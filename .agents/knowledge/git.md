@@ -20,6 +20,29 @@ Feature branches always base off `dev`, never `main`. `gh pr create` must pass `
 
 **The `dev` → `main` promotion is the user's call, every time.** Don't open it because a plan finished, don't open it because `dev` is green, don't treat "merge the phase PRs automatically" as covering it. Green CI is permission to integrate, not to release.
 
+## Run a plan to completion
+
+Once a plan is approved, **work every phase through to the end without stopping to check in.** Nothing on the way to `dev` needs a decision from the user, and pausing between phases just makes them approve the same thing repeatedly.
+
+For each phase, in order:
+
+1. Branch `feat/<plan>-p<n>-<name>` off the current `dev`.
+2. Build the phase. Run `pnpm lint && pnpm typecheck` until green.
+3. Commit, push, open a PR with `--base dev`.
+4. Wait for CI. **Green → merge and clean up. Red → fix it and push again.** Don't ask.
+5. `git switch dev && git pull --ff-only`, then start the next phase from there.
+
+Tick each phase off in the plan file as it lands.
+
+**Stop and ask only when:**
+
+- A phase can't be built as specified, and the fix changes what was agreed — not merely how it's implemented.
+- Something discovered mid-run invalidates a later phase's design. Say so, propose the revision, then continue.
+- CI stays red after a genuine attempt to fix it. Report what's failing rather than disabling the check or merging around it.
+- The work would touch `main`, credentials, or anything outside the repo.
+
+Report at the end: what shipped, what was found, what's left. Not phase by phase.
+
 ## Branches
 
 ```
