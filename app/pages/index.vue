@@ -133,75 +133,87 @@ const faq: AccordionItem[] = [
         { label: 'Get started', to: '/register', size: 'xl', trailingIcon: 'i-lucide-arrow-right' },
         { label: 'Sign in', to: '/login', size: 'xl', color: 'neutral', variant: 'subtle' }
       ]"
-    />
-
-    <UPageSection
-      id="features"
-      title="What it does"
-      description="The parts that make a chat interface usable rather than merely present."
     >
-      <UPageGrid>
-        <UPageCard
-          v-for="feature in features"
-          :key="feature.title"
-          v-bind="feature"
-          spotlight
+      <LandingHeroDemo class="mt-12" />
+    </UPageHero>
+
+    <RevealSection>
+      <UPageSection
+        id="features"
+        title="What it does"
+        description="The parts that make a chat interface usable rather than merely present."
+      >
+        <UPageGrid>
+          <UPageCard
+            v-for="feature in features"
+            :key="feature.title"
+            v-bind="feature"
+            spotlight
+          />
+        </UPageGrid>
+      </UPageSection>
+    </RevealSection>
+
+    <RevealSection>
+      <UPageSection
+        id="pricing"
+        title="Pricing"
+        description="Illustrative. Nothing here charges anyone."
+      >
+        <UPricingPlans>
+          <UPricingPlan
+            v-for="plan in plans"
+            :key="plan.title"
+            v-bind="plan"
+          />
+        </UPricingPlans>
+      </UPageSection>
+    </RevealSection>
+
+    <RevealSection>
+      <UPageSection
+        title="What people say"
+        description="Invented, like the pricing."
+      >
+        <UPageColumns>
+          <UPageCard
+            v-for="testimonial in testimonials"
+            :key="testimonial.user.name"
+            variant="subtle"
+            :description="testimonial.quote"
+          >
+            <template #footer>
+              <UUser
+                v-bind="testimonial.user"
+                size="sm"
+              />
+            </template>
+          </UPageCard>
+        </UPageColumns>
+      </UPageSection>
+    </RevealSection>
+
+    <RevealSection>
+      <UPageSection
+        id="faq"
+        title="Questions"
+      >
+        <UAccordion
+          :items="faq"
+          class="mx-auto max-w-2xl"
         />
-      </UPageGrid>
-    </UPageSection>
+      </UPageSection>
+    </RevealSection>
 
-    <UPageSection
-      id="pricing"
-      title="Pricing"
-      description="Illustrative. Nothing here charges anyone."
-    >
-      <UPricingPlans>
-        <UPricingPlan
-          v-for="plan in plans"
-          :key="plan.title"
-          v-bind="plan"
-        />
-      </UPricingPlans>
-    </UPageSection>
-
-    <UPageSection
-      title="What people say"
-      description="Invented, like the pricing."
-    >
-      <UPageColumns>
-        <UPageCard
-          v-for="testimonial in testimonials"
-          :key="testimonial.user.name"
-          variant="subtle"
-          :description="testimonial.quote"
-        >
-          <template #footer>
-            <UUser
-              v-bind="testimonial.user"
-              size="sm"
-            />
-          </template>
-        </UPageCard>
-      </UPageColumns>
-    </UPageSection>
-
-    <UPageSection
-      id="faq"
-      title="Questions"
-    >
-      <UAccordion
-        :items="faq"
-        class="mx-auto max-w-2xl"
+    <RevealSection>
+      <UPageCTA
+        title="Try it"
+        description="Any email and password gets you in. Nothing is stored."
+        variant="subtle"
+        :links="[
+          { label: 'Get started', to: '/register', size: 'lg', trailingIcon: 'i-lucide-arrow-right' }
+        ]"
       />
-    </UPageSection>
-
-    <UPageCTA
-      title="Try it"
-      description="Any email and password gets you in. Nothing is stored."
-      variant="subtle"
-      :links="[
-        { label: 'Get started', to: '/register', size: 'lg', trailingIcon: 'i-lucide-arrow-right' }
-      ]"
-    />
+    </RevealSection>
   </div>
 </template>
