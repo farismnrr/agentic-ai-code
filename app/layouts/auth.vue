@@ -13,7 +13,7 @@
       </NuxtLink>
     </header>
 
-    <main class="flex flex-1 items-center justify-center p-4">
+    <main class="flex flex-1 items-center justify-center p-6 sm:p-8">
       <div class="w-full max-w-sm">
         <slot />
       </div>
