@@ -40,19 +40,30 @@ html.dark .shiki span {
 
   /* ── Graphite ─────────────────────────────────────────────────────────
      A cool grey with a blue cast, so the signal reads as the same family
-     rather than a sticker on top of it. 950 is the app ground (#0B0E14),
-     900 the raised surface (#151A23).                                    */
+     rather than a sticker on top of it.
+
+     The dark end is aligned to how Nuxt UI maps neutrals, not to a scale
+     invented separately:
+
+       --ui-bg          (ground)   = neutral-900  -> #0B0E14
+       --ui-bg-elevated (surface)  = neutral-800  -> #151A23
+       --ui-bg-accented            = neutral-700  -> #262D3A
+       --ui-text-muted             = neutral-400  -> #8A93A5
+
+     Getting this wrong the first time put the ground on #151A23 and left
+     #0B0E14 unused, which is what made the auth screen look like a
+     different product. Aligning the scale beats overriding the system. */
   --color-graphite-50: #f5f7fa;
   --color-graphite-100: #eaeef4;
   --color-graphite-200: #d2dae6;
   --color-graphite-300: #adbacd;
   --color-graphite-400: #8a93a5;
   --color-graphite-500: #626c80;
-  --color-graphite-600: #4c5566;
-  --color-graphite-700: #3c4453;
-  --color-graphite-800: #262d3a;
-  --color-graphite-900: #151a23;
-  --color-graphite-950: #0b0e14;
+  --color-graphite-600: #3c4453;
+  --color-graphite-700: #262d3a;
+  --color-graphite-800: #151a23;
+  --color-graphite-900: #0b0e14;
+  --color-graphite-950: #06080c;
 
   /* ── Shape ────────────────────────────────────────────────────────────
      Small and deliberate. Borders carry the structure that a softer
@@ -75,15 +86,11 @@ html.dark .shiki span {
   --duration-slow: 260ms;
 }
 
-/* Nuxt UI derives its semantic tokens from the palettes above; these two
-   pin the page ground itself, which sits outside that system. */
-:root {
-  --ui-bg: var(--color-white);
-}
-
-.dark {
-  --ui-bg: var(--color-graphite-950);
-}
+/* No --ui-bg override: the scale above is aligned so Nuxt UI's own mapping
+   already lands on the intended ground. An override here would only hide a
+   misaligned scale, and would apply to the page while every component kept
+   deriving its own surfaces from the palette — which is exactly how the two
+   drifted apart. */
 
 /* Consistent interaction timing without repeating the same utility on
    every control. Transform and colour only — both composite cheaply. */
