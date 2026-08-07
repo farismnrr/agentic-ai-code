@@ -16,7 +16,8 @@ export function useWorkspaces() {
 
   async function loadAll() {
     try {
-      const data = await $fetch<Workspace[]>('/api/workspaces')
+      const fetch = import.meta.server ? useRequestFetch() : $fetch
+      const data = await fetch<Workspace[]>('/api/workspaces')
       workspaces.value = data
 
       // Clear active workspace if it no longer exists

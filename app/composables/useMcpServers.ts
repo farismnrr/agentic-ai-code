@@ -19,7 +19,8 @@ export function useMcpServers() {
   )
 
   async function loadAll() {
-    const data = await $fetch<McpServer[]>('/api/mcp-servers')
+    const fetch = import.meta.server ? useRequestFetch() : $fetch
+    const data = await fetch<McpServer[]>('/api/mcp-servers')
     servers.value = data
   }
 
