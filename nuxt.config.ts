@@ -22,9 +22,10 @@ export default defineNuxtConfig({
     }
   },
 
-  routeRules: {
-    '/': { prerender: true }
-  },
+  // `/` used to be a static landing page and was prerendered. It's now the
+  // interactive empty state, backed by in-memory conversation state, so
+  // prerendering it would ship a snapshot of an empty store.
+  routeRules: {},
 
   // Default dev port. NUXT_PORT (or --port) in .env overrides this.
   devServer: {
