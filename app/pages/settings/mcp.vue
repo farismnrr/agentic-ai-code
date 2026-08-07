@@ -75,7 +75,7 @@ function removeServer(id: string, name: string) {
 
 <template>
   <div class="space-y-4 py-4">
-    <div class="flex items-start justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
       <div>
         <h2 class="text-base font-semibold text-highlighted">
           MCP servers
