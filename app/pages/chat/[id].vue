@@ -124,7 +124,7 @@ defineShortcuts({
   <UDashboardPanel :id="`chat-${conversationId}`">
     <template #header>
       <UDashboardNavbar :title="conversation?.title ?? 'Chat'">
-        <template #leading>
+        <template #left>
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
@@ -160,6 +160,7 @@ defineShortcuts({
           :messages="messages"
           :status="status"
           :assistant="{ actions: [] }"
+          class="max-w-3xl mx-auto w-full"
         >
           <template #content="{ message }">
             <ChatMessageParts :message="message" />
@@ -275,6 +276,7 @@ defineShortcuts({
           :error="error"
           autofocus
           placeholder="Message AI Code…"
+          :ui="{ footer: 'flex-wrap sm:flex-nowrap' }"
           @submit="submit"
         >
           <UChatPromptSubmit
