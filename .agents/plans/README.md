@@ -10,11 +10,11 @@ Write a plan here when a task spans several sessions or several files, so the ne
 
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
-## In flight
+## In Flight
+*None active.*
 
-- [004-ui-responsiveness.md](004-ui-responsiveness.md) — UI Responsiveness Fix (Mobile S - Desktop 2K)
-
-## Done
+## Completed
+- [004-ui-responsiveness.md](004-ui-responsiveness.md): Audit and resolve responsiveness on Mobile S through Desktop 2K across all UI pages.
 
 - [001-chat-ui.md](001-chat-ui.md) — ChatGPT-like AI chat UI, frontend only
 - [002-landing-auth-interactive.md](002-landing-auth-interactive.md) — landing → login → app, and closing the interaction gaps
