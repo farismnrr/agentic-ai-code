@@ -34,6 +34,16 @@ export default defineNuxtConfig({
     smtpUser: '',
     smtpPassword: '',
     smtpFrom: '',
+    oauth: {
+      google: {
+        clientId: '',
+        clientSecret: ''
+      },
+      github: {
+        clientId: '',
+        clientSecret: ''
+      }
+    },
     public: {
       siteUrl: 'http://localhost:3333'
     }
