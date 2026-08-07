@@ -19,7 +19,14 @@ const items: NavigationMenuItem[] = [
         </template>
       </UDashboardNavbar>
 
-      <UDashboardToolbar>
+      <!-- The toolbar ships `overflow-x-auto` so it can scroll on narrow
+           screens. CSS then computes the visible `overflow-y` to `auto` as
+           well — when one axis is not visible, the other can't stay visible.
+           The `-mb-px` below pushes the tab indicator 1px past the container
+           to sit on its border, and that 1px was enough to grow a vertical
+           scrollbar. Clipping the y axis keeps the horizontal scrolling that
+           was intended and drops the scrollbar that wasn't. -->
+      <UDashboardToolbar :ui="{ root: 'overflow-y-hidden' }">
         <UNavigationMenu
           :items="items"
           highlight
