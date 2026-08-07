@@ -76,6 +76,10 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2026-06-30',
 
+  nitro: {
+    errorHandler: '~~/server/error'
+  },
+
   eslint: {
     // Surface lint errors in the dev server and browser overlay, not just in `pnpm lint`
     checker: true,
