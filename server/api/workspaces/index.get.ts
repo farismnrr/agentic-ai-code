@@ -14,6 +14,8 @@ export default defineEventHandler(async (event) => {
   return userWorkspaces.map(w => ({
     id: w.id,
     name: w.name,
+    path: w.path,
+    pathConfirmed: w.pathConfirmed,
     createdAt: w.createdAt.getTime(),
     updatedAt: w.updatedAt.getTime()
   }))

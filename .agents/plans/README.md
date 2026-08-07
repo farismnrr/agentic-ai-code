@@ -13,6 +13,7 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 ## In Flight
 
 ## Completed
+- [010-workspace-folders.md](010-workspace-folders.md) — workspaces become real folders (OpenClaw-style configured root) instead of just names, fixing the mismatch with opencode/Claude Code/Antigravity's actual model.
 - [009-workspace-picker.md](009-workspace-picker.md) — require picking/creating a workspace on first `/chat` visit, and fix the uncaught "No active workspace" race.
 - [008-remove-dummy-data.md](008-remove-dummy-data.md) — remove leftover fixture/seed data and the destructive demo-reset endpoint now that auth, persistence, and the model are real.
 - [007-terminal-workspace-identity.md](007-terminal-workspace-identity.md) — opencode-web/OpenClaw-inspired rebrand + workspace grouping + real model wiring via 9Router.

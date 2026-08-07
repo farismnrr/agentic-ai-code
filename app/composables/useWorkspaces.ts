@@ -29,10 +29,10 @@ export function useWorkspaces() {
     }
   }
 
-  async function create(name: string): Promise<Workspace> {
+  async function create(name: string, path: string): Promise<Workspace> {
     const data = await $fetch<Workspace>('/api/workspaces', {
       method: 'POST',
-      body: { name }
+      body: { name, path }
     })
     workspaces.value = [data, ...workspaces.value]
     return data
@@ -44,11 +44,11 @@ export function useWorkspaces() {
     )
   }
 
-  async function update(id: string, name: string) {
-    updateLocally(id, { name })
+  async function update(id: string, updates: Partial<Workspace>) {
+    updateLocally(id, updates)
     const data = await $fetch<Workspace>(`/api/workspaces/${id}`, {
       method: 'PUT',
-      body: { name }
+      body: updates
     })
     updateLocally(id, data)
   }
