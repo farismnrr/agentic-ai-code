@@ -32,7 +32,7 @@ function deleteConversation(id: string) {
 }
 
 const userItems: DropdownMenuItem[][] = [
-  [{ label: 'Settings', icon: 'i-lucide-settings', to: '/settings/mcp' }],
+  [{ label: 'Settings', icon: 'i-lucide-settings', to: '/settings/general' }],
   [{ label: 'Sign out', icon: 'i-lucide-log-out', color: 'error' }]
 ]
 
