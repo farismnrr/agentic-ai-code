@@ -5,7 +5,8 @@ export default defineNuxtConfig({
     '@nuxt/ui',
     // Renders assistant markdown incrementally as tokens arrive; plain
     // rendering flickers and breaks mid-token during streaming.
-    '@comark/nuxt'
+    '@comark/nuxt',
+    'nuxt-auth-utils'
   ],
 
   devtools: {
@@ -17,6 +18,22 @@ export default defineNuxtConfig({
   // Values here are overridden at runtime by NUXT_-prefixed env vars.
   // Public keys are exposed to the browser; add private keys at the top level.
   runtimeConfig: {
+    // postgres.js connection string — read via useRuntimeConfig().databaseUrl
+    // in server/utils/db.ts. Never expose this to the client.
+    databaseUrl: '',
+    // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
+    // be ≥ 32 characters. Generated once per environment, never reused.
+    session: {
+      password: ''
+    },
+    // SMTP for email verification + password reset. All values come from
+    // NUXT_SMTP_* env vars — nothing is hardcoded here.
+    smtpHost: '',
+    smtpPort: '',
+    smtpSecure: '',
+    smtpUser: '',
+    smtpPassword: '',
+    smtpFrom: '',
     public: {
       siteUrl: 'http://localhost:3333'
     }
@@ -26,14 +43,20 @@ export default defineNuxtConfig({
     // The landing page is static and public, so it can be built once at
     // deploy time. This reverses the change made in plan 001, when `/` was
     // the stateful chat screen.
-    '/': { prerender: true },
+    '/': { prerender: true }
 
-    // App routes are client-rendered. The session lives in localStorage, so
-    // the server can't know who is signed in — an SSR pass would render
-    // guarded content for a moment before the client middleware redirects.
-    // These pages are driven entirely by client state anyway.
-    '/chat/**': { ssr: false },
-    '/settings/**': { ssr: false }
+    // /chat/** and /settings/** no longer carry ssr: false.
+    //
+    // Old reason they had it: the session lived in localStorage, which the
+    // server can't read, so an SSR pass would render the guarded shell for a
+    // signed-in visitor before the client middleware redirected — a visible
+    // flash of the wrong state.
+    //
+    // Why it's gone now (plan 005, phase 1): the session is now an httpOnly
+    // cookie set by nuxt-auth-utils. The server reads it on every request, so
+    // requireUserSession() / useUserSession() work the same way on both sides.
+    // The global middleware can guard on the server, so the SSR pass already
+    // produces the right result — no flash, no need for client-only rendering.
   },
 
   // Default dev port. NUXT_PORT (or --port) in .env overrides this.
