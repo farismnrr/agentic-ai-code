@@ -1,5 +1,8 @@
 <template>
-  <div class="flex min-h-svh flex-col bg-muted">
+  <!-- The ground, same as every other screen. `bg-muted` here was the one
+       use of that token in the whole app, and it put auth two steps lighter
+       than the app it leads into. The card carries the elevation instead. -->
+  <div class="flex min-h-svh flex-col bg-default">
     <header class="p-4 sm:p-6">
       <NuxtLink
         to="/"
