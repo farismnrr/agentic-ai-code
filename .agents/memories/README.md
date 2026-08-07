@@ -20,3 +20,4 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [fixtures-not-disposable.md](fixtures-not-disposable.md) — check what's actually inside `fixtures/` before deleting it; `models.ts` was real config, not a stub
 - [009-loaded-state-pattern.md](009-loaded-state-pattern.md) — use `useState`, not a bare `ref`, for a composable's own "have I loaded yet" flag, or it won't be shared across call sites
 - [nuxt-ssr-fetch-cookies.md](nuxt-ssr-fetch-cookies.md) — a composable's bare `$fetch('/api/...')` silently 401s during SSR; needs `useRequestFetch()` on the server
+- [010-workspace-configured-root.md](010-workspace-configured-root.md) — why workspace folders use one operator-configured root (OpenClaw precedent) instead of an unrestricted filesystem browser

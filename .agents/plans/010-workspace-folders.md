@@ -1,5 +1,7 @@
 # 010 — Workspaces are folders, not just names
 
+> **Status: complete.** Shipped via PR #40, squash-merged to `dev` as `a1347f8`. The first implementation pass (`f0f8056`) had a real, live-exploitable path traversal bug in the traversal guard, caught and fixed (`9ee2c3c`) before merge — see Verification below.
+
 ## Context
 
 Plan 007 introduced "workspaces" purely as a named grouping for chats — a `text` name in Postgres, no tie to the filesystem at all. That doesn't match how the tools this app is explicitly modeled after actually work. Confirmed by research, not assumption:
@@ -46,21 +48,20 @@ This app is architecturally different from all four: it's a real multi-tenant we
 
 ## Verification
 
-- `pnpm lint && pnpm typecheck && pnpm audit` green; run a real `nuxt build` + `vue-tsc -p .nuxt/tsconfig.json` too (per `.agents/memories/007-typecheck-gate-was-silent.md`, `nuxt typecheck` alone isn't trustworthy).
-- `GET /api/fs/browse?path=../../etc` (and other traversal attempts) rejected, not just quietly clamped.
-- Create a workspace via the picker: browse into a real subdirectory, confirm, verify `workspaces.path` and `pathConfirmed=true` in the DB.
-- An existing (pre-migration) workspace shows the confirm-path nudge; confirming it updates `pathConfirmed` to `true`.
-- `/security-review` on the diff before merging, given this adds a new filesystem-touching endpoint — specifically check the traversal guard and that `fs.readdir` never follows symlinks outside the root.
+- ✅ `pnpm lint`, a real `nuxt build` + `vue-tsc -p .nuxt/tsconfig.json` (not just `nuxt typecheck` — see `.agents/memories/007-typecheck-gate-was-silent.md`), and `pnpm audit` all clean on the merged commit.
+- ✅ **Real path traversal vulnerability found and fixed before merge.** The first pass's guard (`resolvedPath.startsWith(absoluteRoot)`) allowed a sibling-directory bypass — live-verified with a freshly registered, zero-privilege user: `GET /api/fs/browse?path=../ai-code-005-p3` returned `200` with a full directory listing of a sibling checkout on the machine, escaping `NUXT_WORKSPACES_ROOT` entirely. Fixed to `resolvedPath !== absoluteRoot && !resolvedPath.startsWith(absoluteRoot + path.sep)`; re-verified live with three separate escape attempts (`../<sibling>`, `../..`, a nested `.agents/../../ai-code-005-p3`) all correctly returning `403`, while normal in-root browsing still works.
+- ✅ `WorkspaceFolderPicker.vue` uses this project's semantic color tokens (`border-default`, `bg-elevated`, `text-muted`, `text-dimmed`), not raw Tailwind palette classes — caught in the same pass as the traversal bug.
+- ✅ Both `WorkspacePicker.vue` and `default.vue`'s sidebar use the one shared `WorkspaceFolderPicker.vue` instead of each having their own create-workspace modal (this also folds in a DRY fix flagged independently during plan 009's review).
+- ✅ `/security-review` run against the merged diff (`f4ac161..a1347f8`) as a fast-follow (the plan required it before merging, but the branch had already been merged before this pass ran — see `.agents/knowledge/git.md` process gap noted below). It found one real bug and one already-accepted tradeoff:
+  - **HIGH, fixed as a follow-up commit**: `resolveWorkspacePath()` only did a string-prefix check, never resolving symlinks — `fs.readdir`/`fs.stat` follow symlinks by default, so a symlink under the root pointing outside it (not contrived — pnpm/node_modules link structures and deploy `current ->` conventions make this a realistic accident, not just a deliberate attack) would bypass the boundary entirely even after the sibling-prefix fix. This is exactly what the plan's own verification list asked for ("`fs.readdir` never follows symlinks outside the root") but was never actually tested in the first pass. Fixed by resolving both the root and the candidate path with `fs.realpath()` and re-checking the boundary against the *real* paths, in `resolveWorkspacePath()` itself so all three call sites inherit it. **Live-verified**: created `ln -s /etc evil-link` inside the configured root, confirmed `GET /api/fs/browse?path=evil-link` and `POST /api/workspaces {"path":"evil-link"}` both now return `403` (previously would have followed straight through to `/etc`), while normal in-root browsing still returns real results.
+  - **MEDIUM, accepted as-is, not fixed**: `GET /api/fs/browse` scopes access to *any* authenticated user via `requireUserSession`, not to paths the requesting user's own workspaces reference — since the root is shared across all accounts by explicit design (`.agents/memories/010-workspace-configured-root.md`), any registered user can walk the entire root tree and see every other user's workspace folder names. This is the direct, foreseeable consequence of the shared-root decision already made and documented in that memory, not a new gap — surfaced here so it's an explicit, acknowledged tradeoff rather than something nobody noticed. Revisit if this stops being a single-operator deployment.
+- Create-workspace-via-picker and the confirm-path nudge on a backfilled workspace were verified by code reading (both wired through `handleSelectFolder`/`handleSelectCreateWorkspace`/`handleSelectConfirmWorkspace` correctly) rather than a live end-to-end click-through — worth a manual pass in a browser before relying on this further.
+
+**Process note**: this plan's own "Verification" section required `/security-review` *before* merging, but the branch was pushed, reviewed, and merged without it — caught only when re-reading `.agents/knowledge/` after the fact. The symlink bug above is a direct consequence: it's exactly the class of issue that review step exists to catch. Run `/security-review` before opening the PR next time, not after merging.
 
 ## On completion
 
-Status: **Complete**
-
-**Verification notes:**
-- `pnpm lint`, `nuxt build`, `vue-tsc`, and `pnpm audit` all run green.
-- Path traversal vulnerability (e.g. `../ai-code-005-p3`) patched and verified live returning 403 Forbidden.
-- The `WorkspaceFolderPicker.vue` component correctly utilizes project semantic tokens (e.g., `bg-elevated`, `border-default`).
-- `workspaces.path` and `pathConfirmed` fields added via migration.
-- `GET /api/fs/browse` lists only valid child directories within the configured root.
-
-Per `.agents/knowledge/self-improvement.md`: write this plan to `.agents/plans/010-workspace-folders.md`, tick items off as they land, move it to Completed in `.agents/plans/README.md`, and record in `.agents/memories/` the OpenClaw-precedent reasoning behind the configured-root design — a future agent tempted to add a "browse anywhere" mode should see why that was explicitly rejected.
+- [x] Plan file updated with status and real verification results.
+- [x] Moved to the Completed list in `.agents/plans/README.md`.
+- [x] `.agents/memories/010-workspace-configured-root.md` written — and indexed in `memories/README.md` (it existed on disk but wasn't indexed until this pass; same gap recurred from plans 008 and 009, worth watching for).
+- [x] Branch pushed, PR opened against `dev`, CI green, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.
