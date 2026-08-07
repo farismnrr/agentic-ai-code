@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "nuxt typecheck",
-    "audit": "pnpm audit"
+    "audit": "pnpm audit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@ai-sdk/vue": "^4.0.55",
@@ -19,13 +21,19 @@
     "@iconify-json/simple-icons": "^1.2.92",
     "@nuxt/ui": "^4.10.0",
     "ai": "^7.0.55",
+    "drizzle-orm": "^0.45.2",
+    "nodemailer": "^9.0.4",
     "nuxt": "^4.5.1",
+    "nuxt-auth-utils": "0.5.30",
+    "postgres": "^3.4.9",
     "tailwindcss": "^4.3.3",
     "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
+    "@types/nodemailer": "^8.0.1",
     "agentation-vue": "^0.3.0",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^10.8.0",
     "eslint-plugin-format": "^2.0.1",
     "typescript": "^6.0.3",

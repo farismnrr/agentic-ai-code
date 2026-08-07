@@ -9,9 +9,9 @@ const { register } = useAuth()
 
 const schema = v.pipe(
   v.object({
-    name: v.pipe(v.string(), v.minLength(1, 'Name is required')),
+    name: v.pipe(v.string(), v.minLength(1, 'Name is required'), v.maxLength(100, 'Name too long')),
     email: v.pipe(v.string(), v.email('Enter a valid email address')),
-    password: v.pipe(v.string(), v.minLength(8, 'At least 8 characters')),
+    password: v.pipe(v.string(), v.minLength(8, 'At least 8 characters'), v.maxLength(128, 'Password too long')),
     confirm: v.string()
   }),
   // Cross-field, so it can't be a per-field rule — same shape as the
@@ -26,13 +26,24 @@ type Schema = v.InferOutput<typeof schema>
 
 const state = reactive({ name: '', email: '', password: '', confirm: '' })
 const loading = ref(false)
+const serverError = ref<string | null>(null)
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
-  await new Promise(resolve => setTimeout(resolve, 350))
-
-  register(event.data.email, event.data.name)
-  await navigateTo('/chat')
+  serverError.value = null
+  try {
+    await register(event.data.name, event.data.email, event.data.password, event.data.confirm)
+    await navigateTo('/chat')
+  } catch (err: unknown) {
+    const fe = err as { data?: { message?: string }, statusCode?: number }
+    if (fe?.statusCode === 429) {
+      serverError.value = fe.data?.message ?? 'Too many attempts. Try again later.'
+    } else {
+      serverError.value = 'Could not create account. Please try again.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -43,7 +54,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         Create account
       </h1>
       <p class="mt-1 text-sm text-muted">
-        Nothing is stored anywhere. It's a prototype.
+        Your data is stored securely.
       </p>
     </div>
 
@@ -54,6 +65,13 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="onSubmit"
       >
+        <UAlert
+          v-if="serverError"
+          color="error"
+          variant="soft"
+          :description="serverError"
+        />
+
         <UFormField
           label="Name"
           name="name"
