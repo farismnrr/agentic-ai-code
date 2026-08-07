@@ -13,6 +13,8 @@ const conversation = computed(() => get(conversationId.value))
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
 
+const settings = useSettings()
+
 const {
   messages,
   status,
@@ -69,6 +71,35 @@ function send(text: string) {
 async function copy(text: string) {
   await navigator.clipboard.writeText(text)
   toast.add({ title: 'Copied', icon: 'i-lucide-check', color: 'success' })
+}
+
+/**
+ * Edit a prompt and send it again. Truncating at the edited message rather
+ * than appending is what makes it an edit — everything after it was an answer
+ * to the old wording, so keeping it would leave the thread self-contradictory.
+ */
+function editAndResend(messageId: string, text: string) {
+  const index = messages.value.findIndex(m => m.id === messageId)
+  if (index === -1) return
+  messages.value = messages.value.slice(0, index)
+  send(text)
+}
+
+const editing = ref<{ id: string, text: string } | null>(null)
+
+function confirmEdit() {
+  const pending = editing.value
+  if (!pending?.text.trim()) return
+  editing.value = null
+  editAndResend(pending.id, pending.text.trim())
+}
+
+/** Feedback has nowhere to go without a backend, so it only acknowledges. */
+const feedback = ref<Record<string, 'up' | 'down'>>({})
+
+function rate(messageId: string, value: 'up' | 'down') {
+  feedback.value = { ...feedback.value, [messageId]: value }
+  toast.add({ title: 'Thanks for the feedback', icon: 'i-lucide-check', color: 'neutral' })
 }
 
 // A conversation opened straight from the empty state has its first prompt
@@ -148,15 +179,43 @@ defineShortcuts({
               aria-label="Copy message"
               @click="copy(getTextFromMessage(message))"
             />
+
             <UButton
-              v-if="message.role === 'assistant'"
-              icon="i-lucide-refresh-cw"
+              v-if="message.role === 'user'"
+              icon="i-lucide-pencil"
               color="neutral"
               variant="ghost"
               size="xs"
-              aria-label="Regenerate"
-              @click="regenerate()"
+              aria-label="Edit and resend"
+              @click="editing = { id: message.id, text: getTextFromMessage(message) }"
             />
+
+            <template v-if="message.role === 'assistant'">
+              <UButton
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                aria-label="Regenerate"
+                @click="regenerate()"
+              />
+              <UButton
+                icon="i-lucide-thumbs-up"
+                :color="feedback[message.id] === 'up' ? 'primary' : 'neutral'"
+                variant="ghost"
+                size="xs"
+                aria-label="Good response"
+                @click="rate(message.id, 'up')"
+              />
+              <UButton
+                icon="i-lucide-thumbs-down"
+                :color="feedback[message.id] === 'down' ? 'error' : 'neutral'"
+                variant="ghost"
+                size="xs"
+                aria-label="Bad response"
+                @click="rate(message.id, 'down')"
+              />
+            </template>
           </template>
         </UChatMessages>
 
@@ -164,6 +223,39 @@ defineShortcuts({
              #header/#body/#footer is treated as default-slot content and
              makes Vue drop the named slots. It's a teleported modal, so its
              position in the tree has no visual effect. -->
+        <UModal
+          :open="editing !== null"
+          title="Edit message"
+          description="Everything after this message will be replaced."
+          @update:open="editing = null"
+        >
+          <template #body>
+            <UTextarea
+              v-if="editing"
+              v-model="editing.text"
+              :rows="4"
+              autoresize
+              autofocus
+              class="w-full"
+            />
+          </template>
+
+          <template #footer>
+            <div class="flex w-full justify-end gap-2">
+              <UButton
+                label="Cancel"
+                color="neutral"
+                variant="ghost"
+                @click="editing = null"
+              />
+              <UButton
+                label="Send"
+                @click="confirmEdit"
+              />
+            </div>
+          </template>
+        </UModal>
+
         <ChatToolApproval
           :messages="messages"
           :conversation="conversation"
@@ -180,6 +272,7 @@ defineShortcuts({
       <UContainer class="pb-4 sm:pb-6">
         <UChatPrompt
           v-model="input"
+          :submit-on-enter="settings.sendOnEnter"
           :error="error"
           autofocus
           placeholder="Message AI Code…"

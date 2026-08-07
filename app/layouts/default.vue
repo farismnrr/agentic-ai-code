@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
-const { sorted, remove } = useConversations()
+const { sorted, remove, update } = useConversations()
 const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
@@ -30,6 +30,40 @@ function deleteConversation(id: string) {
   const wasOpen = route.path === `/chat/${id}`
   remove(id)
   if (wasOpen) void router.push('/chat')
+}
+
+// Renaming happens in a modal rather than inline: the sidebar row is a
+// navigation link, and an input inside it fights the link for clicks and
+// keyboard focus.
+const renaming = ref<{ id: string, title: string } | null>(null)
+
+function startRename(id: string, title: string) {
+  renaming.value = { id, title }
+}
+
+function confirmRename() {
+  const pending = renaming.value
+  if (!pending) return
+  const title = pending.title.trim()
+  if (title) update(pending.id, { title })
+  renaming.value = null
+}
+
+/** Per-row menu. Replaces a hover-only icon, which touch devices can't reach. */
+function rowItems(id: string, title: string): DropdownMenuItem[][] {
+  return [[
+    {
+      label: 'Rename',
+      icon: 'i-lucide-pencil',
+      onSelect: () => startRename(id, title)
+    },
+    {
+      label: 'Delete',
+      icon: 'i-lucide-trash-2',
+      color: 'error',
+      onSelect: () => deleteConversation(id)
+    }
+  ]]
 }
 
 const userItems = computed<DropdownMenuItem[][]>(() => [
@@ -107,15 +141,16 @@ const searchGroups = computed(() => [{
               :ui="{ link: 'group' }"
             >
               <template #item-trailing="{ item }">
-                <UButton
-                  icon="i-lucide-trash-2"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  class="opacity-0 group-hover:opacity-100"
-                  :aria-label="`Delete ${item.label}`"
-                  @click.stop.prevent="deleteConversation(String(item.value))"
-                />
+                <UDropdownMenu :items="rowItems(String(item.value), String(item.label))">
+                  <UButton
+                    icon="i-lucide-ellipsis"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :aria-label="`Options for ${item.label}`"
+                    @click.stop.prevent
+                  />
+                </UDropdownMenu>
               </template>
             </UNavigationMenu>
           </div>
@@ -152,6 +187,37 @@ const searchGroups = computed(() => [{
       v-model:open="searchOpen"
       :groups="searchGroups"
     />
+
+    <UModal
+      :open="renaming !== null"
+      title="Rename conversation"
+      @update:open="renaming = null"
+    >
+      <template #body>
+        <UInput
+          v-if="renaming"
+          v-model="renaming.title"
+          autofocus
+          class="w-full"
+          @keydown.enter="confirmRename"
+        />
+      </template>
+
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton
+            label="Cancel"
+            color="neutral"
+            variant="ghost"
+            @click="renaming = null"
+          />
+          <UButton
+            label="Rename"
+            @click="confirmRename"
+          />
+        </div>
+      </template>
+    </UModal>
 
     <slot />
   </UDashboardGroup>

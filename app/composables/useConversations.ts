@@ -1,7 +1,6 @@
 import type { Conversation, UIMessage } from '~/types/chat'
 import { seedConversations } from '~/utils/fixtures/conversations'
 import { defaultEnabledToolIds } from '~/utils/fixtures/mcp-servers'
-import { defaultModelId } from '~/utils/fixtures/models'
 
 /**
  * In-memory conversation store.
@@ -13,6 +12,7 @@ import { defaultModelId } from '~/utils/fixtures/models'
  */
 export function useConversations() {
   const conversations = useState<Conversation[]>('conversations', () => [...seedConversations])
+  const settings = useSettings()
 
   /** Newest first, which is the order the sidebar renders. */
   const sorted = computed(() =>
@@ -31,7 +31,7 @@ export function useConversations() {
       createdAt: now,
       updatedAt: now,
       messages: [],
-      modelId: defaultModelId,
+      modelId: settings.value.defaultModelId,
       enabledToolIds: [...defaultEnabledToolIds],
       approvals: {},
       ...overrides
@@ -44,6 +44,11 @@ export function useConversations() {
     conversations.value = conversations.value.map(c =>
       c.id === id ? { ...c, ...patch, updatedAt: Date.now() } : c
     )
+  }
+
+  /** Restores seed data — the way out of a wedged demo, since nothing persists. */
+  function reset() {
+    conversations.value = [...seedConversations]
   }
 
   function remove(id: string) {
@@ -65,5 +70,5 @@ export function useConversations() {
     return firstLine.length > 48 ? `${trimmed}…` : trimmed
   }
 
-  return { conversations, sorted, get, create, update, remove, setMessages, titleFrom }
+  return { conversations, sorted, get, create, update, remove, reset, setMessages, titleFrom }
 }
