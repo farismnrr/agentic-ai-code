@@ -20,7 +20,7 @@
     </main>
 
     <footer class="p-4 text-center text-xs text-dimmed sm:p-6">
-      A prototype — no real accounts, any credentials work.
+      Sign in to access your chat history and settings.
     </footer>
   </div>
 </template>

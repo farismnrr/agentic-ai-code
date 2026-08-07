@@ -2,19 +2,6 @@
 useSeoMeta({ title: 'General settings' })
 
 const settings = useSettings()
-const { reset: resetConversations } = useConversations()
-const toast = useToast()
-
-/**
- * Nothing persists, so a demo that gets into a confusing state has no way out
- * short of a reload — which also signs nothing out, since the session is the
- * one thing that survives. This is that way out.
- */
-async function resetDemo() {
-  await $fetch('/api/reseed', { method: 'POST' })
-  await resetConversations()
-  toast.add({ title: 'Demo data reset', icon: 'i-lucide-rotate-ccw', color: 'success' })
-}
 
 const languages = [
   { label: 'English', value: 'en' },
@@ -68,22 +55,6 @@ const languages = [
         class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4"
       >
         <USwitch v-model="settings.sendOnEnter" />
-      </UFormField>
-    </UCard>
-
-    <UCard>
-      <UFormField
-        label="Reset demo data"
-        description="Restores the seed conversations. Your session stays signed in."
-        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-      >
-        <UButton
-          label="Reset"
-          icon="i-lucide-rotate-ccw"
-          color="neutral"
-          variant="subtle"
-          @click="resetDemo"
-        />
       </UFormField>
     </UCard>
   </div>

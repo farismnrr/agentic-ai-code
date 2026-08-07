@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import type { DynamicToolUIPart, ToolUIPart } from 'ai'
-import { mcpToolsById } from '#shared/utils/fixtures/mcp-servers'
-
 // `isToolUIPart` narrows to either shape — MCP tools arrive as dynamic ones,
 // so accepting only `ToolUIPart` would reject exactly the case we care about.
 const props = defineProps<{
@@ -10,9 +8,11 @@ const props = defineProps<{
   streaming: boolean
 }>()
 
+const { toolsById } = useMcpServers()
+
 /** Tool ids are `<serverId>.<name>`, so the server is recoverable from the name. */
 const server = computed(() =>
-  Object.values(mcpToolsById).find(t => t.name === props.toolName)?.serverId
+  Object.values(toolsById.value).find(t => t.name === props.toolName)?.serverId
 )
 
 const input = computed(() => {
