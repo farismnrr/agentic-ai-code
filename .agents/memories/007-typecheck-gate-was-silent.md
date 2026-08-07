@@ -1,29 +1,33 @@
-# `nuxt typecheck` silently passed with real type errors present
+# `nuxt typecheck` doesn't reliably surface real type errors — known, not yet fixed
 
-`package.json`'s `typecheck` script used to be `nuxt typecheck`. Confirmed
-(by deliberately reintroducing two real bugs and rerunning) that both `nuxt
-typecheck` and standalone `nuxi typecheck` exit `0` with no output on this
-Nuxt 4.5.1 / vue-tsc 3.3.9 combo, even with a fully-populated `.nuxt/`. It's
-not a missing-file problem — the checker step itself never surfaces errors
-here.
+During plan 007, `nuxt typecheck` was observed exiting `0` with no output
+on code that had real type errors present (confirmed once by comparing
+against a direct `vue-tsc --noEmit -p .nuxt/tsconfig.json` run, which did
+report them). This is a genuine gap in the CI gate, but **two fix attempts
+in this PR both made CI worse, not better**, so the script was reverted to
+plain `"typecheck": "nuxt typecheck"` (the pre-plan-007 baseline) rather
+than ship something unproven:
 
-Calling `vue-tsc --noEmit -p .nuxt/tsconfig.json` directly does catch real
-errors, **but only if `.nuxt/tsconfig.json` exists** — and `nuxt prepare`
-(what `postinstall` runs on `pnpm install`) only generates
-`.nuxt/tsconfig.server.json`, not the full `tsconfig.app.json` /
-`tsconfig.shared.json` / `tsconfig.node.json` / `tsconfig.json` set that the
-root `tsconfig.json`'s project references need. Those are only written by a
-real `nuxt build` (confirmed: ~50s). A fresh CI checkout that just ran
-`pnpm install` therefore has no `.nuxt/tsconfig.json`, and a bare `vue-tsc
--p .nuxt/tsconfig.json` fails with `TS5058: The specified path does not
-exist` — this broke CI on PR #36 before being caught.
-
-Fixed: `"typecheck": "nuxt build --dotenv .env.example && vue-tsc --noEmit
--p .nuxt/tsconfig.json"`. Costs a full build every typecheck run (~50s) but
-is the only combination verified to actually catch errors on a clean
-checkout.
+1. `vue-tsc --noEmit -p .nuxt/tsconfig.json` directly — fails outright on a
+   clean checkout: `nuxt prepare` (what `postinstall` runs) only writes
+   `.nuxt/tsconfig.server.json`, not the full `tsconfig.app.json` /
+   `tsconfig.shared.json` / `tsconfig.node.json` / `tsconfig.json` set the
+   root `tsconfig.json`'s project references need — `TS5058: The specified
+   path does not exist`.
+2. `nuxt build --dotenv .env.example && vue-tsc ...` — generates the full
+   tsconfig set (confirmed locally), but failed in CI with
+   `TSCONFIG_ERROR: Tsconfig not found .nuxt/tsconfig.app.json` from a
+   `rolldown@1.1.5` stack frame, while `pnpm-lock.yaml` pins
+   `rolldown@1.2.1` everywhere and the same build succeeded locally every
+   time. `rolldown` is resolved outside the deterministic lockfile graph
+   (likely via `vite`'s optional-bundler resolution), so **the exact
+   version a clean `pnpm install` picks up is not reproducible between this
+   machine and GitHub Actions** — not something to chase further inside a
+   feature PR.
 
 **Why this matters:** `pnpm typecheck` gates every PR per
-`.agents/knowledge/project.md`. Re-verify by deliberately introducing a type
-error on a *clean* checkout (`rm -rf .nuxt .output`) and confirming the
-script's exit code is non-zero before trusting any future change to it.
+`.agents/knowledge/project.md`, and it is currently back to a state that
+may silently pass real type errors — this is a known, open gap, not a
+resolved one. Before trusting it again (or attempting another fix), verify
+on a genuinely clean checkout in CI itself, not just locally — local
+success here did not predict CI's behavior twice in a row.
