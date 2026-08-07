@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const body = result.output
 
   // Validate path resolves within root and exists as a directory
-  const resolvedPath = resolveWorkspacePath(body.path)
+  const resolvedPath = await resolveWorkspacePath(body.path)
   try {
     const stat = await fs.stat(resolvedPath)
     if (!stat.isDirectory()) {

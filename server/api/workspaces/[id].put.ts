@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body.path !== undefined) {
-    const resolvedPath = resolveWorkspacePath(body.path)
+    const resolvedPath = await resolveWorkspacePath(body.path)
     try {
       const stat = await fs.stat(resolvedPath)
       if (!stat.isDirectory()) {
