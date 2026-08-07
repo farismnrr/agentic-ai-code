@@ -1,4 +1,4 @@
-import { defaultModelId } from '#shared/utils/fixtures/models'
+import { defaultModelId } from '#shared/utils/models'
 
 export interface AppSettings {
   language: string

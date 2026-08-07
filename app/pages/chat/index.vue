@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { models } from '#shared/utils/fixtures/models'
+import { models } from '#shared/utils/models'
 
 useSeoMeta({ title: 'New chat' })
 
