@@ -229,6 +229,22 @@ const searchGroups = computed(() => [{
       </template>
     </UModal>
 
-    <slot />
+    <div class="flex flex-1 flex-col min-w-0 h-full">
+      <div
+        v-if="user && !user.emailVerifiedAt"
+        class="bg-primary-500/10 border-b border-primary-500/20 px-4 py-3 flex items-center justify-between shrink-0 z-50"
+      >
+        <div class="flex items-center gap-3">
+          <UIcon
+            name="i-lucide-mail-warning"
+            class="w-5 h-5 text-primary"
+          />
+          <p class="text-sm font-medium text-primary">
+            Please verify your email address to secure your account.
+          </p>
+        </div>
+      </div>
+      <slot />
+    </div>
   </UDashboardGroup>
 </template>
