@@ -14,7 +14,7 @@ export default defineOAuthGitHubEventHandler({
     const email = githubUser.email
 
     if (!email) {
-      throw createError({ statusCode: 400, message: 'GitHub account has no email.' })
+      throw badRequest('GitHub account has no email.')
     }
 
     // 1. Check if we already have this exact OAuth account linked
@@ -58,11 +58,16 @@ export default defineOAuthGitHubEventHandler({
 
     if (existingUser) {
       // Link the new OAuth account to the existing user
-      await db.insert(oauthAccounts).values({
-        provider,
-        providerAccountId,
-        userId: existingUser.id
-      })
+      try {
+        await db.insert(oauthAccounts).values({
+          provider,
+          providerAccountId,
+          userId: existingUser.id
+        })
+      } catch (err) {
+        if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+        throw err
+      }
 
       const [user] = await db
         .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
@@ -84,26 +89,37 @@ export default defineOAuthGitHubEventHandler({
     }
 
     // 3. Completely new user
-    const [createdUser] = await db.insert(users).values({
-      email,
-      name: githubUser.name || githubUser.login || 'User',
-      avatarUrl: githubUser.avatar_url,
-      // Treat OAuth email as verified at creation time
-      emailVerifiedAt: new Date()
-    }).returning({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      emailVerifiedAt: users.emailVerifiedAt
-    })
+    let createdUser
+    try {
+      [createdUser] = await db.insert(users).values({
+        email,
+        name: githubUser.name || githubUser.login || 'User',
+        avatarUrl: githubUser.avatar_url,
+        // Treat OAuth email as verified at creation time
+        emailVerifiedAt: new Date()
+      }).returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        emailVerifiedAt: users.emailVerifiedAt
+      })
+    } catch (err) {
+      if (isUniqueViolation(err)) throw conflict('Email already registered')
+      throw err
+    }
 
-    if (!createdUser) throw createError({ statusCode: 500, message: 'Account creation failed' })
+    if (!createdUser) throw internal('Account creation failed')
 
-    await db.insert(oauthAccounts).values({
-      provider,
-      providerAccountId,
-      userId: createdUser.id
-    })
+    try {
+      await db.insert(oauthAccounts).values({
+        provider,
+        providerAccountId,
+        userId: createdUser.id
+      })
+    } catch (err) {
+      if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+      throw err
+    }
 
     await setUserSession(event, {
       user: {
