@@ -26,7 +26,8 @@ export function useConversations() {
       conversations.value = []
       return
     }
-    const data = await $fetch<Conversation[]>('/api/conversations', {
+    const fetch = import.meta.server ? useRequestFetch() : $fetch
+    const data = await fetch<Conversation[]>('/api/conversations', {
       query: { workspaceId: activeWorkspaceId.value }
     })
     conversations.value = data
@@ -34,7 +35,8 @@ export function useConversations() {
 
   async function loadOne(id: string) {
     try {
-      const data = await $fetch<Conversation>(`/api/conversations/${id}`)
+      const fetch = import.meta.server ? useRequestFetch() : $fetch
+      const data = await fetch<Conversation>(`/api/conversations/${id}`)
       updateLocally(id, data)
       return data
     } catch {

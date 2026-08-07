@@ -12,8 +12,8 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 
 ## In Flight
 
-
 ## Completed
+- [009-workspace-picker.md](009-workspace-picker.md) — require picking/creating a workspace on first `/chat` visit, and fix the uncaught "No active workspace" race.
 - [008-remove-dummy-data.md](008-remove-dummy-data.md) — remove leftover fixture/seed data and the destructive demo-reset endpoint now that auth, persistence, and the model are real.
 - [007-terminal-workspace-identity.md](007-terminal-workspace-identity.md) — opencode-web/OpenClaw-inspired rebrand + workspace grouping + real model wiring via 9Router.
 - [006-error-handling.md](006-error-handling.md) — centralize server error handling (RFC 9457 Problem Details) and audit every 4xx/5xx to match its real failure scenario.

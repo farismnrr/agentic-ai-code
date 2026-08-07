@@ -2,6 +2,7 @@ import type { Workspace } from '#shared/types/chat'
 
 export function useWorkspaces() {
   const workspaces = useState<Workspace[]>('workspaces', () => [])
+  const loaded = useState<boolean>('workspaces-loaded', () => false)
   // Persist the active workspace across reloads
   const activeWorkspaceId = useCookie<string | null>('workspace-id', { default: () => null })
 
@@ -14,16 +15,17 @@ export function useWorkspaces() {
   }
 
   async function loadAll() {
-    const data = await $fetch<Workspace[]>('/api/workspaces')
-    workspaces.value = data
+    try {
+      const fetch = import.meta.server ? useRequestFetch() : $fetch
+      const data = await fetch<Workspace[]>('/api/workspaces')
+      workspaces.value = data
 
-    // If we have workspaces but no active one, or the active one doesn't exist anymore, default to the first one
-    if (data.length > 0) {
-      if (!activeWorkspaceId.value || !data.some(w => w.id === activeWorkspaceId.value)) {
-        activeWorkspaceId.value = data[0]!.id
+      // Clear active workspace if it no longer exists
+      if (activeWorkspaceId.value && !data.some(w => w.id === activeWorkspaceId.value)) {
+        activeWorkspaceId.value = null
       }
-    } else {
-      activeWorkspaceId.value = null
+    } finally {
+      loaded.value = true
     }
   }
 
@@ -70,5 +72,5 @@ export function useWorkspaces() {
     }
   }
 
-  return { workspaces, sorted, activeWorkspaceId, get, loadAll, create, update, remove }
+  return { workspaces, sorted, activeWorkspaceId, loaded, get, loadAll, create, update, remove }
 }
