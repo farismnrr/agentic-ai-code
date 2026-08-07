@@ -1,6 +1,24 @@
-import { pickScenario } from '#shared/utils/fixtures/replies'
 import { messages as messagesTable, conversations } from '../database/schema'
 import { eq, and } from 'drizzle-orm'
+import { createParser } from 'eventsource-parser'
+import type { UIMessage } from '#shared/types/chat'
+
+function mapMessages(messages: UIMessage[]) {
+  return messages.map((msg) => {
+    let text = ''
+    if (msg.parts) {
+      for (const part of msg.parts) {
+        if (part.type === 'text') {
+          text += part.text
+        }
+      }
+    }
+    return {
+      role: msg.role,
+      content: text
+    }
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -31,28 +49,59 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const prompt = lastMsg?.content ?? ''
-  const scenario = pickScenario(prompt)
+  const mappedMessages = mapMessages(messages)
+  const config = useRuntimeConfig()
 
   setHeader(event, 'content-type', 'text/plain; charset=utf-8')
 
   return new ReadableStream({
     async start(controller) {
       try {
-        const chunks = scenario.build({ enabledToolIds: conv.enabledToolIds || [] })
+        const response = await fetch(`${config.routerBaseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.routerApiKey}`
+          },
+          body: JSON.stringify({
+            model: conv.modelId || 'vx/gemini-3-flash-preview',
+            messages: mappedMessages,
+            stream: true
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`Upstream error: ${response.status} ${response.statusText}`)
+        }
+
         let fullResponseText = ''
 
-        for (const chunk of chunks) {
-          if (chunk.type === 'text-delta') {
-            controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
-            fullResponseText += chunk.delta
-          } else if (chunk.type === 'reasoning-delta') {
-            // Send reasoning as normal text for simplicity
-            controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
-            fullResponseText += chunk.delta
+        const parser = createParser((event) => {
+          if (event.type === 'event') {
+            if (event.data === '[DONE]') {
+              return
+            }
+            try {
+              const data = JSON.parse(event.data)
+              const delta = data.choices[0]?.delta?.content || ''
+              if (delta) {
+                fullResponseText += delta
+                controller.enqueue(`0:${JSON.stringify(delta)}\n`)
+              }
+            } catch (err) {
+              console.error('Error parsing SSE', err)
+            }
           }
+        })
 
-          await new Promise(resolve => setTimeout(resolve, 22))
+        const reader = response.body?.getReader()
+        if (reader) {
+          const decoder = new TextDecoder()
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            parser.feed(decoder.decode(value))
+          }
         }
 
         await db.insert(messagesTable).values({
