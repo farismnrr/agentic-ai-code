@@ -125,16 +125,44 @@ const faq: AccordionItem[] = [
 </script>
 
 <template>
-  <div>
+  <div class="relative overflow-hidden">
+    <!-- Dynamic Ambient Background -->
+    <div class="pointer-events-none absolute inset-0 z-[-1] overflow-hidden">
+      <!-- Grid pattern -->
+      <div class="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+
+      <!-- Glowing blobs -->
+      <div
+        class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[400px] bg-primary/20 blur-[120px] rounded-[100%] animate-pulse"
+        style="animation-duration: 4s;"
+      />
+      <div
+        class="absolute top-[10%] right-[-10%] w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-[100%] animate-pulse"
+        style="animation-duration: 7s; animation-delay: 1s;"
+      />
+      <div
+        class="absolute top-[20%] left-[-10%] w-[600px] h-[600px] bg-purple-500/10 blur-[120px] rounded-[100%] animate-pulse"
+        style="animation-duration: 5s; animation-delay: 2s;"
+      />
+    </div>
+
     <UPageHero
-      title="Chat with models, connected to your tools"
       description="Streaming replies, MCP tool calling that asks before it acts, and a model picker that does not lose your thread. This is a prototype — no backend behind it."
       :links="[
         { label: 'Get started', to: '/register', size: 'xl', trailingIcon: 'i-lucide-arrow-right' },
         { label: 'Sign in', to: '/login', size: 'xl', color: 'neutral', variant: 'subtle' }
       ]"
     >
-      <LandingHeroDemo class="mt-12" />
+      <template #title>
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500">
+          Chat with models, <br class="hidden sm:block"> connected to your tools
+        </span>
+      </template>
+
+      <div class="relative mx-auto mt-12 max-w-2xl group">
+        <div class="absolute -inset-1 rounded-xl bg-gradient-to-r from-primary to-blue-500 opacity-20 blur-lg transition-opacity duration-1000 group-hover:opacity-40" />
+        <LandingHeroDemo class="relative" />
+      </div>
     </UPageHero>
 
     <RevealSection>
