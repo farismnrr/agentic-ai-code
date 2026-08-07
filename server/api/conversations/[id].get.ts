@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
   return {
     id: conversation.id,
     title: conversation.title,
+    workspaceId: conversation.workspaceId,
     modelId: conversation.modelId,
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,

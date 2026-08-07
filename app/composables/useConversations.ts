@@ -37,7 +37,16 @@ export function useConversations() {
     try {
       const fetch = import.meta.server ? useRequestFetch() : $fetch
       const data = await fetch<Conversation>(`/api/conversations/${id}`)
-      updateLocally(id, data)
+      // updateLocally() only patches an existing entry (.map() no-ops if the
+      // id isn't found) — a conversation opened directly (deep link,
+      // bookmark, refresh before the list has loaded) isn't in the store
+      // yet, so that would silently drop the fetched data. Insert it here
+      // instead of routing through updateLocally, since this is a full
+      // record, not a partial patch.
+      const exists = conversations.value.some(c => c.id === id)
+      conversations.value = exists
+        ? conversations.value.map(c => (c.id === id ? { ...c, ...data } : c))
+        : [data, ...conversations.value]
       return data
     } catch {
       return null
