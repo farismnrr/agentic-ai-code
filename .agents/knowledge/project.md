@@ -17,9 +17,10 @@ Nuxt 4 application built on the official Nuxt UI v4 starter template.
 | Lint | `pnpm lint` |
 | Autofix | `pnpm lint:fix` |
 | Type check | `pnpm typecheck` |
+| Audit dependencies | `pnpm audit` — must report zero before any merge |
 | Regenerate `.nuxt` types | `pnpm postinstall` (runs `nuxt prepare`) |
 
-Before declaring work done, run `pnpm lint` and `pnpm typecheck`.
+Before declaring work done, run `pnpm lint`, `pnpm typecheck` and `pnpm audit`. All three gate every PR in CI.
 
 ## Layout
 
