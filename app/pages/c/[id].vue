@@ -3,7 +3,6 @@ import { getTextFromMessage } from '@nuxt/ui/utils/ai'
 import { models } from '~/utils/fixtures/models'
 
 const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 
 const { get, update, titleFrom } = useConversations()
@@ -79,9 +78,14 @@ onMounted(() => {
   if (pending) send(pending)
 })
 
-watchEffect(() => {
-  if (!conversation.value) return
-  if (route.path !== `/c/${conversationId.value}`) void router.push('/')
+// Esc halts a streaming reply, matching the stop button.
+defineShortcuts({
+  escape: {
+    usingInput: true,
+    handler: () => {
+      if (status.value === 'streaming' || status.value === 'submitted') void stop()
+    }
+  }
 })
 </script>
 
@@ -90,6 +94,7 @@ watchEffect(() => {
     <template #header>
       <UDashboardNavbar :title="conversation?.title ?? 'Chat'">
         <template #leading>
+          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
@@ -111,13 +116,27 @@ watchEffect(() => {
       </div>
 
       <UContainer v-else>
+        <div
+          v-if="!messages.length && status === 'ready'"
+          class="flex flex-1 items-center justify-center py-16"
+        >
+          <p class="text-muted">
+            Send a message to get started.
+          </p>
+        </div>
+
         <UChatMessages
+          v-else
           :messages="messages"
           :status="status"
           :assistant="{ actions: [] }"
         >
           <template #content="{ message }">
             <ChatMessageParts :message="message" />
+          </template>
+
+          <template #indicator>
+            <UChatShimmer text="Thinking…" />
           </template>
 
           <template #actions="{ message }">
