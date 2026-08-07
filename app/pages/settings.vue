@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
-// General, Models and Account land in phase 5; listing them now would link
-// to routes that 404.
 const items: NavigationMenuItem[] = [
-  { label: 'MCP', icon: 'i-lucide-blocks', to: '/settings/mcp' }
+  { label: 'General', icon: 'i-lucide-settings-2', to: '/settings/general' },
+  { label: 'Models', icon: 'i-lucide-sparkles', to: '/settings/models' },
+  { label: 'MCP', icon: 'i-lucide-blocks', to: '/settings/mcp' },
+  { label: 'Account', icon: 'i-lucide-user', to: '/settings/account' }
 ]
 </script>
 
