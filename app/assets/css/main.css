@@ -1,18 +1,124 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
 
-@theme static {
-  --font-sans: 'Public Sans', sans-serif;
+/* Shiki emits both themes inline and expects the consumer to pick one.
+   Without this, code blocks keep their light palette in dark mode. */
+html.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
 
-  --color-green-50: #effdf5;
-  --color-green-100: #d9fbe8;
-  --color-green-200: #b3f5d1;
-  --color-green-300: #75edae;
-  --color-green-400: #00dc82;
-  --color-green-500: #00c16a;
-  --color-green-600: #00a155;
-  --color-green-700: #007f45;
-  --color-green-800: #016538;
-  --color-green-900: #0a5331;
-  --color-green-950: #052e16;
+@theme static {
+  /* Geist for everything, Geist Mono for labels, tool names and data.
+     @nuxt/fonts ships with Nuxt UI and self-hosts both from Google Fonts —
+     no <link> tag and no extra dependency. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* ── Signal ───────────────────────────────────────────────────────────
+     The only saturated colour in the product, and it means one thing:
+     something is live. Streaming text, a running tool call, a connected
+     server, a focused control. Never decoration.
+
+     500 is the dark-mode value (#4CC2FF). Light mode leans on 600/700,
+     because 500 on a white surface fails contrast for text and borders —
+     the scale exists so both themes can hold the same idea.             */
+  --color-signal-50: #ecf9ff;
+  --color-signal-100: #d5f1ff;
+  --color-signal-200: #b0e6ff;
+  --color-signal-300: #79d7ff;
+  --color-signal-400: #4cc2ff;
+  --color-signal-500: #21a8f0;
+  --color-signal-600: #0b88ce;
+  --color-signal-700: #0c6da6;
+  --color-signal-800: #105c89;
+  --color-signal-900: #134d71;
+  --color-signal-950: #0c314b;
+
+  /* ── Graphite ─────────────────────────────────────────────────────────
+     A cool grey with a blue cast, so the signal reads as the same family
+     rather than a sticker on top of it.
+
+     The dark end is aligned to how Nuxt UI maps neutrals, not to a scale
+     invented separately:
+
+       --ui-bg          (ground)   = neutral-900  -> #0B0E14
+       --ui-bg-elevated (surface)  = neutral-800  -> #151A23
+       --ui-bg-accented            = neutral-700  -> #262D3A
+       --ui-text-muted             = neutral-400  -> #8A93A5
+
+     Getting this wrong the first time put the ground on #151A23 and left
+     #0B0E14 unused, which is what made the auth screen look like a
+     different product. Aligning the scale beats overriding the system. */
+  --color-graphite-50: #f5f7fa;
+  --color-graphite-100: #eaeef4;
+  --color-graphite-200: #d2dae6;
+  --color-graphite-300: #adbacd;
+  --color-graphite-400: #8a93a5;
+  --color-graphite-500: #626c80;
+  --color-graphite-600: #3c4453;
+  --color-graphite-700: #262d3a;
+  --color-graphite-800: #151a23;
+  --color-graphite-900: #0b0e14;
+  --color-graphite-950: #06080c;
+
+  /* ── Shape ────────────────────────────────────────────────────────────
+     Small and deliberate. Borders carry the structure that a softer
+     design would hand to shadows.                                        */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────
+     Durations live here so they stay consistent and can be silenced in
+     one place for reduced motion. Enter slightly slower than exit for
+     occasional UI; high-frequency hover states use --duration-fast both
+     ways so they never feel laggy.                                       */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 260ms;
+}
+
+/* No --ui-bg override: the scale above is aligned so Nuxt UI's own mapping
+   already lands on the intended ground. An override here would only hide a
+   misaligned scale, and would apply to the page while every component kept
+   deriving its own surfaces from the palette — which is exactly how the two
+   drifted apart. */
+
+/* Consistent interaction timing without repeating the same utility on
+   every control. Transform and colour only — both composite cheaply. */
+@layer base {
+  a,
+  button,
+  [role='button'],
+  input,
+  textarea,
+  select {
+    transition:
+      color var(--duration-fast) var(--ease-out-quart),
+      background-color var(--duration-fast) var(--ease-out-quart),
+      border-color var(--duration-fast) var(--ease-out-quart),
+      opacity var(--duration-fast) var(--ease-out-quart);
+  }
+}
+
+/* Anyone who has asked for less motion gets none of it. This has to be
+   blunt: a design that respects the preference selectively still makes
+   people ill. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
