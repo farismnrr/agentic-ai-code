@@ -1,24 +1,26 @@
 <script setup lang="ts">
-const { workspaces, activeWorkspaceId, create: createWorkspace } = useWorkspaces()
+const { workspaces, activeWorkspaceId, create: createWorkspace, update: updateWorkspace } = useWorkspaces()
 
 const workspaceCreating = ref(false)
-const workspaceName = ref('')
 const pending = ref(false)
 const toast = useToast()
 
-async function confirmCreateWorkspace() {
-  const name = workspaceName.value.trim()
-  if (!name) return
+const workspaceConfirming = ref<typeof workspaces.value[0] | null>(null)
 
+async function handleSelectFolder(result: { name: string, path: string }) {
   pending.value = true
   try {
-    const w = await createWorkspace(name)
-    activeWorkspaceId.value = w.id
-    workspaceCreating.value = false
-    workspaceName.value = ''
+    if (workspaceConfirming.value) {
+      await updateWorkspace(workspaceConfirming.value.id, { name: result.name, path: result.path })
+      workspaceConfirming.value = null
+    } else {
+      const w = await createWorkspace(result.name, result.path)
+      activeWorkspaceId.value = w.id
+      workspaceCreating.value = false
+    }
   } catch (err) {
     toast.add({
-      title: 'Failed to create workspace',
+      title: workspaceConfirming.value ? 'Failed to update workspace' : 'Failed to create workspace',
       description: (err as Error).message,
       color: 'error'
     })
@@ -47,7 +49,24 @@ async function confirmCreateWorkspace() {
         icon="i-lucide-folder"
         class="cursor-pointer hover:border-primary-500/50 transition-colors"
         @click="activeWorkspaceId = workspace.id"
-      />
+      >
+        <template
+          v-if="!workspace.pathConfirmed"
+          #description
+        >
+          <div class="mt-2">
+            <UButton
+              size="xs"
+              color="warning"
+              variant="soft"
+              icon="i-lucide-alert-circle"
+              @click.stop="workspaceConfirming = workspace"
+            >
+              Confirm Folder
+            </UButton>
+          </div>
+        </template>
+      </UPageCard>
 
       <UPageCard
         title="Create workspace"
@@ -57,37 +76,20 @@ async function confirmCreateWorkspace() {
       />
     </UPageGrid>
 
-    <UModal
-      :open="workspaceCreating"
-      title="New workspace"
-      @update:open="workspaceCreating = false"
-    >
-      <template #body>
-        <UInput
-          v-model="workspaceName"
-          autofocus
-          placeholder="Workspace name..."
-          class="w-full"
-          :loading="pending"
-          @keydown.enter="confirmCreateWorkspace"
-        />
-      </template>
+    <WorkspaceFolderPicker
+      v-model="workspaceCreating"
+      :pending="pending"
+      @select="handleSelectFolder"
+    />
 
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            label="Cancel"
-            color="neutral"
-            variant="ghost"
-            @click="workspaceCreating = false"
-          />
-          <UButton
-            label="Create"
-            :loading="pending"
-            @click="confirmCreateWorkspace"
-          />
-        </div>
-      </template>
-    </UModal>
+    <WorkspaceFolderPicker
+      :model-value="!!workspaceConfirming"
+      :initial-name="workspaceConfirming?.name"
+      :initial-path="workspaceConfirming?.path"
+      :is-update="true"
+      :pending="pending"
+      @update:model-value="(val) => { if (!val) workspaceConfirming = null }"
+      @select="handleSelectFolder"
+    />
   </UContainer>
 </template>

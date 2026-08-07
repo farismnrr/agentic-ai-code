@@ -28,6 +28,7 @@ export default defineNuxtConfig({
     databaseUrl: '',
     routerBaseUrl: 'http://localhost:20128/v1',
     routerApiKey: '',
+    workspacesRoot: '',
     // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
     // be ≥ 32 characters. Generated once per environment, never reused.
     session: {

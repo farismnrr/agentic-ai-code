@@ -50,7 +50,9 @@ export default defineEventHandler(async (event) => {
 
       await tx.insert(workspaces).values({
         userId: inserted!.id,
-        name: 'Personal'
+        name: 'Personal',
+        path: '',
+        pathConfirmed: false
       })
     })
   } catch (err) {

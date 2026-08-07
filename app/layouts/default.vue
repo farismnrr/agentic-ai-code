@@ -94,25 +94,44 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
 const activeWorkspace = computed(() => workspaces.value.find(w => w.id === activeWorkspaceId.value))
 
 const workspaceCreating = ref(false)
-const workspaceName = ref('')
+const workspaceCreatingPending = ref(false)
 const toast = useToast()
 
-async function confirmCreateWorkspace() {
-  if (workspaceName.value.trim()) {
-    try {
-      const w = await createWorkspace(workspaceName.value.trim())
-      activeWorkspaceId.value = w.id
-    } catch (err) {
-      toast.add({
-        title: 'Failed to create workspace',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return
-    }
+async function handleSelectCreateWorkspace(result: { name: string, path: string }) {
+  workspaceCreatingPending.value = true
+  try {
+    const w = await createWorkspace(result.name, result.path)
+    activeWorkspaceId.value = w.id
+    workspaceCreating.value = false
+  } catch (err) {
+    toast.add({
+      title: 'Failed to create workspace',
+      description: (err as Error).message,
+      color: 'error'
+    })
+  } finally {
+    workspaceCreatingPending.value = false
   }
-  workspaceCreating.value = false
-  workspaceName.value = ''
+}
+
+const workspaceConfirming = ref<typeof workspaces.value[0] | null>(null)
+const workspaceConfirmingPending = ref(false)
+
+async function handleSelectConfirmWorkspace(result: { name: string, path: string }) {
+  if (!workspaceConfirming.value) return
+  workspaceConfirmingPending.value = true
+  try {
+    await updateWorkspace(workspaceConfirming.value.id, { name: result.name, path: result.path })
+    workspaceConfirming.value = null
+  } catch (err) {
+    toast.add({
+      title: 'Failed to confirm workspace',
+      description: (err as Error).message,
+      color: 'error'
+    })
+  } finally {
+    workspaceConfirmingPending.value = false
+  }
 }
 
 const workspaceRenaming = ref<{ id: string, name: string } | null>(null)
@@ -123,7 +142,7 @@ function confirmRenameWorkspace() {
   const pending = workspaceRenaming.value
   if (!pending) return
   const name = pending.name.trim()
-  if (name) updateWorkspace(pending.id, name)
+  if (name) updateWorkspace(pending.id, { name })
   workspaceRenaming.value = null
 }
 
@@ -133,6 +152,14 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
     icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
     onSelect: () => { activeWorkspaceId.value = w.id },
     children: [[
+      ...(!w.pathConfirmed
+        ? [{
+            label: 'Confirm Folder',
+            icon: 'i-lucide-alert-circle',
+            color: 'warning' as const,
+            onSelect: () => { workspaceConfirming.value = w }
+          }]
+        : []),
       {
         label: 'Rename',
         icon: 'i-lucide-pencil',
@@ -338,36 +365,21 @@ const searchGroups = computed(() => [
       </template>
     </UModal>
 
-    <UModal
-      :open="workspaceCreating"
-      title="New workspace"
-      @update:open="workspaceCreating = false"
-    >
-      <template #body>
-        <UInput
-          v-model="workspaceName"
-          autofocus
-          placeholder="Workspace name..."
-          class="w-full"
-          @keydown.enter="confirmCreateWorkspace"
-        />
-      </template>
+    <WorkspaceFolderPicker
+      v-model="workspaceCreating"
+      :pending="workspaceCreatingPending"
+      @select="handleSelectCreateWorkspace"
+    />
 
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            label="Cancel"
-            color="neutral"
-            variant="ghost"
-            @click="workspaceCreating = false"
-          />
-          <UButton
-            label="Create"
-            @click="confirmCreateWorkspace"
-          />
-        </div>
-      </template>
-    </UModal>
+    <WorkspaceFolderPicker
+      :model-value="!!workspaceConfirming"
+      :initial-name="workspaceConfirming?.name"
+      :initial-path="workspaceConfirming?.path"
+      :is-update="true"
+      :pending="workspaceConfirmingPending"
+      @update:model-value="(val) => { if (!val) workspaceConfirming = null }"
+      @select="handleSelectConfirmWorkspace"
+    />
 
     <UModal
       :open="workspaceRenaming !== null"
