@@ -54,7 +54,25 @@ Commits are atomic — one logical change each. If a commit needs "and" in its s
 - Body states the why, what changed, how it was verified, and links the plan phase it closes.
 - CI (`.github/workflows/ci.yml`) runs `pnpm lint` and `pnpm typecheck` on every PR. Green before merge, no exceptions.
 - **Squash merge** into `main`, so one PR is one commit and `main`'s history reads as a list of shipped changes.
-- Delete the branch after merge.
+
+## Clean up after every merge
+
+Merging is not finished until nothing is left behind. Do all of this immediately, without being asked:
+
+```sh
+gh pr merge <n> --squash --delete-branch   # removes the remote branch, and the local one if checked out elsewhere
+git switch main && git pull --ff-only
+git fetch --prune                          # drop stale remotes/origin/* refs
+git worktree remove <path>                 # if the work used a worktree
+git worktree prune                         # drop stale worktree metadata
+git branch -d <branch>                     # if a local copy survived
+```
+
+Then confirm with `git branch -a` and `git worktree list` — expect `main` and the one main worktree, nothing else.
+
+**Why:** stale branches and worktrees pile up fast when work is split per plan phase. They clutter the branch picker on GitHub, make `git branch -a` useless for seeing what's actually in flight, and leave orphaned directories on disk. A branch that has been squash-merged has no unique history left to lose, so there is nothing to preserve by keeping it.
+
+Never delete a branch that has **not** been merged — `git branch -d` refuses that on purpose. Don't reach for `-D` to force past it.
 
 ## What is and isn't committed
 
