@@ -36,7 +36,7 @@ const languages = [
       <UFormField
         label="Theme"
         description="Follows your system setting unless overridden."
-        class="flex items-center justify-between gap-4 pb-4"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4"
       >
         <UColorModeSelect />
       </UFormField>
@@ -44,7 +44,7 @@ const languages = [
       <UFormField
         label="Language"
         description="Interface language."
-        class="flex items-center justify-between gap-4 py-4"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4"
       >
         <USelect
           v-model="settings.language"
@@ -56,7 +56,7 @@ const languages = [
       <UFormField
         label="Stream responses"
         description="Show tokens as they arrive instead of waiting for the full reply."
-        class="flex items-center justify-between gap-4 py-4"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4"
       >
         <USwitch v-model="settings.streaming" />
       </UFormField>
@@ -64,7 +64,7 @@ const languages = [
       <UFormField
         label="Send on Enter"
         description="Off means Enter adds a newline and ⌘+Enter sends."
-        class="flex items-center justify-between gap-4 pt-4"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4"
       >
         <USwitch v-model="settings.sendOnEnter" />
       </UFormField>
@@ -74,7 +74,7 @@ const languages = [
       <UFormField
         label="Reset demo data"
         description="Restores the seed conversations. Your session stays signed in."
-        class="flex items-center justify-between gap-4"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <UButton
           label="Reset"
