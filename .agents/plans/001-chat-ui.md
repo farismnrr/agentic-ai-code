@@ -1,5 +1,7 @@
 # external MCP client-like AI chat UI — frontend only
 
+> **Status: complete.** All six phases shipped to `dev` via PRs #3, #5, #6, #7, #8, #9.
+
 ## Context
 
 The repo is currently the untouched Nuxt UI starter (one landing page). We want a external MCP client-style app: conversation sidebar, streaming chat, settings, and MCP server management — **UI only, no backend this iteration**.
@@ -50,14 +52,14 @@ Each phase should end green (`pnpm lint && pnpm typecheck`) and visibly working 
 1. **`simulateReadableStream` is exported from `ai`** — the SDK's own chunk-emitter with `initialDelayInMs` / `chunkDelayInMs`. No hand-rolled `setTimeout` loop. It's pull-based, so cancelling the reader (what `stop()` does) ends the stream on its own; `abortSignal` never needs threading through.
 2. **Tool approval is native.** The chunk union has `tool-approval-request` / `tool-approval-response`, tool parts have `approval-requested` and `approval-responded` states, and `useChat()` exposes `addToolApprovalResponse({ id, approved, reason })`. **Phase 4's approval dialog is a view over SDK state, not a bespoke state machine** — do not invent a parallel one. `Conversation.approvals` only remembers the "always" answers so the dialog can be skipped next time.
 
-### 2. Shell — layout and navigation
+### 2. Shell — layout and navigation ✅ done
 
 - `app/layouts/default.vue` → `UDashboardGroup` + `UDashboardSidebar` (collapsible, resizable), per the pattern in `references/layouts/dashboard.md`.
 - Sidebar: "New chat" button, conversation list via `UNavigationMenu` (grouped Today / Previous 7 days), `UDashboardSearchButton`, user menu in `#footer`.
 - `UDashboardSearch` wired to conversations for ⌘K.
 - Keep `<UApp>` as the outermost element in `app.vue` — overlays and toasts depend on it.
 
-### 3. Chat — the core screen
+### 3. Chat — the core screen ✅ done
 
 - `app/composables/useConversations.ts` — `useState()`-backed store (SSR-safe; a module-scope `ref` leaks between requests). CRUD over conversations, all in memory.
 - `app/pages/index.vue` — empty state: greeting, suggested prompts, centered prompt box. First submit creates a conversation and routes to it.
@@ -72,14 +74,14 @@ Each phase should end green (`pnpm lint && pnpm typecheck`) and visibly working 
 - Message actions (copy, regenerate, thumbs) via the `#actions` slot.
 - Model selector in `UChatPrompt`'s `#footer` slot.
 
-### 4. MCP surfaces
+### 4. MCP surfaces ✅ done
 
 - **Tool call in message** — `UChatTool` with `variant="card"` in the `#content` slot, showing tool name, server badge, arguments, and result. This is the surface users actually see; get it right first.
 - **Tool picker in prompt** — popover in `UChatPrompt`'s footer listing servers and their tools with checkboxes; selection is per-conversation state.
 - **Approval dialog** — `UModal` driven by the SDK's `approval-requested` part state (see phase 1 note 2): tool name, server, arguments, and Allow once / Always allow / Deny, answered with `addToolApprovalResponse()`. Only the "always" answers go into `Conversation.approvals`, so the dialog can be auto-answered next time.
 - **Server manager** — `app/pages/settings/mcp.vue`: `UTable` of servers (name, transport, status, tool count), enable/disable `USwitch`, add-server `UModal` with a `UForm`, and an expandable tool list per server.
 
-### 5. Settings
+### 5. Settings ✅ done
 
 `app/pages/settings.vue` as a parent with a `UNavigationMenu`, children:
 
@@ -90,7 +92,7 @@ Each phase should end green (`pnpm lint && pnpm typecheck`) and visibly working 
 
 Forms use `UForm` + a Standard Schema validator (Zod or Valibot — pick one and stay with it); see `references/guidelines/forms.md`.
 
-### 6. Polish
+### 6. Polish ✅ done
 
 - Loading skeletons, empty states, `UChatShimmer` while awaiting first token.
 - Mobile: sidebar collapses to `UDashboardSidebarToggle`; verify the prompt box doesn't get eaten by the mobile keyboard.

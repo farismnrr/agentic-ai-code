@@ -38,6 +38,7 @@ function start(text: string) {
     <template #header>
       <UDashboardNavbar title="New chat">
         <template #leading>
+          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>

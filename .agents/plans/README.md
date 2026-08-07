@@ -12,8 +12,8 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 
 ## In flight
 
-- [001-chat-ui.md](001-chat-ui.md) — external MCP client-like AI chat UI, frontend only (not started)
+_Nothing in flight._
 
 ## Done
 
-_None yet._
+- [001-chat-ui.md](001-chat-ui.md) — external MCP client-like AI chat UI, frontend only
