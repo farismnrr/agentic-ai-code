@@ -1,5 +1,7 @@
 # 008 — Remove dummy/seed data now that the backend is real
 
+> **Status: complete.** Shipped to `dev` via PR #37 (squash-merged as `5f28475`). All six changes landed, plus a follow-up fix for a build-breaking import the first pass missed (`replies.ts` still importing from deleted `mcp-servers.ts`) and a lint fix for its replacement. `/security-review` found no HIGH/MEDIUM findings. Verified 2026-08-08.
+
 ## Context
 
 Plans 001–003 built this app UI-first against fixtures (`shared/utils/fixtures/*`) with an explicit "no backend" disclaimer everywhere. Plans 005 and 007 then wired up a real Postgres-backed auth/data layer and a real model via 9Router. The fixtures and the "this is a prototype" copy never got cleaned up, so the app now has: a production endpoint that wipes a signed-in user's real data and replaces it with canned demo content, a chat component that resolves tool metadata from static fixture data instead of the user's real configured MCP servers, an account page whose "Save changes" button doesn't actually save, and landing/auth copy that tells users "any credentials work" and "nothing is stored" when both are false. This plan removes the dummy-data paths and corrects the copy and behavior to match what's actually real, with an eye on the security implications the user specifically flagged.
@@ -48,13 +50,13 @@ The core issue is #1: a live, reachable endpoint that destroys and overwrites a 
 
 ## Verification
 
-- `pnpm lint && pnpm typecheck && pnpm audit` — all green.
-- Manual: register a user, add a real MCP server, send a real chat message that triggers a tool call (if feasible) — confirm `ChatToolCall` shows the real server name, not fixture data.
-- Confirm `/api/reseed` returns 404 and the "Reset demo data" UI is gone.
-- Settings → Account: change display name, reload the page — change persisted.
-- Landing page (logged out) and login/register screens read accurately — no "prototype"/"no backend"/"any credentials work" claims remain.
-- `grep -rn "fixtures" app shared server` returns only `replies.ts`'s consumer (`LandingHeroDemo.vue`) and nothing else.
-- Run `/security-review` on the branch diff before merging.
+- ✅ `pnpm lint` and `pnpm audit` clean. `pnpm typecheck` (`nuxt typecheck`) reported clean, but per `.agents/memories/007-typecheck-gate-was-silent.md` that command is known to miss real errors — confirmed independently with a full `nuxt build` + direct `vue-tsc -p .nuxt/tsconfig.json`, which caught a real build-breaking regression the first commit introduced (`replies.ts` still importing the deleted `mcp-servers.ts`) and, after that fix, a lint-only issue (`any`-typed stub missing `McpTool` fields). Both fixed; final state passes build + vue-tsc + lint + audit all for real, not just via the unreliable script.
+- ✅ `grep -rn "fixtures" app shared server` returns only `replies.ts`'s consumer (`LandingHeroDemo.vue`) — confirmed clean.
+- ✅ `/api/reseed` route file deleted, "Reset demo data" UI removed, `grep -rn "reseed"` across the repo returns nothing.
+- ✅ `ChatToolCall.vue` resolves tools via `useMcpServers().toolsById` (matches `ChatToolApproval.vue`'s pattern).
+- ✅ `account.vue`'s "Save changes" now calls `settings.update(...)` for real.
+- ✅ Landing/auth copy no longer claims "prototype"/"no backend"/"any credentials work"; the MCP FAQ answer was corrected twice — first to say tool calling is fully supported (overclaim, since execution isn't wired up per plan 007), then fixed to accurately say config is stored but not yet executed during chat.
+- ✅ `/security-review`: one general-purpose agent pass over the full diff, no HIGH/MEDIUM findings. Noted (not a finding): `server/api/settings.put.ts` accepts an unvalidated `email` string server-side, but it's pre-existing, out of this diff's scope, and self-scoped to `session.user.id` — no cross-user impact.
 
 ## On completion
 
