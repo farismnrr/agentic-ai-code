@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
-const { sorted, remove, update, loadAll: loadConversations } = useConversations()
+const { sorted, remove, update, loadOne, loadAll: loadConversations } = useConversations()
 const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
 const { load: loadSettings } = useSettings()
 const { loadAll: loadMcpServers } = useMcpServers()
@@ -11,6 +11,22 @@ const route = useRoute()
 
 await useAsyncData('app-data', async () => {
   if (user.value) {
+    // Opening a conversation directly (a deep link, a bookmark, a refresh)
+    // never went through the workspace picker, so activeWorkspaceId can be
+    // unset or stale even though the conversation itself belongs to a real
+    // workspace. This has to be resolved and set *before* loadConversations()
+    // below, in this same async block — the sidebar's own template renders
+    // once this resolves, and by then it's too late for a page component
+    // further down the tree to correct it; SSR doesn't re-render a parent
+    // because a child mutated shared state after the parent already rendered.
+    const chatRouteMatch = route.path.match(/^\/chat\/([^/]+)$/)
+    if (chatRouteMatch) {
+      const conv = await loadOne(chatRouteMatch[1]!)
+      if (conv && conv.workspaceId !== activeWorkspaceId.value) {
+        activeWorkspaceId.value = conv.workspaceId
+      }
+    }
+
     await Promise.allSettled([
       loadSettings(),
       loadWorkspaces().then(loadConversations),
