@@ -11,7 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
-*None active.*
+- [005-backend-auth.md](005-backend-auth.md): Real backend auth (cookie session, Postgres, OAuth, email verification) then chat/settings/MCP persistence.
 
 ## Completed
 - [004-ui-responsiveness.md](004-ui-responsiveness.md): Audit and resolve responsiveness on Mobile S through Desktop 2K across all UI pages.
