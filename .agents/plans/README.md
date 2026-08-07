@@ -11,7 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
-*None active.*
+- [006-error-handling.md](006-error-handling.md): centralize server error handling (RFC 9457 Problem Details) and audit every 4xx/5xx to match its real failure scenario.
 
 ## Completed
 - [005-backend-auth.md](005-backend-auth.md) — real backend auth (cookie session, Postgres, OAuth, email verification) then chat/settings/MCP persistence.
