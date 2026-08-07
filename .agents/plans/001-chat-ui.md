@@ -38,11 +38,17 @@ Also add the Shiki dark-mode CSS block from `.agents/skills/nuxt-ui/references/l
 
 Each phase should end green (`pnpm lint && pnpm typecheck`) and visibly working at http://100.99.88.53:3333.
 
-### 1. Data layer — types and fixtures
+### 1. Data layer — types and fixtures ✅ done
 
-- `app/types/chat.ts` — re-export the SDK's `UIMessage` rather than defining a parallel type. Define only what's ours: `Conversation`, `McpServer`, `McpTool`, `ToolApproval`.
-- `app/utils/fixtures/` — seed conversations, MCP servers with tool lists, and a set of canned assistant replies (one plain, one with a reasoning block, one with an MCP tool call, one with a code block, one error).
-- `app/utils/mock-transport.ts` — the `ChatTransport` implementation. Chunk canned replies into token-sized pieces on a `setTimeout` loop; honour the `AbortSignal` so stop works.
+- `app/types/chat.ts` — re-exports the SDK's `UIMessage`; defines `Conversation`, `McpServer`, `McpTool`, `ApprovalDecision`, `ChatModel`.
+- `app/utils/fixtures/` — `models.ts`, `mcp-servers.ts` (4 servers, 10 tools, one in an error state), `conversations.ts` (3 seeds across time buckets), `replies.ts` (5 scenarios: default, reasoning, code, error, tool).
+- `app/utils/mock-transport.ts` — the `ChatTransport` implementation.
+- `@comark/nuxt` registered in `nuxt.config.ts`.
+
+**Two things found by reading `ai@7`'s types that change later phases:**
+
+1. **`simulateReadableStream` is exported from `ai`** — the SDK's own chunk-emitter with `initialDelayInMs` / `chunkDelayInMs`. No hand-rolled `setTimeout` loop. It's pull-based, so cancelling the reader (what `stop()` does) ends the stream on its own; `abortSignal` never needs threading through.
+2. **Tool approval is native.** The chunk union has `tool-approval-request` / `tool-approval-response`, tool parts have `approval-requested` and `approval-responded` states, and `useChat()` exposes `addToolApprovalResponse({ id, approved, reason })`. **Phase 4's approval dialog is a view over SDK state, not a bespoke state machine** — do not invent a parallel one. `Conversation.approvals` only remembers the "always" answers so the dialog can be skipped next time.
 
 ### 2. Shell — layout and navigation
 
@@ -70,7 +76,7 @@ Each phase should end green (`pnpm lint && pnpm typecheck`) and visibly working 
 
 - **Tool call in message** — `UChatTool` with `variant="card"` in the `#content` slot, showing tool name, server badge, arguments, and result. This is the surface users actually see; get it right first.
 - **Tool picker in prompt** — popover in `UChatPrompt`'s footer listing servers and their tools with checkboxes; selection is per-conversation state.
-- **Approval dialog** — `UModal` triggered by the mock transport before a tool "runs": tool name, server, arguments, and Allow once / Always allow / Deny. Store the decision in the conversation state so "always allow" actually sticks within the session.
+- **Approval dialog** — `UModal` driven by the SDK's `approval-requested` part state (see phase 1 note 2): tool name, server, arguments, and Allow once / Always allow / Deny, answered with `addToolApprovalResponse()`. Only the "always" answers go into `Conversation.approvals`, so the dialog can be auto-answered next time.
 - **Server manager** — `app/pages/settings/mcp.vue`: `UTable` of servers (name, transport, status, tool count), enable/disable `USwitch`, add-server `UModal` with a `UForm`, and an expandable tool list per server.
 
 ### 5. Settings

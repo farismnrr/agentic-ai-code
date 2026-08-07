@@ -12,9 +12,12 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@ai-sdk/vue": "^4.0.55",
+    "@comark/nuxt": "^0.6.0",
     "@iconify-json/lucide": "^1.2.121",
     "@iconify-json/simple-icons": "^1.2.92",
     "@nuxt/ui": "^4.10.0",
+    "ai": "^7.0.55",
     "nuxt": "^4.5.1",
     "tailwindcss": "^4.3.3"
   },
