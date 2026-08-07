@@ -12,9 +12,10 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 
 ## In flight
 
-_Nothing in flight._
+- [004-ui-responsiveness.md](004-ui-responsiveness.md) — UI Responsiveness Fix (Mobile S - Desktop 2K)
 
 ## Done
 
 - [001-chat-ui.md](001-chat-ui.md) — ChatGPT-like AI chat UI, frontend only
 - [002-landing-auth-interactive.md](002-landing-auth-interactive.md) — landing → login → app, and closing the interaction gaps
+- [003-instrument-design.md](003-instrument-design.md) — "Instrument": give the product a visual identity
