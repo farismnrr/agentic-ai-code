@@ -9,7 +9,8 @@
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "audit": "pnpm audit"
   },
   "dependencies": {
     "@ai-sdk/vue": "^4.0.55",

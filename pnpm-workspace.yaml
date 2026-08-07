@@ -4,3 +4,24 @@ allowBuilds:
   esbuild: false
   unrs-resolver: false
   vue-demi: false
+
+# Every advisory below is transitive — none of these are direct dependencies.
+# They come in through Nuxt's own tree (nitropack, @nuxt/eslint, @nuxt/icon),
+# so we can't wait for each intermediate package to bump. Each entry pins the
+# lowest version the advisory considers patched.
+#
+# Re-check with `pnpm audit` after any dependency change; drop an entry once
+# the upstream range moves past it, so this list doesn't quietly rot.
+overrides:
+  # Version-range-keyed overrides (brace-expansion@^2: ...) are silently
+  # ignored here, so this is a single unscoped pin across every major in the
+  # tree. Verified against a production build — minimatch's consumers work
+  # fine on 5.x.
+  brace-expansion: '>=5.0.9'
+  '@babel/core': '>=7.29.1'
+  esbuild: '>=0.28.1'
+  js-yaml@^4: '>=4.3.1'
+  launch-editor: '>=2.14.1'
+  shell-quote: '>=1.8.5'
+  svgo@^4: '>=4.0.2'
+  tar: '>=7.5.21'
