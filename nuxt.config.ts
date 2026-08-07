@@ -24,7 +24,16 @@ export default defineNuxtConfig({
     // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
     // be ≥ 32 characters. Generated once per environment, never reused.
     session: {
-      password: ''
+      password: '',
+      cookie: {
+        // h3's session cookie defaults to Secure unconditionally, which
+        // silently drops the cookie on any non-HTTPS origin (plain
+        // http://<lan-ip>:3333 during local dev) — the browser and curl
+        // both refuse to store or resend it, so login "succeeds" but no
+        // session ever persists. Only relax this outside production;
+        // real deployments must keep Secure.
+        secure: process.env.NODE_ENV === 'production'
+      }
     },
     // SMTP for email verification + password reset. All values come from
     // NUXT_SMTP_* env vars — nothing is hardcoded here.
