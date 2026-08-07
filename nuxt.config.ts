@@ -2,7 +2,10 @@
 export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
-    '@nuxt/ui'
+    '@nuxt/ui',
+    // Renders assistant markdown incrementally as tokens arrive; plain
+    // rendering flickers and breaks mid-token during streaming.
+    '@comark/nuxt'
   ],
 
   devtools: {
