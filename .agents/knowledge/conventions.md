@@ -1,6 +1,7 @@
 # Conventions
 
 - **Use semantic color classes** — `text-default`, `text-muted`, `bg-elevated`, `border-muted`. Never raw palette colors like `text-gray-500`; they break dark mode and theming.
+- **The signal colour (cyan/primary) is reserved for things that are actually happening.** Streaming text, a running tool call, a connected MCP server, a focused input. Nothing decorative ever uses it.
 - **Brand colors live in `app/app.config.ts`** (`ui.colors.primary` / `ui.colors.neutral`), not hardcoded in components.
 - **Icons use `i-{collection}-{name}`** — `lucide` and `simple-icons` are installed locally. Anything else needs a new `@iconify-json/*` dependency.
 - **Components and composables are auto-imported.** Don't add manual imports for anything under `app/components/` or `app/composables/`.

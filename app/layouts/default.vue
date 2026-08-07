@@ -155,12 +155,22 @@ const searchGroups = computed(() => [{
             </UNavigationMenu>
           </div>
 
-          <p
+          <div
             v-if="!groups.length"
-            class="px-2.5 py-4 text-sm text-muted"
+            class="px-2.5 py-4 text-center"
           >
-            No conversations yet.
-          </p>
+            <p class="mb-3 text-sm text-muted">
+              No conversations yet.
+            </p>
+            <UButton
+              label="Start one"
+              icon="i-lucide-message-square-plus"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              @click="newChat"
+            />
+          </div>
         </template>
       </template>
 

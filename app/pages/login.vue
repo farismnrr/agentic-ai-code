@@ -53,6 +53,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           label="Email"
           name="email"
           required
+          :ui="{ label: 'font-mono text-xs text-muted uppercase tracking-wider' }"
         >
           <UInput
             v-model="state.email"
@@ -68,6 +69,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           label="Password"
           name="password"
           required
+          :ui="{ label: 'font-mono text-xs text-muted uppercase tracking-wider' }"
         >
           <UInput
             v-model="state.password"
