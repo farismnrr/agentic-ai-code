@@ -26,6 +26,7 @@ Everything an AI agent needs for this repo lives here. `EXTERNAL MCP CLIENT.md` 
 | [`self-improvement.md`](knowledge/self-improvement.md) | **Keeping this folder current.** What to record, where, and what not to record |
 | [`project.md`](knowledge/project.md) | Stack, versions, directory layout, commands |
 | [`conventions.md`](knowledge/conventions.md) | Coding rules — colors, icons, auto-imports, gotchas |
+| [`git.md`](knowledge/git.md) | **Branching, commits, PRs.** Never commit to `main`; never commit unasked |
 | [`tooling.md`](knowledge/tooling.md) | ESLint setup, environment variables, runtime config |
 | [`resources.md`](knowledge/resources.md) | Skills and the Nuxt UI MCP server — what each is for |
 

@@ -13,10 +13,19 @@ node_modules
 logs
 *.log
 
-# Misc
+# Editors
 .DS_Store
 .fleet
 .idea
+.vscode
+
+# Tool caches
+.eslintcache
+*.tsbuildinfo
+
+# external MCP client Code — settings.json is shared and committed; these are personal/machine state
+.external-mcp/settings.local.json
+.external-mcp/.credentials.json
 
 # Local env files
 .env
