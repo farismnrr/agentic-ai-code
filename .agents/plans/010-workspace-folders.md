@@ -54,4 +54,13 @@ This app is architecturally different from all four: it's a real multi-tenant we
 
 ## On completion
 
+Status: **Complete**
+
+**Verification notes:**
+- `pnpm lint`, `nuxt build`, `vue-tsc`, and `pnpm audit` all run green.
+- Path traversal vulnerability (e.g. `../ai-code-005-p3`) patched and verified live returning 403 Forbidden.
+- The `WorkspaceFolderPicker.vue` component correctly utilizes project semantic tokens (e.g., `bg-elevated`, `border-default`).
+- `workspaces.path` and `pathConfirmed` fields added via migration.
+- `GET /api/fs/browse` lists only valid child directories within the configured root.
+
 Per `.agents/knowledge/self-improvement.md`: write this plan to `.agents/plans/010-workspace-folders.md`, tick items off as they land, move it to Completed in `.agents/plans/README.md`, and record in `.agents/memories/` the OpenClaw-precedent reasoning behind the configured-root design — a future agent tempted to add a "browse anywhere" mode should see why that was explicitly rejected.
