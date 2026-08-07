@@ -11,7 +11,7 @@ const route = useRoute()
 
 await useAsyncData('app-data', async () => {
   if (user.value) {
-    await Promise.all([
+    await Promise.allSettled([
       loadSettings(),
       loadWorkspaces().then(loadConversations),
       loadMcpServers()
@@ -95,10 +95,21 @@ const activeWorkspace = computed(() => workspaces.value.find(w => w.id === activ
 
 const workspaceCreating = ref(false)
 const workspaceName = ref('')
+const toast = useToast()
+
 async function confirmCreateWorkspace() {
   if (workspaceName.value.trim()) {
-    const w = await createWorkspace(workspaceName.value.trim())
-    activeWorkspaceId.value = w.id
+    try {
+      const w = await createWorkspace(workspaceName.value.trim())
+      activeWorkspaceId.value = w.id
+    } catch (err) {
+      toast.add({
+        title: 'Failed to create workspace',
+        description: (err as Error).message,
+        color: 'error'
+      })
+      return
+    }
   }
   workspaceCreating.value = false
   workspaceName.value = ''

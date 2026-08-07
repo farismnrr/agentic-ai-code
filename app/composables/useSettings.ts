@@ -24,7 +24,8 @@ export function useSettings() {
   }))
 
   async function load() {
-    const data = await $fetch<AppSettings>('/api/settings')
+    const fetch = import.meta.server ? useRequestFetch() : $fetch
+    const data = await fetch<AppSettings>('/api/settings')
     settings.value = data
   }
 

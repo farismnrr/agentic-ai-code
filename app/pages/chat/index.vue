@@ -4,9 +4,11 @@ import { models } from '#shared/utils/models'
 useSeoMeta({ title: 'New chat' })
 
 const { create, titleFrom } = useConversations()
+const { loaded, activeWorkspaceId } = useWorkspaces()
 const settings = useSettings()
 const { set: setPendingPrompt } = usePendingPrompt()
 const router = useRouter()
+const toast = useToast()
 
 const input = ref('')
 // Seeded from the saved default so the settings page actually governs this.
@@ -27,11 +29,19 @@ async function start(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
 
-  const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value })
-  // The chat instance doesn't exist until the next page mounts, so hand the
-  // prompt over rather than trying to send it here.
-  setPendingPrompt(conversation.id, trimmed)
-  void router.push(`/chat/${conversation.id}`)
+  try {
+    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value })
+    // The chat instance doesn't exist until the next page mounts, so hand the
+    // prompt over rather than trying to send it here.
+    setPendingPrompt(conversation.id, trimmed)
+    void router.push(`/chat/${conversation.id}`)
+  } catch (err) {
+    toast.add({
+      title: 'Failed to start conversation',
+      description: (err as Error).message,
+      color: 'error'
+    })
+  }
 }
 </script>
 
@@ -46,7 +56,21 @@ async function start(text: string) {
     </template>
 
     <template #body>
-      <UContainer class="flex w-full flex-1 flex-col justify-center gap-8 py-10">
+      <div
+        v-if="!loaded"
+        class="flex w-full flex-1 flex-col items-center justify-center p-10"
+      >
+        <USkeleton class="h-8 w-64 mb-4" />
+        <USkeleton class="h-4 w-96 mb-8" />
+        <USkeleton class="h-12 w-full max-w-2xl rounded-full" />
+      </div>
+
+      <WorkspacePicker v-else-if="!activeWorkspaceId" />
+
+      <UContainer
+        v-else
+        class="flex w-full flex-1 flex-col justify-center gap-8 py-10"
+      >
         <div class="text-center">
           <h1 class="text-2xl font-semibold text-highlighted sm:text-3xl">
             What are we building?
