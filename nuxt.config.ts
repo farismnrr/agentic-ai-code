@@ -15,12 +15,19 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark'
+  },
+
   // Values here are overridden at runtime by NUXT_-prefixed env vars.
   // Public keys are exposed to the browser; add private keys at the top level.
   runtimeConfig: {
     // postgres.js connection string — read via useRuntimeConfig().databaseUrl
     // in server/utils/db.ts. Never expose this to the client.
     databaseUrl: '',
+    routerBaseUrl: 'http://localhost:20128/v1',
+    routerApiKey: '',
     // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
     // be ≥ 32 characters. Generated once per environment, never reused.
     session: {

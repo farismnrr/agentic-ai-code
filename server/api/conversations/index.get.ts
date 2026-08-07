@@ -1,14 +1,19 @@
-import { eq, desc } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { conversations } from '../../database/schema'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const db = useDb()
 
+  const query = getQuery(event)
+  if (!query.workspaceId || typeof query.workspaceId !== 'string') {
+    throw badRequest('Missing workspaceId')
+  }
+
   const userConversations = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.userId, session.user.id))
+    .where(and(eq(conversations.userId, session.user.id), eq(conversations.workspaceId, query.workspaceId)))
     .orderBy(desc(conversations.updatedAt))
 
   // For the list, we don't fetch all messages, just the metadata.

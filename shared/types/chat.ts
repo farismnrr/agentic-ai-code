@@ -45,8 +45,16 @@ export interface McpServer {
 /** Remembered answer to an approval prompt, scoped to one conversation. */
 export type ApprovalDecision = 'always' | 'never'
 
+export interface Workspace {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface Conversation {
   id: string
+  workspaceId: string
   title: string
   createdAt: number
   updatedAt: number

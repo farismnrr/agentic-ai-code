@@ -1,5 +1,5 @@
 import { defineEventHandler } from 'h3'
-import { conversations, messages, userSettings, mcpServers } from '../database/schema'
+import { conversations, messages, userSettings, mcpServers, workspaces } from '../database/schema'
 import { eq } from 'drizzle-orm'
 import { seedConversations } from '#shared/utils/fixtures/conversations'
 import { defaultModelId } from '#shared/utils/fixtures/models'
@@ -38,10 +38,17 @@ export default defineEventHandler(async (event) => {
     await db.insert(mcpServers).values(mcpData)
   }
 
+  let [w] = await db.select().from(workspaces).where(eq(workspaces.userId, userId)).limit(1)
+  if (!w) {
+    const [inserted] = await db.insert(workspaces).values({ userId, name: 'Personal' }).returning()
+    w = inserted!
+  }
+
   // Reseed conversations and messages
   for (const conv of seedConversations) {
     const [c] = await db.insert(conversations).values({
       userId,
+      workspaceId: w.id,
       title: conv.title,
       modelId: conv.modelId,
       enabledToolIds: conv.enabledToolIds || [],
