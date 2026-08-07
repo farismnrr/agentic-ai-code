@@ -14,7 +14,6 @@ const items: NavigationMenuItem[] = [
     <template #header>
       <UDashboardNavbar title="Settings">
         <template #leading>
-          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
