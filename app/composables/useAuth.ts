@@ -1,66 +1,73 @@
+/**
+ * Thin wrapper over nuxt-auth-utils' `useUserSession()`.
+ *
+ * Call-sites (login.vue, register.vue, default layout) stay unchanged — they
+ * still see `user`, `isAuthenticated`, `login`, `register`, and `logout`.
+ *
+ * The heavy lifting moved to the server:
+ * - Session is a sealed httpOnly cookie (nuxt-auth-utils).
+ * - Credentials are validated and hashed server-side (scrypt).
+ * - This composable only communicates with those server routes.
+ *
+ * The `restore()` helper and `localStorage` paths are removed entirely —
+ * the cookie is readable on both server and client, so there's nothing to
+ * restore manually.
+ */
+
 export interface SessionUser {
+  id: string
   name: string
   email: string
+  /** ISO string when verified, null when unverified. */
+  emailVerifiedAt: string | null
 }
 
-const STORAGE_KEY = 'ai-code.session'
-
-/**
- * Fake authentication for the prototype. Any credentials are accepted —
- * there is no backend to check them against.
- *
- * The session is the one thing that survives a reload. Everything else
- * (conversations, settings, MCP servers) deliberately resets to seed data, so
- * each demo starts clean. Without this exception the route guard would bounce
- * you to /login on every refresh, which reads as broken rather than clean.
- */
 export function useAuth() {
-  const user = useState<SessionUser | null>('auth-user', () => null)
+  const { user: sessionUser, fetch: fetchSession, clear } = useUserSession()
 
-  /** Called once from a client plugin — localStorage doesn't exist during SSR. */
-  function restore() {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-    try {
-      user.value = JSON.parse(raw) as SessionUser
-    } catch {
-      // A corrupt entry shouldn't lock anyone out of the prototype.
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  }
-
-  function persist(value: SessionUser | null) {
-    if (import.meta.server) return
-    if (value) localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-    else localStorage.removeItem(STORAGE_KEY)
-  }
-
-  /** Derives a display name from an email so the UI has something to show. */
-  function nameFromEmail(email: string): string {
-    const local = email.split('@')[0] ?? 'there'
-    return local
-      .split(/[._-]+/)
-      .filter(Boolean)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ') || 'there'
-  }
-
-  function login(email: string, name?: string) {
-    const session: SessionUser = { name: name?.trim() || nameFromEmail(email), email }
-    user.value = session
-    persist(session)
-    return session
-  }
-
-  /** Same effect as login — there's no account store to write to. */
-  const register = login
-
-  function logout() {
-    user.value = null
-    persist(null)
-  }
+  /**
+   * The session user, typed. nuxt-auth-utils stores it as `Record<string, unknown>`,
+   * so we cast here — the server populates exactly these fields.
+   */
+  const user = computed(() =>
+    sessionUser.value ? (sessionUser.value as unknown as SessionUser) : null
+  )
 
   const isAuthenticated = computed(() => user.value !== null)
 
-  return { user, isAuthenticated, restore, login, register, logout }
+  /**
+   * Send credentials to the server and receive a session cookie in return.
+   * On success the cookie is set automatically; `useUserSession()` will
+   * reflect the new user without a reload (it's reactive).
+   */
+  async function login(email: string, password: string) {
+    await $fetch('/api/auth/login', {
+      method: 'POST',
+      body: { email, password }
+    })
+    // nuxt-auth-utils updates the session reactive state after the
+    // Set-Cookie header arrives. fetch() re-reads the session endpoint
+    // and refreshes the reactive user state.
+    await fetchSession()
+  }
+
+  /**
+   * Creates an account and establishes a session in one step.
+   * All four parameters are validated server-side as well.
+   */
+  async function register(name: string, email: string, password: string, confirm: string) {
+    await $fetch('/api/auth/register', {
+      method: 'POST',
+      body: { name, email, password, confirm }
+    })
+    await fetchSession()
+  }
+
+  /** Deletes the session cookie via the server route and clears local state. */
+  async function logout() {
+    await $fetch('/api/auth/logout', { method: 'POST' })
+    await clear()
+  }
+
+  return { user, isAuthenticated, login, register, logout }
 }

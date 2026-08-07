@@ -1,14 +1,21 @@
 /** Routes reachable without a session. Everything else is guarded. */
 const PUBLIC_ROUTES = ['/', '/login', '/register']
 
+/**
+ * Route guard backed by the nuxt-auth-utils session cookie.
+ *
+ * The cookie is an httpOnly sealed cookie set by the server, readable on
+ * both the server (SSR) and the client (via the nuxt-auth-utils module). This
+ * means the guard works correctly on both sides, so the `import.meta.server`
+ * early-return that was here before plan 005 is no longer needed.
+ *
+ * Removing `ssr: false` from /chat/** and /settings/** in nuxt.config.ts
+ * means those pages are now server-rendered. The SSR pass runs this guard
+ * first, so a signed-in visitor gets their content rendered on the server
+ * and an anonymous visitor is redirected to /login — no flash, no client-only
+ * rendering workaround.
+ */
 export default defineNuxtRouteMiddleware((to) => {
-  // The session lives in localStorage, which doesn't exist on the server, so
-  // the server can't know whether anyone is signed in. Guarding there would
-  // bounce a signed-in visitor on every hard refresh. App routes are rendered
-  // client-side (see `routeRules` in nuxt.config), so there's no flash of
-  // guarded content before this runs.
-  if (import.meta.server) return
-
   const { isAuthenticated } = useAuth()
   const isPublic = PUBLIC_ROUTES.includes(to.path)
 

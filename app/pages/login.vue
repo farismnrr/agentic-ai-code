@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
 
 definePageMeta({ layout: 'auth' })
@@ -8,26 +7,28 @@ useSeoMeta({ title: 'Sign in' })
 const { login } = useAuth()
 const route = useRoute()
 
-const schema = v.object({
-  email: v.pipe(v.string(), v.email('Enter a valid email address')),
-  password: v.pipe(v.string(), v.minLength(8, 'At least 8 characters'))
-})
-
-type Schema = v.InferOutput<typeof schema>
-
 const state = reactive({ email: '', password: '' })
 const loading = ref(false)
+const serverError = ref<string | null>(null)
 
-async function onSubmit(event: FormSubmitEvent<Schema>) {
+async function onSubmit(event: FormSubmitEvent<typeof state>) {
   loading.value = true
-  // No request to make; a beat of latency keeps the button state honest
-  // instead of flashing.
-  await new Promise(resolve => setTimeout(resolve, 350))
-
-  login(event.data.email)
-
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/chat'
-  await navigateTo(redirect)
+  serverError.value = null
+  try {
+    await login(event.data.email, event.data.password)
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/chat'
+    await navigateTo(redirect)
+  } catch (err: unknown) {
+    const fe = err as { data?: { message?: string }, statusCode?: number }
+    if (fe?.statusCode === 429) {
+      serverError.value = fe.data?.message ?? 'Too many attempts. Try again later.'
+    } else {
+      // Generic message regardless of server error — don't leak account existence.
+      serverError.value = 'Invalid email or password.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -38,17 +39,23 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         Sign in
       </h1>
       <p class="mt-1 text-sm text-muted">
-        Any email and password will do.
+        Sign in to your account.
       </p>
     </div>
 
     <UCard>
       <UForm
-        :schema="schema"
         :state="state"
         class="space-y-4"
         @submit="onSubmit"
       >
+        <UAlert
+          v-if="serverError"
+          color="error"
+          variant="soft"
+          :description="serverError"
+        />
+
         <UFormField
           label="Email"
           name="email"
