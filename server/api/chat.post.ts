@@ -82,8 +82,8 @@ export default defineEventHandler(async (event) => {
 
         let fullResponseText = ''
 
-        const parser = createParser((event) => {
-          if (event.type === 'event') {
+        const parser = createParser({
+          onEvent: (event) => {
             if (event.data === '[DONE]') {
               return
             }

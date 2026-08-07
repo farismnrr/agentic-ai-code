@@ -48,10 +48,10 @@ export default defineEventHandler(async (event) => {
         passwordHash: hash
       }).returning({ id: users.id })
 
-      await tx.insert(workspaces).values({
-        userId: inserted.id,
+      const [w] = await tx.insert(workspaces).values({
+        userId: inserted!.id,
         name: 'Personal'
-      })
+      }).returning()
     })
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('Email already registered')

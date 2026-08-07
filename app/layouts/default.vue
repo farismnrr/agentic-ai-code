@@ -112,7 +112,7 @@ function confirmRenameWorkspace() {
   const pending = workspaceRenaming.value
   if (!pending) return
   const name = pending.name.trim()
-  if (name) updateWorkspace(pending.id, { name })
+  if (name) updateWorkspace(pending.id, name)
   workspaceRenaming.value = null
 }
 
@@ -135,7 +135,7 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
           await removeWorkspace(w.id)
           // If we deleted the active one, fallback to the first available
           if (activeWorkspaceId.value === w.id) {
-            activeWorkspaceId.value = workspaces.value[0]?.id
+            activeWorkspaceId.value = workspaces.value[0]?.id || null
           }
         }
       }

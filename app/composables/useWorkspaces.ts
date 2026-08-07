@@ -20,7 +20,7 @@ export function useWorkspaces() {
     // If we have workspaces but no active one, or the active one doesn't exist anymore, default to the first one
     if (data.length > 0) {
       if (!activeWorkspaceId.value || !data.some(w => w.id === activeWorkspaceId.value)) {
-        activeWorkspaceId.value = data[0].id
+        activeWorkspaceId.value = data[0]!.id
       }
     } else {
       activeWorkspaceId.value = null
@@ -58,7 +58,7 @@ export function useWorkspaces() {
     // Switch active if we just deleted it
     if (activeWorkspaceId.value === id) {
       const remaining = sorted.value
-      activeWorkspaceId.value = remaining.length > 0 ? remaining[0].id : null
+      activeWorkspaceId.value = remaining.length > 0 ? remaining[0]!.id : null
     }
 
     try {
