@@ -20,7 +20,19 @@ feat/001-p2-shell
 feat/001-p3-chat
 ```
 
-`001` is the plan file in [`../plans/`](../plans/); `p1` is its phase. One PR per phase — each phase is defined to end green and reviewable on its own, so don't stack a whole plan into one branch.
+`001` is the plan file in [`../plans/`](../plans/); `p1` is its phase.
+
+### One PR per *phase*, not per plan
+
+A plan is several PRs. This is deliberate and has been questioned once, so the reasoning:
+
+- A six-phase plan in one PR is 30+ files. That size gets approved, not reviewed.
+- Phases are defined to end green and work on their own, so each is independently revertable. One bad phase shouldn't drag correct earlier work out with it.
+- **Later phases get corrected by what earlier ones discover.** Plan 001 phase 1 turned up two facts about the AI SDK that changed the design of phase 4 — see [`../memories/ai-sdk-native-features.md`](../memories/ai-sdk-native-features.md). In a single PR those would have surfaced only after phase 4 was already built on the wrong assumption.
+
+`main` therefore collects several commits per plan. That's fine — each one is a working change.
+
+Not everything is plan work: a fix or a docs change unrelated to any plan gets its own branch and PR under a plain `<type>/<description>` name. Don't inflate the PR count either — a small clarification to something still open in review belongs on that open branch, not in a new PR.
 
 Branch off the latest `main`. Keep branches short-lived; rebase onto `main` rather than merging `main` in, so history stays linear.
 
