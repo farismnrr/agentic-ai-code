@@ -30,6 +30,11 @@ async function onSubmit(event: FormSubmitEvent<typeof state>) {
     loading.value = false
   }
 }
+
+// Display errors passed via URL (e.g., from OAuth redirect)
+if (route.query.error) {
+  serverError.value = String(route.query.error)
+}
 </script>
 
 <template>
@@ -55,6 +60,29 @@ async function onSubmit(event: FormSubmitEvent<typeof state>) {
           variant="soft"
           :description="serverError"
         />
+
+        <div class="space-y-3">
+          <UButton
+            to="/api/auth/google"
+            external
+            color="neutral"
+            variant="outline"
+            block
+            icon="i-simple-icons-google"
+            label="Continue with Google"
+          />
+          <UButton
+            to="/api/auth/github"
+            external
+            color="neutral"
+            variant="outline"
+            block
+            icon="i-simple-icons-github"
+            label="Continue with GitHub"
+          />
+        </div>
+
+        <USeparator label="or" />
 
         <UFormField
           label="Email"

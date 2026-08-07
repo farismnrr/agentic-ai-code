@@ -1,0 +1,123 @@
+import { eq, and } from 'drizzle-orm'
+import { users, oauthAccounts } from '../../database/schema'
+
+export default defineOAuthGitHubEventHandler({
+  config: {
+    // Requires 'user:email' scope to fetch the user's email address if they
+    // have it set to private on their GitHub profile.
+    emailRequired: true
+  },
+  async onSuccess(event, { user: githubUser }) {
+    const db = useDb()
+    const provider = 'github'
+    const providerAccountId = String(githubUser.id)
+    const email = githubUser.email
+
+    if (!email) {
+      throw createError({ statusCode: 400, message: 'GitHub account has no email.' })
+    }
+
+    // 1. Check if we already have this exact OAuth account linked
+    const [existingAccount] = await db
+      .select({ userId: oauthAccounts.userId })
+      .from(oauthAccounts)
+      .where(
+        and(
+          eq(oauthAccounts.provider, provider),
+          eq(oauthAccounts.providerAccountId, providerAccountId)
+        )
+      )
+      .limit(1)
+
+    if (existingAccount) {
+      const [user] = await db
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .from(users)
+        .where(eq(users.id, existingAccount.userId))
+        .limit(1)
+
+      if (user) {
+        await setUserSession(event, {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+          }
+        })
+        return sendRedirect(event, '/chat')
+      }
+    }
+
+    // 2. Check if the email is already registered via password or another provider
+    const [existingUser] = await db
+      .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    if (existingUser) {
+      // Link the new OAuth account to the existing user
+      await db.insert(oauthAccounts).values({
+        provider,
+        providerAccountId,
+        userId: existingUser.id
+      })
+
+      const [user] = await db
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .from(users)
+        .where(eq(users.id, existingUser.id))
+        .limit(1)
+
+      if (user) {
+        await setUserSession(event, {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+          }
+        })
+        return sendRedirect(event, '/chat')
+      }
+    }
+
+    // 3. Completely new user
+    const [createdUser] = await db.insert(users).values({
+      email,
+      name: githubUser.name || githubUser.login || 'User',
+      avatarUrl: githubUser.avatar_url,
+      // Treat OAuth email as verified at creation time
+      emailVerifiedAt: new Date()
+    }).returning({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      emailVerifiedAt: users.emailVerifiedAt
+    })
+
+    if (!createdUser) throw createError({ statusCode: 500, message: 'Account creation failed' })
+
+    await db.insert(oauthAccounts).values({
+      provider,
+      providerAccountId,
+      userId: createdUser.id
+    })
+
+    await setUserSession(event, {
+      user: {
+        id: createdUser.id,
+        email: createdUser.email,
+        name: createdUser.name,
+        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null
+      }
+    })
+
+    return sendRedirect(event, '/chat')
+  },
+  onError(event, error) {
+    console.error('GitHub OAuth error:', error)
+    return sendRedirect(event, '/login?error=GitHub login failed')
+  }
+})
