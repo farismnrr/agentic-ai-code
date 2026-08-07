@@ -80,6 +80,16 @@ export default defineNuxtConfig({
     errorHandler: '~~/server/error'
   },
 
+  // @nuxt/ui pulls in @nuxt/fonts, whose `fontless` dependency spawns an
+  // esbuild service that never shuts itself down. `pnpm build` finishes and
+  // writes .output/ correctly, but the CLI process hangs forever afterward —
+  // upstream issue, not ours: https://github.com/nuxt/nuxt/issues/33987.
+  hooks: {
+    close: () => {
+      process.exit(0)
+    }
+  },
+
   eslint: {
     // Surface lint errors in the dev server and browser overlay, not just in `pnpm lint`
     checker: true,
