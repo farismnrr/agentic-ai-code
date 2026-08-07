@@ -1,4 +1,4 @@
-import type { ChatModel } from '~/types/chat'
+import type { ChatModel } from '#shared/types/chat'
 
 export const models: ChatModel[] = [
   {

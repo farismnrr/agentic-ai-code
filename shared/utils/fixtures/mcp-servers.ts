@@ -1,4 +1,4 @@
-import type { McpServer, McpTool } from '~/types/chat'
+import type { McpServer, McpTool } from '#shared/types/chat'
 
 /**
  * Stand-in for what an MCP client would report after connecting. Shapes follow

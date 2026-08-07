@@ -1,6 +1,6 @@
 import type { UIMessageChunk } from 'ai'
-import type { McpTool } from '~/types/chat'
-import { mcpToolsById } from './mcp-servers'
+import type { McpTool } from '#shared/types/chat'
+import { mcpToolsById } from './mcp-servers.js'
 
 /**
  * Canned assistant responses, expressed as the AI SDK's own `UIMessageChunk`
