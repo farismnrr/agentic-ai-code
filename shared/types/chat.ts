@@ -48,6 +48,8 @@ export type ApprovalDecision = 'always' | 'never'
 export interface Workspace {
   id: string
   name: string
+  path: string
+  pathConfirmed: boolean
   createdAt: number
   updatedAt: number
 }

@@ -22,6 +22,13 @@
       "when": 1786127654430,
       "tag": "0002_friendly_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786138223704,
+      "tag": "0003_stale_killraven",
+      "breakpoints": true
     }
   ]
 }
