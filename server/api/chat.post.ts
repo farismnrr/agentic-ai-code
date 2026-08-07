@@ -57,8 +57,14 @@ export default defineEventHandler(async (event) => {
   return new ReadableStream({
     async start(controller) {
       try {
+        const abortController = new AbortController()
+        event.node.req.on('close', () => {
+          abortController.abort()
+        })
+
         const response = await fetch(`${config.routerBaseUrl}/chat/completions`, {
           method: 'POST',
+          signal: abortController.signal,
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.routerApiKey}`

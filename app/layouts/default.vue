@@ -2,7 +2,7 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove, update, loadAll: loadConversations } = useConversations()
-const { workspaces, activeWorkspaceId, create: createWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
+const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
 const { load: loadSettings } = useSettings()
 const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
@@ -21,8 +21,10 @@ await useAsyncData('app-data', async () => {
 })
 
 // Whenever workspace changes, we should reload conversations
-watch(activeWorkspaceId, () => {
-  loadConversations()
+watch(activeWorkspaceId, (newId, oldId) => {
+  if (oldId !== undefined && newId !== oldId) {
+    loadConversations()
+  }
 })
 
 const groups = computed(() => groupConversations(sorted.value))
@@ -102,11 +104,42 @@ async function confirmCreateWorkspace() {
   workspaceName.value = ''
 }
 
+const workspaceRenaming = ref<{ id: string, name: string } | null>(null)
+function startRenameWorkspace(id: string, name: string) {
+  workspaceRenaming.value = { id, name }
+}
+function confirmRenameWorkspace() {
+  const pending = workspaceRenaming.value
+  if (!pending) return
+  const name = pending.name.trim()
+  if (name) updateWorkspace(pending.id, { name })
+  workspaceRenaming.value = null
+}
+
 const workspaceItems = computed<DropdownMenuItem[][]>(() => {
   const list = workspaces.value.map(w => ({
     label: w.name,
     icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
-    onSelect: () => { activeWorkspaceId.value = w.id }
+    onSelect: () => { activeWorkspaceId.value = w.id },
+    children: [[
+      {
+        label: 'Rename',
+        icon: 'i-lucide-pencil',
+        onSelect: () => startRenameWorkspace(w.id, w.name)
+      },
+      {
+        label: 'Delete',
+        icon: 'i-lucide-trash-2',
+        color: 'error' as const,
+        onSelect: async () => {
+          await removeWorkspace(w.id)
+          // If we deleted the active one, fallback to the first available
+          if (activeWorkspaceId.value === w.id) {
+            activeWorkspaceId.value = workspaces.value[0]?.id
+          }
+        }
+      }
+    ]]
   }))
   return [
     list,
@@ -198,6 +231,7 @@ const searchGroups = computed(() => [
               {{ group.label }}
             </p>
 
+            <!-- One UNavigationMenu per bucket -->
             <UNavigationMenu
               :items="itemsFor(group.conversations)"
               orientation="vertical"
@@ -261,6 +295,7 @@ const searchGroups = computed(() => [
       :groups="searchGroups"
     />
 
+    <!-- Renaming happens in a modal, rather than inline in the sidebar, to keep the sidebar HTML simple -->
     <UModal
       :open="renaming !== null"
       title="Rename conversation"
@@ -318,6 +353,37 @@ const searchGroups = computed(() => [
           <UButton
             label="Create"
             @click="confirmCreateWorkspace"
+          />
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="workspaceRenaming !== null"
+      title="Rename workspace"
+      @update:open="workspaceRenaming = null"
+    >
+      <template #body>
+        <UInput
+          v-if="workspaceRenaming"
+          v-model="workspaceRenaming.name"
+          autofocus
+          class="w-full"
+          @keydown.enter="confirmRenameWorkspace"
+        />
+      </template>
+
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton
+            label="Cancel"
+            color="neutral"
+            variant="ghost"
+            @click="workspaceRenaming = null"
+          />
+          <UButton
+            label="Rename"
+            @click="confirmRenameWorkspace"
           />
         </div>
       </template>
