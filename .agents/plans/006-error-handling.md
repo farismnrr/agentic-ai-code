@@ -1,6 +1,6 @@
 # 006 — Error handling: stop leaking internals, make status codes match RFC 9110/9457
 
-> **Status: belum mulai.**
+> **Status: complete.** Fase 0-2 mendarat bareng dalam satu PR ke `dev`, bukan tiga PR terpisah seperti rencana awal — kerjaannya berkembang iteratif/nyambung terus (bukan berhenti bersih di tiap batas fase), jadi memecahnya sekarang lewat rebase/cherry-pick cuma nambah risiko tanpa manfaat nyata. Sepanjang jalan juga ketemu dan dibenerin dua bug di luar scope error-handling murni: alias Nitro `~` vs `~~` yang bikin build gagal, dan build yang hang gara-gara upstream bug `fontless`/`@nuxt/fonts` (lihat `.agents/memories/fontless-build-hang.md`).
 
 ## Context
 
@@ -67,12 +67,12 @@ Scope commit baru yang relevan: `auth`, `db`, `chat` (sudah ada), tidak perlu sc
 
 Tiap fase berakhir hijau (`pnpm lint && pnpm typecheck && pnpm audit`) dan punya PR sendiri ke `dev`.
 
-### Fase 0 — Plan ini masuk repo
+### Fase 0 — Plan ini masuk repo ✅ done (digabung ke PR yang sama)
 
 - File ini ada di `.agents/plans/006-error-handling.md`, terdaftar di [`README.md`](README.md) di bawah **In Flight**.
 - Branch `docs/006-plan`, commit `docs(agents): add plan 006 for RFC-consistent error handling`, PR ke `dev`.
 
-### Fase 1 — Central error handler + factory (fondasi)
+### Fase 1 — Central error handler + factory (fondasi) ✅ done
 
 1. `server/utils/http-errors.ts` — factory RFC 9457:
 
@@ -144,7 +144,7 @@ export function isUniqueViolation(err: unknown): boolean {
 }
 ```
 
-### Fase 2 — Audit semua titik error di server/, pasang status code yang benar
+### Fase 2 — Audit semua titik error di server/, pasang status code yang benar ✅ done
 
 1. Ganti semua situs `createError({...})` ad hoc ke factory dari `server/utils/http-errors.ts`:
    - `server/api/auth/{login,register,forgot,reset,verify}.post.ts`
