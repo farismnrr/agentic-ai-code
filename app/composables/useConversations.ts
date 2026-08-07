@@ -5,8 +5,7 @@ import type { Conversation, UIMessage } from '#shared/types/chat'
  *
  * Backed by `useState` rather than a module-scope `ref`: on the server a
  * module-scope ref is shared across every request, so one visitor's
- * conversations would leak into another's. State resets on reload by design —
- * persistence is out of scope for this iteration.
+ * conversations would leak into another's.
  */
 export function useConversations() {
   const conversations = useState<Conversation[]>('conversations', () => [])
@@ -82,12 +81,6 @@ export function useConversations() {
       updateLocally(id, data)
     }
   }
-
-  /** Restores seed data — the way out of a wedged demo, since nothing persists. */
-  function reset() {
-    // not used much now
-  }
-
   async function remove(id: string) {
     conversations.value = conversations.value.filter(c => c.id !== id)
     await $fetch(`/api/conversations/${id}`, { method: 'DELETE' })
@@ -110,5 +103,5 @@ export function useConversations() {
     return firstLine.length > 48 ? `${trimmed}…` : trimmed
   }
 
-  return { conversations, sorted, get, loadAll, loadOne, create, update, updateLocally, remove, reset, setMessages, titleFrom }
+  return { conversations, sorted, get, loadAll, loadOne, create, update, updateLocally, remove, setMessages, titleFrom }
 }
