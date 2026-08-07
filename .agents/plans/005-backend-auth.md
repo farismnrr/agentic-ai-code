@@ -1,6 +1,6 @@
 # 005 — Backend: auth sungguhan, lalu persistensi sungguhan
 
-> **Status: belum mulai.** Fase 0 (plan ini masuk repo) sedang berjalan.
+> **Status: complete.** Shipped to `dev` via PR #26 (fase 0), #27 (fase 1), #28 (fase 2), #29 (fase 3), #30 (fase 4), #31 (docs follow-up).
 
 ## Context
 
@@ -92,7 +92,7 @@ Sebelum staging selalu `git status` dulu. Jangan `git add -A` setelah build atau
 
 Tiap fase berakhir hijau (`pnpm lint && pnpm typecheck && pnpm audit`) dan punya PR sendiri ke `dev`.
 
-### Fase 0 — Plan ini masuk repo
+### Fase 0 — Plan ini masuk repo ✅ done
 
 Sebelum kode apa pun:
 
@@ -103,7 +103,7 @@ Sebelum kode apa pun:
 
 *(Fase 1–4 masing-masing di worktree + branch sesuai tabel di atas.)*
 
-### Fase 1 — Fondasi: DB + email/password auth
+### Fase 1 — Fondasi: DB + email/password auth ✅ done
 
 1. `pnpm dlx nuxi module add auth-utils`; `pnpm add drizzle-orm postgres`; `pnpm add -D drizzle-kit`. (`valibot` sudah terpasang.)
 2. `server/database/schema.ts` (`pgSchema('ai_code')`), `drizzle.config.ts`, script `db:generate` / `db:migrate` di `package.json`. Migrasi awal: `users`, `oauth_accounts`, `verification_tokens`.
@@ -114,20 +114,20 @@ Sebelum kode apa pun:
 7. `app/middleware/auth.global.ts`: buang guard `import.meta.server` — cookie terbaca di server, jadi guard jalan di kedua sisi. **Hapus `ssr: false`** untuk `/chat/**` dan `/settings/**` di `nuxt.config.ts`; komentar di sana yang menjelaskan alasan lama ikut diperbarui.
 8. Pengerasan: rate limit login/register (in-memory per IP+email, cukup untuk single-node), pesan error seragam supaya tidak membocorkan email mana yang terdaftar, cookie `sameSite: 'lax'` + `secure` di produksi.
 
-### Fase 2 — OAuth Google & GitHub
+### Fase 2 — OAuth Google & GitHub ✅ done
 
 - `server/routes/auth/google.get.ts` dan `github.get.ts` pakai `defineOAuthGoogleEventHandler` / `defineOAuthGitHubEventHandler`.
 - Logika penautan akun: cocokkan `oauth_accounts`, kalau tidak ada cocokkan email terverifikasi lalu tautkan, kalau tidak ada juga buat user baru dengan `email_verified_at` terisi dari provider. Email yang **belum** terverifikasi dari provider tidak boleh otomatis menautkan akun password — itu jalur pengambilalihan akun.
 - Tombol social di `app/pages/login.vue` dan `register.vue` (di plan 002 sengaja ditolak; sekarang jadi nyata), pakai ikon `simple-icons`.
 
-### Fase 3 — Verifikasi email & reset password
+### Fase 3 — Verifikasi email & reset password ✅ done
 
 - `server/utils/mailer.ts` — nodemailer + SMTP dari runtime config, template HTML sederhana bergaya produk ini (bukan salinan ATJA).
 - Alur: register mengirim link verifikasi; `/api/auth/verify` menandai `email_verified_at`; `/api/auth/forgot` + `/api/auth/reset` memakai token sekali pakai berumur pendek. Respons `forgot` selalu sukses apa pun emailnya (anti user-enumeration).
 - Halaman `app/pages/verify-email.vue` dan `reset-password.vue` di layout `auth`, ditambah banner "verifikasi email lu" di layout `default` selama `email_verified_at` kosong.
 - Keputusan: akun **belum terverifikasi tetap boleh login**, hanya diberi banner. Memblokir login sebelum verifikasi bikin demo macet kalau SMTP lagi rewel.
 
-### Fase 4 — Data chat pindah ke Postgres
+### Fase 4 — Data chat pindah ke Postgres ✅ done
 
 - Migrasi tabel `conversations`, `messages`, `user_settings`, `mcp_servers`.
 - CRUD di `server/api/conversations/**`, `server/api/settings.*`, `server/api/mcp-servers/**`; semuanya di balik `requireUserSession`.
