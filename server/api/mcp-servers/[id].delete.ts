@@ -4,7 +4,7 @@ import { mcpServers } from '../../database/schema'
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
-  if (!id) throw createError({ statusCode: 400, message: 'Missing server ID' })
+  if (!id) throw badRequest('Missing server ID')
 
   const db = useDb()
 
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   if (!deleted) {
-    throw createError({ statusCode: 404, message: 'Server not found' })
+    throw notFound('Server not found')
   }
 
   return { ok: true }

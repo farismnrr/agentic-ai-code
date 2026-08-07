@@ -11,9 +11,11 @@ const updateSchema = v.object({
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
-  if (!id) throw createError({ statusCode: 400, message: 'Missing conversation ID' })
+  if (!id) throw badRequest('Missing conversation ID')
 
-  const body = await readValidatedBody(event, data => v.parse(updateSchema, data))
+  const result = v.safeParse(updateSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
   const db = useDb()
 
   const [updated] = await db
@@ -26,7 +28,7 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   if (!updated) {
-    throw createError({ statusCode: 404, message: 'Conversation not found' })
+    throw notFound('Conversation not found')
   }
 
   return {

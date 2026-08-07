@@ -1,20 +1,19 @@
 import { eq, and } from 'drizzle-orm'
 import { users, verificationTokens } from '../../database/schema'
 import { hashToken } from '../../utils/token'
+import { verifySchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
-const verifySchema = v.object({
-  token: v.string()
-})
-
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(verifySchema, data))
+  const result = v.safeParse(verifySchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   // Rate limit
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
   const { limited, retryAfter } = rateLimit({ key: `verify:${ip}`, maxAttempts: 10 })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
 
   const db = useDb()
@@ -32,11 +31,11 @@ export default defineEventHandler(async (event) => {
     .limit(1)
 
   if (!tokenRecord) {
-    throw createError({ statusCode: 400, message: 'Invalid or expired verification link.' })
+    throw badRequest('Invalid verification link.')
   }
 
   if (tokenRecord.consumedAt || tokenRecord.expiresAt < new Date()) {
-    throw createError({ statusCode: 400, message: 'This verification link has expired or already been used.' })
+    throw gone('This verification link has expired or already been used.')
   }
 
   // Mark token consumed and update user as verified

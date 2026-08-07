@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const { messages, id: conversationId } = await readBody(event)
 
   if (!conversationId) {
-    throw createError({ statusCode: 400, message: 'Missing conversationId' })
+    throw badRequest('Missing conversationId')
   }
 
   const db = useDb()
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     .limit(1)
 
   if (!conv) {
-    throw createError({ statusCode: 404, message: 'Conversation not found' })
+    throw notFound('Conversation not found')
   }
 
   const lastMsg = messages[messages.length - 1]
@@ -38,29 +38,35 @@ export default defineEventHandler(async (event) => {
 
   return new ReadableStream({
     async start(controller) {
-      const chunks = scenario.build({ enabledToolIds: conv.enabledToolIds || [] })
-      let fullResponseText = ''
+      try {
+        const chunks = scenario.build({ enabledToolIds: conv.enabledToolIds || [] })
+        let fullResponseText = ''
 
-      for (const chunk of chunks) {
-        if (chunk.type === 'text-delta') {
-          controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
-          fullResponseText += chunk.delta
-        } else if (chunk.type === 'reasoning-delta') {
-          // Send reasoning as normal text for simplicity
-          controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
-          fullResponseText += chunk.delta
+        for (const chunk of chunks) {
+          if (chunk.type === 'text-delta') {
+            controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
+            fullResponseText += chunk.delta
+          } else if (chunk.type === 'reasoning-delta') {
+            // Send reasoning as normal text for simplicity
+            controller.enqueue(`0:${JSON.stringify(chunk.delta)}\n`)
+            fullResponseText += chunk.delta
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 22))
         }
 
-        await new Promise(resolve => setTimeout(resolve, 22))
+        await db.insert(messagesTable).values({
+          conversationId: conv.id,
+          role: 'assistant',
+          parts: [{ type: 'text', text: fullResponseText || 'Mock response without text' }]
+        })
+
+        controller.close()
+      } catch (err) {
+        console.error('[chat stream]', err)
+        controller.enqueue(`3:${JSON.stringify('Something went wrong while generating a response.')}\n`)
+        controller.close()
       }
-
-      await db.insert(messagesTable).values({
-        conversationId: conv.id,
-        role: 'assistant',
-        parts: [{ type: 'text', text: fullResponseText || 'Mock response without text' }]
-      })
-
-      controller.close()
     }
   })
 })

@@ -18,7 +18,9 @@ import { loginSchema } from '../../../shared/schemas/auth'
 const GENERIC_ERROR = 'Invalid email or password'
 
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(loginSchema, data))
+  const result = v.safeParse(loginSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
   const { limited, retryAfter } = rateLimit({
@@ -26,7 +28,7 @@ export default defineEventHandler(async (event) => {
     maxAttempts: 10
   })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
 
   const db = useDb()
@@ -45,12 +47,12 @@ export default defineEventHandler(async (event) => {
 
   // No account OR account has no password (OAuth-only) — same generic message.
   if (!user || !user.passwordHash) {
-    throw createError({ statusCode: 401, message: GENERIC_ERROR })
+    throw unauthorized(GENERIC_ERROR)
   }
 
   const valid = await verifyPassword(user.passwordHash, body.password)
   if (!valid) {
-    throw createError({ statusCode: 401, message: GENERIC_ERROR })
+    throw unauthorized(GENERIC_ERROR)
   }
 
   await setUserSession(event, {
