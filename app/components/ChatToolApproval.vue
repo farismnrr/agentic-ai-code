@@ -108,10 +108,10 @@ watch(pending, (value) => {
         </div>
 
         <div v-if="formattedInput">
-          <p class="mb-1 text-xs font-medium text-dimmed">
+          <p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-dimmed">
             Arguments
           </p>
-          <pre class="max-h-56 overflow-auto rounded-md bg-elevated p-2 text-xs">{{ formattedInput }}</pre>
+          <pre class="max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ formattedInput }}</pre>
         </div>
 
         <p class="text-sm text-muted">

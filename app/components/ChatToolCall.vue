@@ -38,26 +38,26 @@ const errorText = computed(() =>
   >
     <div class="space-y-3 text-sm">
       <div v-if="input">
-        <p class="mb-1 text-xs font-medium text-dimmed">
+        <p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-dimmed">
           Arguments
         </p>
-        <pre class="overflow-x-auto rounded-md bg-elevated p-2 text-xs">{{ input }}</pre>
+        <pre class="overflow-x-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ input }}</pre>
       </div>
 
       <div v-if="errorText">
-        <p class="mb-1 text-xs font-medium text-error">
+        <p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-error">
           Error
         </p>
-        <p class="text-error">
+        <p class="font-mono text-xs text-error">
           {{ errorText }}
         </p>
       </div>
 
       <div v-else-if="output">
-        <p class="mb-1 text-xs font-medium text-dimmed">
+        <p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-dimmed">
           Result
         </p>
-        <pre class="overflow-x-auto rounded-md bg-elevated p-2 text-xs">{{ output }}</pre>
+        <pre class="overflow-x-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ output }}</pre>
       </div>
 
       <p

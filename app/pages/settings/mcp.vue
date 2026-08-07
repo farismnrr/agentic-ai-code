@@ -94,6 +94,32 @@ function removeServer(id: string, name: string) {
     </div>
 
     <UCard
+      v-if="!servers.length"
+      class="border-dashed"
+      :ui="{ body: 'flex flex-col items-center justify-center py-12 text-center' }"
+    >
+      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-elevated">
+        <UIcon
+          name="i-lucide-blocks"
+          class="size-5 text-muted"
+        />
+      </div>
+      <h3 class="mb-1 text-sm font-medium text-highlighted">
+        No MCP servers
+      </h3>
+      <p class="mb-4 text-sm text-muted">
+        Add a server to give the model tools to work with.
+      </p>
+      <UButton
+        label="Add server"
+        icon="i-lucide-plus"
+        color="neutral"
+        variant="outline"
+        @click="addOpen = true"
+      />
+    </UCard>
+
+    <UCard
       v-for="server in servers"
       :key="server.id"
       :ui="{ body: 'space-y-3' }"
