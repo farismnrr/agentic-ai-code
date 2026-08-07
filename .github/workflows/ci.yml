@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
@@ -35,3 +35,8 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      # Fails the build on any advisory. Fix by pinning the patched version
+      # under `overrides:` in pnpm-workspace.yaml — see .agents/knowledge/git.md.
+      - name: Audit
+        run: pnpm audit
