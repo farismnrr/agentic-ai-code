@@ -16,3 +16,4 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [fontless-build-hang.md](fontless-build-hang.md) — `pnpm build` finishes but never exits: `fontless`/`@nuxt/fonts` leaks an esbuild service, worked around via `hooks.close` in `nuxt.config.ts`
 - [007-workspace-client-routing.md](007-workspace-client-routing.md) — why workspace active state is client-side rather than nested in the URL
 - [007-9router-config.md](007-9router-config.md) — how the real model backend is wired up via 9router
+- [007-typecheck-gate-was-silent.md](007-typecheck-gate-was-silent.md) — `nuxt typecheck` silently passed with real errors; script now runs `vue-tsc` directly

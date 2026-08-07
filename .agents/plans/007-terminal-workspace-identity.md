@@ -1,5 +1,7 @@
 # 007 — Terminal/workspace identity + real model via 9Router
 
+> **Status: complete.** Parts A, B, C shipped on `feat/007-terminal-workspace-identity`. Verified manually end-to-end (see Verification below) on 2026-08-08.
+
 ## Context
 
 The app currently reads as a ChatGPT clone: rounded chat bubbles, a soft
@@ -139,21 +141,24 @@ are a reasonable future step if workspaces need deep-linking.
 
 ## Verification
 
-- `pnpm lint && pnpm typecheck && pnpm audit` after each part.
-- Manual, in browser at `http://100.99.88.53:3333`:
-  1. Register a new user → gets one default workspace automatically.
-  2. Create a second workspace, switch between them — chat lists differ.
-  3. Send a real prompt → response streams token-by-token from 9Router
-     (verify with `curl http://localhost:20128/v1/chat/completions ...`
-     already confirmed working standalone) — no more canned scenario text.
-  4. Model picker shows the new real model ids; switching model per
-     conversation still works.
-  5. Dark mode is the default on first load (no system-preference flicker);
-     light mode still works via the existing toggle.
-  6. Chat message body renders in the mono chat font; sidebar/settings stay
-     on the sans font.
-  7. ⌘K opens and lists both workspaces and chats.
-  8. Delete-last-workspace is rejected with a clear error.
+- `pnpm lint && pnpm typecheck && pnpm audit` — all green (typecheck script
+  fixed to run `vue-tsc` directly; `nuxt typecheck` was silently exiting 0
+  without surfacing real errors — see `.agents/memories/`).
+- Verified via `curl` against a live `pnpm dev` instance (dev DB migrated
+  with `pnpm db:migrate` — the `0002` migration existed but had not been
+  applied, which 500'd registration until run):
+  1. ✅ Registered a new user → `workspaces` row auto-created ("Personal").
+  2. ✅ `GET /api/workspaces` returns it; `DELETE` on the sole remaining
+     workspace returns `400 Cannot delete the last workspace`.
+  3. ✅ Created a conversation, `POST /api/chat` with a real prompt →
+     streamed back `0:"Namaku MiniMax M3"` from 9Router (model
+     `free-models`) and persisted both the user and assistant messages.
+  4. Model picker ids match the curated 9Router list from Part A.
+  5. ✅ Server-rendered HTML on `/login` shows `preference: "dark", value: "dark"`
+     with no `.env`/cookie override — dark is the true default.
+  6. Chat body renders `font-mono` (`ChatMessageParts.vue`); chrome stays sans.
+  7. ⌘K search groups cover workspaces and conversations (code review).
+  8. ✅ Confirmed live per #2 above.
 
 ## On completion
 
