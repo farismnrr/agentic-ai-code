@@ -25,7 +25,9 @@ export function resolveWorkspacePath(relativePath: string): string {
   const resolvedPath = path.resolve(absoluteRoot, cleanRelative)
 
   // Ensure the resolved path still starts with the absolute root (traversal guard)
-  if (!resolvedPath.startsWith(absoluteRoot)) {
+  // Must check with path.sep to prevent matching sibling directories that share a prefix
+  // e.g. /root-dir and /root-dir-sibling
+  if (resolvedPath !== absoluteRoot && !resolvedPath.startsWith(absoluteRoot + path.sep)) {
     throw createError({ statusCode: 403, statusMessage: 'Path traversal detected' })
   }
 

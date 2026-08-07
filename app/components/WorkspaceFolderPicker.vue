@@ -99,15 +99,15 @@ function confirm() {
           autofocus
         />
 
-        <div class="border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden">
-          <div class="bg-gray-50 dark:bg-gray-900 px-3 py-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1 text-sm overflow-x-auto">
+        <div class="border border-default rounded-md overflow-hidden">
+          <div class="bg-elevated px-3 py-2 border-b border-default flex items-center gap-1 text-sm overflow-x-auto">
             <template
               v-for="(crumb, idx) in breadcrumbs"
               :key="crumb.path"
             >
               <span
                 v-if="idx > 0"
-                class="text-gray-400"
+                class="text-muted"
               >/</span>
               <button
                 class="hover:text-primary-500 hover:underline px-1 rounded transition-colors"
@@ -125,12 +125,12 @@ function confirm() {
             >
               <UIcon
                 name="i-lucide-loader-2"
-                class="animate-spin w-5 h-5 text-gray-500"
+                class="animate-spin w-5 h-5 text-muted"
               />
             </div>
             <div
               v-else-if="directories.length === 0"
-              class="text-center text-sm text-gray-500 p-4"
+              class="text-center text-sm text-dimmed p-4"
             >
               No subdirectories found.
             </div>
@@ -141,7 +141,7 @@ function confirm() {
               <button
                 v-for="dir in directories"
                 :key="dir.path"
-                class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-left text-sm"
+                class="flex items-center gap-2 px-2 py-1.5 hover:bg-elevated rounded text-left text-sm"
                 @click="selectDirectory(dir)"
               >
                 <UIcon
