@@ -125,7 +125,6 @@ defineShortcuts({
     <template #header>
       <UDashboardNavbar :title="conversation?.title ?? 'Chat'">
         <template #leading>
-          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
