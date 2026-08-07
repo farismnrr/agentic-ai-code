@@ -12,17 +12,106 @@ html.dark .shiki span {
 }
 
 @theme static {
-  --font-sans: 'Public Sans', sans-serif;
+  /* Geist for everything, Geist Mono for labels, tool names and data.
+     @nuxt/fonts ships with Nuxt UI and self-hosts both from Google Fonts —
+     no <link> tag and no extra dependency. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
 
-  --color-green-50: #effdf5;
-  --color-green-100: #d9fbe8;
-  --color-green-200: #b3f5d1;
-  --color-green-300: #75edae;
-  --color-green-400: #00dc82;
-  --color-green-500: #00c16a;
-  --color-green-600: #00a155;
-  --color-green-700: #007f45;
-  --color-green-800: #016538;
-  --color-green-900: #0a5331;
-  --color-green-950: #052e16;
+  /* ── Signal ───────────────────────────────────────────────────────────
+     The only saturated colour in the product, and it means one thing:
+     something is live. Streaming text, a running tool call, a connected
+     server, a focused control. Never decoration.
+
+     500 is the dark-mode value (#4CC2FF). Light mode leans on 600/700,
+     because 500 on a white surface fails contrast for text and borders —
+     the scale exists so both themes can hold the same idea.             */
+  --color-signal-50: #ecf9ff;
+  --color-signal-100: #d5f1ff;
+  --color-signal-200: #b0e6ff;
+  --color-signal-300: #79d7ff;
+  --color-signal-400: #4cc2ff;
+  --color-signal-500: #21a8f0;
+  --color-signal-600: #0b88ce;
+  --color-signal-700: #0c6da6;
+  --color-signal-800: #105c89;
+  --color-signal-900: #134d71;
+  --color-signal-950: #0c314b;
+
+  /* ── Graphite ─────────────────────────────────────────────────────────
+     A cool grey with a blue cast, so the signal reads as the same family
+     rather than a sticker on top of it. 950 is the app ground (#0B0E14),
+     900 the raised surface (#151A23).                                    */
+  --color-graphite-50: #f5f7fa;
+  --color-graphite-100: #eaeef4;
+  --color-graphite-200: #d2dae6;
+  --color-graphite-300: #adbacd;
+  --color-graphite-400: #8a93a5;
+  --color-graphite-500: #626c80;
+  --color-graphite-600: #4c5566;
+  --color-graphite-700: #3c4453;
+  --color-graphite-800: #262d3a;
+  --color-graphite-900: #151a23;
+  --color-graphite-950: #0b0e14;
+
+  /* ── Shape ────────────────────────────────────────────────────────────
+     Small and deliberate. Borders carry the structure that a softer
+     design would hand to shadows.                                        */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────
+     Durations live here so they stay consistent and can be silenced in
+     one place for reduced motion. Enter slightly slower than exit for
+     occasional UI; high-frequency hover states use --duration-fast both
+     ways so they never feel laggy.                                       */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 260ms;
+}
+
+/* Nuxt UI derives its semantic tokens from the palettes above; these two
+   pin the page ground itself, which sits outside that system. */
+:root {
+  --ui-bg: var(--color-white);
+}
+
+.dark {
+  --ui-bg: var(--color-graphite-950);
+}
+
+/* Consistent interaction timing without repeating the same utility on
+   every control. Transform and colour only — both composite cheaply. */
+@layer base {
+  a,
+  button,
+  [role='button'],
+  input,
+  textarea,
+  select {
+    transition:
+      color var(--duration-fast) var(--ease-out-quart),
+      background-color var(--duration-fast) var(--ease-out-quart),
+      border-color var(--duration-fast) var(--ease-out-quart),
+      opacity var(--duration-fast) var(--ease-out-quart);
+  }
+}
+
+/* Anyone who has asked for less motion gets none of it. This has to be
+   blunt: a design that respects the preference selectively still makes
+   people ill. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
