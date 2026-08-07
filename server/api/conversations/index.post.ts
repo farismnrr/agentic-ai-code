@@ -3,7 +3,8 @@ import * as v from 'valibot'
 
 const createSchema = v.object({
   title: v.string(),
-  modelId: v.string()
+  modelId: v.string(),
+  workspaceId: v.string()
 })
 
 export default defineEventHandler(async (event) => {
@@ -18,6 +19,7 @@ export default defineEventHandler(async (event) => {
     .insert(conversations)
     .values({
       userId: session.user.id,
+      workspaceId: body.workspaceId,
       title: body.title,
       modelId: body.modelId
     })
@@ -31,6 +33,7 @@ export default defineEventHandler(async (event) => {
     id: conversation.id,
     title: conversation.title,
     modelId: conversation.modelId,
+    workspaceId: conversation.workspaceId,
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,
     createdAt: conversation.createdAt.getTime(),
