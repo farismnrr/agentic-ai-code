@@ -1,10 +1,23 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
-const { sorted, remove, update } = useConversations()
+const { sorted, remove, update, loadAll: loadConversations } = useConversations()
+const { load: loadSettings } = useSettings()
+const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
+
+await useAsyncData('app-data', async () => {
+  if (user.value) {
+    await Promise.all([
+      loadSettings(),
+      loadConversations(),
+      loadMcpServers()
+    ])
+  }
+  return true
+})
 
 const groups = computed(() => groupConversations(sorted.value))
 
@@ -229,6 +242,22 @@ const searchGroups = computed(() => [{
       </template>
     </UModal>
 
-    <slot />
+    <div class="flex flex-1 flex-col min-w-0 h-full">
+      <div
+        v-if="user && !user.emailVerifiedAt"
+        class="bg-primary-500/10 border-b border-primary-500/20 px-4 py-3 flex items-center justify-between shrink-0 z-50"
+      >
+        <div class="flex items-center gap-3">
+          <UIcon
+            name="i-lucide-mail-warning"
+            class="w-5 h-5 text-primary"
+          />
+          <p class="text-sm font-medium text-primary">
+            Please verify your email address to secure your account.
+          </p>
+        </div>
+      </div>
+      <slot />
+    </div>
   </UDashboardGroup>
 </template>

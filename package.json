@@ -30,6 +30,7 @@
     "valibot": "^1.4.2"
   },
   "devDependencies": {
+    "@ai-sdk/provider-utils": "^5.0.23",
     "@nuxt/eslint": "^1.16.0",
     "@types/nodemailer": "^8.0.1",
     "agentation-vue": "^0.3.0",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DynamicToolUIPart, ToolUIPart } from 'ai'
-import { mcpToolsById } from '~/utils/fixtures/mcp-servers'
+import { mcpToolsById } from '#shared/utils/fixtures/mcp-servers'
 
 // `isToolUIPart` narrows to either shape — MCP tools arrive as dynamic ones,
 // so accepting only `ToolUIPart` would reject exactly the case we care about.

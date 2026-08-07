@@ -1,4 +1,4 @@
-import { defaultModelId } from '~/utils/fixtures/models'
+import { defaultModelId } from '#shared/utils/fixtures/models'
 
 export interface AppSettings {
   language: string
@@ -11,12 +11,8 @@ export interface AppSettings {
   email: string
 }
 
-/**
- * App-wide preferences. In-memory like everything else this iteration —
- * persistence is the backend's job and is deliberately out of scope.
- */
 export function useSettings() {
-  return useState<AppSettings>('settings', () => ({
+  const settings = useState<AppSettings>('settings', () => ({
     language: 'en',
     streaming: true,
     sendOnEnter: true,
@@ -26,4 +22,20 @@ export function useSettings() {
     displayName: 'Faris',
     email: 'farismunir2@gmail.com'
   }))
+
+  async function load() {
+    const data = await $fetch<AppSettings>('/api/settings')
+    settings.value = data
+  }
+
+  async function update(patch: Partial<AppSettings>) {
+    settings.value = { ...settings.value, ...patch }
+    const data = await $fetch<AppSettings>('/api/settings', {
+      method: 'PUT',
+      body: patch
+    })
+    settings.value = data
+  }
+
+  return Object.assign(settings, { load, update })
 }

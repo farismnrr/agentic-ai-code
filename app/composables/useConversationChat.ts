@@ -1,6 +1,5 @@
 import { useChat } from '@ai-sdk/vue'
-import type { Conversation, UIMessage } from '~/types/chat'
-import { MockChatTransport } from '~/utils/mock-transport'
+import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
  * Wires one conversation to the AI SDK.
@@ -13,20 +12,14 @@ import { MockChatTransport } from '~/utils/mock-transport'
  */
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages } = useConversations()
-  const settings = useSettings()
-
-  const transport = new MockChatTransport({
-    // Both read at send time, so changing tools or the streaming preference
-    // mid-conversation takes effect on the next message rather than needing
-    // the chat rebuilt.
-    getEnabledToolIds: () => conversation.value?.enabledToolIds ?? [],
-    getStreaming: () => settings.value.streaming
-  })
 
   const chat = useChat(() => ({
+    api: '/api/chat',
+    body: {
+      id: conversation.value?.id
+    },
     id: conversation.value?.id,
     messages: (conversation.value?.messages ?? []) as UIMessage[],
-    transport,
     onError: (error: Error) => {
       console.error('[chat]', error)
     }

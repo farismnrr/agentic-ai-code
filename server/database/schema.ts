@@ -4,8 +4,12 @@ import {
   text,
   varchar,
   timestamp,
-  unique
+  unique,
+  jsonb,
+  boolean,
+  real
 } from 'drizzle-orm/pg-core'
+import type { McpTool, UIMessage } from '#shared/types/chat'
 
 /**
  * All tables live in the `ai_code` schema inside the shared `masihawam`
@@ -66,4 +70,72 @@ export const verificationTokens = aiCode.table('verification_tokens', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   /** Set once the link is clicked; prevents re-use. */
   consumedAt: timestamp('consumed_at', { withTimezone: true })
+})
+
+// ---------------------------------------------------------------------------
+// Conversations
+// ---------------------------------------------------------------------------
+
+export const conversations = aiCode.table('conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  modelId: text('model_id').notNull(),
+  enabledToolIds: jsonb('enabled_tool_ids').$type<string[]>().notNull().default([]),
+  approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+})
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+export const messages = aiCode.table('messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  conversationId: uuid('conversation_id')
+    .notNull()
+    .references(() => conversations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  parts: jsonb('parts').$type<UIMessage['parts']>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+})
+
+// ---------------------------------------------------------------------------
+// User Settings
+// ---------------------------------------------------------------------------
+
+export const userSettings = aiCode.table('user_settings', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  language: text('language').notNull().default('en'),
+  streaming: boolean('streaming').notNull().default(true),
+  sendOnEnter: boolean('send_on_enter').notNull().default(true),
+  defaultModelId: text('default_model_id').notNull(),
+  temperature: real('temperature').notNull().default(0.7),
+  systemPrompt: text('system_prompt').notNull().default(''),
+  displayName: text('display_name').notNull(),
+  email: text('email').notNull()
+})
+
+// ---------------------------------------------------------------------------
+// MCP Servers
+// ---------------------------------------------------------------------------
+
+export const mcpServers = aiCode.table('mcp_servers', {
+  id: text('id').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  transport: text('transport').notNull(),
+  url: text('url'),
+  command: text('command'),
+  status: text('status').notNull().default('disconnected'),
+  enabled: boolean('enabled').notNull().default(true),
+  tools: jsonb('tools').$type<McpTool[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })
