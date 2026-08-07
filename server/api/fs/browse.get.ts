@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const relativePath = (query.path as string) || ''
 
-  const resolvedPath = resolveWorkspacePath(relativePath)
+  const resolvedPath = await resolveWorkspacePath(relativePath)
 
   try {
     const entries = await fs.readdir(resolvedPath, { withFileTypes: true })
