@@ -14,9 +14,31 @@ const conversation = computed(() => get(conversationId.value))
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
 
-const { messages, status, error, sendMessage, stop, regenerate } = useConversationChat(conversation)
+const {
+  messages,
+  status,
+  error,
+  sendMessage,
+  stop,
+  regenerate,
+  addToolApprovalResponse
+} = useConversationChat(conversation)
 
 const input = ref('')
+
+const enabledToolIds = computed({
+  get: () => conversation.value?.enabledToolIds ?? [],
+  set: (value: string[]) => {
+    if (conversation.value) update(conversation.value.id, { enabledToolIds: value })
+  }
+})
+
+function rememberApproval({ toolId, decision }: { toolId: string, decision: 'always' | 'never' }) {
+  if (!conversation.value) return
+  update(conversation.value.id, {
+    approvals: { ...conversation.value.approvals, [toolId]: decision }
+  })
+}
 
 const modelItems = computed(() =>
   models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
@@ -118,6 +140,17 @@ watchEffect(() => {
             />
           </template>
         </UChatMessages>
+
+        <!-- Lives inside a named slot deliberately: a bare child alongside
+             #header/#body/#footer is treated as default-slot content and
+             makes Vue drop the named slots. It's a teleported modal, so its
+             position in the tree has no visual effect. -->
+        <ChatToolApproval
+          :messages="messages"
+          :conversation="conversation"
+          @respond="addToolApprovalResponse"
+          @remember="rememberApproval"
+        />
       </UContainer>
     </template>
 
@@ -147,6 +180,7 @@ watchEffect(() => {
               variant="ghost"
               size="sm"
             />
+            <ChatToolPicker v-model="enabledToolIds" />
           </template>
         </UChatPrompt>
       </UContainer>
