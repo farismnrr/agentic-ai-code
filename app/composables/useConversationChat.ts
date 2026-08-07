@@ -13,11 +13,14 @@ import { MockChatTransport } from '~/utils/mock-transport'
  */
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages } = useConversations()
+  const settings = useSettings()
 
   const transport = new MockChatTransport({
-    // Read at send time, so toggling tools mid-conversation takes effect
-    // on the next message rather than needing the chat rebuilt.
-    getEnabledToolIds: () => conversation.value?.enabledToolIds ?? []
+    // Both read at send time, so changing tools or the streaming preference
+    // mid-conversation takes effect on the next message rather than needing
+    // the chat rebuilt.
+    getEnabledToolIds: () => conversation.value?.enabledToolIds ?? [],
+    getStreaming: () => settings.value.streaming
   })
 
   const chat = useChat(() => ({

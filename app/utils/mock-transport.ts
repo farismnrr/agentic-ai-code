@@ -21,6 +21,11 @@ export interface MockChatTransportOptions {
   chunkDelayInMs?: number
   /** Tool ids enabled for the conversation, read at send time. */
   getEnabledToolIds?: () => string[]
+  /**
+   * Read at send time. When false the whole reply arrives at once, which is
+   * what the "stream responses" setting turns off.
+   */
+  getStreaming?: () => boolean
 }
 
 export class MockChatTransport<UI_MESSAGE extends UIMessage = UIMessage>
@@ -28,11 +33,13 @@ implements ChatTransport<UI_MESSAGE> {
   private readonly initialDelayInMs: number
   private readonly chunkDelayInMs: number
   private readonly getEnabledToolIds: () => string[]
+  private readonly getStreaming: () => boolean
 
   constructor(options: MockChatTransportOptions = {}) {
     this.initialDelayInMs = options.initialDelayInMs ?? 400
     this.chunkDelayInMs = options.chunkDelayInMs ?? 22
     this.getEnabledToolIds = options.getEnabledToolIds ?? (() => [])
+    this.getStreaming = options.getStreaming ?? (() => true)
   }
 
   sendMessages({
@@ -63,12 +70,16 @@ implements ChatTransport<UI_MESSAGE> {
       { type: 'finish', finishReason: scenario.id === 'error' ? 'error' : 'stop' }
     ]
 
+    const streaming = this.getStreaming()
+
     return Promise.resolve(
       simulateReadableStream({
         chunks,
         // Regeneration shouldn't re-pay the full thinking pause.
-        initialDelayInMs: trigger === 'regenerate-message' ? 150 : this.initialDelayInMs,
-        chunkDelayInMs: this.chunkDelayInMs
+        initialDelayInMs: streaming
+          ? (trigger === 'regenerate-message' ? 150 : this.initialDelayInMs)
+          : 0,
+        chunkDelayInMs: streaming ? this.chunkDelayInMs : 0
       })
     )
   }

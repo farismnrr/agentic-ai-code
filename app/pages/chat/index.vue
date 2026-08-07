@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { models, defaultModelId } from '~/utils/fixtures/models'
+import { models } from '~/utils/fixtures/models'
 
 useSeoMeta({ title: 'New chat' })
 
 const { create, titleFrom } = useConversations()
+const settings = useSettings()
 const { set: setPendingPrompt } = usePendingPrompt()
 const router = useRouter()
 
 const input = ref('')
-const modelId = ref(defaultModelId)
+// Seeded from the saved default so the settings page actually governs this.
+const modelId = ref(settings.value.defaultModelId)
 
 const suggestions = [
   { label: 'Search the repo for chat components', icon: 'i-lucide-folder-search' },
@@ -57,6 +59,7 @@ function start(text: string) {
 
         <UChatPrompt
           v-model="input"
+          :submit-on-enter="settings.sendOnEnter"
           autofocus
           placeholder="Message AI Code…"
           @submit="start(input)"
