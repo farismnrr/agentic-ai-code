@@ -103,9 +103,34 @@ Commits are atomic — one logical change each. If a commit needs "and" in its s
 
 - Title uses the same conventional-commit format as the subject line.
 - Body states the why, what changed, how it was verified, and links the plan phase it closes.
-- CI (`.github/workflows/ci.yml`) runs `pnpm lint` and `pnpm typecheck` on every PR. Green before merge, no exceptions.
+- CI (`.github/workflows/ci.yml`) runs `pnpm lint`, `pnpm typecheck` and `pnpm audit` on every PR. Green before merge, no exceptions.
+- **`pnpm audit` must report zero before merging.** See below.
 - **Squash merge**, so one PR is one commit and branch history reads as a list of shipped changes.
 - Base is `dev` for feature PRs. Only the release PR targets `main`.
+
+## Zero vulnerabilities before every merge
+
+`pnpm audit` must report **no known vulnerabilities** before a PR merges to `dev`. Not "only transitive ones", not "only in dev dependencies" — zero.
+
+Run it after any dependency change, before opening the PR:
+
+```sh
+pnpm audit
+```
+
+If it reports anything:
+
+1. `pnpm audit --json` to get each advisory's `patched_versions`.
+2. Add a pin under `overrides:` in `pnpm-workspace.yaml` at the lowest patched version.
+3. `pnpm install`, then re-run `pnpm audit` until it's clean.
+4. **Prove nothing broke** — `pnpm lint && pnpm typecheck && pnpm build`. An override forces a version the dependency never asked for, so the build is the only thing that tells you it still works.
+
+Two traps, both hit for real:
+
+- **Version-range-keyed overrides are silently ignored** in this setup. `brace-expansion@^2: '>=2.1.4'` looks correct, changes nothing, and reports no error. Use an unscoped key (`brace-expansion: '>=5.0.9'`) and confirm with `ls node_modules/.pnpm/<pkg>@*` that the vulnerable version is actually gone.
+- **"Transitive so not our problem" is not a reason to skip it.** The advisories here all came through Nuxt's own tree, and every one had a patched version reachable by an override.
+
+Keep the comments in `pnpm-workspace.yaml` current: note why each pin exists and drop it once upstream moves past it, so the list doesn't rot into permanent noise.
 
 ## Clean up after every merge
 
