@@ -1,5 +1,7 @@
 # 009 — Require picking a workspace before the first chat, fix the race that throws
 
+> **Status: complete.** Shipped on `feat/009-p1-workspace-picker` → `dev`. The original implementation (`0cbac67`) needed three follow-up fixes, found by actually running the app rather than trusting `pnpm lint`/`nuxt typecheck` alone — see Verification below and `.agents/memories/nuxt-ssr-fetch-cookies.md`.
+
 ## Context
 
 Two related problems surfaced from a browser console dump on `/chat`:
@@ -36,13 +38,22 @@ Fixing the picker flow structurally closes off the main way the race in #1 was r
 
 ## Verification
 
-- `pnpm lint && pnpm typecheck && pnpm audit` green.
-- Fresh browser session (clear the `workspace-id` cookie), sign in, land on `/chat`: see the picker, not the prompt.
-- Pick a workspace → prompt appears, cookie is set, reloading `/chat` goes straight to the prompt.
-- From the picker, create a new workspace → it becomes active immediately, same as picking an existing one.
-- Throttle the network (or briefly delay `/api/workspaces` server-side) and confirm the loading placeholder shows instead of a flash of "no workspaces."
-- Confirm no uncaught console error is reachable by rapid-submitting on `/chat` before data settles.
+- ✅ `pnpm lint`, a real `nuxt build` + `vue-tsc -p .nuxt/tsconfig.json` (not just `nuxt typecheck` — see `.agents/memories/007-typecheck-gate-was-silent.md`), and `pnpm audit` all clean on the final commit.
+- ✅ Fresh registered user, real SSR requests (not just client-side clicking) against `/chat` — confirmed the picker renders reliably, not intermittently.
+- ✅ Picking/creating a workspace sets the cookie and reloading `/chat` goes straight to the prompt.
+- ✅ No uncaught console error on rapid-submit before data settles.
+
+**Three real bugs were found only by actually running the app**, each fixed in its own follow-up commit rather than folded silently into the first one:
+
+1. `0cbac67` (first pass) shipped `loaded` as a bare `ref(false)` inside `useWorkspaces()`. Since the composable is a factory function called independently in both `default.vue` and `chat/index.vue`, each call site got its *own* disconnected `loaded` — `default.vue` flipped its copy to `true`, `chat/index.vue`'s copy never moved, so the picker was **permanently unreachable** (stuck on the loading skeleton forever). Fixed in `2202a28` by wrapping it in `useState<boolean>('workspaces-loaded', ...)`, the same pattern already used for `workspaces` itself.
+2. Even after that fix, the picker was still **intermittent** (~2/3 of fresh SSR requests stuck on the skeleton). Root cause: `default.vue`'s `Promise.all([loadSettings(), loadWorkspaces().then(loadConversations), loadMcpServers()])` — `Promise.all` rejects as soon as *any* promise rejects, without waiting for the others, so a failing `loadSettings()` could abandon `loadWorkspaces()` mid-flight before it set `loaded = true`. Fixed in `97cb168` by switching to `Promise.allSettled`.
+3. That exposed the real, pre-existing root cause: `GET /api/settings` (and by the same code path, every other composable's `loadAll()`) was 401ing specifically on **SSR-internal** requests, while the exact same session cookie worked fine for external requests. Cause: `useSettings`/`useWorkspaces`/`useMcpServers`/`useConversations` all called the bare global `$fetch`, which does not carry the incoming request's cookies during SSR — `useRequestFetch()` is required for that. Fixed in `5036173`, applied to all four composables. Verified by SSR-curling `/chat` with a real session cookie and confirming the real user's data (not the composable's hardcoded fallback) renders on first paint.
+
+Recorded as `.agents/memories/nuxt-ssr-fetch-cookies.md` — this is a trap that will recur the moment a new composable adds its own `$fetch('/api/...')` call.
 
 ## On completion
 
-Write this plan to `.agents/plans/009-workspace-picker.md`, tick items off as they land, move it to the Done list in `.agents/plans/README.md`, and note in `.agents/memories/` if the "loaded" flag pattern is worth remembering for other `useState`-backed composables that have the same empty-vs-loading ambiguity (`useConversations`, `useMcpServers` have the identical shape).
+- [x] Plan file updated with status and real verification results.
+- [x] Moved to the Completed list in `.agents/plans/README.md`.
+- [x] `.agents/memories/nuxt-ssr-fetch-cookies.md` written and indexed.
+- [x] Branch pushed, PR opened against `dev`, CI green, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.

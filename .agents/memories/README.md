@@ -17,3 +17,6 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [007-workspace-client-routing.md](007-workspace-client-routing.md) — why workspace active state is client-side rather than nested in the URL
 - [007-9router-config.md](007-9router-config.md) — how the real model backend is wired up via 9router
 - [007-typecheck-gate-was-silent.md](007-typecheck-gate-was-silent.md) — `nuxt typecheck` silently passed with real errors; script now runs `vue-tsc` directly
+- [fixtures-not-disposable.md](fixtures-not-disposable.md) — check what's actually inside `fixtures/` before deleting it; `models.ts` was real config, not a stub
+- [009-loaded-state-pattern.md](009-loaded-state-pattern.md) — use `useState`, not a bare `ref`, for a composable's own "have I loaded yet" flag, or it won't be shared across call sites
+- [nuxt-ssr-fetch-cookies.md](nuxt-ssr-fetch-cookies.md) — a composable's bare `$fetch('/api/...')` silently 401s during SSR; needs `useRequestFetch()` on the server
