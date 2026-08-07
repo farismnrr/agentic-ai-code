@@ -17,6 +17,11 @@ const conversation = computed(() => get(conversationId.value))
 // conversation.value.messages as the chat's initial seed. useChat() re-seeds
 // and rebuilds its chat instance any time that reactive value changes, so
 // loading it after mount would reset state instead of restoring it.
+//
+// The layout (app/layouts/default.vue) already resolves this conversation
+// and syncs the active workspace before its own sidebar renders — this call
+// is idempotent with that one, kept here because this page can't assume the
+// layout always ran it (and needs the awaited result regardless).
 await loadOne(conversationId.value)
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
