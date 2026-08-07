@@ -11,7 +11,7 @@ const route = useRoute()
 
 await useAsyncData('app-data', async () => {
   if (user.value) {
-    await Promise.all([
+    await Promise.allSettled([
       loadSettings(),
       loadWorkspaces().then(loadConversations),
       loadMcpServers()
