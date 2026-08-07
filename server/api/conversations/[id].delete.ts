@@ -4,7 +4,7 @@ import { conversations } from '../../database/schema'
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
-  if (!id) throw createError({ statusCode: 400, message: 'Missing conversation ID' })
+  if (!id) throw badRequest('Missing conversation ID')
 
   const db = useDb()
 
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   if (!deleted) {
-    throw createError({ statusCode: 404, message: 'Conversation not found' })
+    throw notFound('Conversation not found')
   }
 
   return { ok: true }

@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   const [newSettings] = await db.insert(userSettings).values(defaultSettings).returning()
 
   if (!newSettings) {
-    throw createError({ statusCode: 500, message: 'Failed to create settings' })
+    throw internal('Failed to create settings')
   }
 
   return {
