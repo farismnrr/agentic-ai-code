@@ -2,6 +2,7 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove } = useConversations()
+const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
 
@@ -14,27 +15,35 @@ const groups = computed(() => groupConversations(sorted.value))
 function itemsFor(conversations: typeof sorted.value): NavigationMenuItem[] {
   return conversations.map(conversation => ({
     label: conversation.title,
-    to: `/c/${conversation.id}`,
-    active: route.path === `/c/${conversation.id}`,
+    to: `/chat/${conversation.id}`,
+    active: route.path === `/chat/${conversation.id}`,
     // Carried through so the row's delete button knows what to remove.
     value: conversation.id
   }))
 }
 
 function newChat() {
-  void router.push('/')
+  void router.push('/chat')
 }
 
 function deleteConversation(id: string) {
-  const wasOpen = route.path === `/c/${id}`
+  const wasOpen = route.path === `/chat/${id}`
   remove(id)
-  if (wasOpen) void router.push('/')
+  if (wasOpen) void router.push('/chat')
 }
 
-const userItems: DropdownMenuItem[][] = [
+const userItems = computed<DropdownMenuItem[][]>(() => [
   [{ label: 'Settings', icon: 'i-lucide-settings', to: '/settings/general' }],
-  [{ label: 'Sign out', icon: 'i-lucide-log-out', color: 'error' }]
-]
+  [{
+    label: 'Sign out',
+    icon: 'i-lucide-log-out',
+    color: 'error',
+    onSelect: () => {
+      logout()
+      void router.push('/login')
+    }
+  }]
+])
 
 // ⌘K opens search, ⌘⇧O starts a new chat — the two shortcuts people expect.
 const searchOpen = ref(false)
@@ -50,7 +59,7 @@ const searchGroups = computed(() => [{
     label: conversation.title,
     suffix: new Date(conversation.updatedAt).toLocaleDateString(),
     icon: 'i-lucide-message-square',
-    to: `/c/${conversation.id}`
+    to: `/chat/${conversation.id}`
   }))
 }])
 </script>
@@ -126,9 +135,9 @@ const searchGroups = computed(() => [{
           class="w-full"
         >
           <UButton
-            :label="collapsed ? undefined : 'Faris'"
+            :label="collapsed ? undefined : (user?.name ?? 'Account')"
             :square="collapsed"
-            :avatar="{ alt: 'Faris' }"
+            :avatar="{ alt: user?.name ?? 'Account' }"
             color="neutral"
             variant="ghost"
             :block="!collapsed"

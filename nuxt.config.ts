@@ -22,10 +22,14 @@ export default defineNuxtConfig({
     }
   },
 
-  // `/` used to be a static landing page and was prerendered. It's now the
-  // interactive empty state, backed by in-memory conversation state, so
-  // prerendering it would ship a snapshot of an empty store.
-  routeRules: {},
+  routeRules: {
+    // App routes are client-rendered. The session lives in localStorage, so
+    // the server can't know who is signed in — an SSR pass would render
+    // guarded content for a moment before the client middleware redirects.
+    // These pages are driven entirely by client state anyway.
+    '/chat/**': { ssr: false },
+    '/settings/**': { ssr: false }
+  },
 
   // Default dev port. NUXT_PORT (or --port) in .env overrides this.
   devServer: {

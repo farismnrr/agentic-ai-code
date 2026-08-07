@@ -1,92 +1,38 @@
 <script setup lang="ts">
-import { models, defaultModelId } from '~/utils/fixtures/models'
-
-useSeoMeta({ title: 'New chat' })
-
-const { create, titleFrom } = useConversations()
-const { set: setPendingPrompt } = usePendingPrompt()
-const router = useRouter()
-
-const input = ref('')
-const modelId = ref(defaultModelId)
-
-const suggestions = [
-  { label: 'Search the repo for chat components', icon: 'i-lucide-folder-search' },
-  { label: 'Why is there no tailwind.config.js?', icon: 'i-lucide-help-circle' },
-  { label: 'Show me an example component', icon: 'i-lucide-code' },
-  { label: 'List the open pull requests', icon: 'i-simple-icons-github' }
-]
-
-const modelItems = computed(() =>
-  models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
-)
-
-function start(text: string) {
-  const trimmed = text.trim()
-  if (!trimmed) return
-
-  const conversation = create({ title: titleFrom(trimmed), modelId: modelId.value })
-  // The chat instance doesn't exist until the next page mounts, so hand the
-  // prompt over rather than trying to send it here.
-  setPendingPrompt(conversation.id, trimmed)
-  void router.push(`/c/${conversation.id}`)
-}
+// Placeholder. Phase 2 replaces this with the real landing page — hero,
+// features, pricing, testimonials, FAQ.
+definePageMeta({ layout: false })
+useSeoMeta({ title: 'AI Code' })
 </script>
 
 <template>
-  <UDashboardPanel id="home">
-    <template #header>
-      <UDashboardNavbar title="New chat">
-        <template #leading>
-          <UDashboardSidebarToggle />
-          <UDashboardSidebarCollapse />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <div class="flex min-h-svh flex-col items-center justify-center gap-6 p-6 text-center">
+    <div>
+      <h1 class="text-3xl font-semibold text-highlighted">
+        AI Code
+      </h1>
+      <p class="mt-2 text-muted">
+        Chat with models, connected to your MCP tools.
+      </p>
+    </div>
 
-    <template #body>
-      <UContainer class="flex w-full flex-1 flex-col justify-center gap-8 py-10">
-        <div class="text-center">
-          <h1 class="text-2xl font-semibold text-highlighted sm:text-3xl">
-            What are we building?
-          </h1>
-          <p class="mt-2 text-muted">
-            Ask anything. Connected MCP tools are used when they help.
-          </p>
-        </div>
+    <div class="flex gap-3">
+      <UButton
+        to="/login"
+        label="Sign in"
+        size="lg"
+      />
+      <UButton
+        to="/register"
+        label="Create account"
+        color="neutral"
+        variant="subtle"
+        size="lg"
+      />
+    </div>
 
-        <UChatPrompt
-          v-model="input"
-          autofocus
-          placeholder="Message AI Code…"
-          @submit="start(input)"
-        >
-          <UChatPromptSubmit />
-
-          <template #footer>
-            <USelect
-              v-model="modelId"
-              :items="modelItems"
-              :icon="models.find(m => m.id === modelId)?.icon"
-              variant="ghost"
-              size="sm"
-            />
-          </template>
-        </UChatPrompt>
-
-        <div class="flex flex-wrap justify-center gap-2">
-          <UButton
-            v-for="suggestion in suggestions"
-            :key="suggestion.label"
-            :label="suggestion.label"
-            :icon="suggestion.icon"
-            color="neutral"
-            variant="subtle"
-            size="sm"
-            @click="start(suggestion.label)"
-          />
-        </div>
-      </UContainer>
-    </template>
-  </UDashboardPanel>
+    <p class="text-xs text-dimmed">
+      Landing page lands in phase 2.
+    </p>
+  </div>
 </template>
