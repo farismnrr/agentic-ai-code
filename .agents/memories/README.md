@@ -14,3 +14,5 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [auth-utils-type-augmentation.md](auth-utils-type-augmentation.md) — `#auth-utils` module augmentation must live in `shared/types/`, not `app/types/`, or `session.user` types break
 - [background-command-output.md](background-command-output.md) — don't judge a background build/dev command as stuck from `tail` or CPU%; read the full output file
 - [fontless-build-hang.md](fontless-build-hang.md) — `pnpm build` finishes but never exits: `fontless`/`@nuxt/fonts` leaks an esbuild service, worked around via `hooks.close` in `nuxt.config.ts`
+- [007-workspace-client-routing.md](007-workspace-client-routing.md) — why workspace active state is client-side rather than nested in the URL
+- [007-9router-config.md](007-9router-config.md) — how the real model backend is wired up via 9router
