@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getToolName, isReasoningUIPart, isTextUIPart, isToolUIPart } from 'ai'
 import { isPartStreaming, isToolStreaming } from '@nuxt/ui/utils/ai'
-import type { UIMessage } from '~/types/chat'
+import type { UIMessage } from '#shared/types/chat'
 
 /**
  * Renders one message's parts. Split out of the page because the same

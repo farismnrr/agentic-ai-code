@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import type { McpTransport } from '~/types/chat'
+import type { McpTransport } from '#shared/types/chat'
 
 useSeoMeta({ title: 'MCP servers' })
 

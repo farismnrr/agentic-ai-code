@@ -1,10 +1,23 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
-const { sorted, remove, update } = useConversations()
+const { sorted, remove, update, loadAll: loadConversations } = useConversations()
+const { load: loadSettings } = useSettings()
+const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
+
+await useAsyncData('app-data', async () => {
+  if (user.value) {
+    await Promise.all([
+      loadSettings(),
+      loadConversations(),
+      loadMcpServers()
+    ])
+  }
+  return true
+})
 
 const groups = computed(() => groupConversations(sorted.value))
 

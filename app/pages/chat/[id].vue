@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getTextFromMessage } from '@nuxt/ui/utils/ai'
-import { models } from '~/utils/fixtures/models'
+import { models } from '#shared/utils/fixtures/models'
 
 const route = useRoute()
 const toast = useToast()
