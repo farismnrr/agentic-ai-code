@@ -1,6 +1,12 @@
 import type { UIMessageChunk } from 'ai'
 import type { McpTool } from '#shared/types/chat'
-import { mcpToolsById } from './mcp-servers.js'
+const mcpToolsById: Record<string, any> = {
+  github: {
+    name: 'search_repositories',
+    serverId: 'github',
+    sampleInput: { query: 'nuxt UI' }
+  }
+}
 
 /**
  * Canned assistant responses, expressed as the AI SDK's own `UIMessageChunk`

@@ -99,7 +99,7 @@ const faq: AccordionItem[] = [
   {
     label: 'Does this actually talk to a model?',
     content:
-      'Yes. It connects to real AI models via the 9Router API with full support for tool calling and streaming responses.'
+      'Yes. It connects to real AI models via the 9Router API with streaming responses.'
   },
   {
     label: 'What is MCP?',
@@ -114,7 +114,7 @@ const faq: AccordionItem[] = [
   {
     label: 'Can I use my own MCP servers?',
     content:
-      'Yes. You can add them in settings and they show up in the tool picker. The app connects to your real MCP servers to execute tools.'
+      'Yes. You can add them in settings and they show up in the tool picker. Note: in this phase, the backend securely stores your configuration but does not yet execute tool calls during chat.'
   },
   {
     label: 'Is the pricing real?',
