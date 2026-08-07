@@ -39,11 +39,11 @@ defineProps<{ message: UIMessage }>()
         v-if="message.role === 'assistant'"
         :value="part.text"
         :streaming="isPartStreaming(part)"
-        class="*:first:mt-0 *:last:mb-0"
+        class="font-mono *:first:mt-0 *:last:mb-0"
       />
       <p
         v-else
-        class="whitespace-pre-wrap"
+        class="font-mono whitespace-pre-wrap"
       >
         {{ part.text }}
       </p>

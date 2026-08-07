@@ -2,6 +2,7 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove, update, loadAll: loadConversations } = useConversations()
+const { workspaces, activeWorkspaceId, create: createWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
 const { load: loadSettings } = useSettings()
 const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
@@ -12,25 +13,25 @@ await useAsyncData('app-data', async () => {
   if (user.value) {
     await Promise.all([
       loadSettings(),
-      loadConversations(),
+      loadWorkspaces().then(loadConversations),
       loadMcpServers()
     ])
   }
   return true
 })
 
+// Whenever workspace changes, we should reload conversations
+watch(activeWorkspaceId, () => {
+  loadConversations()
+})
+
 const groups = computed(() => groupConversations(sorted.value))
 
-/**
- * One `UNavigationMenu` per bucket. Passing every bucket to a single menu
- * would flatten the headings, and the grouping is the whole point of the list.
- */
 function itemsFor(conversations: typeof sorted.value): NavigationMenuItem[] {
   return conversations.map(conversation => ({
     label: conversation.title,
     to: `/chat/${conversation.id}`,
     active: route.path === `/chat/${conversation.id}`,
-    // Carried through so the row's delete button knows what to remove.
     value: conversation.id
   }))
 }
@@ -45,9 +46,6 @@ function deleteConversation(id: string) {
   if (wasOpen) void router.push('/chat')
 }
 
-// Renaming happens in a modal rather than inline: the sidebar row is a
-// navigation link, and an input inside it fights the link for clicks and
-// keyboard focus.
 const renaming = ref<{ id: string, title: string } | null>(null)
 
 function startRename(id: string, title: string) {
@@ -62,7 +60,6 @@ function confirmRename() {
   renaming.value = null
 }
 
-/** Per-row menu. Replaces a hover-only icon, which touch devices can't reach. */
 function rowItems(id: string, title: string): DropdownMenuItem[][] {
   return [[
     {
@@ -92,23 +89,58 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
   }]
 ])
 
-// ⌘K opens search, ⌘⇧O starts a new chat — the two shortcuts people expect.
+const activeWorkspace = computed(() => workspaces.value.find(w => w.id === activeWorkspaceId.value))
+
+const workspaceCreating = ref(false)
+const workspaceName = ref('')
+async function confirmCreateWorkspace() {
+  if (workspaceName.value.trim()) {
+    const w = await createWorkspace(workspaceName.value.trim())
+    activeWorkspaceId.value = w.id
+  }
+  workspaceCreating.value = false
+  workspaceName.value = ''
+}
+
+const workspaceItems = computed<DropdownMenuItem[][]>(() => {
+  const list = workspaces.value.map(w => ({
+    label: w.name,
+    icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
+    onSelect: () => { activeWorkspaceId.value = w.id }
+  }))
+  return [
+    list,
+    [{ label: 'New workspace', icon: 'i-lucide-plus', onSelect: () => { workspaceCreating.value = true } }]
+  ]
+})
+
 const searchOpen = ref(false)
 defineShortcuts({
   meta_k: () => { searchOpen.value = true },
   meta_shift_o: newChat
 })
 
-const searchGroups = computed(() => [{
-  id: 'conversations',
-  label: 'Conversations',
-  items: sorted.value.map(conversation => ({
-    label: conversation.title,
-    suffix: new Date(conversation.updatedAt).toLocaleDateString(),
-    icon: 'i-lucide-message-square',
-    to: `/chat/${conversation.id}`
-  }))
-}])
+const searchGroups = computed(() => [
+  {
+    id: 'workspaces',
+    label: 'Workspaces',
+    items: workspaces.value.map(w => ({
+      label: w.name,
+      icon: 'i-lucide-folder',
+      onSelect: () => { activeWorkspaceId.value = w.id }
+    }))
+  },
+  {
+    id: 'conversations',
+    label: 'Conversations',
+    items: sorted.value.map(conversation => ({
+      label: conversation.title,
+      suffix: new Date(conversation.updatedAt).toLocaleDateString(),
+      icon: 'i-lucide-message-square',
+      to: `/chat/${conversation.id}`
+    }))
+  }
+])
 </script>
 
 <template>
@@ -121,18 +153,36 @@ const searchGroups = computed(() => [{
       :max-size="26"
     >
       <template #header="{ collapsed }">
-        <UButton
-          :label="collapsed ? undefined : 'New chat'"
-          :square="collapsed"
-          icon="i-lucide-square-pen"
-          color="neutral"
-          variant="outline"
-          :block="!collapsed"
-          @click="newChat"
-        />
+        <UDropdownMenu
+          :items="workspaceItems"
+          class="w-full"
+        >
+          <UButton
+            :label="collapsed ? undefined : (activeWorkspace?.name ?? 'Workspace')"
+            :square="collapsed"
+            icon="i-lucide-layout-grid"
+            color="neutral"
+            variant="ghost"
+            :block="!collapsed"
+            :trailing-icon="collapsed ? undefined : 'i-lucide-chevron-down'"
+            :ui="{ trailingIcon: 'ms-auto' }"
+          />
+        </UDropdownMenu>
       </template>
 
       <template #default="{ collapsed }">
+        <div class="px-2 pb-2">
+          <UButton
+            :label="collapsed ? undefined : 'New chat'"
+            :square="collapsed"
+            icon="i-lucide-square-pen"
+            color="neutral"
+            variant="outline"
+            :block="!collapsed"
+            @click="newChat"
+          />
+        </div>
+
         <UDashboardSearchButton
           :collapsed="collapsed"
           class="mb-2"
@@ -151,7 +201,7 @@ const searchGroups = computed(() => [{
             <UNavigationMenu
               :items="itemsFor(group.conversations)"
               orientation="vertical"
-              :ui="{ link: 'group' }"
+              :ui="{ link: 'group', root: 'py-0.5' }"
             >
               <template #item-trailing="{ item }">
                 <UDropdownMenu :items="rowItems(String(item.value), String(item.label))">
@@ -237,6 +287,37 @@ const searchGroups = computed(() => [{
           <UButton
             label="Rename"
             @click="confirmRename"
+          />
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="workspaceCreating"
+      title="New workspace"
+      @update:open="workspaceCreating = false"
+    >
+      <template #body>
+        <UInput
+          v-model="workspaceName"
+          autofocus
+          placeholder="Workspace name..."
+          class="w-full"
+          @keydown.enter="confirmCreateWorkspace"
+        />
+      </template>
+
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton
+            label="Cancel"
+            color="neutral"
+            variant="ghost"
+            @click="workspaceCreating = false"
+          />
+          <UButton
+            label="Create"
+            @click="confirmCreateWorkspace"
           />
         </div>
       </template>

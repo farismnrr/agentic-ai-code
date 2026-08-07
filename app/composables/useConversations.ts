@@ -22,7 +22,14 @@ export function useConversations() {
   }
 
   async function loadAll() {
-    const data = await $fetch<Conversation[]>('/api/conversations')
+    const { activeWorkspaceId } = useWorkspaces()
+    if (!activeWorkspaceId.value) {
+      conversations.value = []
+      return
+    }
+    const data = await $fetch<Conversation[]>('/api/conversations', {
+      query: { workspaceId: activeWorkspaceId.value }
+    })
     conversations.value = data
   }
 
@@ -37,9 +44,12 @@ export function useConversations() {
   }
 
   async function create(overrides: Partial<Conversation> = {}): Promise<Conversation> {
+    const { activeWorkspaceId } = useWorkspaces()
+    if (!activeWorkspaceId.value) throw new Error('No active workspace')
     const data = await $fetch<Conversation>('/api/conversations', {
       method: 'POST',
       body: {
+        workspaceId: activeWorkspaceId.value,
         title: overrides.title || 'New chat',
         modelId: overrides.modelId || settings.value.defaultModelId
       }
