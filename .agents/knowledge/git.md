@@ -56,6 +56,24 @@ Commits are atomic — one logical change each. If a commit needs "and" in its s
 - **Squash merge** into `main`, so one PR is one commit and `main`'s history reads as a list of shipped changes.
 - Delete the branch after merge.
 
+## What is and isn't committed
+
+Committed on purpose, despite living in dot-folders:
+
+- `.agents/**` — knowledge, skills, plans, memories, hooks. This is project material.
+- `.claude/settings.json` — shared hooks and settings for everyone on the repo.
+- `.claude/skills/*` — symlinks into `.agents/skills/`; git stores the link, not a copy.
+- `.mcp.json`, `.env.example`, `skills-lock.json`.
+
+Never committed — see `.gitignore`:
+
+- `.env` and any `.env.*` other than the example.
+- `.claude/settings.local.json` and `.claude/.credentials.json` — personal and machine-specific.
+- `.agents/.sync-state/`, `.agents/.last-sync` — per-session hook state.
+- Build output (`.nuxt`, `.output`, `.nitro`, `dist`), `node_modules`, caches, editor folders.
+
+Before staging, run `git status` and look at the list. Don't `git add -A` straight after a build.
+
 ## Rules for agents
 
 - **Never commit or push unless the user asks.** Staging and committing are outward-facing steps that need a request; finishing a task does not imply committing it.

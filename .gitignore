@@ -13,10 +13,19 @@ node_modules
 logs
 *.log
 
-# Misc
+# Editors
 .DS_Store
 .fleet
 .idea
+.vscode
+
+# Tool caches
+.eslintcache
+*.tsbuildinfo
+
+# Claude Code — settings.json is shared and committed; these are personal/machine state
+.claude/settings.local.json
+.claude/.credentials.json
 
 # Local env files
 .env
