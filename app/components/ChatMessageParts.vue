@@ -30,9 +30,14 @@ defineProps<{ message: UIMessage }>()
     />
 
     <template v-else-if="isTextUIPart(part)">
-      <Comark
+      <!-- `Markdown`, not `Comark`: @comark/nuxt registers Markdown and
+           MarkdownDocument. The prop is `value`, not `markdown`. The Nuxt UI
+           chat reference still shows the old names, and getting either wrong
+           fails as an unresolved component — which SSRs as an empty node and
+           then breaks hydration for the whole page, not just this part. -->
+      <Markdown
         v-if="message.role === 'assistant'"
-        :markdown="part.text"
+        :value="part.text"
         :streaming="isPartStreaming(part)"
         class="*:first:mt-0 *:last:mb-0"
       />
