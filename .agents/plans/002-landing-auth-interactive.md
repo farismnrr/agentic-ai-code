@@ -1,5 +1,7 @@
 # 002 — Landing → login → app, and make the prototype actually interactive
 
+> **Status: complete.** Shipped to `dev` via PRs #13, #14, #15, #16.
+
 ## Context
 
 Plan 001 delivered the chat UI, but the app opened straight into a chat screen and, worse, **wasn't usable**: `Comark` never resolved, which broke hydration on every chat page and left nothing clickable. That's fixed (PR #12), but it exposed the real gap — 001 was verified by reading server-rendered HTML, which proves markup exists, not that the app runs.
@@ -36,31 +38,31 @@ Landing takes `/`, so the app moves under `/chat`:
 
 Each phase ends green (`pnpm lint && pnpm typecheck && pnpm audit`) and gets its own PR into `dev`, per `.agents/knowledge/git.md`.
 
-### 1. Auth foundation
+### 1. Auth foundation ✅ done
 
 - `app/composables/useAuth.ts` — `user` ref, `login()`, `register()`, `logout()`. Session in `localStorage` under one key; everything else stays `useState`. Read it in a `.client.ts` plugin, not at module scope — `localStorage` doesn't exist during SSR.
 - `app/middleware/auth.global.ts` — unauthenticated visitors hitting an app route go to `/login?redirect=<path>`; authenticated visitors hitting `/login` go to `/chat`. Public routes: `/`, `/login`, `/register`.
 - Guard runs client-side only for the `localStorage` read; make sure the server render doesn't flash the wrong screen.
 
-### 2. Landing
+### 2. Landing ✅ done
 
 - `app/layouts/landing.vue` — `UHeader` with nav + "Sign in", `UFooter`.
 - `app/pages/index.vue` becomes the landing page using Nuxt UI's page components, all of which are already available: `UPageHero`, `UPageSection`, `UPageFeature`, `UPricingPlans`/`UPricingPlan`, `UPageColumns` for testimonials, `UAccordion` for FAQ, `UPageCTA`.
 - Copy is invented but should describe *this* app — streaming chat, MCP tools, multi-model — not generic SaaS filler.
 
-### 3. Auth pages
+### 3. Auth pages ✅ done (landed with phase 1)
 
 - `app/layouts/auth.vue` — centred card, logo, link back to `/`.
 - `app/pages/login.vue`, `app/pages/register.vue` — `UForm` + valibot, matching `settings/account.vue`'s existing pattern. Any email/password combination succeeds; show the validation errors so the form feels real.
 - Honour `?redirect=`. Fake OAuth buttons are **out of scope** — they were declined.
 
-### 4. Move the app under `/chat`
+### 4. Move the app under `/chat` ✅ done (landed with phase 1)
 
 - Move `pages/index.vue` (empty state) → `pages/chat/index.vue`, `pages/c/[id].vue` → `pages/chat/[id].vue`.
 - Update every link and `router.push`.
 - Wire the sidebar user menu's "Sign out" to `logout()` — it's currently a dead button.
 
-### 5. Close the interaction gaps
+### 5. Close the interaction gaps ✅ done
 
 The point of the plan: things that look interactive but aren't.
 
@@ -71,7 +73,7 @@ The point of the plan: things that look interactive but aren't.
 - **Settings that claim to do something must do it**: `streaming` should actually toggle the mock transport's delay, `sendOnEnter` should change the prompt's submit behaviour, `defaultModelId` should be what `create()` uses. Right now they're stored and ignored.
 - **Reset demo data** button in settings, since nothing persists and a wedged demo needs a way out.
 
-### 6. Polish and consistency
+### 6. Polish and consistency ✅ done
 
 - Landing and auth pages need the dark-mode pass; they're new surfaces.
 - Mobile: landing sections stack, auth card doesn't overflow.

@@ -10,3 +10,4 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [no-type-aware-linting.md](no-type-aware-linting.md) — why typescript-eslint type-aware rules are off
 - [pnpm-over-bun.md](pnpm-over-bun.md) — why pnpm was chosen for this project
 - [ai-sdk-native-features.md](ai-sdk-native-features.md) — stream simulation and tool approval are built into `ai@7`; don't rebuild them
+- [verify-in-a-browser.md](verify-in-a-browser.md) — SSR HTML is not proof the app runs; how a whole plan shipped broken
