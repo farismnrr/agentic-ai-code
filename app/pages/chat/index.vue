@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { models } from '~/utils/fixtures/models'
+import { models } from '#shared/utils/fixtures/models'
 
 useSeoMeta({ title: 'New chat' })
 
@@ -23,11 +23,11 @@ const modelItems = computed(() =>
   models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
 )
 
-function start(text: string) {
+async function start(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
 
-  const conversation = create({ title: titleFrom(trimmed), modelId: modelId.value })
+  const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value })
   // The chat instance doesn't exist until the next page mounts, so hand the
   // prompt over rather than trying to send it here.
   setPendingPrompt(conversation.id, trimmed)

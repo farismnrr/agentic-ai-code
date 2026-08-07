@@ -10,8 +10,9 @@ const toast = useToast()
  * short of a reload — which also signs nothing out, since the session is the
  * one thing that survives. This is that way out.
  */
-function resetDemo() {
-  resetConversations()
+async function resetDemo() {
+  await $fetch('/api/reseed', { method: 'POST' })
+  await resetConversations()
   toast.add({ title: 'Demo data reset', icon: 'i-lucide-rotate-ccw', color: 'success' })
 }
 

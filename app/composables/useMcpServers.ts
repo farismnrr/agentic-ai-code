@@ -1,12 +1,11 @@
-import type { McpServer, McpTool } from '~/types/chat'
-import { mcpServers as seedServers } from '~/utils/fixtures/mcp-servers'
+import type { McpServer, McpTool } from '#shared/types/chat'
 
 /**
  * In-memory MCP server registry. Stands in for what an MCP client would
  * report; `useState` for the same SSR-safety reason as the conversation store.
  */
 export function useMcpServers() {
-  const servers = useState<McpServer[]>('mcp-servers', () => [...seedServers])
+  const servers = useState<McpServer[]>('mcp-servers', () => [])
 
   /** Only connected, enabled servers can contribute tools to a conversation. */
   const availableTools = computed<McpTool[]>(() =>
@@ -19,26 +18,33 @@ export function useMcpServers() {
     Object.fromEntries(servers.value.flatMap(s => s.tools).map(t => [t.id, t]))
   )
 
-  function setEnabled(id: string, enabled: boolean) {
+  async function loadAll() {
+    const data = await $fetch<McpServer[]>('/api/mcp-servers')
+    servers.value = data
+  }
+
+  async function setEnabled(id: string, enabled: boolean) {
     servers.value = servers.value.map(server =>
       server.id === id ? { ...server, enabled } : server
     )
+    await $fetch(`/api/mcp-servers/${id}`, {
+      method: 'PUT',
+      body: { enabled }
+    })
   }
 
-  function add(server: Omit<McpServer, 'id' | 'tools' | 'status'>) {
-    const id = server.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      || `server-${Date.now().toString(36)}`
-    servers.value = [
-      ...servers.value,
-      // A real client discovers tools after connecting; there's nothing to
-      // discover here, so a new server starts connected with no tools.
-      { ...server, id, status: 'connected', tools: [] }
-    ]
+  async function add(server: Omit<McpServer, 'id' | 'tools' | 'status'>) {
+    const data = await $fetch<McpServer>('/api/mcp-servers', {
+      method: 'POST',
+      body: server
+    })
+    servers.value = [...servers.value, data]
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     servers.value = servers.value.filter(server => server.id !== id)
+    await $fetch(`/api/mcp-servers/${id}`, { method: 'DELETE' })
   }
 
-  return { servers, availableTools, toolsById, setEnabled, add, remove }
+  return { servers, availableTools, toolsById, loadAll, setEnabled, add, remove }
 }

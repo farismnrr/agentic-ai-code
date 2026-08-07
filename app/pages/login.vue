@@ -106,13 +106,23 @@ if (route.query.error) {
           required
           :ui="{ label: 'font-mono text-xs text-muted uppercase tracking-wider' }"
         >
-          <UInput
-            v-model="state.password"
-            type="password"
-            autocomplete="current-password"
-            placeholder="••••••••"
-            class="w-full"
-          />
+          <div class="flex flex-col space-y-2">
+            <UInput
+              v-model="state.password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full"
+            />
+            <div class="text-right">
+              <ULink
+                to="/forgot-password"
+                class="text-xs text-muted hover:text-primary transition-colors"
+              >
+                Forgot password?
+              </ULink>
+            </div>
+          </div>
         </UFormField>
 
         <UButton

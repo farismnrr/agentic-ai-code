@@ -1,7 +1,8 @@
 import * as v from 'valibot'
 import { eq } from 'drizzle-orm'
-import { users } from '../../database/schema'
+import { users, verificationTokens } from '../../database/schema'
 import { registerSchema } from '../../../shared/schemas/auth'
+import { generateToken } from '../../utils/token'
 
 /**
  * POST /api/auth/register
@@ -59,6 +60,33 @@ export default defineEventHandler(async (event) => {
       name: created.name,
       emailVerifiedAt: created.emailVerifiedAt?.toISOString() ?? null
     }
+  })
+
+  // Generate and send verification email
+  const { token, hash: tokenHash } = generateToken()
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+  await db.insert(verificationTokens).values({
+    tokenHash,
+    userId: created.id,
+    type: 'email_verify',
+    expiresAt
+  })
+
+  const { sendEmail, getTemplate } = useMailer()
+  const config = useRuntimeConfig()
+  // The frontend handles the ?token= extraction
+  const verifyUrl = `${config.public.siteUrl}/verify-email?token=${token}`
+
+  await sendEmail({
+    to: created.email,
+    subject: 'Verify your email address',
+    html: getTemplate(
+      'Verify your email',
+      'Thanks for signing up! Please verify your email address to continue.',
+      'Verify Email',
+      verifyUrl
+    )
   })
 
   setResponseStatus(event, 201)

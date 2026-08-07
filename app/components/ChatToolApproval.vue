@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
-import type { Conversation, UIMessage } from '~/types/chat'
+import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
  * Approval prompt for a pending MCP tool call.

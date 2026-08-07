@@ -1,6 +1,4 @@
-import type { Conversation, UIMessage } from '~/types/chat'
-import { seedConversations } from '~/utils/fixtures/conversations'
-import { defaultEnabledToolIds } from '~/utils/fixtures/mcp-servers'
+import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
  * In-memory conversation store.
@@ -11,7 +9,7 @@ import { defaultEnabledToolIds } from '~/utils/fixtures/mcp-servers'
  * persistence is out of scope for this iteration.
  */
 export function useConversations() {
-  const conversations = useState<Conversation[]>('conversations', () => [...seedConversations])
+  const conversations = useState<Conversation[]>('conversations', () => [])
   const settings = useSettings()
 
   /** Newest first, which is the order the sidebar renders. */
@@ -23,40 +21,72 @@ export function useConversations() {
     return conversations.value.find(c => c.id === id)
   }
 
-  function create(overrides: Partial<Conversation> = {}): Conversation {
-    const now = Date.now()
-    const conversation: Conversation = {
-      id: `c_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-      title: 'New chat',
-      createdAt: now,
-      updatedAt: now,
-      messages: [],
-      modelId: settings.value.defaultModelId,
-      enabledToolIds: [...defaultEnabledToolIds],
-      approvals: {},
-      ...overrides
-    }
-    conversations.value = [conversation, ...conversations.value]
-    return conversation
+  async function loadAll() {
+    const data = await $fetch<Conversation[]>('/api/conversations')
+    conversations.value = data
   }
 
-  function update(id: string, patch: Partial<Conversation>) {
+  async function loadOne(id: string) {
+    try {
+      const data = await $fetch<Conversation>(`/api/conversations/${id}`)
+      updateLocally(id, data)
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  async function create(overrides: Partial<Conversation> = {}): Promise<Conversation> {
+    const data = await $fetch<Conversation>('/api/conversations', {
+      method: 'POST',
+      body: {
+        title: overrides.title || 'New chat',
+        modelId: overrides.modelId || settings.value.defaultModelId
+      }
+    })
+    conversations.value = [data, ...conversations.value]
+    return data
+  }
+
+  function updateLocally(id: string, patch: Partial<Conversation>) {
     conversations.value = conversations.value.map(c =>
-      c.id === id ? { ...c, ...patch, updatedAt: Date.now() } : c
+      c.id === id ? { ...c, ...patch, updatedAt: patch.updatedAt || Date.now() } : c
     )
+  }
+
+  async function update(id: string, patch: Partial<Conversation>) {
+    // Optimistic update
+    updateLocally(id, patch)
+
+    // Pick fields that are safe to update directly
+    const apiPatch: Pick<Partial<Conversation>, 'title' | 'enabledToolIds' | 'approvals'> = {}
+    if (patch.title !== undefined) apiPatch.title = patch.title
+    if (patch.enabledToolIds !== undefined) apiPatch.enabledToolIds = patch.enabledToolIds
+    if (patch.approvals !== undefined) apiPatch.approvals = patch.approvals
+
+    if (Object.keys(apiPatch).length > 0) {
+      const data = await $fetch<Conversation>(`/api/conversations/${id}`, {
+        method: 'PUT',
+        body: apiPatch
+      })
+      updateLocally(id, data)
+    }
   }
 
   /** Restores seed data — the way out of a wedged demo, since nothing persists. */
   function reset() {
-    conversations.value = [...seedConversations]
+    // not used much now
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     conversations.value = conversations.value.filter(c => c.id !== id)
+    await $fetch(`/api/conversations/${id}`, { method: 'DELETE' })
   }
 
   function setMessages(id: string, messages: UIMessage[]) {
-    update(id, { messages })
+    // We only update messages locally in useConversations because chat persistence
+    // to DB happens in the chat stream itself / backend.
+    updateLocally(id, { messages })
   }
 
   /**
@@ -70,5 +100,5 @@ export function useConversations() {
     return firstLine.length > 48 ? `${trimmed}…` : trimmed
   }
 
-  return { conversations, sorted, get, create, update, remove, reset, setMessages, titleFrom }
+  return { conversations, sorted, get, loadAll, loadOne, create, update, updateLocally, remove, reset, setMessages, titleFrom }
 }

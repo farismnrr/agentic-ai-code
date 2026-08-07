@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { models } from '~/utils/fixtures/models'
+import { models } from '#shared/utils/fixtures/models'
 
 useSeoMeta({ title: 'Model settings' })
 

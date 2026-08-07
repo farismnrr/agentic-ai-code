@@ -1,5 +1,5 @@
-import type { Conversation, UIMessage } from '~/types/chat'
-import { defaultEnabledToolIds } from './mcp-servers'
+import type { Conversation, UIMessage } from '#shared/types/chat'
+import { defaultEnabledToolIds } from './mcp-servers.js'
 import { defaultModelId } from './models'
 
 function message(id: string, role: UIMessage['role'], text: string): UIMessage {
