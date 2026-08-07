@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 import { eq } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
+import { users, verificationTokens, workspaces } from '../../database/schema'
 import { registerSchema } from '../../../shared/schemas/auth'
 import { generateToken } from '../../utils/token'
 
@@ -41,10 +41,17 @@ export default defineEventHandler(async (event) => {
   const hash = await hashPassword(body.password)
 
   try {
-    await db.insert(users).values({
-      email: body.email,
-      name: body.name,
-      passwordHash: hash
+    await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(users).values({
+        email: body.email,
+        name: body.name,
+        passwordHash: hash
+      }).returning({ id: users.id })
+
+      await tx.insert(workspaces).values({
+        userId: inserted!.id,
+        name: 'Personal'
+      })
     })
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('Email already registered')
