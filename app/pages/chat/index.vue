@@ -39,7 +39,7 @@ function start(text: string) {
   <UDashboardPanel id="home">
     <template #header>
       <UDashboardNavbar title="New chat">
-        <template #leading>
+        <template #left>
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
@@ -61,6 +61,7 @@ function start(text: string) {
           :submit-on-enter="settings.sendOnEnter"
           autofocus
           placeholder="Message AI Code…"
+          :ui="{ footer: 'flex-wrap sm:flex-nowrap' }"
           @submit="start(input)"
         >
           <UChatPromptSubmit />
