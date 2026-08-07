@@ -5,11 +5,19 @@ import { models } from '#shared/utils/models'
 const route = useRoute()
 const toast = useToast()
 
-const { get, update, titleFrom } = useConversations()
+const { get, loadOne, update, titleFrom } = useConversations()
 const { take: takePendingPrompt } = usePendingPrompt()
 
 const conversationId = computed(() => String(route.params.id))
 const conversation = computed(() => get(conversationId.value))
+
+// The conversations list only carries metadata, not messages (see
+// server/api/conversations/index.get.ts) — this page needs the full
+// conversation, and it must resolve before useConversationChat() reads
+// conversation.value.messages as the chat's initial seed. useChat() re-seeds
+// and rebuilds its chat instance any time that reactive value changes, so
+// loading it after mount would reset state instead of restoring it.
+await loadOne(conversationId.value)
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
 
