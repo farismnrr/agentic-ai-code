@@ -13,28 +13,36 @@ export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const db = useDb()
 
-  const body = await readValidatedBody(event, data => v.parse(createSchema, data))
+  const result = v.safeParse(createSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   const id = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `server-${Date.now().toString(36)}`
 
-  const [server] = await db
-    .insert(mcpServers)
-    .values({
-      id: `${id}-${session.user.id}`, // To ensure uniqueness per user if necessary, or just rely on UUID/timestamp. Wait, id is a string and primary key. Let's make it unique across all by appending timestamp
-      userId: session.user.id,
-      name: body.name,
-      description: body.description,
-      transport: body.transport,
-      url: body.url,
-      command: body.command,
-      status: 'connected',
-      enabled: true,
-      tools: []
-    })
-    .returning()
+  let server
+  try {
+    [server] = await db
+      .insert(mcpServers)
+      .values({
+        id: `${id}-${session.user.id}`, // To ensure uniqueness per user if necessary, or just rely on UUID/timestamp. Wait, id is a string and primary key. Let's make it unique across all by appending timestamp
+        userId: session.user.id,
+        name: body.name,
+        description: body.description,
+        transport: body.transport,
+        url: body.url,
+        command: body.command,
+        status: 'connected',
+        enabled: true,
+        tools: []
+      })
+      .returning()
+  } catch (err) {
+    if (isUniqueViolation(err)) throw conflict('Server ID already exists')
+    throw err
+  }
 
   if (!server) {
-    throw createError({ statusCode: 500, message: 'Failed to create server' })
+    throw internal('Failed to create server')
   }
 
   return {

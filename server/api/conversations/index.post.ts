@@ -10,7 +10,9 @@ export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const db = useDb()
 
-  const body = await readValidatedBody(event, data => v.parse(createSchema, data))
+  const result = v.safeParse(createSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   const [conversation] = await db
     .insert(conversations)
@@ -22,7 +24,7 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   if (!conversation) {
-    throw createError({ statusCode: 500, message: 'Failed to create conversation' })
+    throw internal('Failed to create conversation')
   }
 
   return {

@@ -17,7 +17,9 @@ export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const db = useDb()
 
-  const body = await readValidatedBody(event, data => v.parse(settingsSchema, data))
+  const result = v.safeParse(settingsSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   const [updatedSettings] = await db
     .update(userSettings)
@@ -26,7 +28,7 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   if (!updatedSettings) {
-    throw createError({ statusCode: 404, message: 'Settings not found' })
+    throw notFound('Settings not found')
   }
 
   return {

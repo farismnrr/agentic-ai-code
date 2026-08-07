@@ -1,20 +1,19 @@
 import { eq } from 'drizzle-orm'
 import { users, verificationTokens } from '../../database/schema'
 import { generateToken } from '../../utils/token'
+import { forgotPasswordSchema as forgotSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
-const forgotSchema = v.object({
-  email: v.pipe(v.string(), v.email())
-})
-
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(forgotSchema, data))
+  const result = v.safeParse(forgotSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   // Rate limit
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
   const { limited, retryAfter } = rateLimit({ key: `forgot:${ip}`, maxAttempts: 5 })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
 
   const db = useDb()
@@ -44,7 +43,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const resetUrl = `${config.public.siteUrl}/reset-password?token=${token}`
 
-  await sendEmail({
+  const emailSent = await sendEmail({
     to: user.email,
     subject: 'Reset your password',
     html: getTemplate(
@@ -54,6 +53,10 @@ export default defineEventHandler(async (event) => {
       resetUrl
     )
   })
+
+  if (!emailSent) {
+    console.warn('[email] delivery failed', { to: user.email, purpose: 'forgot' })
+  }
 
   return { ok: true }
 })

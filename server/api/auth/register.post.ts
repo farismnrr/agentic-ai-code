@@ -16,13 +16,15 @@ import { generateToken } from '../../utils/token'
  * Rate limit: 5 register attempts per IP per 15 minutes.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(registerSchema, data))
+  const result = v.safeParse(registerSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   // Rate limit by IP to slow down bulk account creation.
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
   const { limited, retryAfter } = rateLimit({ key: `register:${ip}`, maxAttempts: 5 })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
 
   const db = useDb()
@@ -38,11 +40,16 @@ export default defineEventHandler(async (event) => {
 
   const hash = await hashPassword(body.password)
 
-  await db.insert(users).values({
-    email: body.email,
-    name: body.name,
-    passwordHash: hash
-  })
+  try {
+    await db.insert(users).values({
+      email: body.email,
+      name: body.name,
+      passwordHash: hash
+    })
+  } catch (err) {
+    if (isUniqueViolation(err)) throw conflict('Email already registered')
+    throw err
+  }
 
   // Fetch the created user to seed the session.
   const [created] = await db
@@ -51,7 +58,7 @@ export default defineEventHandler(async (event) => {
     .where(eq(users.email, body.email))
     .limit(1)
 
-  if (!created) throw createError({ statusCode: 500, message: 'Account creation failed' })
+  if (!created) throw internal('Account creation failed')
 
   await setUserSession(event, {
     user: {
@@ -78,7 +85,7 @@ export default defineEventHandler(async (event) => {
   // The frontend handles the ?token= extraction
   const verifyUrl = `${config.public.siteUrl}/verify-email?token=${token}`
 
-  await sendEmail({
+  const emailSent = await sendEmail({
     to: created.email,
     subject: 'Verify your email address',
     html: getTemplate(
@@ -88,6 +95,9 @@ export default defineEventHandler(async (event) => {
       verifyUrl
     )
   })
+  if (!emailSent) {
+    console.warn('[email] delivery failed', { to: created.email, purpose: 'register' })
+  }
 
   setResponseStatus(event, 201)
   return { ok: true }
