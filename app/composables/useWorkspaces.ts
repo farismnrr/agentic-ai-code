@@ -2,7 +2,7 @@ import type { Workspace } from '#shared/types/chat'
 
 export function useWorkspaces() {
   const workspaces = useState<Workspace[]>('workspaces', () => [])
-  const loaded = ref(false)
+  const loaded = useState<boolean>('workspaces-loaded', () => false)
   // Persist the active workspace across reloads
   const activeWorkspaceId = useCookie<string | null>('workspace-id', { default: () => null })
 

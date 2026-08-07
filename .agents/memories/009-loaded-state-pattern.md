@@ -9,7 +9,7 @@ When using `useState` in Nuxt to store data fetched from the server (e.g., in co
 To resolve this ambiguity, especially when rendering "empty states" vs "loading skeletons" in the UI (like replacing the chat prompt with a workspace picker only if genuinely zero workspaces exist), add a `loaded` ref to the composable:
 
 ```typescript
-const loaded = ref(false)
+const loaded = useState<boolean>('something-loaded', () => false)
 
 async function loadAll() {
   try {
