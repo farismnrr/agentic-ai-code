@@ -1,6 +1,7 @@
 import { messages as messagesTable, conversations } from '../database/schema'
 import { eq, and } from 'drizzle-orm'
 import { createParser } from 'eventsource-parser'
+import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 
 function mapMessages(messages: UIMessage[]) {
@@ -52,76 +53,81 @@ export default defineEventHandler(async (event) => {
   const mappedMessages = mapMessages(messages)
   const config = useRuntimeConfig()
 
-  setHeader(event, 'content-type', 'text/plain; charset=utf-8')
+  // Builds a real ai@7 UIMessageChunk stream — useChat()'s DefaultChatTransport
+  // parses Server-Sent Events against uiMessageChunkSchema, not the legacy
+  // `0:"..."` data-stream-protocol lines this used to emit. See
+  // .agents/memories/ai-sdk-native-features.md: use the SDK's own stream
+  // helpers rather than hand-rolling the wire format.
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      const abortController = new AbortController()
+      event.node.req.on('close', () => {
+        abortController.abort()
+      })
 
-  return new ReadableStream({
-    async start(controller) {
-      try {
-        const abortController = new AbortController()
-        event.node.req.on('close', () => {
-          abortController.abort()
+      const response = await fetch(`${config.routerBaseUrl}/chat/completions`, {
+        method: 'POST',
+        signal: abortController.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.routerApiKey}`
+        },
+        body: JSON.stringify({
+          model: conv.modelId || 'vx/gemini-3-flash-preview',
+          messages: mappedMessages,
+          stream: true
         })
+      })
 
-        const response = await fetch(`${config.routerBaseUrl}/chat/completions`, {
-          method: 'POST',
-          signal: abortController.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.routerApiKey}`
-          },
-          body: JSON.stringify({
-            model: conv.modelId || 'vx/gemini-3-flash-preview',
-            messages: mappedMessages,
-            stream: true
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`Upstream error: ${response.status} ${response.statusText}`)
-        }
-
-        let fullResponseText = ''
-
-        const parser = createParser({
-          onEvent: (event) => {
-            if (event.data === '[DONE]') {
-              return
-            }
-            try {
-              const data = JSON.parse(event.data)
-              const delta = data.choices[0]?.delta?.content || ''
-              if (delta) {
-                fullResponseText += delta
-                controller.enqueue(`0:${JSON.stringify(delta)}\n`)
-              }
-            } catch (err) {
-              console.error('Error parsing SSE', err)
-            }
-          }
-        })
-
-        const reader = response.body?.getReader()
-        if (reader) {
-          const decoder = new TextDecoder()
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            parser.feed(decoder.decode(value))
-          }
-        }
-
-        await db.insert(messagesTable).values({
-          conversationId: conv.id,
-          role: 'assistant',
-          parts: [{ type: 'text', text: fullResponseText || 'Mock response without text' }]
-        })
-
-        controller.close()
-      } catch (err) {
-        console.error('[chat stream]', err)
-        controller.enqueue(`3:${JSON.stringify('Something went wrong while generating a response.')}\n`)
-        controller.close()
+      if (!response.ok) {
+        throw new Error(`Upstream error: ${response.status} ${response.statusText}`)
       }
+
+      let fullResponseText = ''
+      const textId = crypto.randomUUID()
+      writer.write({ type: 'text-start', id: textId })
+
+      const parser = createParser({
+        onEvent: (event) => {
+          if (event.data === '[DONE]') {
+            return
+          }
+          try {
+            const data = JSON.parse(event.data)
+            const delta = data.choices[0]?.delta?.content || ''
+            if (delta) {
+              fullResponseText += delta
+              writer.write({ type: 'text-delta', id: textId, delta })
+            }
+          } catch (err) {
+            console.error('Error parsing SSE', err)
+          }
+        }
+      })
+
+      const reader = response.body?.getReader()
+      if (reader) {
+        const decoder = new TextDecoder()
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          parser.feed(decoder.decode(value))
+        }
+      }
+
+      writer.write({ type: 'text-end', id: textId })
+
+      await db.insert(messagesTable).values({
+        conversationId: conv.id,
+        role: 'assistant',
+        parts: [{ type: 'text', text: fullResponseText || 'Empty response' }]
+      })
+    },
+    onError: (err) => {
+      console.error('[chat stream]', err)
+      return 'Something went wrong while generating a response.'
     }
   })
+
+  return createUIMessageStreamResponse({ stream })
 })
