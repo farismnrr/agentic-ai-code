@@ -48,13 +48,13 @@ Per the `ui-animation` skill, now installed at `.agents/skills/ui-animation/`:
 
 Each phase ends green (`pnpm lint && pnpm typecheck && pnpm audit`) with its own PR into `dev`.
 
-### 1. The token system
+### [x] 1. The token system
 
 - `app/assets/css/main.css` — replace the green scale with a `signal` scale, set `--font-sans: 'Geist'` and `--font-mono: 'Geist Mono'`, define radius, elevation and easing tokens under `@theme`.
 - `app/app.config.ts` — point `ui.colors.primary` at the new scale, `neutral` at a cool grey.
 - Nothing else changes in this phase. The whole app should visibly shift on token change alone; if a surface doesn't move, it's hardcoding something it shouldn't, and that's worth knowing before hand-finishing anything.
 
-### 2. Landing — the hero is a live demo
+### [x] 2. Landing — the hero is a live demo
 
 The most characteristic thing about this product is watching a reply stream in. So the hero **is** that, driven by the `MockChatTransport` already in `app/utils/mock-transport.ts` — not a screenshot, not a video.
 
@@ -62,11 +62,11 @@ The most characteristic thing about this product is watching a reply stream in. 
 - The rest of the page gets scroll-reveal on section entry, and that's the whole motion budget for the page.
 - Rework the feature cards, pricing and FAQ against the new tokens.
 
-### 3. Auth surfaces
+### [x] 3. Auth surfaces
 
 Login and register are the second thing anyone sees and are currently a plain card. Give them the ground treatment, mono labels, and a considered focus state — focus is where the signal colour earns its keep.
 
-### 4. Chat surface
+### [x] 4. Chat surface
 
 The screen people live in.
 
@@ -75,11 +75,11 @@ The screen people live in.
 - `ChatToolCall` and `ChatToolApproval` restyled as instrument readouts, with mono for tool names and arguments.
 - Sidebar: denser, quieter, with the active row carrying the only accent.
 
-### 5. Settings and empty states
+### [x] 5. Settings and empty states
 
 Bring the four settings tabs and the empty states onto the system. Empty states are an invitation to act, not an apology.
 
-### 6. Audit
+### [x] 6. Audit
 
 - Both themes, every route.
 - `prefers-reduced-motion` honoured.
