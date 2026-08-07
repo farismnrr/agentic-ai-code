@@ -62,6 +62,7 @@ export default defineEventHandler(async (event) => {
       ...session,
       user: {
         ...session.user,
+        id: sessionUser.id,
         emailVerifiedAt: now.toISOString()
       }
     })
