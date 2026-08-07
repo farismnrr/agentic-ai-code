@@ -89,7 +89,7 @@ Branch off the latest `dev`. Keep branches short-lived; rebase onto `dev` rather
 
 **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 
-**Scopes** for this repo: `chat`, `mcp`, `settings`, `ui`, `agents`, `deps`, `config`. Omit the scope when a change is genuinely repo-wide.
+**Scopes** for this repo: `chat`, `mcp`, `settings`, `ui`, `agents`, `deps`, `config`, `auth`, `db`. Omit the scope when a change is genuinely repo-wide.
 
 **Subject:** imperative mood, lowercase, no trailing period, ≤ 72 chars. "add tool approval dialog", not "added" or "Adds".
 
