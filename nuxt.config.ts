@@ -23,6 +23,11 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
+    // The landing page is static and public, so it can be built once at
+    // deploy time. This reverses the change made in plan 001, when `/` was
+    // the stateful chat screen.
+    '/': { prerender: true },
+
     // App routes are client-rendered. The session lives in localStorage, so
     // the server can't know who is signed in — an SSR pass would render
     // guarded content for a moment before the client middleware redirects.

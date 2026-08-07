@@ -17,3 +17,4 @@ _Nothing in flight._
 ## Done
 
 - [001-chat-ui.md](001-chat-ui.md) — external MCP client-like AI chat UI, frontend only
+- [002-landing-auth-interactive.md](002-landing-auth-interactive.md) — landing → login → app, and closing the interaction gaps
