@@ -147,3 +147,32 @@ changing what's shown by default:
 - Not changing the URL structure (still no `/workspace/:id/chat/:id` —
   per [[007-workspace-client-routing]], unless this phase reveals a real
   need to revisit that, which should be flagged, not silently done.
+
+## On completion
+
+- [x] Phase 1 — `GET /api/conversations` now returns all of a user's
+      conversations across every workspace when `workspaceId` is
+      omitted, still scoped to `session.user.id`; `useConversations().loadAll()`
+      always fetches the full set for the sidebar.
+- [x] Phase 2 — sidebar restructured to group by workspace (icon+name
+      section, chats nested underneath) instead of a single
+      active-workspace-scoped recency list; the old top dropdown was
+      replaced with a "Workspaces" header + inline per-workspace
+      sections, each clickable to make it active.
+- [x] Phase 3 — chat header shows the owning workspace as a subtle badge
+      next to the conversation title.
+- [x] Phase 4 — workspace name stays the short folder name everywhere;
+      the real full path is only visible via an explicit "View details"
+      action, implemented consistently in both places a workspace can be
+      picked from (`WorkspacePicker.vue`'s card and the sidebar's
+      per-workspace "…" dropdown in `layouts/default.vue`), both opening
+      the same read-only modal.
+- [x] Both bugs found reviewing the in-progress branch fixed and
+      verified: the `#left`/`#title` slot conflict in `UDashboardNavbar`
+      (title and the new workspace badge now render, moved into a single
+      `#left` slot alongside the sidebar-collapse button) and the
+      hardcoded `text-gray-900 dark:text-white` (now `text-default`).
+- [x] `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run
+      lint && pnpm audit` all clean.
+- [x] Merged to `dev` via PR (see plans/README.md), branch and worktree
+      cleaned up per `.agents/knowledge/git.md`.
