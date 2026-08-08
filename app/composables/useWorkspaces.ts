@@ -110,7 +110,7 @@ export function useWorkspaces() {
     }
 
     try {
-      await $fetch(`/api/workspaces/${id}`, { method: 'DELETE' })
+      await $fetch(`/api/workspaces/${id}` as string, { method: 'DELETE' })
     } catch (e) {
       // Revert on failure
       workspaces.value = original

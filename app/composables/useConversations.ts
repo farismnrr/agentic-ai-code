@@ -21,15 +21,8 @@ export function useConversations() {
   }
 
   async function loadAll() {
-    const { activeWorkspaceId } = useWorkspaces()
-    if (!activeWorkspaceId.value) {
-      conversations.value = []
-      return
-    }
     const fetch = import.meta.server ? useRequestFetch() : $fetch
-    const data = await fetch<Conversation[]>('/api/conversations', {
-      query: { workspaceId: activeWorkspaceId.value }
-    })
+    const data = await fetch<Conversation[]>('/api/conversations')
     conversations.value = data
   }
 

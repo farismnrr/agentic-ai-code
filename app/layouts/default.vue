@@ -46,14 +46,23 @@ await useAsyncData('app-data', async () => {
   return true
 })
 
-// Whenever workspace changes, we should reload conversations
+// Whenever workspace changes, we don't necessarily need to reload conversations
+// since we now load ALL workspaces' conversations in Phase 1.
+// But keeping it as a full refresh mechanism doesn't hurt.
 watch(activeWorkspaceId, (newId, oldId) => {
   if (oldId !== undefined && newId !== oldId) {
     loadConversations()
   }
 })
 
-const groups = computed(() => groupConversations(sorted.value))
+const workspaceGroups = computed(() => {
+  return workspaces.value.map((workspace) => {
+    return {
+      workspace,
+      conversations: sorted.value.filter(c => c.workspaceId === workspace.id)
+    }
+  })
+})
 
 function itemsFor(conversations: typeof sorted.value): NavigationMenuItem[] {
   return conversations.map(conversation => ({
@@ -117,8 +126,6 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
   }]
 ])
 
-const activeWorkspace = computed(() => workspaces.value.find(w => w.id === activeWorkspaceId.value))
-
 const workspaceCreating = ref(false)
 const workspaceCreatingPending = ref(false)
 const toast = useToast()
@@ -172,44 +179,34 @@ function confirmRenameWorkspace() {
   workspaceRenaming.value = null
 }
 
-const workspaceItems = computed<DropdownMenuItem[][]>(() => {
-  const list = workspaces.value.map(w => ({
-    label: w.name,
-    icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
-    onSelect: () => { setActive(w.id) },
-    children: [[
-      ...(!w.pathConfirmed
-        ? [{
-            label: 'Confirm Folder',
-            icon: 'i-lucide-alert-circle',
-            color: 'warning' as const,
-            onSelect: () => { workspaceConfirming.value = w }
-          }]
-        : []),
-      {
-        label: 'Rename',
-        icon: 'i-lucide-pencil',
-        onSelect: () => startRenameWorkspace(w.id, w.name)
-      },
-      {
-        label: 'Delete',
-        icon: 'i-lucide-trash-2',
-        color: 'error' as const,
-        onSelect: async () => {
-          await removeWorkspace(w.id)
-          // If we deleted the active one, fallback to the first available
-          if (activeWorkspaceId.value === w.id) {
-            setActive(workspaces.value[0]?.id || null)
-          }
+function workspaceActionItems(w: typeof workspaces.value[0]): DropdownMenuItem[][] {
+  return [[
+    ...(!w.pathConfirmed
+      ? [{
+          label: 'Confirm Folder',
+          icon: 'i-lucide-alert-circle',
+          color: 'warning' as const,
+          onSelect: () => { workspaceConfirming.value = w }
+        }]
+      : []),
+    {
+      label: 'Rename',
+      icon: 'i-lucide-pencil',
+      onSelect: () => startRenameWorkspace(w.id, w.name)
+    },
+    {
+      label: 'Delete',
+      icon: 'i-lucide-trash-2',
+      color: 'error' as const,
+      onSelect: async () => {
+        await removeWorkspace(w.id)
+        if (activeWorkspaceId.value === w.id) {
+          setActive(workspaces.value[0]?.id || null)
         }
       }
-    ]]
-  }))
-  return [
-    list,
-    [{ label: 'New workspace', icon: 'i-lucide-plus', onSelect: () => { workspaceCreating.value = true } }]
-  ]
-})
+    }
+  ]]
+}
 
 const searchOpen = ref(false)
 defineShortcuts({
@@ -250,21 +247,21 @@ const searchGroups = computed(() => [
       :max-size="26"
     >
       <template #header="{ collapsed }">
-        <UDropdownMenu
-          :items="workspaceItems"
-          class="w-full"
-        >
+        <div class="flex items-center justify-between px-2 w-full">
+          <span
+            v-if="!collapsed"
+            class="font-semibold text-sm truncate"
+          >Workspaces</span>
           <UButton
-            :label="collapsed ? undefined : (activeWorkspace?.name ?? 'Workspace')"
-            :square="collapsed"
-            icon="i-lucide-layout-grid"
+            icon="i-lucide-plus"
             color="neutral"
             variant="ghost"
-            :block="!collapsed"
-            :trailing-icon="collapsed ? undefined : 'i-lucide-chevron-down'"
-            :ui="{ trailingIcon: 'ms-auto' }"
+            size="xs"
+            :class="collapsed ? 'mx-auto' : ''"
+            :title="collapsed ? 'New workspace' : undefined"
+            @click="workspaceCreating = true"
           />
-        </UDropdownMenu>
+        </div>
       </template>
 
       <template #default="{ collapsed }">
@@ -287,15 +284,33 @@ const searchGroups = computed(() => [
 
         <template v-if="!collapsed">
           <div
-            v-for="group in groups"
-            :key="group.label"
+            v-for="group in workspaceGroups"
+            :key="group.workspace.id"
             class="mb-3"
           >
-            <p class="px-2.5 py-1 text-xs font-medium text-dimmed">
-              {{ group.label }}
-            </p>
+            <div class="px-2.5 py-1 flex items-center justify-between group">
+              <p
+                class="text-xs font-medium cursor-pointer truncate mr-2"
+                :class="activeWorkspaceId === group.workspace.id ? 'text-primary' : 'text-dimmed hover:text-primary'"
+                :title="group.workspace.name"
+                @click="setActive(group.workspace.id)"
+              >
+                {{ group.workspace.name }}
+              </p>
 
-            <!-- One UNavigationMenu per bucket -->
+              <UDropdownMenu :items="workspaceActionItems(group.workspace)">
+                <UButton
+                  icon="i-lucide-ellipsis"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  class="opacity-0 group-hover:opacity-100"
+                  @click.stop.prevent
+                />
+              </UDropdownMenu>
+            </div>
+
+            <!-- One UNavigationMenu per workspace -->
             <UNavigationMenu
               :items="itemsFor(group.conversations)"
               orientation="vertical"
@@ -317,7 +332,7 @@ const searchGroups = computed(() => [
           </div>
 
           <div
-            v-if="!groups.length"
+            v-if="!workspaceGroups.some(g => g.conversations.length > 0)"
             class="px-2.5 py-4 text-center"
           >
             <p class="mb-3 text-sm text-muted">
