@@ -96,3 +96,71 @@ Given there's exactly **one** forceable tool today (`search`), this doesn't need
 - Manual (or Playwright), in a **chat-mode** conversation: type `@` → dropdown appears with "search"; type `@se` → still matches (filter); type `@xyz` → no match, dropdown closes/empty; select via click and via Enter after arrowing → `@search ` inserted correctly, cursor after it, dropdown closes.
 - In an **agent-mode** conversation: typing `@` does **not** open the dropdown (no forceable tools defined for that mode).
 - Confirm the resulting `@search <query>` message still round-trips through the existing backend logic exactly as shipped in Phase 1 (no regression — this phase only changes how the text gets typed).
+
+---
+
+## Phase 3 — Rich-text `@search` tag via `UEditor` + `UEditorMentionMenu`
+
+### Context
+
+Phase 2 shipped a hand-rolled `@search` dropdown (`ChatMentionMenu.vue` + `useChatMention.ts`) against the plain `UTextarea` `UChatPrompt` uses by default. Feedback after using it:
+1. Dropdown itself works now (Phase 2's regex fix confirmed).
+2. Once `@search` is inserted, there's no visual marker that it's a "tag" (color/bold) — impossible with a plain `<textarea>`, which can't style substrings.
+3. Cursor lands in the wrong place after inserting — a real bug in the hand-rolled `document.querySelector('textarea')`-based focus/positioning logic (grabs the *first* textarea in the whole document, and never explicitly moves the caret after `.focus()`).
+
+Explicit direction this round: switch to Nuxt UI's rich-text `UEditor` (Tiptap-based, contenteditable) and its native `UEditorMentionMenu`, rather than patching the hand-rolled version further. Verified this is not just feasible but unusually cheap:
+
+- **`UEditorMentionMenu`'s default mention rendering already produces exactly `@search`** as plain text — `Editor.vue`'s built-in `mention.renderText` is `` `${node.attrs.mentionSuggestionChar ?? '@'}${node.attrs.label ?? node.attrs.id}` ``, so `editor.getText()` on a doc containing a `search`-labeled mention node yields the literal string `"@search"`, byte-identical to what the backend's `extractForcedSearch()` (`server/utils/langgraph-chat.ts`) already regex-matches. **Zero backend changes, zero custom Tiptap extension needed.**
+- **The colored/bold tag styling (feedback #2) already exists in Nuxt UI's own theme** — `.nuxt/ui/editor.ts` ships `[&_.mention]:text-primary [&_.mention]:font-medium` targeting the `.mention` class that `renderHTML` attaches to every mention span. This is free — no custom CSS to write.
+- **The cursor-position bug (feedback #3) goes away structurally**, not by patching — Tiptap's own `insertContent`/selection handling places the cursor after inserted content natively; the entire class of "wrong textarea, wrong focus" bug is specific to the hand-rolled DOM-query approach being replaced.
+- `@tiptap/extension-mention` is already a transitive dependency of `@nuxt/ui` (not in `package.json` directly, doesn't need to be added) — `Editor.vue` imports and configures it itself.
+
+**What has to be hand-built, because `UEditor` doesn't provide it:** `UEditor` has no submit-on-enter / Shift+Enter-newline / IME-guard logic of its own (that lives entirely inside `ChatPrompt.vue`'s internals, not exported/reusable) — must be wired manually via `@keydown`. `UEditor` also has no `disabled` prop (use `editable: !disabled` instead) and its own content-model (`getText()`/`getHTML()`/`getJSON()` via the exposed Tiptap `editor` instance) is a *second*, separate model from `UChatPrompt`'s own top-level string `v-model` — the two must be bridged manually (derive plain text from the editor, assign into the same `input` ref `submit()`/`sendMessage()` already use, so nothing downstream changes).
+
+### Decisions
+
+- **`UChatPrompt`'s `#body` slot now renders `<UEditor>`** (via its `v-slot="{ editor }"` to get the live Tiptap instance) instead of the default `UTextarea`, with `<UEditorMentionMenu :editor="editor" :items="mentionItems" />` alongside it — no more manual `#header` overlay positioning; `UEditorMentionMenu` positions itself at the real cursor via Tiptap's suggestion plugin, which is strictly better than Phase 2's "always anchored above the textarea" approximation.
+- **`mentionItems` stays a small local array** — `[{ label: 'search', description: 'Force this turn to search the web', icon: 'i-lucide-search' }]`, same one-tool-today, extensible-later shape as Phase 2, just moved to the shape `EditorMentionMenuItem` expects (`label`/`description`/`icon`, no `trigger` field needed anymore since the node's `renderText` already derives `@${label}`).
+- **Shared composable, not duplicated logic across the two pages** — `useChatEditor(input: Ref<string>)` (or similar name), replacing `useChatMention.ts`, encapsulating: the exposed Tiptap `editor` ref, a watcher that derives plain text via `editor.getText()` into the passed-in `input` ref, the Enter-to-submit/Shift+Enter-newline keydown handler (respecting `settings.sendOnEnter`, mirroring `ChatPrompt.vue`'s own `handleEnter` semantics as closely as possible), and a `clearEditor()` used by `submit()`/`start()` after sending (must call the Tiptap instance's own clear command — resetting the bridged `input` ref alone isn't enough, since the next `getText()` tick would just repopulate it from the still-populated editor content). Used identically from both `[id].vue` and `index.vue`.
+- **`ChatMentionMenu.vue` and `useChatMention.ts` are deleted**, not left dangling — fully superseded, not kept as a fallback.
+- **No backend changes.** `server/utils/langgraph-chat.ts`'s `extractForcedSearch()` is untouched — verified the plain-text output is identical to what Phase 1 already handles.
+
+### Changes
+
+#### `app/composables/useChatEditor.ts` (new, replaces `useChatMention.ts`)
+- Holds the exposed Tiptap `editor` ref (set from the `#body` slot's `v-slot="{ editor }"`).
+- Watches editor content, writes `editor.getText()` into the caller's `input` ref.
+- `handleKeydown(e)`: Enter submits (calls the `#body` slot's `submit` scoped prop) unless Shift is held or an IME composition is in progress; Shift+Enter inserts a newline (default Tiptap behavior, just don't `preventDefault`).
+- `clearEditor()`: clears Tiptap content after a message is sent.
+- `mentionItems`: the one-item array described above.
+
+#### `app/pages/chat/[id].vue` and `app/pages/chat/index.vue`
+1. Replace the current `#header` `ChatMentionMenu` block and `useChatMention(input)` call with `useChatEditor(input)`.
+2. `<UChatPrompt>`'s default body replaced via `#body="{ submit, disabled }"` rendering `<UEditor v-slot="{ editor }" :placeholder="...' :editable="!disabled" @update:model-value="..." @keydown="handleKeydown($event, submit)"> <UEditorMentionMenu :editor="editor" :items="mentionItems" /> </UEditor>`.
+3. `submit()`/`start()` call `clearEditor()` alongside the existing `input.value = ''` reset.
+4. `mode === 'chat'` gating for the mention menu carries over from Phase 2 (agent mode still has no `@search`-equivalent) — likely via conditionally passing `mentionItems: []` or `v-if` around `UEditorMentionMenu` when `mode !== 'chat'`.
+
+#### Deletions
+- `app/components/ChatMentionMenu.vue`
+- `app/composables/useChatMention.ts`
+
+### Out of scope
+
+- Any tool besides `search` in the mention list (same as Phase 2).
+- Agent-mode MCP tool mentions.
+- Changing the mention's rendered color/weight beyond what Nuxt UI's `.mention` theme class already provides by default.
+- Rich-text formatting beyond what's needed for the mention node (no bold/italic/lists toolbar — `starterKit` stays effectively minimal/default, not expanded into a full WYSIWYG toolbar).
+
+### Verification
+
+- `pnpm lint`, `pnpm typecheck`.
+- Manual (or Playwright), in a **chat-mode** conversation:
+  - Type `@` → `UEditorMentionMenu` opens positioned at the cursor; type `se` → filters to "search"; select via click and via keyboard (Tiptap's suggestion plugin handles ↑/↓/Enter itself) → `@search` appears inline, styled distinctly (colored/bold via `.mention`), cursor lands immediately after it.
+  - Continue typing a query after the tag, submit → confirm the message sent to the backend is the plain-text `"@search <query>"` string (check the persisted message / network payload) and that `extractForcedSearch()` still forces the real tool call exactly as Phase 1 verified (tool card renders, SearxNG receives traffic).
+  - Shift+Enter inserts a newline instead of submitting; plain Enter submits (respecting `settings.sendOnEnter`).
+  - After sending, the editor visually clears (not just the underlying `input` ref) — no leftover mention/text visible for the next message.
+  - In an **agent-mode** conversation: typing `@` does not open the mention menu.
+
+## Status: Phase 3 complete
+
+Implemented UEditor-based mention replacing the hand-rolled ChatMentionMenu.

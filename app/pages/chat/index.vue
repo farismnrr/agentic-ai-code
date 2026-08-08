@@ -25,7 +25,7 @@ watchEffect(() => {
 
 const input = ref('')
 
-const { mentionOpen, mentionFilter, onMentionSelect, forceCloseMention } = useChatMention(input)
+const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
 const workspaceId = ref<string | undefined>(activeWorkspaceId.value || undefined)
 watch(() => activeWorkspaceId.value, (newId) => {
@@ -72,6 +72,7 @@ const workspaceItems = computed(() =>
 async function start(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
+  clearEditor()
 
   try {
     const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
@@ -129,20 +130,25 @@ async function start(text: string) {
 
         <UChatPrompt
           v-model="input"
-          :submit-on-enter="settings.sendOnEnter"
-          autofocus
-          placeholder="Message AI Code…"
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="start(input)"
         >
-          <template #header>
-            <ChatMentionMenu
-              v-if="mode === 'chat'"
-              :open="mentionOpen"
-              :filter="mentionFilter"
-              @select="onMentionSelect"
-              @close="forceCloseMention = true"
-            />
+          <template #body="{ submit: promptSubmit, disabled }">
+            <UEditor
+              ref="editorRef"
+              v-slot="{ editor }"
+              placeholder="Message AI Code…"
+              :editable="!disabled"
+              class="w-full bg-transparent min-h-[44px]"
+              @update:model-value="syncText()"
+              @keydown="handleKeydown($event, promptSubmit)"
+            >
+              <UEditorMentionMenu
+                v-if="mode === 'chat'"
+                :editor="editor"
+                :items="mentionItems"
+              />
+            </UEditor>
           </template>
 
           <UChatPromptSubmit />

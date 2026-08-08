@@ -46,7 +46,7 @@ const {
 
 const input = ref('')
 
-const { mentionOpen, mentionFilter, onMentionSelect, forceCloseMention } = useChatMention(input)
+const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
 const enabledToolIds = computed({
   get: () => conversation.value?.enabledToolIds ?? [],
@@ -101,7 +101,7 @@ const supportsReasoning = computed(() => {
 function submit() {
   const text = input.value.trim()
   if (!text) return
-  input.value = ''
+  clearEditor()
   send(text)
 }
 
@@ -336,21 +336,26 @@ defineShortcuts({
       <UContainer class="pb-4 sm:pb-6">
         <UChatPrompt
           v-model="input"
-          :submit-on-enter="settings.sendOnEnter"
           :error="error"
-          autofocus
-          placeholder="Message AI Code…"
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="submit"
         >
-          <template #header>
-            <ChatMentionMenu
-              v-if="mode === 'chat'"
-              :open="mentionOpen"
-              :filter="mentionFilter"
-              @select="onMentionSelect"
-              @close="forceCloseMention = true"
-            />
+          <template #body="{ submit: promptSubmit, disabled }">
+            <UEditor
+              ref="editorRef"
+              v-slot="{ editor }"
+              placeholder="Message AI Code…"
+              :editable="!disabled"
+              class="w-full bg-transparent min-h-[44px]"
+              @update:model-value="syncText()"
+              @keydown="handleKeydown($event, promptSubmit)"
+            >
+              <UEditorMentionMenu
+                v-if="mode === 'chat'"
+                :editor="editor"
+                :items="mentionItems"
+              />
+            </UEditor>
           </template>
 
           <UChatPromptSubmit
