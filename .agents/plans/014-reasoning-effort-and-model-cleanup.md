@@ -87,3 +87,46 @@ whether `'max'` is a supported alias on their side.
   (matches the SDK's own documented default).
 - No effort control surfaced for non-reasoning models — see step 3.
 - Not re-opening plan 013's animation work — this plan is additive to it.
+
+## On completion
+
+- [x] Phase 1 — `server/utils/settings.ts` now imports `defaultModelId`
+      from `shared/utils/models.ts` instead of the hardcoded
+      `'gpt-4o-mini'` literal.
+- [x] Phase 1 — data cleanup done via `scripts/backfill-models.ts`, a
+      one-off script backfilling any `user_settings.default_model_id` /
+      `conversations.model_id` row still stuck on `'gpt-4o-mini'` to
+      `vx/gemini-3-flash-preview`. First cut of the script imported
+      `dotenv/config` without `dotenv` being a declared dependency
+      (only present transitively in the lockfile) — it threw
+      `ERR_MODULE_NOT_FOUND` before ever touching the database, caught in
+      review by actually running it, not just reading the diff. Fixed by
+      adding `dotenv` to `package.json` `dependencies`. Live-verified
+      after the fix: `npx tsx scripts/backfill-models.ts` runs clean
+      end-to-end against the real dev database (0 stale rows at the time,
+      confirming both the query and the connection path work).
+- [x] Phase 2 — real reasoning-effort control wired via
+      `providerOptions['9router'].reasoningEffort`, confirmed correct
+      against the installed `@ai-sdk/openai-compatible` source (forwarded
+      verbatim as `reasoning_effort` in the outgoing HTTP body).
+- [x] Phase 2's flagged open risk — whether 9Router accepts the
+      non-standard `'max'` level — **resolved live, not just theorized**:
+      sent a real message through "High Thinking" at `reasoningEffort:
+      'max'` via the running app and confirmed both no error response and
+      a visibly deeper reasoning trace (a full step-by-step long
+      multiplication) versus the near-instant one-line reasoning at
+      `'medium'` on the same model. `'max'` is accepted as-is.
+- [x] Effort selector added to **both** places a conversation's model can
+      be picked — `app/pages/chat/[id].vue` (existing conversation) and
+      `app/pages/chat/index.vue` (the "New chat" landing prompt, which has
+      its own separate `UChatPrompt`/model picker). The first review pass
+      only found it wired into `[id].vue`; a conversation started from the
+      landing page with "High Thinking" already selected had no way to
+      set effort before the first message. Fixed by threading
+      `reasoningEffort` through `useConversations().create()` →
+      `POST /api/conversations` (validated with
+      `v.picklist(['low','medium','high','max'])`) → the new column.
+- [x] `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run
+      lint && pnpm audit` all clean.
+- [x] Merged to `dev` via PR (see plans/README.md), branch and worktree
+      cleaned up per `.agents/knowledge/git.md`.
