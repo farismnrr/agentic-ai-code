@@ -5,6 +5,7 @@ import { verifyApiKey } from '../../utils/api-key'
 import { getSettings, updateSettings } from '../../utils/settings'
 import { listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace } from '../../utils/workspaces'
 import { listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../../utils/mcp-servers'
+import { listConversationMessages, sendMessage } from '../../utils/messages'
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers
@@ -75,13 +76,11 @@ export default defineEventHandler(async (event) => {
           const res = await deleteMcpServer(userId, args.id as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'send_message') {
-          // TODO: Phase 1.5 - Extract chat/message logic to utils and call it here
-          // Currently unimplemented but registered per plan step 8
-          return { content: [{ type: 'text', text: JSON.stringify({ error: 'Not yet implemented' }) }] }
+          const res = await sendMessage(userId, args.conversationId as string, args.text as string)
+          return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'list_messages') {
-          // TODO: Phase 1.5 - Extract chat/message logic to utils and call it here
-          // Currently unimplemented but registered per plan step 8
-          return { content: [{ type: 'text', text: JSON.stringify({ error: 'Not yet implemented' }) }] }
+          const res = await listConversationMessages(userId, args.conversationId as string)
+          return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         }
 
         throw new Error(`Unknown tool: ${name}`)

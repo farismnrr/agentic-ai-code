@@ -13,7 +13,7 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
 
 - **Inbound auth**: new `api_keys` table, one-way hashed (SHA-256, same pattern as `verification_tokens.tokenHash`), scoped to a user. Presented once at creation, never stored/shown again — same UX as most SaaS API key flows. Sent as `Authorization: Bearer <key>` on the MCP endpoint only; session cookies remain the only auth for the existing browser-facing REST API.
 - **Inbound transport**: MCP TypeScript SDK (`@modelcontextprotocol/sdk`), SSEServerTransport (Server-Sent Events) mounted at `server/api/mcp/index.ts`. Note: This deviates from the originally planned Streamable HTTP transport. Sessions are currently stored in a module-scoped in-memory `Map`, which is pragmatic for a single-operator deployment but will not survive across multi-worker Nitro scale-outs (would need Redis/DB state later).
-- **Inbound tool scope** (phase 1, confirmed): settings (read/update), workspaces (list/create/update/delete), MCP servers (list/create/update/delete — meta), chat (send a message to a conversation, read conversation messages). *Update: 8/10 tools implemented; chat tools (send_message/list_messages) are stubbed and deferred to Phase 1.5.*
+- **Inbound tool scope** (phase 1, confirmed): settings (read/update), workspaces (list/create/update/delete), MCP servers (list/create/update/delete — meta), chat (send a message to a conversation, read conversation messages). *Update: all 10/10 tools implemented and live-verified, including `send_message`/`list_messages` (backed by the new `server/utils/messages.ts`, shared with `conversations/[id].get.ts`).*
 - **Outbound wiring**: when a conversation has `enabledToolIds` referencing enabled rows in `mcp_servers`, `chat.post.ts` connects to each (HTTP or stdio per `transport`), lists their tools, passes them to the router's `/chat/completions` call as OpenAI-style `tools`, and executes any tool call the model returns before continuing the stream — respecting the existing `approvals` map (`always`/`never`) and falling back to the SDK's `tool-approval-request` flow (see `.agents/memories/ai-sdk-native-features.md`) when neither applies.
 - **Scope boundary**: outbound MCP client connections are per-request, not persistent background connections — no daemon, no reconnect logic. `status`/`tools` on `mcp_servers` refresh opportunistically (on use, and via a manual "test connection" action), not via a polling job.
 - **Security Warning (Phase 2)**: The outbound `stdio` transport spawns arbitrary commands from `mcp_servers.command`. Currently, `create_mcp_server` accepts any command from an external client, creating an RCE vulnerability in a multi-tenant setup. Phase 2 MUST address this (e.g. whitelist commands, disable stdio temporarily, or require strict admin approval).
@@ -34,7 +34,9 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
    - `list_workspaces`, `create_workspace`, `update_workspace`, `delete_workspace`
    - `list_mcp_servers`, `create_mcp_server`, `update_mcp_server`, `delete_mcp_server`
    - `send_message` (conversationId, text — reuses `chat.post.ts`'s send path but returns the full assistant reply rather than streaming, since MCP tool calls are request/response), `list_messages` (conversationId)
-9. Refactor REST handlers that now share logic with a tool (e.g. `workspaces/index.post.ts`'s create-and-validate path) to call the same `server/utils/` function, so there's exactly one implementation of each operation.
+9. Refactor REST handlers that now share logic with a tool (e.g. `workspaces/index.post.ts`'s create-and-validate path) to call the same `server/utils/` function, so there's exactly one implementation of each operation. **Done for settings, workspaces, mcp-servers, and messages** — `conversations/[id].get.ts` now calls `listConversationMessages()` from `server/utils/messages.ts` instead of duplicating the query.
+
+**Phase 1 status: complete, live-verified, ready for PR.** `pnpm build`, `vue-tsc --noEmit -p .nuxt/tsconfig.json`, `pnpm lint`, `pnpm audit` all clean. Curl-tested end to end against a running dev server with two real registered users: SSE handshake, `initialize`, `tools/list` (all 10 tools), and `tools/call` for `get_settings`, `create_workspace`, `send_message` (hit the real 9Router model and got a real reply), `list_messages` (output matched `GET /api/conversations/:id` exactly), unknown-tool error path, revoked-key rejection, and a cross-user IDOR attempt (`delete_workspace` with another user's workspace id correctly returned "not found" and left the row untouched).
 
 ### Phase 2 — Outbound: actually use stored MCP servers in chat
 
@@ -57,9 +59,15 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
 - Live test: enable a real MCP server (e.g. a local filesystem or GitHub MCP server) on a conversation, send a message that requires a tool call, confirm the approval flow fires and the tool result reaches the model.
 - `/security-review` before opening each phase's PR — this plan adds a new unauthenticated-by-cookie surface (the MCP endpoint) and a credential-issuing flow, both classic targets.
 
-## On completion
+## On completion — Phase 1
 
-- [x] Plan file updated with status and real verification results. (Inbound API keys setup complete, ready for UI hookup)
-- [x] Moved to the Completed list in `.agents/plans/README.md`.
-- [x] New memory written if anything about the MCP SDK's HTTP transport or tool-call plumbing turns out non-obvious (following the pattern of `.agents/memories/ai-sdk-native-features.md`).
-- [ ] Branch pushed, PR opened per phase against `dev`, CI green, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.
+- [x] Plan file updated with status and real verification results.
+- [x] Stays in the In Flight list in `.agents/plans/README.md` — Phase 2 (outbound wiring) hasn't started, so the plan as a whole isn't done yet. Move to Completed only once both phases have shipped.
+- [x] `.agents/memories/012-mcp-inbound-sse-transport.md` written — records the SSE-vs-Streamable-HTTP deviation and the in-memory session Map's scaling limit, and indexed in `memories/README.md`.
+- [ ] Branch pushed, PR opened against `dev` (`feat/012-p1-mcp-api-key-phase1`), CI green, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.
+
+## On completion — Phase 2 (not started)
+
+- [ ] Outbound wiring (steps 10-12) implemented and live-tested against a real third-party MCP server.
+- [ ] The stdio-transport RCE risk flagged in Decisions above resolved one way or another (whitelist, disable, or explicit approval gate) before this ships — not carried forward silently.
+- [ ] Plan moved to Completed in `.agents/plans/README.md` once this phase's PR merges.
