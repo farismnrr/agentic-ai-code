@@ -35,32 +35,36 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parts: any[] = []
         let currentText = ''
+        let textIndex = 0
 
         for await (const event of stream) {
           if (event.event === 'on_chat_model_stream') {
             const chunk = event.data?.chunk?.content
             if (chunk) {
+              if (!currentText) {
+                textIndex++
+                writer.write({ type: 'text-start', id: `text-${textIndex}` })
+              }
               writer.write({
                 type: 'text-delta',
-                id: 'langgraph-text',
+                id: `text-${textIndex}`,
                 delta: chunk
               })
               currentText += chunk
             }
           } else if (event.event === 'on_tool_start') {
             if (currentText) {
+              writer.write({ type: 'text-end', id: `text-${textIndex}` })
               parts.push({ type: 'text', text: currentText })
               currentText = ''
             }
             parts.push({
-              type: 'tool-invocation',
-              toolInvocation: {
-                state: 'call',
-                toolCallId: event.run_id,
-                toolName: event.name,
-                args: event.data?.input || {}
-              }
-            })
+              type: 'dynamic-tool',
+              toolCallId: event.run_id,
+              toolName: event.name,
+              state: 'call',
+              input: event.data?.input || {}
+            } as any)
             writer.write({
               type: 'tool-input-available',
               toolCallId: event.run_id,
@@ -68,10 +72,10 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
               input: event.data?.input || {}
             })
           } else if (event.event === 'on_tool_end') {
-            const invocation = parts.find(p => p.type === 'tool-invocation' && p.toolInvocation.toolCallId === event.run_id)
+            const invocation = parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === event.run_id)
             if (invocation) {
-              invocation.toolInvocation.state = 'result'
-              invocation.toolInvocation.result = event.data?.output || ''
+              invocation.state = 'result'
+              invocation.output = event.data?.output || ''
             }
             writer.write({
               type: 'tool-output-available',
@@ -82,6 +86,7 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
         }
 
         if (currentText) {
+          writer.write({ type: 'text-end', id: `text-${textIndex}` })
           parts.push({ type: 'text', text: currentText })
         }
 
