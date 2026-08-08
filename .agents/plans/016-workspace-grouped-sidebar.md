@@ -15,7 +15,11 @@ grouping, chats are nested under it — and a visible indicator of which
 workspace a given conversation belongs to when actually reading it, not
 just in the sidebar.
 
-## Phase 1 — Fetch conversations across all workspaces
+## Phase 1 — Backend: workspace ⇒ many chats API
+
+The data model already supports this (`conversations.workspaceId` is a
+required FK to `workspaces`) — this phase is about making the *API
+surface* explicit and clean, not changing the schema.
 
 1. `server/api/conversations/index.get.ts` currently requires
    `workspaceId` (`throw badRequest('Missing workspaceId')` if absent).
@@ -23,14 +27,18 @@ just in the sidebar.
    conversations across **all** their workspaces (still scoped to
    `session.user.id` — never cross-user). Keep the `workspaceId`-scoped
    query path working too, since other call sites may still want it.
+   This is the one-to-many read path the frontend groups by: fetch
+   workspaces (`GET /api/workspaces`) and all conversations
+   (`GET /api/conversations`, no `workspaceId`) as two flat lists, and
+   group client-side by `conversation.workspaceId` — no nested-response
+   endpoint needed, the FK is enough.
 2. `app/composables/useConversations.ts`'s `loadAll()` currently hard-requires
-   `activeWorkspaceId` and returns `[]` without one. Add a mode (or a
-   second function) that fetches *all* workspaces' conversations for the
-   sidebar, independent of which one is "active." Decide whether "active
-   workspace" still means anything after this change — likely yes, but
-   scoped down to just "which workspace `+ New chat` creates into" and
-   "which workspace's picker state gates the empty `/chat` state," not
-   "which workspace's chats are visible."
+   `activeWorkspaceId` and returns `[]` without one. Change it to always
+   fetch *all* workspaces' conversations for the sidebar. Decide whether
+   "active workspace" still means anything after this change — likely
+   yes, but scoped down to just "which workspace `+ New chat` creates
+   into" and "which workspace's picker state gates the empty `/chat`
+   state," not "which workspace's chats are visible."
 
 ## Phase 2 — Sidebar: workspace-grouped structure
 
@@ -62,6 +70,59 @@ just in the sidebar.
 2. Keep it subtle (a small badge/label, not a second heading) — the
    title is still the primary thing being read.
 
+## Phase 4 — Show the full folder path via a "…" detail, not the name
+
+The workspace's display name stays exactly what it is today — a short
+folder name (e.g. `BNSP`) — never the full path. `workspaces.path` is
+already stored (plan 010) and already returned by `GET /api/workspaces`,
+just never surfaced anywhere in the UI. Add a way to see it without
+changing what's shown by default:
+
+1. In the sidebar's per-workspace `UDropdownMenu` (`workspaceActionItems()`
+   in `app/layouts/default.vue`, opened via the "…" button next to each
+   workspace's group header), add a **"View details"** (or "Show full
+   path") item. Clicking it should surface the full `path` — a
+   `UTooltip`/`UPopover` anchored to the item, a small `UModal`, or an
+   inline expand-in-place row; pick whichever is least disruptive to the
+   existing dropdown, don't build a whole new settings surface for one
+   string.
+2. Do the same for the workspace picker's own per-workspace card
+   (`WorkspacePicker.vue`) if it has an equivalent options affordance, so
+   the two workspace UIs (picker + sidebar) are consistent about how you
+   see the full path.
+3. This is read-only — renaming/re-pointing the folder already goes
+   through the existing "Confirm Folder"/rename flow
+   (`WorkspaceFolderPicker`, `initial-path`), this phase doesn't touch
+   that.
+
+## Known bugs to fix in this same effort (found reviewing the in-progress branch)
+
+- **The chat header's title (and this plan's own new workspace badge)
+  never render.** `app/pages/chat/[id].vue` passes both `#left`
+  (overridden with just `<UDashboardSidebarCollapse />`) and `#title` to
+  `UDashboardNavbar` — but per the component's own source
+  (`node_modules/@nuxt/ui/.../DashboardNavbar.vue`), the `<h1><slot
+  name="title">` that actually renders `#title`'s content only exists
+  inside `<slot name="left">`'s *default* (fallback) content. Overriding
+  `#left` explicitly discards that fallback entirely, so `#title` is
+  never mounted anywhere — confirmed via `DOM.querySelector('h1[data-slot="title"]')`
+  returning nothing live in a running instance of this branch. This
+  predates this plan (the old code used the `title` prop with the same
+  `#left` override, which has the identical problem — the chat title has
+  likely never visibly rendered), but the new workspace badge inherits
+  it too, so it must be fixed here rather than shipped invisible. Fix by
+  either dropping the custom `#left` override (let the component's
+  default `#left` content render, passing `title`/leading/trailing
+  through their intended props/slots instead of `#left`), or by moving
+  the sidebar-collapse button *and* the title+badge into a single custom
+  `#left` slot together, since `#left` is all-or-nothing.
+- **Hardcoded Tailwind colors.** The workspace-badge markup uses
+  `text-gray-900 dark:text-white` — this project's convention
+  (`.agents/knowledge/conventions.md`) requires semantic classes
+  (`text-default`/`text-highlighted`/etc.) so dark mode and theming keep
+  working; raw palette classes bypass both. Fix to use the same semantic
+  class the original title text used before this branch touched it.
+
 ## Verification
 
 - Live test: a user with 2+ workspaces, each with several chats, sees
@@ -71,9 +132,13 @@ just in the sidebar.
   and that the chat-before-workspace guarantee (plan 009) isn't
   regressed — still impossible to create a conversation with no
   workspace.
-- Confirm the chat header workspace label matches the conversation's
-  real `workspaceId`, including for a deep-linked conversation opened
-  directly (not via the sidebar).
+- Confirm the chat header workspace label **actually renders** (not just
+  exists in the template — verify via a real screenshot/DOM check, per
+  the bug above) and matches the conversation's real `workspaceId`,
+  including for a deep-linked conversation opened directly.
+- Confirm the workspace name shown everywhere stays the short folder
+  name, and the full path is only visible after an explicit "…" action —
+  never shown by default.
 - `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run lint && pnpm audit` clean.
 
 ## Out of scope
