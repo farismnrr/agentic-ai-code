@@ -181,7 +181,10 @@ defineShortcuts({
           </template>
 
           <template #indicator>
-            <UChatShimmer text="Thinking…" class="animate-pulse" />
+            <UChatShimmer
+              text="Thinking…"
+              class="animate-pulse"
+            />
           </template>
 
           <template #actions="{ message }">

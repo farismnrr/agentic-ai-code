@@ -20,9 +20,9 @@ defineProps<{ message: UIMessage }>()
       v-if="isReasoningUIPart(part)"
       :text="part.text"
       :streaming="isPartStreaming(part)"
-      :ui="{ 
-        base: 'animate-reasoning-in', 
-        header: 'transition-colors duration-200' 
+      :ui="{
+        base: 'animate-reasoning-in',
+        header: 'transition-colors duration-200'
       }"
     />
 

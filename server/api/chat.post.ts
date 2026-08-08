@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
 
   const modelInfo = models.find(m => m.id === (conv.modelId || 'vx/gemini-3-flash-preview'))
   let baseModel = getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview')
-  
+
   if (modelInfo?.supportsReasoning) {
     baseModel = wrapLanguageModel({
       model: baseModel,
