@@ -11,6 +11,12 @@ const { take: takePendingPrompt } = usePendingPrompt()
 const conversationId = computed(() => String(route.params.id))
 const conversation = computed(() => get(conversationId.value))
 
+const { get: getWorkspace } = useWorkspaces()
+const workspaceName = computed(() => {
+  if (!conversation.value?.workspaceId) return null
+  return getWorkspace(conversation.value.workspaceId)?.name
+})
+
 // The conversations list only carries metadata, not messages (see
 // server/api/conversations/index.get.ts) — this page needs the full
 // conversation, and it must resolve before useConversationChat() reads
@@ -154,9 +160,23 @@ defineShortcuts({
 <template>
   <UDashboardPanel :id="`chat-${conversationId}`">
     <template #header>
-      <UDashboardNavbar :title="conversation?.title ?? 'Chat'">
+      <UDashboardNavbar>
         <template #left>
           <UDashboardSidebarCollapse />
+          <div class="flex items-center gap-2">
+            <h1 class="font-semibold text-default truncate">
+              {{ conversation?.title ?? 'Chat' }}
+            </h1>
+            <UBadge
+              v-if="workspaceName"
+              variant="subtle"
+              size="xs"
+              color="neutral"
+              class="hidden sm:inline-flex rounded-full"
+            >
+              {{ workspaceName }}
+            </UBadge>
+          </div>
         </template>
       </UDashboardNavbar>
     </template>

@@ -6,14 +6,16 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
 
   const query = getQuery(event)
-  if (!query.workspaceId || typeof query.workspaceId !== 'string') {
-    throw badRequest('Missing workspaceId')
+
+  const conditions = [eq(conversations.userId, session.user.id)]
+  if (query.workspaceId && typeof query.workspaceId === 'string') {
+    conditions.push(eq(conversations.workspaceId, query.workspaceId))
   }
 
   const userConversations = await db
     .select()
     .from(conversations)
-    .where(and(eq(conversations.userId, session.user.id), eq(conversations.workspaceId, query.workspaceId)))
+    .where(and(...conditions))
     .orderBy(desc(conversations.updatedAt))
 
   // For the list, we don't fetch all messages, just the metadata.

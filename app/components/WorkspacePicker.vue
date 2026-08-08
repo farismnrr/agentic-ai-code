@@ -6,6 +6,7 @@ const pending = ref(false)
 const toast = useToast()
 
 const workspaceConfirming = ref<typeof workspaces.value[0] | null>(null)
+const workspaceDetailsPath = ref<string | null>(null)
 
 async function handleSelectFolder(result: { name: string, path: string }) {
   pending.value = true
@@ -50,12 +51,10 @@ async function handleSelectFolder(result: { name: string, path: string }) {
         class="cursor-pointer hover:border-primary-500/50 transition-colors"
         @click="setActive(workspace.id)"
       >
-        <template
-          v-if="!workspace.pathConfirmed"
-          #description
-        >
-          <div class="mt-2">
+        <template #description>
+          <div class="mt-2 flex flex-wrap gap-2">
             <UButton
+              v-if="!workspace.pathConfirmed"
               size="xs"
               color="warning"
               variant="soft"
@@ -63,6 +62,15 @@ async function handleSelectFolder(result: { name: string, path: string }) {
               @click.stop="workspaceConfirming = workspace"
             >
               Confirm Folder
+            </UButton>
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-info"
+              @click.stop="workspaceDetailsPath = workspace.path"
+            >
+              View details
             </UButton>
           </div>
         </template>
@@ -91,5 +99,26 @@ async function handleSelectFolder(result: { name: string, path: string }) {
       @update:model-value="(val) => { if (!val) workspaceConfirming = null }"
       @select="handleSelectFolder"
     />
+
+    <UModal
+      :open="workspaceDetailsPath !== null"
+      title="Workspace Details"
+      @update:open="workspaceDetailsPath = null"
+    >
+      <template #body>
+        <p class="text-sm font-mono break-all text-default bg-elevated p-2 rounded border border-muted">
+          {{ workspaceDetailsPath }}
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end">
+          <UButton
+            label="Close"
+            color="neutral"
+            @click="workspaceDetailsPath = null"
+          />
+        </div>
+      </template>
+    </UModal>
   </UContainer>
 </template>
