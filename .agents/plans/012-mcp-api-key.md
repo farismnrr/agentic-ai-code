@@ -64,7 +64,7 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
 - [x] Plan file updated with status and real verification results.
 - [x] Stays in the In Flight list in `.agents/plans/README.md` — Phase 2 (outbound wiring) hasn't started, so the plan as a whole isn't done yet. Move to Completed only once both phases have shipped.
 - [x] `.agents/memories/012-mcp-inbound-sse-transport.md` written — records the SSE-vs-Streamable-HTTP deviation and the in-memory session Map's scaling limit, and indexed in `memories/README.md`.
-- [ ] Branch pushed, PR opened against `dev` (`feat/012-p1-mcp-api-key-phase1`), CI green, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.
+- [x] Branch pushed, PR opened against `dev` (`feat/012-p1-mcp-api-key-phase1`), CI green, merged as `13ae69c` (PR #45, squash-merged), branch/worktree cleaned up per `.agents/knowledge/git.md`.
 
 ## On completion — Phase 2 (not started)
 
