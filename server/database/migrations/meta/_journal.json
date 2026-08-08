@@ -43,6 +43,13 @@
       "when": 1786177185878,
       "tag": "0005_sturdy_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786182884813,
+      "tag": "0006_lethal_kingpin",
+      "breakpoints": true
     }
   ]
 }

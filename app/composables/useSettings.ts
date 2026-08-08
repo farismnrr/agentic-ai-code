@@ -9,6 +9,7 @@ export interface AppSettings {
   systemPrompt: string
   displayName: string
   email: string
+  lastActiveWorkspaceId: string | null
 }
 
 export function useSettings() {
@@ -20,7 +21,8 @@ export function useSettings() {
     temperature: 0.7,
     systemPrompt: '',
     displayName: 'Faris',
-    email: 'farismunir2@gmail.com'
+    email: 'farismunir2@gmail.com',
+    lastActiveWorkspaceId: null
   }))
 
   async function load() {

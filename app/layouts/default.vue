@@ -2,8 +2,9 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove, update, loadOne, loadAll: loadConversations } = useConversations()
-const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
-const { load: loadSettings } = useSettings()
+const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces, setActive } = useWorkspaces()
+const settings = useSettings()
+const loadSettings = settings.load
 const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
 const router = useRouter()
@@ -23,7 +24,7 @@ await useAsyncData('app-data', async () => {
     if (chatRouteMatch) {
       const conv = await loadOne(chatRouteMatch[1]!)
       if (conv && conv.workspaceId !== activeWorkspaceId.value) {
-        activeWorkspaceId.value = conv.workspaceId
+        setActive(conv.workspaceId)
       }
     }
 
@@ -32,6 +33,15 @@ await useAsyncData('app-data', async () => {
       loadWorkspaces().then(loadConversations),
       loadMcpServers()
     ])
+
+    if (!activeWorkspaceId.value && settings.value.lastActiveWorkspaceId) {
+      const w = workspaces.value.find(w => w.id === settings.value.lastActiveWorkspaceId)
+      if (w) {
+        setActive(w.id)
+        // Since we changed activeWorkspaceId, we might need to load conversations if we didn't already
+        // Wait, the watcher will trigger loadConversations() when activeWorkspaceId changes.
+      }
+    }
   }
   return true
 })
@@ -117,7 +127,7 @@ async function handleSelectCreateWorkspace(result: { name: string, path: string 
   workspaceCreatingPending.value = true
   try {
     const w = await createWorkspace(result.name, result.path)
-    activeWorkspaceId.value = w.id
+    setActive(w.id)
     workspaceCreating.value = false
   } catch (err) {
     toast.add({
@@ -166,7 +176,7 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
   const list = workspaces.value.map(w => ({
     label: w.name,
     icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
-    onSelect: () => { activeWorkspaceId.value = w.id },
+    onSelect: () => { setActive(w.id) },
     children: [[
       ...(!w.pathConfirmed
         ? [{
@@ -189,7 +199,7 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
           await removeWorkspace(w.id)
           // If we deleted the active one, fallback to the first available
           if (activeWorkspaceId.value === w.id) {
-            activeWorkspaceId.value = workspaces.value[0]?.id || null
+            setActive(workspaces.value[0]?.id || null)
           }
         }
       }
@@ -214,7 +224,7 @@ const searchGroups = computed(() => [
     items: workspaces.value.map(w => ({
       label: w.name,
       icon: 'i-lucide-folder',
-      onSelect: () => { activeWorkspaceId.value = w.id }
+      onSelect: () => { setActive(w.id) }
     }))
   },
   {
