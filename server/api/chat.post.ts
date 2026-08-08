@@ -1,6 +1,6 @@
 import { messages as messagesTable, conversations } from '../database/schema'
 import { eq, and, desc } from 'drizzle-orm'
-import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware } from 'ai'
+import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { models } from '#shared/utils/models'
 

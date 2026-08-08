@@ -21,7 +21,7 @@ defineProps<{ message: UIMessage }>()
       :text="part.text"
       :streaming="isPartStreaming(part)"
       :ui="{ 
-        base: 'animate-in fade-in zoom-in-95 duration-300', 
+        base: 'animate-reasoning-in', 
         header: 'transition-colors duration-200' 
       }"
     />

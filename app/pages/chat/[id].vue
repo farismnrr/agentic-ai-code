@@ -174,7 +174,7 @@ defineShortcuts({
           :status="status"
           :assistant="{ actions: [] }"
           class="max-w-3xl mx-auto w-full"
-          :ui="{ message: { base: 'animate-in fade-in slide-in-from-bottom-2 duration-300' } }"
+          :ui="{ message: { base: 'animate-message-in' } }"
         >
           <template #content="{ message }">
             <ChatMessageParts :message="message" />
