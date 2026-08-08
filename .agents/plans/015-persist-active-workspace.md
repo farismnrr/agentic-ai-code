@@ -119,3 +119,55 @@ browser-only guess.
   it, only fixes durability of the selection itself.
 - Not adding multi-device "currently active" sync/realtime — last-write-wins
   on the new DB column is enough; no requirement for live cross-tab sync.
+
+## On completion
+
+- [x] Phase 1 (investigate the actual failure mode) — live-tested: a
+      plain page refresh with the `workspace-id` cookie intact already
+      worked correctly before any of this plan's changes (session
+      cookies survive a normal reload, only clearing on browser close),
+      confirming the original report was about durability across a
+      closed browser/new device/expired cookie, not literally every
+      single refresh.
+- [x] Phase 2 — `users.lastActiveWorkspaceId` column added
+      (`server/database/schema.ts`, migration `0006`), exposed via
+      `GET /api/settings`, write path centralized through
+      `useWorkspaces().setActive()` (updates the cookie and persists
+      server-side via `PUT /api/workspaces/active`), all five original
+      call sites (including `WorkspacePicker.vue`) now go through it.
+      Cookie given a real 1-year `maxAge`.
+- [x] Two review rounds found and fixed real bugs the build/lint/typecheck
+      gate never caught:
+      1. `WorkspacePicker.vue` initially not wired to `setActive()`,
+         `settings.lastActiveWorkspaceId` read without `.value`,
+         `active.put.ts` using undeclared `zod` instead of `valibot`,
+         a schema forward-reference breaking `users`/`workspaces` typing,
+         and migration `0006` never applied to the dev database (broke
+         all new signups) — all fixed and live-verified.
+      2. A second round found the restore mechanism didn't actually take
+         effect: sequencing `loadSettings()` before the layout's
+         `Promise.allSettled` (and later, calling `useSettings()` inside
+         `loadAll()` after an internal `await`) broke Nuxt's SSR
+         composable-context propagation, surfacing only as `NUXT_E1001`
+         with no other symptom, silently swallowed by `allSettled`. Fixed
+         by grabbing `useSettings()` synchronously at the top of
+         `useWorkspaces()` and awaiting the settings promise *inside*
+         `loadAll()`'s existing parallel fetch instead of sequencing it
+         ahead of the batch. Even after that fix, the cookie was
+         correctly restored server-side (confirmed via the `Set-Cookie`
+         header) but `app/pages/chat/index.vue` still rendered the
+         picker in the same response, since pages and layouts each get
+         their own Suspense boundary in Nuxt — fixed with a small
+         reactive, idempotent `watchEffect` directly in `chat/index.vue`
+         as a belt-and-suspenders correction.
+- [x] Live end-to-end verification (real browser session, two consecutive
+      reloads after clearing the cookie, plus raw `curl` SSR-body
+      inspection) confirms the fix holds. Mid-conversation model/effort
+      switching (an unrelated prior fix) still works, confirmed via
+      regression check.
+- [x] `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run
+      lint` clean (one pre-existing, unrelated `useWorkspaces.ts` DELETE
+      method type error remains — present on `dev` before this plan too,
+      not introduced here, not fixed as part of this plan's scope).
+- [x] Merged to `dev` via PR (see plans/README.md), branch and worktree
+      cleaned up per `.agents/knowledge/git.md`.
