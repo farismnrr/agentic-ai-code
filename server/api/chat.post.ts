@@ -79,27 +79,40 @@ export default defineEventHandler(async (event) => {
     tools,
     originalMessages: messages,
     onEnd: async ({ responseMessage, isContinuation }) => {
-      await close()
+      // toUIMessageStream only invokes onEnd from its underlying
+      // TransformStream's flush()/cancel() hooks, which — unlike the
+      // per-step onStepFinish callback — the `ai` SDK does not wrap in a
+      // try/catch (see node_modules/ai/dist/index.js, handleUIMessageStreamFinish).
+      // An unhandled throw here errors the response stream after the
+      // client has already received every visible byte, so the browser
+      // renders a complete answer while the DB write silently never
+      // happens and nothing is logged anywhere. Catch and log explicitly
+      // so a persistence failure is at least visible instead of invisible.
+      try {
+        await close()
 
-      if (isContinuation) {
-        const [last] = await db
-          .select()
-          .from(messagesTable)
-          .where(eq(messagesTable.conversationId, conv.id))
-          .orderBy(desc(messagesTable.createdAt))
-          .limit(1)
+        if (isContinuation) {
+          const [last] = await db
+            .select()
+            .from(messagesTable)
+            .where(eq(messagesTable.conversationId, conv.id))
+            .orderBy(desc(messagesTable.createdAt))
+            .limit(1)
 
-        if (last && last.role === 'assistant') {
-          await db.update(messagesTable).set({ parts: responseMessage.parts }).where(eq(messagesTable.id, last.id))
-          return
+          if (last && last.role === 'assistant') {
+            await db.update(messagesTable).set({ parts: responseMessage.parts }).where(eq(messagesTable.id, last.id))
+            return
+          }
         }
-      }
 
-      await db.insert(messagesTable).values({
-        conversationId: conv.id,
-        role: 'assistant',
-        parts: responseMessage.parts
-      })
+        await db.insert(messagesTable).values({
+          conversationId: conv.id,
+          role: 'assistant',
+          parts: responseMessage.parts
+        })
+      } catch (err) {
+        console.error('[chat onEnd] failed to persist assistant message', err)
+      }
     }
   })
 
