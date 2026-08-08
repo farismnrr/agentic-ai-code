@@ -123,7 +123,7 @@ async function start(text: string) {
           :submit-on-enter="settings.sendOnEnter"
           autofocus
           placeholder="Message AI Code…"
-          :ui="{ footer: 'flex-wrap sm:flex-nowrap' }"
+          :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="start(input)"
         >
           <UChatPromptSubmit />
