@@ -56,12 +56,12 @@ await useAsyncData('app-data', async () => {
   return true
 })
 
-// Whenever workspace changes, we don't necessarily need to reload conversations
-// since we now load ALL workspaces' conversations in Phase 1.
+// Whenever workspace changes, we don't necessarily need to reload the
+// sidebar since we already load ALL workspaces' conversations up front.
 // But keeping it as a full refresh mechanism doesn't hurt.
 watch(activeWorkspaceId, (newId, oldId) => {
   if (oldId !== undefined && newId !== oldId) {
-    loadConversations()
+    loadSidebar()
   }
 })
 
