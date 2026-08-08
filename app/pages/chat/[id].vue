@@ -174,13 +174,17 @@ defineShortcuts({
           :status="status"
           :assistant="{ actions: [] }"
           class="max-w-3xl mx-auto w-full"
+          :ui="{ message: { base: 'animate-message-in' } }"
         >
           <template #content="{ message }">
             <ChatMessageParts :message="message" />
           </template>
 
           <template #indicator>
-            <UChatShimmer text="Thinking…" />
+            <UChatShimmer
+              text="Thinking…"
+              class="animate-pulse"
+            />
           </template>
 
           <template #actions="{ message }">

@@ -20,6 +20,10 @@ defineProps<{ message: UIMessage }>()
       v-if="isReasoningUIPart(part)"
       :text="part.text"
       :streaming="isPartStreaming(part)"
+      :ui="{
+        base: 'animate-reasoning-in',
+        header: 'transition-colors duration-200'
+      }"
     />
 
     <ChatToolCall
@@ -39,7 +43,10 @@ defineProps<{ message: UIMessage }>()
         v-if="message.role === 'assistant'"
         :value="part.text"
         :streaming="isPartStreaming(part)"
-        class="*:first:mt-0 *:last:mb-0"
+        :class="[
+          '*:first:mt-0 *:last:mb-0 transition-opacity duration-150',
+          isPartStreaming(part) ? 'opacity-80' : 'opacity-100'
+        ]"
       />
       <p
         v-else

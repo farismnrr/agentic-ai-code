@@ -22,7 +22,7 @@
     "@iconify-json/simple-icons": "^1.2.92",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@nuxt/ui": "^4.10.0",
-    "ai": "^7.0.55",
+    "ai": "^7.0.56",
     "drizzle-orm": "^0.45.2",
     "eventsource-parser": "^3.1.0",
     "nodemailer": "^9.0.4",
