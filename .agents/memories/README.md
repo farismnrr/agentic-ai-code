@@ -26,3 +26,4 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [dev-mode-vs-build.md](dev-mode-vs-build.md) — use `pnpm build && pnpm preview` for local verification, not `pnpm dev`; kill and restart `preview` on every rebuild, it doesn't pick up a new `.output` on its own
 - [013-nuxt-ui-slot-typecheck-gate.md](013-nuxt-ui-slot-typecheck-gate.md) — a wrong `:ui` slot key on a Nuxt UI component silently no-ops at runtime; only `vue-tsc -p .nuxt/tsconfig.json --noEmit` catches it, not `nuxt build`
 - [014-scripts-dir-not-gated.md](014-scripts-dir-not-gated.md) — `scripts/*.ts` one-off scripts aren't covered by build/typecheck/lint; a broken one only surfaces by actually running it
+- [chat-onend-silent-persistence-failure.md](chat-onend-silent-persistence-failure.md) — `chat.post.ts`'s `onEnd` can fail to persist the assistant message with zero error output, intermittently; now logged, root cause (suspected abort-controller race) still open
