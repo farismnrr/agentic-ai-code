@@ -23,5 +23,5 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [009-loaded-state-pattern.md](009-loaded-state-pattern.md) — use `useState`, not a bare `ref`, for a composable's own "have I loaded yet" flag, or it won't be shared across call sites
 - [nuxt-ssr-fetch-cookies.md](nuxt-ssr-fetch-cookies.md) — a composable's bare `$fetch('/api/...')` silently 401s during SSR; needs `useRequestFetch()` on the server
 - [010-workspace-configured-root.md](010-workspace-configured-root.md) — why workspace folders use one operator-configured root (OpenClaw precedent) instead of an unrestricted filesystem browser
-- [dev-mode-vs-build.md](dev-mode-vs-build.md) — use `pnpm build && pnpm preview` for local verification, not `pnpm dev` — its file-watcher breaks across branch/worktree operations, and it's slower to load
+- [dev-mode-vs-build.md](dev-mode-vs-build.md) — use `pnpm build && pnpm preview` for local verification, not `pnpm dev`; kill and restart `preview` on every rebuild, it doesn't pick up a new `.output` on its own
 - [013-nuxt-ui-slot-typecheck-gate.md](013-nuxt-ui-slot-typecheck-gate.md) — a wrong `:ui` slot key on a Nuxt UI component silently no-ops at runtime; only `vue-tsc -p .nuxt/tsconfig.json --noEmit` catches it, not `nuxt build`
