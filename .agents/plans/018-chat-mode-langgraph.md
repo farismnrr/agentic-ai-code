@@ -69,4 +69,4 @@ Follow the `reasoningEffort` pattern exactly (`app/pages/chat/index.vue:35-46,14
 ## On completion
 - [x] Update this plan file with final status per phase.
 - [x] Write `.agents/memories/018-...md` for any live-verified finding (e.g. LangGraph→UI-stream bridging quirks, if any turn up), and add it to `memories/README.md`'s index.
-- [ ] Follow `.agents/knowledge/git.md` for branch/commit/PR — never commit to `main`/`dev` directly, never commit unasked.
+- [x] Follow `.agents/knowledge/git.md` for branch/commit/PR — never commit to `main`/`dev` directly, never commit unasked.

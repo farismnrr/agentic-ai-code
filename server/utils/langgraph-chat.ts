@@ -1,4 +1,4 @@
-import { createReactAgent } from '@langchain/langgraph/prebuilt'
+import { createAgent } from 'langchain'
 import { getLanggraphModel } from './langgraph-model'
 import { langgraphTools } from './langgraph-tools'
 import type { UIMessage } from '#shared/types/chat'
@@ -21,21 +21,21 @@ function convertToLangchainMessages(uiMessages: UIMessage[]) {
 
 export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd: (parts: UIMessage['parts']) => Promise<void>) {
   const model = getLanggraphModel(modelId)
-  const agent = createReactAgent({ llm: model, tools: langgraphTools })
+  const agent = createAgent({ model, tools: langgraphTools })
 
   return createUIMessageStream({
     async execute({ writer }) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parts: any[] = []
+      let currentText = ''
+      let textIndex = 0
+
       try {
         const inputMessages = convertToLangchainMessages(uiMessages)
-        const stream = await agent.streamEvents(
+        const stream = agent.streamEvents(
           { messages: inputMessages },
           { version: 'v2' }
         )
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parts: any[] = []
-        let currentText = ''
-        let textIndex = 0
 
         for await (const event of stream) {
           if (event.event === 'on_chat_model_stream') {
@@ -62,25 +62,27 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
               type: 'dynamic-tool',
               toolCallId: event.run_id,
               toolName: event.name,
-              state: 'call',
+              state: 'input-available',
               input: event.data?.input || {}
-            } as any)
+            })
             writer.write({
               type: 'tool-input-available',
               toolCallId: event.run_id,
               toolName: event.name,
-              input: event.data?.input || {}
+              input: event.data?.input || {},
+              dynamic: true
             })
           } else if (event.event === 'on_tool_end') {
             const invocation = parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === event.run_id)
             if (invocation) {
-              invocation.state = 'result'
+              invocation.state = 'output-available'
               invocation.output = event.data?.output || ''
             }
             writer.write({
               type: 'tool-output-available',
               toolCallId: event.run_id,
-              output: event.data?.output || ''
+              output: event.data?.output || '',
+              dynamic: true
             })
           }
         }
@@ -96,10 +98,28 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
           console.error('[langgraph onEnd] failed', err)
         }
       } catch (e: unknown) {
+        if (currentText) {
+          writer.write({ type: 'text-end', id: `text-${textIndex}` })
+          parts.push({ type: 'text', text: currentText })
+        }
+        const errorText = (e as Error).message
+        for (const part of parts) {
+          if (part.type === 'dynamic-tool' && part.state === 'input-available') {
+            part.state = 'output-error'
+            part.errorText = errorText
+          }
+        }
         writer.write({
           type: 'error',
-          errorText: (e as Error).message
+          errorText
         })
+        if (parts.length > 0) {
+          try {
+            await onEnd(parts)
+          } catch (err) {
+            console.error('[langgraph onEnd] failed', err)
+          }
+        }
       }
     }
   })
