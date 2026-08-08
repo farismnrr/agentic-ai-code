@@ -40,7 +40,9 @@ export async function createMcpServer(userId: string, body: { name: string, desc
         transport: body.transport,
         url: body.url,
         command: body.command,
-        status: 'connected',
+        // 'connected' is a claim, not yet a fact — POST /api/mcp-servers/:id/test
+        // is what actually verifies it and updates this.
+        status: 'disconnected',
         enabled: true,
         tools: []
       })

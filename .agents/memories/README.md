@@ -18,6 +18,7 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [007-9router-config.md](007-9router-config.md) — how the real model backend is wired up via 9router
 - [007-typecheck-gate-was-silent.md](007-typecheck-gate-was-silent.md) — `pnpm typecheck` (`nuxt typecheck`) can silently pass real type errors; two fixes were tried and reverted, so `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit` is still the only real gate — confirmed again in plan 012, where `nuxt typecheck` passed on code that didn't compile at all
 - [012-mcp-inbound-sse-transport.md](012-mcp-inbound-sse-transport.md) — inbound MCP server uses SSE + an in-memory session map, not Streamable HTTP as planned — single-instance only
+- [012-mcp-outbound-tool-loop.md](012-mcp-outbound-tool-loop.md) — outbound chat tool-calling runs on `streamText` + `@ai-sdk/openai-compatible` + `toolApproval`, not hand-rolled SSE parsing; denying a tool blocks execution but doesn't stop the model from retrying the call
 - [fixtures-not-disposable.md](fixtures-not-disposable.md) — check what's actually inside `fixtures/` before deleting it; `models.ts` was real config, not a stub
 - [009-loaded-state-pattern.md](009-loaded-state-pattern.md) — use `useState`, not a bare `ref`, for a composable's own "have I loaded yet" flag, or it won't be shared across call sites
 - [nuxt-ssr-fetch-cookies.md](nuxt-ssr-fetch-cookies.md) — a composable's bare `$fetch('/api/...')` silently 401s during SSR; needs `useRequestFetch()` on the server
