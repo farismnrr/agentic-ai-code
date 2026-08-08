@@ -116,3 +116,34 @@ the other three already cover.
   doesn't touch how the "current" workspace is remembered.
 - Not revisiting the URL structure — still no `/workspace/:id/chat`,
   per [[007-workspace-client-routing]].
+
+## On completion
+
+- [x] Phase A — `USelect` for workspace added to `UChatPrompt`'s
+      `#footer` in `app/pages/chat/index.vue`, defaulting to
+      `activeWorkspaceId`; `useConversations().create()` now accepts an
+      explicit `workspaceId` override, and `start()` passes the form's
+      selection through and calls `setActive()` on submit if it diverged
+      from what was previously active.
+- [x] Phase B — "New chat" added to each workspace's sidebar "…" menu
+      (`workspaceActionItems()`), targeting that workspace specifically
+      via `setActive(w.id)` + `router.push('/chat')`.
+- [x] Review found a real bug in the first cut: the form's `workspaceId`
+      ref only synced from `activeWorkspaceId` while still unset
+      (`!workspaceId.value` guard), so using the sidebar's per-workspace
+      "New chat" while already on `/chat` with a workspace already
+      selected left the form silently targeting the stale workspace —
+      `router.push('/chat')` to the same route is a Vue Router no-op, so
+      nothing else would have corrected it. Fixed by dropping the guard;
+      the watcher now unconditionally follows `activeWorkspaceId`
+      whenever it changes (which only happens via an explicit `setActive()`
+      elsewhere, not from the user's own in-form pick, so it doesn't
+      clobber a manual in-progress selection).
+- [x] Phase C — the sidebar's generic empty-state block now only fires
+      when `workspaces.length === 0` ("No workspaces yet" / "Create one",
+      opening the workspace-creation modal), not whenever every existing
+      workspace's chat list happens to be empty.
+- [x] `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run
+      lint && pnpm audit` all clean.
+- [x] Merged to `dev` via PR (see plans/README.md), branch and worktree
+      cleaned up per `.agents/knowledge/git.md`.
