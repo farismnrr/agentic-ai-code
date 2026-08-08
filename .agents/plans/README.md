@@ -13,6 +13,7 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 ## In Flight
 
 ## Completed
+- [015-persist-active-workspace.md](015-persist-active-workspace.md) — the active workspace now survives a closed browser/new device via a server-side `users.lastActiveWorkspaceId` column, not just a session cookie; fixed two rounds of real bugs including an SSR composable-context break (NUXT_E1001) and a page/layout Suspense-boundary race.
 - [014-reasoning-effort-and-model-cleanup.md](014-reasoning-effort-and-model-cleanup.md) — a low/medium/high/max reasoning-effort control for the "High Thinking" model via 9Router's `reasoning_effort`, plus fixing the stray hardcoded `legacy-model-id` default that doesn't match any real model.
 - [013-chat-thinking-and-animations.md](013-chat-thinking-and-animations.md) — real reasoning output from the router model (`extractReasoningMiddleware`, gated by model capability) plus a external MCP client-style motion pass on message/reasoning entrance.
 - [012-mcp-api-key.md](012-mcp-api-key.md) — API keys + an MCP server this app exposes (settings/workspace/chat tools), plus wiring stored third-party `mcp_servers` rows into chat via `streamText`'s native tool-approval flow instead of just persisting them.

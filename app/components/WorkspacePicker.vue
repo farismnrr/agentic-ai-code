@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { workspaces, activeWorkspaceId, create: createWorkspace, update: updateWorkspace } = useWorkspaces()
+const { workspaces, create: createWorkspace, update: updateWorkspace, setActive } = useWorkspaces()
 
 const workspaceCreating = ref(false)
 const pending = ref(false)
@@ -15,7 +15,7 @@ async function handleSelectFolder(result: { name: string, path: string }) {
       workspaceConfirming.value = null
     } else {
       const w = await createWorkspace(result.name, result.path)
-      activeWorkspaceId.value = w.id
+      setActive(w.id)
       workspaceCreating.value = false
     }
   } catch (err) {
@@ -48,7 +48,7 @@ async function handleSelectFolder(result: { name: string, path: string }) {
         :title="workspace.name"
         icon="i-lucide-folder"
         class="cursor-pointer hover:border-primary-500/50 transition-colors"
-        @click="activeWorkspaceId = workspace.id"
+        @click="setActive(workspace.id)"
       >
         <template
           v-if="!workspace.pathConfirmed"
