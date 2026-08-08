@@ -172,9 +172,9 @@ defineShortcuts({
           v-else
           :messages="messages"
           :status="status"
-          :assistant="{ actions: [] }"
+          :assistant="{ actions: [], ui: { root: 'animate-message-in' } }"
+          :user="{ ui: { root: 'animate-message-in' } }"
           class="max-w-3xl mx-auto w-full"
-          :ui="{ message: { base: 'animate-message-in' } }"
         >
           <template #content="{ message }">
             <ChatMessageParts :message="message" />
