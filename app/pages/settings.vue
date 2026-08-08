@@ -5,6 +5,7 @@ const items: NavigationMenuItem[] = [
   { label: 'General', icon: 'i-lucide-settings-2', to: '/settings/general' },
   { label: 'Models', icon: 'i-lucide-sparkles', to: '/settings/models' },
   { label: 'MCP', icon: 'i-lucide-blocks', to: '/settings/mcp' },
+  { label: 'API Keys', icon: 'i-lucide-key', to: '/settings/api-keys' },
   { label: 'Account', icon: 'i-lucide-user', to: '/settings/account' }
 ]
 </script>

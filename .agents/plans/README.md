@@ -13,6 +13,7 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 ## In Flight
 
 ## Completed
+- [012-mcp-api-key.md](012-mcp-api-key.md) — API keys + an MCP server this app exposes (settings/workspace/chat tools), plus actually wiring stored third-party `mcp_servers` rows into chat instead of just persisting them.
 - [010-workspace-folders.md](010-workspace-folders.md) — workspaces become real folders (OpenClaw-style configured root) instead of just names, fixing the mismatch with opencode/Claude Code/Antigravity's actual model.
 - [009-workspace-picker.md](009-workspace-picker.md) — require picking/creating a workspace on first `/chat` visit, and fix the uncaught "No active workspace" race.
 - [008-remove-dummy-data.md](008-remove-dummy-data.md) — remove leftover fixture/seed data and the destructive demo-reset endpoint now that auth, persistence, and the model are real.

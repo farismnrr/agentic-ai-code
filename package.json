@@ -19,6 +19,7 @@
     "@comark/nuxt": "^0.6.0",
     "@iconify-json/lucide": "^1.2.121",
     "@iconify-json/simple-icons": "^1.2.92",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@nuxt/ui": "^4.10.0",
     "ai": "^7.0.55",
     "drizzle-orm": "^0.45.2",
