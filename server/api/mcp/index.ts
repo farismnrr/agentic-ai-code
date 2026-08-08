@@ -7,6 +7,9 @@ import { listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace } fro
 import { listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../../utils/mcp-servers'
 
 // We store active transports keyed by their SDK-generated session ID
+// Note: This in-memory map means connections won't survive across Nitro workers
+// in a multi-process deployment. This is acceptable for single-operator deployments
+// (the current target), but should be moved to Redis/DB if scaling horizontally.
 const transports = new Map<string, SSEServerTransport>()
 
 export default defineEventHandler(async (event) => {
@@ -29,7 +32,9 @@ export default defineEventHandler(async (event) => {
           { name: 'list_mcp_servers', description: 'List connected MCP servers', inputSchema: { type: 'object', properties: {} } },
           { name: 'create_mcp_server', description: 'Create MCP server', inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, transport: { type: 'string' }, url: { type: 'string' }, command: { type: 'string' } }, required: ['name', 'transport'] } },
           { name: 'update_mcp_server', description: 'Update MCP server', inputSchema: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, transport: { type: 'string' }, url: { type: 'string' }, command: { type: 'string' }, status: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['id'] } },
-          { name: 'delete_mcp_server', description: 'Delete MCP server', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }
+          { name: 'delete_mcp_server', description: 'Delete MCP server', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+          { name: 'send_message', description: 'Send a message to a conversation', inputSchema: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] } },
+          { name: 'list_messages', description: 'List messages in a conversation', inputSchema: { type: 'object', properties: { conversationId: { type: 'string' } }, required: ['conversationId'] } }
         ]
       }
     })
@@ -69,6 +74,14 @@ export default defineEventHandler(async (event) => {
         } else if (name === 'delete_mcp_server') {
           const res = await deleteMcpServer(userId, args.id as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
+        } else if (name === 'send_message') {
+          // TODO: Phase 1.5 - Extract chat/message logic to utils and call it here
+          // Currently unimplemented but registered per plan step 8
+          return { content: [{ type: 'text', text: JSON.stringify({ error: 'Not yet implemented' }) }] }
+        } else if (name === 'list_messages') {
+          // TODO: Phase 1.5 - Extract chat/message logic to utils and call it here
+          // Currently unimplemented but registered per plan step 8
+          return { content: [{ type: 'text', text: JSON.stringify({ error: 'Not yet implemented' }) }] }
         }
 
         throw new Error(`Unknown tool: ${name}`)
