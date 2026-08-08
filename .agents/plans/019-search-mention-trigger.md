@@ -42,8 +42,57 @@ Single file, no schema/API/frontend changes:
   - Send `@search` with no query after it → confirm it's treated as normal text (no forced call, no crash).
   - Reload the conversation → confirm the transcript shows the literal `"@search cari tentang bnsp"` text the user typed, not a stripped/cleaned version.
 
-## Status: complete
+## Status: Phase 1 complete
 
 Shipped on `feat/019-p1-search-trigger`, 4 commits (`8b6417f` initial impl, `72eedcc` fix, `38bf090` tool-file split, `1c2e97e` unrelated sidebar-watcher fix).
 
 **Deviation from the original design**, live-verified and documented in `.agents/memories/019-search-forced-tool-choice-unreliable.md`: forcing via `ChatOpenAI.withConfig({ tool_choice })` (the plan's Decision #3) does not survive `createAgent()`'s internal handling in the installed `langchain`/`@langchain/openai` versions — it neither crashes (once `MultipleToolsBoundError` was separately fixed) nor actually forces the call; the model just answers from its own knowledge with zero tool traffic. `@search` now calls `searxng_search` directly instead of asking the model to decide, then hand-writes the same UI chunks the normal path produces, then does a plain (non-agent) model call to summarize the real results. All four verification scenarios above passed via a live Playwright run against a real logged-in session (tool card rendered, `docker logs shared-searxng` showed real traffic, bare `@search` handled gracefully, literal text survived reload).
+
+---
+
+## Phase 2 — `@` mention dropdown for chat-mode tool triggers
+
+### Context
+
+Phase 1 shipped `@search <query>` as a literal typed prefix, deliberately with **no autocomplete UI** ("per the request, `@search` is a literal typed prefix, detected as plain text"). Now explicitly requested: typing `@` in the chat input should open a dropdown so `@search` can be picked/tagged, not just remembered and typed blind. This stays in the same plan file rather than a new plan number — plan 020 (tools-as-local-packages) is unrelated and untouched.
+
+**Nuxt UI 4 doesn't have a drop-in answer here.** Its one "type `@` to open a list" component, `UEditorMentionMenu`, only attaches to the Tiptap-based `UEditor` (contenteditable, ProseMirror suggestion plugin) — `UChatPrompt` (used in both `app/pages/chat/[id].vue` and `app/pages/chat/index.vue`) renders a plain `UTextarea` bound to a `ref<string>`. Swapping the textarea for a full rich-text editor just to get one mention popup is a much bigger change than this warrants. `UChatPrompt` also has no caret-position-aware overlay slot — its `#header` slot is the only one that renders inside `root` (which has `relative` positioning) above the textarea, everything else (`#footer`) renders below.
+
+Given there's exactly **one** forceable tool today (`search`), this doesn't need real caret-tracking or a generic mention framework — a small, hand-built dropdown anchored above the textarea via `UChatPrompt`'s existing `#header` slot is enough, and cheap to extend later if more forceable tools are added (matches Phase 1's original "can follow the same pattern later if asked" for `curl`).
+
+### Decisions
+
+- **New shared component, not duplicated logic** — `app/components/ChatMentionMenu.vue`, used from both `[id].vue` and `index.vue` (both already compose `UChatPrompt` inline; `ChatToolPicker.vue` is the existing precedent for a small chat-input-adjacent component in this codebase).
+- **Trigger detection**: watch the `input` ref for a trailing `@<partial>` token — `/(?:^|\s)@(\w*)$/` matched against the current value's end (simplification: good enough for a single-line-growing textarea where users aren't routinely editing mid-text before more typing). When matched, the menu opens with `partial` as the filter.
+- **Tool list is a small local array**, extensible later — `[{ trigger: 'search', label: '@search', description: 'Force this turn to search the web', icon: 'i-lucide-search' }]` — filtered by `partial`. Only rendered/active when `mode === 'chat'` (agent mode has no `@search`-equivalent; matches Phase 1's chat-mode-only scoping).
+- **Positioning**: rendered into `UChatPrompt`'s `#header` slot, `absolute bottom-full left-0` within `root`'s relative box — sits right above the textarea. Not true caret-tracking, but correct and simple for a single-line-growing input with one candidate item; revisit only if a future multi-line-editing use case demands real caret coordinates.
+- **Selection replaces the trailing `@partial` token** with `@search ` (trailing space) in the `input` ref and refocuses the textarea — keyboard (↑/↓ to move, Enter/Tab to select, Escape to close) and mouse-click both supported, since "dropdown tools... biar bisa ke tag" implies real interactive selection, not just a visual hint.
+- **No change to the backend.** `server/utils/langgraph-chat.ts`'s `@search` detection (already shipped in Phase 1) is unaffected — the dropdown only changes how the same literal `@search <query>` text gets typed.
+
+### Changes
+
+#### `app/components/ChatMentionMenu.vue` (new)
+- Props: `open: boolean`, `filter: string`, `items` (the tool list, or hardcode it here since there's only one for now).
+- Emits `select(trigger: string)`, `close()`.
+- Keyboard nav (↑/↓/Enter/Tab/Escape) — needs `v-model:highlighted` or an internal `ref` index.
+- Simple list markup (icon + label + description per row), similar visual weight to `ChatToolPicker.vue`'s existing popover rows but not wrapped in `UPopover` (it's driven by the trigger regex, not hover/click-to-open).
+
+#### `app/pages/chat/[id].vue` and `app/pages/chat/index.vue`
+1. Add `mentionOpen`/`mentionFilter` computed or refs derived from `input.value` via the trigger regex.
+2. Add `<template #header>` to the existing `<UChatPrompt>` (currently unused in both files) rendering `<ChatMentionMenu :open="mentionOpen" :filter="mentionFilter" @select="onMentionSelect" @close="mentionOpen = false" v-if="mode === 'chat'" />`.
+3. `onMentionSelect(trigger)`: replace the trailing `@partial` in `input.value` with `@${trigger} `, close the menu, refocus the textarea (`UChatPrompt` likely exposes the textarea ref, or focus via a template ref — confirm during implementation).
+4. Existing `submit()`/`start()` handlers, model bindings, and `ChatToolPicker`/`mode` selects are untouched.
+
+### Out of scope
+
+- Real caret-position tracking (dropdown always anchors above the textarea, not at the cursor mid-text).
+- Any tool besides `search` (list is trivially extensible later, not populated now).
+- Agent-mode MCP tool mentions (different mechanism, different scope — not requested).
+- Changing `UChatPrompt` to the rich-text `UEditor`/`UEditorMentionMenu` path.
+
+### Verification
+
+- `pnpm lint`, `pnpm typecheck`.
+- Manual (or Playwright), in a **chat-mode** conversation: type `@` → dropdown appears with "search"; type `@se` → still matches (filter); type `@xyz` → no match, dropdown closes/empty; select via click and via Enter after arrowing → `@search ` inserted correctly, cursor after it, dropdown closes.
+- In an **agent-mode** conversation: typing `@` does **not** open the dropdown (no forceable tools defined for that mode).
+- Confirm the resulting `@search <query>` message still round-trips through the existing backend logic exactly as shipped in Phase 1 (no regression — this phase only changes how the text gets typed).

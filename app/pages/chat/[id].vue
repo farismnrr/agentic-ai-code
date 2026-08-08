@@ -46,6 +46,25 @@ const {
 
 const input = ref('')
 
+const forceCloseMention = ref(false)
+watch(input, () => {
+  forceCloseMention.value = false
+})
+const mentionMatch = computed(() => forceCloseMention.value ? null : input.value.match(/(?:^|\\s)@(\\w*)$/))
+const mentionOpen = computed(() => mentionMatch.value !== null)
+const mentionFilter = computed(() => mentionMatch.value ? mentionMatch.value[1]! : '')
+
+function onMentionSelect(trigger: string) {
+  if (!mentionMatch.value) return
+  const matchStr = mentionMatch.value[0]
+  const replaceStr = matchStr.replace(/@\\w*$/, `@${trigger} `)
+  input.value = input.value.substring(0, input.value.length - matchStr.length) + replaceStr
+  forceCloseMention.value = true
+  setTimeout(() => {
+    const textarea = document.querySelector('textarea')
+    if (textarea) textarea.focus()
+  }, 0)
+}
 const enabledToolIds = computed({
   get: () => conversation.value?.enabledToolIds ?? [],
   set: (value: string[]) => {
@@ -341,6 +360,16 @@ defineShortcuts({
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="submit"
         >
+          <template #header>
+            <ChatMentionMenu
+              v-if="mode === 'chat'"
+              :open="mentionOpen"
+              :filter="mentionFilter"
+              @select="onMentionSelect"
+              @close="forceCloseMention = true"
+            />
+          </template>
+
           <UChatPromptSubmit
             :status="status"
             @stop="stop()"
