@@ -179,6 +179,8 @@ function confirmRenameWorkspace() {
   workspaceRenaming.value = null
 }
 
+const workspaceDetailsPath = ref<string | null>(null)
+
 function workspaceActionItems(w: typeof workspaces.value[0]): DropdownMenuItem[][] {
   return [[
     ...(!w.pathConfirmed
@@ -189,6 +191,11 @@ function workspaceActionItems(w: typeof workspaces.value[0]): DropdownMenuItem[]
           onSelect: () => { workspaceConfirming.value = w }
         }]
       : []),
+    {
+      label: 'View details',
+      icon: 'i-lucide-info',
+      onSelect: () => { workspaceDetailsPath.value = w.path }
+    },
     {
       label: 'Rename',
       icon: 'i-lucide-pencil',
@@ -448,6 +455,27 @@ const searchGroups = computed(() => [
           <UButton
             label="Rename"
             @click="confirmRenameWorkspace"
+          />
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="workspaceDetailsPath !== null"
+      title="Workspace Details"
+      @update:open="workspaceDetailsPath = null"
+    >
+      <template #body>
+        <p class="text-sm font-mono break-all text-default bg-elevated p-2 rounded border border-muted">
+          {{ workspaceDetailsPath }}
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end">
+          <UButton
+            label="Close"
+            color="neutral"
+            @click="workspaceDetailsPath = null"
           />
         </div>
       </template>

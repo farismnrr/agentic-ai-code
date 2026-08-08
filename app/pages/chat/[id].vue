@@ -163,10 +163,10 @@ defineShortcuts({
       <UDashboardNavbar>
         <template #left>
           <UDashboardSidebarCollapse />
-        </template>
-        <template #title>
           <div class="flex items-center gap-2">
-            <span class="font-semibold text-gray-900 dark:text-white truncate">{{ conversation?.title ?? 'Chat' }}</span>
+            <h1 class="font-semibold text-default truncate">
+              {{ conversation?.title ?? 'Chat' }}
+            </h1>
             <UBadge
               v-if="workspaceName"
               variant="subtle"
