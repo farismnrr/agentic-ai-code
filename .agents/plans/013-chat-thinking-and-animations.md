@@ -90,3 +90,43 @@ transition utilities per `.agents/knowledge/nuxt-way.md`.
   UI and should keep working unmodified as a fallback demo path.
 - No reasoning-effort user control (e.g. a slider) — out of scope unless
   requested later.
+
+## On completion
+
+- [x] Phase 1 — reasoning wired via `wrapLanguageModel({ middleware:
+      extractReasoningMiddleware({ tagName: 'think' }) })`, gated by a new
+      `supportsReasoning` flag on the `high-thinking-models` `ChatModel`
+      entry so Flash/Free models aren't wrapped unnecessarily.
+- [x] Phase 2 — message entrance and reasoning-block entrance animated via
+      native Tailwind v4 `@theme` `--animate-*` tokens + `@keyframes` in
+      `app/assets/css/main.css` (`message-in`, `reasoning-in`), not the
+      `tailwindcss-animate` plugin — that plugin isn't installed in this
+      project and an earlier draft that assumed it (`animate-in fade-in
+      zoom-in-95` etc.) silently compiled to no CSS at all.
+- [x] Two review passes caught real bugs the build didn't:
+      1. The first commit dropped `createUIMessageStreamResponse` from the
+         `ai` import while editing the same import line — broke every chat
+         request at runtime (`ReferenceError`), invisible to `nuxt build`
+         since Rollup doesn't fail on an unresolved bare identifier here.
+      2. The merged `:ui` overrides used slot keys that don't exist on
+         `UChatReasoning`/`UChatMessages` (`base`, `header`, `message`) —
+         Vue silently drops unknown prop keys, so the animation classes
+         never reached any element. Only `vue-tsc -p .nuxt/tsconfig.json
+         --noEmit` catches this; `nuxt build` and `eslint` don't. Fixed in
+         a follow-up PR; recorded as
+         [`.agents/memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+- [x] `pnpm build && vue-tsc -p .nuxt/tsconfig.json --noEmit && pnpm run
+      lint` clean after the slot-name fix; compiled CSS confirmed to
+      contain real `.animate-message-in`/`.animate-reasoning-in` rules and
+      their `@keyframes`.
+- [x] Merged to `dev`: `feat/013-reasoning-and-motion` as PR #50
+      (squash-merged), plus a follow-up `fix/013-chat-ui-slot-names` PR for
+      the slot-key bug. Branches/worktrees cleaned up per
+      `.agents/knowledge/git.md`.
+
+**Not yet done:** live-verify reasoning actually renders end-to-end against
+the real 9Router "High Thinking" model in a running dev server (the plan's
+own Phase 1 step 5) — the investigation into whether 9Router forwards
+`<think>` tags or structured reasoning was not confirmed against a live
+call, only wired defensively via `extractReasoningMiddleware`. Worth a
+manual check next time that model is exercised.
