@@ -1,6 +1,5 @@
-import { eq } from 'drizzle-orm'
-import { userSettings } from '../database/schema'
 import * as v from 'valibot'
+import { updateSettings } from '../utils/settings'
 
 const settingsSchema = v.object({
   language: v.optional(v.string()),
@@ -15,30 +14,6 @@ const settingsSchema = v.object({
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const db = useDb()
-
-  const result = v.safeParse(settingsSchema, await readBody(event))
-  if (!result.success) throw unprocessable(result.issues)
-  const body = result.output
-
-  const [updatedSettings] = await db
-    .update(userSettings)
-    .set(body)
-    .where(eq(userSettings.userId, session.user.id))
-    .returning()
-
-  if (!updatedSettings) {
-    throw notFound('Settings not found')
-  }
-
-  return {
-    language: updatedSettings.language,
-    streaming: updatedSettings.streaming,
-    sendOnEnter: updatedSettings.sendOnEnter,
-    defaultModelId: updatedSettings.defaultModelId,
-    temperature: updatedSettings.temperature,
-    systemPrompt: updatedSettings.systemPrompt,
-    displayName: updatedSettings.displayName,
-    email: updatedSettings.email
-  }
+  const body = await readValidatedBody(event, body => v.parse(settingsSchema, body))
+  return updateSettings(session.user.id, body)
 })

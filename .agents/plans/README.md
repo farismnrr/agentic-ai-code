@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [012-mcp-api-key.md](012-mcp-api-key.md) — Phase 1 (API keys + inbound MCP server) done and live-verified; Phase 2 (wiring stored `mcp_servers` rows into chat) not started yet.
 
 ## Completed
 - [010-workspace-folders.md](010-workspace-folders.md) — workspaces become real folders (OpenClaw-style configured root) instead of just names, fixing the mismatch with opencode/Claude Code/Antigravity's actual model.
