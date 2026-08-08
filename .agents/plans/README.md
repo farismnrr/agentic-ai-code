@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [017-explicit-workspace-targeting.md](017-explicit-workspace-targeting.md) — explicit workspace picker in the chat prompt form and per-workspace "New chat" in the sidebar, so starting a chat doesn't silently depend on whichever workspace happened to be "active."
 
 ## Completed
 - [016-workspace-grouped-sidebar.md](016-workspace-grouped-sidebar.md) — restructure the sidebar to group chats by workspace (not just the single active one), a workspace indicator in the chat header, and a "View details" action to see a workspace's full folder path without changing its short display name.
