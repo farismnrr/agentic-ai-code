@@ -5,7 +5,8 @@ export const models: ChatModel[] = [
     id: 'high-thinking-models',
     label: 'High Thinking',
     description: 'Most capable. Best for hard reasoning and long tasks.',
-    icon: 'i-lucide-sparkles'
+    icon: 'i-lucide-sparkles',
+    supportsReasoning: true
   },
   {
     id: 'vx/gemini-3-flash-preview',

@@ -84,6 +84,31 @@ html.dark .shiki span {
   --duration-fast: 120ms;
   --duration-base: 160ms;
   --duration-slow: 260ms;
+
+  --animate-message-in: message-in var(--duration-slow) var(--ease-out-quart) forwards;
+  --animate-reasoning-in: reasoning-in var(--duration-slow) var(--ease-out-quart) forwards;
+
+  @keyframes message-in {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes reasoning-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
 /* No --ui-bg override: the scale above is aligned so Nuxt UI's own mapping
