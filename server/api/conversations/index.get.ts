@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
     id: c.id,
     title: c.title,
     modelId: c.modelId,
+    reasoningEffort: c.reasoningEffort,
     enabledToolIds: c.enabledToolIds,
     approvals: c.approvals,
     createdAt: c.createdAt.getTime(),
