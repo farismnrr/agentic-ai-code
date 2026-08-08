@@ -13,6 +13,7 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 ## In Flight
 
 ## Completed
+- [014-reasoning-effort-and-model-cleanup.md](014-reasoning-effort-and-model-cleanup.md) — a low/medium/high/max reasoning-effort control for the "High Thinking" model via 9Router's `reasoning_effort`, plus fixing the stray hardcoded `gpt-4o-mini` default that doesn't match any real model.
 - [013-chat-thinking-and-animations.md](013-chat-thinking-and-animations.md) — real reasoning output from the router model (`extractReasoningMiddleware`, gated by model capability) plus a ChatGPT-style motion pass on message/reasoning entrance.
 - [012-mcp-api-key.md](012-mcp-api-key.md) — API keys + an MCP server this app exposes (settings/workspace/chat tools), plus wiring stored third-party `mcp_servers` rows into chat via `streamText`'s native tool-approval flow instead of just persisting them.
 - [010-workspace-folders.md](010-workspace-folders.md) — workspaces become real folders (OpenClaw-style configured root) instead of just names, fixing the mismatch with opencode/Claude Code/Antigravity's actual model.

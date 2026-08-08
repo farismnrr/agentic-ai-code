@@ -4,7 +4,8 @@ import * as v from 'valibot'
 const createSchema = v.object({
   title: v.string(),
   modelId: v.string(),
-  workspaceId: v.string()
+  workspaceId: v.string(),
+  reasoningEffort: v.optional(v.picklist(['low', 'medium', 'high', 'max']))
 })
 
 export default defineEventHandler(async (event) => {
@@ -21,7 +22,8 @@ export default defineEventHandler(async (event) => {
       userId: session.user.id,
       workspaceId: body.workspaceId,
       title: body.title,
-      modelId: body.modelId
+      modelId: body.modelId,
+      reasoningEffort: body.reasoningEffort
     })
     .returning()
 

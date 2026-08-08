@@ -13,6 +13,18 @@ const toast = useToast()
 const input = ref('')
 // Seeded from the saved default so the settings page actually governs this.
 const modelId = ref(settings.value.defaultModelId)
+const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
+
+const effortItems = [
+  { label: 'Low Effort', value: 'low' },
+  { label: 'Medium Effort', value: 'medium' },
+  { label: 'High Effort', value: 'high' },
+  { label: 'Max Effort', value: 'max' }
+]
+
+const supportsReasoning = computed(() => {
+  return models.find(m => m.id === modelId.value)?.supportsReasoning ?? false
+})
 
 const suggestions = [
   { label: 'Search the repo for chat components', icon: 'i-lucide-folder-search' },
@@ -30,7 +42,7 @@ async function start(text: string) {
   if (!trimmed) return
 
   try {
-    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value })
+    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, reasoningEffort: reasoningEffort.value })
     // The chat instance doesn't exist until the next page mounts, so hand the
     // prompt over rather than trying to send it here.
     setPendingPrompt(conversation.id, trimmed)
@@ -95,6 +107,13 @@ async function start(text: string) {
               v-model="modelId"
               :items="modelItems"
               :icon="models.find(m => m.id === modelId)?.icon"
+              variant="ghost"
+              size="sm"
+            />
+            <USelect
+              v-if="supportsReasoning"
+              v-model="reasoningEffort"
+              :items="effortItems"
               variant="ghost"
               size="sm"
             />
