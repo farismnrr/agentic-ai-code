@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.25",
     "@ai-sdk/vue": "^4.0.55",
     "@comark/nuxt": "^0.6.0",
     "@iconify-json/lucide": "^1.2.121",

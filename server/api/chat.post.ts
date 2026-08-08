@@ -1,25 +1,7 @@
 import { messages as messagesTable, conversations } from '../database/schema'
-import { eq, and } from 'drizzle-orm'
-import { createParser } from 'eventsource-parser'
-import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
+import { eq, and, desc } from 'drizzle-orm'
+import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-
-function mapMessages(messages: UIMessage[]) {
-  return messages.map((msg) => {
-    let text = ''
-    if (msg.parts) {
-      for (const part of msg.parts) {
-        if (part.type === 'text') {
-          text += part.text
-        }
-      }
-    }
-    return {
-      role: msg.role,
-      content: text
-    }
-  })
-}
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -41,6 +23,9 @@ export default defineEventHandler(async (event) => {
     throw notFound('Conversation not found')
   }
 
+  // Resuming a tool-approval response re-sends the same in-flight assistant
+  // message with an appended approval part, not a new user message — so this
+  // only fires on an actual new turn, not every request.
   const lastMsg = messages[messages.length - 1]
   if (lastMsg && lastMsg.role === 'user') {
     await db.insert(messagesTable).values({
@@ -50,84 +35,57 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const mappedMessages = mapMessages(messages)
-  const config = useRuntimeConfig()
+  // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
+  // against the user's stored mcp_servers rows into real ai@7 tools, and
+  // conv.approvals into streamText's toolApproval map — see plan 012 Phase 2
+  // and .agents/memories/012-mcp-inbound-sse-transport.md's sibling decision
+  // record for why this goes through the SDK's own tool-approval mechanism
+  // instead of a hand-rolled one (.agents/memories/ai-sdk-native-features.md).
+  const { tools, toolApproval, close } = await buildMcpTools(session.user.id, conv.enabledToolIds, conv.approvals)
 
-  // Builds a real ai@7 UIMessageChunk stream — useChat()'s DefaultChatTransport
-  // parses Server-Sent Events against uiMessageChunkSchema, not the legacy
-  // `0:"..."` data-stream-protocol lines this used to emit. See
-  // .agents/memories/ai-sdk-native-features.md: use the SDK's own stream
-  // helpers rather than hand-rolling the wire format.
-  const stream = createUIMessageStream({
-    execute: async ({ writer }) => {
-      const abortController = new AbortController()
-      event.node.req.on('close', () => {
-        abortController.abort()
-      })
+  const abortController = new AbortController()
+  event.node.req.on('close', () => abortController.abort())
 
-      const response = await fetch(`${config.routerBaseUrl}/chat/completions`, {
-        method: 'POST',
-        signal: abortController.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.routerApiKey}`
-        },
-        body: JSON.stringify({
-          model: conv.modelId || 'vx/gemini-3-flash-preview',
-          messages: mappedMessages,
-          stream: true
-        })
-      })
+  const result = streamText({
+    model: getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview'),
+    messages: await convertToModelMessages(messages as UIMessage[], { tools }),
+    tools,
+    toolApproval,
+    stopWhen: stepCountIs(5),
+    abortSignal: abortController.signal,
+    onError: ({ error }) => {
+      console.error('[chat stream]', error)
+    }
+  })
 
-      if (!response.ok) {
-        throw new Error(`Upstream error: ${response.status} ${response.statusText}`)
-      }
+  const uiStream = toUIMessageStream({
+    stream: result.stream,
+    tools,
+    originalMessages: messages,
+    onEnd: async ({ responseMessage, isContinuation }) => {
+      await close()
 
-      let fullResponseText = ''
-      const textId = crypto.randomUUID()
-      writer.write({ type: 'text-start', id: textId })
+      if (isContinuation) {
+        const [last] = await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.conversationId, conv.id))
+          .orderBy(desc(messagesTable.createdAt))
+          .limit(1)
 
-      const parser = createParser({
-        onEvent: (event) => {
-          if (event.data === '[DONE]') {
-            return
-          }
-          try {
-            const data = JSON.parse(event.data)
-            const delta = data.choices[0]?.delta?.content || ''
-            if (delta) {
-              fullResponseText += delta
-              writer.write({ type: 'text-delta', id: textId, delta })
-            }
-          } catch (err) {
-            console.error('Error parsing SSE', err)
-          }
-        }
-      })
-
-      const reader = response.body?.getReader()
-      if (reader) {
-        const decoder = new TextDecoder()
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          parser.feed(decoder.decode(value))
+        if (last && last.role === 'assistant') {
+          await db.update(messagesTable).set({ parts: responseMessage.parts }).where(eq(messagesTable.id, last.id))
+          return
         }
       }
-
-      writer.write({ type: 'text-end', id: textId })
 
       await db.insert(messagesTable).values({
         conversationId: conv.id,
         role: 'assistant',
-        parts: [{ type: 'text', text: fullResponseText || 'Empty response' }]
+        parts: responseMessage.parts
       })
-    },
-    onError: (err) => {
-      console.error('[chat stream]', err)
-      return 'Something went wrong while generating a response.'
     }
   })
 
-  return createUIMessageStreamResponse({ stream })
+  return createUIMessageStreamResponse({ stream: uiStream })
 })

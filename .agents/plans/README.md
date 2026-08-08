@@ -11,9 +11,9 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
-- [012-mcp-api-key.md](012-mcp-api-key.md) — Phase 1 (API keys + inbound MCP server) done and live-verified; Phase 2 (wiring stored `mcp_servers` rows into chat) not started yet.
 
 ## Completed
+- [012-mcp-api-key.md](012-mcp-api-key.md) — API keys + an MCP server this app exposes (settings/workspace/chat tools), plus wiring stored third-party `mcp_servers` rows into chat via `streamText`'s native tool-approval flow instead of just persisting them.
 - [010-workspace-folders.md](010-workspace-folders.md) — workspaces become real folders (OpenClaw-style configured root) instead of just names, fixing the mismatch with opencode/external MCP client Code/Antigravity's actual model.
 - [009-workspace-picker.md](009-workspace-picker.md) — require picking/creating a workspace on first `/chat` visit, and fix the uncaught "No active workspace" race.
 - [008-remove-dummy-data.md](008-remove-dummy-data.md) — remove leftover fixture/seed data and the destructive demo-reset endpoint now that auth, persistence, and the model are real.
