@@ -46,6 +46,8 @@ const {
 
 const input = ref('')
 
+const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
+
 const enabledToolIds = computed({
   get: () => conversation.value?.enabledToolIds ?? [],
   set: (value: string[]) => {
@@ -99,7 +101,7 @@ const supportsReasoning = computed(() => {
 function submit() {
   const text = input.value.trim()
   if (!text) return
-  input.value = ''
+  clearEditor()
   send(text)
 }
 
@@ -334,13 +336,30 @@ defineShortcuts({
       <UContainer class="pb-4 sm:pb-6">
         <UChatPrompt
           v-model="input"
-          :submit-on-enter="settings.sendOnEnter"
           :error="error"
-          autofocus
-          placeholder="Message AI Code…"
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="submit"
         >
+          <template #body="{ submit: promptSubmit, disabled }">
+            <UEditor
+              ref="editorRef"
+              v-slot="{ editor }"
+              autofocus
+              placeholder="Message AI Code…"
+              :editable="!disabled"
+              :mention="mode === 'chat'"
+              class="w-full bg-transparent min-h-[44px]"
+              :editor-props="{ handleKeyDown: (_view, event) => handleKeydown(event, promptSubmit) }"
+              @update:model-value="syncText()"
+            >
+              <UEditorMentionMenu
+                v-if="mode === 'chat'"
+                :editor="editor"
+                :items="mentionItems"
+              />
+            </UEditor>
+          </template>
+
           <UChatPromptSubmit
             :status="status"
             @stop="stop()"

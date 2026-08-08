@@ -24,6 +24,9 @@ watchEffect(() => {
 })
 
 const input = ref('')
+
+const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
+
 const workspaceId = ref<string | undefined>(activeWorkspaceId.value || undefined)
 watch(() => activeWorkspaceId.value, (newId) => {
   if (newId) {
@@ -72,6 +75,7 @@ async function start(text: string) {
 
   try {
     const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
+    clearEditor()
     if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
       setActive(workspaceId.value)
     }
@@ -126,12 +130,29 @@ async function start(text: string) {
 
         <UChatPrompt
           v-model="input"
-          :submit-on-enter="settings.sendOnEnter"
-          autofocus
-          placeholder="Message AI Code…"
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="start(input)"
         >
+          <template #body="{ submit: promptSubmit, disabled }">
+            <UEditor
+              ref="editorRef"
+              v-slot="{ editor }"
+              autofocus
+              placeholder="Message AI Code…"
+              :editable="!disabled"
+              :mention="mode === 'chat'"
+              class="w-full bg-transparent min-h-[44px]"
+              :editor-props="{ handleKeyDown: (_view, event) => handleKeydown(event, promptSubmit) }"
+              @update:model-value="syncText()"
+            >
+              <UEditorMentionMenu
+                v-if="mode === 'chat'"
+                :editor="editor"
+                :items="mentionItems"
+              />
+            </UEditor>
+          </template>
+
           <UChatPromptSubmit />
 
           <template #footer>
