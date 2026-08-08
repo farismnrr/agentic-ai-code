@@ -40,6 +40,7 @@ function select(index: number) {
 
 function handleKeydown(e: KeyboardEvent) {
   if (!props.open || items.value.length === 0) return
+  if (document.activeElement?.tagName !== 'TEXTAREA') return
 
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -73,13 +74,13 @@ onUnmounted(() => {
 <template>
   <div
     v-if="open && items.length > 0"
-    class="absolute bottom-full left-0 mb-2 w-72 rounded-md bg-white dark:bg-gray-900 shadow-lg ring-1 ring-gray-200 dark:ring-gray-800 p-1 z-50 overflow-hidden"
+    class="absolute bottom-full left-0 mb-2 w-72 rounded-md bg-elevated shadow-lg ring-1 ring-[var(--ui-border)] p-1 z-50 overflow-hidden"
   >
     <button
       v-for="(item, index) in items"
       :key="item.trigger"
       class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors"
-      :class="index === highlighted ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
+      :class="index === highlighted ? 'bg-[var(--ui-bg-elevated)]' : 'hover:bg-[var(--ui-bg-elevated)]'"
       @click="select(index)"
       @mousemove="highlighted = index"
     >
