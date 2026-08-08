@@ -16,20 +16,27 @@ export function useChatEditor(input: Ref<string>, sendOnEnter: Ref<boolean> | bo
     input.value = ''
   }
 
-  function handleKeydown(e: KeyboardEvent, submit: () => void) {
-    if (e.isComposing || e.keyCode === 229) return
+  // Returns true when the keystroke was handled (submitted), so the caller
+  // (Tiptap's own editorProps.handleKeyDown — see usage below) knows to
+  // stop further processing. A plain `@keydown` listener on <UEditor> does
+  // NOT work: Nuxt UI's Editor.vue only declares `update:modelValue` as a
+  // real emit, so any other listener attr (like `onKeydown`) falls through
+  // to ProseMirror's `editorProps.attributes`, which stringifies it into an
+  // inert `onkeydown="..."` HTML attribute instead of registering a real
+  // event listener. Tiptap's `editorProps.handleKeyDown(view, event)` is
+  // the actual, supported hook for intercepting keystrokes.
+  function handleKeydown(e: KeyboardEvent, submit: () => void): boolean {
+    if (e.isComposing || e.keyCode === 229) return false
 
-    if (e.key === 'Enter') {
-      if (e.shiftKey) {
-        // Default Tiptap handles Shift+Enter for newline
-      } else {
-        const shouldSubmit = typeof sendOnEnter === 'boolean' ? sendOnEnter : sendOnEnter.value
-        if (shouldSubmit) {
-          e.preventDefault()
-          submit()
-        }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const shouldSubmit = typeof sendOnEnter === 'boolean' ? sendOnEnter : sendOnEnter.value
+      if (shouldSubmit) {
+        e.preventDefault()
+        submit()
+        return true
       }
     }
+    return false
   }
 
   const mentionItems = [

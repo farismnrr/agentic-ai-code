@@ -344,11 +344,13 @@ defineShortcuts({
             <UEditor
               ref="editorRef"
               v-slot="{ editor }"
+              autofocus
               placeholder="Message AI Code…"
               :editable="!disabled"
+              :mention="mode === 'chat'"
               class="w-full bg-transparent min-h-[44px]"
+              :editor-props="{ handleKeyDown: (_view, event) => handleKeydown(event, promptSubmit) }"
               @update:model-value="syncText()"
-              @keydown="handleKeydown($event, promptSubmit)"
             >
               <UEditorMentionMenu
                 v-if="mode === 'chat'"

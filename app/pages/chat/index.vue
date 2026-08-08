@@ -72,10 +72,10 @@ const workspaceItems = computed(() =>
 async function start(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
-  clearEditor()
 
   try {
     const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
+    clearEditor()
     if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
       setActive(workspaceId.value)
     }
@@ -137,11 +137,13 @@ async function start(text: string) {
             <UEditor
               ref="editorRef"
               v-slot="{ editor }"
+              autofocus
               placeholder="Message AI Code…"
               :editable="!disabled"
+              :mention="mode === 'chat'"
               class="w-full bg-transparent min-h-[44px]"
+              :editor-props="{ handleKeyDown: (_view, event) => handleKeydown(event, promptSubmit) }"
               @update:model-value="syncText()"
-              @keydown="handleKeydown($event, promptSubmit)"
             >
               <UEditorMentionMenu
                 v-if="mode === 'chat'"
