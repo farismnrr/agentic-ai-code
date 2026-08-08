@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [016-workspace-grouped-sidebar.md](016-workspace-grouped-sidebar.md) — restructure the sidebar to group chats by workspace (not just the single active one), plus a workspace indicator in the chat header itself.
 
 ## Completed
 - [015-persist-active-workspace.md](015-persist-active-workspace.md) — the active workspace now survives a closed browser/new device via a server-side `users.lastActiveWorkspaceId` column, not just a session cookie; fixed two rounds of real bugs including an SSR composable-context break (NUXT_E1001) and a page/layout Suspense-boundary race.
