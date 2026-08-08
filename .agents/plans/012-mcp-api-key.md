@@ -81,4 +81,5 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
 - [x] Outbound wiring (steps 10-14) implemented and live-tested against a real third-party MCP server — see Verification above.
 - [x] The stdio-transport RCE risk flagged in Phase 1 resolved: outbound connections fail closed on `transport: 'stdio'` (see Decisions → Security resolution).
 - [x] `.agents/memories/012-mcp-outbound-tool-loop.md` written — records the SDK-native `streamText`/`toolApproval` architecture decision and the denial-retry live-test finding.
-- [ ] Plan moved to Completed in `.agents/plans/README.md` once this phase's PR merges.
+- [x] Plan moved to Completed in `.agents/plans/README.md` — merged as PR #47 (`3579707`).
+- [x] Branch pushed, PR opened against `dev` (`feat/012-p2-mcp-outbound-v2`), CI green, `/security-review` run and its one HIGH finding (SSRF via `mcp_servers.url`) fixed before merge, merged, branch/worktree cleaned up per `.agents/knowledge/git.md`.
