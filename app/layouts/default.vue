@@ -28,20 +28,20 @@ await useAsyncData('app-data', async () => {
       }
     }
 
+    // loadWorkspaces() awaits this same settings promise *internally*
+    // (see useWorkspaces.ts) before it restores the active workspace and
+    // flips `loaded` true — keeping all three fetches in one parallel
+    // Promise.allSettled here, rather than a separate preceding
+    // `await loadSettings()`, matters: an extra sequential await/try-catch
+    // inserted before this block breaks Nuxt's SSR composable-context
+    // propagation for the calls inside loadWorkspaces()/loadMcpServers(),
+    // surfacing as NUXT_E1001 with no other indication anything failed.
+    const settingsPromise = loadSettings()
     await Promise.allSettled([
-      loadSettings(),
-      loadWorkspaces().then(loadConversations),
+      settingsPromise,
+      loadWorkspaces(settingsPromise).then(loadConversations),
       loadMcpServers()
     ])
-
-    if (!activeWorkspaceId.value && settings.value.lastActiveWorkspaceId) {
-      const w = workspaces.value.find(w => w.id === settings.value.lastActiveWorkspaceId)
-      if (w) {
-        setActive(w.id)
-        // Since we changed activeWorkspaceId, we might need to load conversations if we didn't already
-        // Wait, the watcher will trigger loadConversations() when activeWorkspaceId changes.
-      }
-    }
   }
   return true
 })

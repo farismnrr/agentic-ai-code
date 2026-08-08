@@ -4,11 +4,24 @@ import { models } from '#shared/utils/models'
 useSeoMeta({ title: 'New chat' })
 
 const { create, titleFrom } = useConversations()
-const { loaded, activeWorkspaceId } = useWorkspaces()
+const { loaded, activeWorkspaceId, workspaces, setActive } = useWorkspaces()
 const settings = useSettings()
 const { set: setPendingPrompt } = usePendingPrompt()
 const router = useRouter()
 const toast = useToast()
+
+// Belt-and-suspenders alongside layouts/default.vue's own restore: pages
+// and layouts each get their own Suspense boundary in Nuxt, so the
+// layout finishing its async setup (and correctly restoring
+// activeWorkspaceId there) doesn't guarantee this page's *own* render
+// runs after it — this page has no async setup of its own to block on.
+// Reactive and idempotent, so it's harmless if the layout already did it.
+watchEffect(() => {
+  if (loaded.value && !activeWorkspaceId.value && settings.value.lastActiveWorkspaceId) {
+    const w = workspaces.value.find(w => w.id === settings.value.lastActiveWorkspaceId)
+    if (w) setActive(w.id)
+  }
+})
 
 const input = ref('')
 // Seeded from the saved default so the settings page actually governs this.
