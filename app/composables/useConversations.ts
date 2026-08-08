@@ -61,7 +61,8 @@ export function useConversations() {
       body: {
         workspaceId: activeWorkspaceId.value,
         title: overrides.title || 'New chat',
-        modelId: overrides.modelId || settings.value.defaultModelId
+        modelId: overrides.modelId || settings.value.defaultModelId,
+        reasoningEffort: overrides.reasoningEffort
       }
     })
     conversations.value = [data, ...conversations.value]

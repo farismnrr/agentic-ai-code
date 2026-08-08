@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [014-reasoning-effort-and-model-cleanup.md](014-reasoning-effort-and-model-cleanup.md) — a low/medium/high/max reasoning-effort control for the "High Thinking" model via 9Router's `reasoning_effort`, plus fixing the stray hardcoded `gpt-4o-mini` default that doesn't match any real model.
 
 ## Completed
 - [013-chat-thinking-and-animations.md](013-chat-thinking-and-animations.md) — real reasoning output from the router model (`extractReasoningMiddleware`, gated by model capability) plus a ChatGPT-style motion pass on message/reasoning entrance.

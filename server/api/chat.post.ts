@@ -64,6 +64,11 @@ export default defineEventHandler(async (event) => {
     toolApproval,
     stopWhen: stepCountIs(5),
     abortSignal: abortController.signal,
+    providerOptions: modelInfo?.supportsReasoning
+      ? {
+          '9router': { reasoningEffort: conv.reasoningEffort ?? 'medium' }
+        }
+      : undefined,
     onError: ({ error }) => {
       console.error('[chat stream]', error)
     }

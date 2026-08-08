@@ -63,6 +63,7 @@ export interface Conversation {
   updatedAt: number
   messages: UIMessage[]
   modelId: string
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'max'
   /** `McpTool['id']` values the user has switched on for this conversation. */
   enabledToolIds: string[]
   /** `McpTool['id']` → remembered decision, set by "always allow" / "always deny". */

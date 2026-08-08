@@ -80,6 +80,9 @@ importers:
       agentation-vue:
         specifier: ^0.3.0
         version: 0.3.0(vue@3.5.40(typescript@6.0.3))
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10

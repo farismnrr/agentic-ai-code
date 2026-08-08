@@ -102,6 +102,7 @@ export const conversations = aiCode.table('conversations', {
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   modelId: text('model_id').notNull(),
+  reasoningEffort: text('reasoning_effort').$type<'low' | 'medium' | 'high' | 'max'>(),
   enabledToolIds: jsonb('enabled_tool_ids').$type<string[]>().notNull().default([]),
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
