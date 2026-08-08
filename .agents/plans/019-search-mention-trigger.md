@@ -41,3 +41,9 @@ Single file, no schema/API/frontend changes:
   - Send a plain natural-language search request ("cari di internet dong soal X") → confirm unchanged existing behavior (model decides, as today).
   - Send `@search` with no query after it → confirm it's treated as normal text (no forced call, no crash).
   - Reload the conversation → confirm the transcript shows the literal `"@search cari tentang bnsp"` text the user typed, not a stripped/cleaned version.
+
+## Status: complete
+
+Shipped on `feat/019-p1-search-trigger`, 4 commits (`8b6417f` initial impl, `72eedcc` fix, `38bf090` tool-file split, `1c2e97e` unrelated sidebar-watcher fix).
+
+**Deviation from the original design**, live-verified and documented in `.agents/memories/019-search-forced-tool-choice-unreliable.md`: forcing via `ChatOpenAI.withConfig({ tool_choice })` (the plan's Decision #3) does not survive `createAgent()`'s internal handling in the installed `langchain`/`@langchain/openai` versions — it neither crashes (once `MultipleToolsBoundError` was separately fixed) nor actually forces the call; the model just answers from its own knowledge with zero tool traffic. `@search` now calls `searxng_search` directly instead of asking the model to decide, then hand-writes the same UI chunks the normal path produces, then does a plain (non-agent) model call to summarize the real results. All four verification scenarios above passed via a live Playwright run against a real logged-in session (tool card rendered, `docker logs shared-searxng` showed real traffic, bare `@search` handled gracefully, literal text survived reload).
