@@ -80,8 +80,10 @@ export function useConversations() {
     updateLocally(id, patch)
 
     // Pick fields that are safe to update directly
-    const apiPatch: Pick<Partial<Conversation>, 'title' | 'enabledToolIds' | 'approvals'> = {}
+    const apiPatch: Pick<Partial<Conversation>, 'title' | 'modelId' | 'reasoningEffort' | 'enabledToolIds' | 'approvals'> = {}
     if (patch.title !== undefined) apiPatch.title = patch.title
+    if (patch.modelId !== undefined) apiPatch.modelId = patch.modelId
+    if (patch.reasoningEffort !== undefined) apiPatch.reasoningEffort = patch.reasoningEffort
     if (patch.enabledToolIds !== undefined) apiPatch.enabledToolIds = patch.enabledToolIds
     if (patch.approvals !== undefined) apiPatch.approvals = patch.approvals
 

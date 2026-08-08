@@ -4,6 +4,8 @@ import * as v from 'valibot'
 
 const updateSchema = v.object({
   title: v.optional(v.string()),
+  modelId: v.optional(v.string()),
+  reasoningEffort: v.optional(v.picklist(['low', 'medium', 'high', 'max'])),
   enabledToolIds: v.optional(v.array(v.string())),
   approvals: v.optional(v.record(v.string(), v.union([v.literal('always'), v.literal('never')])))
 })
@@ -35,6 +37,7 @@ export default defineEventHandler(async (event) => {
     id: updated.id,
     title: updated.title,
     modelId: updated.modelId,
+    reasoningEffort: updated.reasoningEffort,
     enabledToolIds: updated.enabledToolIds,
     approvals: updated.approvals,
     createdAt: updated.createdAt.getTime(),
