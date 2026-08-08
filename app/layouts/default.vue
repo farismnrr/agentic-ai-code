@@ -2,8 +2,9 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove, update, loadOne, loadAll: loadConversations } = useConversations()
-const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces } = useWorkspaces()
-const { load: loadSettings } = useSettings()
+const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces, setActive } = useWorkspaces()
+const settings = useSettings()
+const loadSettings = settings.load
 const { loadAll: loadMcpServers } = useMcpServers()
 const { user, logout } = useAuth()
 const router = useRouter()
@@ -23,13 +24,22 @@ await useAsyncData('app-data', async () => {
     if (chatRouteMatch) {
       const conv = await loadOne(chatRouteMatch[1]!)
       if (conv && conv.workspaceId !== activeWorkspaceId.value) {
-        activeWorkspaceId.value = conv.workspaceId
+        setActive(conv.workspaceId)
       }
     }
 
+    // loadWorkspaces() awaits this same settings promise *internally*
+    // (see useWorkspaces.ts) before it restores the active workspace and
+    // flips `loaded` true — keeping all three fetches in one parallel
+    // Promise.allSettled here, rather than a separate preceding
+    // `await loadSettings()`, matters: an extra sequential await/try-catch
+    // inserted before this block breaks Nuxt's SSR composable-context
+    // propagation for the calls inside loadWorkspaces()/loadMcpServers(),
+    // surfacing as NUXT_E1001 with no other indication anything failed.
+    const settingsPromise = loadSettings()
     await Promise.allSettled([
-      loadSettings(),
-      loadWorkspaces().then(loadConversations),
+      settingsPromise,
+      loadWorkspaces(settingsPromise).then(loadConversations),
       loadMcpServers()
     ])
   }
@@ -117,7 +127,7 @@ async function handleSelectCreateWorkspace(result: { name: string, path: string 
   workspaceCreatingPending.value = true
   try {
     const w = await createWorkspace(result.name, result.path)
-    activeWorkspaceId.value = w.id
+    setActive(w.id)
     workspaceCreating.value = false
   } catch (err) {
     toast.add({
@@ -166,7 +176,7 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
   const list = workspaces.value.map(w => ({
     label: w.name,
     icon: activeWorkspaceId.value === w.id ? 'i-lucide-check' : 'i-lucide-folder',
-    onSelect: () => { activeWorkspaceId.value = w.id },
+    onSelect: () => { setActive(w.id) },
     children: [[
       ...(!w.pathConfirmed
         ? [{
@@ -189,7 +199,7 @@ const workspaceItems = computed<DropdownMenuItem[][]>(() => {
           await removeWorkspace(w.id)
           // If we deleted the active one, fallback to the first available
           if (activeWorkspaceId.value === w.id) {
-            activeWorkspaceId.value = workspaces.value[0]?.id || null
+            setActive(workspaces.value[0]?.id || null)
           }
         }
       }
@@ -214,7 +224,7 @@ const searchGroups = computed(() => [
     items: workspaces.value.map(w => ({
       label: w.name,
       icon: 'i-lucide-folder',
-      onSelect: () => { activeWorkspaceId.value = w.id }
+      onSelect: () => { setActive(w.id) }
     }))
   },
   {
