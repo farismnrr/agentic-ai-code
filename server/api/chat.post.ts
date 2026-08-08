@@ -1,7 +1,8 @@
 import { messages as messagesTable, conversations } from '../database/schema'
 import { eq, and, desc } from 'drizzle-orm'
-import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, createUIMessageStreamResponse } from 'ai'
+import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
+import { models } from '#shared/utils/models'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -46,8 +47,18 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
 
+  const modelInfo = models.find(m => m.id === (conv.modelId || 'vx/gemini-3-flash-preview'))
+  let baseModel = getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview')
+  
+  if (modelInfo?.supportsReasoning) {
+    baseModel = wrapLanguageModel({
+      model: baseModel,
+      middleware: extractReasoningMiddleware({ tagName: 'think' })
+    })
+  }
+
   const result = streamText({
-    model: getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview'),
+    model: baseModel,
     messages: await convertToModelMessages(messages as UIMessage[], { tools }),
     tools,
     toolApproval,

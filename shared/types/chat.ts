@@ -12,6 +12,7 @@ export interface ChatModel {
   label: string
   description: string
   icon: string
+  supportsReasoning?: boolean
 }
 
 export type McpTransport = 'http' | 'sse' | 'stdio'
