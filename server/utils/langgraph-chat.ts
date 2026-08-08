@@ -5,10 +5,30 @@ import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
 
-function convertToLangchainMessages(uiMessages: UIMessage[]) {
-  return uiMessages.map((m) => {
+function extractForcedSearch(uiMessages: UIMessage[]) {
+  if (uiMessages.length === 0) return { forced: false }
+  const lastMessage = uiMessages[uiMessages.length - 1]
+  if (lastMessage.role !== 'user') return { forced: false }
+
+  let content = ''
+  if (lastMessage.parts) {
+    for (const part of lastMessage.parts) {
+      if (part.type === 'text') content += part.text
+    }
+  }
+  const match = content.match(/^@search[:,]?\s+(.+)/is)
+  if (match) {
+    return { forced: true, cleanedText: match[1] }
+  }
+  return { forced: false }
+}
+
+function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: string) {
+  return uiMessages.map((m, index) => {
     let content = ''
-    if (m.parts) {
+    if (index === uiMessages.length - 1 && cleanedLastText !== undefined) {
+      content = cleanedLastText
+    } else if (m.parts) {
       for (const part of m.parts) {
         if (part.type === 'text') content += part.text
       }
@@ -20,7 +40,13 @@ function convertToLangchainMessages(uiMessages: UIMessage[]) {
 }
 
 export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd: (parts: UIMessage['parts']) => Promise<void>) {
-  const model = getLanggraphModel(modelId)
+  const { forced, cleanedText } = extractForcedSearch(uiMessages)
+  const baseModel = getLanggraphModel(modelId)
+
+  const model = forced
+    ? baseModel.bindTools(langgraphTools, { tool_choice: { type: 'function', function: { name: 'searxng_search' } } }) as typeof baseModel
+    : baseModel
+
   const agent = createAgent({ model, tools: langgraphTools })
 
   return createUIMessageStream({
@@ -31,7 +57,7 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
       let textIndex = 0
 
       try {
-        const inputMessages = convertToLangchainMessages(uiMessages)
+        const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
         const stream = agent.streamEvents(
           { messages: inputMessages },
           { version: 'v2' }
