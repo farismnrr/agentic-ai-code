@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
     reasoningEffort: c.reasoningEffort,
     enabledToolIds: c.enabledToolIds,
     approvals: c.approvals,
+    mode: c.mode,
     createdAt: c.createdAt.getTime(),
     updatedAt: c.updatedAt.getTime(),
     messages: [] // messages are fetched when opening the conversation
