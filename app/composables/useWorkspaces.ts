@@ -4,7 +4,10 @@ export function useWorkspaces() {
   const workspaces = useState<Workspace[]>('workspaces', () => [])
   const loaded = useState<boolean>('workspaces-loaded', () => false)
   // Persist the active workspace across reloads
-  const activeWorkspaceId = useCookie<string | null>('workspace-id', { default: () => null })
+  const activeWorkspaceId = useCookie<string | null>('workspace-id', {
+    default: () => null,
+    maxAge: 60 * 60 * 24 * 365
+  })
 
   const sorted = computed(() =>
     [...workspaces.value].sort((a, b) => b.updatedAt - a.updatedAt)
@@ -12,6 +15,18 @@ export function useWorkspaces() {
 
   function get(id: string): Workspace | undefined {
     return workspaces.value.find(w => w.id === id)
+  }
+
+  function setActive(id: string | null) {
+    activeWorkspaceId.value = id
+
+    // Fire and forget, but log errors
+    if (import.meta.client) {
+      $fetch('/api/workspaces/active', {
+        method: 'PUT',
+        body: { id }
+      }).catch(e => console.error('Failed to persist active workspace:', e))
+    }
   }
 
   async function loadAll() {
@@ -22,7 +37,7 @@ export function useWorkspaces() {
 
       // Clear active workspace if it no longer exists
       if (activeWorkspaceId.value && !data.some(w => w.id === activeWorkspaceId.value)) {
-        activeWorkspaceId.value = null
+        setActive(null)
       }
     } finally {
       loaded.value = true
@@ -60,7 +75,7 @@ export function useWorkspaces() {
     // Switch active if we just deleted it
     if (activeWorkspaceId.value === id) {
       const remaining = sorted.value
-      activeWorkspaceId.value = remaining.length > 0 ? remaining[0]!.id : null
+      setActive(remaining.length > 0 ? remaining[0]!.id : null)
     }
 
     try {
@@ -72,5 +87,5 @@ export function useWorkspaces() {
     }
   }
 
-  return { workspaces, sorted, activeWorkspaceId, loaded, get, loadAll, create, update, remove }
+  return { workspaces, sorted, activeWorkspaceId, loaded, get, loadAll, create, update, remove, setActive }
 }

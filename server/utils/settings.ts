@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { userSettings } from '../database/schema'
+import { userSettings, users } from '../database/schema'
 import { defaultModelId } from '#shared/utils/models'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
@@ -11,6 +11,14 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     .where(eq(userSettings.userId, userId))
     .limit(1)
 
+  const [userRow] = await db
+    .select({ lastActiveWorkspaceId: users.lastActiveWorkspaceId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  const lastActiveWorkspaceId = userRow?.lastActiveWorkspaceId || null
+
   if (settings) {
     return {
       language: settings.language,
@@ -20,7 +28,8 @@ export async function getSettings(userId: string, name: string = 'User', email: 
       temperature: settings.temperature,
       systemPrompt: settings.systemPrompt,
       displayName: settings.displayName,
-      email: settings.email
+      email: settings.email,
+      lastActiveWorkspaceId
     }
   }
 
@@ -50,7 +59,8 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     temperature: newSettings.temperature,
     systemPrompt: newSettings.systemPrompt,
     displayName: newSettings.displayName,
-    email: newSettings.email
+    email: newSettings.email,
+    lastActiveWorkspaceId
   }
 }
 

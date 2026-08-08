@@ -35,6 +35,7 @@ export const users = aiCode.table('users', {
   avatarUrl: text('avatar_url'),
   /** Set when the user clicks the verification link; null = unverified. */
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  lastActiveWorkspaceId: uuid('last_active_workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })
