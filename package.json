@@ -20,17 +20,21 @@
     "@comark/nuxt": "^0.6.0",
     "@iconify-json/lucide": "^1.2.121",
     "@iconify-json/simple-icons": "^1.2.92",
+    "@langchain/core": "^1.2.5",
+    "@langchain/openai": "^1.5.6",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@nuxt/ui": "^4.10.0",
     "ai": "^7.0.56",
     "drizzle-orm": "^0.45.2",
     "eventsource-parser": "^3.1.0",
+    "langchain": "^1.5.5",
     "nodemailer": "^9.0.4",
     "nuxt": "^4.5.1",
     "nuxt-auth-utils": "0.5.30",
     "postgres": "^3.4.9",
     "tailwindcss": "^4.3.3",
-    "valibot": "^1.4.2"
+    "valibot": "^1.4.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@ai-sdk/provider-utils": "^5.0.23",

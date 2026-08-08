@@ -42,10 +42,54 @@ export default defineEventHandler(async (event) => {
   // and .agents/memories/012-mcp-inbound-sse-transport.md's sibling decision
   // record for why this goes through the SDK's own tool-approval mechanism
   // instead of a hand-rolled one (.agents/memories/ai-sdk-native-features.md).
-  const { tools, toolApproval, close } = await buildMcpTools(session.user.id, conv.enabledToolIds, conv.approvals)
+  let tools, toolApproval, close: () => Promise<void>
+
+  if (conv.mode === 'agent') {
+    const mcp = await buildMcpTools(session.user.id, conv.enabledToolIds, conv.approvals)
+    tools = mcp.tools
+    toolApproval = mcp.toolApproval
+    close = mcp.close
+  } else {
+    close = async () => {}
+  }
 
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
+
+  const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false) => {
+    try {
+      await close()
+
+      if (isContinuation) {
+        const [last] = await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.conversationId, conv.id))
+          .orderBy(desc(messagesTable.createdAt))
+          .limit(1)
+
+        if (last && last.role === 'assistant') {
+          await db.update(messagesTable).set({ parts }).where(eq(messagesTable.id, last.id))
+          return
+        }
+      }
+
+      await db.insert(messagesTable).values({
+        conversationId: conv.id,
+        role: 'assistant',
+        parts
+      })
+    } catch (err) {
+      console.error('[chat onEnd] failed to persist assistant message', err)
+    }
+  }
+
+  if (conv.mode === 'chat') {
+    const uiStream = runLanggraphChat(messages as UIMessage[], conv.modelId || 'vx/gemini-3-flash-preview', async (parts) => {
+      await persistAssistantMessage(parts, false)
+    })
+    return createUIMessageStreamResponse({ stream: uiStream })
+  }
 
   const modelInfo = models.find(m => m.id === (conv.modelId || 'vx/gemini-3-flash-preview'))
   let baseModel = getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview')
@@ -88,31 +132,7 @@ export default defineEventHandler(async (event) => {
       // renders a complete answer while the DB write silently never
       // happens and nothing is logged anywhere. Catch and log explicitly
       // so a persistence failure is at least visible instead of invisible.
-      try {
-        await close()
-
-        if (isContinuation) {
-          const [last] = await db
-            .select()
-            .from(messagesTable)
-            .where(eq(messagesTable.conversationId, conv.id))
-            .orderBy(desc(messagesTable.createdAt))
-            .limit(1)
-
-          if (last && last.role === 'assistant') {
-            await db.update(messagesTable).set({ parts: responseMessage.parts }).where(eq(messagesTable.id, last.id))
-            return
-          }
-        }
-
-        await db.insert(messagesTable).values({
-          conversationId: conv.id,
-          role: 'assistant',
-          parts: responseMessage.parts
-        })
-      } catch (err) {
-        console.error('[chat onEnd] failed to persist assistant message', err)
-      }
+      await persistAssistantMessage(responseMessage.parts, isContinuation)
     }
   })
 

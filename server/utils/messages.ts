@@ -33,6 +33,7 @@ export async function listConversationMessages(userId: string, conversationId: s
     reasoningEffort: conversation.reasoningEffort,
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,
+    mode: conversation.mode,
     createdAt: conversation.createdAt.getTime(),
     updatedAt: conversation.updatedAt.getTime(),
     messages: msgs.map(m => ({

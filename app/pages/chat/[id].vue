@@ -71,6 +71,13 @@ const modelId = computed({
   }
 })
 
+const mode = computed({
+  get: () => conversation.value?.mode ?? 'chat',
+  set: (value: 'chat' | 'agent') => {
+    if (conversation.value) update(conversation.value.id, { mode: value })
+  }
+})
+
 const reasoningEffort = computed({
   get: () => conversation.value?.reasoningEffort ?? 'medium',
   set: (value: 'low' | 'medium' | 'high' | 'max') => {
@@ -355,7 +362,10 @@ defineShortcuts({
               variant="ghost"
               size="sm"
             />
-            <ChatToolPicker v-model="enabledToolIds" />
+            <ChatToolPicker
+              v-if="mode === 'agent'"
+              v-model="enabledToolIds"
+            />
           </template>
         </UChatPrompt>
       </UContainer>
