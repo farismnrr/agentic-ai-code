@@ -65,6 +65,24 @@ const modelId = computed({
   }
 })
 
+const reasoningEffort = computed({
+  get: () => conversation.value?.reasoningEffort ?? 'medium',
+  set: (value: 'low' | 'medium' | 'high' | 'max') => {
+    if (conversation.value) update(conversation.value.id, { reasoningEffort: value })
+  }
+})
+
+const effortItems = [
+  { label: 'Low Effort', value: 'low' },
+  { label: 'Medium Effort', value: 'medium' },
+  { label: 'High Effort', value: 'high' },
+  { label: 'Max Effort', value: 'max' }
+]
+
+const supportsReasoning = computed(() => {
+  return models.find(m => m.id === modelId.value)?.supportsReasoning ?? false
+})
+
 function submit() {
   const text = input.value.trim()
   if (!text) return
@@ -307,6 +325,13 @@ defineShortcuts({
               v-model="modelId"
               :items="modelItems"
               :icon="models.find(m => m.id === modelId)?.icon"
+              variant="ghost"
+              size="sm"
+            />
+            <USelect
+              v-if="supportsReasoning"
+              v-model="reasoningEffort"
+              :items="effortItems"
               variant="ghost"
               size="sm"
             />

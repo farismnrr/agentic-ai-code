@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { userSettings } from '../database/schema'
+import { defaultModelId } from '#shared/utils/models'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
   const db = useDb()
@@ -29,7 +30,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     language: 'en',
     streaming: true,
     sendOnEnter: true,
-    defaultModelId: 'legacy-model-id',
+    defaultModelId,
     temperature: 0.7,
     systemPrompt: '',
     displayName: name,

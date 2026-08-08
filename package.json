@@ -37,6 +37,7 @@
     "@nuxt/eslint": "^1.16.0",
     "@types/nodemailer": "^8.0.1",
     "agentation-vue": "^0.3.0",
+    "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.8.0",
     "eslint-plugin-format": "^2.0.1",
