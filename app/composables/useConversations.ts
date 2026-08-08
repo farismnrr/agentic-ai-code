@@ -48,11 +48,12 @@ export function useConversations() {
 
   async function create(overrides: Partial<Conversation> = {}): Promise<Conversation> {
     const { activeWorkspaceId } = useWorkspaces()
-    if (!activeWorkspaceId.value) throw new Error('No active workspace')
+    const workspaceId = overrides.workspaceId || activeWorkspaceId.value
+    if (!workspaceId) throw new Error('No active workspace')
     const data = await $fetch<Conversation>('/api/conversations', {
       method: 'POST',
       body: {
-        workspaceId: activeWorkspaceId.value,
+        workspaceId,
         title: overrides.title || 'New chat',
         modelId: overrides.modelId || settings.value.defaultModelId,
         reasoningEffort: overrides.reasoningEffort

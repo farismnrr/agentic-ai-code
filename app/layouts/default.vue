@@ -183,6 +183,14 @@ const workspaceDetailsPath = ref<string | null>(null)
 
 function workspaceActionItems(w: typeof workspaces.value[0]): DropdownMenuItem[][] {
   return [[
+    {
+      label: 'New chat',
+      icon: 'i-lucide-square-pen',
+      onSelect: () => {
+        setActive(w.id)
+        void router.push('/chat')
+      }
+    },
     ...(!w.pathConfirmed
       ? [{
           label: 'Confirm Folder',
@@ -339,19 +347,19 @@ const searchGroups = computed(() => [
           </div>
 
           <div
-            v-if="!workspaceGroups.some(g => g.conversations.length > 0)"
+            v-if="workspaces.length === 0"
             class="px-2.5 py-4 text-center"
           >
             <p class="mb-3 text-sm text-muted">
-              No conversations yet.
+              No workspaces yet.
             </p>
             <UButton
-              label="Start one"
-              icon="i-lucide-message-square-plus"
+              label="Create one"
+              icon="i-lucide-folder-plus"
               color="neutral"
               variant="outline"
               size="xs"
-              @click="newChat"
+              @click="workspaceCreating = true"
             />
           </div>
         </template>
