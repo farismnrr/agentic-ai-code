@@ -63,6 +63,7 @@ export interface Conversation {
   updatedAt: number
   messages: UIMessage[]
   modelId: string
+  mode: 'chat' | 'agent'
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max'
   /** `McpTool['id']` values the user has switched on for this conversation. */
   enabledToolIds: string[]

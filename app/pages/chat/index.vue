@@ -32,7 +32,13 @@ watch(() => activeWorkspaceId.value, (newId) => {
 })
 // Seeded from the saved default so the settings page actually governs this.
 const modelId = ref(settings.value.defaultModelId)
+const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
+
+const modeItems = [
+  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
+  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
+]
 
 const effortItems = [
   { label: 'Low Effort', value: 'low' },
@@ -65,7 +71,7 @@ async function start(text: string) {
   if (!trimmed) return
 
   try {
-    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
+    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
     if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
       setActive(workspaceId.value)
     }
@@ -140,6 +146,13 @@ async function start(text: string) {
               v-model="modelId"
               :items="modelItems"
               :icon="models.find(m => m.id === modelId)?.icon"
+              variant="ghost"
+              size="sm"
+            />
+            <USelect
+              v-model="mode"
+              :items="modeItems"
+              :icon="modeItems.find(m => m.value === mode)?.icon"
               variant="ghost"
               size="sm"
             />
