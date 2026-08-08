@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
-const { sorted, remove, update, loadOne, loadAll: loadConversations } = useConversations()
-const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, loadAll: loadWorkspaces, setActive } = useWorkspaces()
+const { sorted, remove, update, loadOne } = useConversations()
+const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, setActive } = useWorkspaces()
+const { load: loadSidebar } = useSidebarData()
 const settings = useSettings()
 const loadSettings = settings.load
 const { loadAll: loadMcpServers } = useMcpServers()
@@ -15,31 +16,40 @@ await useAsyncData('app-data', async () => {
     // Opening a conversation directly (a deep link, a bookmark, a refresh)
     // never went through the workspace picker, so activeWorkspaceId can be
     // unset or stale even though the conversation itself belongs to a real
-    // workspace. This has to be resolved and set *before* loadConversations()
-    // below, in this same async block — the sidebar's own template renders
-    // once this resolves, and by then it's too late for a page component
-    // further down the tree to correct it; SSR doesn't re-render a parent
-    // because a child mutated shared state after the parent already rendered.
+    // workspace. This has to be resolved and set *before* the sidebar
+    // renders — the sidebar's own template renders once this resolves, and
+    // by then it's too late for a page component further down the tree to
+    // correct it; SSR doesn't re-render a parent because a child mutated
+    // shared state after the parent already rendered.
     const chatRouteMatch = route.path.match(/^\/chat\/([^/]+)$/)
-    if (chatRouteMatch) {
-      const conv = await loadOne(chatRouteMatch[1]!)
-      if (conv && conv.workspaceId !== activeWorkspaceId.value) {
-        setActive(conv.workspaceId)
-      }
-    }
+    // loadOne() must be *invoked* here, not awaited before the batch below —
+    // it calls useRequestFetch() internally, which needs Nuxt's SSR context.
+    // Awaiting it first crosses an await boundary before loadSidebar()/
+    // loadMcpServers() are invoked, breaking their own internal composable
+    // calls (NUXT_E1001, silently swallowed by Promise.allSettled — see
+    // .agents/memories/015-composable-after-await-breaks-ssr-context.md).
+    // Chaining .then() here keeps the invocation synchronous while still
+    // resolving setActive() before this whole block returns.
+    const loadOnePromise = chatRouteMatch
+      ? loadOne(chatRouteMatch[1]!).then((conv) => {
+          if (conv && conv.workspaceId !== activeWorkspaceId.value) {
+            setActive(conv.workspaceId)
+          }
+        })
+      : Promise.resolve()
 
-    // loadWorkspaces() awaits this same settings promise *internally*
-    // (see useWorkspaces.ts) before it restores the active workspace and
-    // flips `loaded` true — keeping all three fetches in one parallel
-    // Promise.allSettled here, rather than a separate preceding
-    // `await loadSettings()`, matters: an extra sequential await/try-catch
-    // inserted before this block breaks Nuxt's SSR composable-context
-    // propagation for the calls inside loadWorkspaces()/loadMcpServers(),
-    // surfacing as NUXT_E1001 with no other indication anything failed.
+    // Sidebar data (workspaces + conversation metadata) is one server-side
+    // join (GET /api/sidebar via useSidebarData()), not two client-side
+    // composable calls orchestrated here — see
+    // .agents/memories/018-sidebar-single-fetch.md for why that used to
+    // break. loadSidebar() awaits this same settings promise *internally*,
+    // for the same SSR-context reason `loadOne` above is invoked (not
+    // awaited) synchronously.
     const settingsPromise = loadSettings()
     await Promise.allSettled([
+      loadOnePromise,
       settingsPromise,
-      loadWorkspaces(settingsPromise).then(loadConversations),
+      loadSidebar(settingsPromise),
       loadMcpServers()
     ])
   }
