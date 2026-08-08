@@ -24,6 +24,12 @@ watchEffect(() => {
 })
 
 const input = ref('')
+const workspaceId = ref<string | undefined>(activeWorkspaceId.value || undefined)
+watch(() => activeWorkspaceId.value, (newId) => {
+  if (newId) {
+    workspaceId.value = newId
+  }
+})
 // Seeded from the saved default so the settings page actually governs this.
 const modelId = ref(settings.value.defaultModelId)
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
@@ -50,12 +56,19 @@ const modelItems = computed(() =>
   models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
 )
 
+const workspaceItems = computed(() =>
+  workspaces.value.map(w => ({ label: w.name, value: w.id }))
+)
+
 async function start(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
 
   try {
-    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, reasoningEffort: reasoningEffort.value })
+    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
+    if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
+      setActive(workspaceId.value)
+    }
     // The chat instance doesn't exist until the next page mounts, so hand the
     // prompt over rather than trying to send it here.
     setPendingPrompt(conversation.id, trimmed)
@@ -116,6 +129,13 @@ async function start(text: string) {
           <UChatPromptSubmit />
 
           <template #footer>
+            <USelect
+              v-model="workspaceId"
+              :items="workspaceItems"
+              icon="i-lucide-folder"
+              variant="ghost"
+              size="sm"
+            />
             <USelect
               v-model="modelId"
               :items="modelItems"
