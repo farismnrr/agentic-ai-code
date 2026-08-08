@@ -1,0 +1,1 @@
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "mode" text DEFAULT 'agent' NOT NULL;

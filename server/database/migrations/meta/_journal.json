@@ -50,6 +50,13 @@
       "when": 1786182884813,
       "tag": "0006_lethal_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786193033539,
+      "tag": "0007_clever_zeigeist",
+      "breakpoints": true
     }
   ]
 }

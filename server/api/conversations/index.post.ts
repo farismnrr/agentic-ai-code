@@ -5,6 +5,7 @@ const createSchema = v.object({
   title: v.string(),
   modelId: v.string(),
   workspaceId: v.string(),
+  mode: v.picklist(['chat', 'agent']),
   reasoningEffort: v.optional(v.picklist(['low', 'medium', 'high', 'max']))
 })
 
@@ -23,6 +24,7 @@ export default defineEventHandler(async (event) => {
       workspaceId: body.workspaceId,
       title: body.title,
       modelId: body.modelId,
+      mode: body.mode,
       reasoningEffort: body.reasoningEffort
     })
     .returning()
@@ -35,6 +37,7 @@ export default defineEventHandler(async (event) => {
     id: conversation.id,
     title: conversation.title,
     modelId: conversation.modelId,
+    mode: conversation.mode,
     workspaceId: conversation.workspaceId,
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,
