@@ -1,4 +1,5 @@
 import { useChat } from '@ai-sdk/vue'
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
@@ -41,6 +42,13 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     },
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
+    // Without this, `addToolApprovalResponse` only marks the pending part as
+    // answered in local state — it never actually sends the follow-up
+    // request that resumes the conversation and runs the approved tool, so
+    // clicking "Always allow" (or an auto-remembered decision) appeared to
+    // do nothing and the turn hung forever. This is the SDK's own official
+    // helper for exactly this trigger.
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onError: (error: Error) => {
       console.error('[chat]', error)
     }
