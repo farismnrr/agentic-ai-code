@@ -109,6 +109,8 @@ export const conversations = aiCode.table('conversations', {
   reasoningEffort: text('reasoning_effort').$type<'low' | 'medium' | 'high' | 'max'>(),
   enabledToolIds: jsonb('enabled_tool_ids').$type<string[]>().notNull().default([]),
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
+  contextSummary: text('context_summary'),
+  contextSummaryUpToMessageId: uuid('context_summary_up_to_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })

@@ -4,6 +4,7 @@ import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wra
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
+import { resolveMessagesForModel } from '../utils/context-compaction'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
@@ -50,9 +51,13 @@ export default defineEventHandler(async (event) => {
 
   const resolvedConfig = resolveModelConfig(modelInfo)
 
-  if (!conv) {
-    throw notFound('Conversation not found')
-  }
+  const resolvedMessages = await resolveMessagesForModel({
+    messages: messages as UIMessage[],
+    conv,
+    contextWindow: resolvedConfig.contextWindow,
+    maxOutputTokens: resolvedConfig.maxOutputTokens,
+    getSummarizerModel: () => getChatModel(provider, modelInfo.modelId)
+  })
 
   // Resuming a tool-approval response re-sends the same in-flight assistant
   // message with an appended approval part, not a new user message — so this
@@ -203,7 +208,7 @@ export default defineEventHandler(async (event) => {
     const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
     const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     const uiStream = runLanggraphChat({
-      uiMessages: messages as UIMessage[],
+      uiMessages: resolvedMessages,
       baseModel: langgraphModel,
       workspacePath,
       systemPrompt,
@@ -226,7 +231,7 @@ export default defineEventHandler(async (event) => {
   const result = streamText({
     model: baseModel,
     system: buildWorkspaceSystemPrompt(tools?.terminal ? 'full' : 'none'),
-    messages: await convertToModelMessages(messages as UIMessage[], { tools }),
+    messages: await convertToModelMessages(resolvedMessages, { tools }),
     tools,
     toolApproval,
     // 5 was too low for a real terminal-backed edit flow (explore, read,
