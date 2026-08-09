@@ -41,7 +41,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     try {
       client = await createMcpClient(server)
     } catch (err) {
-      console.error(`[mcp-tools] failed to connect to "${server.name}":`, err)
+      logger.error(`[mcp-tools] failed to connect to "${server.name}"`, err)
       continue
     }
     clients.push(client)
@@ -50,7 +50,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     try {
       listed = await client.listTools()
     } catch (err) {
-      console.error(`[mcp-tools] failed to list tools for "${server.name}":`, err)
+      logger.error(`[mcp-tools] failed to list tools for "${server.name}"`, err)
       continue
     }
 
@@ -77,7 +77,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     tools,
     toolApproval: toolApproval as ToolApprovalConfiguration<ToolSet, never>,
     close: async () => {
-      await Promise.all(clients.map(c => c.close().catch((err: unknown) => console.error('[mcp-tools] error closing client', err))))
+      await Promise.all(clients.map(c => c.close().catch((err: unknown) => logger.error('[mcp-tools] error closing client', err))))
     }
   }
 }

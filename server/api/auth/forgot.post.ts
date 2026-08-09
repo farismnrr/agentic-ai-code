@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!emailSent) {
-    console.warn('[email] delivery failed', { to: user.email, purpose: 'forgot' })
+    logger.warn('[email] delivery failed', undefined, { to: user.email, purpose: 'forgot' })
   }
 
   return { ok: true }

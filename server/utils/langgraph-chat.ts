@@ -136,7 +136,7 @@ export function runLanggraphChat({
           try {
             await onEnd(parts)
           } catch (err) {
-            console.error('[langgraph onEnd] failed', err)
+            logger.error('[langgraph onEnd] failed', err)
           }
           return
         }
@@ -225,7 +225,7 @@ export function runLanggraphChat({
         try {
           await onEnd(parts)
         } catch (err) {
-          console.error('[langgraph onEnd] failed', err)
+          logger.error('[langgraph onEnd] failed', err)
         }
       } catch (e: unknown) {
         clearTimeout(timeoutId)
@@ -248,7 +248,7 @@ export function runLanggraphChat({
           try {
             await onEnd(parts)
           } catch (err) {
-            console.error('[langgraph onEnd] failed', err)
+            logger.error('[langgraph onEnd] failed', err)
           }
         }
       }

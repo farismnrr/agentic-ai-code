@@ -1,5 +1,5 @@
 import type * as v from 'valibot'
-import { getLogger } from './otel'
+import { logger } from './logger'
 
 interface ProblemInit {
   status: number
@@ -10,23 +10,19 @@ interface ProblemInit {
 }
 
 // Every thrown API error funnels through here, so this is the one place
-// that needs instrumenting to get 4xx/5xx responses into Loki — before
-// this, only frontend-forwarded logs (server/api/telemetry.post.ts) ever
-// reached the logs pipeline; a server-side 502 like a dead upstream
-// provider was visible in `docker compose logs` but invisible in Loki.
+// that needs instrumenting to get 4xx/5xx responses into Loki (via
+// `logger`, see server/utils/logger.ts) — before this, only
+// frontend-forwarded logs (server/api/telemetry.post.ts) ever reached the
+// logs pipeline; a server-side 502 like a dead upstream provider was
+// visible in `docker compose logs` but invisible in Loki.
 function problem(init: ProblemInit) {
-  const severityNumber = init.status >= 500 ? 17 : 13 // ERROR : WARN, matches telemetry.post.ts's scale
-  getLogger('ai-code-server').emit({
-    severityNumber,
-    severityText: severityNumber === 17 ? 'ERROR' : 'WARN',
-    body: `${init.status} ${init.title}${init.detail ? `: ${init.detail}` : ''}`,
-    attributes: {
-      'service.name': 'ai-code-server',
-      'status': init.status,
-      'type': init.type ?? 'about:blank',
-      ...init.extra
-    }
-  })
+  const message = `${init.status} ${init.title}${init.detail ? `: ${init.detail}` : ''}`
+  const attributes = { status: init.status, type: init.type ?? 'about:blank', ...init.extra }
+  if (init.status >= 500) {
+    logger.error(message, undefined, attributes)
+  } else {
+    logger.warn(message, undefined, attributes)
+  }
 
   return createError({
     statusCode: init.status,
@@ -63,7 +59,7 @@ export function tooManyRequests(retryAfterSeconds?: number) {
 }
 
 export const internal = (cause?: unknown) => {
-  console.error('[internal]', cause)
   const detail = cause instanceof Error ? cause.message : cause ? String(cause) : undefined
-  return problem({ status: 500, title: 'Internal Server Error', detail })
+  const extra = cause instanceof Error && cause.stack ? { stack: cause.stack } : undefined
+  return problem({ status: 500, title: 'Internal Server Error', detail, extra })
 }

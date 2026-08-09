@@ -83,7 +83,7 @@ export default defineEventHandler(async (event) => {
         workspacePath = await resolveWorkspacePath(workspace.path)
         workspaceName = workspace.name
       } catch (err) {
-        console.error('[chat] failed to resolve workspace path for terminal tool', err)
+        logger.error('[chat] failed to resolve workspace path for terminal tool', err)
       }
     }
   }
@@ -173,7 +173,7 @@ export default defineEventHandler(async (event) => {
         parts
       })
     } catch (err) {
-      console.error('[chat onEnd] failed to persist assistant message', err)
+      logger.error('[chat onEnd] failed to persist assistant message', err)
     }
   }
 
@@ -228,7 +228,7 @@ export default defineEventHandler(async (event) => {
         }
       : undefined,
     onError: ({ error }) => {
-      console.error('[chat stream]', error)
+      logger.error('[chat stream]', error)
     }
   })
 

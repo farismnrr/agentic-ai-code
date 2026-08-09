@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
         })
       }
     } catch (err) {
-      console.error('[api-auth] API Key verification failed', err)
+      logger.error('[api-auth] API Key verification failed', err)
     }
   }
 })
