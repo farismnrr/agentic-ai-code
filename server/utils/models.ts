@@ -2,6 +2,18 @@ import { eq, and } from 'drizzle-orm'
 import { models, modelProviders } from '../database/schema'
 import { notFound, forbidden } from './http-errors'
 
+interface ModelFields {
+  modelId?: string
+  label?: string
+  description?: string
+  icon?: string
+  contextWindow?: number
+  maxOutputTokens?: number
+  thinkingEnabled?: boolean
+  thinkingMinTokens?: number
+  thinkingMaxTokens?: number
+}
+
 export async function listModels(userId: string) {
   const db = useDb()
   const userModels = await db
@@ -11,7 +23,7 @@ export async function listModels(userId: string) {
   return userModels
 }
 
-export async function createModel(userId: string, providerId: string, body: any) {
+export async function createModel(userId: string, providerId: string, body: ModelFields & { modelId: string, label: string }) {
   const db = useDb()
   // Ensure provider exists and belongs to user
   const [provider] = await db
@@ -42,16 +54,16 @@ export async function createModel(userId: string, providerId: string, body: any)
   return model
 }
 
-export async function updateModel(userId: string, id: string, updates: any) {
+export async function updateModel(userId: string, id: string, updates: ModelFields) {
   const db = useDb()
 
-  const updateData: any = {
+  const updateData: ModelFields & { updatedAt: Date } = {
     updatedAt: new Date()
   }
-  const fields = ['modelId', 'label', 'description', 'icon', 'contextWindow', 'maxOutputTokens', 'thinkingEnabled', 'thinkingMinTokens', 'thinkingMaxTokens']
+  const fields = ['modelId', 'label', 'description', 'icon', 'contextWindow', 'maxOutputTokens', 'thinkingEnabled', 'thinkingMinTokens', 'thinkingMaxTokens'] as const
   for (const field of fields) {
     if (updates[field] !== undefined) {
-      updateData[field] = updates[field]
+      updateData[field] = updates[field] as never
     }
   }
 

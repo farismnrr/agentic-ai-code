@@ -5,6 +5,9 @@ import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
+import type { getLanggraphModel } from './providers/langgraph-model'
+
+type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
 function extractForcedSearch(uiMessages: UIMessage[]) {
   if (uiMessages.length === 0) return { forced: false }
@@ -48,7 +51,7 @@ export function runLanggraphChat({
   onEnd
 }: {
   uiMessages: UIMessage[]
-  baseModel: any
+  baseModel: LanggraphModel
   workspacePath: string | undefined
   systemPrompt: string | undefined
   onEnd: (parts: UIMessage['parts']) => Promise<void>

@@ -70,7 +70,14 @@ export async function updateModelProvider(userId: string, id: string, updates: {
     throw badRequest('Base URL is required for this provider type')
   }
 
-  const updateData: any = {
+  const updateData: {
+    updatedAt: Date
+    name?: string
+    baseUrl?: string
+    customHeaders?: Record<string, string>
+    enabled?: boolean
+    apiKeyEncrypted?: string
+  } = {
     updatedAt: new Date()
   }
 
