@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     try {
       listed = await client.listTools()
     } finally {
-      await client.close().catch((err: unknown) => console.error('[mcp test] error closing client', err))
+      await client.close().catch((err: unknown) => logger.error('[mcp test] error closing client', err))
     }
 
     const tools: McpTool[] = listed.tools.map(t => ({

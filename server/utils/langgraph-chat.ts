@@ -1,10 +1,13 @@
 import { createAgent } from 'langchain'
-import { getLanggraphModel } from './langgraph-model'
+
 import { buildLanggraphTools } from './langgraph-tools'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
+import type { getLanggraphModel } from './providers/langgraph-model'
+
+type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
 function extractForcedSearch(uiMessages: UIMessage[]) {
   if (uiMessages.length === 0) return { forced: false }
@@ -42,13 +45,13 @@ function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: s
 
 export function runLanggraphChat({
   uiMessages,
-  modelId,
+  baseModel,
   workspacePath,
   systemPrompt,
   onEnd
 }: {
   uiMessages: UIMessage[]
-  modelId: string
+  baseModel: LanggraphModel
   workspacePath: string | undefined
   systemPrompt: string | undefined
   onEnd: (parts: UIMessage['parts']) => Promise<void>
@@ -66,8 +69,6 @@ export function runLanggraphChat({
       let timeoutId: ReturnType<typeof setTimeout> | undefined
 
       try {
-        const baseModel = getLanggraphModel(modelId)
-
         if (forced && cleanedText !== undefined) {
           // @search guarantees the tool actually runs — rather than asking
           // the model to decide (via provider-level tool_choice forcing,
@@ -138,7 +139,7 @@ export function runLanggraphChat({
           try {
             await onEnd(parts)
           } catch (err) {
-            console.error('[langgraph onEnd] failed', err)
+            logger.error('[langgraph onEnd] failed', err)
           }
           return
         }
@@ -227,7 +228,7 @@ export function runLanggraphChat({
         try {
           await onEnd(parts)
         } catch (err) {
-          console.error('[langgraph onEnd] failed', err)
+          logger.error('[langgraph onEnd] failed', err)
         }
       } catch (e: unknown) {
         clearTimeout(timeoutId)
@@ -250,7 +251,7 @@ export function runLanggraphChat({
           try {
             await onEnd(parts)
           } catch (err) {
-            console.error('[langgraph onEnd] failed', err)
+            logger.error('[langgraph onEnd] failed', err)
           }
         }
       }

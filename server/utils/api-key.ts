@@ -36,7 +36,7 @@ export async function verifyApiKey(event: H3Event) {
   }
 
   // Bump lastUsedAt asynchronously
-  db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKey.id)).execute().catch(console.error)
+  db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKey.id)).execute().catch(err => logger.error('[api-key] failed to update lastUsedAt', err))
 
   return apiKey.userId
 }

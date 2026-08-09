@@ -105,7 +105,7 @@ export default defineEventHandler(async (event) => {
     )
   })
   if (!emailSent) {
-    console.warn('[email] delivery failed', { to: created.email, purpose: 'register' })
+    logger.warn('[email] delivery failed', undefined, { to: created.email, purpose: 'register' })
   }
 
   setResponseStatus(event, 201)

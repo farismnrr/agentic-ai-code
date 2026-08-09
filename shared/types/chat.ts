@@ -7,12 +7,28 @@ import type { UIMessage } from 'ai'
  */
 export type { UIMessage }
 
+export interface ModelProvider {
+  id: string
+  type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
+  name: string
+  baseUrl: string | null
+  customHeaders: Record<string, string>
+  enabled: boolean
+  hasApiKey: boolean
+}
+
 export interface ChatModel {
   id: string
+  providerId: string
+  modelId: string
   label: string
   description: string
   icon: string
-  supportsReasoning?: boolean
+  contextWindow: number | null
+  maxOutputTokens: number | null
+  thinkingEnabled: boolean | null
+  thinkingMinTokens: number | null
+  thinkingMaxTokens: number | null
 }
 
 export type McpTransport = 'http' | 'sse' | 'stdio'

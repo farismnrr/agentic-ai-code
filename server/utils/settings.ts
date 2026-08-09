@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm'
 import { userSettings, users } from '../database/schema'
-import { defaultModelId } from '#shared/utils/models'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
   const db = useDb()
@@ -39,7 +38,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     language: 'en',
     streaming: true,
     sendOnEnter: true,
-    defaultModelId,
+    defaultModelId: null,
     temperature: 0.7,
     systemPrompt: '',
     displayName: name,
@@ -64,7 +63,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
   }
 }
 
-export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string, temperature?: number, systemPrompt?: string, displayName?: string, email?: string }) {
+export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string, email?: string }) {
   const db = useDb()
   const [updatedSettings] = await db
     .update(userSettings)

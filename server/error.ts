@@ -39,7 +39,7 @@ export default defineNitroErrorHandler((error, event) => {
       : { type: 'about:blank', title: 'Internal Server Error', status: 500, instance: event.path }
 
   // Full detail (message asli, stack, error object) HANYA ke server log — tidak pernah ke client.
-  if (!isProblem && !isTrusted) console.error('[unhandled]', error)
+  if (!isProblem && !isTrusted) logger.error('[unhandled]', error)
 
   setResponseHeader(event, 'Content-Type', 'application/problem+json')
   if (isProblem && data.retryAfter) {

@@ -104,7 +104,7 @@ export async function sendMessage(userId: string, conversationId: string, text: 
         const delta = data.choices[0]?.delta?.content || ''
         if (delta) fullResponseText += delta
       } catch (err) {
-        console.error('Error parsing SSE', err)
+        logger.error('Error parsing SSE', err)
       }
     }
   })

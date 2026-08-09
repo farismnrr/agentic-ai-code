@@ -144,7 +144,7 @@ export default defineOAuthGoogleEventHandler({
     return sendRedirect(event, '/chat')
   },
   onError(event, error) {
-    console.error('Google OAuth error:', error)
+    logger.error('Google OAuth error', error)
     return sendRedirect(event, '/login?error=Google login failed')
   }
 })
