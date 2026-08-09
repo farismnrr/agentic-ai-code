@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3333:3333"
+    networks:
+      - masihawam-net
+      - sensio-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    environment:
+      - NUXT_OTEL_ENABLED=true
+      - NUXT_OTEL_JAEGER_ENDPOINT=http://jaeger:4317
+      - NUXT_OTEL_LOKI_PUSH_URL=http://loki:3100/loki/api/v1/push
+      # Override the DB URL to use the docker host instead of the container's localhost
+      - NUXT_DATABASE_URL=${NUXT_DATABASE_URL:-postgres://postgres:postgres@host.docker.internal:5432/ai-code}
+
+networks:
+  masihawam-net:
+    external: true
+  sensio-network:
+    external: true

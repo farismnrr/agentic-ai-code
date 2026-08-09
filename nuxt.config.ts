@@ -95,7 +95,21 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   nitro: {
-    errorHandler: '~~/server/error'
+    errorHandler: '~~/server/error',
+    externals: {
+      traceInclude: ['@opentelemetry'],
+      external: [
+        '@opentelemetry/sdk-trace-node',
+        '@opentelemetry/sdk-logs',
+        '@opentelemetry/api',
+        '@opentelemetry/api-logs',
+        '@opentelemetry/semantic-conventions',
+        '@opentelemetry/exporter-trace-otlp-grpc',
+        '@opentelemetry/resources',
+        '@opentelemetry/instrumentation',
+        '@opentelemetry/instrumentation-http'
+      ]
+    }
   },
 
   // @nuxt/ui pulls in @nuxt/fonts, whose `fontless` dependency spawns an
