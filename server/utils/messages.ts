@@ -34,6 +34,7 @@ export async function listConversationMessages(userId: string, conversationId: s
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,
     mode: conversation.mode,
+    lastMeasuredTokens: conversation.lastMeasuredTokens,
     createdAt: conversation.createdAt.getTime(),
     updatedAt: conversation.updatedAt.getTime(),
     messages: msgs.map(m => ({
