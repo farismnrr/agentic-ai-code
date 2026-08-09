@@ -139,7 +139,15 @@ async function removeModel(id: string) {
               value-key="value"
               create-item
               class="w-full"
-            />
+            >
+              <template #item="{ item }">
+                <UIcon :name="item.icon || item.value || item" class="w-5 h-5 flex-shrink-0" />
+                <span class="truncate">{{ item.label || item }}</span>
+              </template>
+              <template #leading>
+                <UIcon v-if="editingModel.icon" :name="editingModel.icon" class="w-5 h-5 flex-shrink-0" />
+              </template>
+            </USelectMenu>
           </UFormField>
 
           <UCard :ui="{ body: 'space-y-4' }">
