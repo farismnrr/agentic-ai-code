@@ -153,6 +153,26 @@ export default defineEventHandler(async (event) => {
     try {
       await close()
 
+      // Diagnostic trail for provider-specific tool-call metadata (e.g.
+      // Gemini 3's thoughtSignature, carried as callProviderMetadata) —
+      // added after a real session showed the AI SDK's own "Replayed N
+      // functionCall part(s) without a thoughtSignature" warning with no
+      // way to tell, after the fact, whether the metadata was ever present
+      // at the point we persisted it. Logs every turn, not just failures,
+      // since the previous debugging session had to reconstruct this from
+      // raw DB rows after the fact.
+      const toolParts = parts.filter(p => String(p.type).startsWith('tool-'))
+      if (toolParts.length > 0) {
+        logger.info('[chat persist] assistant message with tool calls', {
+          conversationId: conv.id,
+          modelId: modelInfo.modelId,
+          providerType: provider.type,
+          isContinuation,
+          toolCallCount: toolParts.length,
+          toolCallsMissingProviderMetadata: toolParts.filter(p => !('callProviderMetadata' in p) && !('resultProviderMetadata' in p)).length
+        })
+      }
+
       if (isContinuation) {
         const [last] = await db
           .select()

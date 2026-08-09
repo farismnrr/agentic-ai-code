@@ -44,5 +44,11 @@ export const logger = {
   info(message: string, attributes: LogAttributes = {}) {
     consola.info(message)
     emit(9, 'INFO', message, attributes)
+  },
+  // Forwards to Loki only, no consola print — for wrapping output Node/a
+  // dependency already prints on its own (e.g. process.emitWarning), where
+  // calling logger.warn() would duplicate every line on stdout.
+  forwardOnly(severityNumber: number, severityText: string, message: string, attributes: LogAttributes = {}) {
+    emit(severityNumber, severityText, message, attributes)
   }
 }
