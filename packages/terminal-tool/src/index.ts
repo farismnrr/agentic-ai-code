@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { execa } from 'execa'
 
 export const terminalToolSchema = z.object({
-  command: z.string().describe('The command to run.'),
-  args: z.array(z.string()).optional().describe('Arguments for the command.')
+  command: z.string().describe('The binary to run, e.g. "ls" — do not include flags/arguments here, put them in `args` instead.'),
+  args: z.array(z.string()).optional().describe('Arguments for the command, e.g. ["-la", "."].')
 })
 
 export const runTerminalCommand = async ({
@@ -20,7 +20,17 @@ export const runTerminalCommand = async ({
   assertSafeCommand: (command: string, args: string[]) => Promise<void>
 }) => {
   try {
-    await assertSafeCommand(command, args)
+    // Models frequently glue the whole invocation into `command` (e.g.
+    // "ls -la") instead of splitting it into `args` as instructed — rather
+    // than reject that outright (which just makes the model retry blindly),
+    // split it here so both call shapes reach the same argv. This is plain
+    // whitespace splitting, not shell parsing — execa still runs with
+    // `shell: false`, so this doesn't reintroduce metacharacter handling.
+    const [binary, ...gluedArgs] = command.trim().split(/\s+/)
+    const finalCommand = binary ?? command
+    const finalArgs = [...gluedArgs, ...args]
+
+    await assertSafeCommand(finalCommand, finalArgs)
 
     // minimal env passthrough
     const env: Record<string, string> = {}
@@ -28,7 +38,7 @@ export const runTerminalCommand = async ({
     if (process.env.HOME) env.HOME = process.env.HOME
     if (process.env.LANG) env.LANG = process.env.LANG
 
-    const { exitCode, stdout, stderr } = await execa(command, args, {
+    const { exitCode, stdout, stderr } = await execa(finalCommand, finalArgs, {
       shell: false,
       cwd,
       env,
@@ -72,7 +82,7 @@ export const createTerminalAiTool = ({
 }) => {
   return aiTool({
     description: 'Run a shell command within the workspace directory.',
-    parameters: terminalToolSchema,
+    inputSchema: terminalToolSchema,
     execute: async ({ command, args }) => runTerminalCommand({ command, args, cwd, assertSafeCommand })
   })
 }
