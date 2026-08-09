@@ -1,5 +1,5 @@
 import { LokiLogExporter } from '../utils/otel'
-import { NodeTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node'
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node'
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
 import { resourceFromAttributes } from '@opentelemetry/resources'
@@ -25,7 +25,7 @@ export default defineNitroPlugin(async () => {
   })
   const tracerProvider = new NodeTracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(traceExporter)]
+    spanProcessors: [new BatchSpanProcessor(traceExporter)]
   })
   tracerProvider.register()
 

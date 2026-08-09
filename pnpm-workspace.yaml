@@ -2,7 +2,7 @@ allowBuilds:
   '@parcel/watcher': false
   '@tailwindcss/oxide': false
   esbuild: false
-  protobufjs: set this to true or false
+  protobufjs: false
   unrs-resolver: false
   vue-demi: false
 

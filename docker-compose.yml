@@ -19,7 +19,7 @@ services:
       - NUXT_OTEL_JAEGER_ENDPOINT=http://jaeger:4317
       - NUXT_OTEL_LOKI_PUSH_URL=http://loki:3100/loki/api/v1/push
       # Override the DB URL to use the docker host instead of the container's localhost
-      - NUXT_DATABASE_URL=${NUXT_DATABASE_URL:-postgres://postgres:postgres@host.docker.internal:5432/ai-code}
+      - NUXT_DATABASE_URL=${NUXT_DATABASE_URL_DOCKER:-postgres://postgres:postgres@host.docker.internal:5432/ai-code}
 
 networks:
   masihawam-net:
