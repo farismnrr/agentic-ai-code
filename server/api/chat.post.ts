@@ -40,11 +40,23 @@ export default defineEventHandler(async (event) => {
   }
 
   let workspacePath: string | undefined
+  let workspaceName: string | undefined
   if (conv.workspaceId) {
     const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, conv.workspaceId)).limit(1)
     if (workspace) {
       workspacePath = workspace.path
+      workspaceName = workspace.name
     }
+  }
+
+  // Without this, the model has no idea a workspace/terminal tool exists at
+  // all and falls back to asking the user to paste files — it never learns
+  // to explore proactively just from the tool's own (generic) description.
+  const buildWorkspaceSystemPrompt = (hasTerminal: boolean) => {
+    if (!workspacePath) return undefined
+    const base = `You are a coding assistant currently working in the workspace "${workspaceName}" located at ${workspacePath}.`
+    if (!hasTerminal) return base
+    return `${base} You have access to a \`terminal\` tool scoped to this workspace directory — use it proactively (e.g. \`tree\`, \`find\`, \`grep\`/\`rg\`, \`cat\`, \`sed -n\`) to explore, read, or search files when the user asks about their project, rather than asking them to paste code or links.`
   }
 
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
@@ -105,8 +117,17 @@ export default defineEventHandler(async (event) => {
   }
 
   if (conv.mode === 'chat') {
-    const uiStream = runLanggraphChat(messages as UIMessage[], conv.modelId || 'vx/gemini-3-flash-preview', workspacePath, async (parts) => {
-      await persistAssistantMessage(parts, false)
+    // Chat mode always wires the read-only terminal tool in when a
+    // workspace is resolved (see server/utils/langgraph-tools.ts).
+    const systemPrompt = buildWorkspaceSystemPrompt(Boolean(workspacePath))
+    const uiStream = runLanggraphChat({
+      uiMessages: messages as UIMessage[],
+      modelId: conv.modelId || 'vx/gemini-3-flash-preview',
+      workspacePath,
+      systemPrompt,
+      onEnd: async (parts) => {
+        await persistAssistantMessage(parts, false)
+      }
     })
     return createUIMessageStreamResponse({ stream: uiStream })
   }
@@ -123,6 +144,7 @@ export default defineEventHandler(async (event) => {
 
   const result = streamText({
     model: baseModel,
+    system: buildWorkspaceSystemPrompt(Boolean(tools?.terminal)),
     messages: await convertToModelMessages(messages as UIMessage[], { tools }),
     tools,
     toolApproval,

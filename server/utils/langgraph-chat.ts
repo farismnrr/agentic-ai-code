@@ -40,7 +40,19 @@ function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: s
   })
 }
 
-export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, workspacePath: string | undefined, onEnd: (parts: UIMessage['parts']) => Promise<void>) {
+export function runLanggraphChat({
+  uiMessages,
+  modelId,
+  workspacePath,
+  systemPrompt,
+  onEnd
+}: {
+  uiMessages: UIMessage[]
+  modelId: string
+  workspacePath: string | undefined
+  systemPrompt: string | undefined
+  onEnd: (parts: UIMessage['parts']) => Promise<void>
+}) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
 
   return createUIMessageStream({
@@ -132,9 +144,15 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, works
         const agent = createAgent({ model: baseModel, tools: langgraphTools })
 
         const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
+        if (systemPrompt) inputMessages.unshift(new SystemMessage(systemPrompt))
+        // Without a cap, a model that keeps mis-forming tool calls (e.g.
+        // gluing "ls -F" into a single `command` string instead of
+        // splitting it into `args`) can loop indefinitely re-trying
+        // variations instead of ever producing a final answer — agent mode
+        // already caps this via streamText's `stopWhen: stepCountIs(5)`.
         const stream = agent.streamEvents(
           { messages: inputMessages },
-          { version: 'v2' }
+          { version: 'v2', recursionLimit: 10 }
         )
 
         for await (const event of stream) {
