@@ -44,6 +44,20 @@ const {
   addToolApprovalResponse
 } = useConversationChat(conversation)
 
+// UChatMessages' own #indicator only shows while status === 'submitted', or
+// while streaming with zero parts on the last message — the instant the
+// first tool call starts (e.g. terminal exploring a workspace), that parts
+// array is non-empty and the indicator disappears even though several more
+// tool calls and the final answer are usually still to come. Each tool
+// card does shimmer individually, but across a longer multi-step chain that
+// reads as "stuck" rather than "still working" at a glance.
+const isWorkingWithoutAnswerYet = computed(() => {
+  if (status.value !== 'streaming') return false
+  const last = messages.value[messages.value.length - 1]
+  if (!last || last.role !== 'assistant') return false
+  return !last.parts?.some(part => part.type === 'text' && part.text)
+})
+
 const input = ref('')
 
 const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
@@ -282,6 +296,16 @@ defineShortcuts({
             </template>
           </template>
         </UChatMessages>
+
+        <div
+          v-if="isWorkingWithoutAnswerYet"
+          class="max-w-3xl mx-auto w-full px-4 pb-2"
+        >
+          <UChatShimmer
+            text="Still working…"
+            class="animate-pulse"
+          />
+        </div>
 
         <!-- Lives inside a named slot deliberately: a bare child alongside
              #header/#body/#footer is treated as default-slot content and
