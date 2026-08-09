@@ -1,14 +1,16 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
 import { LokiLogExporter } from '../utils/otel'
-import { NodeTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node'
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
 import { logs } from '@opentelemetry/api-logs'
-import { HttpInstrumentation } from '@opentelemetry/instrumentation-http'
-import { registerInstrumentations } from '@opentelemetry/instrumentation'
 
+// Tracing + HTTP instrumentation live in otel-preload.mjs (repo root),
+// loaded via `node --import` before Nitro's own module graph starts —
+// HttpInstrumentation must patch `node:http` before anything else imports
+// it, and Nitro's entry does `import 'node:http'` before any plugin here
+// ever runs, so registering it from inside the app is always too late.
+// The logs pipeline has no such early-patch requirement, so it stays here.
 export default defineNitroPlugin(async () => {
   if (process.env.NUXT_OTEL_ENABLED !== 'true') {
     return
@@ -26,37 +28,10 @@ export default defineNitroPlugin(async () => {
     'deployment.environment': process.env.NODE_ENV || 'development'
   })
 
-  // Tracing
-  const traceExporter = new OTLPTraceExporter({
-    url: process.env.NUXT_OTEL_JAEGER_ENDPOINT || 'http://localhost:4317'
-  })
-  // BatchSpanProcessor was tried here for parity with the logs pipeline's
-  // batching, but the version Nitro's build actually externalizes into
-  // .output/server/node_modules never delivers spans to the exporter at
-  // all — confirmed live: neither the positional nor the options-object
-  // constructor form gets a span to Jaeger, and forceFlush() throws an
-  // unhandled rejection. SimpleSpanProcessor (exports synchronously per
-  // span-end, no batching) is the one that has actually been verified
-  // end-to-end against the real Jaeger container. Correctness over
-  // consistency with the logs pipeline's batching.
-  const tracerProvider = new NodeTracerProvider({
-    resource,
-    spanProcessors: [new SimpleSpanProcessor(traceExporter)]
-  })
-  tracerProvider.register()
-
-  // Logging
   const logExporter = new LokiLogExporter()
   const loggerProvider = new LoggerProvider({
     resource,
     processors: [new BatchLogRecordProcessor({ exporter: logExporter })]
   })
   logs.setGlobalLoggerProvider(loggerProvider)
-
-  // Instrumentation
-  registerInstrumentations({
-    instrumentations: [
-      new HttpInstrumentation()
-    ]
-  })
 })
