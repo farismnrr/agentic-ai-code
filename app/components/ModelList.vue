@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Model } from '~/composables/useModels'
-import { VERTEX_AI_CHAT_MODELS } from '#shared/utils/vertex-ai-models'
+import { VERTEX_AI_CHAT_MODELS, VERTEX_AI_MODEL_DEFAULTS } from '#shared/utils/vertex-ai-models'
 
 const { models, create, update, remove } = useModels()
 const { providers, listModels } = useModelProviders()
@@ -68,6 +68,24 @@ const modelIdDescription = computed(() => {
 })
 
 watch(() => editingModel.value.providerId, providerId => loadModelIdOptions(providerId))
+
+// Auto-fill the Overrides section with Google's published limits for known
+// Vertex AI models — one less thing to look up by hand. Plain v-model
+// fields underneath, so this only sets a starting point; editing or
+// clearing them afterward works exactly as it does for any other provider.
+// Deliberately wired to the USelectMenu's own @update:model-value (an
+// actual pick in the form) rather than a generic watch()on modelId — a
+// watch would also fire when edit() bulk-loads an existing, already-saved
+// model into the form, silently overwriting whatever overrides the user
+// had already customized for it.
+function applyVertexDefaultsIfKnown(modelId: string | undefined) {
+  if (selectedProviderType.value !== 'vertex_ai' || !modelId) return
+  const defaults = VERTEX_AI_MODEL_DEFAULTS[modelId]
+  if (!defaults) return
+  editingModel.value.contextWindow = defaults.contextWindow
+  editingModel.value.maxOutputTokens = defaults.maxOutputTokens
+  editingModel.value.thinkingEnabled = defaults.thinkingEnabled
+}
 
 function edit(model: Model) {
   editingModel.value = {
@@ -183,6 +201,7 @@ async function removeModel(id: string) {
               value-key="value"
               create-item
               class="w-full"
+              @update:model-value="applyVertexDefaultsIfKnown"
             />
           </UFormField>
           <UFormField label="Label">
