@@ -174,7 +174,11 @@ export default defineEventHandler(async (event) => {
     messages: await convertToModelMessages(messages as UIMessage[], { tools }),
     tools,
     toolApproval,
-    stopWhen: stepCountIs(5),
+    // 5 was too low for a real terminal-backed edit flow (explore, read,
+    // write, verify already eats 4-5 steps on its own) — it cut the loop
+    // off exactly at the last tool call, leaving no budget for the model to
+    // ever produce a closing text summary telling the user it was done.
+    stopWhen: stepCountIs(20),
     // Without this, a hung model API call (as opposed to a hung terminal
     // command, which execa already caps at 30s) had nothing to time it out —
     // the request would wait indefinitely. `timeout` is streamText's own
