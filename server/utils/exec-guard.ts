@@ -13,15 +13,20 @@ export const assertSafeCommand = async (command: string, args: string[], mode: '
 
   // Additional per-binary checks
   if (command === 'find') {
-    const blockedArgs = ['-delete', '-exec', '-fprintf']
-    if (args.some(arg => blockedArgs.includes(arg))) {
-      throw new Error(`assertSafeCommand: 'find' arguments ${blockedArgs.join(', ')} are not allowed.`)
+    // Exact-match blocklists are bypassable by GNU-style flags with attached
+    // values (e.g. `-fprint` vs `-fprintf`), so block by prefix instead —
+    // every one of these can execute a program or write to the filesystem.
+    const blockedPrefixes = ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fls']
+    if (args.some(arg => blockedPrefixes.some(prefix => arg.startsWith(prefix)))) {
+      throw new Error(`assertSafeCommand: 'find' arguments starting with ${blockedPrefixes.join(', ')} are not allowed.`)
     }
   }
 
   if (command === 'sed') {
-    // Only allow -n, block -i
-    if (args.includes('-i')) {
+    // Only allow -n, block -i. GNU sed also accepts a suffix glued directly
+    // onto -i (e.g. -i.bak), so an exact '-i' match alone is bypassable —
+    // block on prefix instead.
+    if (args.some(arg => arg.startsWith('-i'))) {
       throw new Error(`assertSafeCommand: 'sed -i' is not allowed.`)
     }
   }
@@ -39,9 +44,23 @@ export const assertSafeCommand = async (command: string, args: string[], mode: '
       throw new Error(`assertSafeCommand: git subcommand '${subcommand}' is not allowed in read-only mode.`)
     }
 
-    // Additional checks for blocked global flags
-    if (args.includes('--global') || args.includes('-C') || args.includes('--exec')) {
-      throw new Error(`assertSafeCommand: git global flags like --global, -C, or --exec are not allowed.`)
+    // `remote` is only allowed as the read-only `remote -v` (or bare
+    // `remote`) — `remote add`/`remove`/`set-url` mutate repo config and
+    // must not slip through just because the subcommand name matches.
+    if (subcommand === 'remote') {
+      const remoteArgs = args.filter(a => a !== 'remote')
+      const allowedRemoteArgs = new Set(['-v', '--verbose'])
+      if (remoteArgs.some(a => !allowedRemoteArgs.has(a))) {
+        throw new Error(`assertSafeCommand: 'git remote' only allows '-v' in read-only mode.`)
+      }
+    }
+
+    // Additional checks for blocked global flags. Prefix-matched because
+    // git accepts `--flag=value` glued forms (e.g. `--exec=/bin/sh`,
+    // `--output=file`) that an exact string match would miss entirely.
+    const blockedFlagPrefixes = ['--global', '-C', '--exec', '--output', '--upload-pack', '-c']
+    if (args.some(arg => blockedFlagPrefixes.some(prefix => arg.startsWith(prefix)))) {
+      throw new Error(`assertSafeCommand: git flags like --global, -C, --exec, --output, --upload-pack, or -c are not allowed.`)
     }
   }
 }
