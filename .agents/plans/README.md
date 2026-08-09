@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [024-context-compaction.md](024-context-compaction.md) — trim/summarize long chat histories against the model's `contextWindow` (already tracked per model, currently unused) instead of sending the full message array unbounded every turn.
 
 ## Completed
 - [023-user-configurable-model-providers.md](023-user-configurable-model-providers.md) — user-owned providers (OpenAI Compatible, Anthropic Compatible, Vertex AI Express Mode) and models replacing the hardcoded 9Router-only list; live model-ID discovery for the two Compatible types, a curated+curl-verified list for Vertex AI, per-model context/output/thinking overrides. Shipped well past the original plan: fixed `vertex_ai` actually calling the Gemini Developer API instead of real Vertex AI, custom request headers, provider/model dropdowns going stale until a reload, server errors never reaching Loki, and a docker-compose/Dockerfile bug (no workspace-root mount, missing CLI tools) that silently broke the terminal tool for every conversation.
