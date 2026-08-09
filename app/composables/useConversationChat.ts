@@ -59,9 +59,25 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK
   // owns the messages during a turn; the store is the durable copy.
-  watch(chat.messages, (messages) => {
-    if (conversation.value) setMessages(conversation.value.id, messages as UIMessage[])
+  let debounceTimer: ReturnType<typeof setTimeout>
+
+  const flushMessages = () => {
+    clearTimeout(debounceTimer)
+    if (conversation.value) {
+      setMessages(conversation.value.id, chat.messages.value as UIMessage[])
+    }
+  }
+
+  watch(chat.messages, () => {
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(flushMessages, 300)
   }, { deep: true })
+
+  watch(() => chat.status.value, (status) => {
+    if (status !== 'streaming') {
+      flushMessages()
+    }
+  })
 
   return chat
 }

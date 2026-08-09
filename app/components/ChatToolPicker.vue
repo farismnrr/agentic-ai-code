@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { nativeTools } from '#shared/utils/native-tools'
+import type { ApprovalDecision } from '#shared/types/chat'
+
+const props = defineProps<{
+  approvals?: Record<string, ApprovalDecision>
+}>()
+
+const emit = defineEmits<{
+  'update:approvals': [value: Record<string, ApprovalDecision>]
+}>()
 
 const modelValue = defineModel<string[]>({ default: () => [] })
 
@@ -37,6 +46,12 @@ function toggleServer(serverId: string) {
     ? modelValue.value.filter(id => !ids.includes(id))
     : [...new Set([...modelValue.value, ...ids])]
 }
+
+function resetApproval(toolId: string) {
+  if (!props.approvals) return
+  const { [toolId]: _, ...next } = props.approvals
+  emit('update:approvals', next)
+}
 </script>
 
 <template>
@@ -68,15 +83,34 @@ function toggleServer(serverId: string) {
           <div class="px-2 py-1 font-medium text-sm">
             Built-in
           </div>
-          <UCheckbox
+          <div
             v-for="tool in nativeTools"
             :key="tool.id"
-            :model-value="isOn(tool.id)"
-            :label="tool.name"
-            :description="tool.description"
-            class="px-2 py-1 ps-6"
-            @update:model-value="toggleTool(tool.id)"
-          />
+            class="flex items-center justify-between gap-1"
+          >
+            <UCheckbox
+              :model-value="isOn(tool.id)"
+              :label="tool.name"
+              :description="tool.description"
+              class="px-2 py-1 ps-6 flex-1 min-w-0"
+              @update:model-value="toggleTool(tool.id)"
+            />
+            <UBadge
+              v-if="approvals?.[tool.id]"
+              size="xs"
+              :color="approvals[tool.id] === 'always' ? 'primary' : 'error'"
+              variant="subtle"
+              class="cursor-pointer shrink-0 me-2"
+              title="Click to reset approval decision"
+              @click.stop="resetApproval(tool.id)"
+            >
+              {{ approvals[tool.id] }}
+              <UIcon
+                name="i-lucide-x"
+                class="size-3 ms-1"
+              />
+            </UBadge>
+          </div>
         </div>
 
         <div
@@ -92,15 +126,34 @@ function toggleServer(serverId: string) {
             @update:model-value="toggleServer(server.id)"
           />
 
-          <UCheckbox
+          <div
             v-for="tool in server.tools"
             :key="tool.id"
-            :model-value="isOn(tool.id)"
-            :label="tool.name"
-            :description="tool.description"
-            class="px-2 py-1 ps-6"
-            @update:model-value="toggleTool(tool.id)"
-          />
+            class="flex items-center justify-between gap-1"
+          >
+            <UCheckbox
+              :model-value="isOn(tool.id)"
+              :label="tool.name"
+              :description="tool.description"
+              class="px-2 py-1 ps-6 flex-1 min-w-0"
+              @update:model-value="toggleTool(tool.id)"
+            />
+            <UBadge
+              v-if="approvals?.[tool.id]"
+              size="xs"
+              :color="approvals[tool.id] === 'always' ? 'primary' : 'error'"
+              variant="subtle"
+              class="cursor-pointer shrink-0 me-2"
+              title="Click to reset approval decision"
+              @click.stop="resetApproval(tool.id)"
+            >
+              {{ approvals[tool.id] }}
+              <UIcon
+                name="i-lucide-x"
+                class="size-3 ms-1"
+              />
+            </UBadge>
+          </div>
         </div>
       </div>
     </template>

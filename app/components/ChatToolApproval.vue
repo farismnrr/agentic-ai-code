@@ -21,8 +21,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  respond: [{ id: string, approved: boolean }]
-  remember: [{ toolId: string, decision: 'always' | 'never' }]
+  answer: [{ id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }]
 }>()
 
 const { toolsById } = useMcpServers()
@@ -79,10 +78,12 @@ function answer(approved: boolean, remember: boolean) {
   const current = pending.value
   if (!current) return
 
-  if (remember && toolId.value) {
-    emit('remember', { toolId: toolId.value, decision: approved ? 'always' : 'never' })
-  }
-  emit('respond', { id: current.approvalId, approved })
+  emit('answer', {
+    id: current.approvalId,
+    approved,
+    toolId: toolId.value,
+    remember: remember ? (approved ? 'always' : 'never') : undefined
+  })
 }
 
 // A decision already remembered for this tool answers without interrupting.

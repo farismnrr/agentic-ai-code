@@ -369,10 +369,169 @@ cutoff exists, reading only the tail — zero extra queries in the steady
 state (the timestamp rides along on the already-loaded `conv` row), and the
 DB read stays bounded once a conversation has compacted at least once.
 
-## Status: CLOSED
+## Phases 1-3 status: merged to `dev`
 
 All three phases + review hardening implemented, typechecked, migrations
 applied. Commits: `e388979`, `23beafb`, `e1599ab`, `779f859`, `a09fed9`,
-plus this final DB-read-bounding fix. Manual testing pending — see
-`.agents/memories/` if any issue surfaces post-merge that's worth
-recording as a durable trap.
+plus the DB-read-bounding fix. Merged via PR #84.
+
+---
+
+## Phase 4 (implemented): context-usage indicator, chat freeze fix, tool-approval race fix
+
+Branch per [`git.md`](../knowledge/git.md)'s phase-branch convention:
+`feat/024-p4-chat-ux-fixes`, one PR into `dev`.
+
+### Context
+Three independent items surfaced from manual testing after phases 1-3
+landed, bundled here because they all touch the chat page/composables area
+that phases 1-3 also touched:
+
+1. **UI freeze during chat** — reported as "tiap chat UI-nya ngefreeze."
+   Root-caused via Explore: `app/composables/useConversationChat.ts:62-64`
+   has a `watch(chat.messages, ..., { deep: true })` that fires on **every
+   streamed token/chunk**. A deep watcher on a growing message/parts array
+   costs proportional to total conversation size, not chunk size. It calls
+   `setMessages()` → `app/composables/useConversations.ts`'s
+   `updateLocally()`, which does `conversations.value.map(...)` +
+   object-spread over **every conversation in the sidebar**, reassigning
+   the top-level `conversations` ref — which in turn invalidates the
+   `sorted` computed (another full copy+sort) and re-renders anything
+   reading it. Net cost per streamed token: O(messages in this
+   conversation) × O(conversations in the sidebar). On a long chat or a
+   user with many conversations, this compounds into a visible freeze.
+
+2. **Tool-approval modal reappearing despite "Always allow"** —
+   root-caused via Explore as a **race, not a missing feature**.
+   Persistence already works (`conversations.approvals` PUT is wired end
+   to end). The bug: `app/components/ChatToolApproval.vue:78-86`'s
+   `answer()` fires `emit('remember', ...)` and `emit('respond', ...)`
+   **synchronously, back to back, with no await between them**. `remember`
+   → `rememberApproval` (`app/pages/chat/[id].vue:77-82`) →
+   `useConversations().update()` — this kicks off an unawaited
+   `PUT /api/conversations/:id`. `respond` → `addToolApprovalResponse`,
+   which (via `sendAutomaticallyWhen:
+   lastAssistantMessageIsCompleteWithApprovalResponses`,
+   `useConversationChat.ts:53`) **immediately** fires a new
+   `POST /api/chat`. That request re-reads `conv.approvals` fresh from the
+   DB (`chat.post.ts:22-26`) to decide the next tool call's approval — and
+   frequently wins the race against the still-in-flight PUT, so the
+   "always allow" write hasn't landed yet. Server falls back to
+   `'user-approval'` again → modal reappears mid-turn. Also requested: a
+   way to view/reset a remembered "always allow/deny" decision from the
+   Tools picker — no such UI exists today (`ChatToolPicker.vue` only
+   manages `enabledToolIds`, never touches `approvals`).
+
+3. **Context-window usage indicator** (like Claude Code/opencode) — the
+   data mostly exists already: `conversations.lastMeasuredTokens` (real
+   usage from the last turn, added in Phase 2 above) and
+   `models.contextWindow`/`maxOutputTokens`. Gap found via Explore:
+   `GET /api/conversations/[id]` (`server/utils/messages.ts:18-46`)
+   **doesn't return `lastMeasuredTokens`** even though the DB column and
+   the `Conversation` type both have it — client-side plumbing is
+   otherwise ready (`useModels()` already exposes `contextWindow` per
+   model, same pairing pattern already used at `chat/[id].vue:125`). No
+   existing progress-bar/meter convention in the app (confirmed via
+   `.agents/knowledge/nuxt-way.md`'s "prefer the framework's own
+   mechanism" rule — checked before reaching for anything else); this
+   introduces Nuxt UI's `UProgress` as the first use, not a hand-rolled
+   bar.
+
+### Approach
+
+**1. Fix the freeze: throttle the store mirror-back, not the mechanism.**
+Don't touch the `useChat` factory itself — its `conversationId`/
+`seedMessages` indirection (`useConversationChat.ts:17-36`) is
+deliberately fragile and already has a documented reason for its current
+shape. Instead, throttle *how often* the deep watcher's callback actually
+writes to the store:
+- Wrap the `setMessages()` call in a small hand-rolled trailing-edge
+  debounce (~300ms; no new dependency — `@vueuse/core` isn't installed
+  per `package.json` and this is a few lines, consistent with
+  `nuxt-way.md`'s "reach for a third-party approach only when nothing
+  built-in covers it, and say why").
+- **Always flush immediately, uncoalesced, when `chat.status` transitions
+  away from `'streaming'`** (`'ready'`/`'error'`) — watch `chat.status`
+  alongside the debounce so the final message state is never lost or
+  delayed past turn-end.
+- Cuts the dominant cost from "every token" to "a few times a second,"
+  without changing `updateLocally`'s internals or risking the
+  already-fixed `useChat`-factory re-trigger bug documented in the
+  surrounding comments.
+
+**2. Fix the approval race + add reset UI.**
+Collapse `ChatToolApproval.vue`'s two emits into one `answer` event
+carrying `{ id, approved, remember?: 'always' | 'never' }`, handled by a
+single async function in `chat/[id].vue` that `await`s the approvals
+`update()` (when remembering) **before** calling
+`addToolApprovalResponse`. This guarantees the PUT lands before the SDK's
+automatic resubmission can fire the next `/api/chat` request that reads
+`conv.approvals`:
+- `ChatToolApproval.vue`: replace `remember`+`respond` emits with one
+  `answer` emit; `answer(approved, remember)` builds the payload and
+  emits once.
+- `chat/[id].vue`: new `async function handleApprovalAnswer({ id,
+  approved, toolId, remember })` — if `remember`, `await
+  update(conversation.value.id, { approvals: {...} })`, then call
+  `addToolApprovalResponse({ id, approved })`.
+
+**Reset UI**: extend `ChatToolPicker.vue` to accept the conversation's
+`approvals` (new prop) and show a small badge/icon next to any tool that
+has a remembered `'always'`/`'never'` decision, with a click to clear it
+(emit an update that removes that `toolId` key from `approvals`, wired
+through the same `update(conversation.id, { approvals })` pattern already
+used by `rememberApproval`). Passed down from `chat/[id].vue` alongside
+the existing `v-model="enabledToolIds"` binding.
+
+**3. Context-window usage indicator.**
+- `server/utils/messages.ts`'s `listConversationMessages()` return
+  object: add `lastMeasuredTokens: conversation.lastMeasuredTokens`.
+- New small component `app/components/ChatContextUsage.vue` taking the
+  resolved `ChatModel` and `Conversation`, computing `used =
+  conversation.lastMeasuredTokens ?? 0`, `budget = (model.contextWindow ??
+  0) - (model.maxOutputTokens ?? 0)`, `percent = budget > 0 ?
+  Math.min(100, Math.round(used / budget * 100)) : 0` — mirrors the exact
+  budget formula already established in
+  `server/utils/context-compaction.ts` (`contextWindow - maxOutputTokens -
+  margin`), so the UI number and the server's actual compaction trigger
+  point agree conceptually.
+- Render as `UProgress` + a small "N% of context" label, placed in
+  `chat/[id].vue`'s `UChatPrompt` `#footer` slot near the existing model
+  `USelect` (~line 414) — same toolbar row as the other per-conversation
+  controls (model, mode, reasoning effort).
+- Hide/omit when `model.contextWindow` is unset (compaction itself is
+  opt-in per model — the indicator should be too).
+
+### Files touched
+- `app/composables/useConversationChat.ts` — debounce the mirror-back
+  watcher, flush on stream-end.
+- `app/components/ChatToolApproval.vue` — single `answer` emit instead of
+  `remember`+`respond`.
+- `app/pages/chat/[id].vue` — async `handleApprovalAnswer`, pass
+  `approvals` down to `ChatToolPicker`, mount `ChatContextUsage` in the
+  prompt footer.
+- `app/components/ChatToolPicker.vue` — accept `approvals` prop,
+  show/reset remembered decisions per tool.
+- `app/components/ChatContextUsage.vue` — new.
+- `server/utils/messages.ts` — return `lastMeasuredTokens` from
+  `listConversationMessages()`.
+
+No schema/migration changes — all three items work with data that already
+exists.
+
+### Verification
+- Freeze: start a long-running agent turn with several tool calls / a
+  long response; confirm the UI stays responsive (typing in the input,
+  scrolling) during streaming, and that the sidebar/title still updates
+  correctly the moment the turn finishes.
+- Approval race: enable an MCP tool requiring approval, trigger it twice
+  in the same agent turn (or across two turns), click "Always allow" the
+  first time — confirm the modal does **not** reappear for the second
+  call. Also verify the new reset control in the Tools picker clears a
+  remembered decision and the modal reappears next time as expected.
+- Context usage: open a conversation on a model with `contextWindow` set,
+  send messages, confirm the indicator's percentage tracks
+  `lastMeasuredTokens` growth and roughly lines up with when
+  `context-compaction.ts` actually triggers a compaction round. Confirm
+  it's hidden for models without `contextWindow` set.
+- `npx nuxi typecheck` and `pnpm lint` clean.
