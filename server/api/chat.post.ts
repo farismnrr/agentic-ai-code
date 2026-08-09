@@ -64,11 +64,19 @@ export default defineEventHandler(async (event) => {
   // Without this, the model has no idea a workspace/terminal tool exists at
   // all and falls back to asking the user to paste files — it never learns
   // to explore proactively just from the tool's own (generic) description.
-  const buildWorkspaceSystemPrompt = (hasTerminal: boolean) => {
+  //
+  // 'full' access additionally warns against editing blind: a real incident
+  // had the model run `sed -i` on a file based on its contents from several
+  // turns earlier in the conversation, never re-reading it in the same turn
+  // and never checking the edit actually applied — a write tool with no
+  // read-before-write discipline is a data-loss risk, not just a UX one.
+  const buildWorkspaceSystemPrompt = (terminalAccess: 'none' | 'read-only' | 'full') => {
     if (!workspacePath) return undefined
     const base = `You are a coding assistant currently working in the workspace "${workspaceName}" located at ${workspacePath}.`
-    if (!hasTerminal) return base
-    return `${base} You have access to a \`terminal\` tool scoped to this workspace directory — use it proactively (e.g. \`tree\`, \`find\`, \`grep\`/\`rg\`, \`cat\`, \`sed -n\`) to explore, read, or search files when the user asks about their project, rather than asking them to paste code or links.`
+    if (terminalAccess === 'none') return base
+    const exploreGuidance = `You have access to a \`terminal\` tool scoped to this workspace directory — use it proactively (e.g. \`tree\`, \`find\`, \`grep\`/\`rg\`, \`cat\`, \`sed -n\`) to explore, read, or search files when the user asks about their project, rather than asking them to paste code or links.`
+    if (terminalAccess === 'read-only') return `${base} ${exploreGuidance}`
+    return `${base} ${exploreGuidance} This terminal has full write access (not read-only) — before editing or overwriting any file, always re-read its current contents first with \`cat\`/\`sed -n\` in this same turn, even if you already saw it earlier in the conversation, since it may have changed since. Never assume a file's contents or line numbers from memory. After making a change, read the file back to confirm it applied correctly before telling the user it's done.`
   }
 
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
@@ -131,7 +139,7 @@ export default defineEventHandler(async (event) => {
   if (conv.mode === 'chat') {
     // Chat mode always wires the read-only terminal tool in when a
     // workspace is resolved (see server/utils/langgraph-tools.ts).
-    const systemPrompt = buildWorkspaceSystemPrompt(Boolean(workspacePath))
+    const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
     const uiStream = runLanggraphChat({
       uiMessages: messages as UIMessage[],
       modelId: conv.modelId || 'vx/gemini-3-flash-preview',
@@ -156,7 +164,7 @@ export default defineEventHandler(async (event) => {
 
   const result = streamText({
     model: baseModel,
-    system: buildWorkspaceSystemPrompt(Boolean(tools?.terminal)),
+    system: buildWorkspaceSystemPrompt(tools?.terminal ? 'full' : 'none'),
     messages: await convertToModelMessages(messages as UIMessage[], { tools }),
     tools,
     toolApproval,

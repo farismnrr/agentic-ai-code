@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
+import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
@@ -53,9 +54,17 @@ const pending = computed<PendingApproval | undefined>(() => {
   return undefined
 })
 
-const toolId = computed(() =>
-  pending.value?.serverId ? `${pending.value.serverId}.${pending.value.toolName}` : undefined
-)
+// MCP tools resolve an id via `serverId.toolName`; native tools (e.g.
+// `terminal`, registered directly in the ToolSet with no MCP server) have no
+// `serverId` at all, so that id would always be undefined for them — meaning
+// "Always allow"/"Always deny" silently never persisted for the terminal
+// tool. Fall back to the native tools registry, matched by its model-facing
+// `toolName`, so the id lines up with what server/api/chat.post.ts reads
+// back from `conversation.approvals`.
+const toolId = computed(() => {
+  if (pending.value?.serverId) return `${pending.value.serverId}.${pending.value.toolName}`
+  return nativeTools.find(t => t.toolName === pending.value?.toolName)?.id
+})
 
 const open = computed({
   get: () => Boolean(pending.value),
