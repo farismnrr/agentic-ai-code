@@ -7,12 +7,27 @@ import type { UIMessage } from 'ai'
  */
 export type { UIMessage }
 
+export interface ModelProvider {
+  id: string
+  type: '9router' | 'gcp_agent_platform'
+  name: string
+  baseUrl: string | null
+  enabled: boolean
+  hasApiKey: boolean
+}
+
 export interface ChatModel {
   id: string
+  providerId: string
+  modelId: string
   label: string
   description: string
   icon: string
-  supportsReasoning?: boolean
+  contextWindow: number | null
+  maxOutputTokens: number | null
+  thinkingEnabled: boolean | null
+  thinkingMinTokens: number | null
+  thinkingMaxTokens: number | null
 }
 
 export type McpTransport = 'http' | 'sse' | 'stdio'

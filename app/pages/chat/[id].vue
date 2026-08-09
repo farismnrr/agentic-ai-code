@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { getTextFromMessage } from '@nuxt/ui/utils/ai'
-import { models } from '#shared/utils/models'
 
 const route = useRoute()
 const toast = useToast()
@@ -10,6 +9,12 @@ const { take: takePendingPrompt } = usePendingPrompt()
 
 const conversationId = computed(() => String(route.params.id))
 const conversation = computed(() => get(conversationId.value))
+
+const { models, load: loadModels } = useModels()
+
+if (models.value.length === 0) {
+  await loadModels()
+}
 
 const { get: getWorkspace } = useWorkspaces()
 const workspaceName = computed(() => {
@@ -77,7 +82,7 @@ function rememberApproval({ toolId, decision }: { toolId: string, decision: 'alw
 }
 
 const modelItems = computed(() =>
-  models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
+  models.value.map(model => ({ label: model.name, value: model.id, icon: 'i-lucide-box' }))
 )
 
 // Matches app/pages/chat/index.vue's modeItems — same labels/icons for the
@@ -89,7 +94,7 @@ const modeItems = [
 ]
 
 const modelId = computed({
-  get: () => conversation.value?.modelId ?? models[0]!.id,
+  get: () => conversation.value?.modelId ?? models.value[0]?.id,
   set: (value: string) => {
     if (conversation.value) update(conversation.value.id, { modelId: value })
   }
@@ -117,7 +122,7 @@ const effortItems = [
 ]
 
 const supportsReasoning = computed(() => {
-  return models.find(m => m.id === modelId.value)?.supportsReasoning ?? false
+  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
 })
 
 function submit() {
@@ -409,7 +414,7 @@ defineShortcuts({
             <USelect
               v-model="modelId"
               :items="modelItems"
-              :icon="models.find(m => m.id === modelId)?.icon"
+              icon="i-lucide-box"
               variant="ghost"
               size="sm"
             />

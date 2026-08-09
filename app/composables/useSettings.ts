@@ -1,15 +1,18 @@
-import { defaultModelId } from '#shared/utils/models'
-
 export interface AppSettings {
   language: string
   streaming: boolean
   sendOnEnter: boolean
-  defaultModelId: string
+  defaultModelId: string | null
   temperature: number
   systemPrompt: string
   displayName: string
   email: string
   lastActiveWorkspaceId: string | null
+  defaultContextWindow: number
+  defaultMaxOutputTokens: number
+  defaultThinkingEnabled: boolean
+  defaultThinkingMinTokens: number
+  defaultThinkingMaxTokens: number
 }
 
 export function useSettings() {
@@ -17,12 +20,17 @@ export function useSettings() {
     language: 'en',
     streaming: true,
     sendOnEnter: true,
-    defaultModelId,
+    defaultModelId: null,
     temperature: 0.7,
     systemPrompt: '',
     displayName: 'Faris',
     email: 'farismunir2@gmail.com',
-    lastActiveWorkspaceId: null
+    lastActiveWorkspaceId: null,
+    defaultContextWindow: 128000,
+    defaultMaxOutputTokens: 8192,
+    defaultThinkingEnabled: false,
+    defaultThinkingMinTokens: 1024,
+    defaultThinkingMaxTokens: 8192
   }))
 
   async function load() {

@@ -2,7 +2,9 @@ import { messages as messagesTable, conversations, workspaces } from '../databas
 import { eq, and, desc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import { models } from '#shared/utils/models'
+import { getChatModel, resolveModelConfig } from '../utils/providers/index'
+import { getLanggraphModel } from '../utils/providers/langgraph-model'
+import { getSettings } from '../utils/settings'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
@@ -22,6 +24,33 @@ export default defineEventHandler(async (event) => {
     .from(conversations)
     .where(and(eq(conversations.id, conversationId), eq(conversations.userId, session.user.id)))
     .limit(1)
+
+  if (!conv) {
+    throw notFound('Conversation not found')
+  }
+
+  const [modelInfo] = await db
+    .select()
+    .from(models)
+    .where(eq(models.id, conv.modelId))
+    .limit(1)
+
+  if (!modelInfo) {
+    throw notFound('Model not found')
+  }
+
+  const [provider] = await db
+    .select()
+    .from(modelProviders)
+    .where(eq(modelProviders.id, modelInfo.providerId))
+    .limit(1)
+
+  if (!provider) {
+    throw notFound('Model provider not found')
+  }
+
+  const settings = await getSettings(session.user.id)
+  const resolvedConfig = resolveModelConfig(modelInfo, settings)
 
   if (!conv) {
     throw notFound('Conversation not found')
@@ -154,9 +183,10 @@ export default defineEventHandler(async (event) => {
     // Chat mode always wires the read-only terminal tool in when a
     // workspace is resolved (see server/utils/langgraph-tools.ts).
     const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
+    const langgraphModel = getLanggraphModel(provider, modelInfo.modelId)
     const uiStream = runLanggraphChat({
       uiMessages: messages as UIMessage[],
-      modelId: conv.modelId || 'vx/gemini-3-flash-preview',
+      baseModel: langgraphModel,
       workspacePath,
       systemPrompt,
       onEnd: async (parts) => {
@@ -166,10 +196,9 @@ export default defineEventHandler(async (event) => {
     return createUIMessageStreamResponse({ stream: uiStream })
   }
 
-  const modelInfo = models.find(m => m.id === (conv.modelId || 'vx/gemini-3-flash-preview'))
-  let baseModel = getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview')
+  let baseModel = getChatModel(provider, modelInfo.modelId)
 
-  if (modelInfo?.supportsReasoning) {
+  if (resolvedConfig.thinkingEnabled) {
     baseModel = wrapLanguageModel({
       model: baseModel,
       middleware: extractReasoningMiddleware({ tagName: 'think' })
@@ -194,7 +223,7 @@ export default defineEventHandler(async (event) => {
     // preferring SDK mechanisms over hand-rolled ones).
     timeout: { totalMs: 180_000, stepMs: 60_000 },
     abortSignal: abortController.signal,
-    providerOptions: modelInfo?.supportsReasoning
+    providerOptions: resolvedConfig.thinkingEnabled
       ? {
           '9router': { reasoningEffort: conv.reasoningEffort ?? 'medium' }
         }
