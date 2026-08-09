@@ -8,11 +8,6 @@ export interface AppSettings {
   displayName: string
   email: string
   lastActiveWorkspaceId: string | null
-  defaultContextWindow: number
-  defaultMaxOutputTokens: number
-  defaultThinkingEnabled: boolean
-  defaultThinkingMinTokens: number
-  defaultThinkingMaxTokens: number
 }
 
 export function useSettings() {
@@ -25,12 +20,7 @@ export function useSettings() {
     systemPrompt: '',
     displayName: 'Faris',
     email: 'farismunir2@gmail.com',
-    lastActiveWorkspaceId: null,
-    defaultContextWindow: 128000,
-    defaultMaxOutputTokens: 8192,
-    defaultThinkingEnabled: false,
-    defaultThinkingMinTokens: 1024,
-    defaultThinkingMaxTokens: 8192
+    lastActiveWorkspaceId: null
   }))
 
   async function load() {

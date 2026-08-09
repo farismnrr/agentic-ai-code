@@ -28,12 +28,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
       systemPrompt: settings.systemPrompt,
       displayName: settings.displayName,
       email: settings.email,
-      lastActiveWorkspaceId,
-      defaultContextWindow: settings.defaultContextWindow,
-      defaultMaxOutputTokens: settings.defaultMaxOutputTokens,
-      defaultThinkingEnabled: settings.defaultThinkingEnabled,
-      defaultThinkingMinTokens: settings.defaultThinkingMinTokens,
-      defaultThinkingMaxTokens: settings.defaultThinkingMaxTokens
+      lastActiveWorkspaceId
     }
   }
 
@@ -47,12 +42,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     temperature: 0.7,
     systemPrompt: '',
     displayName: name,
-    email: email,
-    defaultContextWindow: 128000,
-    defaultMaxOutputTokens: 8192,
-    defaultThinkingEnabled: false,
-    defaultThinkingMinTokens: 1024,
-    defaultThinkingMaxTokens: 8192
+    email: email
   }
 
   const [newSettings] = await db.insert(userSettings).values(defaultSettings).returning()
@@ -69,16 +59,11 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     systemPrompt: newSettings.systemPrompt,
     displayName: newSettings.displayName,
     email: newSettings.email,
-    lastActiveWorkspaceId,
-    defaultContextWindow: newSettings.defaultContextWindow,
-    defaultMaxOutputTokens: newSettings.defaultMaxOutputTokens,
-    defaultThinkingEnabled: newSettings.defaultThinkingEnabled,
-    defaultThinkingMinTokens: newSettings.defaultThinkingMinTokens,
-    defaultThinkingMaxTokens: newSettings.defaultThinkingMaxTokens
+    lastActiveWorkspaceId
   }
 }
 
-export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string, email?: string, defaultContextWindow?: number, defaultMaxOutputTokens?: number, defaultThinkingEnabled?: boolean, defaultThinkingMinTokens?: number, defaultThinkingMaxTokens?: number }) {
+export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string, email?: string }) {
   const db = useDb()
   const [updatedSettings] = await db
     .update(userSettings)
@@ -98,11 +83,6 @@ export async function updateSettings(userId: string, updates: { language?: strin
     temperature: updatedSettings.temperature,
     systemPrompt: updatedSettings.systemPrompt,
     displayName: updatedSettings.displayName,
-    email: updatedSettings.email,
-    defaultContextWindow: updatedSettings.defaultContextWindow,
-    defaultMaxOutputTokens: updatedSettings.defaultMaxOutputTokens,
-    defaultThinkingEnabled: updatedSettings.defaultThinkingEnabled,
-    defaultThinkingMinTokens: updatedSettings.defaultThinkingMinTokens,
-    defaultThinkingMaxTokens: updatedSettings.defaultThinkingMaxTokens
+    email: updatedSettings.email
   }
 }

@@ -1,4 +1,4 @@
-import { messages as messagesTable, conversations, workspaces } from '../database/schema'
+import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
@@ -225,7 +225,7 @@ export default defineEventHandler(async (event) => {
     abortSignal: abortController.signal,
     providerOptions: resolvedConfig.thinkingEnabled
       ? {
-          '9router': { reasoningEffort: conv.reasoningEffort ?? 'medium' }
+          [provider.type]: { reasoningEffort: conv.reasoningEffort ?? 'medium' }
         }
       : undefined,
     onError: ({ error }) => {

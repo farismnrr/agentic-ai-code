@@ -72,7 +72,7 @@ const suggestions = [
 ]
 
 const modelItems = computed(() =>
-  models.value.map(model => ({ label: model.name, value: model.id, icon: 'i-lucide-box' }))
+  models.value.map(model => ({ label: model.label || model.name, value: model.id, icon: 'i-lucide-box' }))
 )
 
 const workspaceItems = computed(() =>

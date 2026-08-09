@@ -18,7 +18,7 @@ export function decryptSecret(encryptedData: string): string {
   const config = useRuntimeConfig()
   const key = Buffer.from(config.modelProviderSecretKey, 'hex')
   const parts = encryptedData.split(':')
-  if (parts.length !== 3) {
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
     throw new Error('Invalid encrypted data format')
   }
 

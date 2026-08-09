@@ -38,6 +38,7 @@ export async function createModel(userId: string, providerId: string, body: any)
     })
     .returning()
 
+  if (!model) throw internal('Failed to create model')
   return model
 }
 

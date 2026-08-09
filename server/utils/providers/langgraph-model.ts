@@ -20,7 +20,7 @@ export function getLanggraphModel(provider: ModelProviderRow, modelId: string) {
   }
   if (provider.type === 'gcp_agent_platform') {
     return new ChatGoogleGenerativeAI({
-      modelName: modelId,
+      model: modelId,
       apiKey
     })
   }

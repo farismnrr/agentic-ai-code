@@ -9,7 +9,7 @@ if (models.value.length === 0) {
 }
 
 const modelItems = computed(() =>
-  models.value.map(model => ({ label: model.name, value: model.id, icon: 'i-lucide-box' }))
+  models.value.map(model => ({ label: model.label || model.name, value: model.id, icon: 'i-lucide-box' }))
 )
 </script>
 
@@ -48,7 +48,7 @@ const modelItems = computed(() =>
     <UCard :ui="{ body: 'divide-y divide-default' }">
       <UFormField
         label="Default model"
-        :description="models.value.find(m => m.id === settings.defaultModelId)?.description"
+        :description="models?.find(m => m.id === settings.defaultModelId)?.description"
         class="flex items-start justify-between gap-4 pb-4"
       >
         <USelect

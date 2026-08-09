@@ -57,6 +57,20 @@
       "when": 1786193033539,
       "tag": "0007_clever_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786268040547,
+      "tag": "0008_colossal_talkback",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786268158275,
+      "tag": "0009_fine_zarda",
+      "breakpoints": true
     }
   ]
 }

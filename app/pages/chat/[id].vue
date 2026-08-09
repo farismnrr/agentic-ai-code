@@ -82,7 +82,7 @@ function rememberApproval({ toolId, decision }: { toolId: string, decision: 'alw
 }
 
 const modelItems = computed(() =>
-  models.value.map(model => ({ label: model.name, value: model.id, icon: 'i-lucide-box' }))
+  models.value.map(model => ({ label: model.label || model.name, value: model.id, icon: 'i-lucide-box' }))
 )
 
 // Matches app/pages/chat/index.vue's modeItems — same labels/icons for the

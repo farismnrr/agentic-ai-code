@@ -36,6 +36,8 @@ export async function createModelProvider(userId: string, body: { type: '9router
     })
     .returning()
 
+  if (!provider) throw internal('Failed to create model provider')
+
   return {
     id: provider.id,
     type: provider.type,
