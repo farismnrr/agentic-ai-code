@@ -6,12 +6,13 @@ import type { InferSelectModel } from 'drizzle-orm'
 
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
 
-export function getLanggraphModel(provider: ModelProviderRow, modelId: string) {
+export function getLanggraphModel(provider: ModelProviderRow, modelId: string, maxOutputTokens?: number) {
   const apiKey = decryptSecret(provider.apiKeyEncrypted)
   if (provider.type === '9router') {
     if (!provider.baseUrl) throw new Error('9Router provider requires a base URL')
     return new ChatOpenAI({
       modelName: modelId,
+      maxTokens: maxOutputTokens,
       configuration: {
         baseURL: provider.baseUrl,
         apiKey
@@ -21,8 +22,9 @@ export function getLanggraphModel(provider: ModelProviderRow, modelId: string) {
   if (provider.type === 'gcp_agent_platform') {
     return new ChatGoogleGenerativeAI({
       model: modelId,
+      maxOutputTokens,
       apiKey
     })
   }
-  throw new Error(`Unknown provider type: ${(provider as any).type}`)
+  throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }

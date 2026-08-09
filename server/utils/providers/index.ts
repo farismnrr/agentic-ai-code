@@ -14,15 +14,15 @@ export function getChatModel(provider: ModelProviderRow, modelId: string) {
   if (provider.type === 'gcp_agent_platform') {
     return getGcpAgentPlatformModel(modelId, provider.apiKeyEncrypted)
   }
-  throw new Error(`Unknown provider type: ${(provider as any).type}`)
+  throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }
 
-export function resolveModelConfig(model: ChatModel, settings: any) {
+export function resolveModelConfig(model: ChatModel) {
   return {
-    contextWindow: model.contextWindow ?? settings.defaultContextWindow,
-    maxOutputTokens: model.maxOutputTokens ?? settings.defaultMaxOutputTokens,
-    thinkingEnabled: model.thinkingEnabled ?? settings.defaultThinkingEnabled,
-    thinkingMinTokens: model.thinkingMinTokens ?? settings.defaultThinkingMinTokens,
-    thinkingMaxTokens: model.thinkingMaxTokens ?? settings.defaultThinkingMaxTokens
+    contextWindow: model.contextWindow ?? undefined,
+    maxOutputTokens: model.maxOutputTokens ?? undefined,
+    thinkingEnabled: model.thinkingEnabled ?? false,
+    thinkingMinTokens: model.thinkingMinTokens ?? undefined,
+    thinkingMaxTokens: model.thinkingMaxTokens ?? undefined
   }
 }

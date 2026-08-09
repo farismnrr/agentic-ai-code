@@ -1,9 +1,17 @@
 import crypto from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 
-export function encryptSecret(text: string): string {
+function getSecretKey(): Buffer {
   const config = useRuntimeConfig()
   const key = Buffer.from(config.modelProviderSecretKey, 'hex')
+  if (key.length !== 32) {
+    throw new Error('NUXT_MODEL_PROVIDER_SECRET_KEY must be set to a 32-byte hex string (generate with `openssl rand -hex 32`)')
+  }
+  return key
+}
+
+export function encryptSecret(text: string): string {
+  const key = getSecretKey()
   const iv = crypto.randomBytes(12)
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
 
@@ -15,8 +23,7 @@ export function encryptSecret(text: string): string {
 }
 
 export function decryptSecret(encryptedData: string): string {
-  const config = useRuntimeConfig()
-  const key = Buffer.from(config.modelProviderSecretKey, 'hex')
+  const key = getSecretKey()
   const parts = encryptedData.split(':')
   if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
     throw new Error('Invalid encrypted data format')

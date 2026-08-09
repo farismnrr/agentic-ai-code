@@ -3,18 +3,18 @@ import { listModels } from '../../utils/models'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  
+
   const [providers, models] = await Promise.all([
     listModelProviders(session.user.id),
     listModels(session.user.id)
   ])
-  
+
   return {
     providers,
     models,
     providerTypes: ['9router', 'gcp_agent_platform'],
     providerOptions: providers.map(p => ({ label: p.name, value: p.id })),
-    modelItems: models.map(m => ({ label: m.label || m.name, value: m.id, icon: 'i-lucide-box' })),
+    modelItems: models.map(m => ({ label: m.label, value: m.id, icon: 'i-lucide-box' })),
     modelIdOptions: [
       { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' },
       { label: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },

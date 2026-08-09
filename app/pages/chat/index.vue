@@ -37,7 +37,7 @@ watch(() => activeWorkspaceId.value, (newId) => {
   }
 })
 // Seeded from the saved default so the settings page actually governs this.
-const modelId = ref(settings.value.defaultModelId)
+const modelId = ref<string | undefined>(settings.value.defaultModelId ?? undefined)
 const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
 // A brand-new conversation has no id to PATCH yet, so there was previously no
@@ -72,7 +72,7 @@ const suggestions = [
 ]
 
 const modelItems = computed(() =>
-  models.value.map(model => ({ label: model.label || model.name, value: model.id, icon: 'i-lucide-box' }))
+  models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
 
 const workspaceItems = computed(() =>

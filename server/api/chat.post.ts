@@ -4,7 +4,6 @@ import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wra
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
-import { getSettings } from '../utils/settings'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
@@ -49,8 +48,7 @@ export default defineEventHandler(async (event) => {
     throw notFound('Model provider not found')
   }
 
-  const settings = await getSettings(session.user.id)
-  const resolvedConfig = resolveModelConfig(modelInfo, settings)
+  const resolvedConfig = resolveModelConfig(modelInfo)
 
   if (!conv) {
     throw notFound('Conversation not found')
@@ -183,7 +181,7 @@ export default defineEventHandler(async (event) => {
     // Chat mode always wires the read-only terminal tool in when a
     // workspace is resolved (see server/utils/langgraph-tools.ts).
     const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
-    const langgraphModel = getLanggraphModel(provider, modelInfo.modelId)
+    const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     const uiStream = runLanggraphChat({
       uiMessages: messages as UIMessage[],
       baseModel: langgraphModel,
@@ -222,6 +220,7 @@ export default defineEventHandler(async (event) => {
     // native option (see .agents/memories/ai-sdk-native-features.md on
     // preferring SDK mechanisms over hand-rolled ones).
     timeout: { totalMs: 180_000, stepMs: 60_000 },
+    maxOutputTokens: resolvedConfig.maxOutputTokens,
     abortSignal: abortController.signal,
     providerOptions: resolvedConfig.thinkingEnabled
       ? {

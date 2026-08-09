@@ -13,6 +13,11 @@ if (data.value) {
   providers.value = data.value.providers
   types.value = data.value.providerTypes
 }
+
+const defaultModelId = computed({
+  get: () => settings.value.defaultModelId ?? undefined,
+  set: (value: string | undefined) => { settings.value.defaultModelId = value ?? null }
+})
 </script>
 
 <template>
@@ -34,8 +39,8 @@ if (data.value) {
       <p class="text-sm text-muted mb-4">
         Add and configure specific models from your providers.
       </p>
-      <ModelList 
-        :provider-options="data?.providerOptions || []" 
+      <ModelList
+        :provider-options="data?.providerOptions || []"
         :model-id-options="data?.modelIdOptions || []"
         :icon-options="data?.iconOptions || []"
       />
@@ -58,7 +63,7 @@ if (data.value) {
         class="flex items-start justify-between gap-4 pb-4"
       >
         <USelect
-          v-model="settings.defaultModelId"
+          v-model="defaultModelId"
           :items="data?.modelItems || []"
           icon="i-lucide-box"
           class="w-56"

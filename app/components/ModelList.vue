@@ -5,17 +5,29 @@ const { models, create, update, remove } = useModels()
 const { providers } = useModelProviders()
 const toast = useToast()
 
-const props = defineProps<{
+defineProps<{
   providerOptions: { label: string, value: string }[]
   modelIdOptions: { label: string, value: string }[]
   iconOptions: { label: string, value: string, icon: string }[]
 }>()
 
+type NullableNumericFields = 'contextWindow' | 'maxOutputTokens' | 'thinkingMinTokens' | 'thinkingMaxTokens'
+type EditingModel = Omit<Partial<Model>, NullableNumericFields | 'thinkingEnabled'> & {
+  [K in NullableNumericFields]?: number
+} & { thinkingEnabled?: boolean }
+
 const isOpen = ref(false)
-const editingModel = ref<Partial<Model>>({})
+const editingModel = ref<EditingModel>({})
 
 function edit(model: Model) {
-  editingModel.value = { ...model }
+  editingModel.value = {
+    ...model,
+    contextWindow: model.contextWindow ?? undefined,
+    maxOutputTokens: model.maxOutputTokens ?? undefined,
+    thinkingEnabled: model.thinkingEnabled ?? undefined,
+    thinkingMinTokens: model.thinkingMinTokens ?? undefined,
+    thinkingMaxTokens: model.thinkingMaxTokens ?? undefined
+  }
   isOpen.value = true
 }
 
@@ -141,11 +153,18 @@ async function removeModel(id: string) {
               class="w-full"
             >
               <template #item="{ item }">
-                <UIcon :name="item.icon || item.value || item" class="w-5 h-5 flex-shrink-0" />
+                <UIcon
+                  :name="item.icon || item.value || item"
+                  class="w-5 h-5 flex-shrink-0"
+                />
                 <span class="truncate">{{ item.label || item }}</span>
               </template>
               <template #leading>
-                <UIcon v-if="editingModel.icon" :name="editingModel.icon" class="w-5 h-5 flex-shrink-0" />
+                <UIcon
+                  v-if="editingModel.icon"
+                  :name="editingModel.icon"
+                  class="w-5 h-5 flex-shrink-0"
+                />
               </template>
             </USelectMenu>
           </UFormField>

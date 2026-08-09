@@ -4,11 +4,13 @@ import type { ModelProvider } from '~/composables/useModelProviders'
 const { providers, types, create, update, remove } = useModelProviders()
 const toast = useToast()
 
+type EditingProvider = Omit<Partial<ModelProvider>, 'baseUrl'> & { apiKey?: string, baseUrl?: string }
+
 const isOpen = ref(false)
-const editingProvider = ref<Partial<ModelProvider> & { apiKey?: string }>({})
+const editingProvider = ref<EditingProvider>({})
 
 function edit(provider: ModelProvider) {
-  editingProvider.value = { ...provider }
+  editingProvider.value = { ...provider, baseUrl: provider.baseUrl ?? undefined }
   isOpen.value = true
 }
 

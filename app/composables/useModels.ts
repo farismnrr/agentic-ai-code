@@ -2,7 +2,6 @@ export interface Model {
   id: string
   providerId: string
   modelId: string
-  name: string
   label: string
   description: string
   icon: string
