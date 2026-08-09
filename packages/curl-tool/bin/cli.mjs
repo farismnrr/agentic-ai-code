@@ -6,7 +6,7 @@ import { createCurlTool } from '../src/index.ts'
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
   options: {
-    request: { type: 'string', short: 'X', default: 'GET' },
+    'request': { type: 'string', short: 'X', default: 'GET' },
     'header': { type: 'string', short: 'H', multiple: true },
     'data': { type: 'string', short: 'd' },
     'no-guard': { type: 'boolean' }
