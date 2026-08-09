@@ -64,3 +64,21 @@ export const assertSafeCommand = async (command: string, args: string[], mode: '
     }
   }
 }
+
+/**
+ * Classifies a command as read-only by re-running it through the same
+ * allowlist `assertSafeCommand` enforces in chat mode's read-only mode —
+ * one implementation of "what counts as read-only", not a second one. Used
+ * by agent mode to skip the approval prompt for commands that can't mutate
+ * anything regardless of full write access being granted (e.g. `bash -c`
+ * is never classified as read-only here, since an arbitrary shell script
+ * can't be statically judged safe).
+ */
+export const isReadOnlyCommand = async (command: string, args: string[]): Promise<boolean> => {
+  try {
+    await assertSafeCommand(command, args, 'read-only')
+    return true
+  } catch {
+    return false
+  }
+}
