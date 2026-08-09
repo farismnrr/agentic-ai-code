@@ -122,6 +122,11 @@ export async function listProviderModelIds(userId: string, providerId: string) {
   if (PROVIDER_TYPES_REQUIRING_BASE_URL.includes(provider.type) && !provider.baseUrl) {
     throw badRequest(`${provider.name} has no base URL set — edit the provider and add one before listing models`)
   }
+  // Vertex AI Express Mode has no discovery endpoint at all — that's not a
+  // reachability failure, so it shouldn't read as one (502).
+  if (provider.type === 'vertex_ai') {
+    throw badRequest('Vertex AI Express Mode has no model-listing endpoint — enter the model ID directly (e.g. gemini-2.5-flash, gemini-2.5-pro)')
+  }
 
   try {
     return await listProviderModels(provider)

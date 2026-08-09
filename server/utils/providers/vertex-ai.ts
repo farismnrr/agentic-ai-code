@@ -1,27 +1,18 @@
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createVertex } from '@ai-sdk/google-vertex'
 import { decryptSecret } from '../crypto'
 
+/**
+ * Real Vertex AI (aiplatform.googleapis.com), not the Gemini Developer API
+ * (generativelanguage.googleapis.com) — those are two separate Google
+ * products with incompatible API keys, which is why an actual Vertex AI
+ * key thrown at the Gemini API 403s. Express Mode is what makes this work
+ * with just an API key: no project ID, no location, no service account.
+ * See https://ai-sdk.dev/providers/ai-sdk-providers/google-vertex and
+ * https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview
+ */
 export function getVertexAiModel(modelId: string, encryptedApiKey: string) {
-  const provider = createGoogleGenerativeAI({
+  const provider = createVertex({
     apiKey: decryptSecret(encryptedApiKey)
   })
-  return provider(modelId)
-}
-
-/**
- * The Gemini API's own ListModels endpoint — filtered to models that
- * actually support `generateContent`, since the response also includes
- * embedding-only and other non-chat models that would just error if picked.
- */
-export async function listVertexAiModels(encryptedApiKey: string) {
-  const apiKey = decryptSecret(encryptedApiKey)
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
-  if (!response.ok) {
-    throw new Error(`Model list request failed: ${response.status} ${response.statusText}`)
-  }
-  const body = await response.json() as { models?: { name: string, supportedGenerationMethods?: string[] }[] }
-  return (body.models ?? [])
-    .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-    .map(m => m.name.replace(/^models\//, ''))
-    .sort()
+  return provider.languageModel(modelId)
 }

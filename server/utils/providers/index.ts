@@ -1,6 +1,6 @@
 import { getOpenAiCompatibleModel, listOpenAiCompatibleModels } from './openai-compatible'
 import { getAnthropicCompatibleModel, listAnthropicCompatibleModels } from './anthropic-compatible'
-import { getVertexAiModel, listVertexAiModels } from './vertex-ai'
+import { getVertexAiModel } from './vertex-ai'
 import type { modelProviders } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
@@ -32,7 +32,12 @@ export function listProviderModels(provider: ModelProviderRow) {
     return listAnthropicCompatibleModels(provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
   }
   if (provider.type === 'vertex_ai') {
-    return listVertexAiModels(provider.apiKeyEncrypted)
+    // Vertex AI Express Mode has no ListModels/discovery endpoint (confirmed
+    // against Google's own Express Mode REST reference) — providers.ts's
+    // listProviderModelIds() short-circuits before ever calling this for a
+    // vertex_ai row, so this only fires if listProviderModels() is ever
+    // called directly, bypassing that guard.
+    throw new Error('Vertex AI Express Mode has no model-listing endpoint')
   }
   throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }
