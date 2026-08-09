@@ -1,0 +1,10 @@
+.git
+node_modules
+.output
+.nuxt
+dist
+.env
+.env.*
+!.env.example
+.agents
+.external-mcp
