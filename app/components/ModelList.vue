@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Model } from '~/composables/useModels'
+import { VERTEX_AI_CHAT_MODELS } from '#shared/utils/vertex-ai-models'
 
 const { models, create, update, remove } = useModels()
 const { providers, listModels } = useModelProviders()
@@ -33,6 +34,15 @@ const modelIdOptionsLoading = ref(false)
 
 async function loadModelIdOptions(providerId: string | undefined) {
   if (!providerId || modelIdOptionsByProvider.value[providerId]) return
+  // Vertex AI Express Mode has no ListModels/discovery endpoint at all —
+  // the server already knows this and would just 400 every time, so don't
+  // even attempt the fetch (and don't show an error toast for something
+  // that was never going to work). Use the curl-verified curated list
+  // instead; USelectMenu's create-item still allows typing any other id.
+  if (providers.value.find(p => p.id === providerId)?.type === 'vertex_ai') {
+    modelIdOptionsByProvider.value[providerId] = VERTEX_AI_CHAT_MODELS
+    return
+  }
   modelIdOptionsLoading.value = true
   try {
     modelIdOptionsByProvider.value[providerId] = await listModels(providerId)
@@ -47,6 +57,14 @@ async function loadModelIdOptions(providerId: string | undefined) {
 const modelIdOptions = computed(() => {
   const providerId = editingModel.value.providerId
   return providerId ? (modelIdOptionsByProvider.value[providerId] ?? []) : []
+})
+
+const selectedProviderType = computed(() => providers.value.find(p => p.id === editingModel.value.providerId)?.type)
+
+const modelIdDescription = computed(() => {
+  if (selectedProviderType.value === 'vertex_ai') return 'Vertex AI Express Mode has no live model list — pick from this curated set, or type another model ID by hand'
+  if (modelIdOptionsLoading.value) return 'Loading models from provider…'
+  return 'Fetched live from the provider — type to search, or enter one by hand'
 })
 
 watch(() => editingModel.value.providerId, providerId => loadModelIdOptions(providerId))
@@ -156,7 +174,7 @@ async function removeModel(id: string) {
           </UFormField>
           <UFormField
             label="Model ID"
-            :description="modelIdOptionsLoading ? 'Loading models from provider…' : 'Fetched live from the provider — type to search, or enter one by hand'"
+            :description="modelIdDescription"
           >
             <USelectMenu
               v-model="editingModel.modelId"
