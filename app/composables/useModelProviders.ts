@@ -41,5 +41,9 @@ export function useModelProviders() {
     providers.value = providers.value.filter(p => p.id !== id)
   }
 
-  return { providers, types, load, create, update, remove }
+  function listModels(providerId: string) {
+    return $fetch<{ label: string, value: string }[]>(`/api/providers/${providerId}/models`)
+  }
+
+  return { providers, types, load, create, update, remove, listModels }
 }

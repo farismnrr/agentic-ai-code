@@ -1,7 +1,8 @@
 import { eq, and } from 'drizzle-orm'
 import { modelProviders } from '../database/schema'
 import { encryptSecret } from './crypto'
-import { notFound } from './http-errors'
+import { notFound, badRequest, badGateway } from './http-errors'
+import { listProviderModels } from './providers/index'
 
 export async function listModelProviders(userId: string) {
   const db = useDb()
@@ -50,6 +51,20 @@ export async function createModelProvider(userId: string, body: { type: '9router
 
 export async function updateModelProvider(userId: string, id: string, updates: { name?: string, baseUrl?: string, apiKey?: string, enabled?: boolean }) {
   const db = useDb()
+
+  const [existing] = await db
+    .select()
+    .from(modelProviders)
+    .where(and(eq(modelProviders.id, id), eq(modelProviders.userId, userId)))
+    .limit(1)
+
+  if (!existing) throw notFound('Provider not found')
+
+  const nextBaseUrl = updates.baseUrl !== undefined ? updates.baseUrl : existing.baseUrl
+  if (existing.type === '9router' && !nextBaseUrl) {
+    throw badRequest('Base URL is required for 9Router providers')
+  }
+
   const updateData: any = {
     updatedAt: new Date()
   }
@@ -86,4 +101,24 @@ export async function deleteModelProvider(userId: string, id: string) {
 
   if (!deleted) throw notFound('Provider not found')
   return { ok: true }
+}
+
+export async function listProviderModelIds(userId: string, providerId: string) {
+  const db = useDb()
+  const [provider] = await db
+    .select()
+    .from(modelProviders)
+    .where(and(eq(modelProviders.id, providerId), eq(modelProviders.userId, userId)))
+    .limit(1)
+
+  if (!provider) throw notFound('Provider not found')
+  if (provider.type === '9router' && !provider.baseUrl) {
+    throw badRequest(`${provider.name} has no base URL set — edit the provider and add one before listing models`)
+  }
+
+  try {
+    return await listProviderModels(provider)
+  } catch (err) {
+    throw badGateway(`Could not reach ${provider.name}: ${(err as Error).message}`)
+  }
 }

@@ -29,6 +29,7 @@ export const forbidden = (detail?: string) => problem({ status: 403, title: 'For
 export const notFound = (detail?: string) => problem({ status: 404, title: 'Not Found', detail })
 export const conflict = (detail?: string) => problem({ status: 409, title: 'Conflict', detail })
 export const gone = (detail?: string) => problem({ status: 410, title: 'Gone', detail })
+export const badGateway = (detail?: string) => problem({ status: 502, title: 'Bad Gateway', detail })
 
 export function unprocessable(issues: v.BaseIssue<unknown>[]) {
   const errors = issues.map(issue => ({

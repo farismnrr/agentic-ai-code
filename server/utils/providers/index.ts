@@ -1,5 +1,5 @@
-import { getRouter9Model } from './router9'
-import { getGcpAgentPlatformModel } from './gcp-agent-platform'
+import { getRouter9Model, listRouter9Models } from './router9'
+import { getGcpAgentPlatformModel, listGcpAgentPlatformModels } from './gcp-agent-platform'
 import type { modelProviders } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
@@ -13,6 +13,17 @@ export function getChatModel(provider: ModelProviderRow, modelId: string) {
   }
   if (provider.type === 'gcp_agent_platform') {
     return getGcpAgentPlatformModel(modelId, provider.apiKeyEncrypted)
+  }
+  throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
+}
+
+export function listProviderModels(provider: ModelProviderRow) {
+  if (provider.type === '9router') {
+    if (!provider.baseUrl) throw new Error('9Router provider requires a base URL')
+    return listRouter9Models(provider.baseUrl, provider.apiKeyEncrypted)
+  }
+  if (provider.type === 'gcp_agent_platform') {
+    return listGcpAgentPlatformModels(provider.apiKeyEncrypted)
   }
   throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }

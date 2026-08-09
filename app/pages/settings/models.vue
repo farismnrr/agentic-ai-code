@@ -41,7 +41,6 @@ const defaultModelId = computed({
       </p>
       <ModelList
         :provider-options="data?.providerOptions || []"
-        :model-id-options="data?.modelIdOptions || []"
         :icon-options="data?.iconOptions || []"
       />
     </div>

@@ -2,12 +2,11 @@
 import type { Model } from '~/composables/useModels'
 
 const { models, create, update, remove } = useModels()
-const { providers } = useModelProviders()
+const { providers, listModels } = useModelProviders()
 const toast = useToast()
 
 defineProps<{
   providerOptions: { label: string, value: string }[]
-  modelIdOptions: { label: string, value: string }[]
   iconOptions: { label: string, value: string, icon: string }[]
 }>()
 
@@ -19,6 +18,34 @@ type EditingModel = Omit<Partial<Model>, NullableNumericFields | 'thinkingEnable
 const isOpen = ref(false)
 const editingModel = ref<EditingModel>({})
 
+// Live model IDs fetched from the selected provider's own API, keyed by
+// providerId so switching providers in the form doesn't require a refetch
+// if the user flips back and forth. `create-item` on the USelectMenu still
+// lets the user type a model ID by hand when the live list is empty/errored
+// (e.g. the provider's key was just added and hasn't been saved yet).
+const modelIdOptionsByProvider = ref<Record<string, { label: string, value: string }[]>>({})
+const modelIdOptionsLoading = ref(false)
+
+async function loadModelIdOptions(providerId: string | undefined) {
+  if (!providerId || modelIdOptionsByProvider.value[providerId]) return
+  modelIdOptionsLoading.value = true
+  try {
+    modelIdOptionsByProvider.value[providerId] = await listModels(providerId)
+  } catch (err: unknown) {
+    const error = err as Error
+    toast.add({ title: 'Could not load model list', description: error.message, color: 'warning' })
+  } finally {
+    modelIdOptionsLoading.value = false
+  }
+}
+
+const modelIdOptions = computed(() => {
+  const providerId = editingModel.value.providerId
+  return providerId ? (modelIdOptionsByProvider.value[providerId] ?? []) : []
+})
+
+watch(() => editingModel.value.providerId, providerId => loadModelIdOptions(providerId))
+
 function edit(model: Model) {
   editingModel.value = {
     ...model,
@@ -29,12 +56,14 @@ function edit(model: Model) {
     thinkingMaxTokens: model.thinkingMaxTokens ?? undefined
   }
   isOpen.value = true
+  loadModelIdOptions(model.providerId)
 }
 
 function createNew() {
   editingModel.value = { icon: 'i-lucide-sparkles' }
   if (providers.value.length > 0) {
     editingModel.value.providerId = providers.value[0]?.id
+    loadModelIdOptions(editingModel.value.providerId)
   }
   isOpen.value = true
 }
@@ -122,11 +151,12 @@ async function removeModel(id: string) {
           </UFormField>
           <UFormField
             label="Model ID"
-            description="The exact ID used by the provider (e.g. gemini-1.5-pro)"
+            :description="modelIdOptionsLoading ? 'Loading models from provider…' : 'Fetched live from the provider — type to search, or enter one by hand'"
           >
             <USelectMenu
               v-model="editingModel.modelId"
               :items="modelIdOptions"
+              :loading="modelIdOptionsLoading"
               value-key="value"
               create-item
               class="w-full"
