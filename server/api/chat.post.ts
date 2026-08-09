@@ -44,8 +44,20 @@ export default defineEventHandler(async (event) => {
   if (conv.workspaceId) {
     const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, conv.workspaceId)).limit(1)
     if (workspace) {
-      workspacePath = workspace.path
-      workspaceName = workspace.name
+      // `workspace.path` is stored relative to NUXT_WORKSPACES_ROOT (see
+      // createWorkspace/updateWorkspace in server/utils/workspaces.ts) — it
+      // is NOT an absolute, ready-to-use cwd. Re-resolve it through the same
+      // fail-closed, symlink-aware jail check server/api/fs/browse.get.ts
+      // already uses, rather than trusting the raw column value: passing
+      // the relative string straight to execa's `cwd` would resolve against
+      // the Nitro process's own cwd instead of the workspace root, silently
+      // pointing the terminal tool at the wrong (or nonexistent) directory.
+      try {
+        workspacePath = await resolveWorkspacePath(workspace.path)
+        workspaceName = workspace.name
+      } catch (err) {
+        console.error('[chat] failed to resolve workspace path for terminal tool', err)
+      }
     }
   }
 

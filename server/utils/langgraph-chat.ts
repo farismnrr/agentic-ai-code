@@ -145,14 +145,16 @@ export function runLanggraphChat({
 
         const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
         if (systemPrompt) inputMessages.unshift(new SystemMessage(systemPrompt))
-        // Without a cap, a model that keeps mis-forming tool calls (e.g.
-        // gluing "ls -F" into a single `command` string instead of
-        // splitting it into `args`) can loop indefinitely re-trying
-        // variations instead of ever producing a final answer — agent mode
+        // Without a cap, a model that keeps mis-forming tool calls can loop
+        // indefinitely instead of ever producing a final answer — agent mode
         // already caps this via streamText's `stopWhen: stepCountIs(5)`.
+        // LangGraph counts each model call AND each tool call as a step, so
+        // this needs enough headroom for genuine multi-step exploration
+        // (e.g. "explain this project" reasonably takes 4-6 tool calls)
+        // plus the final synthesis call — 10 cuts that off mid-exploration.
         const stream = agent.streamEvents(
           { messages: inputMessages },
-          { version: 'v2', recursionLimit: 10 }
+          { version: 'v2', recursionLimit: 25 }
         )
 
         for await (const event of stream) {
