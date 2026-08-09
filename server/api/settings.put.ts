@@ -19,6 +19,10 @@ const settingsSchema = v.object({
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const body = await readValidatedBody(event, body => v.parse(settingsSchema, body))
-  return updateSettings(session.user.id, body)
+  const body = await readBody(event)
+  const parsed = v.safeParse(settingsSchema, body)
+  if (!parsed.success) {
+    throw unprocessable(parsed.issues)
+  }
+  return updateSettings(session.user.id, parsed.output)
 })

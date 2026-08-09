@@ -2,20 +2,17 @@
 useSeoMeta({ title: 'Model settings' })
 
 const settings = useSettings()
-const { models, load: loadModels } = useModels()
-const { providers, load: loadProviders } = useModelProviders()
 
-if (models.value.length === 0) {
-  await loadModels()
+const { data } = await useFetch('/api/settings/models-config')
+
+const { models } = useModels()
+const { providers, types } = useModelProviders()
+
+if (data.value) {
+  models.value = data.value.models
+  providers.value = data.value.providers
+  types.value = data.value.providerTypes
 }
-
-if (providers.value.length === 0) {
-  await loadProviders()
-}
-
-const modelItems = computed(() =>
-  models.value.map(model => ({ label: model.label || model.name, value: model.id, icon: 'i-lucide-box' }))
-)
 </script>
 
 <template>
@@ -37,7 +34,11 @@ const modelItems = computed(() =>
       <p class="text-sm text-muted mb-4">
         Add and configure specific models from your providers.
       </p>
-      <ModelList />
+      <ModelList 
+        :provider-options="data?.providerOptions || []" 
+        :model-id-options="data?.modelIdOptions || []"
+        :icon-options="data?.iconOptions || []"
+      />
     </div>
 
     <div>
@@ -58,7 +59,7 @@ const modelItems = computed(() =>
       >
         <USelect
           v-model="settings.defaultModelId"
-          :items="modelItems"
+          :items="data?.modelItems || []"
           icon="i-lucide-box"
           class="w-56"
         />

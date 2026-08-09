@@ -11,6 +11,12 @@ export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
   if (!id) throw badRequest('Missing provider ID')
-  const body = await readValidatedBody(event, body => v.parse(bodySchema, body))
-  return updateModelProvider(session.user.id, id, body)
+  
+  const body = await readBody(event)
+  const parsed = v.safeParse(bodySchema, body)
+  if (!parsed.success) {
+    throw unprocessable(parsed.issues)
+  }
+  
+  return updateModelProvider(session.user.id, id, parsed.output)
 })

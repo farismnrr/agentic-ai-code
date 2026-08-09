@@ -15,7 +15,11 @@ const bodySchema = v.object({
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const body = await readValidatedBody(event, body => v.parse(bodySchema, body))
-  const { providerId, ...modelData } = body
+  const body = await readBody(event)
+  const parsed = v.safeParse(bodySchema, body)
+  if (!parsed.success) {
+    throw unprocessable(parsed.issues)
+  }
+  const { providerId, ...modelData } = parsed.output
   return createModel(session.user.id, providerId, modelData)
 })

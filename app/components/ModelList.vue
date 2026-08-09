@@ -5,6 +5,12 @@ const { models, create, update, remove } = useModels()
 const { providers } = useModelProviders()
 const toast = useToast()
 
+const props = defineProps<{
+  providerOptions: { label: string, value: string }[]
+  modelIdOptions: { label: string, value: string }[]
+  iconOptions: { label: string, value: string, icon: string }[]
+}>()
+
 const isOpen = ref(false)
 const editingModel = ref<Partial<Model>>({})
 
@@ -42,8 +48,6 @@ async function removeModel(id: string) {
   await remove(id)
   toast.add({ title: 'Model removed' })
 }
-
-const providerOptions = computed(() => providers.value.map(p => ({ label: p.name, value: p.id })))
 </script>
 
 <template>
@@ -108,8 +112,11 @@ const providerOptions = computed(() => providers.value.map(p => ({ label: p.name
             label="Model ID"
             description="The exact ID used by the provider (e.g. gemini-1.5-pro)"
           >
-            <UInput
+            <USelectMenu
               v-model="editingModel.modelId"
+              :items="modelIdOptions"
+              value-key="value"
+              create-item
               class="w-full"
             />
           </UFormField>
@@ -126,8 +133,11 @@ const providerOptions = computed(() => providers.value.map(p => ({ label: p.name
             />
           </UFormField>
           <UFormField label="Icon">
-            <UInput
+            <USelectMenu
               v-model="editingModel.icon"
+              :items="iconOptions"
+              value-key="value"
+              create-item
               class="w-full"
             />
           </UFormField>
