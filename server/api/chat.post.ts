@@ -73,7 +73,13 @@ export default defineEventHandler(async (event) => {
   const buildWorkspaceSystemPrompt = (terminalAccess: 'none' | 'read-only' | 'full') => {
     if (!workspacePath) return undefined
     const base = `You are a coding assistant currently working in the workspace "${workspaceName}" located at ${workspacePath}.`
-    if (terminalAccess === 'none') return base
+    // A conversation can reach here with a real workspace but zero enabled
+    // tools (e.g. agent mode started fresh with nothing toggled on yet) —
+    // without being told that plainly, a model asked to read/edit a file has
+    // fabricated a plausible-sounding "I found the file and edited it"
+    // narrative instead of saying it has no way to do that. Never let silent
+    // tool absence read as an invitation to make something up.
+    if (terminalAccess === 'none') return `${base} You do NOT have any tool to read, search, or modify files in this conversation right now. If asked to do any of that, say plainly that you don't have that capability here (the user can enable the terminal tool via the Tools picker) — never claim to have looked at, found, or changed a file you have no way to access.`
     const exploreGuidance = `You have access to a \`terminal\` tool scoped to this workspace directory — use it proactively (e.g. \`tree\`, \`find\`, \`grep\`/\`rg\`, \`cat\`, \`sed -n\`) to explore, read, or search files when the user asks about their project, rather than asking them to paste code or links.`
     if (terminalAccess === 'read-only') return `${base} ${exploreGuidance}`
     return `${base} ${exploreGuidance} This terminal has full write access (not read-only) — before editing or overwriting any file, always re-read its current contents first with \`cat\`/\`sed -n\` in this same turn, even if you already saw it earlier in the conversation, since it may have changed since. Never assume a file's contents or line numbers from memory. After making a change, read the file back to confirm it applied correctly before telling the user it's done.`

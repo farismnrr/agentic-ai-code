@@ -3,7 +3,7 @@ import { models } from '#shared/utils/models'
 
 useSeoMeta({ title: 'New chat' })
 
-const { create, titleFrom } = useConversations()
+const { create, update, titleFrom } = useConversations()
 const { loaded, activeWorkspaceId, workspaces, setActive } = useWorkspaces()
 const settings = useSettings()
 const { set: setPendingPrompt } = usePendingPrompt()
@@ -37,6 +37,13 @@ watch(() => activeWorkspaceId.value, (newId) => {
 const modelId = ref(settings.value.defaultModelId)
 const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
+// A brand-new conversation has no id to PATCH yet, so there was previously no
+// way to enable a tool (including the native terminal) before the first
+// message — an agent-mode conversation started here always began with zero
+// tools available, silently, which a model can (and did) paper over by
+// fabricating a plausible-sounding answer instead of saying it lacks the
+// capability. Collected here, then applied once the conversation exists.
+const enabledToolIds = ref<string[]>([])
 
 const modeItems = [
   { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
@@ -75,6 +82,12 @@ async function start(text: string) {
 
   try {
     const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
+    // The create endpoint doesn't accept enabledToolIds (only PATCH does) —
+    // apply the picker's selection as a follow-up update, same mechanism
+    // [id].vue uses for every later change.
+    if (enabledToolIds.value.length > 0) {
+      await update(conversation.id, { enabledToolIds: enabledToolIds.value })
+    }
     clearEditor()
     if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
       setActive(workspaceId.value)
@@ -183,6 +196,10 @@ async function start(text: string) {
               :items="effortItems"
               variant="ghost"
               size="sm"
+            />
+            <ChatToolPicker
+              v-if="mode === 'agent'"
+              v-model="enabledToolIds"
             />
           </template>
         </UChatPrompt>
