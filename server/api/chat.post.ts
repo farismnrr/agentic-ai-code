@@ -1,8 +1,9 @@
-import { messages as messagesTable, conversations, workspaces } from '../database/schema'
+import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import { models } from '#shared/utils/models'
+import { getChatModel, resolveModelConfig } from '../utils/providers/index'
+import { getLanggraphModel } from '../utils/providers/langgraph-model'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
@@ -22,6 +23,32 @@ export default defineEventHandler(async (event) => {
     .from(conversations)
     .where(and(eq(conversations.id, conversationId), eq(conversations.userId, session.user.id)))
     .limit(1)
+
+  if (!conv) {
+    throw notFound('Conversation not found')
+  }
+
+  const [modelInfo] = await db
+    .select()
+    .from(models)
+    .where(eq(models.id, conv.modelId))
+    .limit(1)
+
+  if (!modelInfo) {
+    throw notFound('Model not found')
+  }
+
+  const [provider] = await db
+    .select()
+    .from(modelProviders)
+    .where(eq(modelProviders.id, modelInfo.providerId))
+    .limit(1)
+
+  if (!provider) {
+    throw notFound('Model provider not found')
+  }
+
+  const resolvedConfig = resolveModelConfig(modelInfo)
 
   if (!conv) {
     throw notFound('Conversation not found')
@@ -56,7 +83,7 @@ export default defineEventHandler(async (event) => {
         workspacePath = await resolveWorkspacePath(workspace.path)
         workspaceName = workspace.name
       } catch (err) {
-        console.error('[chat] failed to resolve workspace path for terminal tool', err)
+        logger.error('[chat] failed to resolve workspace path for terminal tool', err)
       }
     }
   }
@@ -126,6 +153,26 @@ export default defineEventHandler(async (event) => {
     try {
       await close()
 
+      // Diagnostic trail for provider-specific tool-call metadata (e.g.
+      // Gemini 3's thoughtSignature, carried as callProviderMetadata) —
+      // added after a real session showed the AI SDK's own "Replayed N
+      // functionCall part(s) without a thoughtSignature" warning with no
+      // way to tell, after the fact, whether the metadata was ever present
+      // at the point we persisted it. Logs every turn, not just failures,
+      // since the previous debugging session had to reconstruct this from
+      // raw DB rows after the fact.
+      const toolParts = parts.filter(p => String(p.type).startsWith('tool-'))
+      if (toolParts.length > 0) {
+        logger.info('[chat persist] assistant message with tool calls', {
+          conversationId: conv.id,
+          modelId: modelInfo.modelId,
+          providerType: provider.type,
+          isContinuation,
+          toolCallCount: toolParts.length,
+          toolCallsMissingProviderMetadata: toolParts.filter(p => !('callProviderMetadata' in p) && !('resultProviderMetadata' in p)).length
+        })
+      }
+
       if (isContinuation) {
         const [last] = await db
           .select()
@@ -146,7 +193,7 @@ export default defineEventHandler(async (event) => {
         parts
       })
     } catch (err) {
-      console.error('[chat onEnd] failed to persist assistant message', err)
+      logger.error('[chat onEnd] failed to persist assistant message', err)
     }
   }
 
@@ -154,9 +201,10 @@ export default defineEventHandler(async (event) => {
     // Chat mode always wires the read-only terminal tool in when a
     // workspace is resolved (see server/utils/langgraph-tools.ts).
     const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
+    const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     const uiStream = runLanggraphChat({
       uiMessages: messages as UIMessage[],
-      modelId: conv.modelId || 'vx/gemini-3-flash-preview',
+      baseModel: langgraphModel,
       workspacePath,
       systemPrompt,
       onEnd: async (parts) => {
@@ -166,10 +214,9 @@ export default defineEventHandler(async (event) => {
     return createUIMessageStreamResponse({ stream: uiStream })
   }
 
-  const modelInfo = models.find(m => m.id === (conv.modelId || 'vx/gemini-3-flash-preview'))
-  let baseModel = getRouterModel(conv.modelId || 'vx/gemini-3-flash-preview')
+  let baseModel = getChatModel(provider, modelInfo.modelId)
 
-  if (modelInfo?.supportsReasoning) {
+  if (resolvedConfig.thinkingEnabled) {
     baseModel = wrapLanguageModel({
       model: baseModel,
       middleware: extractReasoningMiddleware({ tagName: 'think' })
@@ -193,14 +240,15 @@ export default defineEventHandler(async (event) => {
     // native option (see .agents/memories/ai-sdk-native-features.md on
     // preferring SDK mechanisms over hand-rolled ones).
     timeout: { totalMs: 180_000, stepMs: 60_000 },
+    maxOutputTokens: resolvedConfig.maxOutputTokens,
     abortSignal: abortController.signal,
-    providerOptions: modelInfo?.supportsReasoning
+    providerOptions: resolvedConfig.thinkingEnabled
       ? {
-          '9router': { reasoningEffort: conv.reasoningEffort ?? 'medium' }
+          [provider.type]: { reasoningEffort: conv.reasoningEffort ?? 'medium' }
         }
       : undefined,
     onError: ({ error }) => {
-      console.error('[chat stream]', error)
+      logger.error('[chat stream]', error)
     }
   })
 

@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { models } from '#shared/utils/models'
-
 useSeoMeta({ title: 'New chat' })
 
 const { create, update, titleFrom } = useConversations()
@@ -9,6 +7,11 @@ const settings = useSettings()
 const { set: setPendingPrompt } = usePendingPrompt()
 const router = useRouter()
 const toast = useToast()
+const { models, load: loadModels } = useModels()
+
+if (models.value.length === 0) {
+  await loadModels()
+}
 
 // Belt-and-suspenders alongside layouts/default.vue's own restore: pages
 // and layouts each get their own Suspense boundary in Nuxt, so the
@@ -34,7 +37,7 @@ watch(() => activeWorkspaceId.value, (newId) => {
   }
 })
 // Seeded from the saved default so the settings page actually governs this.
-const modelId = ref(settings.value.defaultModelId)
+const modelId = ref<string | undefined>(settings.value.defaultModelId ?? undefined)
 const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
 // A brand-new conversation has no id to PATCH yet, so there was previously no
@@ -58,7 +61,7 @@ const effortItems = [
 ]
 
 const supportsReasoning = computed(() => {
-  return models.find(m => m.id === modelId.value)?.supportsReasoning ?? false
+  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
 })
 
 const suggestions = [
@@ -69,7 +72,7 @@ const suggestions = [
 ]
 
 const modelItems = computed(() =>
-  models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
+  models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
 
 const workspaceItems = computed(() =>
@@ -179,7 +182,7 @@ async function start(text: string) {
             <USelect
               v-model="modelId"
               :items="modelItems"
-              :icon="models.find(m => m.id === modelId)?.icon"
+              icon="i-lucide-box"
               variant="ghost"
               size="sm"
             />

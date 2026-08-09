@@ -4,13 +4,30 @@ ENV PATH="$PNPM_HOME:$PATH"
 ENV CI=true
 RUN corepack enable
 
+FROM base AS runtime-tools
+# node:22-slim ships almost nothing beyond coreutils/findutils/grep/sed/awk —
+# the terminal tool's own system prompt (see buildWorkspaceSystemPrompt in
+# server/api/chat.post.ts) tells the model to use `tree`, `grep`/`rg`, `git`,
+# none of which existed in the image, so every such call failed to even
+# spawn (see packages/terminal-tool/src/index.ts's execa `.failed` handling).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    tree \
+    ripgrep \
+    less \
+    unzip \
+    jq \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 FROM base AS build
 WORKDIR /app
 COPY . .
 RUN pnpm install --config.ignore-scripts=true
 RUN pnpm build
 
-FROM base AS runtime
+FROM runtime-tools AS runtime
 WORKDIR /app
 COPY --from=build /app/.output ./.output
 # otel-preload.mjs runs via `node --import` before Nitro's own build output

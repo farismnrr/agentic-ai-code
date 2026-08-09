@@ -12,6 +12,16 @@ services:
       - "host.docker.internal:host-gateway"
     env_file:
       - .env
+    volumes:
+      # The terminal tool resolves workspace paths under NUXT_WORKSPACES_ROOT
+      # (see server/utils/workspaces.ts) — without this mount that root only
+      # exists on the host, so every command's `cwd` is missing inside the
+      # container and execa fails to spawn silently (see runTerminalCommand
+      # in packages/terminal-tool/src/index.ts, which returned an unhelpful
+      # "Exit: undefined" for this exact case before that was also fixed).
+      # Mounted at the identical absolute path on both sides so the DB's
+      # already-resolved workspace paths need no translation.
+      - ${NUXT_WORKSPACES_ROOT}:${NUXT_WORKSPACES_ROOT}
     environment:
       - NUXT_OTEL_ENABLED=true
       - NUXT_OTEL_JAEGER_ENDPOINT=http://jaeger:4317

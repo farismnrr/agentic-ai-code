@@ -39,7 +39,7 @@ export const runTerminalCommand = async ({
     if (process.env.LANG) env.LANG = process.env.LANG
 
     const timeoutMs = 30000
-    const { exitCode, stdout, stderr, timedOut } = await execa(finalCommand, finalArgs, {
+    const result = await execa(finalCommand, finalArgs, {
       shell: false,
       cwd,
       env,
@@ -48,6 +48,7 @@ export const runTerminalCommand = async ({
       killSignal: 'SIGKILL',
       reject: false
     })
+    const { exitCode, stdout, stderr, timedOut } = result
 
     // `exitCode` is undefined when the process was killed for timing out
     // rather than exiting on its own — surface that explicitly instead of
@@ -55,6 +56,19 @@ export const runTerminalCommand = async ({
     // failure and gives the model nothing to act on.
     if (timedOut) {
       return `Error: command timed out after ${timeoutMs / 1000}s and was killed.`
+    }
+
+    // `reject: false` means execa never throws, even when the process
+    // couldn't be spawned at all (bad `cwd`, missing binary, ENOENT, …) —
+    // that case also has `exitCode: undefined` but with empty stdout/stderr
+    // and no signal that anything actually went wrong. Without checking
+    // `.failed` here, this silently returned "Exit: undefined / Stdout: /
+    // Stderr: " for every single command, indistinguishable from a command
+    // that legitimately produced no output — the model had no way to tell
+    // "this ran and did nothing" from "this never ran at all", and neither
+    // did anyone reading the logs.
+    if (result.failed) {
+      return `Error: ${result.shortMessage}`
     }
 
     const truncate = (str: string) => str.length > 20000 ? str.slice(0, 20000) + '... (truncated)' : str

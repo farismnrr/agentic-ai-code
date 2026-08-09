@@ -15,7 +15,7 @@ export function useMailer() {
 
   async function sendEmail({ to, subject, html }: { to: string, subject: string, html: string }) {
     if (!config.smtpHost || !config.smtpUser || !config.smtpPassword) {
-      console.warn('SMTP is not fully configured. Email was not sent.', { to, subject })
+      logger.warn('SMTP is not fully configured. Email was not sent.', undefined, { to, subject })
       // We don't throw an error here to prevent blocking the user if SMTP is misconfigured in dev
       return false
     }
@@ -29,7 +29,7 @@ export function useMailer() {
       })
       return true
     } catch (error) {
-      console.error('Failed to send email:', error)
+      logger.error('Failed to send email', error)
       return false
     }
   }

@@ -133,7 +133,7 @@ export default defineOAuthGitHubEventHandler({
     return sendRedirect(event, '/chat')
   },
   onError(event, error) {
-    console.error('GitHub OAuth error:', error)
+    logger.error('GitHub OAuth error', error)
     return sendRedirect(event, '/login?error=GitHub login failed')
   }
 })

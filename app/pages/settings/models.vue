@@ -1,22 +1,60 @@
 <script setup lang="ts">
-import { models } from '#shared/utils/models'
+import type { ModelProviderTypeOption } from '~/composables/useModelProviders'
 
 useSeoMeta({ title: 'Model settings' })
 
 const settings = useSettings()
 
+const { data } = await useFetch('/api/settings/models-config')
+
+const { models } = useModels()
+const { providers, types } = useModelProviders()
+
+if (data.value) {
+  models.value = data.value.models
+  providers.value = data.value.providers
+  types.value = data.value.providerTypes as ModelProviderTypeOption[]
+}
+
+// Derived from the live `models` state so a model added/removed below
+// updates this dropdown immediately, without needing the page reloaded.
 const modelItems = computed(() =>
-  models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
+  models.value.map(m => ({ label: m.label, value: m.id, icon: 'i-lucide-box' }))
 )
+
+const defaultModelId = computed({
+  get: () => settings.value.defaultModelId ?? undefined,
+  set: (value: string | undefined) => { settings.value.defaultModelId = value ?? null }
+})
 </script>
 
 <template>
-  <div class="space-y-4 py-4">
+  <div class="space-y-8 py-4">
+    <div>
+      <h2 class="text-base font-semibold text-highlighted">
+        Model Providers
+      </h2>
+      <p class="text-sm text-muted mb-4">
+        Configure your model providers (e.g. 9Router, GCP Agent Platform).
+      </p>
+      <ProviderList />
+    </div>
+
     <div>
       <h2 class="text-base font-semibold text-highlighted">
         Models
       </h2>
-      <p class="text-sm text-muted">
+      <p class="text-sm text-muted mb-4">
+        Add and configure specific models from your providers.
+      </p>
+      <ModelList :icon-options="data?.iconOptions || []" />
+    </div>
+
+    <div>
+      <h2 class="text-base font-semibold text-highlighted">
+        Default Settings
+      </h2>
+      <p class="text-sm text-muted mb-4">
         Defaults for new conversations. Existing ones keep the model they
         were started with.
       </p>
@@ -25,13 +63,13 @@ const modelItems = computed(() =>
     <UCard :ui="{ body: 'divide-y divide-default' }">
       <UFormField
         label="Default model"
-        :description="models.find(m => m.id === settings.defaultModelId)?.description"
+        :description="models?.find(m => m.id === settings.defaultModelId)?.description"
         class="flex items-start justify-between gap-4 pb-4"
       >
         <USelect
-          v-model="settings.defaultModelId"
+          v-model="defaultModelId"
           :items="modelItems"
-          :icon="models.find(m => m.id === settings.defaultModelId)?.icon"
+          icon="i-lucide-box"
           class="w-56"
         />
       </UFormField>

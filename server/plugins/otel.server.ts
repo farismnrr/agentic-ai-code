@@ -34,4 +34,13 @@ export default defineNitroPlugin(async () => {
     processors: [new BatchLogRecordProcessor({ exporter: logExporter })]
   })
   logs.setGlobalLoggerProvider(loggerProvider)
+
+  // Node-level warnings (process.emitWarning) — including the AI SDK's own
+  // "AI SDK Warning System" (e.g. missing Gemini 3 thoughtSignature on
+  // replayed tool calls) — only ever reached `docker compose logs` before
+  // this. logger.warn() also goes through consola for stdout, so this
+  // doesn't change what operators see locally, only what reaches Loki.
+  process.on('warning', (warning) => {
+    logger.forwardOnly(13, 'WARN', warning.message, { warningName: warning.name, stack: warning.stack })
+  })
 })

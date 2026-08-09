@@ -8,6 +8,7 @@ import {
   jsonb,
   boolean,
   real,
+  integer,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
 import type { McpTool, UIMessage } from '#shared/types/chat'
@@ -151,11 +152,52 @@ export const userSettings = aiCode.table('user_settings', {
   language: text('language').notNull().default('en'),
   streaming: boolean('streaming').notNull().default(true),
   sendOnEnter: boolean('send_on_enter').notNull().default(true),
-  defaultModelId: text('default_model_id').notNull(),
+  defaultModelId: uuid('default_model_id').references(() => models.id, { onDelete: 'set null' }),
   temperature: real('temperature').notNull().default(0.7),
   systemPrompt: text('system_prompt').notNull().default(''),
   displayName: text('display_name').notNull(),
   email: text('email').notNull()
+})
+
+// ---------------------------------------------------------------------------
+// Model Providers
+// ---------------------------------------------------------------------------
+
+export type ModelProviderType = 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
+
+export const modelProviders = aiCode.table('model_providers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').$type<ModelProviderType>().notNull(),
+  name: text('name').notNull(),
+  baseUrl: text('base_url'),
+  apiKeyEncrypted: text('api_key_encrypted').notNull(),
+  /** Only meaningful for openai_compatible/anthropic_compatible — sent on every request to that provider's endpoint. */
+  customHeaders: jsonb('custom_headers').$type<Record<string, string>>().notNull().default({}),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+})
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+export const models = aiCode.table('models', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  providerId: uuid('provider_id').notNull().references(() => modelProviders.id, { onDelete: 'cascade' }),
+  modelId: text('model_id').notNull(),
+  label: text('label').notNull(),
+  description: text('description').notNull().default(''),
+  icon: text('icon').notNull().default('i-lucide-sparkles'),
+  contextWindow: integer('context_window'),
+  maxOutputTokens: integer('max_output_tokens'),
+  thinkingEnabled: boolean('thinking_enabled'),
+  thinkingMinTokens: integer('thinking_min_tokens'),
+  thinkingMaxTokens: integer('thinking_max_tokens'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })
 
 // ---------------------------------------------------------------------------

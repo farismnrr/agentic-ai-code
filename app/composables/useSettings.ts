@@ -1,10 +1,8 @@
-import { defaultModelId } from '#shared/utils/models'
-
 export interface AppSettings {
   language: string
   streaming: boolean
   sendOnEnter: boolean
-  defaultModelId: string
+  defaultModelId: string | null
   temperature: number
   systemPrompt: string
   displayName: string
@@ -17,7 +15,7 @@ export function useSettings() {
     language: 'en',
     streaming: true,
     sendOnEnter: true,
-    defaultModelId,
+    defaultModelId: null,
     temperature: 0.7,
     systemPrompt: '',
     displayName: 'Faris',
