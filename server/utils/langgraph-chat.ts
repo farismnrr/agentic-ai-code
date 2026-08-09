@@ -1,6 +1,6 @@
 import { createAgent } from 'langchain'
 import { getLanggraphModel } from './langgraph-model'
-import { langgraphTools } from './langgraph-tools'
+import { buildLanggraphTools } from './langgraph-tools'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
@@ -40,7 +40,7 @@ function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: s
   })
 }
 
-export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd: (parts: UIMessage['parts']) => Promise<void>) {
+export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, workspacePath: string | undefined, onEnd: (parts: UIMessage['parts']) => Promise<void>) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
 
   return createUIMessageStream({
@@ -128,6 +128,7 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
           return
         }
 
+        const langgraphTools = buildLanggraphTools({ workspacePath })
         const agent = createAgent({ model: baseModel, tools: langgraphTools })
 
         const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
