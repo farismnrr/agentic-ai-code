@@ -5,6 +5,9 @@ allowBuilds:
   unrs-resolver: false
   vue-demi: false
 
+packages:
+  - 'packages/*'
+
 # Every advisory below is transitive — none of these are direct dependencies.
 # They come in through Nuxt's own tree (nitropack, @nuxt/eslint, @nuxt/icon),
 # so we can't wait for each intermediate package to bump. Each entry pins the
