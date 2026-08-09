@@ -1,0 +1,14 @@
+{
+  "name": "@ai-code/curl-tool",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "bin": {
+    "curl-tool": "./bin/cli.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.2.5",
+    "zod": "^4.4.3"
+  }
+}
