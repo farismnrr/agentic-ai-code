@@ -535,3 +535,16 @@ exists.
   `context-compaction.ts` actually triggers a compaction round. Confirm
   it's hidden for models without `contextWindow` set.
 - `npx nuxi typecheck` and `pnpm lint` clean.
+
+### Phase 4 review fix (implemented)
+Initial implementation debounced the mirror-back watcher's *callback body*
+but kept `{ deep: true }` on `watch(chat.messages, ...)` — verified against
+`@ai-sdk/vue`'s source (`node_modules/@ai-sdk/vue/dist/index.js:333-343`)
+that `chat.messages` is a `shallowRef` and the SDK itself calls
+`triggerRef()` on every push/pop/replace, which already forces the watcher
+to fire on every mutation with no `deep` option needed. Keeping `deep:
+true` meant Vue still ran a full `traverse()` — walking every message and
+part in the conversation — on every single streamed chunk, before the
+debounce's `setTimeout` was ever reached, un-throttled by the fix. Removed
+`{ deep: true }`: same trigger frequency (the SDK's own `triggerRef`
+already guarantees it), zero traversal cost.

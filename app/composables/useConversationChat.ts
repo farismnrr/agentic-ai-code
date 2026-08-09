@@ -68,10 +68,20 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }
   }
 
+  // Not `{ deep: true }`: `chat.messages` is a `shallowRef` and the SDK
+  // itself calls `triggerRef()` on every push/pop/replace
+  // (@ai-sdk/vue's `pushMessage`/`popMessage`/`replaceMessage`), which
+  // already forces this watcher to fire on every mutation regardless of
+  // the deep option. `deep: true` bought nothing here except making Vue
+  // `traverse()` — walk every message and every part — on every single
+  // streamed chunk before this callback (and its debounce) ever runs,
+  // which was the other half of the freeze: cost proportional to total
+  // conversation size, paid per token, un-throttleable by debouncing the
+  // callback body alone.
   watch(chat.messages, () => {
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(flushMessages, 300)
-  }, { deep: true })
+  })
 
   watch(() => chat.status.value, (status) => {
     if (status !== 'streaming') {
