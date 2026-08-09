@@ -3,9 +3,14 @@ useSeoMeta({ title: 'Model settings' })
 
 const settings = useSettings()
 const { models, load: loadModels } = useModels()
+const { providers, load: loadProviders } = useModelProviders()
 
 if (models.value.length === 0) {
   await loadModels()
+}
+
+if (providers.value.length === 0) {
+  await loadProviders()
 }
 
 const modelItems = computed(() =>

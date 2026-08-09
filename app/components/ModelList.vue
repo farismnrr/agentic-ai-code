@@ -56,6 +56,7 @@ const providerOptions = computed(() => providers.value.map(p => ({ label: p.name
         label="Add Model"
         size="xs"
         color="primary"
+        :disabled="providers.length === 0"
         @click="createNew"
       />
     </div>
