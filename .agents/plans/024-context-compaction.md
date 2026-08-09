@@ -257,7 +257,7 @@ Two gaps specific to a conversation that compacts many times in a row:
 
 ---
 
-## Phase 3 (planned, not yet implemented): stop sending full chat history on every request
+## Phase 3 (implemented): stop sending full chat history on every request
 
 ### Why
 Phases 1-2 fixed what's sent *to the LLM*. This phase fixes the other half:
