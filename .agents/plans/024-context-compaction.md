@@ -548,3 +548,9 @@ part in the conversation — on every single streamed chunk, before the
 debounce's `setTimeout` was ever reached, un-throttled by the fix. Removed
 `{ deep: true }`: same trigger frequency (the SDK's own `triggerRef`
 already guarantees it), zero traversal cost.
+
+## Status: CLOSED
+
+All four phases implemented, reviewed, typechecked, linted, `pnpm audit`
+clean, migrations applied. Phases 1-3 merged via PR #84. Phase 4 branch:
+`feat/024-p4-chat-ux-fixes`.
