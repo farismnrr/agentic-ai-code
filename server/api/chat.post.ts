@@ -1,8 +1,11 @@
-import { messages as messagesTable, conversations } from '../database/schema'
+import { messages as messagesTable, conversations, workspaces } from '../database/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { models } from '#shared/utils/models'
+import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
+import { createTerminalAiTool } from '@ai-code/terminal-tool'
+import { assertSafeCommand } from '../utils/exec-guard'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -36,6 +39,14 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  let workspacePath: string | undefined
+  if (conv.workspaceId) {
+    const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, conv.workspaceId)).limit(1)
+    if (workspace) {
+      workspacePath = workspace.path
+    }
+  }
+
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
   // against the user's stored mcp_servers rows into real ai@7 tools, and
   // conv.approvals into streamText's toolApproval map — see plan 012 Phase 2
@@ -49,6 +60,15 @@ export default defineEventHandler(async (event) => {
     tools = mcp.tools
     toolApproval = mcp.toolApproval
     close = mcp.close
+
+    if (conv.enabledToolIds?.includes(NATIVE_TERMINAL_TOOL_ID) && workspacePath) {
+      tools['terminal'] = createTerminalAiTool({
+        cwd: workspacePath,
+        assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
+      })
+      const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
+      toolApproval['terminal'] = approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
+    }
   } else {
     close = async () => {}
   }
@@ -85,7 +105,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (conv.mode === 'chat') {
-    const uiStream = runLanggraphChat(messages as UIMessage[], conv.modelId || 'vx/gemini-3-flash-preview', async (parts) => {
+    const uiStream = runLanggraphChat(messages as UIMessage[], conv.modelId || 'vx/gemini-3-flash-preview', workspacePath, async (parts) => {
       await persistAssistantMessage(parts, false)
     })
     return createUIMessageStreamResponse({ stream: uiStream })

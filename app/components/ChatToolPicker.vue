@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { nativeTools } from '#shared/utils/native-tools'
+
 const modelValue = defineModel<string[]>({ default: () => [] })
 
 const { servers } = useMcpServers()
@@ -58,6 +60,24 @@ function toggleServer(serverId: string) {
             settings
           </ULink>.
         </p>
+
+        <div
+          v-if="nativeTools.length > 0"
+          class="mb-2"
+        >
+          <div class="px-2 py-1 font-medium text-sm">
+            Built-in
+          </div>
+          <UCheckbox
+            v-for="tool in nativeTools"
+            :key="tool.id"
+            :model-value="isOn(tool.id)"
+            :label="tool.name"
+            :description="tool.description"
+            class="px-2 py-1 ps-6"
+            @update:model-value="toggleTool(tool.id)"
+          />
+        </div>
 
         <div
           v-for="server in usable"
