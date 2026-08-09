@@ -1,5 +1,5 @@
 import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
-import { eq, and, desc, asc } from 'drizzle-orm'
+import { eq, and, gt, desc, asc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
@@ -49,8 +49,19 @@ export default defineEventHandler(async (event) => {
     throw notFound('Model provider not found')
   }
 
+  // Bound the query with the compaction cutoff (once one exists) instead of
+  // fetching every message in the conversation on every single turn —
+  // everything at/before the cutoff is already represented by
+  // conv.contextSummary and gets discarded by resolveMessagesForModel
+  // anyway. See server/utils/context-compaction.ts for where this cached
+  // timestamp is written (alongside contextSummaryUpToMessageId, only on
+  // an actual compaction event, not the per-turn hot path).
+  const historyWhere = conv.contextSummaryUpToCreatedAt
+    ? and(eq(messagesTable.conversationId, conv.id), gt(messagesTable.createdAt, conv.contextSummaryUpToCreatedAt))
+    : eq(messagesTable.conversationId, conv.id)
+
   const dbRows = await db.select().from(messagesTable)
-    .where(eq(messagesTable.conversationId, conv.id))
+    .where(historyWhere)
     .orderBy(asc(messagesTable.createdAt))
   let messages: UIMessage[] = dbRows.map(r => ({ id: r.id, role: r.role as UIMessage['role'], parts: r.parts as UIMessage['parts'] }))
 

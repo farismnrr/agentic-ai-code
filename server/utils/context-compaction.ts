@@ -1,6 +1,6 @@
 import { generateText, convertToModelMessages, type LanguageModel } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import { conversations as conversationsTable } from '../database/schema'
+import { conversations as conversationsTable, messages as messagesTable } from '../database/schema'
 import { eq } from 'drizzle-orm'
 import { logger } from './logger'
 
@@ -152,11 +152,23 @@ export async function resolveMessagesForModel({
 
     if (newSummary) {
       const db = useDb()
+
+      // Cache the cutoff message's createdAt alongside its id so
+      // chat.post.ts can bound its per-turn history query
+      // (`createdAt > this`) instead of fetching the whole conversation
+      // every turn — this only runs on an actual compaction event (rare),
+      // not the per-turn hot path.
+      const [cutoffRow] = await db.select({ createdAt: messagesTable.createdAt })
+        .from(messagesTable)
+        .where(eq(messagesTable.id, newCutoffMessage.id))
+        .limit(1)
+
       // Persist new summary and cutoff
       await db.update(conversationsTable)
         .set({
           contextSummary: newSummary,
           contextSummaryUpToMessageId: newCutoffMessage.id,
+          contextSummaryUpToCreatedAt: cutoffRow?.createdAt,
           updatedAt: new Date()
         })
         .where(eq(conversationsTable.id, conv.id))

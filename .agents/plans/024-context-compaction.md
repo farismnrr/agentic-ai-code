@@ -350,3 +350,29 @@ No schema/migration changes.
 - Tool approval: full approve flow still completes exactly as before (highest-regression-risk path — re-check against `chat.post.ts:57-64`'s documented behavior).
 - Network tab: `/api/chat` request body is a single message, not the full array, even on a long conversation.
 - `npx nuxi typecheck` clean.
+
+---
+
+## Phase 3 review fix (implemented): bound the DB read too
+
+The first Phase 3 cut fixed the network side but still ran
+`SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at`
+unbounded on every turn — full table read moved from client→server payload
+to server→DB read, not eliminated. Fixed by caching
+`conversations.contextSummaryUpToCreatedAt` (new nullable timestamp column,
+migration `0014_simple_matthew_murdock.sql`) alongside the existing
+`contextSummaryUpToMessageId`, written only when an actual compaction round
+happens (`context-compaction.ts`, one extra single-row lookup on that rare
+path). `chat.post.ts`'s per-turn history query now does
+`gt(messagesTable.createdAt, conv.contextSummaryUpToCreatedAt)` when that
+cutoff exists, reading only the tail — zero extra queries in the steady
+state (the timestamp rides along on the already-loaded `conv` row), and the
+DB read stays bounded once a conversation has compacted at least once.
+
+## Status: CLOSED
+
+All three phases + review hardening implemented, typechecked, migrations
+applied. Commits: `e388979`, `23beafb`, `e1599ab`, `779f859`, `a09fed9`,
+plus this final DB-read-bounding fix. Manual testing pending — see
+`.agents/memories/` if any issue surfaces post-merge that's worth
+recording as a durable trap.

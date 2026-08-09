@@ -111,6 +111,12 @@ export const conversations = aiCode.table('conversations', {
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
   contextSummary: text('context_summary'),
   contextSummaryUpToMessageId: uuid('context_summary_up_to_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+  // Cached `createdAt` of the message above so chat.post.ts can bound its
+  // per-turn history query (`createdAt > this`) instead of fetching every
+  // message in the conversation on every single turn — see
+  // server/api/chat.post.ts and the note in context-compaction.ts where
+  // this is written alongside contextSummaryUpToMessageId.
+  contextSummaryUpToCreatedAt: timestamp('context_summary_up_to_created_at', { withTimezone: true }),
   // Cached from the most recent assistant message's real `usage.totalTokens`
   // (see server/utils/context-compaction.ts) so the compaction budget check
   // can read it off the already-loaded `conv` row instead of re-querying
