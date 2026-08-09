@@ -87,4 +87,6 @@ export interface Conversation {
   approvals: Record<string, ApprovalDecision>
   contextSummary?: string | null
   contextSummaryUpToMessageId?: string | null
+  lastMeasuredTokens?: number | null
+  lastMeasuredMessageId?: string | null
 }

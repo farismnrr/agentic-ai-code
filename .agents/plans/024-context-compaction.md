@@ -200,3 +200,153 @@ untouched — only the numerator gets more accurate.
 - Confirm the no-usage-available fallback path still works (e.g. stub a
   provider response with `usage: undefined`) — compaction must not throw
   or silently stop triggering when usage is missing.
+
+---
+
+## Phase 2 review fixes (implemented)
+
+Two gaps found reviewing the Phase 2 commit, both fixed:
+
+1. **`@search`-forced replies in chat mode never captured usage.** The
+   forced-search branch in `langgraph-chat.ts` streams via
+   `baseModel.stream(inputMessages)` directly, separate from the
+   `agent.streamEvents` loop where `usage_metadata` capture was added —
+   so every `@search:`-triggered turn persisted `totalTokens: null` and
+   compaction silently fell back to the heuristic for that turn. Fixed by
+   reading `chunk.usage_metadata?.total_tokens` inside that branch's own
+   streaming loop too.
+
+2. **Unconditional extra DB query on every chat turn.** The original
+   Phase 2 implementation queried `messages` via `inArray` on every call
+   to `resolveMessagesForModel` (even when nowhere near budget) to look up
+   `totalTokens` for the candidate messages. Replaced with a cache:
+   `conversations` gained `lastMeasuredTokens` / `lastMeasuredMessageId`,
+   written once per turn in `chat.post.ts`'s `cacheLastMeasuredTokens`
+   (alongside the existing message insert/update), right after a real
+   usage number is known. `resolveMessagesForModel` now reads the baseline
+   straight off the already-loaded `conv` row — no query at all in the
+   common case.
+
+---
+
+## Repeated-compaction hardening (implemented)
+
+Two gaps specific to a conversation that compacts many times in a row:
+
+1. **No verification a compaction pass actually lands under budget.**
+   `resolveMessagesForModel` ran a single summarize pass and returned
+   whatever tail size resulted, with no check that `[summary, ...tail]`
+   was actually back under budget — a pathological case (one huge tool
+   output sitting in the kept tail) could ship an over-budget request
+   anyway. Added `truncatePartsIfNeeded()`: after summarizing, if
+   `[newSummaryMessage, ...tail]` is still over budget, clip oversized
+   `text`/`input`/`output` string content within tail parts (oldest tail
+   message first, the single most recent message left untouched) until
+   back under budget or all messages are checked. Logs a warning if still
+   over budget after that — a deliberate best-effort last resort, not a
+   hard guarantee.
+2. **Lossy drift across many resummarization rounds.** Each compaction
+   feeds the previous summary back into the next summarization call, so
+   over many rounds specific facts can gradually erode through repeated
+   compression. The summarization system prompt now explicitly instructs
+   the model to carry forward every concrete fact/decision/file
+   path/identifier/number already present in the existing summary
+   verbatim, rather than just "be concise" — reduces (doesn't eliminate)
+   drift. Full raw history in the DB remains the ultimate source of truth
+   regardless.
+
+---
+
+## Phase 3 (planned, not yet implemented): stop sending full chat history on every request
+
+### Why
+Phases 1-2 fixed what's sent *to the LLM*. This phase fixes the other half:
+what's sent *client → server*. `chat.post.ts` currently trusts the
+client-supplied `messages: UIMessage[]` request body as the full
+conversation history on every turn, and `useChat` (`useConversationChat.ts`)
+has no `transport`/`prepareSendMessagesRequest` override, so it defaults to
+sending its entire local `messages` state every time. Compaction never
+touches this — it only trims the in-memory array built inside
+`chat.post.ts` after the request already arrived. At high message counts
+this means unbounded JSON payload growth, `readBody()` parse cost, and
+`O(n)` scans (`messages.findIndex(...)`) on every single turn regardless of
+how well-compacted the model-facing context is.
+
+The `messages` table is already the durable, complete source of truth —
+confirmed via `server/api/conversations/[id].get.ts` →
+`listConversationMessages()` (`server/utils/messages.ts`), which already
+loads a conversation's full history straight from the DB, not from any
+client cache. The client array in `chat.post.ts` is redundant.
+
+### Three ways `useChat` re-sends messages (verified against `node_modules/ai/dist/index.js`)
+1. **`submit-message`** (normal new turn) — last client message is a new
+   user message not yet in the DB.
+2. **`regenerate-message`** (`regenerate()` in `app/pages/chat/[id].vue:291,403`,
+   always called with no `messageId` in this UI → always targets the last
+   assistant message) — `this.regenerate` trims the SDK's own
+   `state.messages` client-side to end right after the preceding user
+   message before sending. That last message is **already in the DB,
+   unchanged** — today's code (`if (lastMsg.role === 'user') insert`)
+   actually re-inserts it as a duplicate row every time regenerate is
+   clicked, silently. This phase fixes that as a side effect. The model
+   also must not see the stale assistant answer being replaced.
+3. **Tool-approval resume** — the existing in-flight assistant message is
+   re-sent with an appended approval part (`chat.post.ts:62-64`). Not a
+   new message; its content differs from what's currently in the DB.
+
+### Approach
+**Client** (`app/composables/useConversationChat.ts`): replace the bare
+`api: '/api/chat'` string with an explicit `DefaultChatTransport` (import
+from `'ai'`) using `prepareSendMessagesRequest`:
+```ts
+transport: new DefaultChatTransport({
+  api: '/api/chat',
+  prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
+    body: { id, trigger, messageId, message: messages[messages.length - 1] }
+  })
+})
+```
+`trigger` is the SDK's own `'submit-message' | 'regenerate-message' | 'resume-stream'` — reuse verbatim, don't re-derive server-side.
+`sendAutomaticallyWhen`/`onError` stay as-is.
+
+**Server** (`server/api/chat.post.ts`): read `{ message, trigger, id: conversationId }` instead of `{ messages, id }`. After the existing conv/model/provider lookups, reconstruct `messages` from the DB (same select shape as `listConversationMessages`):
+```ts
+const dbRows = await db.select().from(messagesTable)
+  .where(eq(messagesTable.conversationId, conv.id))
+  .orderBy(asc(messagesTable.createdAt))
+let messages: UIMessage[] = dbRows.map(r => ({ id: r.id, role: r.role as UIMessage['role'], parts: r.parts }))
+
+if (trigger === 'submit-message' && message?.role === 'user') {
+  const [inserted] = await db.insert(messagesTable)
+    .values({ conversationId: conv.id, role: 'user', parts: message.parts })
+    .returning({ id: messagesTable.id })
+  messages.push({ ...message, id: inserted.id })
+} else if (trigger === 'regenerate-message') {
+  // drop the stale assistant answer being replaced — not history for this call
+  if (messages.at(-1)?.role === 'assistant') messages = messages.slice(0, -1)
+} else {
+  // tool-approval resume (and resume-stream, safe no-op if `message` is undefined):
+  // swap in the client's freshly-updated version of the in-flight assistant
+  // message — DB still has the pre-approval parts.
+  if (message && messages.length > 0) messages[messages.length - 1] = message
+}
+```
+Every downstream use of `messages as UIMessage[]` (`resolveMessagesForModel`, `runLanggraphChat({ uiMessages })`, `convertToModelMessages(...)`, `toUIMessageStream({ originalMessages: messages, ... })`) switches to this reconstructed array — no call-site shape changes.
+
+`isContinuation` detection (`toUIMessageStream`'s `state.message.id === lastMessage?.id`, `node_modules/ai/dist/index.js:7456`) still works unchanged: the approval-resume branch puts the client's message (same id as what's being resumed) at the end of the reconstructed array, same as today.
+
+### Known accepted gap (pre-existing, unchanged by this phase)
+The stale assistant row being regenerated away is never deleted from the DB — it's excluded from what's sent to the model this turn, but stays as an orphaned row. This is true of today's code too (nothing currently deletes it either); fixing it is a separate, explicit scope decision, not bundled into this payload-size fix.
+
+### Files touched
+- `app/composables/useConversationChat.ts` — `DefaultChatTransport` + `prepareSendMessagesRequest`.
+- `server/api/chat.post.ts` — read `{ message, trigger, id }`, reconstruct `messages` from `messagesTable` keyed by `trigger`.
+
+No schema/migration changes.
+
+### Verification
+- New turn: persists once (not duplicated), reply coherent.
+- Regenerate: exactly one new assistant row, no duplicate user row, regenerated answer doesn't reference the discarded old answer.
+- Tool approval: full approve flow still completes exactly as before (highest-regression-risk path — re-check against `chat.post.ts:57-64`'s documented behavior).
+- Network tab: `/api/chat` request body is a single message, not the full array, even on a long conversation.
+- `npx nuxi typecheck` clean.

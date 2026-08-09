@@ -111,6 +111,12 @@ export const conversations = aiCode.table('conversations', {
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
   contextSummary: text('context_summary'),
   contextSummaryUpToMessageId: uuid('context_summary_up_to_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+  // Cached from the most recent assistant message's real `usage.totalTokens`
+  // (see server/utils/context-compaction.ts) so the compaction budget check
+  // can read it off the already-loaded `conv` row instead of re-querying
+  // `messages` on every single chat turn.
+  lastMeasuredTokens: integer('last_measured_tokens'),
+  lastMeasuredMessageId: uuid('last_measured_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })

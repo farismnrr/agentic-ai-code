@@ -154,6 +154,16 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
 
+  // Cached on `conversations` so the next turn's compaction budget check
+  // (server/utils/context-compaction.ts) can read the last real usage
+  // number off the already-loaded conversation row instead of issuing its
+  // own `messages` query every turn.
+  const cacheLastMeasuredTokens = async (messageId: string, totalTokens: number) => {
+    await db.update(conversations)
+      .set({ lastMeasuredTokens: totalTokens, lastMeasuredMessageId: messageId })
+      .where(eq(conversations.id, conv.id))
+  }
+
   const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false, totalTokens?: number | null) => {
     try {
       await close()
@@ -190,16 +200,19 @@ export default defineEventHandler(async (event) => {
           const updateData: { parts: UIMessage['parts'], totalTokens?: number } = { parts }
           if (totalTokens != null) updateData.totalTokens = totalTokens
           await db.update(messagesTable).set(updateData).where(eq(messagesTable.id, last.id))
+          if (totalTokens != null) await cacheLastMeasuredTokens(last.id, totalTokens)
           return
         }
       }
 
-      await db.insert(messagesTable).values({
+      const [inserted] = await db.insert(messagesTable).values({
         conversationId: conv.id,
         role: 'assistant',
         parts,
         totalTokens
-      })
+      }).returning({ id: messagesTable.id })
+
+      if (totalTokens != null && inserted) await cacheLastMeasuredTokens(inserted.id, totalTokens)
     } catch (err) {
       logger.error('[chat onEnd] failed to persist assistant message', err)
     }

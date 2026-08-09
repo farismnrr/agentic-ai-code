@@ -133,6 +133,9 @@ export function runLanggraphChat({
               writer.write({ type: 'text-delta', id: `text-${textIndex}`, delta })
               currentText += delta
             }
+            if (chunk.usage_metadata?.total_tokens) {
+              totalTokens = chunk.usage_metadata.total_tokens
+            }
           }
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           if (currentText) parts.push({ type: 'text', text: currentText })
