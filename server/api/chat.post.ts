@@ -1,5 +1,5 @@
 import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, asc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
@@ -11,7 +11,7 @@ import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const { messages, id: conversationId } = await readBody(event)
+  const { message, trigger, id: conversationId } = await readBody(event)
 
   if (!conversationId) {
     throw badRequest('Missing conversationId')
@@ -49,27 +49,35 @@ export default defineEventHandler(async (event) => {
     throw notFound('Model provider not found')
   }
 
+  const dbRows = await db.select().from(messagesTable)
+    .where(eq(messagesTable.conversationId, conv.id))
+    .orderBy(asc(messagesTable.createdAt))
+  let messages: UIMessage[] = dbRows.map(r => ({ id: r.id, role: r.role as UIMessage['role'], parts: r.parts as UIMessage['parts'] }))
+
+  if (trigger === 'submit-message' && message?.role === 'user') {
+    const [inserted] = await db.insert(messagesTable)
+      .values({ conversationId: conv.id, role: 'user', parts: message.parts })
+      .returning({ id: messagesTable.id })
+    messages.push({ ...message, id: inserted.id })
+  } else if (trigger === 'regenerate-message') {
+    // drop the stale assistant answer being replaced — not history for this call
+    if (messages.at(-1)?.role === 'assistant') messages = messages.slice(0, -1)
+  } else {
+    // tool-approval resume (and resume-stream, safe no-op if `message` is undefined):
+    // swap in the client's freshly-updated version of the in-flight assistant
+    // message — DB still has the pre-approval parts.
+    if (message && messages.length > 0) messages[messages.length - 1] = message
+  }
+
   const resolvedConfig = resolveModelConfig(modelInfo)
 
   const resolvedMessages = await resolveMessagesForModel({
-    messages: messages as UIMessage[],
+    messages,
     conv,
     contextWindow: resolvedConfig.contextWindow,
     maxOutputTokens: resolvedConfig.maxOutputTokens,
     getSummarizerModel: () => getChatModel(provider, modelInfo.modelId)
   })
-
-  // Resuming a tool-approval response re-sends the same in-flight assistant
-  // message with an appended approval part, not a new user message — so this
-  // only fires on an actual new turn, not every request.
-  const lastMsg = messages[messages.length - 1]
-  if (lastMsg && lastMsg.role === 'user') {
-    await db.insert(messagesTable).values({
-      conversationId: conv.id,
-      role: 'user',
-      parts: lastMsg.parts
-    })
-  }
 
   let workspacePath: string | undefined
   let workspaceName: string | undefined
