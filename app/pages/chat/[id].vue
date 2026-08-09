@@ -80,6 +80,14 @@ const modelItems = computed(() =>
   models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
 )
 
+// Matches app/pages/chat/index.vue's modeItems — same labels/icons for the
+// same setting, just editable after creation here instead of only at
+// creation time.
+const modeItems = [
+  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
+  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
+]
+
 const modelId = computed({
   get: () => conversation.value?.modelId ?? models[0]!.id,
   set: (value: string) => {
@@ -391,6 +399,13 @@ defineShortcuts({
           />
 
           <template #footer>
+            <USelect
+              v-model="mode"
+              :items="modeItems"
+              :icon="modeItems.find(m => m.value === mode)?.icon"
+              variant="ghost"
+              size="sm"
+            />
             <USelect
               v-model="modelId"
               :items="modelItems"
