@@ -1,21 +1,24 @@
 import * as v from 'valibot'
 
+const PROVIDER_TYPES_REQUIRING_BASE_URL = ['openai_compatible', 'anthropic_compatible']
+
 const bodySchema = v.pipe(
   v.object({
-    type: v.picklist(['9router', 'gcp_agent_platform']),
+    type: v.picklist(['openai_compatible', 'anthropic_compatible', 'vertex_ai']),
     name: v.string(),
     baseUrl: v.optional(v.string()),
-    apiKey: v.string()
+    apiKey: v.string(),
+    customHeaders: v.optional(v.record(v.string(), v.string()))
   }),
-  // 9Router speaks a self-hosted OpenAI-compatible API, so there's no
-  // sensible default base URL to fall back to — an empty one means every
-  // chat request and live model-list fetch fails later with an opaque
-  // error instead of being rejected up front where the user is looking.
+  // OpenAI/Anthropic-compatible services are self-hosted or third-party, so
+  // there's no sensible default base URL to fall back to — an empty one
+  // means every chat request and live model-list fetch fails later with an
+  // opaque error instead of being rejected up front where the user is looking.
   v.forward(
     v.partialCheck(
       [['type'], ['baseUrl']],
-      input => input.type !== '9router' || !!input.baseUrl,
-      'Base URL is required for 9Router providers'
+      input => !PROVIDER_TYPES_REQUIRING_BASE_URL.includes(input.type) || !!input.baseUrl,
+      'Base URL is required for this provider type'
     ),
     ['baseUrl']
   )

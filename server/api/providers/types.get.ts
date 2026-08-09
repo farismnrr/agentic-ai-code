@@ -1,4 +1,8 @@
 export default defineEventHandler(async (event) => {
   await requireUserSession(event)
-  return ['9router', 'gcp_agent_platform']
+  return [
+    { label: 'OpenAI Compatible', value: 'openai_compatible' },
+    { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
+    { label: 'Vertex AI', value: 'vertex_ai' }
+  ]
 })

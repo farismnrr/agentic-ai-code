@@ -9,9 +9,10 @@ export type { UIMessage }
 
 export interface ModelProvider {
   id: string
-  type: '9router' | 'gcp_agent_platform'
+  type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
   name: string
   baseUrl: string | null
+  customHeaders: Record<string, string>
   enabled: boolean
   hasApiKey: boolean
 }

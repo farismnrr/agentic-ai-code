@@ -163,13 +163,17 @@ export const userSettings = aiCode.table('user_settings', {
 // Model Providers
 // ---------------------------------------------------------------------------
 
+export type ModelProviderType = 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
+
 export const modelProviders = aiCode.table('model_providers', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  type: text('type').$type<'9router' | 'gcp_agent_platform'>().notNull(),
+  type: text('type').$type<ModelProviderType>().notNull(),
   name: text('name').notNull(),
   baseUrl: text('base_url'),
   apiKeyEncrypted: text('api_key_encrypted').notNull(),
+  /** Only meaningful for openai_compatible/anthropic_compatible — sent on every request to that provider's endpoint. */
+  customHeaders: jsonb('custom_headers').$type<Record<string, string>>().notNull().default({}),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()

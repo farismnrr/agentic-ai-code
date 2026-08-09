@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ModelProviderTypeOption } from '~/composables/useModelProviders'
+
 useSeoMeta({ title: 'Model settings' })
 
 const settings = useSettings()
@@ -11,7 +13,7 @@ const { providers, types } = useModelProviders()
 if (data.value) {
   models.value = data.value.models
   providers.value = data.value.providers
-  types.value = data.value.providerTypes
+  types.value = data.value.providerTypes as ModelProviderTypeOption[]
 }
 
 const defaultModelId = computed({

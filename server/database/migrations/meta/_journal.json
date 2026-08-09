@@ -71,6 +71,13 @@
       "when": 1786268158275,
       "tag": "0009_fine_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786275236419,
+      "tag": "0010_provider-types-and-custom-headers",
+      "breakpoints": true
     }
   ]
 }

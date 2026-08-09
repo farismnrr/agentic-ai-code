@@ -12,7 +12,11 @@ export default defineEventHandler(async (event) => {
   return {
     providers,
     models,
-    providerTypes: ['9router', 'gcp_agent_platform'],
+    providerTypes: [
+      { label: 'OpenAI Compatible', value: 'openai_compatible' },
+      { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
+      { label: 'Vertex AI', value: 'vertex_ai' }
+    ],
     providerOptions: providers.map(p => ({ label: p.name, value: p.id })),
     modelItems: models.map(m => ({ label: m.label, value: m.id, icon: 'i-lucide-box' })),
     iconOptions: [

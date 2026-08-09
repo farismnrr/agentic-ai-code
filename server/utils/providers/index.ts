@@ -1,5 +1,6 @@
-import { getRouter9Model, listRouter9Models } from './router9'
-import { getGcpAgentPlatformModel, listGcpAgentPlatformModels } from './gcp-agent-platform'
+import { getOpenAiCompatibleModel, listOpenAiCompatibleModels } from './openai-compatible'
+import { getAnthropicCompatibleModel, listAnthropicCompatibleModels } from './anthropic-compatible'
+import { getVertexAiModel, listVertexAiModels } from './vertex-ai'
 import type { modelProviders } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
@@ -7,23 +8,31 @@ import type { ChatModel } from '#shared/types/chat'
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
 
 export function getChatModel(provider: ModelProviderRow, modelId: string) {
-  if (provider.type === '9router') {
-    if (!provider.baseUrl) throw new Error('9Router provider requires a base URL')
-    return getRouter9Model(modelId, provider.baseUrl, provider.apiKeyEncrypted)
+  if (provider.type === 'openai_compatible') {
+    if (!provider.baseUrl) throw new Error('OpenAI Compatible providers require a base URL')
+    return getOpenAiCompatibleModel(modelId, provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
   }
-  if (provider.type === 'gcp_agent_platform') {
-    return getGcpAgentPlatformModel(modelId, provider.apiKeyEncrypted)
+  if (provider.type === 'anthropic_compatible') {
+    if (!provider.baseUrl) throw new Error('Anthropic Compatible providers require a base URL')
+    return getAnthropicCompatibleModel(modelId, provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'vertex_ai') {
+    return getVertexAiModel(modelId, provider.apiKeyEncrypted)
   }
   throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }
 
 export function listProviderModels(provider: ModelProviderRow) {
-  if (provider.type === '9router') {
-    if (!provider.baseUrl) throw new Error('9Router provider requires a base URL')
-    return listRouter9Models(provider.baseUrl, provider.apiKeyEncrypted)
+  if (provider.type === 'openai_compatible') {
+    if (!provider.baseUrl) throw new Error('OpenAI Compatible providers require a base URL')
+    return listOpenAiCompatibleModels(provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
   }
-  if (provider.type === 'gcp_agent_platform') {
-    return listGcpAgentPlatformModels(provider.apiKeyEncrypted)
+  if (provider.type === 'anthropic_compatible') {
+    if (!provider.baseUrl) throw new Error('Anthropic Compatible providers require a base URL')
+    return listAnthropicCompatibleModels(provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'vertex_ai') {
+    return listVertexAiModels(provider.apiKeyEncrypted)
   }
   throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }

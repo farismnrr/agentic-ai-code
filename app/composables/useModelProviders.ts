@@ -1,20 +1,26 @@
 export interface ModelProvider {
   id: string
-  type: '9router' | 'gcp_agent_platform'
+  type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
   name: string
   baseUrl: string | null
+  customHeaders: Record<string, string>
   enabled: boolean
   hasApiKey: boolean
 }
 
+export interface ModelProviderTypeOption {
+  label: string
+  value: ModelProvider['type']
+}
+
 export function useModelProviders() {
   const providers = useState<ModelProvider[]>('model-providers', () => [])
-  const types = useState<string[]>('model-provider-types', () => [])
+  const types = useState<ModelProviderTypeOption[]>('model-provider-types', () => [])
 
   async function load() {
     const fetch = import.meta.server ? useRequestFetch() : $fetch
     providers.value = await fetch<ModelProvider[]>('/api/providers')
-    types.value = await fetch<string[]>('/api/providers/types')
+    types.value = await fetch<ModelProviderTypeOption[]>('/api/providers/types')
   }
 
   async function create(data: Partial<ModelProvider> & { apiKey: string }) {
