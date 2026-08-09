@@ -1,7 +1,7 @@
 import { createAgent } from 'langchain'
 import { getLanggraphModel } from './langgraph-model'
 import { langgraphTools } from './langgraph-tools'
-import { searxngSearchTool } from './tools/searxng-search-tool'
+import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
@@ -84,6 +84,7 @@ export function runLanggraphChat(uiMessages: UIMessage[], modelId: string, onEnd
 
           let searchResultText: string
           try {
+            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl })
             searchResultText = await searxngSearchTool.invoke({ query: cleanedText })
           } catch (err) {
             searchResultText = `Error: ${(err as Error).message}`

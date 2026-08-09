@@ -1,0 +1,14 @@
+{
+  "name": "@ai-code/searxng-search-tool",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "bin": {
+    "searxng-search-tool": "./bin/cli.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.2.5",
+    "zod": "^4.4.3"
+  }
+}

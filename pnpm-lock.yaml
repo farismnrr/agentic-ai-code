@@ -19,6 +19,12 @@ importers:
 
   .:
     dependencies:
+      '@ai-code/curl-tool':
+        specifier: workspace:*
+        version: link:packages/curl-tool
+      '@ai-code/searxng-search-tool':
+        specifier: workspace:*
+        version: link:packages/searxng-search-tool
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.25
         version: 3.0.25(zod@4.4.3)
@@ -113,6 +119,24 @@ importers:
       vue-tsc:
         specifier: ^3.3.9
         version: 3.3.9(typescript@6.0.3)
+
+  packages/curl-tool:
+    dependencies:
+      '@langchain/core':
+        specifier: ^1.2.5
+        version: 1.2.5(openai@6.49.0(ws@8.21.0)(zod@4.4.3))(ws@8.21.0)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  packages/searxng-search-tool:
+    dependencies:
+      '@langchain/core':
+        specifier: ^1.2.5
+        version: 1.2.5(openai@6.49.0(ws@8.21.0)(zod@4.4.3))(ws@8.21.0)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 
