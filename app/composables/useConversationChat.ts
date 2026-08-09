@@ -59,9 +59,35 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK
   // owns the messages during a turn; the store is the durable copy.
-  watch(chat.messages, (messages) => {
-    if (conversation.value) setMessages(conversation.value.id, messages as UIMessage[])
-  }, { deep: true })
+  let debounceTimer: ReturnType<typeof setTimeout>
+
+  const flushMessages = () => {
+    clearTimeout(debounceTimer)
+    if (conversation.value) {
+      setMessages(conversation.value.id, chat.messages.value as UIMessage[])
+    }
+  }
+
+  // Not `{ deep: true }`: `chat.messages` is a `shallowRef` and the SDK
+  // itself calls `triggerRef()` on every push/pop/replace
+  // (@ai-sdk/vue's `pushMessage`/`popMessage`/`replaceMessage`), which
+  // already forces this watcher to fire on every mutation regardless of
+  // the deep option. `deep: true` bought nothing here except making Vue
+  // `traverse()` — walk every message and every part — on every single
+  // streamed chunk before this callback (and its debounce) ever runs,
+  // which was the other half of the freeze: cost proportional to total
+  // conversation size, paid per token, un-throttleable by debouncing the
+  // callback body alone.
+  watch(chat.messages, () => {
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(flushMessages, 300)
+  })
+
+  watch(() => chat.status.value, (status) => {
+    if (status !== 'streaming') {
+      flushMessages()
+    }
+  })
 
   return chat
 }

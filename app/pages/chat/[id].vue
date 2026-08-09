@@ -74,11 +74,19 @@ const enabledToolIds = computed({
   }
 })
 
-function rememberApproval({ toolId, decision }: { toolId: string, decision: 'always' | 'never' }) {
-  if (!conversation.value) return
-  update(conversation.value.id, {
-    approvals: { ...conversation.value.approvals, [toolId]: decision }
-  })
+async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }) {
+  if (remember && toolId && conversation.value) {
+    await update(conversation.value.id, {
+      approvals: { ...conversation.value.approvals, [toolId]: remember }
+    })
+  }
+  addToolApprovalResponse({ id, approved })
+}
+
+function updateApprovals(approvals: Record<string, 'always' | 'never'>) {
+  if (conversation.value) {
+    update(conversation.value.id, { approvals })
+  }
 }
 
 const modelItems = computed(() =>
@@ -360,8 +368,7 @@ defineShortcuts({
         <ChatToolApproval
           :messages="messages"
           :conversation="conversation"
-          @respond="addToolApprovalResponse"
-          @remember="rememberApproval"
+          @answer="handleApprovalAnswer"
         />
       </UContainer>
     </template>
@@ -428,6 +435,12 @@ defineShortcuts({
             <ChatToolPicker
               v-if="mode === 'agent'"
               v-model="enabledToolIds"
+              :approvals="conversation?.approvals"
+              @update:approvals="updateApprovals"
+            />
+            <ChatContextUsage
+              :conversation="conversation"
+              :model-id="modelId"
             />
           </template>
         </UChatPrompt>
