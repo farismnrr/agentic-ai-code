@@ -54,7 +54,7 @@ export function runLanggraphChat({
   baseModel: LanggraphModel
   workspacePath: string | undefined
   systemPrompt: string | undefined
-  onEnd: (parts: UIMessage['parts']) => Promise<void>
+  onEnd: (parts: UIMessage['parts'], totalTokens?: number) => Promise<void>
 }) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
 
@@ -67,6 +67,7 @@ export function runLanggraphChat({
       // Declared outside the try so the catch block below can clear it too —
       // a `const` inside `try {}` isn't visible in the paired `catch {}`.
       let timeoutId: ReturnType<typeof setTimeout> | undefined
+      let totalTokens: number | undefined
 
       try {
         if (forced && cleanedText !== undefined) {
@@ -132,12 +133,15 @@ export function runLanggraphChat({
               writer.write({ type: 'text-delta', id: `text-${textIndex}`, delta })
               currentText += delta
             }
+            if (chunk.usage_metadata?.total_tokens) {
+              totalTokens = chunk.usage_metadata.total_tokens
+            }
           }
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           if (currentText) parts.push({ type: 'text', text: currentText })
 
           try {
-            await onEnd(parts)
+            await onEnd(parts, totalTokens)
           } catch (err) {
             logger.error('[langgraph onEnd] failed', err)
           }
@@ -171,6 +175,10 @@ export function runLanggraphChat({
         for await (const event of stream) {
           if (event.event === 'on_chat_model_stream') {
             const chunk = event.data?.chunk?.content
+            const chunkUsage = event.data?.chunk?.usage_metadata
+            if (chunkUsage?.total_tokens) {
+              totalTokens = chunkUsage.total_tokens
+            }
             if (chunk) {
               if (!currentText) {
                 textIndex++
@@ -226,7 +234,7 @@ export function runLanggraphChat({
         }
 
         try {
-          await onEnd(parts)
+          await onEnd(parts, totalTokens)
         } catch (err) {
           logger.error('[langgraph onEnd] failed', err)
         }
@@ -249,7 +257,7 @@ export function runLanggraphChat({
         })
         if (parts.length > 0) {
           try {
-            await onEnd(parts)
+            await onEnd(parts, totalTokens)
           } catch (err) {
             logger.error('[langgraph onEnd] failed', err)
           }

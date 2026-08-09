@@ -85,4 +85,9 @@ export interface Conversation {
   enabledToolIds: string[]
   /** `McpTool['id']` → remembered decision, set by "always allow" / "always deny". */
   approvals: Record<string, ApprovalDecision>
+  contextSummary?: string | null
+  contextSummaryUpToMessageId?: string | null
+  contextSummaryUpToCreatedAt?: string | null
+  lastMeasuredTokens?: number | null
+  lastMeasuredMessageId?: string | null
 }

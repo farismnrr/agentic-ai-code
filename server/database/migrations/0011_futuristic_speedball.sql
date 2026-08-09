@@ -1,0 +1,3 @@
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "context_summary" text;--> statement-breakpoint
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "context_summary_up_to_message_id" uuid;--> statement-breakpoint
+ALTER TABLE "ai_code"."conversations" ADD CONSTRAINT "conversations_context_summary_up_to_message_id_messages_id_fk" FOREIGN KEY ("context_summary_up_to_message_id") REFERENCES "ai_code"."messages"("id") ON DELETE set null ON UPDATE no action;

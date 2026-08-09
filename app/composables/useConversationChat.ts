@@ -1,5 +1,5 @@
 import { useChat } from '@ai-sdk/vue'
-import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
+import { lastAssistantMessageIsCompleteWithApprovalResponses, DefaultChatTransport } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
@@ -36,10 +36,12 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   })
 
   const chat = useChat(() => ({
-    api: '/api/chat',
-    body: {
-      id: conversationId.value
-    },
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
+        body: { id, trigger, messageId, message: messages[messages.length - 1] }
+      })
+    }),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
     // Without this, `addToolApprovalResponse` only marks the pending part as
