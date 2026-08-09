@@ -1,7 +1,7 @@
 import { generateText, convertToModelMessages, type LanguageModel } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import { conversations as conversationsTable } from '../database/schema'
-import { eq } from 'drizzle-orm'
+import { conversations as conversationsTable, messages as messagesTable } from '../database/schema'
+import { eq, inArray } from 'drizzle-orm'
 import { logger } from './logger'
 
 // Token estimation heuristic: approximate tokens based on stringified length
@@ -55,7 +55,42 @@ export async function resolveMessagesForModel({
     }
   }
 
-  const currentTokens = estimateTokens(candidate)
+  const tokenMap: Record<string, number> = {}
+  try {
+    const db = useDb()
+    const msgIds = candidate.map(m => m.id).filter(id => id && !id.startsWith('temp-') && !id.startsWith('summary-'))
+    if (msgIds.length > 0) {
+      const usages = await db.select({ id: messagesTable.id, totalTokens: messagesTable.totalTokens })
+        .from(messagesTable)
+        .where(inArray(messagesTable.id, msgIds))
+
+      for (const u of usages) {
+        if (u.totalTokens != null) tokenMap[u.id] = u.totalTokens
+      }
+    }
+  } catch (err) {
+    logger.warn('[compaction] Failed to fetch totalTokens', err)
+  }
+
+  let measuredBaseline = 0
+  let measuredIdx = -1
+
+  for (let i = candidate.length - 1; i >= 0; i--) {
+    const m = candidate[i]
+    if (m.role === 'assistant' && m.id && tokenMap[m.id] != null) {
+      measuredBaseline = tokenMap[m.id]
+      measuredIdx = i
+      break
+    }
+  }
+
+  let currentTokens: number
+  if (measuredIdx >= 0) {
+    const unmeasured = candidate.slice(measuredIdx + 1)
+    currentTokens = measuredBaseline + estimateTokens(unmeasured)
+  } else {
+    currentTokens = estimateTokens(candidate)
+  }
 
   if (currentTokens <= budget) {
     return candidate

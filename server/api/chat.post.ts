@@ -154,7 +154,7 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
 
-  const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false) => {
+  const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false, totalTokens?: number | null) => {
     try {
       await close()
 
@@ -187,7 +187,9 @@ export default defineEventHandler(async (event) => {
           .limit(1)
 
         if (last && last.role === 'assistant') {
-          await db.update(messagesTable).set({ parts }).where(eq(messagesTable.id, last.id))
+          const updateData: { parts: UIMessage['parts'], totalTokens?: number } = { parts }
+          if (totalTokens != null) updateData.totalTokens = totalTokens
+          await db.update(messagesTable).set(updateData).where(eq(messagesTable.id, last.id))
           return
         }
       }
@@ -195,7 +197,8 @@ export default defineEventHandler(async (event) => {
       await db.insert(messagesTable).values({
         conversationId: conv.id,
         role: 'assistant',
-        parts
+        parts,
+        totalTokens
       })
     } catch (err) {
       logger.error('[chat onEnd] failed to persist assistant message', err)
@@ -212,8 +215,8 @@ export default defineEventHandler(async (event) => {
       baseModel: langgraphModel,
       workspacePath,
       systemPrompt,
-      onEnd: async (parts) => {
-        await persistAssistantMessage(parts, false)
+      onEnd: async (parts, totalTokens) => {
+        await persistAssistantMessage(parts, false, totalTokens)
       }
     })
     return createUIMessageStreamResponse({ stream: uiStream })
@@ -271,7 +274,14 @@ export default defineEventHandler(async (event) => {
       // renders a complete answer while the DB write silently never
       // happens and nothing is logged anywhere. Catch and log explicitly
       // so a persistence failure is at least visible instead of invisible.
-      await persistAssistantMessage(responseMessage.parts, isContinuation)
+      let totalTokens: number | undefined
+      try {
+        const usage = await result.usage
+        if (usage?.totalTokens) totalTokens = usage.totalTokens
+      } catch {
+        // ignore
+      }
+      await persistAssistantMessage(responseMessage.parts, isContinuation, totalTokens)
     }
   })
 

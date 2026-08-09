@@ -110,3 +110,93 @@ call, so no extra provider config or API key handling is required.
   - The conversation continues to respond coherently to something referenced only in the summarized (older) portion.
   - The DB `messages` table still has full untouched history (compaction never deletes rows).
   - Both `chat` mode and `agent` mode conversations trigger compaction correctly.
+
+---
+
+## Phase 2 (follow-up): replace the token heuristic with real usage accounting
+
+**Status: Phase 1 and Phase 2 are implemented.** (`server/utils/context-compaction.ts`,
+schema columns, wired into `chat.post.ts`). It uses
+`estimateTokens = JSON.stringify(obj).length / 4` for every budget check —
+a rough approximation (worse for non-English text and for dense
+JSON/code, which is most of what tool calls carry). The AI SDK already
+returns *real* token usage per turn; this phase swaps the heuristic for
+that wherever it's available and keeps the heuristic only as a fallback
+for the still-unmeasured tail.
+
+### Why this is safe to bolt on, not a rewrite
+`resolveMessagesForModel`'s structure doesn't change — only what
+`estimateTokens(candidate)` is fed. The insight: we don't need to
+re-measure the *whole* candidate array from scratch each turn. The
+previous assistant turn's `streamText`/`generateText` call already told us,
+exactly, how many tokens the model was given as input for that call. That
+number is a real baseline; only messages appended *after* that turn (the
+new user message, and anything else not yet sent to a model) are
+unmeasured and still need the char/4 estimate.
+
+### 1. Schema: persist real usage per message
+Add to `messages` (`server/database/schema.ts`):
+- `totalTokens: integer` (nullable) — `usage.totalTokens` from the AI SDK
+  (agent mode) or the LangChain equivalent (chat mode), i.e. the exact
+  input+output token count the provider billed for the turn that produced
+  this assistant message. Null for user messages and for any assistant
+  message where usage wasn't available (heuristic fallback still applies).
+
+Migration via `npm run db:generate` / `db:migrate`, same as Phase 1.
+
+### 2. Capture usage where it already exists
+- **Agent mode** (`chat.post.ts`, `streamText` branch): `result.usage` is a
+  promise on the `streamText` return value, resolving to
+  `{ inputTokens, outputTokens, totalTokens }` once the stream finishes.
+  `persistAssistantMessage` already runs at stream end (`onEnd` in
+  `toUIMessageStream`) — thread `await result.usage` through to it and
+  store `totalTokens` on the inserted/updated row.
+- **Chat mode** (`server/utils/langgraph-chat.ts`): LangChain
+  `AIMessageChunk`s carry `.usage_metadata` (`input_tokens`,
+  `output_tokens`, `total_tokens`), and chunk `.concat()` merges it
+  automatically — verify against the installed `@langchain/core` version,
+  since API shape has moved between versions. Accumulate it the same way
+  `currentText` is already accumulated in the streaming loop, and pass the
+  final total through `onEnd` alongside `parts`. If a given call genuinely
+  exposes no usage metadata, leave `totalTokens` null and let the fallback
+  in step 3 cover it — don't block the feature on chat-mode parity.
+
+### 3. Use it in `resolveMessagesForModel`
+Replace the blanket `estimateTokens(candidate)` call with:
+1. Walk `candidate` from the end backwards to find the most recent
+   assistant message with a non-null `totalTokens` — call its value
+   `measuredBaseline` and its index `measuredIdx`.
+2. `projectedTokens = measuredBaseline + estimateTokens(candidate.slice(measuredIdx + 1))`
+   — real count for everything up through the last completed turn, heuristic
+   only for the handful of messages since (typically just the latest user
+   message, sometimes an in-flight tool-approval continuation).
+3. If no message in `candidate` has a measured `totalTokens` (fresh
+   conversation, or usage capture failed), fall back to
+   `estimateTokens(candidate)` exactly as today — Phase 1's behavior is the
+   floor, never worse than before.
+4. Compare `projectedTokens` (or the fallback) against `budget` as today.
+
+This keeps the margin/budget math (`contextWindow - maxOutputTokens - 10%`)
+untouched — only the numerator gets more accurate.
+
+### Files touched (Phase 2)
+- `server/database/schema.ts` — add `messages.totalTokens`.
+- `server/database/migrations/` — new generated migration.
+- `server/api/chat.post.ts` — capture `result.usage` and thread it into
+  `persistAssistantMessage`.
+- `server/utils/langgraph-chat.ts` — accumulate `usage_metadata` from the
+  LangChain stream, pass through `onEnd`.
+- `server/utils/context-compaction.ts` — swap flat heuristic for the
+  measured-baseline + heuristic-delta calculation above.
+
+### Verification (Phase 2)
+- After a normal turn, confirm the new assistant row has a non-null
+  `totalTokens` matching the order of magnitude you'd expect for that
+  conversation (cross-check against provider dashboard/logs if available).
+- Force a conversation with heavy non-English or code-heavy content and
+  confirm compaction now triggers at a materially different point than
+  Phase 1's char/4 estimate would have (log both `projectedTokens` and
+  what the old heuristic would've produced, temporarily, to compare).
+- Confirm the no-usage-available fallback path still works (e.g. stub a
+  provider response with `usage: undefined`) — compaction must not throw
+  or silently stop triggering when usage is missing.

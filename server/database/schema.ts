@@ -126,6 +126,7 @@ export const messages = aiCode.table('messages', {
     .references(() => conversations.id, { onDelete: 'cascade' }),
   role: text('role').notNull(),
   parts: jsonb('parts').$type<UIMessage['parts']>().notNull().default([]),
+  totalTokens: integer('total_tokens'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 })
 
