@@ -5,7 +5,7 @@ import type { UIMessage } from '#shared/types/chat'
 import { models } from '#shared/utils/models'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
-import { assertSafeCommand } from '../utils/exec-guard'
+import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -104,8 +104,16 @@ export default defineEventHandler(async (event) => {
         cwd: workspacePath,
         assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
       })
-      const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
-      toolApproval['terminal'] = approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
+      // Per-call, not per-tool: a read-only command (ls/cat/find/...) runs
+      // immediately regardless of the user's remembered decision — only a
+      // command capable of mutating something (anything outside the
+      // read-only allowlist, including any `bash`/`sh` invocation, which
+      // can't be statically judged safe) is gated behind approval.
+      toolApproval['terminal'] = async (input: { command: string, args?: string[] }) => {
+        if (await isReadOnlyCommand(input.command, input.args ?? [])) return 'approved'
+        const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
+        return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
+      }
     }
   } else {
     close = async () => {}
