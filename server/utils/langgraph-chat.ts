@@ -61,6 +61,9 @@ export function runLanggraphChat({
       const parts: any[] = []
       let currentText = ''
       let textIndex = 0
+      // Declared outside the try so the catch block below can clear it too —
+      // a `const` inside `try {}` isn't visible in the paired `catch {}`.
+      let timeoutId: ReturnType<typeof setTimeout> | undefined
 
       try {
         const baseModel = getLanggraphModel(modelId)
@@ -152,9 +155,16 @@ export function runLanggraphChat({
         // this needs enough headroom for genuine multi-step exploration
         // (e.g. "explain this project" reasonably takes 4-6 tool calls)
         // plus the final synthesis call — 10 cuts that off mid-exploration.
+        // LangChain has no built-in overall timeout (unlike streamText's
+        // native `timeout` option used in agent mode) — without this, a
+        // hung model API call had nothing to time it out, and the request
+        // would wait indefinitely. A tool call itself is already capped by
+        // execa's own 30s timeout; this bounds the model-call side.
+        const timeoutController = new AbortController()
+        timeoutId = setTimeout(() => timeoutController.abort(new Error('Model call timed out after 180s')), 180_000)
         const stream = agent.streamEvents(
           { messages: inputMessages },
-          { version: 'v2', recursionLimit: 25 }
+          { version: 'v2', recursionLimit: 25, signal: timeoutController.signal }
         )
 
         for await (const event of stream) {
@@ -207,6 +217,8 @@ export function runLanggraphChat({
           }
         }
 
+        clearTimeout(timeoutId)
+
         if (currentText) {
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           parts.push({ type: 'text', text: currentText })
@@ -218,6 +230,7 @@ export function runLanggraphChat({
           console.error('[langgraph onEnd] failed', err)
         }
       } catch (e: unknown) {
+        clearTimeout(timeoutId)
         if (currentText) {
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           parts.push({ type: 'text', text: currentText })

@@ -175,6 +175,12 @@ export default defineEventHandler(async (event) => {
     tools,
     toolApproval,
     stopWhen: stepCountIs(5),
+    // Without this, a hung model API call (as opposed to a hung terminal
+    // command, which execa already caps at 30s) had nothing to time it out —
+    // the request would wait indefinitely. `timeout` is streamText's own
+    // native option (see .agents/memories/ai-sdk-native-features.md on
+    // preferring SDK mechanisms over hand-rolled ones).
+    timeout: { totalMs: 180_000, stepMs: 60_000 },
     abortSignal: abortController.signal,
     providerOptions: modelInfo?.supportsReasoning
       ? {
