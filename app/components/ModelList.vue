@@ -6,9 +6,14 @@ const { providers, listModels } = useModelProviders()
 const toast = useToast()
 
 defineProps<{
-  providerOptions: { label: string, value: string }[]
   iconOptions: { label: string, value: string, icon: string }[]
 }>()
+
+// Derived from the live `providers` state (not a snapshot prop) so a
+// provider added in ProviderList.vue shows up here immediately — the two
+// components share the same `useModelProviders()` state, so this updates
+// the moment ProviderList's create()/remove() mutates it, no page reload.
+const providerOptions = computed(() => providers.value.map(p => ({ label: p.name, value: p.id })))
 
 type NullableNumericFields = 'contextWindow' | 'maxOutputTokens' | 'thinkingMinTokens' | 'thinkingMaxTokens'
 type EditingModel = Omit<Partial<Model>, NullableNumericFields | 'thinkingEnabled'> & {

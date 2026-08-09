@@ -17,8 +17,6 @@ export default defineEventHandler(async (event) => {
       { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
       { label: 'Vertex AI', value: 'vertex_ai' }
     ],
-    providerOptions: providers.map(p => ({ label: p.name, value: p.id })),
-    modelItems: models.map(m => ({ label: m.label, value: m.id, icon: 'i-lucide-box' })),
     iconOptions: [
       { label: 'Sparkles', value: 'i-lucide-sparkles', icon: 'i-lucide-sparkles' },
       { label: 'Bot', value: 'i-lucide-bot', icon: 'i-lucide-bot' },

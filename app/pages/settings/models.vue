@@ -16,6 +16,12 @@ if (data.value) {
   types.value = data.value.providerTypes as ModelProviderTypeOption[]
 }
 
+// Derived from the live `models` state so a model added/removed below
+// updates this dropdown immediately, without needing the page reloaded.
+const modelItems = computed(() =>
+  models.value.map(m => ({ label: m.label, value: m.id, icon: 'i-lucide-box' }))
+)
+
 const defaultModelId = computed({
   get: () => settings.value.defaultModelId ?? undefined,
   set: (value: string | undefined) => { settings.value.defaultModelId = value ?? null }
@@ -41,10 +47,7 @@ const defaultModelId = computed({
       <p class="text-sm text-muted mb-4">
         Add and configure specific models from your providers.
       </p>
-      <ModelList
-        :provider-options="data?.providerOptions || []"
-        :icon-options="data?.iconOptions || []"
-      />
+      <ModelList :icon-options="data?.iconOptions || []" />
     </div>
 
     <div>
@@ -65,7 +68,7 @@ const defaultModelId = computed({
       >
         <USelect
           v-model="defaultModelId"
-          :items="data?.modelItems || []"
+          :items="modelItems"
           icon="i-lucide-box"
           class="w-56"
         />

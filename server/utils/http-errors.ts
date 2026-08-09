@@ -1,4 +1,5 @@
 import type * as v from 'valibot'
+import { getLogger } from './otel'
 
 interface ProblemInit {
   status: number
@@ -8,7 +9,25 @@ interface ProblemInit {
   extra?: Record<string, unknown> // extension members, mis. { errors: [...] } atau retryAfter
 }
 
+// Every thrown API error funnels through here, so this is the one place
+// that needs instrumenting to get 4xx/5xx responses into Loki — before
+// this, only frontend-forwarded logs (server/api/telemetry.post.ts) ever
+// reached the logs pipeline; a server-side 502 like a dead upstream
+// provider was visible in `docker compose logs` but invisible in Loki.
 function problem(init: ProblemInit) {
+  const severityNumber = init.status >= 500 ? 17 : 13 // ERROR : WARN, matches telemetry.post.ts's scale
+  getLogger('ai-code-server').emit({
+    severityNumber,
+    severityText: severityNumber === 17 ? 'ERROR' : 'WARN',
+    body: `${init.status} ${init.title}${init.detail ? `: ${init.detail}` : ''}`,
+    attributes: {
+      'service.name': 'ai-code-server',
+      'status': init.status,
+      'type': init.type ?? 'about:blank',
+      ...init.extra
+    }
+  })
+
   return createError({
     statusCode: init.status,
     statusMessage: init.title,
@@ -45,5 +64,6 @@ export function tooManyRequests(retryAfterSeconds?: number) {
 
 export const internal = (cause?: unknown) => {
   console.error('[internal]', cause)
-  return problem({ status: 500, title: 'Internal Server Error' })
+  const detail = cause instanceof Error ? cause.message : cause ? String(cause) : undefined
+  return problem({ status: 500, title: 'Internal Server Error', detail })
 }
