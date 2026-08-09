@@ -1,16 +1,17 @@
 import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, gt, desc, asc } from 'drizzle-orm'
 import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
+import { resolveMessagesForModel } from '../utils/context-compaction'
 import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const { messages, id: conversationId } = await readBody(event)
+  const { message, trigger, id: conversationId } = await readBody(event)
 
   if (!conversationId) {
     throw badRequest('Missing conversationId')
@@ -48,23 +49,46 @@ export default defineEventHandler(async (event) => {
     throw notFound('Model provider not found')
   }
 
+  // Bound the query with the compaction cutoff (once one exists) instead of
+  // fetching every message in the conversation on every single turn —
+  // everything at/before the cutoff is already represented by
+  // conv.contextSummary and gets discarded by resolveMessagesForModel
+  // anyway. See server/utils/context-compaction.ts for where this cached
+  // timestamp is written (alongside contextSummaryUpToMessageId, only on
+  // an actual compaction event, not the per-turn hot path).
+  const historyWhere = conv.contextSummaryUpToCreatedAt
+    ? and(eq(messagesTable.conversationId, conv.id), gt(messagesTable.createdAt, conv.contextSummaryUpToCreatedAt))
+    : eq(messagesTable.conversationId, conv.id)
+
+  const dbRows = await db.select().from(messagesTable)
+    .where(historyWhere)
+    .orderBy(asc(messagesTable.createdAt))
+  let messages: UIMessage[] = dbRows.map(r => ({ id: r.id, role: r.role as UIMessage['role'], parts: r.parts as UIMessage['parts'] }))
+
+  if (trigger === 'submit-message' && message?.role === 'user') {
+    const [inserted] = await db.insert(messagesTable)
+      .values({ conversationId: conv.id, role: 'user', parts: message.parts })
+      .returning({ id: messagesTable.id })
+    messages.push({ ...message, id: inserted.id })
+  } else if (trigger === 'regenerate-message') {
+    // drop the stale assistant answer being replaced — not history for this call
+    if (messages.at(-1)?.role === 'assistant') messages = messages.slice(0, -1)
+  } else {
+    // tool-approval resume (and resume-stream, safe no-op if `message` is undefined):
+    // swap in the client's freshly-updated version of the in-flight assistant
+    // message — DB still has the pre-approval parts.
+    if (message && messages.length > 0) messages[messages.length - 1] = message
+  }
+
   const resolvedConfig = resolveModelConfig(modelInfo)
 
-  if (!conv) {
-    throw notFound('Conversation not found')
-  }
-
-  // Resuming a tool-approval response re-sends the same in-flight assistant
-  // message with an appended approval part, not a new user message — so this
-  // only fires on an actual new turn, not every request.
-  const lastMsg = messages[messages.length - 1]
-  if (lastMsg && lastMsg.role === 'user') {
-    await db.insert(messagesTable).values({
-      conversationId: conv.id,
-      role: 'user',
-      parts: lastMsg.parts
-    })
-  }
+  const resolvedMessages = await resolveMessagesForModel({
+    messages,
+    conv,
+    contextWindow: resolvedConfig.contextWindow,
+    maxOutputTokens: resolvedConfig.maxOutputTokens,
+    getSummarizerModel: () => getChatModel(provider, modelInfo.modelId)
+  })
 
   let workspacePath: string | undefined
   let workspaceName: string | undefined
@@ -149,7 +173,17 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
 
-  const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false) => {
+  // Cached on `conversations` so the next turn's compaction budget check
+  // (server/utils/context-compaction.ts) can read the last real usage
+  // number off the already-loaded conversation row instead of issuing its
+  // own `messages` query every turn.
+  const cacheLastMeasuredTokens = async (messageId: string, totalTokens: number) => {
+    await db.update(conversations)
+      .set({ lastMeasuredTokens: totalTokens, lastMeasuredMessageId: messageId })
+      .where(eq(conversations.id, conv.id))
+  }
+
+  const persistAssistantMessage = async (parts: UIMessage['parts'], isContinuation: boolean = false, totalTokens?: number | null) => {
     try {
       await close()
 
@@ -182,16 +216,22 @@ export default defineEventHandler(async (event) => {
           .limit(1)
 
         if (last && last.role === 'assistant') {
-          await db.update(messagesTable).set({ parts }).where(eq(messagesTable.id, last.id))
+          const updateData: { parts: UIMessage['parts'], totalTokens?: number } = { parts }
+          if (totalTokens != null) updateData.totalTokens = totalTokens
+          await db.update(messagesTable).set(updateData).where(eq(messagesTable.id, last.id))
+          if (totalTokens != null) await cacheLastMeasuredTokens(last.id, totalTokens)
           return
         }
       }
 
-      await db.insert(messagesTable).values({
+      const [inserted] = await db.insert(messagesTable).values({
         conversationId: conv.id,
         role: 'assistant',
-        parts
-      })
+        parts,
+        totalTokens
+      }).returning({ id: messagesTable.id })
+
+      if (totalTokens != null && inserted) await cacheLastMeasuredTokens(inserted.id, totalTokens)
     } catch (err) {
       logger.error('[chat onEnd] failed to persist assistant message', err)
     }
@@ -203,12 +243,12 @@ export default defineEventHandler(async (event) => {
     const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
     const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     const uiStream = runLanggraphChat({
-      uiMessages: messages as UIMessage[],
+      uiMessages: resolvedMessages,
       baseModel: langgraphModel,
       workspacePath,
       systemPrompt,
-      onEnd: async (parts) => {
-        await persistAssistantMessage(parts, false)
+      onEnd: async (parts, totalTokens) => {
+        await persistAssistantMessage(parts, false, totalTokens)
       }
     })
     return createUIMessageStreamResponse({ stream: uiStream })
@@ -226,7 +266,7 @@ export default defineEventHandler(async (event) => {
   const result = streamText({
     model: baseModel,
     system: buildWorkspaceSystemPrompt(tools?.terminal ? 'full' : 'none'),
-    messages: await convertToModelMessages(messages as UIMessage[], { tools }),
+    messages: await convertToModelMessages(resolvedMessages, { tools }),
     tools,
     toolApproval,
     // 5 was too low for a real terminal-backed edit flow (explore, read,
@@ -266,7 +306,14 @@ export default defineEventHandler(async (event) => {
       // renders a complete answer while the DB write silently never
       // happens and nothing is logged anywhere. Catch and log explicitly
       // so a persistence failure is at least visible instead of invisible.
-      await persistAssistantMessage(responseMessage.parts, isContinuation)
+      let totalTokens: number | undefined
+      try {
+        const usage = await result.usage
+        if (usage?.totalTokens) totalTokens = usage.totalTokens
+      } catch {
+        // ignore
+      }
+      await persistAssistantMessage(responseMessage.parts, isContinuation, totalTokens)
     }
   })
 

@@ -1,0 +1,1 @@
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "context_summary_up_to_created_at" timestamp with time zone;

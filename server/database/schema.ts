@@ -109,6 +109,20 @@ export const conversations = aiCode.table('conversations', {
   reasoningEffort: text('reasoning_effort').$type<'low' | 'medium' | 'high' | 'max'>(),
   enabledToolIds: jsonb('enabled_tool_ids').$type<string[]>().notNull().default([]),
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),
+  contextSummary: text('context_summary'),
+  contextSummaryUpToMessageId: uuid('context_summary_up_to_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+  // Cached `createdAt` of the message above so chat.post.ts can bound its
+  // per-turn history query (`createdAt > this`) instead of fetching every
+  // message in the conversation on every single turn — see
+  // server/api/chat.post.ts and the note in context-compaction.ts where
+  // this is written alongside contextSummaryUpToMessageId.
+  contextSummaryUpToCreatedAt: timestamp('context_summary_up_to_created_at', { withTimezone: true }),
+  // Cached from the most recent assistant message's real `usage.totalTokens`
+  // (see server/utils/context-compaction.ts) so the compaction budget check
+  // can read it off the already-loaded `conv` row instead of re-querying
+  // `messages` on every single chat turn.
+  lastMeasuredTokens: integer('last_measured_tokens'),
+  lastMeasuredMessageId: uuid('last_measured_message_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })
@@ -124,6 +138,7 @@ export const messages = aiCode.table('messages', {
     .references(() => conversations.id, { onDelete: 'cascade' }),
   role: text('role').notNull(),
   parts: jsonb('parts').$type<UIMessage['parts']>().notNull().default([]),
+  totalTokens: integer('total_tokens'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 })
 
