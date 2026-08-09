@@ -38,15 +38,24 @@ export const runTerminalCommand = async ({
     if (process.env.HOME) env.HOME = process.env.HOME
     if (process.env.LANG) env.LANG = process.env.LANG
 
-    const { exitCode, stdout, stderr } = await execa(finalCommand, finalArgs, {
+    const timeoutMs = 30000
+    const { exitCode, stdout, stderr, timedOut } = await execa(finalCommand, finalArgs, {
       shell: false,
       cwd,
       env,
       extendEnv: false,
-      timeout: 30000,
+      timeout: timeoutMs,
       killSignal: 'SIGKILL',
       reject: false
     })
+
+    // `exitCode` is undefined when the process was killed for timing out
+    // rather than exiting on its own — surface that explicitly instead of
+    // an ambiguous "Exit: undefined" that reads the same as an unrelated
+    // failure and gives the model nothing to act on.
+    if (timedOut) {
+      return `Error: command timed out after ${timeoutMs / 1000}s and was killed.`
+    }
 
     const truncate = (str: string) => str.length > 20000 ? str.slice(0, 20000) + '... (truncated)' : str
 
