@@ -18,42 +18,6 @@ type EditingModel = Omit<Partial<Model>, NullableNumericFields | 'thinkingEnable
 const isOpen = ref(false)
 const editingModel = ref<EditingModel>({})
 
-// Same low/medium/high/max shape as the per-conversation reasoning-effort
-// picker (see app/pages/chat/index.vue's effortItems) — raw token inputs
-// forced users to know provider-specific numbers off the top of their head.
-// Ranges follow the thinking-budget conventions most providers document
-// (Anthropic's extended thinking budget, Gemini's thinkingBudget): low for
-// quick/cheap reasoning, max for the hardest multi-step problems.
-const THINKING_BUDGET_PRESETS = {
-  low: { min: 1024, max: 4096 },
-  medium: { min: 4096, max: 8192 },
-  high: { min: 8192, max: 16384 },
-  max: { min: 16384, max: 32768 }
-} as const
-type ThinkingBudgetPreset = keyof typeof THINKING_BUDGET_PRESETS
-
-const thinkingBudgetItems = [
-  { label: 'Low', value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High', value: 'high' },
-  { label: 'Max', value: 'max' }
-]
-
-function presetFromTokens(min?: number, max?: number): ThinkingBudgetPreset {
-  const match = (Object.entries(THINKING_BUDGET_PRESETS) as [ThinkingBudgetPreset, { min: number, max: number }][])
-    .find(([, range]) => range.min === min && range.max === max)
-  return match?.[0] ?? 'medium'
-}
-
-const thinkingBudget = computed<ThinkingBudgetPreset>({
-  get: () => presetFromTokens(editingModel.value.thinkingMinTokens, editingModel.value.thinkingMaxTokens),
-  set: (preset: ThinkingBudgetPreset) => {
-    const range = THINKING_BUDGET_PRESETS[preset]
-    editingModel.value.thinkingMinTokens = range.min
-    editingModel.value.thinkingMaxTokens = range.max
-  }
-})
-
 // Live model IDs fetched from the selected provider's own API, keyed by
 // providerId so switching providers in the form doesn't require a refetch
 // if the user flips back and forth. `create-item` on the USelectMenu still
@@ -74,16 +38,6 @@ async function loadModelIdOptions(providerId: string | undefined) {
     modelIdOptionsLoading.value = false
   }
 }
-
-// Checking "Thinking Enabled" with no budget picked yet shouldn't submit
-// undefined min/max while the select visually shows "Medium" (its fallback
-// display value) — pin the fields to that same default the moment thinking
-// turns on.
-watch(() => editingModel.value.thinkingEnabled, (enabled) => {
-  if (enabled && editingModel.value.thinkingMinTokens === undefined && editingModel.value.thinkingMaxTokens === undefined) {
-    thinkingBudget.value = 'medium'
-  }
-})
 
 const modelIdOptions = computed(() => {
   const providerId = editingModel.value.providerId
@@ -263,19 +217,11 @@ async function removeModel(id: string) {
                 placeholder="Default"
               />
             </UFormField>
-            <UFormField label="Thinking Enabled">
-              <UCheckbox v-model="editingModel.thinkingEnabled" />
-            </UFormField>
             <UFormField
-              v-if="editingModel.thinkingEnabled"
-              label="Thinking Budget"
-              description="How much of the model's reasoning budget to use — higher tiers think longer on hard problems but cost more."
+              label="Thinking Enabled"
+              description="Reasoning effort itself is picked per-conversation in the chat picker — this just controls whether the model supports it at all."
             >
-              <USelect
-                v-model="thinkingBudget"
-                :items="thinkingBudgetItems"
-                class="w-full"
-              />
+              <UCheckbox v-model="editingModel.thinkingEnabled" />
             </UFormField>
           </UCard>
         </div>
