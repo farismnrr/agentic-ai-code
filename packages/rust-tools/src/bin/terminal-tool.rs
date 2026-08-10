@@ -46,16 +46,19 @@ async fn run_terminal(
         return "Error: Exec guard blocked request. Use --no-guard to bypass.".to_string();
     }
 
-    let trimmed = command_str.trim();
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    if parts.is_empty() {
+    let parsed_parts = match shell_words::split(command_str) {
+        Ok(parts) => parts,
+        Err(e) => return format!("Error: failed to parse command string: {}", e),
+    };
+
+    if parsed_parts.is_empty() {
         return "Error: Empty command".to_string();
     }
 
-    let binary = parts[0];
-    let glued_args = &parts[1..];
+    let binary = &parsed_parts[0];
+    let glued_args = &parsed_parts[1..];
 
-    let mut final_args: Vec<String> = glued_args.iter().map(|s| s.to_string()).collect();
+    let mut final_args: Vec<String> = glued_args.to_vec();
     final_args.extend_from_slice(passed_args);
 
     let mut cmd = Command::new(binary);

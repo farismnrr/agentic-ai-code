@@ -35,24 +35,72 @@ async fn run_curl(
     body_data: Option<&str>,
     no_guard: bool,
 ) -> String {
-    if !no_guard {
-        eprintln!(
-            "WARN: SSRF guard is enabled but no external validation is provided in CLI. Pass --no-guard if you want to bypass SSRF protection."
-        );
-        return "Error: SSRF guard blocked request. Use --no-guard to bypass.".to_string();
-    }
-
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
         Err(e) => return format!("Error: {}", e),
     };
+
+    if !no_guard {
+        if let Some(host) = parsed_url.host_str() {
+            // Check if it's already an IP string
+            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                if !is_safe_ip(&ip) {
+                    return "Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
+                }
+            } else {
+                // Resolve hostname to IP using trust-dns-resolver
+                use trust_dns_resolver::config::*;
+                use trust_dns_resolver::TokioAsyncResolver;
+                let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+
+                let response = match resolver.lookup_ip(host).await {
+                    Ok(r) => r,
+                    Err(e) => return format!("Error: DNS lookup failed: {}", e),
+                };
+
+                for ip in response.iter() {
+                    if !is_safe_ip(&ip) {
+                        return format!("Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, ip);
+                    }
+                }
+            }
+        }
+    }
+
+fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ipv4) => {
+            !ipv4.is_private()
+                && !ipv4.is_loopback()
+                && !ipv4.is_link_local()
+                && !ipv4.is_multicast()
+                && !ipv4.is_broadcast()
+                && !ipv4.is_documentation()
+                && !ipv4.is_unspecified()
+        }
+        std::net::IpAddr::V6(ipv6) => {
+            !ipv6.is_loopback()
+                && !ipv6.is_multicast()
+                && !ipv6.is_unspecified()
+                && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
+                && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
+        }
+    }
+}
 
     let method = match Method::from_str(&method_str.to_uppercase()) {
         Ok(m) => m,
         Err(e) => return format!("Error: {}", e),
     };
 
-    let client = reqwest::Client::new();
+    let client = if !no_guard {
+        match reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build() {
+            Ok(c) => c,
+            Err(_) => reqwest::Client::new(),
+        }
+    } else {
+        reqwest::Client::new()
+    };
     let mut req_builder = client.request(method, parsed_url.clone());
 
     for h in headers_raw {
