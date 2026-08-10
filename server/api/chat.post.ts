@@ -5,7 +5,7 @@ import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
 import { resolveMessagesForModel } from '../utils/context-compaction'
-import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
+import { NATIVE_TERMINAL_TOOL_ID, NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { createTerminalAiTool } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
 
@@ -155,14 +155,21 @@ export default defineEventHandler(async (event) => {
         cwd: workspacePath,
         assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
       })
-      // Per-call, not per-tool: a read-only command (ls/cat/find/...) runs
-      // immediately regardless of the user's remembered decision — only a
-      // command capable of mutating something (anything outside the
-      // read-only allowlist, including any `bash`/`sh` invocation, which
-      // can't be statically judged safe) is gated behind approval.
       toolApproval['terminal'] = async (input: { command: string, args?: string[] }) => {
         if (await isReadOnlyCommand(input.command, input.args ?? [])) return 'approved'
         const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
+        return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
+      }
+    }
+
+    if (conv.enabledToolIds?.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID)) {
+      tools['local_terminal'] = createTerminalAiTool({
+        cwd: workspacePath || process.cwd(),
+        assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
+      })
+      toolApproval['local_terminal'] = async (input: { command: string, args?: string[] }) => {
+        if (await isReadOnlyCommand(input.command, input.args ?? [])) return 'approved'
+        const approval = conv.approvals?.[NATIVE_LOCAL_TERMINAL_TOOL_ID]
         return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
       }
     }

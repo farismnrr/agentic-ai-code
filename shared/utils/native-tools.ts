@@ -1,4 +1,5 @@
 export const NATIVE_TERMINAL_TOOL_ID = 'native.terminal'
+export const NATIVE_LOCAL_TERMINAL_TOOL_ID = 'native.local_terminal'
 
 export interface NativeTool {
   id: string
@@ -15,5 +16,11 @@ export const nativeTools: NativeTool[] = [
     name: 'Terminal (full shell access)',
     toolName: 'terminal',
     description: 'Execute shell commands within the current workspace directory.'
+  },
+  {
+    id: NATIVE_LOCAL_TERMINAL_TOOL_ID,
+    name: 'Local Terminal (relay agent)',
+    toolName: 'local_terminal',
+    description: 'Execute shell commands on your local machine via the local CLI relay agent.'
   }
 ]

@@ -1,0 +1,18 @@
+{
+  "name": "@ai-code/relay-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "bin": {
+    "relay-agent": "./bin/cli.mjs"
+  },
+  "dependencies": {
+    "execa": "^9.3.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12"
+  }
+}
