@@ -48,9 +48,10 @@ fn test_curl_tool_localhost_blocked() {
         .output()
         .expect("Failed to execute curl-tool");
 
-    assert!(output.status.success());
+    // SSRF guard blocks the request, so exit code must be non-zero
+    assert!(!output.status.success(), "Expected non-zero exit for SSRF-blocked request");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("SSRF guard blocked request"));
+    assert!(stdout.contains("SSRF guard blocked request"), "Expected SSRF block message, got: {stdout}");
 }
 
 #[test]
