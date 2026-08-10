@@ -2,7 +2,7 @@
 
 import { parseArgs } from 'node:util'
 import { RelayAgentServer } from '../src/index.ts'
-import { isProcessAlive, readPidFile, removePidFile, removePidFileIfOwnedByMe, writePidFile } from './pidfile.mjs'
+import { acquireLock, isProcessAlive, readPidFile, removePidFile, removePidFileIfOwnedByMe } from './pidfile.mjs'
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
@@ -54,6 +54,20 @@ if (positionals[0] === 'stop') {
 
 const origin = values.origin ?? process.env.RELAY_AGENT_ORIGIN
 
+// The actual concurrency guard — acquired *before* ever touching the
+// network, not inferred afterward from who won the `listen()` race (see
+// `acquireLock`'s own comment in pidfile.mjs for why that was fragile in
+// practice: writing the pidfile only after a successful bind still left a
+// window where a second process could observe a stale-but-not-yet-cleared
+// lock and misjudge it). A clean, immediate refusal here is also just
+// better UX than surfacing a raw `EADDRINUSE` stack trace for what is, from
+// the user's perspective, "you already have one of these running."
+if (!acquireLock(port)) {
+  const existingPid = readPidFile(port)
+  console.error(`[relay-agent] Already running on port ${port} (pid ${existingPid}). Use \`relay-agent stop\` first, or pass a different --port.`)
+  process.exit(1)
+}
+
 const server = new RelayAgentServer({
   port,
   dir: values.dir,
@@ -77,15 +91,11 @@ async function shutdown(signal) {
 process.on('SIGINT', () => void shutdown('SIGINT'))
 process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
-// The pidfile is written only once `listen()` has actually succeeded —
-// never before attempting it. A failed start (e.g. EADDRINUSE because
-// another instance already holds this port) therefore never has a pidfile
-// of its own to write or clean up, so it can't clobber or delete the
-// genuinely running instance's entry. See the note on
-// `removePidFileIfOwnedByMe` in pidfile.mjs for the real race this fixes.
-server.start().then(() => {
-  writePidFile(port)
-}).catch((err) => {
+server.start().catch((err) => {
+  // We hold the lock but never actually bound the port (e.g. it's held by
+  // some unrelated process, or a permissions error) — release it, since
+  // this process is exiting and has nothing left to be a lock *for*.
+  removePidFileIfOwnedByMe(port)
   console.error('[relay-agent] Failed to start server:', err)
   process.exit(1)
 })
