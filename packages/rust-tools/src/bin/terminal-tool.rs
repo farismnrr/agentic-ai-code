@@ -53,7 +53,7 @@ async fn run_terminal(
 
     let parsed_parts = match shell_words::split(command_str) {
         Ok(parts) => parts,
-        Err(e) => return format!("Error: failed to parse command string: {}", e),
+        Err(e) => return format!("Error: failed to parse command string: {e}"),
     };
 
     if parsed_parts.is_empty() {
@@ -96,7 +96,7 @@ async fn run_terminal(
 
     let child = match cmd.spawn() {
         Ok(c) => c,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     let pid = child.id().unwrap_or(0);
@@ -113,12 +113,9 @@ async fn run_terminal(
                     }
                 }
             }
-            format!(
-                "Error: command timed out after {}ms and was killed.",
-                timeout_ms
-            )
+            format!("Error: command timed out after {timeout_ms}ms and was killed.")
         }
-        Ok(Err(e)) => format!("Error: {}", e),
+        Ok(Err(e)) => format!("Error: {e}"),
         Ok(Ok(out)) => {
             let stdout_str = String::from_utf8_lossy(&out.stdout);
             let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -155,5 +152,5 @@ async fn main() {
     let timeout_ms = args.timeout.unwrap_or(30000);
 
     let output = run_terminal(command, cmd_args, &cwd, args.no_guard, timeout_ms).await;
-    println!("{}", output);
+    println!("{output}");
 }

@@ -31,19 +31,22 @@ async fn run_search(query: &str, base_url: &str) -> String {
     let mut url = match Url::parse(base_url) {
         Ok(u) => match u.join("/search") {
             Ok(joined) => joined,
-            Err(e) => return format!("Error: {}", e),
+            Err(e) => return format!("Error: {e}"),
         },
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     url.query_pairs_mut()
         .append_pair("q", query)
         .append_pair("format", "json");
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let res = match client.get(url).send().await {
         Ok(r) => r,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     if !res.status().is_success() {
@@ -52,7 +55,7 @@ async fn run_search(query: &str, base_url: &str) -> String {
 
     let data: SearxngResponse = match res.json().await {
         Ok(d) => d,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     let items = data.results.unwrap_or_default();
@@ -67,7 +70,7 @@ async fn run_search(query: &str, base_url: &str) -> String {
             let title = r.title.unwrap_or_default();
             let url_str = r.url.unwrap_or_default();
             let snippet = r.content.or(r.snippet).unwrap_or_default();
-            format!("Title: {}\nURL: {}\nSnippet: {}", title, url_str, snippet)
+            format!("Title: {title}\nURL: {url_str}\nSnippet: {snippet}")
         })
         .collect();
 
@@ -91,5 +94,5 @@ async fn main() {
     };
 
     let output = run_search(&query, &args.base_url).await;
-    println!("{}", output);
+    println!("{output}");
 }

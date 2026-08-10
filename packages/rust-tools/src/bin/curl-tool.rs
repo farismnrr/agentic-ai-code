@@ -37,7 +37,7 @@ async fn run_curl(
 ) -> String {
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
-        Err(e) => return format!("Error: URL Error: {}", e),
+        Err(e) => return format!("Error: URL Error: {e}"),
     };
 
     fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
@@ -76,14 +76,14 @@ async fn run_curl(
                 }
             } else {
                 use std::net::ToSocketAddrs;
-                if let Ok(addrs) = format!("{}:80", host).to_socket_addrs() {
+                if let Ok(addrs) = format!("{host}:80").to_socket_addrs() {
                     for addr in addrs {
                         if !is_safe_ip(&addr.ip()) {
                             return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
                         }
                     }
                 } else {
-                    return format!("Error: DNS lookup failed for {}", host);
+                    return format!("Error: DNS lookup failed for {host}");
                 }
             }
         }
@@ -91,7 +91,7 @@ async fn run_curl(
 
     let method = match Method::from_str(&method_str.to_uppercase()) {
         Ok(m) => m,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     let client = if !no_guard {
@@ -109,7 +109,7 @@ async fn run_curl(
                 } else {
                     // Sync DNS resolution for redirects
                     use std::net::ToSocketAddrs;
-                    if let Ok(addrs) = format!("{}:80", host).to_socket_addrs() {
+                    if let Ok(addrs) = format!("{host}:80").to_socket_addrs() {
                         for addr in addrs {
                             if !is_safe_ip(&addr.ip()) {
                                 return attempt.error(
@@ -160,16 +160,16 @@ async fn run_curl(
         Ok(r) => r,
         Err(e) => {
             if e.is_redirect() {
-                return format!("Error: SSRF Error: SSRF guard blocked redirect: {}", e);
+                return format!("Error: SSRF Error: SSRF guard blocked redirect: {e}");
             }
-            return format!("Error: Fetch Error: {}", e);
+            return format!("Error: Fetch Error: {e}");
         }
     };
 
     let status = res.status().as_u16();
     let text = match res.text().await {
         Ok(t) => t,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: {e}"),
     };
 
     let truncated_text = if text.len() > 10000 {
@@ -178,7 +178,7 @@ async fn run_curl(
         &text
     };
 
-    format!("Status: {}\nBody: {}", status, truncated_text)
+    format!("Status: {status}\nBody: {truncated_text}")
 }
 
 #[tokio::main]
@@ -202,5 +202,5 @@ async fn main() {
     )
     .await;
 
-    println!("{}", output);
+    println!("{output}");
 }
