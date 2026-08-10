@@ -8,7 +8,7 @@ These tools were migrated from JS to Rust to enforce strict process boundary che
 ## Toolchain & MSRV
 - **Rust Edition:** 2021
 - **Toolchain:** Stable (latest)
-- **MSRV:** 1.75.0 (Minimum Supported Rust Version)
+- **MSRV:** 1.88.0 (Minimum Supported Rust Version)
 
 ## Release Policy
 - Binaries are built in `release` mode for production.

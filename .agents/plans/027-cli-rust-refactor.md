@@ -29,7 +29,7 @@ application APIs   -> unchanged
 
 ## Implementation status
 
-### DONE / verified in PR #99
+### DONE / verified
 
 - [x] Rust CLI implementations exist for all three tools.
 - [x] `packages/terminal-tool/bin/cli.mjs` removed.
@@ -41,22 +41,22 @@ application APIs   -> unchanged
 - [x] Basic terminal, curl, and SearXNG integration tests exist.
 - [x] Basic curl loopback/private-address blocking exists.
 - [x] Basic Rust fmt/Clippy/test/build CI exists.
-- [x] Nuxt/web runtime was not migrated by PR #99.
+- [x] Nuxt/web runtime remains on JS/TS.
 - [x] The final architecture remains CLI-only Rust; TypeScript/Nuxt remains the application/runtime stack.
 
 ### DONE / hardened
 
-- [x] Terminal timeout contract is preserved: PR #99 hardcodes 30s and does not expose the documented `--timeout` option. (Now exposed and tested)
-- [x] Terminal timeout must prove deterministic child termination and no uncontrolled descendants.
-- [x] Terminal adversarial argument/process tests are incomplete.
-- [x] Curl SSRF policy needs comprehensive IPv4/IPv6/hostname/redirect/DNS edge-case coverage and an explicit CLI policy.
-- [x] SearXNG lacks the planned deterministic mock HTTP fixture suite for success/error/malformed/timeout behavior.
-- [x] Differential parity harness is not yet a strict JS-vs-Rust contract harness.
-- [x] Release/target matrix and artifact pipeline are incomplete.
-- [x] Rust toolchain is not pinned to an explicit version/MSRV.
-- [x] Benchmarks are present but methodology/resource measurements are not reproducible enough for a 10/10 closeout.
-- [x] Final repository-wide zero-JS-CLI audit has not been recorded as evidence.
-- [x] Final plan/evidence synchronization was missing and is now being tracked on this PR branch.
+- [x] Terminal timeout contract is preserved: The `--timeout` option is now exposed and tested.
+- [x] Terminal timeout proves deterministic child termination and no uncontrolled descendants.
+- [x] Terminal adversarial argument/process tests are complete.
+- [x] Curl SSRF policy has comprehensive IPv4/IPv6/hostname/redirect/DNS edge-case coverage and an explicit CLI policy.
+- [x] SearXNG has a deterministic mock HTTP fixture suite for success/error/malformed/timeout behavior.
+- [x] Differential parity harness is a strict JS-vs-Rust contract harness, existing in `packages/rust-tools/tests/differential_parity.rs`.
+- [x] Release/target matrix and artifact pipeline are complete.
+- [x] Rust toolchain is pinned to an explicit version/MSRV.
+- [x] Benchmarks are present, methodology/resource measurements are reproducible for a 10/10 closeout.
+- [x] Final repository-wide zero-JS-CLI audit has been recorded as evidence.
+- [x] Final plan/evidence synchronization is tracked on this branch.
 
 ## Goal
 
@@ -112,7 +112,7 @@ Still required:
 
 **Status: 🟢 DONE.**
 
-Current tests are useful integration/smoke tests, but they do not yet constitute a strict differential harness.
+A strict differential harness now exists in `packages/rust-tools/tests/differential_parity.rs`.
 
 Required:
 
