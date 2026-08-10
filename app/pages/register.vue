@@ -29,6 +29,8 @@ const state = reactive({ name: '', email: '', password: '', confirm: '' })
 const loading = ref(false)
 const serverError = ref<string | null>(null)
 
+const toast = useToast()
+
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
   serverError.value = null
@@ -36,12 +38,17 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     await register(event.data.name, event.data.email, event.data.password, event.data.confirm)
     await navigateTo('/chat')
   } catch (err: unknown) {
-    const fe = err as { data?: { message?: string }, statusCode?: number }
+    const fe = err as { data?: { message?: string, detail?: string }, statusCode?: number }
     if (fe?.statusCode === 429) {
-      serverError.value = fe.data?.message ?? 'Too many attempts. Try again later.'
+      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Too many attempts. Try again later.'
     } else {
-      serverError.value = 'Could not create account. Please try again.'
+      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Could not create account. Please try again.'
     }
+    toast.add({
+      title: 'Registration failed',
+      description: serverError.value,
+      color: 'error'
+    })
   } finally {
     loading.value = false
   }

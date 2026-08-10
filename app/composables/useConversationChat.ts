@@ -11,8 +11,34 @@ import type { Conversation, UIMessage } from '#shared/types/chat'
  *
  *   new DefaultChatTransport({ api: '/api/chat' })
  */
+const GENERIC_PROVIDER_ERROR = 'The model provider returned an error. Try again, or switch models.'
+
+// AI SDK errors from a failed provider call carry a JSON blob as the
+// message (e.g. `[503]: {"error":{"message":"Upstream request failed..."}}`)
+// rather than something fit for a toast — pull the human-readable part out
+// if present. Some providers (seen via a fallback/router chain) throw a
+// non-Error value that both this SDK and the server's own logger (see
+// server/utils/logger.ts's errorAttributes) can only stringify as the
+// literal text "[object Object]" — that's not a message, so treat it (and
+// any other non-informative raw message) the same as no message at all.
+function friendlyChatErrorMessage(error: Error): string {
+  const match = error.message.match(/\{.*\}/s)
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0])
+      const nested = parsed?.error?.message
+      if (typeof nested === 'string' && nested.length > 0) return nested
+    } catch {
+      // Not JSON after all — fall through to the raw message below.
+    }
+  }
+  if (!error.message || error.message === '[object Object]') return GENERIC_PROVIDER_ERROR
+  return error.message
+}
+
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
-  const { setMessages } = useConversations()
+  const { setMessages, loadOne } = useConversations()
+  const toast = useToast()
 
   // `useChat`'s options factory re-runs — recreating its whole internal
   // chat instance and resetting `status` back to 'ready' — whenever ANY
@@ -53,6 +79,12 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onError: (error: Error) => {
       console.error('[chat]', error)
+      toast.add({
+        title: 'Message failed to send',
+        description: friendlyChatErrorMessage(error),
+        icon: 'i-lucide-alert-triangle',
+        color: 'error'
+      })
     }
   }))
 
@@ -86,6 +118,14 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   watch(() => chat.status.value, (status) => {
     if (status !== 'streaming') {
       flushMessages()
+      // The mirror-back watcher above only ever patches `messages` — server
+      // side fields a turn can also change (lastMeasuredTokens from
+      // compaction's usage tracking, contextSummary, approvals persisted
+      // mid-turn) never reach the client otherwise, so e.g. the context-usage
+      // indicator stayed frozen at whatever it showed on page load. Refetch
+      // once per turn, not per chunk — this fires at most as often as
+      // `flushMessages` already does.
+      if (conversation.value) loadOne(conversation.value.id)
     }
   })
 
