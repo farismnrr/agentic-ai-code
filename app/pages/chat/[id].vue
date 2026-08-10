@@ -12,28 +12,38 @@ const conversation = computed(() => get(conversationId.value))
 
 const { models, load: loadModels } = useModels()
 
-if (models.value.length === 0) {
-  await loadModels()
+const loadError = ref<Error | null>(null)
+
+async function fetchInitialData() {
+  loadError.value = null
+  try {
+    if (models.value.length === 0) {
+      await loadModels()
+    }
+    // The conversations list only carries metadata, not messages (see
+    // server/api/conversations/index.get.ts) — this page needs the full
+    // conversation, and it must resolve before useConversationChat() reads
+    // conversation.value.messages as the chat's initial seed. useChat() re-seeds
+    // and rebuilds its chat instance any time that reactive value changes, so
+    // loading it after mount would reset state instead of restoring it.
+    //
+    // The layout (app/layouts/default.vue) already resolves this conversation
+    // and syncs the active workspace before its own sidebar renders — this call
+    // is idempotent with that one, kept here because this page can't assume the
+    // layout always ran it (and needs the awaited result regardless).
+    await loadOne(conversationId.value)
+  } catch (err) {
+    loadError.value = err as Error
+  }
 }
+
+await fetchInitialData()
 
 const { get: getWorkspace } = useWorkspaces()
 const workspaceName = computed(() => {
   if (!conversation.value?.workspaceId) return null
   return getWorkspace(conversation.value.workspaceId)?.name
 })
-
-// The conversations list only carries metadata, not messages (see
-// server/api/conversations/index.get.ts) — this page needs the full
-// conversation, and it must resolve before useConversationChat() reads
-// conversation.value.messages as the chat's initial seed. useChat() re-seeds
-// and rebuilds its chat instance any time that reactive value changes, so
-// loading it after mount would reset state instead of restoring it.
-//
-// The layout (app/layouts/default.vue) already resolves this conversation
-// and syncs the active workspace before its own sidebar renders — this call
-// is idempotent with that one, kept here because this page can't assume the
-// layout always ran it (and needs the awaited result regardless).
-await loadOne(conversationId.value)
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
 
@@ -227,7 +237,18 @@ defineShortcuts({
 
     <template #body>
       <div
-        v-if="!conversation"
+        v-if="loadError"
+        class="flex flex-1 items-center justify-center p-6"
+      >
+        <DataLoadError
+          title="Couldn't load conversation"
+          description="Failed to load conversation details or models."
+          @retry="fetchInitialData()"
+        />
+      </div>
+
+      <div
+        v-else-if="!conversation"
         class="flex flex-1 items-center justify-center"
       >
         <UAlert

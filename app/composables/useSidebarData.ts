@@ -26,6 +26,9 @@ export function useSidebarData() {
   })
   const settings = useSettings()
 
+  const pending = useState<boolean>('sidebar-pending', () => false)
+  const error = useState<Error | null>('sidebar-error', () => null)
+
   /**
    * `settingsPromise` (the in-flight `useSettings().load()` call) is passed
    * in and awaited *inside* this function, alongside the sidebar fetch,
@@ -35,6 +38,8 @@ export function useSidebarData() {
    * fetch below.
    */
   async function load(settingsPromise?: Promise<unknown>) {
+    pending.value = true
+    error.value = null
     try {
       const fetch = import.meta.server ? useRequestFetch() : $fetch
       const [data] = await Promise.all([
@@ -50,10 +55,13 @@ export function useSidebarData() {
       } else if (!activeWorkspaceId.value && lastActiveWorkspaceId && data.workspaces.some(w => w.id === lastActiveWorkspaceId)) {
         activeWorkspaceId.value = lastActiveWorkspaceId
       }
+    } catch (err) {
+      error.value = err as Error
     } finally {
+      pending.value = false
       loaded.value = true
     }
   }
 
-  return { load }
+  return { load, pending, error }
 }
