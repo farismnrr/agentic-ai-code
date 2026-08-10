@@ -1,6 +1,4 @@
 use clap::Parser;
-#[cfg(unix)]
-extern crate libc;
 use std::env;
 use std::process::Stdio;
 use std::time::Duration;
