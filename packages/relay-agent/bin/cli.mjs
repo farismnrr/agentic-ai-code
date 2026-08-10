@@ -2,7 +2,7 @@
 
 import { parseArgs } from 'node:util'
 import { RelayAgentServer } from '../src/index.ts'
-import { isProcessAlive, readPidFile, removePidFile, writePidFile } from './pidfile.mjs'
+import { isProcessAlive, readPidFile, removePidFile, removePidFileIfOwnedByMe, writePidFile } from './pidfile.mjs'
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
@@ -60,8 +60,6 @@ const server = new RelayAgentServer({
   allowedOrigin: origin
 })
 
-writePidFile(port)
-
 // Without this, Ctrl+C (SIGINT) — and `relay-agent stop`'s SIGTERM above —
 // just killed the process outright: no pidfile cleanup (leaving `stop`
 // unable to tell a dead agent from a live one next time), no closing the
@@ -71,7 +69,7 @@ async function shutdown(signal) {
   if (shuttingDown) return
   shuttingDown = true
   console.log(`\n[relay-agent] Received ${signal}, shutting down...`)
-  removePidFile(port)
+  removePidFileIfOwnedByMe(port)
   await server.stop()
   console.log('[relay-agent] Stopped.')
   process.exit(0)
@@ -79,8 +77,15 @@ async function shutdown(signal) {
 process.on('SIGINT', () => void shutdown('SIGINT'))
 process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
-server.start().catch((err) => {
-  removePidFile(port)
+// The pidfile is written only once `listen()` has actually succeeded —
+// never before attempting it. A failed start (e.g. EADDRINUSE because
+// another instance already holds this port) therefore never has a pidfile
+// of its own to write or clean up, so it can't clobber or delete the
+// genuinely running instance's entry. See the note on
+// `removePidFileIfOwnedByMe` in pidfile.mjs for the real race this fixes.
+server.start().then(() => {
+  writePidFile(port)
+}).catch((err) => {
   console.error('[relay-agent] Failed to start server:', err)
   process.exit(1)
 })

@@ -149,20 +149,32 @@ export default defineEventHandler(async (event) => {
     // happens to be offline right now, the tool still shows up here (the
     // server has no way to know live connection state, only pairing
     // metadata) — the client-side error path in
-    // app/composables/useConversationChat.ts's `handleClientToolCall`
+    // app/composables/useConversationChat.ts's `runApprovedLocalTerminalCall`
     // already reports "not connected" back to the model in that case.
-    const [activeDevice] = await db.select({ id: userDevices.id })
-      .from(userDevices)
-      .where(and(eq(userDevices.userId, session.user.id), isNull(userDevices.revokedAt)))
-      .limit(1)
+    //
+    // Wrapped defensively — a real incident (missing migration, see plan
+    // 026 Phase 9) had this exact query throw because `user_devices` didn't
+    // exist yet, taking down the *entire* chat request (including MCP tools
+    // that had nothing to do with this). A hiccup here should degrade to
+    // "no local terminal this turn", not break agent mode outright.
+    let activeDevice: { id: string } | undefined
+    try {
+      [activeDevice] = await db.select({ id: userDevices.id })
+        .from(userDevices)
+        .where(and(eq(userDevices.userId, session.user.id), isNull(userDevices.revokedAt)))
+        .limit(1)
+    } catch (err) {
+      logger.error('[chat] failed to check paired relay-agent devices', err)
+    }
 
     if (activeDevice) {
       // No `execute` here — this makes it a client-executed tool in the AI
       // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
       // addToolOutput pair). Once approved, streamText has nothing to call
       // server-side, so it stops the step and streams the tool call to the
-      // client as-is; app/composables/useConversationChat.ts's `onToolCall`
-      // is what actually runs it — over the loopback WebSocket to the
+      // client as-is; app/composables/useConversationChat.ts's watcher on
+      // `chat.messages` is what actually runs it (not `onToolCall` — see
+      // that file's comments for why), over the loopback WebSocket to the
       // user's local relay-agent CLI. This server has no shell-execution
       // tool of its own at all (the old workspace-sandboxed `terminal` tool
       // was deliberately removed) — `local_terminal` is the only path, and

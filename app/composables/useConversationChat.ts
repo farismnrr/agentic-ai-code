@@ -64,22 +64,76 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
 
   // `local_terminal` is registered server-side with no `execute` (see
   // server/api/chat.post.ts) precisely so this server never runs the user's
-  // local command — once approved, the SDK has nothing left to call
-  // server-side and streams the tool call to the client instead, invoking
-  // this callback. `chatRef.current` is read lazily inside the callback
-  // body (never at options-construction time), so it's fine that it isn't
-  // populated yet when this options object is built below — a real tool
-  // call only arrives well after `chatRef.current` is set.
+  // local command — once approved, the SDK streams the tool call to the
+  // client to run instead. It is deliberately NOT run from `onToolCall`:
+  // the SDK fires that the instant a tool call's *input* is available,
+  // completely independent of approval — traced through
+  // node_modules/ai/dist/index.js and confirmed live (a chat turn stuck at
+  // "Still working…" forever, no approval modal ever shown) that this SDK
+  // behavior does not gate client-tool execution behind approval at all.
+  // Executing from `onToolCall` therefore risked running a command before,
+  // or regardless of, whatever the user actually decided in
+  // ChatToolApproval.vue's modal. Instead, a real command only ever runs
+  // from the watcher below, which fires strictly on the message part
+  // actually reaching `state: 'approval-responded'` with
+  // `approval.approved === true` — true whether that came from the user
+  // clicking Allow just now, or from a remembered `conv.approvals` decision
+  // the server already auto-resolved (both produce the same state
+  // transition, just in different turns). A denied response needs no
+  // handling here — the SDK resolves `output-denied` on its own without
+  // ever invoking a client tool.
   const chatRef: { current?: ReturnType<typeof useChat<UIMessage>> } = {}
-  async function handleClientToolCall({ toolCall }: { toolCall: { toolName: string, toolCallId: string, input: unknown } }) {
-    if (toolCall.toolName !== 'local_terminal' || !chatRef.current) return
+  const executedLocalTerminalCalls = new Set<string>()
 
-    const { command, args, cwd } = toolCall.input as { command: string, args?: string[], cwd?: string }
+  // `executedLocalTerminalCalls` alone only guards within one page
+  // session — the `{ immediate: true }` watcher below is what makes
+  // reopening a conversation resume a call that was approved but never
+  // got to run (e.g. the tab closed mid-flight), which is the behavior we
+  // want. But that same resume-on-reload logic has a narrow failure
+  // window: if a command actually finished running on the CLI but the
+  // follow-up request that would persist its output never completed
+  // (network dropped at exactly that moment), the DB row is left looking
+  // identical to "never ran yet" — reopening would then run it again.
+  // A durable, cross-reload ledger closes that window: mark a call as
+  // attempted here, synchronously, before ever awaiting `exec()` — so even
+  // a mid-flight crash right after this line means a reload will never
+  // retry it, at the cost of never auto-retrying a call that setup-failed
+  // for some unrelated reason (acceptable; the model still sees the error
+  // via `addToolOutput` below in that case, it just won't self-heal on
+  // reload — a real duplicate command run is the worse failure mode here).
+  const EXECUTED_CALLS_STORAGE_KEY = 'relay_agent_executed_tool_calls'
+  const MAX_TRACKED_CALLS = 200
+  function hasAttemptedBefore(toolCallId: string): boolean {
+    if (!import.meta.client) return false
+    try {
+      const ids = JSON.parse(localStorage.getItem(EXECUTED_CALLS_STORAGE_KEY) ?? '[]') as string[]
+      return ids.includes(toolCallId)
+    } catch {
+      return false
+    }
+  }
+  function markAttempted(toolCallId: string) {
+    if (!import.meta.client) return
+    try {
+      const ids = JSON.parse(localStorage.getItem(EXECUTED_CALLS_STORAGE_KEY) ?? '[]') as string[]
+      ids.push(toolCallId)
+      localStorage.setItem(EXECUTED_CALLS_STORAGE_KEY, JSON.stringify(ids.slice(-MAX_TRACKED_CALLS)))
+    } catch {
+      // Storage full/unavailable — worst case this guard is skipped, not fatal.
+    }
+  }
+
+  async function runApprovedLocalTerminalCall(part: { toolCallId: string, input: unknown }) {
+    if (!chatRef.current || executedLocalTerminalCalls.has(part.toolCallId) || hasAttemptedBefore(part.toolCallId)) return
+    executedLocalTerminalCalls.add(part.toolCallId)
+    markAttempted(part.toolCallId)
+
+    const { command, args, cwd } = part.input as { command: string, args?: string[], cwd?: string }
     try {
       const result = await relayAgent.exec(command, args ?? [], cwd)
       await chatRef.current.addToolOutput({
         tool: 'local_terminal',
-        toolCallId: toolCall.toolCallId,
+        toolCallId: part.toolCallId,
         output: result
       })
     } catch (err: unknown) {
@@ -89,7 +143,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       // of the turn just hanging.
       await chatRef.current.addToolOutput({
         tool: 'local_terminal',
-        toolCallId: toolCall.toolCallId,
+        toolCallId: part.toolCallId,
         state: 'output-error',
         errorText: (err as Error).message || 'Local relay agent is not connected'
       })
@@ -105,7 +159,6 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
-    onToolCall: handleClientToolCall,
     // Without this, `addToolApprovalResponse` only marks the pending part as
     // answered in local state — it never actually sends the follow-up
     // request that resumes the conversation and runs the approved tool, so
@@ -128,6 +181,27 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }
   }))
   chatRef.current = chat
+
+  // The one place `local_terminal` actually gets executed — see the note
+  // above `runApprovedLocalTerminalCall`. Fires on every message mutation
+  // (cheap: `executedLocalTerminalCalls` skips anything already handled),
+  // scanning for a part that just became genuinely approved. `immediate:
+  // true` because plain `watch()` only reacts to *changes* — without it, a
+  // conversation reopened with an already-approved-but-never-executed call
+  // still sitting in its loaded history (e.g. the tab closed before this
+  // ever got a chance to run) would never resume it, only a fresh mutation
+  // would ever be seen.
+  watch(chat.messages, () => {
+    for (const message of chat.messages.value) {
+      for (const part of message.parts) {
+        if (part.type !== 'tool-local_terminal') continue
+        const p = part as unknown as { state?: string, approval?: { approved?: boolean }, toolCallId: string, input: unknown }
+        if (p.state === 'approval-responded' && p.approval?.approved === true) {
+          void runApprovedLocalTerminalCall(p)
+        }
+      }
+    }
+  }, { immediate: true })
 
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK
