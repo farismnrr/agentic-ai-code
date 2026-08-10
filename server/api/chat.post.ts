@@ -1,13 +1,12 @@
-import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
-import { eq, and, gt, desc, asc } from 'drizzle-orm'
+import { messages as messagesTable, conversations, workspaces, models, modelProviders, userDevices } from '../database/schema'
+import { eq, and, gt, desc, asc, isNull } from 'drizzle-orm'
 import { streamText, tool as aiTool, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse, type ToolSet, type ToolApprovalConfiguration } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
 import { resolveMessagesForModel } from '../utils/context-compaction'
-import { NATIVE_TERMINAL_TOOL_ID, NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import { createTerminalAiTool, terminalToolSchema } from '@ai-code/terminal-tool'
-import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
+import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
+import { terminalToolSchema } from '@ai-code/terminal-tool'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -113,28 +112,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Without this, the model has no idea a workspace/terminal tool exists at
-  // all and falls back to asking the user to paste files — it never learns
-  // to explore proactively just from the tool's own (generic) description.
-  //
-  // 'full' access additionally warns against editing blind: a real incident
-  // had the model run `sed -i` on a file based on its contents from several
-  // turns earlier in the conversation, never re-reading it in the same turn
-  // and never checking the edit actually applied — a write tool with no
-  // read-before-write discipline is a data-loss risk, not just a UX one.
-  const buildWorkspaceSystemPrompt = (terminalAccess: 'none' | 'read-only' | 'full') => {
+  // The server itself no longer has any file/shell access to offer the
+  // model — that tool (`native.terminal`, workspace-sandboxed, server-side)
+  // was removed by deliberate decision; the only execution path left is
+  // `local_terminal`, which runs on the user's own machine via their paired
+  // relay-agent CLI (see plan 026) and is opt-in per conversation. This is
+  // now just location context, not a capability description — the model
+  // learns what tools it actually has (if any) from the tools/approvals the
+  // SDK gives it directly, not from this prompt.
+  const buildWorkspaceSystemPrompt = () => {
     if (!workspacePath) return undefined
-    const base = `You are a coding assistant currently working in the workspace "${workspaceName}" located at ${workspacePath}.`
-    // A conversation can reach here with a real workspace but zero enabled
-    // tools (e.g. agent mode started fresh with nothing toggled on yet) —
-    // without being told that plainly, a model asked to read/edit a file has
-    // fabricated a plausible-sounding "I found the file and edited it"
-    // narrative instead of saying it has no way to do that. Never let silent
-    // tool absence read as an invitation to make something up.
-    if (terminalAccess === 'none') return `${base} You do NOT have any tool to read, search, or modify files in this conversation right now. If asked to do any of that, say plainly that you don't have that capability here (the user can enable the terminal tool via the Tools picker) — never claim to have looked at, found, or changed a file you have no way to access.`
-    const exploreGuidance = `You have access to a \`terminal\` tool scoped to this workspace directory — use it proactively (e.g. \`tree\`, \`find\`, \`grep\`/\`rg\`, \`cat\`, \`sed -n\`) to explore, read, or search files when the user asks about their project, rather than asking them to paste code or links.`
-    if (terminalAccess === 'read-only') return `${base} ${exploreGuidance}`
-    return `${base} ${exploreGuidance} This terminal has full write access (not read-only) — never edit a file whose exact path you have not confirmed with \`find\`/\`tree\`/\`grep\` in this same turn, even if a filename was mentioned earlier in the conversation; a remembered name or path can be wrong, stale, or entirely made up, and guessing has produced edits to files that don't exist. Before editing or overwriting any file, always re-read its current contents first with \`cat\`/\`sed -n\` in this same turn, even if you already saw it earlier in the conversation, since it may have changed since. Never assume a file's contents or line numbers from memory. After making a change, read the file back to confirm it applied correctly before telling the user it's done. Every new user request that asks you to read, search, or change something requires actually calling the terminal tool in this turn, even if an earlier turn already did something similar — describing a past action instead of performing the current request (e.g. restating an old edit when asked for a different one) is exactly the kind of fabrication this applies to, and has happened for real.`
+    return `You are a coding assistant currently working in the workspace "${workspaceName}" located at ${workspacePath}.`
   }
 
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
@@ -151,32 +139,36 @@ export default defineEventHandler(async (event) => {
     toolApproval = mcp.toolApproval
     close = mcp.close
 
-    if (conv.enabledToolIds?.includes(NATIVE_TERMINAL_TOOL_ID) && workspacePath) {
-      tools['terminal'] = createTerminalAiTool({
-        cwd: workspacePath,
-        assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
-      })
-      toolApproval['terminal'] = async (input: { command: string, args?: string[] }) => {
-        if (await isReadOnlyCommand(input.command, input.args ?? [])) return 'approved'
-        const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
-        return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
-      }
-    }
+    // Not gated by `conv.enabledToolIds` (no picker toggle for this one —
+    // the Settings → Local Terminal page is already where a user manages
+    // this, so a second on/off switch in the chat Tool Picker was
+    // redundant). Instead: available in every agent-mode conversation the
+    // moment the user has at least one non-revoked paired device, and never
+    // otherwise — the per-call approval gate below is what actually decides
+    // whether any given command runs, same as before. If the paired CLI
+    // happens to be offline right now, the tool still shows up here (the
+    // server has no way to know live connection state, only pairing
+    // metadata) — the client-side error path in
+    // app/composables/useConversationChat.ts's `handleClientToolCall`
+    // already reports "not connected" back to the model in that case.
+    const [activeDevice] = await db.select({ id: userDevices.id })
+      .from(userDevices)
+      .where(and(eq(userDevices.userId, session.user.id), isNull(userDevices.revokedAt)))
+      .limit(1)
 
-    if (conv.enabledToolIds?.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID)) {
+    if (activeDevice) {
       // No `execute` here — this makes it a client-executed tool in the AI
       // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
       // addToolOutput pair). Once approved, streamText has nothing to call
       // server-side, so it stops the step and streams the tool call to the
       // client as-is; app/composables/useConversationChat.ts's `onToolCall`
       // is what actually runs it — over the loopback WebSocket to the
-      // user's local relay-agent CLI, never touching this server. This is
-      // the one thing that makes "local_terminal" different from "terminal"
-      // (which keeps its server-side `execute` and runs inside the
-      // workspace sandbox on this box): the whole point of plan 026 is that
-      // this server must never itself execute the user's local command.
+      // user's local relay-agent CLI. This server has no shell-execution
+      // tool of its own at all (the old workspace-sandboxed `terminal` tool
+      // was deliberately removed) — `local_terminal` is the only path, and
+      // it never touches this server: the whole point of plan 026.
       tools['local_terminal'] = aiTool({
-        description: 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.',
+        description: 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Not scoped to any single project folder — pass an explicit `cwd` (absolute path) whenever the target directory matters, since it otherwise runs in the agent\'s own default directory, which may not be the folder the user means. Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.',
         inputSchema: terminalToolSchema
       })
       toolApproval['local_terminal'] = async (_input: { command: string, args?: string[] }) => {
@@ -256,14 +248,15 @@ export default defineEventHandler(async (event) => {
   }
 
   if (conv.mode === 'chat') {
-    // Chat mode always wires the read-only terminal tool in when a
-    // workspace is resolved (see server/utils/langgraph-tools.ts).
-    const systemPrompt = buildWorkspaceSystemPrompt(workspacePath ? 'read-only' : 'none')
+    // Chat mode has no shell/file-access tool of its own (curl + search
+    // only, see server/utils/langgraph-tools.ts) — the workspace-sandboxed
+    // `terminal` tool it used to always wire in was removed; `local_terminal`
+    // is agent-mode-only.
+    const systemPrompt = buildWorkspaceSystemPrompt()
     const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     const uiStream = runLanggraphChat({
       uiMessages: resolvedMessages,
       baseModel: langgraphModel,
-      workspacePath,
       systemPrompt,
       onEnd: async (parts, totalTokens) => {
         await persistAssistantMessage(parts, false, totalTokens)
@@ -283,7 +276,7 @@ export default defineEventHandler(async (event) => {
 
   const result = streamText({
     model: baseModel,
-    system: buildWorkspaceSystemPrompt(tools?.terminal ? 'full' : 'none'),
+    system: buildWorkspaceSystemPrompt(),
     messages: await convertToModelMessages(resolvedMessages, { tools }),
     tools,
     // Cast once, here, at the boundary into the SDK — see the note on

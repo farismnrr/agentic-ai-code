@@ -113,7 +113,11 @@ const downloadLinks = {
       </h2>
       <p class="text-sm text-muted">
         Connect directly to a relay agent CLI running on your local machine.
-        Terminal data never leaves your computer over the internet.
+        Terminal data never leaves your computer over the internet. Once
+        paired, the AI can also use this automatically in Agent-mode
+        conversations — there's no separate toggle for it in the chat Tools
+        picker, but every command still requires your approval there before
+        it runs.
       </p>
     </div>
 
@@ -234,7 +238,7 @@ const downloadLinks = {
             2. Enter Pairing Token
           </h3>
           <p class="text-xs text-muted">
-            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --dir ./my-project --origin {{ siteOrigin }}</code>), then paste the token printed below:
+            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --origin {{ siteOrigin }}</code>), then paste the token printed below. This agent has no directory restriction — it can run commands anywhere on this machine your user account can access, not just one project folder (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir ./some/path</code> only to change its default starting directory).
           </p>
 
           <div class="flex max-w-md gap-2">
@@ -263,7 +267,7 @@ const downloadLinks = {
     >
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="font-medium text-highlighted">Scoped Local Terminal</span>
+          <span class="font-medium text-highlighted">Local Terminal</span>
           <UButton
             v-if="history.length"
             label="Clear Output"
@@ -281,7 +285,7 @@ const downloadLinks = {
           v-if="!history.length"
           class="italic text-gray-500"
         >
-          Terminal ready. Type a command below to execute in your scoped workspace.
+          Terminal ready. Type a command below to execute on this machine.
         </div>
 
         <div

@@ -74,9 +74,9 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   async function handleClientToolCall({ toolCall }: { toolCall: { toolName: string, toolCallId: string, input: unknown } }) {
     if (toolCall.toolName !== 'local_terminal' || !chatRef.current) return
 
-    const { command, args } = toolCall.input as { command: string, args?: string[] }
+    const { command, args, cwd } = toolCall.input as { command: string, args?: string[], cwd?: string }
     try {
-      const result = await relayAgent.exec(command, args ?? [])
+      const result = await relayAgent.exec(command, args ?? [], cwd)
       await chatRef.current.addToolOutput({
         tool: 'local_terminal',
         toolCallId: toolCall.toolCallId,
@@ -84,9 +84,9 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       })
     } catch (err: unknown) {
       // Local agent unreachable/unpaired, or the CLI itself rejected the
-      // call (e.g. workspace-scope violation) — report it as a tool error,
-      // not an unhandled rejection, so the model sees why and can tell the
-      // user to pair a device instead of the turn just hanging.
+      // call — report it as a tool error, not an unhandled rejection, so
+      // the model sees why and can tell the user to pair a device instead
+      // of the turn just hanging.
       await chatRef.current.addToolOutput({
         tool: 'local_terminal',
         toolCallId: toolCall.toolCallId,

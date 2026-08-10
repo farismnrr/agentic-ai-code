@@ -19,7 +19,23 @@ const usable = computed(() =>
   servers.value.filter(server => server.enabled && server.status === 'connected')
 )
 
-const count = computed(() => modelValue.value.length)
+/** The subset of `nativeTools` this component actually renders a checkbox for. */
+const visibleNativeTools = computed(() => nativeTools.filter(t => t.pickerVisible !== false))
+
+// `modelValue` (conv.enabledToolIds) is a persisted array that can outlive
+// the tools it names — a tool removed from `nativeTools` (or an MCP server
+// disconnected/removed) leaves its id sitting in old conversations forever,
+// since nothing retroactively cleans that column up. Counting
+// `modelValue.length` directly showed a stale, un-toggleable "2 tools" for
+// a conversation that had only one real, visible checkbox. Count only ids
+// that still resolve to something this popover actually lists.
+const count = computed(() => {
+  const validIds = new Set([
+    ...visibleNativeTools.value.map(t => t.id),
+    ...usable.value.flatMap(s => s.tools.map(t => t.id))
+  ])
+  return modelValue.value.filter(id => validIds.has(id)).length
+})
 
 function isOn(toolId: string) {
   return modelValue.value.includes(toolId)
@@ -77,14 +93,14 @@ function resetApproval(toolId: string) {
         </p>
 
         <div
-          v-if="nativeTools.length > 0"
+          v-if="visibleNativeTools.length > 0"
           class="mb-2"
         >
           <div class="px-2 py-1 font-medium text-sm">
             Built-in
           </div>
           <div
-            v-for="tool in nativeTools"
+            v-for="tool in visibleNativeTools"
             :key="tool.id"
             class="flex items-center justify-between gap-1"
           >

@@ -97,13 +97,11 @@ function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: s
 export function runLanggraphChat({
   uiMessages,
   baseModel,
-  workspacePath,
   systemPrompt,
   onEnd
 }: {
   uiMessages: UIMessage[]
   baseModel: LanggraphModel
-  workspacePath: string | undefined
   systemPrompt: string | undefined
   onEnd: (parts: UIMessage['parts'], totalTokens?: number) => Promise<void>
 }) {
@@ -199,7 +197,7 @@ export function runLanggraphChat({
           return
         }
 
-        const langgraphTools = buildLanggraphTools({ workspacePath })
+        const langgraphTools = buildLanggraphTools()
         const agent = createAgent({ model: baseModel, tools: langgraphTools })
 
         const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
