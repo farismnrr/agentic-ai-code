@@ -4,7 +4,6 @@ import { buildLanggraphTools } from './langgraph-tools'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
-import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from './providers/langgraph-model'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
@@ -27,20 +26,67 @@ function extractForcedSearch(uiMessages: UIMessage[]) {
   return { forced: false }
 }
 
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+
 function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: string) {
-  return uiMessages.map((m, index) => {
-    let content = ''
+  const resultMessages: (HumanMessage | AIMessage | SystemMessage | ToolMessage)[] = []
+
+  uiMessages.forEach((m, index) => {
+    let textContent = ''
+    const toolCalls: { id: string, name: string, args: Record<string, unknown> }[] = []
+    const toolResults: { toolCallId: string, output: string }[] = []
+
     if (index === uiMessages.length - 1 && cleanedLastText !== undefined) {
-      content = cleanedLastText
+      textContent = cleanedLastText
     } else if (m.parts) {
       for (const part of m.parts) {
-        if (part.type === 'text') content += part.text
+        if (part.type === 'text') {
+          textContent += part.text
+        } else if (part.type === 'dynamic-tool' || part.type === 'tool-terminal') {
+          const rawInput = part.input || part.args
+          const toolCallId = part.toolCallId || part.id || `call_${index}`
+          const toolName = part.toolName || part.command || 'terminal'
+          if (rawInput) {
+            toolCalls.push({
+              id: toolCallId,
+              name: toolName,
+              args: (typeof rawInput === 'object' && rawInput !== null) ? rawInput as Record<string, unknown> : { input: rawInput }
+            })
+          }
+          if (part.output !== undefined) {
+            toolResults.push({
+              toolCallId: toolCallId,
+              output: typeof part.output === 'string' ? part.output : JSON.stringify(part.output)
+            })
+          }
+        }
       }
     }
-    if (m.role === 'user') return new HumanMessage(content)
-    if (m.role === 'system') return new SystemMessage(content)
-    return new AIMessage(content)
+
+    if (m.role === 'user') {
+      resultMessages.push(new HumanMessage(textContent))
+    } else if (m.role === 'system') {
+      resultMessages.push(new SystemMessage(textContent))
+    } else {
+      // assistant
+      if (toolCalls.length > 0) {
+        resultMessages.push(new AIMessage({
+          content: textContent,
+          tool_calls: toolCalls
+        }))
+        for (const tr of toolResults) {
+          resultMessages.push(new ToolMessage({
+            content: tr.output,
+            tool_call_id: tr.toolCallId
+          }))
+        }
+      } else {
+        resultMessages.push(new AIMessage(textContent))
+      }
+    }
   })
+
+  return resultMessages
 }
 
 export function runLanggraphChat({
