@@ -87,7 +87,7 @@ async fn run_terminal(
 
     let timeout_duration = Duration::from_millis(timeout_ms);
 
-    let mut child = match cmd.spawn() {
+    let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return format!("Error: {}", e),
     };
@@ -96,7 +96,8 @@ async fn run_terminal(
 
     match output_result {
         Err(_) => {
-            let _ = child.kill().await;
+            // Because kill_on_drop(true) is set on cmd, the child is automatically killed 
+            // when `child` (which was moved into `wait_with_output()`) is dropped by `timeout()` failing.
             format!("Error: command timed out after {}ms and was killed.", timeout_ms)
         }
         Ok(Err(e)) => format!("Error: {}", e),
@@ -120,7 +121,7 @@ async fn main() {
     let args = Args::parse();
 
     if args.positionals.is_empty() {
-        eprintln!("Usage: terminal-tool <command> [args...] [--cwd <path>] [--no-guard]");
+        eprintln!("Usage: terminal-tool <command> [args...] [--cwd <path>] [--no-guard] [--timeout <ms>]");
         std::process::exit(1);
     }
 
@@ -131,6 +132,8 @@ async fn main() {
         .cwd
         .unwrap_or_else(|| env::current_dir().unwrap().display().to_string());
 
-    let output = run_terminal(command, cmd_args, &cwd, args.no_guard).await;
+    let timeout_ms = args.timeout.unwrap_or(30000);
+
+    let output = run_terminal(command, cmd_args, &cwd, args.no_guard, timeout_ms).await;
     println!("{}", output);
 }

@@ -48,11 +48,17 @@ async fn run_curl(
                     return "Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
                 }
             } else {
-                // Resolve hostname to IP using trust-dns-resolver
-                use trust_dns_resolver::config::*;
-                use trust_dns_resolver::TokioAsyncResolver;
-                let resolver =
-                    TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+                // Resolve hostname to IP using hickory-resolver
+                use hickory_resolver::config::*;
+                use hickory_resolver::TokioResolver;
+                use hickory_resolver::net::runtime::TokioRuntimeProvider;
+                let resolver = TokioResolver::builder_with_config(ResolverConfig::default(), TokioRuntimeProvider::default())
+                    .with_options(ResolverOpts::default())
+                    .build()
+                    .unwrap_or_else(|e| {
+                        eprintln!("Failed to build DNS resolver: {}", e);
+                        std::process::exit(1);
+                    });
 
                 let response = match resolver.lookup_ip(host).await {
                     Ok(r) => r,
