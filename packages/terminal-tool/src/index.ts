@@ -5,7 +5,12 @@ import { execa } from 'execa'
 
 export const terminalToolSchema = z.object({
   command: z.string().describe('The binary to run, e.g. "ls" — do not include flags/arguments here, put them in `args` instead.'),
-  args: z.array(z.string()).optional().describe('Arguments for the command, e.g. ["-la", "."].')
+  args: z.array(z.string()).optional().describe('Arguments for the command, e.g. ["-la", "."].'),
+  // Only meaningful for a tool that has no fixed `cwd` closed over server-side
+  // (e.g. @ai-code/relay-agent's `local_terminal`, which has no directory jail
+  // at all) — createTerminalTool/createTerminalAiTool below ignore this and
+  // always run in their own fixed, server-controlled `cwd`.
+  cwd: z.string().optional().describe('Absolute path to run the command in, for a tool with no fixed working directory. Omit to use that tool\'s own default.')
 })
 
 export const runTerminalCommand = async ({
