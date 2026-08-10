@@ -51,7 +51,8 @@ async fn run_curl(
                 // Resolve hostname to IP using trust-dns-resolver
                 use trust_dns_resolver::config::*;
                 use trust_dns_resolver::TokioAsyncResolver;
-                let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+                let resolver =
+                    TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
 
                 let response = match resolver.lookup_ip(host).await {
                     Ok(r) => r,
@@ -67,26 +68,26 @@ async fn run_curl(
         }
     }
 
-fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
-    match ip {
-        std::net::IpAddr::V4(ipv4) => {
-            !ipv4.is_private()
-                && !ipv4.is_loopback()
-                && !ipv4.is_link_local()
-                && !ipv4.is_multicast()
-                && !ipv4.is_broadcast()
-                && !ipv4.is_documentation()
-                && !ipv4.is_unspecified()
-        }
-        std::net::IpAddr::V6(ipv6) => {
-            !ipv6.is_loopback()
+    fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
+        match ip {
+            std::net::IpAddr::V4(ipv4) => {
+                !ipv4.is_private()
+                    && !ipv4.is_loopback()
+                    && !ipv4.is_link_local()
+                    && !ipv4.is_multicast()
+                    && !ipv4.is_broadcast()
+                    && !ipv4.is_documentation()
+                    && !ipv4.is_unspecified()
+            }
+            std::net::IpAddr::V6(ipv6) => {
+                !ipv6.is_loopback()
                 && !ipv6.is_multicast()
                 && !ipv6.is_unspecified()
                 && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
                 && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
+            }
         }
     }
-}
 
     let method = match Method::from_str(&method_str.to_uppercase()) {
         Ok(m) => m,
@@ -94,7 +95,10 @@ fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
     };
 
     let client = if !no_guard {
-        match reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build() {
+        match reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+        {
             Ok(c) => c,
             Err(_) => reqwest::Client::new(),
         }

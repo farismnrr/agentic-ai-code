@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::env;
+use std::process::Command;
 
 fn get_bin(name: &str) -> String {
     let mut path = env::current_exe().unwrap();
