@@ -47,6 +47,10 @@ fn spawn_mock_server() -> u16 {
                         let response =
                             "HTTP/1.1 302 Found\r\nLocation: http://localtest.me/\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
+                    } else if request.contains("GET /timeout") {
+                        thread::sleep(std::time::Duration::from_millis(1500));
+                        let response = "HTTP/1.1 200 OK\r\n\r\nTimeout";
+                        let _ = stream.write(response.as_bytes());
                     } else {
                         let response = "HTTP/1.1 200 OK\r\n\r\nOK";
                         let _ = stream.write(response.as_bytes());
@@ -67,6 +71,11 @@ fn test_ipv4_mapped_ipv6_blocked() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     println!("STDOUT: {stdout}");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected exit code 1 (Runtime Error) for SSRF block"
+    );
     assert!(stdout.contains("SSRF Error") || stdout.contains("SSRF guard blocked"));
 }
 
@@ -201,4 +210,59 @@ fn test_no_guard_follows_redirect_to_private() {
         "Should not block redirect with SSRF guard"
     );
     // Depending on network, it might timeout or connection refused, but not SSRF blocked.
+}
+
+#[test]
+fn test_curl_timeout_enforced() {
+    let port = spawn_mock_server();
+    let output = Command::new(get_bin())
+        .arg(format!("http://127.0.0.1:{port}/timeout"))
+        .arg("--timeout")
+        .arg("100") // 100ms timeout
+        .arg("--no-guard")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success());
+    assert!(
+        stdout.to_lowercase().contains("timeout")
+            || stdout.to_lowercase().contains("timed out")
+            || stdout.to_lowercase().contains("deadline has elapsed"),
+        "Expected timeout message, got: {stdout}"
+    );
+}
+
+#[test]
+fn test_curl_timeout_zero_ignored() {
+    let port = spawn_mock_server();
+    // Server sleeps for 1.5s, curl with timeout 0 should wait and succeed
+    let output = Command::new(get_bin())
+        .arg(format!("http://127.0.0.1:{port}/timeout"))
+        .arg("--timeout")
+        .arg("0")
+        .arg("--no-guard")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "Expected success when timeout=0, got exit code: {:?}, stdout: {stdout}",
+        output.status.code()
+    );
+    assert!(stdout.contains("Status: 200"));
+}
+
+#[test]
+fn test_curl_exit_code_contract_invalid_usage() {
+    let output = std::process::Command::new(get_bin())
+        .arg("--this-flag-does-not-exist")
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected exit code 2 (Invalid CLI Usage)"
+    );
 }

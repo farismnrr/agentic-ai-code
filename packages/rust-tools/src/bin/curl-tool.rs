@@ -140,7 +140,7 @@ async fn run_curl(
         }
         match builder.build() {
             Ok(c) => c,
-            Err(_) => reqwest::Client::new(),
+            Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
         }
     } else {
         let mut builder =
@@ -150,7 +150,7 @@ async fn run_curl(
         }
         match builder.build() {
             Ok(c) => c,
-            Err(_) => reqwest::Client::new(),
+            Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
         }
     };
     let mut req_builder = client.request(method, parsed_url.clone());

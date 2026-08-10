@@ -13,15 +13,21 @@ fn get_bin(name: &str) -> String {
 #[test]
 fn test_terminal_timeout_descendants_killed() {
     let temp_dir = env::temp_dir();
-    let unique_sleep = "sleep 9999";
+    let pid_file = temp_dir.join(format!("test_pids_{}.txt", std::process::id()));
+    // Clean up any old file
+    let _ = fs::remove_file(&pid_file);
+
     let script = format!(
         r#"#!/usr/bin/env bash
-{unique_sleep} &
-{unique_sleep} &
+sleep 9999 &
+echo $! >> {pid_file}
+sleep 9999 &
+echo $! >> {pid_file}
 wait
-"#
+"#,
+        pid_file = pid_file.display()
     );
-    let script_path = temp_dir.join("test_descendants_unique.sh");
+    let script_path = temp_dir.join(format!("test_descendants_{}.sh", std::process::id()));
     fs::write(&script_path, &script).unwrap();
     Command::new("chmod")
         .arg("+x")
@@ -40,13 +46,32 @@ wait
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("timed out"));
 
-    // verify pgrep finds nothing
-    let pgrep = Command::new("pgrep")
-        .arg("-f")
-        .arg(unique_sleep)
-        .output()
-        .unwrap();
-    assert!(!pgrep.status.success(), "Found stray descendant processes!");
+    // read PIDs from file
+    let pids_str = fs::read_to_string(&pid_file).unwrap_or_default();
+    let pids: Vec<&str> = pids_str
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    assert!(!pids.is_empty(), "Script did not spawn any children");
+
+    // verify each PID is dead
+    for pid in pids {
+        // kill -0 returns success if process exists
+        let kill_status = Command::new("kill").arg("-0").arg(pid).status();
+
+        if let Ok(status) = kill_status {
+            assert!(
+                !status.success(),
+                "Found stray descendant process with PID {}",
+                pid
+            );
+        }
+    }
+
+    let _ = fs::remove_file(&pid_file);
+    let _ = fs::remove_file(&script_path);
 }
 
 #[test]
@@ -126,4 +151,17 @@ fn test_environment_filtering() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("DUMMY_VAR=12345"));
+}
+
+#[test]
+fn test_terminal_exit_code_contract_invalid_usage() {
+    let output = std::process::Command::new(get_bin("terminal-tool"))
+        .arg("--this-flag-does-not-exist")
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected exit code 2 (Invalid CLI Usage)"
+    );
 }

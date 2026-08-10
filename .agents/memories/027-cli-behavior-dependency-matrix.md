@@ -16,7 +16,7 @@ As part of the JS-to-Rust CLI migration (Plan 027), this matrix documents the fu
 
 | Tool | Core Behavior | Security / Constraints | Output Format |
 |---|---|---|---|
-| `terminal-tool` | Executes arbitrary shell commands via POSIX-compliant argument parsing. | Requires `--no-guard`. Strict timeout (default 30s) must deterministically reap the child process. Prevents uncontrolled descendant leaks. | `Exit: <code>\nStdout: <out>\nStderr: <err>` |
+| `terminal-tool` | Executes arbitrary executable commands via POSIX-compliant argument parsing (avoids shell interpolation). | Requires `--no-guard`. Strict timeout (default 30s) must deterministically reap the child process. Prevents uncontrolled descendant leaks. | `Exit: <code>\nStdout: <out>\nStderr: <err>` |
 | `curl-tool` | Executes HTTP requests (GET, POST, etc.) and returns responses. | **SSRF Guard:** Blocks loopback, private networks, link-local, and multicast (IPv4/IPv6). Redirects must be bounded or dropped. Bypassable only with `--no-guard`. | Status code, headers, and body. |
 | `searxng-search-tool` | Proxies search queries to a SearXNG instance. | Expects valid JSON responses. Must gracefully handle network timeouts, empty results, 5xx errors, and malformed JSON. | JSON string matching the SearXNG schema or structured error. |
 
@@ -28,7 +28,7 @@ As part of the JS-to-Rust CLI migration (Plan 027), this matrix documents the fu
 | **All Tools** | `tokio` | Async runtime for HTTP requests and subprocess timeouts. |
 | `terminal-tool` | `shell-words` | Safely tokenizing raw command strings without invoking `/bin/sh`. |
 | `curl-tool` | `reqwest` | HTTP client. Must handle redirects safely (or disable them). |
-| `curl-tool` | `trust-dns-resolver` | Custom DNS resolution to prevent DNS rebinding attacks and validate IPs before connection. |
+| `curl-tool` | `std::net::ToSocketAddrs` | Synchronous DNS resolution to prevent DNS rebinding attacks and validate IPs before connection. |
 | `searxng-search-tool`| `reqwest`, `serde_json`| HTTP requests to the search engine and JSON payload parsing. |
 
 ## 4. Maintenance Notes
