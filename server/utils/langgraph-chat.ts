@@ -3,7 +3,7 @@ import { createAgent } from 'langchain'
 import { buildLanggraphTools } from './langgraph-tools'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
-import { createUIMessageStream } from 'ai'
+import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from './providers/langgraph-model'
 
@@ -42,9 +42,15 @@ function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: s
         if (part.type === 'text') {
           textContent += part.text
         } else if (part.type === 'dynamic-tool' || part.type === 'tool-terminal') {
-          const rawInput = part.input || part.args
-          const toolCallId = part.toolCallId || part.id || `call_${index}`
-          const toolName = part.toolName || part.command || 'terminal'
+          // Both branches share `toolCallId`/`input` in ai@7's real
+          // ToolUIPart/DynamicToolUIPart shape — `.args`/`.id`/`.command`
+          // never existed on either (a leftover from an older SDK shape);
+          // `getToolName` is the SDK's own helper for the name, since the
+          // static branch (`tool-terminal`) carries it in `part.type`
+          // rather than a separate field.
+          const rawInput = part.input
+          const toolCallId = part.toolCallId || `call_${index}`
+          const toolName = getToolName(part)
           if (rawInput) {
             toolCalls.push({
               id: toolCallId,

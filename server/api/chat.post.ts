@@ -1,12 +1,12 @@
 import { messages as messagesTable, conversations, workspaces, models, modelProviders } from '../database/schema'
 import { eq, and, gt, desc, asc } from 'drizzle-orm'
-import { streamText, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse } from 'ai'
+import { streamText, tool as aiTool, convertToModelMessages, stepCountIs, toUIMessageStream, wrapLanguageModel, extractReasoningMiddleware, createUIMessageStreamResponse, type ToolSet, type ToolApprovalConfiguration } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
 import { resolveMessagesForModel } from '../utils/context-compaction'
-import { NATIVE_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import { createTerminalAiTool } from '@ai-code/terminal-tool'
+import { NATIVE_TERMINAL_TOOL_ID, NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
+import { createTerminalAiTool, terminalToolSchema } from '@ai-code/terminal-tool'
 import { assertSafeCommand, isReadOnlyCommand } from '../utils/exec-guard'
 
 export default defineEventHandler(async (event) => {
@@ -69,6 +69,7 @@ export default defineEventHandler(async (event) => {
     const [inserted] = await db.insert(messagesTable)
       .values({ conversationId: conv.id, role: 'user', parts: message.parts })
       .returning({ id: messagesTable.id })
+    if (!inserted) throw internal('Failed to insert user message')
     messages.push({ ...message, id: inserted.id })
   } else if (trigger === 'regenerate-message') {
     // drop the stale assistant answer being replaced — not history for this call
@@ -155,14 +156,31 @@ export default defineEventHandler(async (event) => {
         cwd: workspacePath,
         assertSafeCommand: (c, a) => assertSafeCommand(c, a, 'full')
       })
-      // Per-call, not per-tool: a read-only command (ls/cat/find/...) runs
-      // immediately regardless of the user's remembered decision — only a
-      // command capable of mutating something (anything outside the
-      // read-only allowlist, including any `bash`/`sh` invocation, which
-      // can't be statically judged safe) is gated behind approval.
       toolApproval['terminal'] = async (input: { command: string, args?: string[] }) => {
         if (await isReadOnlyCommand(input.command, input.args ?? [])) return 'approved'
         const approval = conv.approvals?.[NATIVE_TERMINAL_TOOL_ID]
+        return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
+      }
+    }
+
+    if (conv.enabledToolIds?.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID)) {
+      // No `execute` here — this makes it a client-executed tool in the AI
+      // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
+      // addToolOutput pair). Once approved, streamText has nothing to call
+      // server-side, so it stops the step and streams the tool call to the
+      // client as-is; app/composables/useConversationChat.ts's `onToolCall`
+      // is what actually runs it — over the loopback WebSocket to the
+      // user's local relay-agent CLI, never touching this server. This is
+      // the one thing that makes "local_terminal" different from "terminal"
+      // (which keeps its server-side `execute` and runs inside the
+      // workspace sandbox on this box): the whole point of plan 026 is that
+      // this server must never itself execute the user's local command.
+      tools['local_terminal'] = aiTool({
+        description: 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.',
+        inputSchema: terminalToolSchema
+      })
+      toolApproval['local_terminal'] = async (_input: { command: string, args?: string[] }) => {
+        const approval = conv.approvals?.[NATIVE_LOCAL_TERMINAL_TOOL_ID]
         return approval === 'always' ? 'approved' : approval === 'never' ? 'denied' : 'user-approval'
       }
     }
@@ -268,7 +286,10 @@ export default defineEventHandler(async (event) => {
     system: buildWorkspaceSystemPrompt(tools?.terminal ? 'full' : 'none'),
     messages: await convertToModelMessages(resolvedMessages, { tools }),
     tools,
-    toolApproval,
+    // Cast once, here, at the boundary into the SDK — see the note on
+    // `ToolApprovalValue` in server/utils/mcp-tools.ts for why `toolApproval`
+    // is kept as a plain mutable Record everywhere before this point.
+    toolApproval: toolApproval as ToolApprovalConfiguration<ToolSet, never> | undefined,
     // 5 was too low for a real terminal-backed edit flow (explore, read,
     // write, verify already eats 4-5 steps on its own) — it cut the loop
     // off exactly at the last tool call, leaving no budget for the model to
