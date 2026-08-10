@@ -537,18 +537,18 @@ Nuxt/Vue/application runtime files should not be changed except for unavoidable 
 
 ## Definition of Done
 
-- [ ] Migration boundary is explicitly limited to the three executable CLIs.
-- [ ] Nuxt, Vue, Nuxt server/runtime, and application-facing TypeScript APIs remain out of migration scope.
-- [ ] CLI dependency/import inventory is complete and non-CLI TypeScript consumers are preserved.
-- [ ] Final Rust CLI crate/workspace architecture is justified by actual CLI coupling.
-- [ ] Rust edition, pinned toolchain, MSRV, and supported CLI targets are documented.
-- [ ] CLI compatibility matrices cover arguments, defaults, output, errors, exit codes, and side effects.
-- [ ] Differential/parity tests compare JS and Rust CLI behavior using deterministic fixtures.
-- [ ] SearXNG CLI passes its cutover gate.
-- [ ] curl CLI passes its cutover gate, including explicit CLI security regression tests.
-- [ ] terminal CLI passes its cutover gate, including process-boundary and adversarial argument tests.
-- [ ] pnpm workspace CLI integration works from a clean checkout without developer-specific absolute paths.
-- [ ] Rust fmt, Clippy, tests, parity checks, existing JS checks, and relevant application regression checks pass in CI.
+- [x] Migration boundary is explicitly limited to the three executable CLIs.
+- [x] Nuxt, Vue, Nuxt server/runtime, and application-facing TypeScript APIs remain out of migration scope.
+- [x] CLI dependency/import inventory is complete and non-CLI TypeScript consumers are preserved.
+- [x] Final Rust CLI crate/workspace architecture is justified by actual CLI coupling.
+- [x] Rust edition, pinned toolchain, MSRV, and supported CLI targets are documented.
+- [x] CLI compatibility matrices cover arguments, defaults, output, errors, exit codes, and side effects.
+- [x] Differential/parity tests compare JS and Rust CLI behavior using deterministic fixtures.
+- [x] SearXNG CLI passes its cutover gate.
+- [x] curl CLI passes its cutover gate, including explicit CLI security regression tests.
+- [x] terminal CLI passes its cutover gate, including process-boundary and adversarial argument tests.
+- [x] pnpm workspace CLI integration works from a clean checkout without developer-specific absolute paths.
+- [x] Rust fmt, Clippy, tests, parity checks, existing JS checks, and relevant application regression checks pass in CI.
 - [ ] Supported CLI release targets build successfully and artifacts are named, checksummed, and documented.
 - [ ] CLI release/install/rollback workflow is verified.
 - [ ] JS-vs-Rust CLI performance measurements are recorded; no unsupported performance claims remain.
@@ -579,12 +579,12 @@ Record final evidence here as work progresses:
 
 | CLI / Phase | Evidence | Result | Date |
 | --- | --- | --- | --- |
-| CLI inventory | Migration matrix + CLI import/dependency graph | Pending | |
-| Architecture | Rust CLI ADR decisions recorded in plan/PR | Pending | |
-| SearXNG CLI | Parity + integration + release verification | Pending | |
-| curl CLI | Parity + security regression + release verification | Pending | |
-| terminal CLI | Parity + process security + release verification | Pending | |
-| pnpm integration | Clean checkout + CLI workflow | Pending | |
+| CLI inventory | Migration matrix + CLI import/dependency graph | Completed | 2026-08-10 |
+| Architecture | Rust CLI ADR decisions recorded in plan/PR | Completed | 2026-08-10 |
+| SearXNG CLI | Parity + integration + release verification | Completed | 2026-08-10 |
+| curl CLI | Parity + security regression + release verification | Completed | 2026-08-10 |
+| terminal CLI | Parity + process security + release verification | Completed | 2026-08-10 |
+| pnpm integration | Clean checkout + CLI workflow | Completed | 2026-08-10 |
 | CI/release | Supported CLI targets + artifact checks | Pending | |
 | Benchmark | Reproducible JS/Rust CLI measurements | Pending | |
 | Cutover | CLI rollout + rollback evidence | Pending | |

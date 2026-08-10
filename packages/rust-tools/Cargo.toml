@@ -1,0 +1,25 @@
+[package]
+name = "rust-tools"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+url = "2.5"
+thiserror = "1.0"
+
+[[bin]]
+name = "searxng-search-tool"
+path = "src/bin/searxng-search-tool.rs"
+
+[[bin]]
+name = "curl-tool"
+path = "src/bin/curl-tool.rs"
+
+[[bin]]
+name = "terminal-tool"
+path = "src/bin/terminal-tool.rs"

@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "packages/rust-tools"
+]
+resolver = "2"
