@@ -5,7 +5,7 @@ import type { FormSubmitEvent } from '@nuxt/ui'
 useSeoMeta({ title: 'API Keys' })
 
 const toast = useToast()
-const { data: keys, refresh } = await useFetch('/api/api-keys', {
+const { data: keys, pending, error, refresh } = useLazyFetch('/api/api-keys', {
   default: () => []
 })
 
@@ -92,63 +92,83 @@ async function removeKey(id: string, name: string) {
       </template>
     </UAlert>
 
-    <UCard
-      v-if="!keys.length"
-      class="border-dashed"
-      :ui="{ body: 'flex flex-col items-center justify-center py-12 text-center' }"
+    <DataLoadError
+      v-if="error"
+      title="Couldn't load API keys"
+      description="Failed to load your API keys."
+      @retry="refresh()"
+    />
+
+    <div
+      v-else-if="pending"
+      class="space-y-3"
     >
-      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-elevated">
-        <UIcon
-          name="i-lucide-key"
-          class="size-5 text-muted"
-        />
-      </div>
-      <h3 class="mb-1 text-sm font-medium text-highlighted">
-        No API keys
-      </h3>
-      <p class="mb-4 text-sm text-muted">
-        Create a key to connect an external MCP client.
-      </p>
-      <UButton
-        label="Create key"
-        icon="i-lucide-plus"
-        color="neutral"
-        variant="outline"
-        @click="addOpen = true"
+      <USkeleton
+        v-for="i in 2"
+        :key="i"
+        class="h-20 w-full rounded-lg"
       />
-    </UCard>
+    </div>
 
-    <UCard
-      v-for="apiKey in keys"
-      :key="apiKey.id"
-      :ui="{ body: 'space-y-3' }"
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <p class="font-medium text-highlighted">
-              {{ apiKey.name }}
-            </p>
-          </div>
-          <code class="text-xs break-all text-dimmed">{{ apiKey.keyPrefix }}••••••••••••••••</code>
-          <p class="text-xs text-muted mt-1">
-            Created: {{ new Date(apiKey.createdAt).toLocaleDateString() }}
-            <span v-if="apiKey.lastUsedAt">&bull; Last used: {{ new Date(apiKey.lastUsedAt).toLocaleDateString() }}</span>
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <UButton
-            icon="i-lucide-trash-2"
-            color="error"
-            variant="ghost"
-            size="sm"
-            :aria-label="`Revoke ${apiKey.name}`"
-            @click="removeKey(apiKey.id, apiKey.name)"
+    <template v-else>
+      <UCard
+        v-if="!keys?.length"
+        class="border-dashed"
+        :ui="{ body: 'flex flex-col items-center justify-center py-12 text-center' }"
+      >
+        <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-elevated">
+          <UIcon
+            name="i-lucide-key"
+            class="size-5 text-muted"
           />
         </div>
-      </div>
-    </UCard>
+        <h3 class="mb-1 text-sm font-medium text-highlighted">
+          No API keys
+        </h3>
+        <p class="mb-4 text-sm text-muted">
+          Create a key to connect an external MCP client.
+        </p>
+        <UButton
+          label="Create key"
+          icon="i-lucide-plus"
+          color="neutral"
+          variant="outline"
+          @click="addOpen = true"
+        />
+      </UCard>
+
+      <UCard
+        v-for="apiKey in keys"
+        :key="apiKey.id"
+        :ui="{ body: 'space-y-3' }"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="font-medium text-highlighted">
+                {{ apiKey.name }}
+              </p>
+            </div>
+            <code class="text-xs break-all text-dimmed">{{ apiKey.keyPrefix }}••••••••••••••••</code>
+            <p class="text-xs text-muted mt-1">
+              Created: {{ new Date(apiKey.createdAt).toLocaleDateString() }}
+              <span v-if="apiKey.lastUsedAt">&bull; Last used: {{ new Date(apiKey.lastUsedAt).toLocaleDateString() }}</span>
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <UButton
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="ghost"
+              size="sm"
+              :aria-label="`Revoke ${apiKey.name}`"
+              @click="removeKey(apiKey.id, apiKey.name)"
+            />
+          </div>
+        </div>
+      </UCard>
+    </template>
 
     <UModal
       v-model:open="addOpen"

@@ -3,7 +3,7 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const { sorted, remove, update, loadOne } = useConversations()
 const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, setActive } = useWorkspaces()
-const { load: loadSidebar } = useSidebarData()
+const { load: loadSidebar, pending: sidebarPending, error: sidebarError } = useSidebarData()
 const settings = useSettings()
 const loadSettings = settings.load
 const { loadAll: loadMcpServers } = useMcpServers()
@@ -11,7 +11,7 @@ const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
 
-await useAsyncData('app-data', async () => {
+const { refresh: refreshAppData } = useAsyncData('app-data', async () => {
   if (user.value) {
     // Opening a conversation directly (a deep link, a bookmark, a refresh)
     // never went through the workspace picker, so activeWorkspaceId can be
@@ -54,7 +54,7 @@ await useAsyncData('app-data', async () => {
     ])
   }
   return true
-})
+}, { lazy: true })
 
 // Whenever workspace changes, we don't necessarily need to reload the
 // sidebar since we already load ALL workspaces' conversations up front.
@@ -309,69 +309,97 @@ const searchGroups = computed(() => [
 
         <template v-if="!collapsed">
           <div
-            v-for="group in workspaceGroups"
-            :key="group.workspace.id"
-            class="mb-3"
+            v-if="sidebarPending"
+            class="px-2.5 py-2 space-y-4"
           >
-            <div class="px-2.5 py-1 flex items-center justify-between group">
-              <p
-                class="text-xs font-medium cursor-pointer truncate mr-2"
-                :class="activeWorkspaceId === group.workspace.id ? 'text-primary' : 'text-dimmed hover:text-primary'"
-                :title="group.workspace.name"
-                @click="setActive(group.workspace.id)"
-              >
-                {{ group.workspace.name }}
-              </p>
-
-              <UDropdownMenu :items="workspaceActionItems(group.workspace)">
-                <UButton
-                  icon="i-lucide-ellipsis"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  class="opacity-0 group-hover:opacity-100"
-                  @click.stop.prevent
-                />
-              </UDropdownMenu>
-            </div>
-
-            <!-- One UNavigationMenu per workspace -->
-            <UNavigationMenu
-              :items="itemsFor(group.conversations)"
-              orientation="vertical"
-              :ui="{ link: 'group', root: 'py-0.5' }"
+            <div
+              v-for="i in 2"
+              :key="i"
+              class="space-y-2"
             >
-              <template #item-trailing="{ item }">
-                <UDropdownMenu :items="rowItems(String(item.value), String(item.label))">
+              <USkeleton class="h-4 w-28 rounded" />
+              <USkeleton class="h-6 w-full rounded" />
+              <USkeleton class="h-6 w-full rounded" />
+            </div>
+          </div>
+
+          <div
+            v-else-if="sidebarError"
+            class="px-2"
+          >
+            <DataLoadError
+              title="Couldn't load workspaces"
+              description="Failed to load your workspaces and conversations."
+              @retry="refreshAppData()"
+            />
+          </div>
+
+          <template v-else>
+            <div
+              v-for="group in workspaceGroups"
+              :key="group.workspace.id"
+              class="mb-3"
+            >
+              <div class="px-2.5 py-1 flex items-center justify-between group">
+                <p
+                  class="text-xs font-medium cursor-pointer truncate mr-2"
+                  :class="activeWorkspaceId === group.workspace.id ? 'text-primary' : 'text-dimmed hover:text-primary'"
+                  :title="group.workspace.name"
+                  @click="setActive(group.workspace.id)"
+                >
+                  {{ group.workspace.name }}
+                </p>
+
+                <UDropdownMenu :items="workspaceActionItems(group.workspace)">
                   <UButton
                     icon="i-lucide-ellipsis"
                     color="neutral"
                     variant="ghost"
                     size="xs"
-                    :aria-label="`Options for ${item.label}`"
+                    class="opacity-0 group-hover:opacity-100"
                     @click.stop.prevent
                   />
                 </UDropdownMenu>
-              </template>
-            </UNavigationMenu>
-          </div>
+              </div>
 
-          <div
-            v-if="workspaces.length === 0"
-            class="px-2.5 py-4 text-center"
-          >
-            <p class="mb-3 text-sm text-muted">
-              No workspaces yet.
-            </p>
-            <UButton
-              label="Create one"
-              icon="i-lucide-folder-plus"
-              color="neutral"
-              variant="outline"
-              size="xs"
-              @click="workspaceCreating = true"
-            />
-          </div>
+              <!-- One UNavigationMenu per workspace -->
+              <UNavigationMenu
+                :items="itemsFor(group.conversations)"
+                orientation="vertical"
+                :ui="{ link: 'group', root: 'py-0.5' }"
+              >
+                <template #item-trailing="{ item }">
+                  <UDropdownMenu :items="rowItems(String(item.value), String(item.label))">
+                    <UButton
+                      icon="i-lucide-ellipsis"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :aria-label="`Options for ${item.label}`"
+                      @click.stop.prevent
+                    />
+                  </UDropdownMenu>
+                </template>
+              </UNavigationMenu>
+            </div>
+
+            <div
+              v-if="workspaces.length === 0"
+              class="px-2.5 py-4 text-center"
+            >
+              <p class="mb-3 text-sm text-muted">
+                No workspaces yet.
+              </p>
+              <UButton
+                label="Create one"
+                icon="i-lucide-folder-plus"
+                color="neutral"
+                variant="outline"
+                size="xs"
+                @click="workspaceCreating = true"
+              />
+            </div>
+          </template>
         </template>
       </template>
 
