@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util'
-import { spawnSync } from 'node:child_process'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
 import { createCurlTool } from '../../curl-tool/src/index.ts'
-
-
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
