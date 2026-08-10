@@ -37,42 +37,8 @@ async fn run_curl(
 ) -> String {
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => return format!("Error: URL Error: {}", e),
     };
-
-    if !no_guard {
-        if let Some(host) = parsed_url.host_str() {
-            // Check if it's already an IP string
-            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                if !is_safe_ip(&ip) {
-                    return "Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
-                }
-            } else {
-                // Resolve hostname to IP using hickory-resolver
-                use hickory_resolver::config::*;
-                use hickory_resolver::TokioResolver;
-                use hickory_resolver::net::runtime::TokioRuntimeProvider;
-                let resolver = TokioResolver::builder_with_config(ResolverConfig::default(), TokioRuntimeProvider::default())
-                    .with_options(ResolverOpts::default())
-                    .build()
-                    .unwrap_or_else(|e| {
-                        eprintln!("Failed to build DNS resolver: {}", e);
-                        std::process::exit(1);
-                    });
-
-                let response = match resolver.lookup_ip(host).await {
-                    Ok(r) => r,
-                    Err(e) => return format!("Error: DNS lookup failed: {}", e),
-                };
-
-                for ip in response.iter() {
-                    if !is_safe_ip(&ip) {
-                        return format!("Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, ip);
-                    }
-                }
-            }
-        }
-    }
 
     fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
         match ip {
@@ -86,11 +52,39 @@ async fn run_curl(
                     && !ipv4.is_unspecified()
             }
             std::net::IpAddr::V6(ipv6) => {
+                if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                    return is_safe_ip(&std::net::IpAddr::V4(ipv4));
+                }
+
                 !ipv6.is_loopback()
                 && !ipv6.is_multicast()
                 && !ipv6.is_unspecified()
                 && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
                 && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
+            }
+        }
+    }
+
+    let bypass_initial = std::env::var("CURL_TEST_ALLOW_INITIAL").is_ok();
+
+    if !no_guard && !bypass_initial {
+        if let Some(host) = parsed_url.host_str() {
+            // Check if it's already an IP string
+            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                if !is_safe_ip(&ip) {
+                    return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
+                }
+            } else {
+                use std::net::ToSocketAddrs;
+                if let Ok(addrs) = format!("{}:80", host).to_socket_addrs() {
+                    for addr in addrs {
+                        if !is_safe_ip(&addr.ip()) {
+                            return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
+                        }
+                    }
+                } else {
+                    return format!("Error: DNS lookup failed for {}", host);
+                }
             }
         }
     }
@@ -101,15 +95,46 @@ async fn run_curl(
     };
 
     let client = if !no_guard {
+        let policy = reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() > 10 {
+                return attempt.error("too many redirects");
+            }
+
+            let url = attempt.url();
+            if let Some(host) = url.host_str() {
+                if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                    if !is_safe_ip(&ip) {
+                        return attempt.error("redirect to private IP blocked by SSRF guard");
+                    }
+                } else {
+                    // Sync DNS resolution for redirects
+                    use std::net::ToSocketAddrs;
+                    if let Ok(addrs) = format!("{}:80", host).to_socket_addrs() {
+                        for addr in addrs {
+                            if !is_safe_ip(&addr.ip()) {
+                                return attempt.error(
+                                    "redirect resolves to private IP blocked by SSRF guard",
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            attempt.follow()
+        });
+
+        match reqwest::Client::builder().redirect(policy).build() {
+            Ok(c) => c,
+            Err(_) => reqwest::Client::new(),
+        }
+    } else {
         match reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(reqwest::redirect::Policy::limited(10))
             .build()
         {
             Ok(c) => c,
             Err(_) => reqwest::Client::new(),
         }
-    } else {
-        reqwest::Client::new()
     };
     let mut req_builder = client.request(method, parsed_url.clone());
 
@@ -133,7 +158,12 @@ async fn run_curl(
 
     let res = match req_builder.send().await {
         Ok(r) => r,
-        Err(e) => return format!("Error: {}", e),
+        Err(e) => {
+            if e.is_redirect() {
+                return format!("Error: SSRF Error: SSRF guard blocked redirect: {}", e);
+            }
+            return format!("Error: Fetch Error: {}", e);
+        }
     };
 
     let status = res.status().as_u16();

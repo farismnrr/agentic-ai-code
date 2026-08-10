@@ -83,7 +83,14 @@ async fn run_terminal(
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    cmd.kill_on_drop(true);
+    #[cfg(unix)]
+    {
+        cmd.process_group(0);
+    }
+    #[cfg(not(unix))]
+    {
+        cmd.kill_on_drop(true);
+    }
 
     let timeout_duration = Duration::from_millis(timeout_ms);
 
@@ -92,13 +99,24 @@ async fn run_terminal(
         Err(e) => return format!("Error: {}", e),
     };
 
+    let pid = child.id().unwrap_or(0);
+
     let output_result = timeout(timeout_duration, child.wait_with_output()).await;
 
     match output_result {
         Err(_) => {
-            // Because kill_on_drop(true) is set on cmd, the child is automatically killed 
-            // when `child` (which was moved into `wait_with_output()`) is dropped by `timeout()` failing.
-            format!("Error: command timed out after {}ms and was killed.", timeout_ms)
+            #[cfg(unix)]
+            {
+                if pid > 0 {
+                    unsafe {
+                        libc::kill(-(pid as i32), libc::SIGKILL);
+                    }
+                }
+            }
+            format!(
+                "Error: command timed out after {}ms and was killed.",
+                timeout_ms
+            )
         }
         Ok(Err(e)) => format!("Error: {}", e),
         Ok(Ok(out)) => {
@@ -121,7 +139,9 @@ async fn main() {
     let args = Args::parse();
 
     if args.positionals.is_empty() {
-        eprintln!("Usage: terminal-tool <command> [args...] [--cwd <path>] [--no-guard] [--timeout <ms>]");
+        eprintln!(
+            "Usage: terminal-tool <command> [args...] [--cwd <path>] [--no-guard] [--timeout <ms>]"
+        );
         std::process::exit(1);
     }
 
