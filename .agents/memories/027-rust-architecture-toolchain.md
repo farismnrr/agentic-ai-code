@@ -37,7 +37,7 @@ The CLI tools compile to native binaries targeting the environments where the `a
 - `clap`: Used for standard, POSIX-compliant CLI argument parsing. It ensures deterministic boundary and quote preservation (critical for `terminal-tool`).
 - `tokio`: Used because `curl-tool` and `terminal-tool` require async task execution (HTTP requests and child process timeout management).
 - `reqwest`: The standard choice for robust, high-performance HTTP requests in `curl-tool` and `searxng-search-tool`.
-- `trust-dns-resolver`: Directly required by `curl-tool` to pre-resolve DNS and enforce strict SSRF blocks (e.g., rejecting DNS rebinds to 127.0.0.1) before any socket connection is attempted by `reqwest`.
+- `hickory-resolver`: Directly required by `curl-tool` to pre-resolve DNS and enforce strict SSRF blocks (e.g., rejecting DNS rebinds to 127.0.0.1). *Note: We intentionally use `hickory-resolver` over the older `trust-dns-resolver` to mitigate an IDNA vulnerability (`RUSTSEC-2024-0421`) discovered during our `cargo audit`.*
 - `shell-words`: Safely splits string commands into explicit argument vectors for `terminal-tool` to prevent shell-injection vulnerabilities.
 
 These dependencies were chosen to provide exactly the required features for parity with the old Node.js tools while maximizing safety and minimizing bloat.
