@@ -202,5 +202,10 @@ async fn main() {
     )
     .await;
 
+    let is_error = output.starts_with("Error:");
     println!("{output}");
+    
+    if is_error {
+        std::process::exit(1);
+    }
 }
