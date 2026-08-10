@@ -5,7 +5,7 @@ As part of the JS-to-Rust CLI migration (Plan 027), this memory documents the ba
 ## 1. Toolchain & MSRV
 
 - **Pinned Toolchain:** The `packages/rust-tools/rust-toolchain.toml` specifies the toolchain channel as `1.95.0` to guarantee reproducible builds across developer machines and CI pipelines. It includes `rustfmt` and `clippy` components for strict style enforcement.
-- **MSRV Policy:** The Minimum Supported Rust Version (MSRV) is explicitly declared in `Cargo.toml` as `rust-version = "1.75.0"`. This strikes a balance between relying on a modern 2021 edition feature set and maximizing backwards compatibility for older host build environments.
+- **MSRV Policy:** The Minimum Supported Rust Version (MSRV) is explicitly declared in `Cargo.toml` as `rust-version = "1.88.0"`. This strikes a balance between relying on a modern 2021 edition feature set and maximizing backwards compatibility for older host build environments.
 
 ## 2. Release Profile & Distribution
 

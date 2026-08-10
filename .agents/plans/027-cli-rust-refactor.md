@@ -445,7 +445,7 @@ If a regression appears:
 | Differential parity | 🟢 Done | Comprehensive test harness created using old JS files as oracle |
 | Basic CI | 🟢 Done | fmt/Clippy/test/build present |
 | Release CI | 🟢 Done | Matrix, checksums, and artifact pipeline configured in rust-ci.yml |
-| Toolchain/MSRV | 🟢 Done | Explicit pin (1.80.0) configured |
+| Toolchain/MSRV | 🟢 Done | Explicit pin (1.88.0) configured |
 | Benchmark | 🟢 Done | Methodology recorded; RSS and latency proven significantly improved |
 | Final zero-JS audit | 🟢 Done | Repository‑wide audit completed; see [Zero‑JS‑CLI cutover memory](file:///home/farismnrr/.gemini/antigravity-cli/brain/3dd307aa-d587-4749-a8f9-ef37a39ec212/.agents/memories/027-zero-js-cli-cutover.md) |
 | Plan closeout | 🟢 Done | All gates verified; plan status set to COMPLETED |

@@ -128,11 +128,9 @@ fn test_redirect_to_link_local_blocked() {
 #[test]
 fn test_redirect_revalidation_dns() {
     let port = spawn_mock_server();
-    // DNS rebinding simulation: initial request OK, but redirect points to localtest.me
+    // DNS rebinding simulation / redirect to private IP test
+    // initial request OK, but redirect points to localtest.me
     // Since localtest.me resolves to 127.0.0.1, the redirect policy should block it.
-    // wait, our mock server doesn't have a /redirect-to-localtest route.
-    // Let's just use http://localtest.me/ directly since we bypass initial. No, the initial is bypassed, so localtest.me isn't blocked.
-    // But then it won't redirect. We need a redirect.
     // We can just add /redirect-to-localtest to mock server!
     let output = Command::new(get_bin())
         .arg(format!("http://127.0.0.1:{port}/redirect-to-localtest"))
@@ -143,6 +141,19 @@ fn test_redirect_revalidation_dns() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     println!("STDOUT: {stdout}");
     assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
+}
+
+#[test]
+fn test_hostname_resolving_to_private_ip_is_blocked() {
+    let output = Command::new(get_bin())
+        .arg("http://192.168.1.1")
+        .output()
+        .expect("Failed to run curl-tool");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    println!("STDOUT: {stdout}");
+    assert!(!output.status.success());
+    assert!(stdout.contains("SSRF guard blocked"));
 }
 
 #[test]

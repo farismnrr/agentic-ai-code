@@ -26,3 +26,18 @@ When present, it skips the initial IP check and also falls back to a standard `r
 The architecture explicitly bounds the TOCTOU risk for DNS Rebinding through design rather than flaky CI regression tests. 
 1. **Redirect Rebinding**: Fully covered. As proven by the `curl_tool_tests.rs` redirect regression test, an attacker cannot bypass SSRF via an HTTP redirect to a private IP (e.g., `localtest.me`) because the custom `redirect::Policy` synchronously resolves and validates the destination *at the exact moment* of the hop, before the socket connection is attempted.
 2. **Initial Request Rebinding**: To achieve a true TOCTOU on the initial request, an attacker must successfully switch their DNS A-record from a public IP to a private IP in the extremely narrow millisecond window between our `ToSocketAddrs` validation and `reqwest`'s internal socket connection. Since we do not pin the IP (due to `reqwest`'s `resolve()` strictly associating the domain to a *specific port*, which would break dynamic HTTP/HTTPS port transitions), we accept this sub-millisecond race condition as an explicit design boundary. The probability of successfully exploiting this without controlling the target network's DNS cache is negligible.
+
+## Threat Model / DNS Rebinding Explicit Boundary
+
+### What IS protected:
+- Initial requests to IPs that are private/loopback/link-local at time of check
+- Initial requests where hostname DNS resolves to a private IP at time of check  
+- HTTP redirects to private IPs (both literal IP and hostname-resolving)
+- HTTP redirects to loopback/link-local addresses
+
+### Accepted residual risk (documented):
+- **DNS rebinding on initial request**: If a DNS record changes from a public IP to a private IP in the sub-millisecond window between `ToSocketAddrs` validation and `reqwest`'s socket connection, the SSRF guard can be bypassed. This is accepted residual risk because: (a) it requires an attacker to control DNS TTL and the resolver cache on the target host, (b) the attack window is ~1ms, and (c) mitigating it fully requires IP-pinning which breaks dynamic HTTPS port negotiation.
+- **DNS rebinding protection: NOT GUARANTEED against a sophisticated attacker with DNS control.**
+
+### What is out of scope:
+- SSRF via Gopher, file://, or other non-HTTP/HTTPS schemes (curl-tool only supports HTTP/HTTPS URLs)
