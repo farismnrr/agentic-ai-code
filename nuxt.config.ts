@@ -42,7 +42,7 @@ export default defineNuxtConfig({
         // both refuse to store or resend it, so login "succeeds" but no
         // session ever persists. Only relax this outside production;
         // real deployments must keep Secure.
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NUXT_SESSION_COOKIE_SECURE === 'true'
       }
     },
     // SMTP for email verification + password reset. All values come from

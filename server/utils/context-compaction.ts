@@ -1,4 +1,4 @@
-import { generateText, convertToModelMessages, type LanguageModel } from 'ai'
+import { streamText, convertToModelMessages, type LanguageModel } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { conversations as conversationsTable, messages as messagesTable } from '../database/schema'
 import { eq } from 'drizzle-orm'
@@ -43,6 +43,35 @@ function truncatePartsIfNeeded(tail: UIMessage[], summaryMessage: UIMessage, bud
   return clipped
 }
 
+// The summarizer call carries no `tools`, so raw tool-call/tool-result
+// parts passed straight through `convertToModelMessages` land in its
+// prompt as the provider's native tool-call wire format with nothing
+// registered to handle it. Confirmed against production: a weaker model
+// (the "Free Models" provider) pattern-matched that shape in its own
+// input and echoed pseudo tool-call syntax back as its entire "summary"
+// instead of prose. Flatten tool parts to plain descriptive text first so
+// the summarizer only ever sees natural language.
+function flattenToolPartsForSummary(msgs: UIMessage[]): UIMessage[] {
+  return msgs.map((m) => {
+    const hasToolPart = m.parts.some(p => String(p.type).startsWith('tool-') || p.type === 'dynamic-tool')
+    if (!hasToolPart) return m
+    return {
+      ...m,
+      parts: m.parts.map((p) => {
+        if (!(String(p.type).startsWith('tool-') || p.type === 'dynamic-tool')) return p
+        const part = p as Record<string, unknown>
+        const name = 'toolName' in part ? part.toolName : String(p.type).replace(/^tool-/, '')
+        const input = 'input' in part ? JSON.stringify(part.input) : undefined
+        const output = 'output' in part ? JSON.stringify(part.output) : undefined
+        return {
+          type: 'text',
+          text: `[Used tool "${name}"${input ? ` with input ${input}` : ''}${output ? ` — result: ${output}` : ''}]`
+        }
+      })
+    }
+  })
+}
+
 interface ResolveMessagesForModelParams {
   messages: UIMessage[]
   conv: {
@@ -77,11 +106,20 @@ export async function resolveMessagesForModel({
 
   let cutoffIdx = -1
   if (conv.contextSummary) {
+    // Not `role: 'system'` — confirmed against production (AI SDK v7):
+    // `streamText()` flatly rejects any system-role entry inside
+    // `messages`, throwing "System messages are not allowed in the prompt
+    // or messages fields. Use the instructions option instead." The real
+    // system prompt already goes through `system:`/`buildWorkspaceSystemPrompt`
+    // separately in chat.post.ts; this is just conversation content, so
+    // `role: 'user'` (valid in any position, for every provider) carries
+    // it instead, framed clearly so the model doesn't mistake it for
+    // something the human actually typed.
     summaryMessage = {
       id: 'summary-' + conv.id,
-      role: 'system',
+      role: 'user',
       createdAt: new Date(),
-      parts: [{ type: 'text', text: `Conversation summary so far: ${conv.contextSummary}` }]
+      parts: [{ type: 'text', text: `[Context note, not sent by the user — summary of the earlier conversation]: ${conv.contextSummary}` }]
     }
 
     if (conv.contextSummaryUpToMessageId) {
@@ -143,12 +181,21 @@ export async function resolveMessagesForModel({
 
   try {
     const summarizerModel = getSummarizerModel()
-    const modelMessages = await convertToModelMessages(messagesToSummarize)
-    const { text: newSummary } = await generateText({
+    const modelMessages = await convertToModelMessages(flattenToolPartsForSummary(messagesToSummarize))
+    // Not `generateText()` — some OpenAI-compatible providers (confirmed
+    // against the "Free Models" router in production: "Invalid JSON
+    // response... Unexpected token 'd', \"data: {...\"") always respond
+    // with an SSE stream regardless of the request's `stream` flag, which
+    // breaks `generateText()`'s non-streaming JSON parse outright. The
+    // main chat flow already talks to every configured provider
+    // successfully because it always goes through `streamText()` — use
+    // the same proven path here instead of a second, less-compatible one.
+    const summaryResult = streamText({
       model: summarizerModel,
       system: systemPrompt,
       messages: modelMessages
     })
+    const newSummary = await summaryResult.text
 
     if (newSummary) {
       const db = useDb()
@@ -175,9 +222,9 @@ export async function resolveMessagesForModel({
 
       const newSummaryMessage: UIMessage = {
         id: 'summary-' + conv.id + '-' + Date.now(),
-        role: 'system',
+        role: 'user',
         createdAt: new Date(),
-        parts: [{ type: 'text', text: `Conversation summary so far: ${newSummary}` }]
+        parts: [{ type: 'text', text: `[Context note, not sent by the user — summary of the earlier conversation]: ${newSummary}` }]
       }
 
       // Single compaction pass isn't guaranteed to land under budget on its

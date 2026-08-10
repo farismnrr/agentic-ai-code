@@ -308,8 +308,18 @@ export default defineEventHandler(async (event) => {
       // so a persistence failure is at least visible instead of invisible.
       let totalTokens: number | undefined
       try {
-        const usage = await result.usage
-        if (usage?.totalTokens) totalTokens = usage.totalTokens
+        // Not `result.usage` — that's `totalUsage`, the SUM of every step's
+        // usage across this turn's whole multi-step tool-calling loop
+        // (see node_modules/ai/dist/index.js:5946-5985's `steps.reduce(...)`).
+        // A turn with several tool calls re-sends most of the context on
+        // each step, so that sum inflates far past the conversation's real
+        // size — confirmed against production data where it swung
+        // 40k/199k/249k/563k across turns with no relation to actual
+        // history growth. What compaction/the context-usage indicator need
+        // is the size of the *last* call only — the one call whose input
+        // reflects the full conversation as it stands now.
+        const step = await result.finalStep
+        if (step?.usage?.totalTokens) totalTokens = step.usage.totalTokens
       } catch {
         // ignore
       }
