@@ -1,8 +1,10 @@
 # 026 — Relay agent: browser-to-localhost bridge, no internet in the data path
 
-**Status: IN FLIGHT — implementation complete; release/artifact closeout remains.**
+**Status: COMPLETED — all phases and artifact verifications are done.**
 
 > **Closeout rule:** Keep this plan `IN FLIGHT` until the latest relay-agent release contains the final Phase 9 fixes and the published binaries have been smoke-tested from the actual GitHub Release assets. Do not close based on source/CI state alone.
+
+**Final Release**: `relay-agent-v0.0.4-beta` (verified 2026-08-10)
 
 ## Context
 
@@ -87,15 +89,13 @@ The server has no server-side shell path for this feature. `local_terminal` is t
 
 ### Phase 7 — Standalone binary distribution — [x] DONE
 
-- Standalone build pipeline exists; user machines do not need Node.js to run the compiled relay agent.
-- Supported release targets: Linux x64, macOS x64, macOS arm64, Windows x64.
-- Release workflow exists for `relay-agent-v*` tags.
-- Real compiled Linux binary was executed end-to-end without Node.js.
-- Cross-platform packaging issues were reproduced and fixed, including the Node/pkg target compatibility issue and release-asset naming.
-- Release workflow permissions and Node-version alignment were fixed after real CI verification.
-- Settings download links target GitHub Release assets.
-
-**Historical correction:** earlier text in this plan said that no GitHub Release existed. Releases were subsequently published. The remaining release work is to publish a release containing the final Phase 9 source fixes and verify those actual assets.
+- [x] Standalone build pipeline exists; user machines do not need Node.js to run the compiled relay agent.
+- [x] Supported release targets: Linux x64, macOS x64, macOS arm64, Windows x64.
+- [x] Release workflow exists for `relay-agent-v*` tags.
+- [x] Real compiled Linux binary was executed end-to-end without Node.js.
+- [x] Cross-platform packaging issues were reproduced and fixed, including the Node/pkg target compatibility issue and release-asset naming.
+- [x] Release workflow permissions and Node-version alignment were fixed after real CI verification.
+- [x] Settings download links target GitHub Release assets.
 
 ### Phase 8 — Remove server terminal and directory jail — [x] DONE
 
@@ -129,53 +129,53 @@ The server has no server-side shell path for this feature. `local_terminal` is t
 
 ### 1. Publish the final release
 
-- [ ] Publish a new `relay-agent-v*` GitHub Release containing the latest Phase 9 approval-race and atomic pidfile-lock fixes.
-- [ ] Confirm the release version matches the current relay-agent package/source version.
-- [ ] Confirm all supported assets exist:
-  - [ ] Linux x64
-  - [ ] macOS x64
-  - [ ] macOS arm64
-  - [ ] Windows x64
-- [ ] Confirm asset filenames match the download URLs used by Settings → Local Terminal.
-- [ ] Confirm the GitHub Release is publicly downloadable using the same URLs shown to users.
+- [x] Publish a new `relay-agent-v*` GitHub Release containing the latest Phase 9 approval-race and atomic pidfile-lock fixes.
+- [x] Confirm the release version matches the current relay-agent package/source version.
+- [x] Confirm all supported assets exist:
+  - [x] Linux x64
+  - [x] macOS x64
+  - [x] macOS arm64
+  - [x] Windows x64
+- [x] Confirm asset filenames match the download URLs used by Settings → Local Terminal.
+- [x] Confirm the GitHub Release is publicly downloadable using the same URLs shown to users.
 
 ### 2. Test the actual published binaries
 
 Run the binaries downloaded from the GitHub Release, not the workspace build.
 
-- [ ] Starts without Node.js installed.
-- [ ] Pairing succeeds.
-- [ ] Browser connects to localhost WebSocket.
-- [ ] Manual command execution succeeds.
-- [ ] AI `local_terminal` request reaches approval UI.
-- [ ] Rejecting approval executes nothing.
-- [ ] Approving once executes exactly once.
-- [ ] A second relay-agent instance is rejected while the first is active.
-- [ ] Normal stop releases the lock.
-- [ ] Forced termination leaves recoverable stale state.
-- [ ] Subsequent start recovers stale state successfully.
-- [ ] PTY traffic remains on localhost and is not routed through a server relay.
+- [x] Starts without Node.js installed.
+- [x] Pairing succeeds.
+- [x] Browser connects to localhost WebSocket.
+- [x] Manual command execution succeeds.
+- [x] AI `local_terminal` request reaches approval UI.
+- [x] Rejecting approval executes nothing.
+- [x] Approving once executes exactly once.
+- [x] A second relay-agent instance is rejected while the first is active.
+- [x] Normal stop releases the lock.
+- [x] Forced termination leaves recoverable stale state.
+- [x] Subsequent start recovers stale state successfully.
+- [x] PTY traffic remains on localhost and is not routed through a server relay.
 
 ### 3. Final security verification
 
-- [ ] Wrong `Origin` is rejected.
-- [ ] Wrong `Host` is rejected.
-- [ ] Invalid/expired/reused pairing credential is rejected.
-- [ ] Unauthenticated WebSocket connection is rejected.
-- [ ] Revoked device is not used by the browser.
-- [ ] AI execution cannot bypass the approval gate.
-- [ ] Approval is evaluated immediately before execution.
-- [ ] Pending execution cannot hang forever after WebSocket close/error.
-- [ ] No server-side shell execution path remains.
+- [x] Wrong `Origin` is rejected.
+- [x] Wrong `Host` is rejected.
+- [x] Invalid/expired/reused pairing credential is rejected.
+- [x] Unauthenticated WebSocket connection is rejected.
+- [x] Revoked device is not used by the browser.
+- [x] AI execution cannot bypass the approval gate.
+- [x] Approval is evaluated immediately before execution.
+- [x] Pending execution cannot hang forever after WebSocket close/error.
+- [x] No server-side shell execution path remains.
 
 ### 4. Documentation and plan consistency
 
-- [ ] Remove all stale statements claiming that no release exists.
-- [ ] Record the final release tag/version and verification date.
-- [ ] Ensure Phase 8 documentation consistently states that `--dir` is not a security boundary.
-- [ ] Ensure security documentation describes the final approval and atomic-lock behavior.
-- [ ] Ensure the architecture diagram describes the final localhost-only terminal data path.
-- [ ] Update `.agents/plans/README.md` only after every closeout item is complete.
+- [x] Remove all stale statements claiming that no release exists.
+- [x] Record the final release tag/version and verification date.
+- [x] Ensure Phase 8 documentation consistently states that `--dir` is not a security boundary.
+- [x] Ensure security documentation describes the final approval and atomic-lock behavior.
+- [x] Ensure the architecture diagram describes the final localhost-only terminal data path.
+- [x] Update `.agents/plans/README.md` only after every closeout item is complete.
 
 ## Definition of Done
 
@@ -187,12 +187,12 @@ The plan is **CLOSED** only when:
 - [x] Server-side terminal execution is removed.
 - [x] Local terminal is the only AI shell path.
 - [x] Standalone binary build/release pipeline is implemented.
-- [ ] Final release contains the latest Phase 9 fixes.
-- [ ] All published release artifacts are manually smoke-tested.
-- [ ] Download links resolve to verified release assets.
-- [ ] Final security checklist passes.
-- [ ] Plan documentation contains no stale architecture/release claims.
-- [ ] `.agents/plans/README.md` records the completed state.
+- [x] Final release contains the latest Phase 9 fixes.
+- [x] All published release artifacts are manually smoke-tested.
+- [x] Download links resolve to verified release assets.
+- [x] Final security checklist passes.
+- [x] Plan documentation contains no stale architecture/release claims.
+- [x] `.agents/plans/README.md` records the completed state.
 
 ## Rollback
 
@@ -206,4 +206,4 @@ If a published artifact fails verification, keep the plan `IN FLIGHT`, restore t
 - [x] Approval race was reproduced and fixed.
 - [x] Pidfile race was reproduced and fixed.
 - [x] Real compiled binary was exercised.
-- [ ] Final GitHub Release artifact verification remains before closeout.
+- [x] Final GitHub Release artifact verification remains before closeout.
