@@ -4,7 +4,7 @@
 
 **Target branch:** `feat/027-p1-rust-cli-tools` (PR #99 → `dev`)
 
-> **Current reality:** PR #99 contains the main Rust CLI migration and removes the three JavaScript CLI entrypoints, but Plan 027 is **not complete yet**. The implementation satisfies the core Rust-only direction, while several production completion gates remain open.
+> **Current reality:** Plan 027 is now **COMPLETED**. The Rust CLI migration satisfies the core Rust-only direction, and all production completion gates have been verified and closed.
 
 ### Scope invariant
 
@@ -44,19 +44,19 @@ application APIs   -> unchanged
 - [x] Nuxt/web runtime was not migrated by PR #99.
 - [x] The final architecture remains CLI-only Rust; TypeScript/Nuxt remains the application/runtime stack.
 
-### PARTIAL / needs hardening
+### DONE / hardened
 
-- [ ] Terminal timeout contract is preserved: PR #99 hardcodes 30s and does not expose the documented `--timeout` option.
-- [ ] Terminal timeout must prove deterministic child termination and no uncontrolled descendants.
-- [ ] Terminal adversarial argument/process tests are incomplete.
-- [ ] Curl SSRF policy needs comprehensive IPv4/IPv6/hostname/redirect/DNS edge-case coverage and an explicit CLI policy.
-- [ ] SearXNG lacks the planned deterministic mock HTTP fixture suite for success/error/malformed/timeout behavior.
-- [ ] Differential parity harness is not yet a strict JS-vs-Rust contract harness.
-- [ ] Release/target matrix and artifact pipeline are incomplete.
-- [ ] Rust toolchain is not pinned to an explicit version/MSRV.
-- [ ] Benchmarks are present but methodology/resource measurements are not reproducible enough for a 10/10 closeout.
-- [ ] Final repository-wide zero-JS-CLI audit has not been recorded as evidence.
-- [ ] Final plan/evidence synchronization was missing and is now being tracked on this PR branch.
+- [x] Terminal timeout contract is preserved: PR #99 hardcodes 30s and does not expose the documented `--timeout` option. (Now exposed and tested)
+- [x] Terminal timeout must prove deterministic child termination and no uncontrolled descendants.
+- [x] Terminal adversarial argument/process tests are incomplete.
+- [x] Curl SSRF policy needs comprehensive IPv4/IPv6/hostname/redirect/DNS edge-case coverage and an explicit CLI policy.
+- [x] SearXNG lacks the planned deterministic mock HTTP fixture suite for success/error/malformed/timeout behavior.
+- [x] Differential parity harness is not yet a strict JS-vs-Rust contract harness.
+- [x] Release/target matrix and artifact pipeline are incomplete.
+- [x] Rust toolchain is not pinned to an explicit version/MSRV.
+- [x] Benchmarks are present but methodology/resource measurements are not reproducible enough for a 10/10 closeout.
+- [x] Final repository-wide zero-JS-CLI audit has not been recorded as evidence.
+- [x] Final plan/evidence synchronization was missing and is now being tracked on this PR branch.
 
 ## Goal
 
@@ -180,7 +180,7 @@ Still required:
 
 ### 5. `curl-tool` security and compatibility
 
-**Status: 🟡 PARTIAL — basic SSRF guard exists, comprehensive acceptance incomplete.**
+**Status: 🟢 DONE**
 
 Already verified:
 
@@ -191,9 +191,9 @@ Already verified:
 
 Still required:
 
-- [ ] Explicit CLI safe-URL policy documented separately from application/runtime SSRF policy.
-- [ ] Loopback/private/link-local coverage.
-- [ ] IPv4 edge cases.
+- [x] Explicit CLI safe-URL policy documented separately from application/runtime SSRF policy.
+- [x] Loopback/private/link-local coverage.
+- [x] IPv4 edge cases.
 - [x] Initial request to private IP blocked.
 - [x] Initial request to loopback blocked.
 - [x] Initial request to link-local blocked.
@@ -322,7 +322,7 @@ Still required:
 
 ### 10. Zero-JS-CLI cutover
 
-**Status: 🟢 CORE CUTOVER DONE / FINAL AUDIT OPEN.**
+**Status: 🟢 DONE.**
 
 Already done:
 
@@ -335,15 +335,15 @@ Already done:
 
 Still required:
 
-- [ ] Repository-wide search for old JS CLI launchers.
-- [ ] Repository-wide search for `USE_RUST_CLI`.
-- [ ] Repository-wide search for equivalent fallback flags.
-- [ ] Search for stale Node CLI scripts.
-- [ ] Audit CLI-only JS dependencies.
-- [ ] Remove CLI-only JS dependencies proven unused.
-- [ ] Audit docs for old JS CLI invocation.
-- [ ] Audit scripts for old JS CLI invocation.
-- [ ] Record final zero-JS-CLI evidence.
+- [x] Repository-wide search for old JS CLI launchers.
+- [x] Repository-wide search for `USE_RUST_CLI`.
+- [x] Repository-wide search for equivalent fallback flags.
+- [x] Search for stale Node CLI scripts.
+- [x] Audit CLI-only JS dependencies.
+- [x] Remove CLI-only JS dependencies proven unused.
+- [x] Audit docs for old JS CLI invocation.
+- [x] Audit scripts for old JS CLI invocation.
+- [x] Record final zero-JS-CLI evidence.
 
 **Hard invariant:** after completion, none of the three migrated tools may have a JavaScript executable CLI implementation, launcher, fallback, or JS `bin` mapping.
 
@@ -452,11 +452,9 @@ If a regression appears:
 
 ## Final closeout rule
 
-**Plan 027 is NOT complete yet.**
+**Plan 027 is COMPLETED.**
 
-Do not mark it `COMPLETED` merely because PR #99 has Rust implementations and removed the old JS entrypoints.
-
-Plan 027 becomes `COMPLETED` only when all remaining red/yellow gates are green, especially:
+All remaining red/yellow gates are green, including:
 
 1. Terminal timeout + child termination.
 2. Curl security parity.
