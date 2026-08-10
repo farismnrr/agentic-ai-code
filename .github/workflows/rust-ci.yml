@@ -32,10 +32,11 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-audit@0.21.2
 
       - name: Security audit
-        working-directory: packages/rust-tools
         run: cargo audit
 
       - name: Run tests (including strict parity integration)
