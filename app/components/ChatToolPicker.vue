@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nativeTools } from '#shared/utils/native-tools'
+import { nativeTools, NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import type { ApprovalDecision } from '#shared/types/chat'
 
 const props = defineProps<{
@@ -68,6 +68,26 @@ function resetApproval(toolId: string) {
   const { [toolId]: _, ...next } = props.approvals
   emit('update:approvals', next)
 }
+
+// This is NOT a "can the AI use local_terminal at all" switch — that's
+// decided entirely server-side by whether the user has a paired device
+// (see server/api/chat.post.ts), same as every other native tool here has
+// no on/off toggle of its own. This one control is specifically about
+// whether every command still needs its own approval-modal click: writes
+// the exact same `conversations.approvals` entry
+// ChatToolApproval.vue's own "Always allow" button writes, just reachable
+// proactively instead of only after a first prompt. Per-conversation only,
+// same as that column always is — flipping it here never touches any other
+// conversation.
+const skipLocalTerminalApproval = computed(() => props.approvals?.[NATIVE_LOCAL_TERMINAL_TOOL_ID] === 'always')
+
+function toggleSkipLocalTerminalApproval(value: boolean) {
+  if (value) {
+    emit('update:approvals', { ...props.approvals, [NATIVE_LOCAL_TERMINAL_TOOL_ID]: 'always' })
+  } else {
+    resetApproval(NATIVE_LOCAL_TERMINAL_TOOL_ID)
+  }
+}
 </script>
 
 <template>
@@ -126,6 +146,24 @@ function resetApproval(toolId: string) {
                 class="size-3 ms-1"
               />
             </UBadge>
+          </div>
+        </div>
+
+        <div class="mb-2 border-t border-default pt-2">
+          <div class="flex items-center justify-between gap-2 px-2 py-1">
+            <div class="min-w-0">
+              <p class="text-sm">
+                Skip approval for local terminal
+              </p>
+              <p class="text-xs text-muted">
+                Only in this conversation. Doesn't affect whether it's available — that follows Settings → Local Terminal pairing.
+              </p>
+            </div>
+            <USwitch
+              :model-value="skipLocalTerminalApproval"
+              class="shrink-0"
+              @update:model-value="toggleSkipLocalTerminalApproval"
+            />
           </div>
         </div>
 
