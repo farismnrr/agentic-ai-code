@@ -80,8 +80,11 @@ jobs:
           toolchain: 1.88.0
           targets: ${{ matrix.target }}
 
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Install cross
-        if: matrix.use-cross
+        if: matrix.use-cross == true
         run: cargo install cross
 
       - name: Build release artifacts
