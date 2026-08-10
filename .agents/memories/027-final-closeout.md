@@ -24,7 +24,7 @@ launchers, and fallbacks.
 | No obsolete CLI-only JS deps | ✅ PASS | `minimist`, `yargs`, `commander` absent from all three tool `package.json` |
 | TypeScript sources intact | ✅ PASS | `packages/{terminal,curl,searxng-search}-tool/src/index.ts` all exist |
 | Rust binaries present | ✅ PASS | `packages/rust-tools/src/bin/{terminal-tool,curl-tool,searxng-search-tool}.rs` all exist |
-| CI config valid | ✅ PASS | `.github/workflows/rust-ci.yml` present; Rust 1.80.0 pinned, `cargo audit` configured |
+| CI config valid | ✅ PASS | `.github/workflows/rust-ci.yml` present; Rust 1.95.0 pinned (MSRV 1.88.0), `cargo audit` configured |
 | Benchmark evidence | ✅ PASS | `.agents/memories/027-performance-benchmark.md` exists (RSS: 155 MB → 14 MB; latency: 250 ms → 2 ms) |
 | Rollback documented | ✅ PASS | `.agents/memories/027-rust-release-supply-chain.md` exists |
 | PR/merge evidence | ✅ PASS | PR #99 (`feat/027-p1-rust-cli-tools` → `dev`) |

@@ -8,7 +8,7 @@ The CI pipeline for the Rust CLI tools (`terminal-tool`, `curl-tool`, `searxng-s
     *   **Formatting and Linting:** Enforces `cargo fmt` and `cargo clippy -- -D warnings`.
     *   **Security Audit:** Integrates `cargo audit` to automatically enforce a dependency security audit strategy on every PR and push.
     *   **Testing:** Executes the strict differential parity test suite (`cargo test --workspace`) ensuring no regressions against the baseline.
-    *   **Toolchain Pinning:** Rust toolchain is explicitly pinned to `1.80.0` to avoid sudden compilation issues from newer compiler versions.
+    *   **Toolchain Pinning:** Rust toolchain is explicitly pinned to `1.95.0` (with MSRV `1.88.0`) to avoid sudden compilation issues from newer compiler versions.
 
 2.  **Cross-Compilation and Release (`build-release` job):**
     *   Executes only on pushes to `main` and `dev` (conditional to successful tests).
@@ -38,5 +38,5 @@ The artifacts and integration are intended to guarantee a reliable rollback and 
 
 - [x] Matrix build works across architectures.
 - [x] Checksum (`.sha256`) is bundled with every released binary.
-- [x] Toolchain (`1.80.0`) provides deterministic reproduction.
+- [x] Toolchain (`1.95.0`) provides deterministic reproduction.
 - [x] `cargo audit` actively denies compromised dependencies in the supply chain.

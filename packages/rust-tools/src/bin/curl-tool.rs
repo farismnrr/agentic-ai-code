@@ -23,6 +23,10 @@ struct Args {
     #[arg(short = 'd', long = "data")]
     data: Option<String>,
 
+    /// Request timeout in milliseconds (0 = no timeout)
+    #[arg(long = "timeout", default_value = "30000")]
+    timeout_ms: u64,
+
     /// Bypass SSRF guard protection
     #[arg(long = "no-guard")]
     no_guard: bool,
@@ -33,6 +37,7 @@ async fn run_curl(
     method_str: &str,
     headers_raw: &[String],
     body_data: Option<&str>,
+    timeout_ms: u64,
     no_guard: bool,
 ) -> String {
     let parsed_url = match Url::parse(url_str) {
@@ -94,6 +99,12 @@ async fn run_curl(
         Err(e) => return format!("Error: {e}"),
     };
 
+    let timeout = if timeout_ms == 0 {
+        None
+    } else {
+        Some(std::time::Duration::from_millis(timeout_ms))
+    };
+
     let client = if !no_guard {
         let policy = reqwest::redirect::Policy::custom(move |attempt| {
             if attempt.previous().len() > 10 {
@@ -123,15 +134,21 @@ async fn run_curl(
             attempt.follow()
         });
 
-        match reqwest::Client::builder().redirect(policy).build() {
+        let mut builder = reqwest::Client::builder().redirect(policy);
+        if let Some(t) = timeout {
+            builder = builder.timeout(t);
+        }
+        match builder.build() {
             Ok(c) => c,
             Err(_) => reqwest::Client::new(),
         }
     } else {
-        match reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(10))
-            .build()
-        {
+        let mut builder =
+            reqwest::Client::builder().redirect(reqwest::redirect::Policy::limited(10));
+        if let Some(t) = timeout {
+            builder = builder.timeout(t);
+        }
+        match builder.build() {
             Ok(c) => c,
             Err(_) => reqwest::Client::new(),
         }
@@ -198,13 +215,14 @@ async fn main() {
         &args.method,
         &args.headers,
         args.data.as_deref(),
+        args.timeout_ms,
         args.no_guard,
     )
     .await;
 
     let is_error = output.starts_with("Error:");
     println!("{output}");
-    
+
     if is_error {
         std::process::exit(1);
     }

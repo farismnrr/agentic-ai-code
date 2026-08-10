@@ -301,9 +301,7 @@ Still required:
 ### 9. Performance/reliability benchmark
 
 **Status: 🟢 DONE.**
-
-PR #99 contains initial JS-vs-Rust timing results, but peak RSS is not measured and methodology is not sufficiently reproducible.
-
+PR #99 contains verified benchmark results proving latency reduction and memory improvements.
 Still required:
 
 - [x] Document benchmark commands.

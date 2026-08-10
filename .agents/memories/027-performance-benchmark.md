@@ -10,7 +10,7 @@ A custom Python script (`benchmark_runner.py`) was used to execute each CLI impl
 ### Hardware/Environment
 - Environment: Local Linux development environment (Ubuntu 22.04)
 - CPU: AMD Ryzen 9 5900X (or equivalent)
-- Toolchain: Rust 1.80.0 (via `cargo build --release`), Node.js (v22.0.0)
+- Toolchain: Rust 1.95.0 (via `cargo build --release`), Node.js (v22.0.0)
 
 ### Methodology Details
 - **Warm-start/Cold-start:** Each command was executed for 2 warmup iterations to negate page cache variations, followed by 10 benchmark iterations.

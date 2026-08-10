@@ -210,7 +210,10 @@ fn test_curl_guard_blocked() {
     let js_out = run_js_cli("curl_cli.js", &args, &HashMap::new());
     let rs_out = run_rust_cli("curl-tool", &args, &HashMap::new());
     // Rust must exit non-zero (SSRF block)
-    assert!(!rs_out.status.success(), "Rust should exit non-zero for SSRF block");
+    assert!(
+        !rs_out.status.success(),
+        "Rust should exit non-zero for SSRF block"
+    );
     // Both must mention SSRF/URL guard in output
     let rs_stdout = String::from_utf8_lossy(&rs_out.stdout);
     let js_stdout = String::from_utf8_lossy(&js_out.stdout);
@@ -231,11 +234,34 @@ fn test_curl_malformed_url() {
     let args = vec!["--no-guard", "not_a_url"];
     let rs_out = run_rust_cli("curl-tool", &args, &HashMap::new());
     // Rust must exit non-zero for invalid URL
-    assert!(!rs_out.status.success(), "Rust should exit non-zero for malformed URL");
+    assert!(
+        !rs_out.status.success(),
+        "Rust should exit non-zero for malformed URL"
+    );
     let rs_stdout = String::from_utf8_lossy(&rs_out.stdout);
     assert!(
         rs_stdout.to_lowercase().contains("error"),
         "Expected error message in Rust for malformed URL, got: {rs_stdout}"
+    );
+}
+
+#[test]
+fn test_curl_timeout() {
+    let port = spawn_mock_server();
+    let url = format!("http://127.0.0.1:{port}/timeout");
+    let args = vec!["--no-guard", "--timeout", "100", &url];
+    let rs_out = run_rust_cli("curl-tool", &args, &HashMap::new());
+
+    assert!(
+        !rs_out.status.success(),
+        "Rust should exit non-zero on timeout"
+    );
+    let rs_stdout = String::from_utf8_lossy(&rs_out.stdout);
+    assert!(
+        rs_stdout.to_lowercase().contains("timeout")
+            || rs_stdout.to_lowercase().contains("timed out")
+            || rs_stdout.to_lowercase().contains("deadline has elapsed"),
+        "Expected timeout message in Rust stdout, got: {rs_stdout}"
     );
 }
 
