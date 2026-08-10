@@ -6,7 +6,7 @@ use url::Url;
 
 #[derive(Parser, Debug)]
 #[command(name = "curl-tool")]
-#[command(about = "Fetch a URL and return its response", long_about = None)]
+#[command(version, about = "Fetch a URL and return its response", long_about = None)]
 struct Args {
     /// Target URL
     url: Option<String>,

@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 #[command(name = "searxng-search-tool")]
-#[command(about = "Search the web using SearxNG", long_about = None)]
+#[command(version, about = "Search the web using SearxNG", long_about = None)]
 struct Args {
     /// The search query
     query: Option<String>,

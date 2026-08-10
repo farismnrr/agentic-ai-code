@@ -8,6 +8,7 @@ use tokio::time::timeout;
 #[derive(Parser, Debug)]
 #[command(name = "terminal-tool")]
 #[command(
+    version,
     about = "Run a shell command within the workspace directory",
     long_about = None
 )]
