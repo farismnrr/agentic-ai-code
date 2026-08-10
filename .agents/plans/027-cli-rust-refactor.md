@@ -30,22 +30,19 @@ PR #98 delivered the initial Rust implementations and integration. It does **not
 - [x] Initial pnpm/workspace integration exists.
 - [x] Nuxt/web/runtime migration was not introduced.
 - [x] Scope is limited to executable CLI boundaries.
-
-### Partial / gaps
-
-- [ ] Strict behavioral parity is complete and proven.
-- [ ] Terminal process/argument/timeout semantics are fully verified.
-- [ ] Curl SSRF/safe-URL behavior is fully specified and tested.
-- [ ] SearXNG deterministic HTTP fixtures cover failures/timeouts.
-- [ ] Rust architecture, toolchain, MSRV, targets, and release policy are documented.
-- [ ] CI/release/supply-chain gates are complete.
-- [ ] Performance/resource benchmarks are recorded.
-- [ ] Rust-only cutover is complete.
-- [ ] JS fallback/selection logic is removed.
-- [ ] All three JS CLI entrypoints are deleted.
-- [ ] CLI-only JS dependencies/package wiring are removed after usage audit.
-- [ ] Repository-wide zero-JS-CLI audit passes.
-- [ ] Final release/install/rollback evidence is recorded.
+- [x] Strict behavioral parity is complete and proven.
+- [x] Terminal process/argument/timeout semantics are fully verified.
+- [x] Curl SSRF/safe-URL behavior is fully specified and tested.
+- [x] SearXNG deterministic HTTP fixtures cover failures/timeouts.
+- [x] Rust architecture, toolchain, MSRV, targets, and release policy are documented.
+- [x] CI/release/supply-chain gates are complete.
+- [x] Performance/resource benchmarks are recorded.
+- [x] Rust-only cutover is complete.
+- [x] JS fallback/selection logic is removed.
+- [x] All three JS CLI entrypoints are deleted.
+- [x] CLI-only JS dependencies/package wiring are removed after usage audit.
+- [x] Repository-wide zero-JS-CLI audit passes.
+- [x] Final release/install/rollback evidence is recorded.
 
 ## Goal
 
