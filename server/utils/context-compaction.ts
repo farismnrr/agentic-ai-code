@@ -118,7 +118,6 @@ export async function resolveMessagesForModel({
     summaryMessage = {
       id: 'summary-' + conv.id,
       role: 'user',
-      createdAt: new Date(),
       parts: [{ type: 'text', text: `[Context note, not sent by the user — summary of the earlier conversation]: ${conv.contextSummary}` }]
     }
 
@@ -223,7 +222,6 @@ export async function resolveMessagesForModel({
       const newSummaryMessage: UIMessage = {
         id: 'summary-' + conv.id + '-' + Date.now(),
         role: 'user',
-        createdAt: new Date(),
         parts: [{ type: 'text', text: `[Context note, not sent by the user — summary of the earlier conversation]: ${newSummary}` }]
       }
 

@@ -1,6 +1,6 @@
 import { trace, type Tracer } from '@opentelemetry/api'
 import { logs, type Logger } from '@opentelemetry/api-logs'
-import type { LogRecord, LogRecordExporter } from '@opentelemetry/sdk-logs'
+import type { SdkLogRecord as LogRecord, LogRecordExporter } from '@opentelemetry/sdk-logs'
 import { ExportResultCode, type ExportResult } from '@opentelemetry/core'
 
 const IS_ENABLED = process.env.NUXT_OTEL_ENABLED === 'true'
