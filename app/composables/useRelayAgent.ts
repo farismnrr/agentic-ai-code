@@ -37,6 +37,13 @@ export function useRelayAgent() {
 
   const pendingExecs = new Map<string, { resolve: (res: RelayExecResult) => void, reject: (err: Error) => void }>()
 
+  function rejectAllPending(reason: string) {
+    for (const pending of pendingExecs.values()) {
+      pending.reject(new Error(reason))
+    }
+    pendingExecs.clear()
+  }
+
   // Properly initialize from localStorage on client-side mount
   onMounted(() => {
     if (import.meta.client) {
@@ -173,6 +180,7 @@ export function useRelayAgent() {
           isConnected.value = false
           isConnecting.value = false
           error.value = 'WebSocket connection error'
+          rejectAllPending('WebSocket connection error')
           resolve(false)
         }
 
@@ -180,6 +188,12 @@ export function useRelayAgent() {
           isConnected.value = false
           isConnecting.value = false
           ws = null
+          // Without this, a command sent right before the socket dropped
+          // (laptop sleep, CLI killed, network hiccup) left its exec()
+          // promise pending forever — for an AI-initiated call that hangs
+          // the whole chat turn with no error ever surfacing. See plan 026
+          // Phase 8/9.
+          rejectAllPending('Local relay agent connection closed')
         }
       } catch (err: unknown) {
         isConnecting.value = false
@@ -224,7 +238,27 @@ export function useRelayAgent() {
     const id = Math.random().toString(36).substring(2, 9)
 
     return new Promise((resolve, reject) => {
-      pendingExecs.set(id, { resolve, reject })
+      // Backstop for a socket that never fires close/error at all (a dead
+      // connection some networks just go silent on) — matches the relay
+      // agent's own longest command timeout (5 min, see
+      // packages/relay-agent/src/server.ts's execTimeoutMs) plus margin, so
+      // this never fires before a legitimate long-running command
+      // (e.g. npm install) would have gotten its own answer first.
+      const timeoutId = setTimeout(() => {
+        pendingExecs.delete(id)
+        reject(new Error('Local relay agent did not respond in time'))
+      }, 310000)
+
+      pendingExecs.set(id, {
+        resolve: (res) => {
+          clearTimeout(timeoutId)
+          resolve(res)
+        },
+        reject: (err) => {
+          clearTimeout(timeoutId)
+          reject(err)
+        }
+      })
       ws!.send(JSON.stringify({ type: 'exec', id, command, args, cwd }))
     })
   }
