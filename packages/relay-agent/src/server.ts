@@ -1,9 +1,10 @@
 import { createServer, type Server as HttpServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import path from 'node:path'
+import os from 'node:os'
 import crypto from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { execa } from 'execa'
-import { resolveScopedPath } from './scope.ts'
 
 export interface RelayAgentOptions {
   port?: number
@@ -13,9 +14,26 @@ export interface RelayAgentOptions {
   execTimeoutMs?: number
 }
 
+// By deliberate decision (not the original design — see
+// .agents/plans/026-local-cli-relay-agent.md's Phase 8 note), this agent
+// does NOT jail command execution to a single directory. `defaultCwd` is
+// only the starting point a command runs in when it doesn't specify its
+// own `cwd` — any `cwd` a caller sends (the paired browser, or the AI via
+// the chat channel) is honored as-is, anywhere on the filesystem this OS
+// user can reach. There is no directory boundary enforced by this process.
+//
+// This means the two things standing between "the AI/browser can ask" and
+// "a command actually runs on this machine" are: (1) pairing — only a
+// browser holding a valid session credential can open a WS session at all
+// (see validateHostAndOrigin below), and (2) the per-command approval gate
+// on the chat side (server/api/chat.post.ts's `toolApproval['local_terminal']`
+// / ChatToolApproval.vue) for anything the AI initiates — manual commands
+// typed into the paired browser's own terminal panel go straight through,
+// same trust level as opening a real terminal yourself. Whoever controls a
+// paired session has the same reach as this OS user account has.
 export class RelayAgentServer {
   public readonly port: number
-  public readonly workspaceDir: string
+  public readonly defaultCwd: string
   public readonly allowedOrigin: string
   public pairingToken: string
   public pairingTokenExpiresAt: number
@@ -26,7 +44,10 @@ export class RelayAgentServer {
 
   constructor(options: RelayAgentOptions = {}) {
     this.port = options.port ?? 47821
-    this.workspaceDir = path.resolve(options.dir ?? process.cwd())
+    // Defaults to the user's home directory, not `process.cwd()` — this is
+    // meant to be launched once and left running, not necessarily from
+    // inside a particular project folder.
+    this.defaultCwd = path.resolve(options.dir ?? os.homedir())
     // The one place this default lives — bin/cli.mjs deliberately has no
     // default of its own, it just forwards `--origin`/`RELAY_AGENT_ORIGIN`
     // through unchanged. `3333` matches this repo's own real dev origin
@@ -60,7 +81,10 @@ export class RelayAgentServer {
   }
 
   public async start(): Promise<void> {
-    await resolveScopedPath('.', this.workspaceDir)
+    // Fail fast with a clear error if the given/default directory doesn't
+    // exist, rather than letting every subsequent command with no explicit
+    // `cwd` fail one at a time with a less obvious ENOENT.
+    await stat(this.defaultCwd)
 
     this.httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       const validation = this.validateHostAndOrigin(req)
@@ -144,7 +168,7 @@ export class RelayAgentServer {
 
       if (req.method === 'GET' && url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'ok', agent: 'relay-agent', workspace: this.workspaceDir }))
+        res.end(JSON.stringify({ status: 'ok', agent: 'relay-agent', defaultCwd: this.defaultCwd }))
         return
       }
 
@@ -197,7 +221,7 @@ export class RelayAgentServer {
         console.log(`[relay-agent] Listening on http://127.0.0.1:${this.port}`)
         console.log(`[relay-agent] Allowed Origin: ${this.allowedOrigin}`)
         console.log(`[relay-agent] Pairing token: ${this.pairingToken} (expires in 5 minutes)`)
-        console.log(`[relay-agent] Workspace directory: ${this.workspaceDir}`)
+        console.log(`[relay-agent] Default directory: ${this.defaultCwd} (not a restriction — commands may target any path this OS user can access)`)
         resolve()
       })
       this.httpServer?.on('error', reject)
@@ -212,22 +236,15 @@ export class RelayAgentServer {
     }
 
     try {
-      const targetCwd = cwd ? await resolveScopedPath(cwd, this.workspaceDir) : this.workspaceDir
+      // `path.resolve` already leaves an absolute `cwd` untouched and only
+      // joins a relative one onto `defaultCwd` — this is intentionally not
+      // constrained to stay under `defaultCwd` (see the class-level note on
+      // why: full access by design, not a jail).
+      const targetCwd = cwd ? path.resolve(this.defaultCwd, cwd) : this.defaultCwd
 
       const [binary, ...gluedArgs] = command.trim().split(/\s+/)
       const finalCommand = binary ?? command
       const finalArgs = [...gluedArgs, ...args]
-
-      // Safety check: Validate binary AND all arguments for path traversal attempts
-      if (finalCommand.includes('/') || finalCommand.includes('\\')) {
-        await resolveScopedPath(finalCommand, this.workspaceDir)
-      }
-
-      for (const arg of finalArgs) {
-        if (arg.includes('/') || arg.includes('\\') || arg.includes('..')) {
-          await resolveScopedPath(arg, this.workspaceDir)
-        }
-      }
 
       const env: Record<string, string> = {}
       if (process.env.PATH) env.PATH = process.env.PATH

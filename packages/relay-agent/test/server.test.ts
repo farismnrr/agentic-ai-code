@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import path from 'node:path'
 import { WebSocket } from 'ws'
 import { RelayAgentServer } from '../src/index.ts'
-import { resolveScopedPath } from '../src/scope.ts'
 
 interface ExecResultPayload {
   type: string
@@ -14,7 +13,7 @@ interface ExecResultPayload {
   exitCode?: number
 }
 
-describe('RelayAgent - Scope & Core WS', () => {
+describe('RelayAgent - Core WS', () => {
   const testDir = path.resolve(process.cwd())
   let server: RelayAgentServer
   const testPort = 47830
@@ -29,16 +28,11 @@ describe('RelayAgent - Scope & Core WS', () => {
     await server.stop()
   })
 
-  it('allows valid in-scope paths', async () => {
-    const resolved = await resolveScopedPath('.', testDir)
-    expect(resolved).toBe(testDir)
+  it('exposes the configured directory as defaultCwd, not a jail', () => {
+    expect(server.defaultCwd).toBe(testDir)
   })
 
-  it('rejects path traversal attempts', async () => {
-    await expect(resolveScopedPath('../../..', testDir)).rejects.toThrow('Path traversal blocked')
-  })
-
-  it('connects over WebSocket via session credential and executes in-scope commands', async () => {
+  it('connects over WebSocket via session credential and executes commands', async () => {
     // Pair first
     const pairRes = await fetch(`http://127.0.0.1:${testPort}/pair`, {
       method: 'POST',

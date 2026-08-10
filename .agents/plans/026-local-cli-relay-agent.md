@@ -1,5 +1,7 @@
 # 026 — Relay agent: browser-to-localhost bridge, no internet in the data path
 
+**Status: closed, all 8 phases shipped.** Pending: the user's own manual verification pass (real pairing, real chat-driven `local_terminal` calls, checking behavior across a disconnect) before publishing the first real binary release — see the note at the end of Phase 7.
+
 ## Context
 
 The web app runs on a server in Singapore. Today the only shell the AI can touch is the sandboxed workspace directory on that server (plan 021's `terminal-tool`). The user wants the AI/browser to be able to act on **the user's own machine** instead — install packages, run commands in a workspace folder on their laptop — without:
@@ -100,12 +102,24 @@ Small, independently shippable/testable steps — implement and verify each befo
 - Also fixed: the dead, never-read `"pkg"` config block in `package.json` (the `compile` script already passes `--targets`/`--out-path` as explicit CLI flags, so that block was pure noise); the release workflow's `node-version: 20` → `22` to match `ci.yml`'s own Node version.
 - Not yet done: pushing a `relay-agent-v*` tag to actually produce a GitHub Release (deliberately left to the user — publishing is a one-way action). Until that happens, the download buttons in Settings → Local Terminal are dead links.
 
+### Phase 8 — Removed the workspace-directory jail; `local_terminal` is now automatic once paired [DONE]
+
+Two deliberate, user-directed reversals of earlier decisions in this same plan:
+
+- **No more server-side terminal at all.** The `native.terminal` tool (workspace-sandboxed, server-side, from plan 021 — kept alive in both chat mode and agent mode through Phase 7) was removed entirely, in both modes. `local_terminal` (relay-agent, runs on the user's own machine) is now the *only* shell-execution path anywhere in this app — this server has no code path left that spawns a shell itself. Removed: `server/utils/exec-guard.ts` (dead once nothing called it), the `terminal` wiring block in `server/api/chat.post.ts`, the always-on read-only wiring in `server/utils/langgraph-tools.ts` (chat mode). `buildWorkspaceSystemPrompt` no longer describes any terminal capability — it's just location context now, since a tool's own description (not the system prompt) is what tells the model what it can do.
+- **`local_terminal`'s directory jail was removed.** Originally (Phase 1's decision, "workspace-scoped, not whole-host") the relay-agent CLI restricted every command to a single `--dir` root via `resolveScopedPath`'s symlink-aware boundary check. Re-litigated and reversed: `--dir` is now only the *default* starting `cwd` for a command that doesn't specify its own (defaults to the user's home directory, not `process.cwd()`) — a command's `cwd`, or any path-like argument, can target anywhere the OS user account running the CLI can reach. `packages/relay-agent/src/scope.ts` (the jail implementation) was deleted outright, not just unwired. The controls that remain are: pairing (nothing reaches the agent without a valid session credential) and the per-command chat-side approval gate for anything AI-initiated — manual commands typed into the paired browser's own terminal panel need no approval, same as opening a real terminal. `terminalToolSchema` (`packages/terminal-tool/src/index.ts`, shared with `local_terminal`'s tool definition) gained an optional `cwd` field so the model can actually target a directory; `useConversationChat.ts`'s `handleClientToolCall` now forwards it through to `relayAgent.exec()`.
+- **`local_terminal` no longer has a chat Tool Picker toggle.** Redundant with the Settings → Local Terminal page already being where a user manages device pairing — `shared/utils/native-tools.ts`'s entry gained `pickerVisible: false` (kept in the registry so approval-id resolution still works; just not rendered as a checkbox). Availability is now driven server-side by `server/api/chat.post.ts` querying whether the user has any non-revoked row in `user_devices` — present in every agent-mode conversation once true, absent otherwise. Fixed a related latent bug found while touching this: `ChatToolPicker.vue`'s "N tools" count was `conv.enabledToolIds.length` verbatim, which kept counting ids for tools removed from the registry (e.g. the just-deleted `native.terminal`) forever, since nothing retroactively cleans up old conversations' stored `enabledToolIds` — count is now filtered to ids that still resolve to something actually listed.
+
+Known open gap, not yet fixed (found during a design-review conversation, not implemented this phase): if the relay-agent WebSocket drops while a command is mid-flight, `useRelayAgent.ts`'s `pendingExecs` promise is never rejected — `exec()` hangs forever, which (for an AI-initiated call) hangs the whole chat turn with no error surfaced. Needs `onclose`/`onerror` to reject every pending exec, plus probably a client-side timeout as a backstop.
+
+Also added in this phase, prompted by a real "how do I stop this" moment: the CLI previously had no graceful shutdown at all (`Ctrl+C` just killed the process outright, no pidfile, no way to stop a detached instance short of manually finding and `kill`ing the PID). Added `bin/pidfile.mjs` (a pidfile at `os.tmpdir()/relay-agent-<port>.pid`, port-scoped since more than one instance can run at once) plus SIGINT/SIGTERM handlers in `bin/cli.mjs` that call `server.stop()` and clean up the pidfile before exiting, and a `relay-agent stop [--port N]` subcommand that reads the pidfile and sends SIGTERM — self-healing if the pidfile is stale (process already dead/crashed).
+
 ## Out of scope
 
 - Remote (not-same-machine) access — e.g. accessing your desktop from your phone's browser. That needs the internet relay/tunnel model from the original draft (sshx/Teleport-style) and is a different feature; not built here.
 - File transfer / SFTP-style features.
 - Multi-browser-tab or multi-user sharing of one local agent.
-- Sandboxing beyond the workspace-directory scope (containers, restricted OS user) — the directory boundary plus per-command approval for AI-driven actions is the control surface for v1; the user's own OS-level permissions are the rest of the boundary, same as running a normal terminal.
+- Sandboxing of any kind on the relay-agent side (containers, restricted OS user, directory jail) — per Phase 8, this was deliberately removed. The control surface is pairing (network/auth boundary) plus the chat-side per-command approval gate for AI-initiated calls; whoever holds a paired session has the same filesystem reach as the OS user account running the CLI. Run the CLI as an account you're comfortable with that.
 
 ## Verification (whole-plan acceptance, beyond per-phase checks above)
 

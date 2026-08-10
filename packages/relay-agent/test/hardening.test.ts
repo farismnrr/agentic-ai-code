@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import path from 'node:path'
+import os from 'node:os'
+import { realpath } from 'node:fs/promises'
 import { WebSocket } from 'ws'
 import { RelayAgentServer } from '../src/index.ts'
 
@@ -141,8 +143,13 @@ describe('RelayAgent Hardening & Revocation', () => {
     expect(failed).toBe(true)
   })
 
-  it('blocks path traversal in command arguments', async () => {
-    server.pairingToken = 'test-arg-token'
+  // Deliberate, not a gap: this agent has no directory jail (see the
+  // class-level comment in src/server.ts) — a `cwd` outside `defaultCwd`,
+  // or a command targeting a path anywhere else this OS user can reach, is
+  // expected to work. Pairing (this test) and the chat-side per-command
+  // approval gate are the actual controls, not a filesystem boundary here.
+  it('allows a cwd outside defaultCwd (no directory jail by design)', async () => {
+    server.pairingToken = 'test-fullaccess-token'
     server.pairingTokenExpiresAt = Date.now() + 60000
 
     const pairRes = await fetch(`http://127.0.0.1:${testPort}/pair`, {
@@ -151,7 +158,7 @@ describe('RelayAgent Hardening & Revocation', () => {
         'Origin': allowedOrigin,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ token: 'test-arg-token' })
+      body: JSON.stringify({ token: 'test-fullaccess-token' })
     })
     const { sessionCredential } = await pairRes.json()
 
@@ -160,13 +167,15 @@ describe('RelayAgent Hardening & Revocation', () => {
     })
     await new Promise<void>(resolve => ws.on('open', () => resolve()))
 
+    const outsideDir = os.tmpdir()
     const response = await new Promise<ExecResultPayload>((resolve) => {
       ws.on('message', data => resolve(JSON.parse(data.toString()) as ExecResultPayload))
-      ws.send(JSON.stringify({ type: 'exec', id: 'traversal-1', command: 'cat', args: ['../../../etc/passwd'] }))
+      ws.send(JSON.stringify({ type: 'exec', id: 'outside-1', command: 'pwd', cwd: outsideDir }))
     })
 
-    expect(response.success).toBe(false)
-    expect(response.error).toContain('Path traversal blocked')
+    expect(response.success).toBe(true)
+    // Compare via realpath — os.tmpdir() is itself a symlink on macOS (/tmp -> /private/tmp).
+    expect(await realpath(response.stdout?.trim() ?? '')).toBe(await realpath(outsideDir))
     ws.close()
   })
 })
