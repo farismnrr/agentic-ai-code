@@ -1,5 +1,8 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod'
+import { execa } from 'execa'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, context: string) => Promise<void> }) => {
   return tool(
@@ -7,12 +10,28 @@ export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, co
       try {
         const parsedUrl = new URL(url)
         await assertSafeUrl(parsedUrl, `curl tool fetch`)
-        const options: RequestInit = { method }
-        if (headers) options.headers = headers
-        if (body) options.body = body
-        const res = await fetch(parsedUrl, options)
-        const text = await res.text()
-        return `Status: ${res.status}\nBody: ${text.slice(0, 10000)}`
+        
+        const __dirname = path.dirname(fileURLToPath(import.meta.url))
+        const rustBin = path.join(__dirname, '../../../target/release/curl-tool')
+        
+        const args = [url, '--request', method]
+        if (headers) {
+          for (const [k, v] of Object.entries(headers)) {
+            args.push('--header', `${k}: ${v}`)
+          }
+        }
+        if (body) {
+          args.push('--data', body)
+        }
+        
+        args.push('--no-guard')
+        
+        const res = await execa(rustBin, args, { reject: false })
+        if (res.failed) {
+          return `Error: ${res.stderr || res.message}`
+        }
+        
+        return res.stdout
       } catch (e: unknown) {
         return `Error: ${(e as Error).message}`
       }

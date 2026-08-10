@@ -2,10 +2,9 @@
   "name": "@ai-code/relay-agent",
   "version": "0.0.4-beta",
   "private": true,
-  "type": "module",
-  "main": "./src/index.ts",
-  "bin": {
-    "relay-agent": "./bin/cli.mjs"
+    "scripts": {
+    "build": "node build.mjs",
+    "compile": "node build.mjs && pkg dist/bundle.cjs --targets node22-linux-x64,node22-macos-x64,node22-macos-arm64,node22-win-x64 --out-path dist/bin"
   },
   "scripts": {
     "build": "node build.mjs",
