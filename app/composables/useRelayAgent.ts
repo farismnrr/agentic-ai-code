@@ -8,6 +8,24 @@ export interface RelayExecResult {
   exitCode?: number
 }
 
+// `crypto.randomUUID()` only exists in "secure contexts" (HTTPS, or
+// localhost) per the Web Crypto spec — confirmed breaking in production via
+// Loki (`crypto.randomUUID is not a function`, repeated ~20x from
+// `vue.errorHandler`) when this app was reached over plain `http://` on a
+// non-localhost address (a Tailscale IP in the observed case, but any LAN
+// IP over HTTP hits the same wall). `crypto.getRandomValues` has no such
+// restriction, so build a UUID v4 from that instead of the convenience
+// method — this is the one thing standing between a paired device ever
+// getting a fingerprint at all and the whole pairing flow silently
+// breaking depending on how the user reaches this page.
+function generateDeviceFingerprint(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80 // variant 10
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export function useRelayAgent() {
   const sessionCredential = ref<string | null>(null)
   const deviceFingerprint = ref<string | null>(null)
@@ -28,7 +46,7 @@ export function useRelayAgent() {
       }
       let storedFingerprint = localStorage.getItem('relay_agent_device_fingerprint')
       if (!storedFingerprint) {
-        storedFingerprint = crypto.randomUUID()
+        storedFingerprint = generateDeviceFingerprint()
         localStorage.setItem('relay_agent_device_fingerprint', storedFingerprint)
       }
       deviceFingerprint.value = storedFingerprint
@@ -80,7 +98,7 @@ export function useRelayAgent() {
 
         // Ensure independent fingerprint exists
         if (!deviceFingerprint.value && import.meta.client) {
-          deviceFingerprint.value = crypto.randomUUID()
+          deviceFingerprint.value = generateDeviceFingerprint()
           localStorage.setItem('relay_agent_device_fingerprint', deviceFingerprint.value)
         }
 
