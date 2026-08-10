@@ -1,446 +1,271 @@
 # 027 — Refactor tool CLIs from JavaScript to Rust
 
-## Status: PLANNED
+## Status: IN PROGRESS
 
 Target branch: `dev`.
+Implementation branch: `feat/027-p1-rust-cli-tools`.
 
-This plan covers **only the migration of the three executable CLI tools from JavaScript to Rust**. The Nuxt web application, its server runtime, TypeScript tool factories, application-facing APIs, and existing web/runtime architecture remain unchanged and are explicitly out of scope.
+> **Scope is CLI-only.** This plan migrates the three executable CLI tools to Rust. The Nuxt web application, Vue frontend, Nuxt server/runtime, TypeScript application APIs, and TypeScript tool factories remain unchanged and are explicitly out of scope.
 
-The repository is a pnpm workspace. The current CLI entrypoints are:
+Final architecture:
 
-- `packages/terminal-tool/bin/cli.mjs`
-- `packages/curl-tool/bin/cli.mjs`
-- `packages/searxng-search-tool/bin/cli.mjs`
+```text
+terminal CLI  -> Rust only
+curl CLI      -> Rust only
+searxng CLI   -> Rust only
 
-The migration boundary is the executable CLI layer. Their `src/index.ts` modules and other TypeScript APIs may remain in place because they can be consumed by the Nuxt/application layer. Moving a CLI to Rust does **not** imply moving or rewriting its TypeScript runtime/tool API.
+Nuxt/web/application/runtime -> existing TypeScript/Nuxt architecture
+```
+
+## Current status
+
+PR #98 delivered the initial Rust implementations and integration. It does **not** close Plan 027 yet.
+
+### Done
+
+- [x] Rust implementations exist for terminal, curl, and SearXNG CLIs.
+- [x] Initial Rust workspace/tooling exists.
+- [x] Initial CLI argument parsing exists.
+- [x] Initial JS-vs-Rust parity infrastructure exists.
+- [x] Initial pnpm/workspace integration exists.
+- [x] Nuxt/web/runtime migration was not introduced.
+- [x] Scope is limited to executable CLI boundaries.
+
+### Partial / gaps
+
+- [ ] Strict behavioral parity is complete and proven.
+- [ ] Terminal process/argument/timeout semantics are fully verified.
+- [ ] Curl SSRF/safe-URL behavior is fully specified and tested.
+- [ ] SearXNG deterministic HTTP fixtures cover failures/timeouts.
+- [ ] Rust architecture, toolchain, MSRV, targets, and release policy are documented.
+- [ ] CI/release/supply-chain gates are complete.
+- [ ] Performance/resource benchmarks are recorded.
+- [ ] Rust-only cutover is complete.
+- [ ] JS fallback/selection logic is removed.
+- [ ] All three JS CLI entrypoints are deleted.
+- [ ] CLI-only JS dependencies/package wiring are removed after usage audit.
+- [ ] Repository-wide zero-JS-CLI audit passes.
+- [ ] Final release/install/rollback evidence is recorded.
 
 ## Goal
 
-Replace the three executable JavaScript CLIs with maintainable Rust binaries while preserving the existing public CLI contract and security behavior, reducing CLI runtime/dependency overhead where measurable, and establishing a production-grade Rust CLI foundation.
+Replace the three executable JavaScript CLIs with maintainable Rust binaries while preserving the existing observable CLI contract and security behavior. The completed plan must leave **zero executable JavaScript CLI implementations** for these three tools.
 
-The migration is incremental, evidence-driven, and reversible. JavaScript remains the behavioral reference until each individual Rust CLI passes its parity, security, integration, release, and rollout gates.
+JavaScript may remain in the Nuxt/application layer and in TypeScript tool factories required by application consumers. It must not remain as a CLI implementation, launcher, fallback, or package `bin` target for the migrated tools.
 
 ## Explicit scope boundary
 
 ### In scope
 
-- `packages/terminal-tool/bin/cli.mjs` → Rust CLI binary
-- `packages/curl-tool/bin/cli.mjs` → Rust CLI binary
-- `packages/searxng-search-tool/bin/cli.mjs` → Rust CLI binary
-- CLI argument parsing and validation
-- CLI-specific process/HTTP behavior required for parity
-- CLI output, stderr, exit-code, timeout, and signal semantics
-- Rust CLI tests and differential/parity tests against the current JS CLIs
-- Rust toolchain, CI, release artifacts, installation, and rollback for the CLI binaries
-- Removal of obsolete JavaScript **CLI entrypoints** after their individual deprecation gates pass
+- `packages/terminal-tool/bin/cli.mjs` → Rust binary
+- `packages/curl-tool/bin/cli.mjs` → Rust binary
+- `packages/searxng-search-tool/bin/cli.mjs` → Rust binary
+- CLI parsing/validation
+- CLI stdout/stderr/exit codes
+- CLI timeout/signal/process semantics
+- CLI-specific HTTP/security behavior
+- Rust CLI tests and differential tests
+- CLI CI/release/install/rollback
+- Removal of obsolete JS CLI entrypoints and CLI-only wiring
 
 ### Explicitly out of scope
 
-- Nuxt application migration
-- Vue frontend migration
+- Nuxt/Vue migration
 - Nuxt server/runtime migration
-- TypeScript-to-Rust migration outside the executable CLI layer
-- Rewriting `packages/*/src/index.ts` tool factories solely because their CLI wrappers move to Rust
+- Repository-wide TypeScript → Rust migration
+- Rewriting `packages/*/src/index.ts` merely because the CLI moved
 - Replacing Node.js/TypeScript application infrastructure
 - Moving application-facing tool APIs to Rust
-- Changing existing web/API contracts
-- Re-architecting the web application around Rust
-
-If a CLI currently delegates to TypeScript code, Step 1 must determine how that dependency is removed or isolated **for the CLI only**. It must not become a reason to migrate the Nuxt/runtime layer.
-
-## Non-goals
-
-- Do not redesign the user-facing CLI contract during this migration.
-- Do not perform a repository-wide TypeScript-to-Rust rewrite.
-- Do not migrate Nuxt, Vue, the Nuxt server, or application/runtime APIs.
-- Do not remove TypeScript tool factories merely because their CLI wrappers move to Rust.
-- Do not remove the JS CLI implementations until their respective cutover gates and deprecation windows are complete.
-- Do not introduce Rust solely because it is theoretically faster; benchmark the actual CLI workloads.
-- Do not weaken security controls for compatibility.
-- Do not introduce an unnecessary Rust workspace/crate hierarchy before CLI dependency analysis is complete.
-- Do not make production workflows require Cargo/Rust unless that is an explicit product decision.
-- Do not make unrelated application/server changes to accommodate the CLI migration.
+- Web/API contract changes
+- Generic Rust replacement for the application runtime
 
 ## Engineering principles
 
-1. **CLI-only scope.** Keep the Nuxt/web/application stack unchanged.
-2. **Behavioral compatibility before optimization.** Preserve observable CLI behavior first; optimize only after measuring.
-3. **Thin CLI adapters.** Argument parsing and process exit-code mapping belong at the CLI boundary; implementation behavior should remain independently testable.
-4. **Explicit security boundaries.** Process execution and network access are privileged boundaries and must have dedicated negative tests.
-5. **Deterministic verification.** Prefer local fake services, fixtures, and controlled subprocesses over uncontrolled public services.
-6. **Incremental rollout.** One CLI at a time; every cutover has a rollback path.
-7. **Minimal dependencies.** Add Rust crates only when justified by an actual CLI requirement and keep feature flags minimal.
-8. **Supply-chain hygiene.** Pin/document the Rust toolchain, audit dependencies, and make release artifacts reproducible where practical.
-9. **Evidence over claims.** A phase is complete only when its acceptance criteria have recorded verification evidence.
+1. **CLI-only:** never expand this plan into a web/runtime migration.
+2. **Rust-only final state:** JS is a temporary behavioral oracle only.
+3. **Compatibility first:** preserve observable behavior before optimizing.
+4. **Typed boundaries:** implementation code returns typed errors; only the CLI adapter maps exit codes.
+5. **Security by contract:** process execution and network access require explicit negative tests.
+6. **Deterministic tests:** use local fixtures/fake services and controlled subprocesses.
+7. **Minimal dependencies:** add crates only for actual CLI requirements.
+8. **Supply-chain hygiene:** pin/document Rust toolchain and audit dependencies.
+9. **Evidence over claims:** no phase is done without verification evidence.
 
-## Current-state inventory
+## Compatibility contract
 
-### `terminal-tool`
+For each CLI document and test:
 
-Current package: `packages/terminal-tool/`.
-
-The CLI accepts a command and arguments plus options including `--cwd`, `--timeout`, and `--no-guard`. The package also exposes TypeScript tool factories used elsewhere in the application. Those application consumers are **not part of this migration**.
-
-The Rust CLI must inventory and preserve, where CLI behavior requires it:
-
-- positional command/argument semantics
-- working-directory handling
-- timeout behavior
-- subprocess exit status
-- stdout/stderr capture
-- environment handling
-- signal/termination behavior
-- command/argument boundary semantics
-- CLI guard and explicit bypass behavior
-
-The current CLI guard behavior and application/runtime safety behavior must be documented separately. The latter is not being migrated by this plan.
-
-### `curl-tool`
-
-Current package: `packages/curl-tool/`.
-
-The CLI accepts a URL, request method, repeated headers, request body, and `--no-guard`.
-
-The package runtime exposes an injectable safe-URL/SSRF boundary, while the current CLI wrapper has its own guard/bypass behavior. The Rust implementation must inventory the **CLI's actual current behavior** and preserve it without assuming that the application/runtime security implementation is part of the Rust migration.
-
-Preserve CLI behavior for:
-
-- URL parsing
-- method semantics
-- repeated-header parsing
-- body handling
-- stdout/stderr behavior
-- non-zero failure behavior
-- timeout/network failure behavior
-- CLI guard/bypass semantics
-- redirect behavior and URL validation where applicable to the CLI
-
-### `searxng-search-tool`
-
-Current package: `packages/searxng-search-tool/`.
-
-The CLI accepts a positional query and optional `--base-url`, with the current default pointing at the local SearXNG service.
-
-Preserve CLI query handling, base URL resolution, HTTP behavior, response decoding, output, errors, and timeout semantics.
-
-## CLI migration boundary
-
-For each tool, the migration boundary is:
-
-```text
-Current executable
-packages/<tool>/bin/cli.mjs
-          |
-          v
-New Rust CLI binary
-```
-
-The TypeScript modules under `packages/<tool>/src/` are **not automatically migration targets**.
-
-If the current CLI imports shared TypeScript code, Step 1 must identify that dependency and choose a CLI-only solution, such as:
-
-```text
-A. Reimplement the CLI-required behavior in Rust.
-B. Keep the TS implementation for application consumers while the CLI moves to Rust.
-C. Extract a narrowly scoped shared contract only if it does not expand the web/runtime scope.
-```
-
-The default assumption is **A/B, not a web/runtime rewrite**.
-
-A Rust implementation may share internal Rust libraries between the three CLIs where justified, but that shared code exists solely to support the CLI binaries.
-
-## Compatibility specification
-
-For each CLI, create a compatibility matrix covering:
-
-- command/subcommand names
 - positional arguments
-- flags, aliases, and repeatable options
+- flags/aliases/repeated options
 - defaults
-- environment variables
-- configuration files, if any
-- accepted input shapes
-- stdout format
-- stderr format
+- environment/configuration
+- stdout contract
+- stderr contract
 - exit codes
 - timeout semantics
 - signal/interrupt behavior
 - network behavior
-- URL validation and redirect policy
+- URL validation/redirect policy
 - subprocess behavior
-- working-directory semantics
-- environment inheritance/filtering
-- error categories/messages where externally consumed
+- cwd/environment semantics
+- externally consumed error categories/messages
 
-Human-facing incidental wording should not be snapshot-locked unless consumers depend on it. Machine-consumed output must remain stable or be explicitly versioned before changing.
+Do not snapshot incidental human wording unless consumers depend on it. Machine-consumed output must remain stable or be explicitly versioned.
 
-### Exit-code policy
+## Plan / completion gates
 
-Rust implementation modules must return typed `Result`/error values. Only the outer CLI adapter maps errors to process exit codes.
+### 1. CLI inventory and dependency boundary
 
-Document the mapping for each CLI. Do not scatter process termination calls throughout the implementation.
+**Status: 🟢 DONE / 🟡 FINAL AUDIT REQUIRED**
 
-## Target Rust CLI architecture
+Audit the three `bin/cli.mjs` files, their package metadata, CLI-only dependencies, root workspace scripts, CI/release workflows, and docs. Trace TypeScript imports only to identify application consumers that must remain.
 
-Do not assume a final crate layout until Step 1 is complete. Evaluate only structures that support the three CLI binaries, for example:
+Required matrix:
 
-- one Rust crate with multiple binaries
-- a small Rust workspace with a shared CLI library and binaries
-- per-CLI crates only where independent release/testing justify them
+`CLI behavior | JS source | CLI-only dependency | application consumer | Rust owner | compatibility requirement | evidence`
 
-Prefer the smallest architecture that provides clear separation of:
+**Gate:** every public CLI behavior and dependency is classified; no Nuxt/runtime migration is proposed.
 
-1. CLI parsing and dispatch.
-2. Typed CLI input/configuration.
-3. CLI/tool behavior.
-4. External I/O such as HTTP and subprocesses.
-5. Error types.
-6. Exit-code/output mapping.
-7. CLI-specific test fixtures and integration harnesses.
+### 2. Rust architecture/toolchain baseline
 
-The preferred flow is:
+**Status: 🟡 PARTIAL**
 
-```text
-CLI args
-  -> typed input/config
-  -> CLI implementation
-  -> typed result/error
-  -> CLI output + exit code
-```
+Finalize and document:
 
-Do not create a generic application runtime or Rust replacement for Nuxt/server services as part of this plan.
-
-Avoid shell execution unless the existing CLI contract explicitly requires shell semantics. If shell semantics are required, document them as a CLI compatibility requirement and test them deliberately.
-
-## Plan
-
-### Step 1 — CLI-only repository and dependency inventory
-
-Before writing production Rust code, inspect the complete CLI implementations and identify their boundaries with the rest of the repository.
-
-Audit:
-
-- `packages/terminal-tool/bin/cli.mjs`
-- `packages/terminal-tool/src/**` only to understand CLI dependencies and identify non-CLI consumers
-- `packages/terminal-tool/package.json`
-- `packages/curl-tool/bin/cli.mjs`
-- `packages/curl-tool/src/**` only to understand CLI dependencies and identify non-CLI consumers
-- `packages/curl-tool/package.json`
-- `packages/searxng-search-tool/bin/cli.mjs`
-- `packages/searxng-search-tool/src/**` only to understand CLI dependencies and identify non-CLI consumers
-- `packages/searxng-search-tool/package.json`
-- root `package.json`
-- `pnpm-workspace.yaml`
-- CI workflows relevant to CLI builds/tests
-- release workflows relevant to CLI artifacts
-- CLI documentation and package READMEs
-
-Do **not** inventory the Nuxt application as a migration target. Only trace its imports when needed to prove that a TypeScript module must remain because it is an application consumer.
-
-Produce a CLI migration matrix with:
-
-`CLI behavior | JS source | CLI-only dependency? | application consumer? | Rust owner | compatibility requirement | test/evidence`
-
-Also produce a dependency matrix showing which current JS dependencies are CLI-only versus required by application/runtime consumers.
-
-**Exit gate:** every public CLI behavior and every CLI dependency is classified; all non-CLI TypeScript consumers are explicitly preserved; no web/runtime migration work is proposed.
-
-### Step 2 — Rust CLI architecture decision and baseline
-
-Using Step 1 evidence, record decisions for:
-
-- Rust CLI crate/workspace layout
+- crate/workspace layout
 - Rust edition
-- pinned toolchain and MSRV
-- supported operating systems/architectures
-- async runtime requirement for CLI workloads
-- HTTP client choice where required
-- error-handling model
-- logging/diagnostics approach if needed
-- CLI configuration strategy
+- pinned toolchain + MSRV
+- supported OS/architectures
+- dependency/features policy
+- error/diagnostics model
 - binary naming/versioning
-- CLI distribution strategy
-
-Candidate dependencies such as `clap`, `tokio`, `reqwest`, `serde`, `thiserror`, and `anyhow` must be selected only when justified by actual CLI code paths. Prefer minimal feature flags and avoid duplicate functionality.
-
-Establish:
-
-- `rustfmt`
-- Clippy with warnings treated as errors
-- unit/integration test conventions
-- pinned toolchain configuration
-- CLI dependency policy
 - release profile
-- reproducible-build expectations where practical
+- `rustfmt`/Clippy/test conventions
 
-Do not introduce unsafe Rust without a concrete requirement and explicit review.
+**Gate:** clean build + fmt + Clippy + tests pass.
 
-**Exit gate:** the CLI architecture is recorded, dependencies are justified, and a clean minimal Rust CLI build/test/Clippy pipeline passes.
+### 3. Strict differential/parity harness
 
-### Step 3 — Define CLI platform and distribution contract
+**Status: 🟡 PARTIAL**
 
-Because the deliverables are CLI binaries, explicitly define supported targets before release work.
+Run JS oracle and Rust CLI with identical inputs and compare:
 
-At minimum evaluate the repository's actual CLI user needs for:
+- exit status exactly
+- stdout exactly where contractual
+- stderr exactly where contractual, otherwise structured error category
+- relevant side effects
+- timeout/failure behavior
 
-- Linux x86_64
-- Linux ARM64
-- macOS x86_64
-- macOS ARM64
-- Windows x86_64
+Cover positive, negative, malformed input, timeout, unavailable dependency, and boundary cases. Do **not** accept generic `Error:` prefix equality as parity.
 
-Do not promise a target merely because Cargo can theoretically compile it.
+**Gate:** every contractual behavior has an explicit deterministic equivalence rule and passing test.
 
-Define:
+### 4. SearXNG CLI
 
-- binary names
-- release version source of truth
-- artifact naming
-- checksums/signatures if distributed
-- GitHub Release strategy
-- developer installation strategy
-- production installation strategy
-- rollback behavior
+**Status: 🟡 IMPLEMENTED / CUTOVER INCOMPLETE**
 
-Production CLI installation must not require Rust/Cargo unless explicitly approved.
+Verify query parsing, base URL handling, HTTP behavior, response decoding, output, errors, and timeout semantics using deterministic fixtures.
 
-**Exit gate:** CLI target matrix and distribution mechanism are documented and can be exercised from a clean checkout/release workflow.
+Required cases:
 
-### Step 4 — Build CLI differential/parity test harness before migration
+- success
+- empty/edge query
+- malformed response
+- non-2xx response
+- connection failure
+- timeout
+- invalid base URL
 
-Create a reusable harness that runs the current JS CLI and Rust CLI with identical inputs and captures:
+**Gate:** strict parity + integration + release tests pass; Rust is the only executable path; JS entrypoint can be deleted.
 
-- exit status
-- stdout
-- stderr
-- duration
-- relevant CLI side effects
+### 5. Curl CLI security/parity
 
-Use deterministic fixtures and local fake HTTP services. For subprocess tests, use controlled fixtures/scripts rather than arbitrary host commands wherever possible.
+**Status: 🔴 IMPLEMENTED / NOT ACCEPTED**
 
-For each CLI create positive, negative, timeout, malformed-input, and failure cases.
+Define the actual CLI safe-URL contract independently from application/runtime SSRF policy.
 
-**Exit gate:** each CLI has at least one known-good JS invocation and an equivalent Rust invocation producing equivalent observable CLI behavior before cutover.
+Test:
 
-### Step 5 — Establish the Rust CLI skeleton and test conventions
-
-Implement only the minimum shared foundation justified by the CLI architecture decision:
-
-- typed CLI parsing
-- typed CLI configuration/input
-- error model
-- exit-code mapping
-- output abstraction where needed
-- CLI test helpers
-- shared HTTP/process primitives only when genuinely shared by the CLI binaries
-
-Keep the binary adapters thin. Do not prematurely build a generic application framework for three small CLI tools.
-
-**Exit gate:** a minimal Rust CLI binary can parse representative inputs, return deterministic exit codes, and run through the parity harness.
-
-### Step 6 — Migrate `searxng-search-tool` CLI
-
-Use SearXNG as the lowest-risk CLI migration after Step 1 confirms it has the lowest coupling.
-
-Implement only the CLI behavior:
-
-- positional query
-- configurable base URL
-- HTTP client behavior
-- response decoding
-- timeout/error mapping
-- output contract
-
-Keep any TypeScript implementation required by the Nuxt/application layer intact.
-
-**Acceptance:** fixture responses, malformed responses, invalid configuration, HTTP failure, timeout, and unavailable-service cases match the documented CLI contract.
-
-**Cutover gate:** CI green, parity green, supported release build green, CLI documentation updated, rollback path verified.
-
-### Step 7 — Migrate `curl-tool` CLI with explicit security policy
-
-Before implementation, document the actual existing CLI safe-URL behavior and distinguish it from any application/runtime SSRF policy.
-
-Implement and test the CLI policy for:
-
-- loopback/private/link-local destinations as applicable to the established CLI policy
-- IPv4 and IPv6 representations
+- valid public destinations
+- loopback/private/link-local destinations according to policy
+- IPv4/IPv6 forms
 - hostname resolution
-- redirects and whether validation is re-applied
+- redirects and re-validation
 - malformed URLs
 - unsafe destinations
-- explicit CLI bypass behavior
-- DNS/rebinding-sensitive cases if the current CLI policy addresses them
-- request methods, repeated headers, body handling, and timeouts
+- `--no-guard` semantics
+- methods
+- repeated headers
+- body handling
+- timeout/network errors
+- DNS/rebinding-sensitive cases where applicable
 
-Do not broaden the CLI bypass accidentally. If existing policy is ambiguous, resolve the **CLI** policy explicitly before declaring compatibility.
+A blanket “block everything unless bypassed” implementation is not proof of compatibility.
 
-**Acceptance:** security negative tests prove unsafe destinations remain blocked under guarded CLI operation; positive tests prove allowed requests work; bypass behavior is explicit and tested; Rust and JS CLI contracts match.
+**Gate:** positive + negative security tests and strict JS/Rust parity pass.
 
-### Step 8 — Migrate `terminal-tool` CLI with process-boundary hardening
+### 6. Terminal CLI process-boundary hardening
 
-Inventory the current `execa` CLI semantics before selecting the Rust process API.
+**Status: 🔴 IMPLEMENTED / NOT ACCEPTED**
 
-Preserve and test:
+Verify:
 
-- command/argument boundaries
-- working directory
+- exact command/argument boundaries
+- quoting
+- spaces in arguments/paths
+- empty arguments
+- metacharacters
+- no accidental shell interpretation
+- cwd
 - environment behavior
 - timeout
+- deterministic child termination
 - stdout/stderr
-- child exit status
-- termination/signal behavior
-- CLI guard and explicit bypass semantics
+- exit status
+- signals
+- guard/bypass behavior
 - spawn failures
 
-Avoid implicit shell interpretation. User-controlled strings must not silently become additional commands or arguments.
+Do not use naive whitespace splitting where argument boundaries matter.
 
-Add adversarial tests for quoting, metacharacters, paths containing spaces, empty arguments, missing executables, timeouts, and non-zero exits.
+**Gate:** adversarial process tests pass and timeout cannot leave uncontrolled children.
 
-**Acceptance:** CLI process behavior is compatible, security boundaries are explicit, and the CLI cannot accidentally reinterpret input as shell syntax unless that is an intentional documented CLI contract.
+### 7. Rust-only pnpm/workspace integration
 
-### Step 9 — Integrate Rust binaries with the pnpm workspace without changing Nuxt/runtime architecture
+**Status: 🟡 PARTIAL**
 
-Choose the least disruptive integration model based on Step 1.
+Final execution path must invoke Rust directly. Remove runtime selectors such as `USE_RUST_CLI` once Rust is accepted.
 
-Evaluate only CLI integration mechanisms:
+Application-facing TypeScript APIs remain intact.
 
-- package-level wrappers
-- development-time Cargo invocation
-- built binary artifacts
-- platform-specific packaging
-- release-time installation
+**Gate:** clean checkout resolves Rust CLI binaries without developer-specific absolute paths and Nuxt/web behavior is unchanged.
 
-Preserve existing package names and public TypeScript APIs used by the Nuxt/application layer.
+### 8. CI, release, and supply-chain hardening
 
-**Exit gate:** fresh checkout can build/install the CLI tooling using the documented workflow, and the intended Rust binary resolves without developer-specific absolute paths. Nuxt/web application behavior remains unchanged.
+**Status: 🔴 NOT DONE**
 
-### Step 10 — CI, release, and supply-chain hardening for CLI binaries
-
-Keep existing JS checks while CLI migration is in progress.
-
-Rust CLI CI should include, as applicable to the final crate/workspace:
+CI should include, as applicable:
 
 - `cargo fmt --check`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- Clippy with warnings denied
 - `cargo test --workspace`
-- CLI integration/parity tests
-- release builds for supported CLI targets
-- existing `pnpm lint`
-- existing `pnpm typecheck`
-- relevant existing application tests only as regression protection, not as migration targets
+- strict parity/integration tests
+- existing pnpm lint/typecheck/regression checks
+- release builds for every promised target
+- pinned/documented Rust toolchain
+- one repository-approved dependency/security scanner
+- checksummed artifacts
+- signing/provenance when required
 
-Pin/document the Rust toolchain. Use one dependency/security scanner strategy consistent with repository policy, such as `cargo audit` or `cargo deny`, rather than adding overlapping scanners without purpose.
+Production installation must not require Cargo/Rust unless explicitly approved.
 
-For CLI releases, publish deterministic artifact names and checksums; add signatures/provenance when required by the repository's release/security policy.
+**Gate:** clean-checkout CI and release workflow pass for all promised targets.
 
-**Exit gate:** CI passes from a clean checkout and every supported CLI release target produces the expected artifact.
+### 9. Performance/reliability benchmark
 
-### Step 11 — CLI performance, reliability, and resource benchmark
+**Status: 🔴 NOT DONE**
 
-Measure JS versus Rust before making performance claims.
-
-Record for representative CLI workloads:
+Measure JS baseline vs Rust for representative workloads:
 
 - cold startup
 - warm startup where meaningful
@@ -448,148 +273,174 @@ Record for representative CLI workloads:
 - command latency
 - binary size
 - repeated invocation throughput
-- network and subprocess latency separately where practical
+- network/subprocess latency separately where practical
 
-Use identical environments and representative fixtures. Investigate meaningful regressions before cutover.
+**Gate:** reproducible benchmark commands and recorded results; no unsupported performance claims.
 
-**Exit gate:** benchmark commands are reproducible and results are recorded in the plan or a dedicated CLI benchmark document.
+### 10. Controlled Rust-only cutover
 
-### Step 12 — Controlled CLI cutover and deprecation
+**Status: 🔴 NOT DONE**
 
-Use staged rollout per CLI:
+Temporary migration may use:
 
 ```text
-Stage A: JS CLI is default; Rust CLI is reference/opt-in.
-Stage B: Rust CLI is opt-in in real workflows; JS remains fallback.
-Stage C: Rust CLI is default; JS CLI remains available during deprecation window.
-Stage D: Rust CLI only after removal criteria are satisfied.
+JS oracle -> Rust opt-in -> Rust default -> Rust-only
 ```
 
-This rollout applies **only to CLI executables**. It does not change the Nuxt web application, server runtime, or application-facing TypeScript tool APIs.
+Final state must be:
 
-Before each transition require:
+```text
+CLI invocation
+      ↓
+Rust binary
+      ↓
+NO JS FALLBACK
+```
 
-1. CLI feature parity evidence.
-2. CLI security regression coverage.
-3. Integration tests green.
-4. Release artifact verified on supported CLI targets.
-5. Performance acceptable against baseline.
-6. CLI documentation updated.
-7. CLI rollback path exercised or otherwise proven.
+Before cutover require parity, security, integration, release, documentation, and rollback evidence.
 
-Do not delete JS CLI code merely because Rust tests are green.
+### 11. Delete obsolete JavaScript CLI code
 
-### Step 13 — Remove obsolete JavaScript CLI paths only
+**Status: 🔴 NOT DONE — HARD REQUIREMENT**
 
-Only after every CLI completes its deprecation window:
+Delete after the corresponding CLI passes all gates:
 
-- remove obsolete JS CLI entrypoints
-- remove CLI-only dependencies only when repository-wide search proves they are unused
-- remove dead CLI package scripts/build glue
-- remove obsolete CLI compatibility fixtures only when replacement coverage exists
-- update CLI package documentation
-- verify no application imports depend on TypeScript APIs being removed
+- `packages/terminal-tool/bin/cli.mjs`
+- `packages/curl-tool/bin/cli.mjs`
+- `packages/searxng-search-tool/bin/cli.mjs`
 
-Do **not** remove or rewrite TypeScript tool factories/runtime APIs that remain in use by Nuxt/application code.
+Also remove:
 
-**Exit gate:** repository-wide CLI dependency/import search is clean, CI remains green, fresh installation works, and no CLI production path depends on removed JS CLI code. Nuxt/application APIs remain intact.
+- JS CLI launchers/fallbacks
+- `USE_RUST_CLI` or equivalent selectors
+- obsolete JS `bin` mappings
+- CLI-only JS dependencies
+- obsolete package scripts/build glue
+- docs instructing execution of old JS CLIs
 
-## Security requirements
+**Hard gate:** repository-wide search proves zero executable JS CLI implementations remain for these three tools.
 
-### Terminal CLI execution
+### 12. Final repository audit and closeout
 
-- No accidental shell interpretation.
-- Explicit argument boundaries.
-- CLI guard behavior remains explicit.
-- Timeout and child termination are deterministic.
-- Environment handling is documented.
-- Adversarial command/argument tests are required.
+**Status: 🔴 NOT DONE**
 
-### HTTP/curl CLI
+Audit:
 
-- CLI safe-URL policy is explicit and tested.
-- Guarded and bypassed modes are distinct.
-- Redirect behavior is defined.
-- DNS/hostname handling is tested according to the established CLI policy.
-- Unsafe destinations have negative tests.
+- zero JS CLI entrypoints
+- zero JS CLI fallback paths
+- zero JS package `bin` mappings for migrated CLIs
+- no stale CLI-only dependencies
+- no stale docs/scripts
+- no broken Nuxt/application imports
+- CI green
+- release artifacts verified
+- benchmark evidence recorded
+- rollback documented
+- final PR/merge evidence recorded
 
-### CLI supply chain
+Only after all gates pass may this plan become `COMPLETED` and `.agents/plans/README.md` be updated.
 
-- Rust toolchain is pinned/documented.
-- CLI dependency versions/features are reviewed.
-- Security/advisory scanning follows one repository-approved strategy.
-- CLI release artifacts are checksummed; signing/provenance is added when required.
+## Zero-JS-CLI invariant
 
-## Files touched summary
+This is a hard invariant of Plan 027:
 
-The exact list is intentionally derived from Step 1. Expected areas include:
+> **After completion, terminal-tool, curl-tool, and searxng-search-tool have no JavaScript executable CLI implementation, launcher, fallback path, or package `bin` mapping to JavaScript.**
 
-- `.agents/plans/027-cli-rust-refactor.md`
-- new Rust CLI crate/workspace files
-- `packages/terminal-tool/bin/**` and CLI-specific package metadata as required
-- `packages/curl-tool/bin/**` and CLI-specific package metadata as required
-- `packages/searxng-search-tool/bin/**` and CLI-specific package metadata as required
-- `.github/workflows/**` as required for CLI CI/release
-- CLI parity/integration test fixtures
-- CLI release configuration and documentation
+Allowed to remain:
 
-Nuxt/Vue/application runtime files should not be changed except for unavoidable CLI integration wiring, and such changes must not alter web/runtime architecture.
+- Nuxt/Vue code
+- TypeScript application/runtime code
+- TypeScript tool factories consumed by the application
+- non-executable shared package code
+
+Forbidden after completion:
+
+- `bin/cli.mjs` for these tools
+- Node-based CLI launchers
+- JS fallback selectors
+- JS package `bin` targets
+- documentation/scripts invoking the old JS CLIs
 
 ## Definition of Done
 
-- [x] Migration boundary is explicitly limited to the three executable CLIs.
-- [x] Nuxt, Vue, Nuxt server/runtime, and application-facing TypeScript APIs remain out of migration scope.
-- [x] CLI dependency/import inventory is complete and non-CLI TypeScript consumers are preserved.
-- [x] Final Rust CLI crate/workspace architecture is justified by actual CLI coupling.
-- [x] Rust edition, pinned toolchain, MSRV, and supported CLI targets are documented.
-- [x] CLI compatibility matrices cover arguments, defaults, output, errors, exit codes, and side effects.
-- [x] Differential/parity tests compare JS and Rust CLI behavior using deterministic fixtures.
-- [x] SearXNG CLI passes its cutover gate.
-- [x] curl CLI passes its cutover gate, including explicit CLI security regression tests.
-- [x] terminal CLI passes its cutover gate, including process-boundary and adversarial argument tests.
-- [x] pnpm workspace CLI integration works from a clean checkout without developer-specific absolute paths.
-- [x] Rust fmt, Clippy, tests, parity checks, existing JS checks, and relevant application regression checks pass in CI.
-- [ ] Supported CLI release targets build successfully and artifacts are named, checksummed, and documented.
-- [ ] CLI release/install/rollback workflow is verified.
-- [ ] JS-vs-Rust CLI performance measurements are recorded; no unsupported performance claims remain.
-- [ ] JS CLI remains available through the agreed deprecation window for each tool.
-- [ ] Repository-wide dependency/import search proves obsolete JS CLI code can be removed safely.
-- [ ] Obsolete JS CLI entrypoints/dependencies/scripts are removed only after all CLI cutover gates pass.
-- [ ] Nuxt/application TypeScript tool APIs remain intact unless separately changed under another plan.
-- [ ] CLI documentation reflects the final Rust CLI architecture and installation flow.
-- [ ] `.agents/plans/README.md` moves Plan 027 to Completed with final PR/commit evidence.
+### Scope
 
-## Rollback strategy
+- [x] Migration limited to the three executable CLIs.
+- [x] Nuxt/Vue/server/runtime/application APIs explicitly remain out of scope.
 
-Each CLI keeps its JS implementation until its Rust replacement has completed the cutover gate and deprecation window.
+### Rust
 
-If a regression is found after a Rust CLI becomes default:
+- [x] Rust implementations exist for all three CLIs.
+- [ ] Architecture/toolchain/MSRV/target policy finalized.
+- [ ] Typed error + exit-code mapping finalized.
 
-1. Switch the affected CLI invocation back to the JS implementation.
-2. Preserve the failing parity/regression case.
-3. Fix the Rust CLI implementation.
-4. Re-run CLI parity, security, integration, and release gates.
-5. Repeat the cutover only after evidence is green.
+### Parity/security
 
-Do not rewrite `dev` history to hide failed migration attempts.
+- [ ] Strict differential tests cover every contractual behavior.
+- [ ] Terminal argument/process/timeout behavior verified.
+- [ ] Curl SSRF/safe-URL behavior verified.
+- [ ] SearXNG deterministic HTTP fixtures/errors/timeouts verified.
+
+### Integration
+
+- [x] Initial pnpm/workspace integration exists.
+- [ ] Rust is final direct execution path.
+- [ ] `USE_RUST_CLI`/equivalent fallback removed.
+- [ ] Clean checkout works without developer-specific paths.
+
+### Zero JavaScript CLI
+
+- [ ] Three `bin/cli.mjs` files deleted.
+- [ ] All JS CLI launchers/fallbacks removed.
+- [ ] JS CLI-only dependencies/scripts/bin mappings removed where unused.
+- [ ] Repository-wide zero-JS-CLI audit passes.
+
+### Quality/release
+
+- [ ] fmt/Clippy/tests/parity green in CI.
+- [ ] Supported release targets build.
+- [ ] Artifacts/checksums/install flow verified.
+- [ ] Dependency/security audit passes.
+- [ ] JS-vs-Rust benchmarks recorded.
+- [ ] Rust-only CLI documentation complete.
+- [ ] Rollback procedure verified.
+
+### Closeout
+
+- [ ] Final repository audit passes.
+- [ ] Final PR/merge evidence recorded.
+- [ ] `.agents/plans/README.md` updated to Completed.
+- [ ] Plan status changed to `COMPLETED` only after every required gate passes.
+
+## Rollback
+
+Before deleting JS, prove the Rust binary can be restored from a known-good release artifact or commit.
+
+If a regression occurs before JS removal:
+
+1. Use the JS implementation only as a temporary oracle/fallback.
+2. Preserve the failing case as a regression test.
+3. Fix Rust.
+4. Re-run parity/security/integration/release gates.
+5. Repeat cutover.
+
+After the zero-JS gate passes, do not reintroduce a permanent JS fallback.
 
 ## Evidence log
 
-Record final evidence here as work progresses:
+| Area | Status | Evidence required |
+| --- | --- | --- |
+| Rust implementations | 🟢 Done | PR #98 |
+| Architecture/toolchain | 🟡 Partial | ADR/config + CI evidence |
+| SearXNG | 🟡 Partial | Fixture parity + release evidence |
+| Curl | 🔴 Gap | SSRF/security + parity evidence |
+| Terminal | 🔴 Gap | process/argument/timeout parity evidence |
+| pnpm integration | 🟡 Partial | Rust-only execution evidence |
+| Zero JS CLI | 🔴 Not done | deletion + repository-wide audit |
+| CI/release | 🔴 Not done | clean-checkout workflow evidence |
+| Benchmark | 🔴 Not done | reproducible benchmark results |
+| Final audit | 🔴 Not done | closeout checklist |
 
-| CLI / Phase | Evidence | Result | Date |
-| --- | --- | --- | --- |
-| CLI inventory | Migration matrix + CLI import/dependency graph | Completed | 2026-08-10 |
-| Architecture | Rust CLI ADR decisions recorded in plan/PR | Completed | 2026-08-10 |
-| SearXNG CLI | Parity + integration + release verification | Completed | 2026-08-10 |
-| curl CLI | Parity + security regression + release verification | Completed | 2026-08-10 |
-| terminal CLI | Parity + process security + release verification | Completed | 2026-08-10 |
-| pnpm integration | Clean checkout + CLI workflow | Completed | 2026-08-10 |
-| CI/release | Supported CLI targets + artifact checks | Pending | |
-| Benchmark | Reproducible JS/Rust CLI measurements | Pending | |
-| Cutover | CLI rollout + rollback evidence | Pending | |
-| Removal | CLI dependency/import audit | Pending | |
+## Closeout rule
 
-## Final closeout
-
-Plan 027 may be marked `COMPLETED` only after every Definition of Done item is checked, final CLI release artifacts are verified, the JS CLI removal decision is supported by repository-wide dependency evidence, and the final PR/commit is recorded in `.agents/plans/README.md`.
+Plan 027 is **not complete** until all required Definition-of-Done items are checked, all three migrated CLIs are Rust-only, **zero executable JavaScript CLI implementations remain**, and the final release/CI/security/parity evidence is recorded.
