@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "bin": {
-    "terminal-tool": "./bin/cli.mjs"
-  },
   "dependencies": {
     "@langchain/core": "^1.2.5",
     "ai": "^7.0.56",
