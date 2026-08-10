@@ -1,5 +1,5 @@
 import { useChat } from '@ai-sdk/vue'
-import { lastAssistantMessageIsCompleteWithApprovalResponses, DefaultChatTransport } from 'ai'
+import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 
 /**
@@ -39,6 +39,7 @@ function friendlyChatErrorMessage(error: Error): string {
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages, loadOne } = useConversations()
   const toast = useToast()
+  const relayAgent = useRelayAgent()
 
   // `useChat`'s options factory re-runs — recreating its whole internal
   // chat instance and resetting `status` back to 'ready' — whenever ANY
@@ -61,6 +62,40 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     seedMessages.value = conversation.value?.messages ?? []
   })
 
+  // `local_terminal` is registered server-side with no `execute` (see
+  // server/api/chat.post.ts) precisely so this server never runs the user's
+  // local command — once approved, the SDK has nothing left to call
+  // server-side and streams the tool call to the client instead, invoking
+  // this callback. `chatRef.current` is read lazily inside the callback
+  // body (never at options-construction time), so it's fine that it isn't
+  // populated yet when this options object is built below — a real tool
+  // call only arrives well after `chatRef.current` is set.
+  const chatRef: { current?: ReturnType<typeof useChat<UIMessage>> } = {}
+  async function handleClientToolCall({ toolCall }: { toolCall: { toolName: string, toolCallId: string, input: unknown } }) {
+    if (toolCall.toolName !== 'local_terminal' || !chatRef.current) return
+
+    const { command, args } = toolCall.input as { command: string, args?: string[] }
+    try {
+      const result = await relayAgent.exec(command, args ?? [])
+      await chatRef.current.addToolOutput({
+        tool: 'local_terminal',
+        toolCallId: toolCall.toolCallId,
+        output: result
+      })
+    } catch (err: unknown) {
+      // Local agent unreachable/unpaired, or the CLI itself rejected the
+      // call (e.g. workspace-scope violation) — report it as a tool error,
+      // not an unhandled rejection, so the model sees why and can tell the
+      // user to pair a device instead of the turn just hanging.
+      await chatRef.current.addToolOutput({
+        tool: 'local_terminal',
+        toolCallId: toolCall.toolCallId,
+        state: 'output-error',
+        errorText: (err as Error).message || 'Local relay agent is not connected'
+      })
+    }
+  }
+
   const chat = useChat(() => ({
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -70,13 +105,18 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
+    onToolCall: handleClientToolCall,
     // Without this, `addToolApprovalResponse` only marks the pending part as
     // answered in local state — it never actually sends the follow-up
     // request that resumes the conversation and runs the approved tool, so
     // clicking "Always allow" (or an auto-remembered decision) appeared to
     // do nothing and the turn hung forever. This is the SDK's own official
-    // helper for exactly this trigger.
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    // helper for exactly this trigger. `local_terminal`'s result arrives via
+    // `addToolOutput` above rather than an approval response, so both
+    // "turn is ready to resume" conditions are checked — either one being
+    // true is enough to send the follow-up request.
+    sendAutomaticallyWhen: options =>
+      lastAssistantMessageIsCompleteWithApprovalResponses(options) || lastAssistantMessageIsCompleteWithToolCalls(options),
     onError: (error: Error) => {
       console.error('[chat]', error)
       toast.add({
@@ -87,6 +127,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       })
     }
   }))
+  chatRef.current = chat
 
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK

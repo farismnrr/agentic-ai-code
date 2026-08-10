@@ -1,12 +1,18 @@
 import { eq } from 'drizzle-orm'
+import * as v from 'valibot'
 import { userDevices } from '#server/database/schema'
+
+const registerDeviceSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1, 'Device name is required')),
+  fingerprint: v.pipe(v.string(), v.minLength(1, 'Fingerprint is required'))
+})
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const userId = session.user.id
   const method = event.method
 
-  const db = useDatabase()
+  const db = useDb()
 
   if (method === 'GET') {
     const devices = await db.select().from(userDevices).where(eq(userDevices.userId, userId))
@@ -14,12 +20,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (method === 'POST') {
-    const body = await readBody(event)
-    const { name, fingerprint } = body || {}
-
-    if (!name || !fingerprint) {
-      throw createError({ statusCode: 400, statusMessage: 'Name and fingerprint are required' })
-    }
+    const result = v.safeParse(registerDeviceSchema, await readBody(event))
+    if (!result.success) throw unprocessable(result.issues)
+    const { name, fingerprint } = result.output
 
     const [device] = await db.insert(userDevices).values({
       userId,
@@ -32,5 +35,5 @@ export default defineEventHandler(async (event) => {
     return device
   }
 
-  throw createError({ statusCode: 405, statusMessage: 'Method not allowed' })
+  throw badRequest(`Unsupported method: ${method}`)
 })

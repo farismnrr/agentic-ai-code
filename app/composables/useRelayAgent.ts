@@ -9,20 +9,31 @@ export interface RelayExecResult {
 }
 
 export function useRelayAgent() {
-  const sessionCredential = useState<string | null>('relay-agent-session-credential', () => {
-    if (import.meta.client) {
-      return localStorage.getItem('relay_agent_session_credential')
-    }
-    return null
-  })
-
-  const port = useState<number>('relay-agent-port', () => 47821)
+  const sessionCredential = ref<string | null>(null)
+  const deviceFingerprint = ref<string | null>(null)
+  const port = ref<number>(47821)
   const isConnected = ref(false)
   const isConnecting = ref(false)
   const error = ref<string | null>(null)
   let ws: WebSocket | null = null
 
   const pendingExecs = new Map<string, { resolve: (res: RelayExecResult) => void, reject: (err: Error) => void }>()
+
+  // Properly initialize from localStorage on client-side mount
+  onMounted(() => {
+    if (import.meta.client) {
+      const storedCred = localStorage.getItem('relay_agent_session_credential')
+      if (storedCred) {
+        sessionCredential.value = storedCred
+      }
+      let storedFingerprint = localStorage.getItem('relay_agent_device_fingerprint')
+      if (!storedFingerprint) {
+        storedFingerprint = crypto.randomUUID()
+        localStorage.setItem('relay_agent_device_fingerprint', storedFingerprint)
+      }
+      deviceFingerprint.value = storedFingerprint
+    }
+  })
 
   function setSessionCredential(cred: string | null) {
     sessionCredential.value = cred
@@ -35,9 +46,30 @@ export function useRelayAgent() {
     }
   }
 
+  async function checkServerRevocation(): Promise<boolean> {
+    if (!deviceFingerprint.value) return false
+    try {
+      const devices = await $fetch<Array<{ fingerprint: string, revokedAt: string | null }>>('/api/devices')
+      const matching = devices.find(d => d.fingerprint === deviceFingerprint.value)
+
+      if (matching && matching.revokedAt) {
+        // Device is revoked on the server
+        setSessionCredential(null)
+        disconnect()
+        error.value = 'Device has been revoked on server'
+        return true
+      }
+      return false
+    } catch {
+      // If server check fails or unauthenticated, ignore
+      return false
+    }
+  }
+
   async function pair(token: string): Promise<boolean> {
     error.value = null
     try {
+      // Note: Do NOT set manual 'Origin' header on client fetch calls (handled automatically by browser)
       const res = await $fetch<{ sessionCredential?: string, error?: string }>(`http://127.0.0.1:${port.value}/pair`, {
         method: 'POST',
         body: { token }
@@ -45,6 +77,26 @@ export function useRelayAgent() {
 
       if (res.sessionCredential) {
         setSessionCredential(res.sessionCredential)
+
+        // Ensure independent fingerprint exists
+        if (!deviceFingerprint.value && import.meta.client) {
+          deviceFingerprint.value = crypto.randomUUID()
+          localStorage.setItem('relay_agent_device_fingerprint', deviceFingerprint.value)
+        }
+
+        // Register device metadata on Singapore server
+        const deviceName = `${navigator.platform || 'Desktop'} Relay Agent (${port.value})`
+        try {
+          await $fetch('/api/devices', {
+            method: 'POST',
+            body: { name: deviceName, fingerprint: deviceFingerprint.value }
+          })
+        } catch (regErr: unknown) {
+          error.value = `Paired locally, but failed to register device on server: ${(regErr as Error).message}`
+          // Return false so user is aware registration failed
+          return false
+        }
+
         return await connect()
       } else {
         error.value = res.error || 'Pairing failed'
@@ -59,6 +111,12 @@ export function useRelayAgent() {
   async function connect(): Promise<boolean> {
     if (!sessionCredential.value) {
       error.value = 'Not paired with local relay agent'
+      return false
+    }
+
+    // Check revocation status from Singapore DB first
+    const isRevoked = await checkServerRevocation()
+    if (isRevoked) {
       return false
     }
 
@@ -89,7 +147,7 @@ export function useRelayAgent() {
               pending.resolve(data)
             }
           } catch {
-            // Ignore non-JSON or unhandled messages
+            // Ignore non-JSON
           }
         }
 
@@ -121,6 +179,22 @@ export function useRelayAgent() {
     isConnected.value = false
   }
 
+  async function unpair() {
+    if (sessionCredential.value) {
+      // Invalidate credential on CLI server
+      try {
+        await $fetch(`http://127.0.0.1:${port.value}/revoke`, {
+          method: 'POST',
+          body: { credential: sessionCredential.value }
+        })
+      } catch {
+        // Ignore if CLI is unreachable
+      }
+    }
+    setSessionCredential(null)
+    disconnect()
+  }
+
   async function exec(command: string, args: string[] = [], cwd?: string): Promise<RelayExecResult> {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       const connected = await connect()
@@ -139,6 +213,7 @@ export function useRelayAgent() {
 
   return {
     sessionCredential,
+    deviceFingerprint,
     port,
     isConnected,
     isConnecting,
@@ -146,6 +221,7 @@ export function useRelayAgent() {
     pair,
     connect,
     disconnect,
+    unpair,
     exec,
     setSessionCredential
   }

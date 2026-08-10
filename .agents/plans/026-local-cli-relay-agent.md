@@ -89,6 +89,17 @@ Small, independently shippable/testable steps — implement and verify each befo
 - Hardening review: workspace-scope traversal validation, CORS/Origin/Host header checks, single-use token expiry, zero-vulnerability dependencies verified via `pnpm audit`.
 - Added documentation in `packages/relay-agent/SKILL.md` and UI guidance on `app/pages/settings/local-terminal.vue`.
 
+### Phase 7 — Standalone binary distribution (no Node.js required on the user's machine) [DONE]
+- Added esbuild bundle step (`build.mjs`) and `@yao-pkg/pkg` cross-compilation target matrix for Linux x64, macOS x64/arm64, and Windows x64.
+- Added GitHub Actions workflow `.github/workflows/release-relay-agent.yml` to build and publish binaries on `relay-agent-v*` tag push — **not yet triggered**; no tag has been pushed and no GitHub Release exists yet, so the UI's download links 404 until the first real release.
+- Updated UI (`app/pages/settings/local-terminal.vue`) with OS auto-detection, direct download buttons pointing to GitHub Release asset URLs, and an explicit `--origin` value derived from `useRequestURL()` in the paired-CLI example command (was previously missing entirely, which would have broken pairing on any deployment other than the CLI's local-dev default).
+- End-to-end verified locally (not just read from logs): ran the real `compile` step, executed the resulting standalone Linux binary directly (no `node`/`npx` involved), paired it over real HTTP, and ran a real command over the real WebSocket exec channel — confirmed working before trusting the CI workflow to do the same.
+- Two real bugs found and fixed only by actually running the compile, not by reading the tool's docs:
+  - `@yao-pkg/pkg`'s remote prebuilt-binary cache had no entry for `node20`'s current patch version (`v20.20.2`) on any platform — it silently fell back to compiling Node.js from source, which hard-fails outright for `macos`/`win` targets from a Linux runner (`Error! Not able to build for 'macos' here, only for 'linux'` — source builds can't cross-compile OS, only prebuilt-binary fetches can). Probed cache coverage across `node16`/`node18`/`node20`/`node22`/`node24` × all 4 targets with `pkg-fetch -t` (fetch-only, no build); `node22`/`node24` had full 4-platform coverage, `node18`/`node20` did not. `package.json`'s `compile` script is now pinned to `node22` — see the verification method documented in `packages/relay-agent/SKILL.md` for re-checking this before ever bumping the version.
+  - The release workflow's rename step assumed pkg's output filenames were `bundle-linux`/`bundle-win.exe`; the real names (confirmed by inspecting `dist/bin/` after a real compile) are `bundle-linux-x64`/`bundle-win-x64.exe` — the workflow would have failed at that step on its first real run. Fixed.
+- Also fixed: the dead, never-read `"pkg"` config block in `package.json` (the `compile` script already passes `--targets`/`--out-path` as explicit CLI flags, so that block was pure noise); the release workflow's `node-version: 20` → `22` to match `ci.yml`'s own Node version.
+- Not yet done: pushing a `relay-agent-v*` tag to actually produce a GitHub Release (deliberately left to the user — publishing is a one-way action). Until that happens, the download buttons in Settings → Local Terminal are dead links.
+
 ## Out of scope
 
 - Remote (not-same-machine) access — e.g. accessing your desktop from your phone's browser. That needs the internet relay/tunnel model from the original draft (sshx/Teleport-style) and is a different feature; not built here.

@@ -11,9 +11,8 @@ const {
   error,
   pair,
   connect,
-  disconnect,
-  exec,
-  setSessionCredential
+  unpair,
+  exec
 } = useRelayAgent()
 
 const pairingTokenInput = ref('')
@@ -24,9 +23,39 @@ const commandInput = ref('')
 const execPending = ref(false)
 const history = ref<Array<{ id: string, command: string, result: RelayExecResult }>>([])
 
+const detectedOs = ref<'linux' | 'macos-arm64' | 'macos-x64' | 'windows' | 'unknown'>('linux')
+
+// The relay-agent CLI runs on the user's own machine as its own process —
+// it cannot read this app's runtime config, so its `--origin` default is
+// only ever a local-dev convenience (see packages/relay-agent/src/server.ts).
+// Whatever origin this page is actually being viewed from (dev, staging,
+// the real Singapore-hosted production domain) must be passed explicitly,
+// so show it here rather than let the user guess or copy a stale example.
+// `useRequestURL()` (not `window.location`) works during SSR too, so this
+// is correct on first paint, not just after hydration.
+const siteOrigin = useRequestURL().origin
+
 onMounted(() => {
   if (sessionCredential.value && !isConnected.value) {
     void connect()
+  }
+
+  if (import.meta.client) {
+    const ua = navigator.userAgent.toLowerCase()
+    const platform = navigator.platform.toLowerCase()
+
+    if (platform.includes('win')) {
+      detectedOs.value = 'windows'
+    } else if (platform.includes('mac') || ua.includes('macintosh')) {
+      // Basic arm64 check for Apple Silicon vs Intel
+      if (navigator.maxTouchPoints > 0 || ua.includes('arm64')) {
+        detectedOs.value = 'macos-arm64'
+      } else {
+        detectedOs.value = 'macos-x64'
+      }
+    } else if (platform.includes('linux')) {
+      detectedOs.value = 'linux'
+    }
   }
 })
 
@@ -62,11 +91,17 @@ async function handleExec() {
   }
 }
 
-function handleUnpair() {
-  setSessionCredential(null)
-  disconnect()
+async function handleUnpair() {
+  await unpair()
   history.value = []
   toast.add({ title: 'Unpaired local relay agent', color: 'neutral' })
+}
+
+const downloadLinks = {
+  'linux': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-linux-x64',
+  'macos-arm64': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-macos-arm64',
+  'macos-x64': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-macos-x64',
+  'windows': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-win-x64.exe'
 }
 </script>
 
@@ -133,24 +168,90 @@ function handleUnpair() {
         v-else
         class="space-y-4"
       >
-        <p class="text-sm text-muted">
-          Run <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">npx @ai-code/relay-agent start</code> on your machine, then enter the pairing token printed in your terminal below:
-        </p>
+        <!-- Standalone Binary Download Section -->
+        <div class="rounded-lg border border-white/10 bg-elevated/50 p-4 space-y-3">
+          <h3 class="flex items-center gap-2 text-sm font-medium text-highlighted">
+            <UIcon
+              name="i-lucide-download"
+              class="size-4"
+            />
+            1. Download Standalone Executable (No Node.js / npm required)
+          </h3>
+          <p class="text-xs text-muted">
+            Download and run the standalone binary for your platform, or run via <code class="rounded bg-black/40 px-1 py-0.5 font-mono text-highlighted">npx @ai-code/relay-agent start</code>:
+          </p>
 
-        <div class="flex max-w-md gap-2">
-          <UInput
-            v-model="pairingTokenInput"
-            placeholder="Enter pairing token..."
-            class="flex-1 font-mono"
-            :disabled="pairingPending"
-            @keyup.enter="handlePair"
-          />
-          <UButton
-            label="Pair"
-            icon="i-lucide-link"
-            :loading="pairingPending"
-            @click="handlePair"
-          />
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              label="Linux (x64)"
+              icon="i-lucide-download"
+              :color="detectedOs === 'linux' ? 'primary' : 'neutral'"
+              :variant="detectedOs === 'linux' ? 'solid' : 'outline'"
+              size="xs"
+              :to="downloadLinks.linux"
+              target="_blank"
+            />
+            <UButton
+              label="macOS (Apple Silicon arm64)"
+              icon="i-lucide-download"
+              :color="detectedOs === 'macos-arm64' ? 'primary' : 'neutral'"
+              :variant="detectedOs === 'macos-arm64' ? 'solid' : 'outline'"
+              size="xs"
+              :to="downloadLinks['macos-arm64']"
+              target="_blank"
+            />
+            <UButton
+              label="macOS (Intel x64)"
+              icon="i-lucide-download"
+              :color="detectedOs === 'macos-x64' ? 'primary' : 'neutral'"
+              :variant="detectedOs === 'macos-x64' ? 'solid' : 'outline'"
+              size="xs"
+              :to="downloadLinks['macos-x64']"
+              target="_blank"
+            />
+            <UButton
+              label="Windows (x64)"
+              icon="i-lucide-download"
+              :color="detectedOs === 'windows' ? 'primary' : 'neutral'"
+              :variant="detectedOs === 'windows' ? 'solid' : 'outline'"
+              size="xs"
+              :to="downloadLinks.windows"
+              target="_blank"
+            />
+          </div>
+
+          <p class="text-xs text-muted italic">
+            Note: On macOS or Windows, if Gatekeeper/SmartScreen blocks unsigned binaries on first run, right-click the binary and select Open, or run <code class="rounded bg-black/40 px-1 font-mono">xattr -d com.apple.quarantine ./relay-agent-macos-*</code>.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <h3 class="flex items-center gap-2 text-sm font-medium text-highlighted">
+            <UIcon
+              name="i-lucide-key"
+              class="size-4"
+            />
+            2. Enter Pairing Token
+          </h3>
+          <p class="text-xs text-muted">
+            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --dir ./my-project --origin {{ siteOrigin }}</code>), then paste the token printed below:
+          </p>
+
+          <div class="flex max-w-md gap-2">
+            <UInput
+              v-model="pairingTokenInput"
+              placeholder="Enter pairing token..."
+              class="flex-1 font-mono"
+              :disabled="pairingPending"
+              @keyup.enter="handlePair"
+            />
+            <UButton
+              label="Pair"
+              icon="i-lucide-link"
+              :loading="pairingPending"
+              @click="handlePair"
+            />
+          </div>
         </div>
       </div>
     </UCard>

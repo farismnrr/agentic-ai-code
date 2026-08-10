@@ -9,6 +9,8 @@ export interface RelayAgentOptions {
   port?: number
   dir?: string
   allowedOrigin?: string
+  tokenTtlMs?: number
+  execTimeoutMs?: number
 }
 
 export class RelayAgentServer {
@@ -16,6 +18,8 @@ export class RelayAgentServer {
   public readonly workspaceDir: string
   public readonly allowedOrigin: string
   public pairingToken: string
+  public pairingTokenExpiresAt: number
+  public readonly execTimeoutMs: number
   private sessionCredentials: Set<string> = new Set()
   private httpServer: HttpServer | null = null
   private wss: WebSocketServer | null = null
@@ -23,8 +27,19 @@ export class RelayAgentServer {
   constructor(options: RelayAgentOptions = {}) {
     this.port = options.port ?? 47821
     this.workspaceDir = path.resolve(options.dir ?? process.cwd())
-    this.allowedOrigin = options.allowedOrigin ?? 'http://localhost:3000'
+    // The one place this default lives — bin/cli.mjs deliberately has no
+    // default of its own, it just forwards `--origin`/`RELAY_AGENT_ORIGIN`
+    // through unchanged. `3333` matches this repo's own real dev origin
+    // (nuxt.config.ts's devServer.port / .env.example's
+    // NUXT_PUBLIC_SITE_URL), which this CLI — running as its own process on
+    // the user's machine — has no way to read directly; it's a local-dev
+    // convenience only, never a guess at a real hosted deployment's origin,
+    // which must always be passed explicitly.
+    this.allowedOrigin = options.allowedOrigin ?? 'http://localhost:3333'
+    this.execTimeoutMs = options.execTimeoutMs ?? 300000 // 5 minutes default timeout for commands like npm install
     this.pairingToken = crypto.randomBytes(16).toString('hex')
+    const ttl = options.tokenTtlMs ?? 5 * 60 * 1000 // 5 minutes TTL
+    this.pairingTokenExpiresAt = Date.now() + ttl
   }
 
   private validateHostAndOrigin(req: IncomingMessage): { valid: boolean, reason?: string } {
@@ -36,8 +51,9 @@ export class RelayAgentServer {
       return { valid: false, reason: `Invalid Host header: ${host}` }
     }
 
-    if (origin && origin !== this.allowedOrigin) {
-      return { valid: false, reason: `Disallowed Origin header: ${origin}` }
+    // Fail-closed: Origin header is mandatory and must strictly match allowedOrigin
+    if (!origin || origin !== this.allowedOrigin) {
+      return { valid: false, reason: `Disallowed or missing Origin header: ${origin}` }
     }
 
     return { valid: true }
@@ -76,7 +92,13 @@ export class RelayAgentServer {
             const data = JSON.parse(body || '{}')
             if (!data.token || data.token !== this.pairingToken) {
               res.writeHead(401, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ error: 'Invalid or expired pairing token' }))
+              res.end(JSON.stringify({ error: 'Invalid pairing token' }))
+              return
+            }
+
+            if (Date.now() > this.pairingTokenExpiresAt) {
+              res.writeHead(401, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Pairing token has expired (~5 min TTL)' }))
               return
             }
 
@@ -88,6 +110,30 @@ export class RelayAgentServer {
 
             res.writeHead(200, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ sessionCredential: sessionCred }))
+          } catch (err: unknown) {
+            res.writeHead(400, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: (err as Error).message }))
+          }
+        })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/revoke') {
+        let body = ''
+        req.on('data', (chunk) => {
+          body += chunk
+        })
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body || '{}')
+            if (data.credential && this.sessionCredentials.has(data.credential)) {
+              this.sessionCredentials.delete(data.credential)
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ success: true, message: 'Session credential revoked' }))
+              return
+            }
+            res.writeHead(400, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Invalid credential' }))
           } catch (err: unknown) {
             res.writeHead(400, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ error: (err as Error).message }))
@@ -117,18 +163,10 @@ export class RelayAgentServer {
       }
 
       const url = new URL(request.url ?? '/', `http://${request.headers.host}`)
-      const token = url.searchParams.get('token')
       const cred = url.searchParams.get('credential')
 
-      let authorized = false
-      if (cred && this.sessionCredentials.has(cred)) {
-        authorized = true
-      } else if (token && this.pairingToken && token === this.pairingToken) {
-        // Upgrade via direct pairing token generates a session credential
-        authorized = true
-      }
-
-      if (!authorized) {
+      // ONLY valid session credentials are allowed for WS upgrade (pairing tokens MUST use /pair)
+      if (!cred || !this.sessionCredentials.has(cred)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
         return
@@ -157,7 +195,8 @@ export class RelayAgentServer {
     return new Promise((resolve, reject) => {
       this.httpServer?.listen(this.port, '127.0.0.1', () => {
         console.log(`[relay-agent] Listening on http://127.0.0.1:${this.port}`)
-        console.log(`[relay-agent] Pairing token: ${this.pairingToken}`)
+        console.log(`[relay-agent] Allowed Origin: ${this.allowedOrigin}`)
+        console.log(`[relay-agent] Pairing token: ${this.pairingToken} (expires in 5 minutes)`)
         console.log(`[relay-agent] Workspace directory: ${this.workspaceDir}`)
         resolve()
       })
@@ -179,8 +218,15 @@ export class RelayAgentServer {
       const finalCommand = binary ?? command
       const finalArgs = [...gluedArgs, ...args]
 
+      // Safety check: Validate binary AND all arguments for path traversal attempts
       if (finalCommand.includes('/') || finalCommand.includes('\\')) {
         await resolveScopedPath(finalCommand, this.workspaceDir)
+      }
+
+      for (const arg of finalArgs) {
+        if (arg.includes('/') || arg.includes('\\') || arg.includes('..')) {
+          await resolveScopedPath(arg, this.workspaceDir)
+        }
       }
 
       const env: Record<string, string> = {}
@@ -188,7 +234,7 @@ export class RelayAgentServer {
       if (process.env.HOME) env.HOME = process.env.HOME
       if (process.env.LANG) env.LANG = process.env.LANG
 
-      const timeoutMs = 30000
+      const timeoutMs = this.execTimeoutMs
       const result = await execa(finalCommand, finalArgs, {
         shell: false,
         cwd: targetCwd,
