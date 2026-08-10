@@ -5,7 +5,7 @@ function measure(name, cmd) {
   const start = performance.now()
   try {
     execSync(cmd, { stdio: 'ignore' })
-  } catch (e) {
+  } catch {
     // ignore
   }
   return performance.now() - start
@@ -19,7 +19,7 @@ results += '| --- | --- | --- | --- |\n'
 function runBenchmark(toolName, jsCmd, rustCmd) {
   let jsTotal = 0
   for (let i = 0; i < iterations; i++) jsTotal += measure(toolName + ' JS', jsCmd)
-  
+
   let rustTotal = 0
   for (let i = 0; i < iterations; i++) rustTotal += measure(toolName + ' Rust', rustCmd)
 
