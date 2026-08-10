@@ -118,6 +118,30 @@ jobs:
             fi
           done
 
+      - name: Smoke test artifacts
+        working-directory: target/${{ matrix.target }}/release/dist
+        run: |
+          for bin in terminal-tool curl-tool searxng-search-tool; do
+            bin_name="${bin}-${{ matrix.target }}"
+            
+            # Verify SHA256 checksum file exists
+            if [ ! -f "${bin_name}.sha256" ]; then
+              echo "Error: Checksum file ${bin_name}.sha256 not found!"
+              exit 1
+            fi
+            
+            # Check if this target can be executed on the current runner
+            # GitHub's macos-latest is now ARM-based (macos-14), so both Apple targets work (x86_64 via Rosetta 2)
+            if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
+              echo "Skipping execution for cross-compiled target ${{ matrix.target }}"
+              continue
+            fi
+            
+            echo "Running smoke test for ${bin_name}..."
+            chmod +x "./${bin_name}"
+            "./${bin_name}" --help
+          done
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
