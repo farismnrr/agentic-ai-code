@@ -45,11 +45,9 @@ jobs:
         run: pnpm audit
 
       - name: Check Rust formatting
-        working-directory: packages/rust-tools
         run: cargo fmt -- --check
 
       - name: Lint with Clippy
-        working-directory: packages/rust-tools
         run: cargo clippy -- -D warnings
 
       - name: Install cargo-audit
@@ -58,11 +56,9 @@ jobs:
           cargo binstall --no-confirm cargo-audit@0.22.2
 
       - name: Rust Security audit
-        working-directory: packages/rust-tools
         run: cargo audit
 
       - name: Run Rust parity tests
-        working-directory: packages/rust-tools
         run: cargo test --workspace
 
   build-release:
@@ -98,7 +94,6 @@ jobs:
         run: cargo install cross
 
       - name: Build release artifacts
-        working-directory: packages/rust-tools
         run: |
           if [ "${{ matrix.use-cross }}" == "true" ]; then
             cross build --release --target ${{ matrix.target }}
@@ -107,7 +102,7 @@ jobs:
           fi
 
       - name: Package artifacts and generate checksums
-        working-directory: packages/rust-tools/target/${{ matrix.target }}/release
+        working-directory: target/${{ matrix.target }}/release
         run: |
           mkdir -p dist
           for bin in terminal-tool curl-tool searxng-search-tool; do
@@ -127,4 +122,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-artifacts-${{ matrix.target }}
-          path: packages/rust-tools/target/${{ matrix.target }}/release/dist/*
+          path: target/${{ matrix.target }}/release/dist/*
