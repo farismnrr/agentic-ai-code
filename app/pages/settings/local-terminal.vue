@@ -241,6 +241,15 @@ const downloadLinks = {
             Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --origin {{ siteOrigin }}</code>), then paste the token printed below. This agent has no directory restriction — it can run commands anywhere on this machine your user account can access, not just one project folder (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir ./some/path</code> only to change its default starting directory).
           </p>
 
+          <p class="text-xs text-muted">
+            <span class="font-medium text-highlighted">Start:</span> just run the binary as shown above (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code> if not using the default port).
+            <span class="font-medium text-highlighted">Stop:</span> <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code> in that terminal, or from anywhere: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 stop</code> (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code> too if you didn't use the default).
+          </p>
+
+          <p class="text-xs text-muted">
+            <span class="font-medium text-highlighted">Run in the background</span> instead of tying up a terminal: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">nohup ./relay-agent-linux-x64 --origin {{ siteOrigin }} &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code>. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">stop</code> still works the same either way.
+          </p>
+
           <div class="flex max-w-md gap-2">
             <UInput
               v-model="pairingTokenInput"
