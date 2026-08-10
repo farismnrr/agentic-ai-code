@@ -1,5 +1,21 @@
 # 025 — Skeleton states + lazy data loading
 
+## Status: CLOSED
+
+Implemented and shipped to `dev` as commit `c089a1a` ("feat(ui): add
+skeleton states and lazy data loading") — `useSidebarData`'s own
+`pending`/`error` state, `layouts/default.vue`'s sidebar skeleton/error/
+retry, `settings/models.vue` and `settings/api-keys.vue` converted to
+`useLazyFetch`, `chat/[id].vue` kept its deliberate blocking load but
+gained try/catch + retry, and a shared `DataLoadError.vue` component.
+`pnpm lint`/`pnpm typecheck` clean.
+
+Note for next time: this landed as a direct commit to `dev`, not through
+a feature branch + PR — outside the workflow in
+[`../knowledge/git.md`](../knowledge/git.md). No action needed now since
+it's already merged and pushed (history isn't being rewritten after the
+fact), but branch it next time.
+
 ## Goal
 
 Right now most data-loading is a single blocking `await useFetch(...)` /
