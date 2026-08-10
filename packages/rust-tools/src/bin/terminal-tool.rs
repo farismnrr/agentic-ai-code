@@ -20,6 +20,10 @@ struct Args {
     #[arg(long = "no-guard")]
     no_guard: bool,
 
+    /// Timeout in milliseconds (default: 30000)
+    #[arg(long = "timeout")]
+    timeout: Option<u64>,
+
     /// Command and arguments
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     positionals: Vec<String>,
@@ -38,6 +42,7 @@ async fn run_terminal(
     passed_args: &[String],
     cwd: &str,
     no_guard: bool,
+    timeout_ms: u64,
 ) -> String {
     if !no_guard {
         eprintln!(
@@ -78,10 +83,11 @@ async fn run_terminal(
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    cmd.kill_on_drop(true);
 
-    let timeout_duration = Duration::from_secs(30);
+    let timeout_duration = Duration::from_millis(timeout_ms);
 
-    let child = match cmd.spawn() {
+    let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return format!("Error: {}", e),
     };
@@ -89,7 +95,10 @@ async fn run_terminal(
     let output_result = timeout(timeout_duration, child.wait_with_output()).await;
 
     match output_result {
-        Err(_) => "Error: command timed out after 30s and was killed.".to_string(),
+        Err(_) => {
+            let _ = child.kill().await;
+            format!("Error: command timed out after {}ms and was killed.", timeout_ms)
+        }
         Ok(Err(e)) => format!("Error: {}", e),
         Ok(Ok(out)) => {
             let stdout_str = String::from_utf8_lossy(&out.stdout);
