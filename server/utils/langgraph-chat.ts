@@ -4,6 +4,7 @@ import { buildLanggraphTools } from './langgraph-tools'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream } from 'ai'
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from './providers/langgraph-model'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
@@ -25,8 +26,6 @@ function extractForcedSearch(uiMessages: UIMessage[]) {
   }
   return { forced: false }
 }
-
-import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 
 function convertToLangchainMessages(uiMessages: UIMessage[], cleanedLastText?: string) {
   const resultMessages: (HumanMessage | AIMessage | SystemMessage | ToolMessage)[] = []
