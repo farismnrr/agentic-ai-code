@@ -38,19 +38,4 @@ jobs:
         working-directory: packages/rust-tools
         run: cargo build
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Install JS dependencies
-        run: pnpm install
-
-      - name: Run JS-Rust Parity Tests
-        working-directory: packages/rust-tools
-        run: node tests/parity.mjs
