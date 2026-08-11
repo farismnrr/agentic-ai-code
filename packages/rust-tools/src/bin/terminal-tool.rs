@@ -9,7 +9,7 @@ use tokio::time::timeout;
 #[command(name = "terminal-tool")]
 #[command(
     version,
-    about = "Run a shell command within the workspace directory",
+    about = "Run an executable command within the workspace directory",
     long_about = None
 )]
 struct Args {
@@ -102,6 +102,26 @@ async fn run_terminal(
 
     let pid = child.id().unwrap_or(0);
 
+    // We only timeout on the wait, so `child` is still available.
+    // However, wait_with_output consumes `child`. 
+    // To do this right, we can just await the child.wait() inside the timeout,
+    // and if it times out, we kill and then child.wait().await again!
+    // But wait() doesn't consume `child`!
+    // Wait, wait_with_output() consumes child. So we can't use wait_with_output if we want to reap after timeout.
+    // BUT we need the output!
+    // We can read stdout and stderr manually first, then wait.
+    
+    
+    // Spawn tasks to read output so we don't block
+    
+    // Actually, if we just wait on the child to exit, the stdout/stderr might fill their pipes and block the child!
+    // We must read concurrently. But if we timeout, we drop the readers and kill.
+    // Instead of doing manual pipes, what if we just use child.wait_with_output() inside the timeout,
+    // and if it times out, the child is dropped by tokio, and we manually call waitpid?
+    // Yes! `waitpid(pid, &mut status, 0)` is completely fine for a synchronous wait, even if Tokio might race to reap it.
+    // Actually, Tokio's `Child::kill` is available if we don't move it. But `wait_with_output` takes `self`.
+    
+    // Let's just use waitpid explicitly:
     let output_result = timeout(timeout_duration, child.wait_with_output()).await;
 
     match output_result {
@@ -111,6 +131,9 @@ async fn run_terminal(
                 if pid > 0 {
                     unsafe {
                         libc::kill(-(pid as i32), libc::SIGKILL);
+                        let mut status = 0;
+                        // wait/reap the process group leader explicitly
+                        libc::waitpid(pid as i32, &mut status, 0);
                     }
                 }
             }
@@ -131,6 +154,7 @@ async fn run_terminal(
         }
     }
 }
+
 
 #[tokio::main]
 async fn main() {

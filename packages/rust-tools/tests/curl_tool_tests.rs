@@ -32,18 +32,18 @@ fn spawn_mock_server() -> u16 {
                 let mut buffer = [0; 1024];
                 if stream.read(&mut buffer).is_ok() {
                     let request = String::from_utf8_lossy(&buffer);
-                    if request.contains("GET /redirect-to-private") {
+                    if request.contains("redirect-to-private") {
                         let response =
                             "HTTP/1.1 302 Found\r\nLocation: http://192.168.1.1/\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /redirect-to-loopback") {
+                    } else if request.contains("redirect-to-loopback") {
                         let response = "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1/\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /redirect-to-link-local") {
+                    } else if request.contains("redirect-to-link-local") {
                         let response =
                             "HTTP/1.1 302 Found\r\nLocation: http://169.254.169.254/\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /redirect-to-localtest") {
+                    } else if request.contains("redirect-to-localtest") {
                         let response =
                             "HTTP/1.1 302 Found\r\nLocation: http://localtest.me/\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
@@ -96,8 +96,8 @@ fn test_hostname_resolves_to_private() {
 fn test_redirect_to_private_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-private"))
-        .env("CURL_TEST_ALLOW_INITIAL", "1")
+        .arg(format!("http://example.com/redirect-to-private"))
+        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
         .output()
         .unwrap();
 
@@ -110,8 +110,8 @@ fn test_redirect_to_private_blocked() {
 fn test_redirect_to_loopback_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-loopback"))
-        .env("CURL_TEST_ALLOW_INITIAL", "1")
+        .arg(format!("http://example.com/redirect-to-loopback"))
+        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
         .output()
         .unwrap();
 
@@ -124,8 +124,8 @@ fn test_redirect_to_loopback_blocked() {
 fn test_redirect_to_link_local_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-link-local"))
-        .env("CURL_TEST_ALLOW_INITIAL", "1")
+        .arg(format!("http://example.com/redirect-to-link-local"))
+        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
         .output()
         .unwrap();
 
@@ -142,8 +142,8 @@ fn test_redirect_revalidation_dns() {
     // Since localtest.me resolves to 127.0.0.1, the redirect policy should block it.
     // We can just add /redirect-to-localtest to mock server!
     let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-localtest"))
-        .env("CURL_TEST_ALLOW_INITIAL", "1")
+        .arg(format!("http://example.com/redirect-to-localtest"))
+        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
         .output()
         .unwrap();
 
@@ -199,7 +199,7 @@ fn test_no_guard_follows_redirect_to_private() {
     // Use --no-guard on our local server that redirects to 192.168.1.1
     // It should try to fetch 192.168.1.1 and fail with a network error, NOT an SSRF block
     let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-private"))
+        .arg(format!("http://example.com/redirect-to-private"))
         .arg("--no-guard")
         .output()
         .unwrap();

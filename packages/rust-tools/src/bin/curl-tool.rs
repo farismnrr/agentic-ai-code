@@ -70,9 +70,8 @@ async fn run_curl(
         }
     }
 
-    let bypass_initial = std::env::var("CURL_TEST_ALLOW_INITIAL").is_ok();
 
-    if !no_guard && !bypass_initial {
+    if !no_guard {
         if let Some(host) = parsed_url.host_str() {
             // Check if it's already an IP string
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
