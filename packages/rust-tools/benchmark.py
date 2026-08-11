@@ -45,7 +45,7 @@ def run_bench(name, cmd_args, env=None):
 def print_res(name, res):
     print(f"{name:30} | {res[0]:8.2f} ms | {res[1]:8.2f} MB | {res[2]}")
 
-print(f"{'Tool':30} | {'Latency':11} | {'Peak RSS':11} | {'Size'}")
+print(f"{'Tool':30} | {'Invocation Latency':18} | {'Peak RSS':11} | {'Size'}")
 print("-" * 70)
 
 t_rust = run_bench("terminal-tool (Rust)", ["./target/release/terminal-tool", "--no-guard", "echo", "hello"])

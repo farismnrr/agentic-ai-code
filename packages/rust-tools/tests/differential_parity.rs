@@ -208,12 +208,12 @@ fn test_terminal_dependency_failure() {
     let args = vec!["--no-guard", "nonexistent_command_12345"];
     let js_out = run_js_cli("terminal_cli.js", &args, &HashMap::new());
     let rs_out = run_rust_cli("terminal-tool", &args, &HashMap::new());
-    
+
     assert!(
         !rs_out.status.success(),
         "Rust should exit non-zero for missing binary"
     );
-    
+
     let rs_stdout = String::from_utf8_lossy(&rs_out.stdout);
     let js_stdout = String::from_utf8_lossy(&js_out.stdout);
     assert!(

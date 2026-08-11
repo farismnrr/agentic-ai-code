@@ -40,10 +40,13 @@ async fn run_search(query: &str, base_url: &str) -> String {
         .append_pair("q", query)
         .append_pair("format", "json");
 
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    {
+        Ok(c) => c,
+        Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
+    };
     let res = match client.get(url).send().await {
         Ok(r) => r,
         Err(e) => return format!("Error: {e}"),
