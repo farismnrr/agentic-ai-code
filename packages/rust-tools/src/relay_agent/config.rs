@@ -218,6 +218,31 @@ impl ServerConfig {
                     .to_string(),
             ));
         }
+        if self.mode == SecurityMode::Remote {
+            let Some(audience) = self.oauth_audience.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_audience is required in remote mode".into(),
+                ));
+            };
+            let parsed = url::Url::parse(audience).map_err(|_| {
+                RelayError::InvalidConfig(
+                    "oauth_audience must be a canonical absolute HTTPS URI".into(),
+                )
+            })?;
+            if parsed.scheme() != "https"
+                || parsed.host_str().is_none()
+                || parsed.cannot_be_a_base()
+                || !parsed.has_authority()
+                || parsed.username() != ""
+                || parsed.password().is_some()
+                || parsed.query().is_some()
+                || parsed.fragment().is_some()
+            {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_audience must be a canonical absolute HTTPS URI without credentials, query, or fragment".into(),
+                ));
+            }
+        }
         if self.mode == SecurityMode::Local
             && self.bind_host != "127.0.0.1"
             && self.bind_host != "::1"
@@ -322,5 +347,27 @@ mod tests {
         config
             .validate()
             .expect("trusted proxy is valid on loopback");
+    }
+
+    #[test]
+    fn remote_audience_must_be_absolute_https_without_fragment_or_query() {
+        for audience in [
+            "http://relay.example/mcp",
+            "/mcp",
+            "https://relay.example/mcp?tenant=one",
+            "https://relay.example/mcp#fragment",
+        ] {
+            let config = ServerConfig {
+                mode: SecurityMode::Remote,
+                oauth_issuer: Some("https://issuer.example".into()),
+                oauth_audience: Some(audience.into()),
+                oauth_owner_subject: Some("owner".into()),
+                ..ServerConfig::default()
+            };
+            assert!(
+                config.validate().is_err(),
+                "audience should be rejected: {audience}"
+            );
+        }
     }
 }

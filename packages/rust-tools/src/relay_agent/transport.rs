@@ -193,10 +193,15 @@ pub fn create_router(config: ServerConfig) -> Router {
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
-    let well_known_router = Router::new().route(
-        "/.well-known/oauth-protected-resource",
-        get(handle_well_known_oauth),
-    );
+    let well_known_router = Router::new()
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(handle_well_known_oauth),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource/{*resource_path}",
+            get(handle_path_well_known_oauth),
+        );
 
     Router::new()
         .merge(mcp_router)
@@ -227,7 +232,55 @@ async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
     response
 }
 
-type JsonErr = (StatusCode, Json<ErrorResponse>);
+type JsonErr = Box<(StatusCode, HeaderMap, Json<ErrorResponse>)>;
+
+fn protected_resource_metadata_url(config: &ServerConfig) -> Option<String> {
+    let audience = config.oauth_audience.as_deref()?;
+    let mut resource = url::Url::parse(audience).ok()?;
+    let path = resource.path().trim_start_matches('/').to_owned();
+    let metadata_path = if path.is_empty() {
+        "/.well-known/oauth-protected-resource".to_owned()
+    } else {
+        format!("/.well-known/oauth-protected-resource/{path}")
+    };
+    resource.set_path(&metadata_path);
+    Some(resource.to_string())
+}
+
+fn bearer_challenge(config: &ServerConfig, error: Option<&str>, scope: Option<&str>) -> HeaderMap {
+    let mut parameters = vec!["realm=\"mcp\"".to_owned()];
+    if let Some(error) = error {
+        parameters.push(format!("error=\"{error}\""));
+    }
+    if let Some(scope) = scope {
+        parameters.push(format!("scope=\"{scope}\""));
+    }
+    if let Some(metadata_url) = protected_resource_metadata_url(config) {
+        parameters.push(format!("resource_metadata=\"{metadata_url}\""));
+    }
+
+    let mut headers = HeaderMap::new();
+    if let Ok(value) = format!("Bearer {}", parameters.join(", ")).parse() {
+        headers.insert(axum::http::header::WWW_AUTHENTICATE, value);
+    }
+    headers
+}
+
+fn oauth_error_response(
+    status: StatusCode,
+    id: Option<Id>,
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+    message: &McpError,
+) -> AxumResponse {
+    (
+        status,
+        bearer_challenge(config, error, scope),
+        Json(ErrorResponse::new(id, message)),
+    )
+        .into_response()
+}
 
 fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
     config.trusted_proxy
@@ -239,7 +292,12 @@ fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
 }
 
 fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
-    (status, Json(ErrorResponse::new(id, err)))
+    Box::new((status, HeaderMap::new(), Json(ErrorResponse::new(id, err))))
+}
+
+fn json_error_response(error: JsonErr) -> AxumResponse {
+    let (status, headers, body) = *error;
+    (status, headers, body).into_response()
 }
 
 async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -253,6 +311,22 @@ async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> impl Int
         metadata["authorization_servers"] = json!([issuer]);
     }
     Json(metadata)
+}
+
+async fn handle_path_well_known_oauth(
+    State(state): State<Arc<AppState>>,
+    uri: axum::http::Uri,
+) -> AxumResponse {
+    let Some(metadata_url) = protected_resource_metadata_url(&state.config) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if uri.path() != metadata_uri.path() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    handle_well_known_oauth(State(state)).await.into_response()
 }
 
 /// Server-side access policy:
@@ -325,15 +399,19 @@ async fn access_policy(
             .unwrap_or_default();
 
         if !auth_header.starts_with("Bearer ") {
-            return (
+            let error = if auth_header.is_empty() {
+                None
+            } else {
+                Some("invalid_token")
+            };
+            return oauth_error_response(
                 StatusCode::UNAUTHORIZED,
-                [(axum::http::header::WWW_AUTHENTICATE, "Bearer realm=\"mcp\"")],
-                Json(ErrorResponse::new(
-                    None,
-                    &McpError::InvalidRequest("Missing or invalid authorization".into()),
-                )),
-            )
-                .into_response();
+                None,
+                &state.config,
+                error,
+                None,
+                &McpError::InvalidRequest("Missing or invalid authorization".into()),
+            );
         }
 
         let token = &auth_header[7..];
@@ -397,36 +475,28 @@ async fn access_policy(
         let header = match jsonwebtoken::decode_header(token) {
             Ok(h) => h,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid token header".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid token header".into()),
+                );
             }
         };
 
         let kid = match header.kid {
             Some(k) => k,
             None => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Token missing kid".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Token missing kid".into()),
+                );
             }
         };
 
@@ -454,38 +524,30 @@ async fn access_policy(
                         match found {
                             Some(j) => j,
                             None => {
-                                return (
+                                return oauth_error_response(
                                     StatusCode::UNAUTHORIZED,
-                                    [(
-                                        axum::http::header::WWW_AUTHENTICATE,
-                                        "Bearer error=\"invalid_token\"",
-                                    )],
-                                    Json(ErrorResponse::new(
-                                        None,
-                                        &McpError::InvalidRequest(
-                                            "Unknown signing key (kid not in JWKS)".into(),
-                                        ),
-                                    )),
-                                )
-                                    .into_response();
+                                    None,
+                                    &state.config,
+                                    Some("invalid_token"),
+                                    None,
+                                    &McpError::InvalidRequest(
+                                        "Unknown signing key (kid not in JWKS)".into(),
+                                    ),
+                                );
                             }
                         }
                     }
                     Err(_) => {
-                        return (
+                        return oauth_error_response(
                             StatusCode::UNAUTHORIZED,
-                            [(
-                                axum::http::header::WWW_AUTHENTICATE,
-                                "Bearer error=\"invalid_token\"",
-                            )],
-                            Json(ErrorResponse::new(
-                                None,
-                                &McpError::InvalidRequest(
-                                    "Unknown signing key (kid not in JWKS)".into(),
-                                ),
-                            )),
-                        )
-                            .into_response();
+                            None,
+                            &state.config,
+                            Some("invalid_token"),
+                            None,
+                            &McpError::InvalidRequest(
+                                "Unknown signing key (kid not in JWKS)".into(),
+                            ),
+                        );
                     }
                 }
             }
@@ -494,18 +556,14 @@ async fn access_policy(
         let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(&jwk) {
             Ok(k) => k,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid JWK".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid JWK".into()),
+                );
             }
         };
 
@@ -521,18 +579,14 @@ async fn access_policy(
         let token_data = match jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation) {
             Ok(data) => data,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid token".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid token".into()),
+                );
             }
         };
         auth_ctx.claims = Some(token_data.claims);
@@ -590,8 +644,11 @@ async fn handle_mcp(
     let payload: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => {
-            let response =
-                err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError).into_response();
+            let response = json_error_response(err_response(
+                StatusCode::BAD_REQUEST,
+                None,
+                &McpError::ParseError,
+            ));
             audit(
                 correlation_id,
                 "http",
@@ -619,13 +676,16 @@ async fn handle_mcp(
             let id = payload
                 .get("id")
                 .and_then(|v| serde_json::from_value::<Id>(v.clone()).ok());
-            return err_response(StatusCode::BAD_REQUEST, id, &mcp_err).into_response();
+            return json_error_response(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
         }
     };
 
     if let Err(err) = validate_routing_headers(&headers, &request) {
-        return err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err)
-            .into_response();
+        return json_error_response(err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &err,
+        ));
     }
 
     match request.method.as_str() {
@@ -638,7 +698,7 @@ async fn handle_mcp(
             &McpError::MethodNotFound(other.to_string()),
         )),
     }
-    .into_response()
+    .map_or_else(json_error_response, |body| body.into_response())
 }
 
 /// Validate the MCP `2026-07-28` standard request-metadata headers against
@@ -821,24 +881,30 @@ async fn handle_tools_call(
 
         let configured_owner = _state.config.oauth_owner_subject.as_deref();
         if claims.sub.as_deref() != configured_owner {
-            return Err((
+            return Err(Box::new((
                 StatusCode::FORBIDDEN,
+                HeaderMap::new(),
                 Json(ErrorResponse::new(
                     Some(request.id.clone()),
                     &McpError::InvalidRequest(
                         "Authenticated subject is not the configured owner".into(),
                     ),
                 )),
-            ));
+            )));
         }
         if !scope_list.contains(&CODING_SCOPE) {
-            return Err((
+            return Err(Box::new((
                 StatusCode::FORBIDDEN,
+                bearer_challenge(
+                    &_state.config,
+                    Some("insufficient_scope"),
+                    Some(CODING_SCOPE),
+                ),
                 Json(ErrorResponse::new(
                     Some(request.id.clone()),
                     &McpError::InvalidRequest("Insufficient scope: requires 'relay.coding'".into()),
                 )),
-            ));
+            )));
         }
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
@@ -925,5 +991,26 @@ mod tests {
         };
 
         assert!(request_uses_trusted_https(&request, &config));
+    }
+
+    #[test]
+    fn bearer_challenge_points_to_path_derived_metadata() {
+        let config = ServerConfig {
+            mode: super::super::config::SecurityMode::Remote,
+            oauth_audience: Some("https://relay.example/mcp".into()),
+            ..ServerConfig::default()
+        };
+
+        let headers = bearer_challenge(&config, Some("insufficient_scope"), Some(CODING_SCOPE));
+        let challenge = headers
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .and_then(|value| value.to_str().ok())
+            .expect("challenge should be present");
+        assert!(challenge.contains("error=\"insufficient_scope\""));
+        assert!(challenge.contains("scope=\"relay.coding\""));
+        assert!(challenge.contains(
+            "resource_metadata=\"https://relay.example/.well-known/oauth-protected-resource/mcp\""
+        ));
+        assert!(!challenge.contains("offline_access"));
     }
 }
