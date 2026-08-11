@@ -85,22 +85,22 @@ Remote OAuth tokens must never rely on an attacker-controlled forwarded header t
 
 ## Tasks
 
-- [ ] Stop automatically setting `trusted_proxy=true` just because `SecurityMode::Remote` is selected.
-- [ ] Make proxy trust an explicit operator choice.
-- [ ] Keep the easiest developer path loopback-first: relay on loopback plus supported secure tunnel/private edge.
-- [ ] If reverse-proxy deployment is supported, require explicit trusted-proxy configuration.
-- [ ] Never trust `X-Forwarded-Proto`, `Forwarded`, `X-Forwarded-Host`, or similar headers from arbitrary peers.
-- [ ] Prefer concrete trusted peer/CIDR/socket identity over a global boolean where practical.
-- [ ] If a boolean is kept for speed, document and enforce the network placement assumption that prevents direct untrusted access.
-- [ ] Direct Remote mode without a trusted HTTPS edge fails closed.
-- [ ] Do not weaken OAuth/auth to simplify proxy handling.
+- [x] Stop automatically setting `trusted_proxy=true` just because `SecurityMode::Remote` is selected.
+- [x] Make proxy trust an explicit operator choice.
+- [x] Keep the easiest developer path loopback-first: relay on loopback plus supported secure tunnel/private edge.
+- [x] If reverse-proxy deployment is supported, require explicit trusted-proxy configuration.
+- [x] Never trust `X-Forwarded-Proto`, `Forwarded`, `X-Forwarded-Host`, or similar headers from arbitrary peers.
+- [x] Prefer concrete trusted peer/CIDR/socket identity over a global boolean where practical.
+- [x] If a boolean is kept for speed, document and enforce the network placement assumption that prevents direct untrusted access.
+- [x] Direct Remote mode without a trusted HTTPS edge fails closed.
+- [x] Do not weaken OAuth/auth to simplify proxy handling.
 
 ## Black-box acceptance
 
-- [ ] direct plaintext request + spoofed `X-Forwarded-Proto: https` does not pass transport trust.
-- [ ] actual trusted edge/tunnel request succeeds.
-- [ ] untrusted forwarded host/proto values cannot alter security decisions.
-- [ ] Authorization and MCP headers survive the approved edge.
+- [x] direct plaintext request + spoofed `X-Forwarded-Proto: https` does not pass transport trust.
+- [x] actual trusted edge/tunnel request succeeds.
+- [x] untrusted forwarded host/proto values cannot alter security decisions.
+- [x] Authorization and MCP headers survive the approved edge.
 
 ---
 

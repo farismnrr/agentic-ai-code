@@ -43,6 +43,7 @@ use axum::{
     Json, Router,
 };
 use serde_json::{json, Value};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tower::limit::ConcurrencyLimitLayer;
@@ -374,7 +375,18 @@ fn oauth_error_response(
 }
 
 fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
+    let trusted_peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<SocketAddr>>()
+        .map(|peer| peer.0.ip())
+        .and_then(|ip| config.trusted_proxy_cidr.as_deref().map(|cidr| (ip, cidr)))
+        .is_some_and(|(ip, cidr)| {
+            cidr.parse::<ipnet::IpNet>()
+                .is_ok_and(|net| net.contains(&ip))
+        });
+
     config.trusted_proxy
+        && trusted_peer
         && req
             .headers()
             .get("x-forwarded-proto")
@@ -1130,7 +1142,7 @@ mod tests {
 
     #[test]
     fn explicitly_trusted_loopback_edge_can_assert_https() {
-        let request = Request::builder()
+        let mut request = Request::builder()
             .uri("/mcp")
             .header("x-forwarded-proto", "https")
             .body(axum::body::Body::empty())
@@ -1138,9 +1150,13 @@ mod tests {
         let config = ServerConfig {
             mode: super::super::config::SecurityMode::Remote,
             trusted_proxy: true,
+            trusted_proxy_cidr: Some("127.0.0.1/32".into()),
             ..ServerConfig::default()
         };
 
+        request.extensions_mut().insert(axum::extract::ConnectInfo(
+            "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
+        ));
         assert!(request_uses_trusted_https(&request, &config));
     }
 

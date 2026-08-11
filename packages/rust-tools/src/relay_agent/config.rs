@@ -33,6 +33,11 @@ pub struct Cli {
     #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY", default_value_t = false)]
     pub trusted_proxy: bool,
 
+    /// CIDR containing the local HTTPS edge/tunnel peer. Required when
+    /// --trusted-proxy is enabled; forwarded headers from other peers are ignored.
+    #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY_CIDR")]
+    pub trusted_proxy_cidr: Option<String>,
+
     /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
     #[arg(short, long)]
     pub dir: Option<String>,
@@ -98,6 +103,7 @@ pub struct ServerConfig {
     pub execution_root: Option<String>,
     pub bind_host: String,
     pub trusted_proxy: bool,
+    pub trusted_proxy_cidr: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -114,6 +120,7 @@ impl Default for ServerConfig {
             execution_root: None,
             bind_host: "127.0.0.1".into(),
             trusted_proxy: false,
+            trusted_proxy_cidr: None,
         }
     }
 }
@@ -270,6 +277,21 @@ impl ServerConfig {
                 "--trusted-proxy is only valid in remote mode".into(),
             ));
         }
+        if self.trusted_proxy {
+            let Some(cidr) = self.trusted_proxy_cidr.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "--trusted-proxy requires --trusted-proxy-cidr to identify the edge peer"
+                        .into(),
+                ));
+            };
+            cidr.parse::<ipnet::IpNet>().map_err(|_| {
+                RelayError::InvalidConfig("--trusted-proxy-cidr must be a valid IP CIDR".into())
+            })?;
+        } else if self.trusted_proxy_cidr.is_some() {
+            return Err(RelayError::InvalidConfig(
+                "--trusted-proxy-cidr requires --trusted-proxy".into(),
+            ));
+        }
         if self.trusted_proxy && self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
             return Err(RelayError::InvalidConfig(
                 "trusted proxy mode requires a loopback relay bind; forwarded headers from \
@@ -293,6 +315,7 @@ impl From<&Cli> for ServerConfig {
             port: cli.port,
             mode: cli.mode,
             trusted_proxy: cli.trusted_proxy,
+            trusted_proxy_cidr: cli.trusted_proxy_cidr.clone(),
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
             oauth_secret: cli.oauth_secret.clone(),
@@ -334,6 +357,7 @@ mod tests {
         let mut config = ServerConfig {
             mode: SecurityMode::Remote,
             trusted_proxy: true,
+            trusted_proxy_cidr: Some("127.0.0.1/32".into()),
             bind_host: "0.0.0.0".into(),
             oauth_issuer: Some("https://issuer.example".into()),
             oauth_audience: Some("https://relay.example/mcp".into()),
