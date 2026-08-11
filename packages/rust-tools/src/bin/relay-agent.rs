@@ -9,6 +9,14 @@ use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(unix)]
+    if unsafe { libc::geteuid() } == 0 {
+        return Err(
+            "refusing to start as UID 0 (root). execution policy requires an unprivileged user."
+                .into(),
+        );
+    }
+
     let cli = Cli::parse();
 
     if let Some(Command::Stop { port }) = cli.command {

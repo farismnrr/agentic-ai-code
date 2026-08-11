@@ -224,30 +224,30 @@ No public unauthenticated execution is permitted.
 
 The relay is an unprivileged automation agent. **It MUST never use or facilitate privilege escalation.** Do not rely on a sudoers configuration as the primary control; the application must reject privilege-escalation paths itself and the process must run as a non-root OS identity.
 
-- [ ] Refuse startup when the relay process is running as UID 0/root where the platform exposes a reliable UID check.
-- [ ] Document and enforce that production service/container users are unprivileged and have no sudo/doas/pkexec-style elevation capability.
-- [ ] Explicitly reject executable names/paths for `sudo`, `su`, `doas`, `pkexec`, `runas`, and equivalent privilege-escalation helpers for each supported OS.
-- [ ] Reject command forms that attempt to invoke a forbidden helper through path aliases or wrapper indirection.
-- [ ] Block shell/interpreter-based bypasses (`sh -c`, `bash -c`, `zsh -c`, PowerShell `-Command`, `cmd /c`, Python/Node/Perl/Ruby `-c`/eval-style execution) unless a specific tool has a narrowly reviewed, non-shell use case.
-- [ ] Do not expose a generic shell tool.
-- [ ] Do not permit MCP callers to choose an arbitrary executable path.
-- [ ] Replace request-derived `--allow-command` behavior with a server-controlled allowlist of approved executable identities/absolute paths and, where needed, approved argument patterns.
-- [ ] Reject path traversal, alternate executable paths, symlink-based command substitution, and interpreter aliases that bypass the allowlist.
-- [ ] Do not permit environment-variable injection that can change executable resolution or load attacker-controlled code (`PATH`, dynamic-loader variables, language runtime preload/plugin variables, etc.).
-- [ ] Set a minimal explicit environment for child processes rather than inheriting the full parent environment where practical.
-- [ ] Ensure the relay's working directory and sibling CLI binaries are not writable by untrusted users.
-- [ ] Ensure approved commands cannot be used as a privilege-escalation trampoline (for example, commands that themselves can launch arbitrary programs or modify executable policy).
-- [ ] Re-run a command-policy review using representative malicious inputs: `sudo`, absolute `/usr/bin/sudo`, `sudo` via shell, symlinked helpers, interpreter `-c`, environment injection, path traversal, and wrapper binaries.
+- [x] Refuse startup when the relay process is running as UID 0/root where the platform exposes a reliable UID check.
+- [x] Document and enforce that production service/container users are unprivileged and have no sudo/doas/pkexec-style elevation capability.
+- [x] Explicitly reject executable names/paths for `sudo`, `su`, `doas`, `pkexec`, `runas`, and equivalent privilege-escalation helpers for each supported OS.
+- [x] Reject command forms that attempt to invoke a forbidden helper through path aliases or wrapper indirection.
+- [x] Block shell/interpreter-based bypasses (`sh -c`, `bash -c`, `zsh -c`, PowerShell `-Command`, `cmd /c`, Python/Node/Perl/Ruby `-c`/eval-style execution) unless a specific tool has a narrowly reviewed, non-shell use case.
+- [x] Do not expose a generic shell tool.
+- [x] Do not permit MCP callers to choose an arbitrary executable path.
+- [x] Replace request-derived `--allow-command` behavior with a server-controlled allowlist of approved executable identities/absolute paths and, where needed, approved argument patterns.
+- [x] Reject path traversal, alternate executable paths, symlink-based command substitution, and interpreter aliases that bypass the allowlist.
+- [x] Do not permit environment-variable injection that can change executable resolution or load attacker-controlled code (`PATH`, dynamic-loader variables, language runtime preload/plugin variables, etc.).
+- [x] Set a minimal explicit environment for child processes rather than inheriting the full parent environment where practical.
+- [x] Ensure the relay's working directory and sibling CLI binaries are not writable by untrusted users.
+- [x] Ensure approved commands cannot be used as a privilege-escalation trampoline (for example, commands that themselves can launch arbitrary programs or modify executable policy).
+- [x] Re-run a command-policy review using representative malicious inputs: `sudo`, absolute `/usr/bin/sudo`, `sudo` via shell, symlinked helpers, interpreter `-c`, environment injection, path traversal, and wrapper binaries.
 
 **Privilege-policy invariant:** an MCP request can only select an operation already approved by server-side policy. The request itself MUST NOT be able to grant permission to the executable it is asking to run.
 
 ### 15.2 OS permission boundary
 
-- [ ] Provide deployment guidance for a dedicated unprivileged OS account/container user.
-- [ ] Explicitly state that filesystem permissions are a defense-in-depth control, not a substitute for the application allowlist.
-- [ ] Ensure the runtime user cannot write to the relay executable directory, approved CLI binaries, configuration/policy files, or release artifacts.
-- [ ] Where supported, use OS-level sandboxing/container isolation as optional defense in depth, but do not make it a prerequisite for the application security model.
-- [ ] Verify no code path intentionally invokes `sudo` or asks for elevated privileges.
+- [x] Provide deployment guidance for a dedicated unprivileged OS account/container user.
+- [x] Explicitly state that filesystem permissions are a defense-in-depth control, not a substitute for the application allowlist.
+- [x] Ensure the runtime user cannot write to the relay executable directory, approved CLI binaries, configuration/policy files, or release artifacts.
+- [x] Where supported, use OS-level sandboxing/container isolation as optional defense in depth, but do not make it a prerequisite for the application security model.
+- [x] Verify no code path intentionally invokes `sudo` or asks for elevated privileges.
 
 ### 15.3 OAuth resource-server model
 
