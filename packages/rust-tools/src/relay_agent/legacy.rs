@@ -12,19 +12,27 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+use tokio::time::Duration;
+
 use uuid::Uuid;
+
+const MAX_WS_MESSAGE_LEN: usize = 65536; // 64 KB
+const MAX_LEGACY_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MB limit
+const SESSION_TTL: Duration = Duration::from_secs(12 * 60 * 60); // 12 hours
 
 pub struct LegacyState {
     pub pairing_token: String,
     pub pairing_token_expires_at: Instant,
-    pub session_credentials: HashSet<String>,
+    pub session_credentials: HashMap<String, Instant>,
     pub default_cwd: PathBuf,
+    pub active_executions: HashMap<String, usize>,
 }
 
 impl LegacyState {
@@ -44,20 +52,24 @@ impl LegacyState {
             config.origin.as_deref().unwrap_or("*")
         );
         println!(
-            "[relay-agent] Pairing token: {} (expires in 5 minutes)",
-            pairing_token
-        );
-        println!(
             "[relay-agent] Default directory: {} (not a restriction — commands may target any path this OS user can access)",
             default_cwd.display()
         );
+        // Removed credential logging as per Phase 11 requirements.
 
         Self {
             pairing_token,
             pairing_token_expires_at: Instant::now() + Duration::from_secs(5 * 60),
-            session_credentials: HashSet::new(),
+            session_credentials: HashMap::new(),
             default_cwd,
+            active_executions: HashMap::new(),
         }
+    }
+
+    fn cleanup_expired(&mut self) {
+        let now = Instant::now();
+        self.session_credentials
+            .retain(|_, expires_at| *expires_at > now);
     }
 }
 
@@ -121,7 +133,9 @@ async fn pair(
 
     let session_cred = Uuid::new_v4().to_string().replace("-", "");
 
-    l.session_credentials.insert(session_cred.clone());
+    l.cleanup_expired();
+    l.session_credentials
+        .insert(session_cred.clone(), Instant::now() + SESSION_TTL);
     l.pairing_token = String::new(); // single use
 
     (
@@ -151,7 +165,7 @@ async fn revoke(
         }
     };
 
-    if l.session_credentials.remove(&credential) {
+    if l.session_credentials.remove(&credential).is_some() {
         (
             StatusCode::OK,
             Json(json!({ "success": true, "message": "Session credential revoked" })),
@@ -177,15 +191,16 @@ async fn websocket_handler(
     let credential = query.credential.unwrap_or_default();
 
     let valid = {
-        let l = state.legacy.lock().unwrap();
-        l.session_credentials.contains(&credential)
+        let mut l = state.legacy.lock().unwrap();
+        l.cleanup_expired();
+        l.session_credentials.contains_key(&credential)
     };
 
     if !valid {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
-    ws.on_upgrade(move |socket| handle_ws(socket, state))
+    ws.on_upgrade(move |socket| handle_ws(socket, state, credential))
 }
 
 #[derive(Deserialize)]
@@ -200,14 +215,46 @@ struct ExecPayload {
     cwd: Option<String>,
 }
 
-async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
+async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>, credential: String) {
     while let Some(Ok(msg)) = socket.recv().await {
         if let Message::Text(text) = msg {
+            if text.len() > MAX_WS_MESSAGE_LEN {
+                let _ = socket
+                    .send(Message::Text(
+                        serde_json::to_string(&json!({
+                            "type": "error",
+                            "error": "Message size exceeded limit"
+                        }))
+                        .unwrap(),
+                    ))
+                    .await;
+                continue;
+            }
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                 let ty = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 if ty == "exec" {
                     if let Ok(payload) = serde_json::from_value::<ExecPayload>(json) {
                         let id = payload.id.clone();
+
+                        // Limit size of strings
+                        if payload.command.as_ref().map(|s| s.len()).unwrap_or(0) > 4096
+                            || payload.cwd.as_ref().map(|s| s.len()).unwrap_or(0) > 4096
+                            || payload.args.iter().map(|s| s.len()).sum::<usize>() > 65536
+                        {
+                            let _ = socket
+                                .send(Message::Text(
+                                    serde_json::to_string(&json!({
+                                        "type": "exec_result",
+                                        "id": id,
+                                        "success": false,
+                                        "error": "Command or arguments exceeded length limits"
+                                    }))
+                                    .unwrap(),
+                                ))
+                                .await;
+                            continue;
+                        }
+
                         if payload.command.is_none()
                             || payload.command.as_ref().unwrap().trim().is_empty()
                         {
@@ -225,12 +272,64 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                             continue;
                         }
 
+                        // Check limits
+                        let check_limit_res = {
+                            let mut l = state.legacy.lock().unwrap();
+                            let count = l.active_executions.entry(credential.clone()).or_insert(0);
+                            if *count >= 4 {
+                                Err("Per-session execution concurrency limit exceeded")
+                            } else {
+                                *count += 1;
+                                Ok(())
+                            }
+                        };
+
+                        if let Err(e) = check_limit_res {
+                            let _ = socket
+                                .send(Message::Text(
+                                    serde_json::to_string(&json!({
+                                        "type": "exec_result",
+                                        "id": id,
+                                        "success": false,
+                                        "error": e
+                                    }))
+                                    .unwrap(),
+                                ))
+                                .await;
+                            continue;
+                        }
+
+                        let _permit_global =
+                            state.execution_semaphore.clone().acquire_owned().await;
+
                         let command = payload.command.unwrap();
                         let parts: Vec<&str> = command.split_whitespace().collect();
                         let binary = parts.first().copied().unwrap_or(command.as_str());
                         let mut final_args =
                             parts[1..].iter().map(|s| s.to_string()).collect::<Vec<_>>();
                         final_args.extend(payload.args);
+
+                        // Reject --no-guard for legacy path as well
+                        if final_args.iter().any(|arg| arg == "--no-guard") {
+                            {
+                                let mut l = state.legacy.lock().unwrap();
+                                if let Some(c) = l.active_executions.get_mut(&credential) {
+                                    *c = c.saturating_sub(1);
+                                }
+                            }
+                            let _ = socket
+                                .send(Message::Text(
+                                    serde_json::to_string(&json!({
+                                        "type": "exec_result",
+                                        "id": id,
+                                        "success": false,
+                                        "error": "--no-guard is strictly forbidden"
+                                    }))
+                                    .unwrap(),
+                                ))
+                                .await;
+                            continue;
+                        }
 
                         let target_cwd = if let Some(c) = payload.cwd {
                             let default_cwd = {
@@ -262,8 +361,6 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                             cmd.process_group(0);
                         }
 
-                        // We can't easily do set extendEnv: false completely but we can clear_env
-                        // and explicitly set PATH, HOME, LANG.
                         cmd.env_clear();
                         if let Ok(v) = std::env::var("PATH") {
                             cmd.env("PATH", v);
@@ -277,24 +374,82 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
 
                         let child_opt = cmd.spawn().ok();
 
-                        if let Some(child) = child_opt {
+                        if let Some(mut child) = child_opt {
                             let pid = child.id();
+
+                            let mut stdout_pipe = child.stdout.take().unwrap();
+                            let mut stderr_pipe = child.stderr.take().unwrap();
+
+                            let read_stdout = async {
+                                let mut stdout_buf = Vec::new();
+                                let mut handle =
+                                    (&mut stdout_pipe).take(MAX_LEGACY_OUTPUT_BYTES as u64 + 1);
+                                handle
+                                    .read_to_end(&mut stdout_buf)
+                                    .await
+                                    .map(|_| stdout_buf)
+                            };
+                            let read_stderr = async {
+                                let mut stderr_buf = Vec::new();
+                                let mut handle =
+                                    (&mut stderr_pipe).take(MAX_LEGACY_OUTPUT_BYTES as u64 + 1);
+                                handle
+                                    .read_to_end(&mut stderr_buf)
+                                    .await
+                                    .map(|_| stderr_buf)
+                            };
+
+                            let read_and_wait = async {
+                                let (out_res, err_res) = tokio::join!(read_stdout, read_stderr);
+                                let stdout_buf = out_res?;
+                                let stderr_buf = err_res?;
+
+                                if stdout_buf.len() > MAX_LEGACY_OUTPUT_BYTES
+                                    || stderr_buf.len() > MAX_LEGACY_OUTPUT_BYTES
+                                {
+                                    if let Some(p) = pid {
+                                        #[cfg(unix)]
+                                        {
+                                            unsafe {
+                                                libc::kill(-(p as i32), libc::SIGKILL);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let status = child.wait().await?;
+                                Ok::<_, std::io::Error>((status, stdout_buf, stderr_buf))
+                            };
+
                             match tokio::time::timeout(
                                 Duration::from_millis(timeout_ms),
-                                child.wait_with_output(),
+                                read_and_wait,
                             )
                             .await
                             {
-                                Ok(Ok(output)) => {
-                                    let exit_code = output.status.code();
-                                    let success = output.status.success();
+                                Ok(Ok((status, stdout_bytes, stderr_bytes))) => {
+                                    let exit_code = status.code();
+                                    let success = status.success();
+                                    let mut stdout_str =
+                                        String::from_utf8_lossy(&stdout_bytes).into_owned();
+                                    let mut stderr_str =
+                                        String::from_utf8_lossy(&stderr_bytes).into_owned();
+                                    if stdout_str.len() > MAX_LEGACY_OUTPUT_BYTES {
+                                        stdout_str.truncate(MAX_LEGACY_OUTPUT_BYTES);
+                                        stdout_str.push_str("\n...[truncated due to size limit]");
+                                    }
+                                    if stderr_str.len() > MAX_LEGACY_OUTPUT_BYTES {
+                                        stderr_str.truncate(MAX_LEGACY_OUTPUT_BYTES);
+                                        stderr_str.push_str("\n...[truncated due to size limit]");
+                                    }
+
                                     let mut res = json!({
-                                            "type": "exec_result",
+                                        "type": "exec_result",
                                         "id": id,
                                         "success": success,
                                         "exitCode": exit_code,
-                                        "stdout": String::from_utf8_lossy(&output.stdout),
-                                        "stderr": String::from_utf8_lossy(&output.stderr),
+                                        "stdout": stdout_str,
+                                        "stderr": stderr_str,
                                     });
                                     if !success {
                                         if let Some(code) = exit_code {
@@ -311,14 +466,14 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                                         .send(Message::Text(serde_json::to_string(&res).unwrap()))
                                         .await;
                                 }
-                                Ok(Err(e)) => {
+                                Ok(Err(_e)) => {
                                     let _ = socket
                                         .send(Message::Text(
                                             serde_json::to_string(&json!({
                                                 "type": "exec_result",
                                                 "id": id,
                                                 "success": false,
-                                                "error": e.to_string()
+                                                "error": "Failed to read command output"
                                             }))
                                             .unwrap(),
                                         ))
@@ -353,6 +508,13 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                                     .unwrap(),
                                 ))
                                 .await;
+                        }
+
+                        {
+                            let mut l = state.legacy.lock().unwrap();
+                            if let Some(c) = l.active_executions.get_mut(&credential) {
+                                *c = c.saturating_sub(1);
+                            }
                         }
                     }
                 } else {

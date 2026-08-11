@@ -120,25 +120,25 @@ Execution policy
 
 No public unauthenticated execution is permitted.
 
-## Phase 11 — Production security + resource-limit remediation — [ ] IN FLIGHT
+## Phase 11 — Production security + resource-limit remediation — [x] DONE
 
 **Goal:** close concrete vulnerabilities found by source-level security review after execution and legacy compatibility were wired. No unit-test gate is required for this phase; every item is validated by direct code-path review, `cargo fmt`, `cargo clippy -D warnings`, `cargo audit`, and manual/runtime smoke verification where available.
 
-- [ ] Remove relay-injected `--no-guard` from terminal/curl execution and prove no untrusted input can disable Plan 027 guards.
-- [ ] Make session credentials expiry-bound, revocable, and race-safe.
-- [ ] Remove pairing/session credential logging and redact credential query parameters from logs/errors.
-- [ ] Remove wildcard/missing-Origin fallbacks and fail closed.
-- [ ] Bound legacy WebSocket message, command, argument, and cwd sizes.
-- [ ] Bound legacy stdout/stderr capture and kill/reap on output overflow.
-- [ ] Add global and per-session execution concurrency limits.
-- [ ] Make timeout/process-tree kill/reap explicit and deterministic.
-- [ ] Preserve Plan 027 SSRF/URL policy; no relay-level curl guard bypass or redirect/DNS policy bypass.
-- [ ] Sanitize externally visible process/system errors.
-- [ ] Document `--dir` as working-directory configuration, not a filesystem sandbox.
-- [ ] Perform final static/manual security audit for guard bypass, wildcard Origin, secret leakage, unbounded input/output, concurrency, timeout/reap, and SSRF paths.
-- [ ] Run `cargo fmt --check`.
-- [ ] Run `cargo clippy --all-targets --all-features -- -D warnings`.
-- [ ] Run `cargo audit`.
+- [x] Remove relay-injected `--no-guard` from terminal/curl execution and prove no untrusted input can disable Plan 027 guards.
+- [x] Make session credentials expiry-bound, revocable, and race-safe.
+- [x] Remove pairing/session credential logging and redact credential query parameters from logs/errors.
+- [x] Remove wildcard/missing-Origin fallbacks and fail closed.
+- [x] Bound legacy WebSocket message, command, argument, and cwd sizes.
+- [x] Bound legacy stdout/stderr capture and kill/reap on output overflow.
+- [x] Add global and per-session execution concurrency limits.
+- [x] Make timeout/process-tree kill/reap explicit and deterministic.
+- [x] Preserve Plan 027 SSRF/URL policy; no relay-level curl guard bypass or redirect/DNS policy bypass.
+- [x] Sanitize externally visible process/system errors.
+- [x] Document `--dir` as working-directory configuration, not a filesystem sandbox.
+- [x] Perform final static/manual security audit for guard bypass, wildcard Origin, secret leakage, unbounded input/output, concurrency, timeout/reap, and SSRF paths.
+- [x] Run `cargo fmt --check`.
+- [x] Run `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] Run `cargo audit`.
 
 **Phase 11 acceptance:** all execution/security/resource-limit paths are bounded and fail closed; no untrusted request can disable Plan 027 guards or bypass SSRF policy.
 
