@@ -10,47 +10,80 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset_name: relay-agent-linux-x64
+            bin_name: relay-agent
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            asset_name: relay-agent-macos-x64
+            bin_name: relay-agent
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            asset_name: relay-agent-macos-arm64
+            bin_name: relay-agent
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            asset_name: relay-agent-win-x64.exe
+            bin_name: relay-agent.exe
 
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          node-version: 22
-          cache: pnpm
+          toolchain: 1.95.0
+          targets: ${{ matrix.target }}
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Build release artifact
+        run: cargo build --release --bin relay-agent --target ${{ matrix.target }}
 
-      - name: Build and compile standalone binaries
-        run: pnpm --filter @ai-code/relay-agent run compile
-
-      - name: Rename binaries to release asset names
-        # pkg's real output names (verified by actually running `compile`
-        # locally) are `bundle-<platform>-<arch>`, not the `bundle-linux` /
-        # `bundle-win.exe` this step originally assumed — those never
-        # existed, so this step would have failed outright the first time
-        # this workflow ran.
+      - name: Package and checksum (Unix)
+        if: matrix.os != 'windows-latest'
         run: |
           mkdir -p release-assets
-          cp packages/relay-agent/dist/bin/bundle-linux-x64 release-assets/relay-agent-linux-x64
-          cp packages/relay-agent/dist/bin/bundle-macos-x64 release-assets/relay-agent-macos-x64
-          cp packages/relay-agent/dist/bin/bundle-macos-arm64 release-assets/relay-agent-macos-arm64
-          cp packages/relay-agent/dist/bin/bundle-win-x64.exe release-assets/relay-agent-win-x64.exe
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} release-assets/${{ matrix.asset_name }}
+          cd release-assets
+          if command -v sha256sum >/dev/null; then
+            sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+          fi
+
+      - name: Package and checksum (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} release-assets/${{ matrix.asset_name }}
+          cd release-assets
+          sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+
+      - name: Smoke test (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd release-assets
+          chmod +x ${{ matrix.asset_name }}
+          ./${{ matrix.asset_name }} --help
+
+      - name: Smoke test (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          cd release-assets
+          ./${{ matrix.asset_name }} --help
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/relay-agent-linux-x64
-            release-assets/relay-agent-macos-x64
-            release-assets/relay-agent-macos-arm64
-            release-assets/relay-agent-win-x64.exe
+            release-assets/${{ matrix.asset_name }}
+            release-assets/${{ matrix.asset_name }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
