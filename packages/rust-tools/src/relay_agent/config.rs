@@ -31,6 +31,18 @@ pub struct Cli {
     /// Allowed Nuxt/browser origin for MCP requests.
     #[arg(short, long, env = "RELAY_AGENT_ORIGIN")]
     pub origin: Option<String>,
+
+    /// OAuth symmetric secret for validating JWTs
+    #[arg(long, env = "OAUTH_SECRET")]
+    pub oauth_secret: Option<String>,
+
+    /// OAuth issuer expected in JWT 'iss' claim
+    #[arg(long, env = "OAUTH_ISSUER")]
+    pub oauth_issuer: Option<String>,
+
+    /// OAuth audience expected in JWT 'aud' claim
+    #[arg(long, env = "OAUTH_AUDIENCE")]
+    pub oauth_audience: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -52,6 +64,9 @@ pub struct ServerConfig {
     pub port: u16,
     pub dir: Option<String>,
     pub origin: Option<String>,
+    pub oauth_secret: Option<String>,
+    pub oauth_issuer: Option<String>,
+    pub oauth_audience: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -60,6 +75,9 @@ impl Default for ServerConfig {
             port: DEFAULT_PORT,
             dir: None,
             origin: None,
+            oauth_secret: None,
+            oauth_issuer: None,
+            oauth_audience: None,
         }
     }
 }
@@ -98,6 +116,13 @@ impl ServerConfig {
                 ));
             }
         }
+        if self.oauth_secret.is_some()
+            && (self.oauth_issuer.is_none() || self.oauth_audience.is_none())
+        {
+            return Err(RelayError::InvalidConfig(
+                "oauth_issuer and oauth_audience are required when oauth_secret is set".to_string(),
+            ));
+        }
         Ok(())
     }
 }
@@ -114,6 +139,9 @@ impl From<&Cli> for ServerConfig {
             port: cli.port,
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
+            oauth_secret: cli.oauth_secret.clone(),
+            oauth_issuer: cli.oauth_issuer.clone(),
+            oauth_audience: cli.oauth_audience.clone(),
         }
     }
 }
