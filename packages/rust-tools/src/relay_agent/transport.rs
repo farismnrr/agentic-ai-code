@@ -158,22 +158,31 @@ async fn access_policy(
 
     if let super::config::SecurityMode::Remote = state.config.mode {
         // Enforce HTTPS
-        let is_https = req.headers().get("x-forwarded-proto").map(|v| v.as_bytes()) == Some(b"https")
+        let is_https = req.headers().get("x-forwarded-proto").map(|v| v.as_bytes())
+            == Some(b"https")
             || req.uri().scheme_str() == Some("https");
-        
+
         if !is_https {
             return (
                 StatusCode::FORBIDDEN,
-                Json(ErrorResponse::new(None, &McpError::InvalidRequest("Remote mode requires HTTPS".into())))
-            ).into_response();
+                Json(ErrorResponse::new(
+                    None,
+                    &McpError::InvalidRequest("Remote mode requires HTTPS".into()),
+                )),
+            )
+                .into_response();
         }
-        
+
         // OAuth must be validated in Remote mode. If secret is missing, it's a misconfiguration.
         if state.config.oauth_secret.is_none() {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse::new(None, &McpError::Internal("OAuth is not configured for Remote mode".into())))
-            ).into_response();
+                Json(ErrorResponse::new(
+                    None,
+                    &McpError::Internal("OAuth is not configured for Remote mode".into()),
+                )),
+            )
+                .into_response();
         }
     }
 

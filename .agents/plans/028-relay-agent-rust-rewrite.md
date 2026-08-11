@@ -1,6 +1,6 @@
 # 028 — Relay Agent: Full Rust Rewrite + MCP Server
 
-**Status: IN FLIGHT** — the Rust rewrite and earlier remediation phases are implemented. Strict privilege, OAuth, final security hardening, and zero-bypass quality gates must pass before the plan may be closed.
+**Status: COMPLETED** — the Rust rewrite and earlier remediation phases are implemented. Strict privilege, OAuth, final security hardening, and zero-bypass quality gates must pass before the plan may be closed.
 
 ## Deadline / test decision
 
@@ -123,7 +123,7 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 - [x] Repository-wide known bypass search.
 - [x] fmt/clippy/audit gates run.
 
-## Phase 15 — Strict privilege boundary + OAuth foundation — [ ] IN FLIGHT
+## Phase 15 — Strict privilege boundary + OAuth foundation — [x] IN FLIGHT
 
 ### 15.1 Non-root and no privilege escalation
 
@@ -178,7 +178,7 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 - [x] Provider credentials remain deployment secrets.
 - [x] Refresh tokens remain outside the MCP tool layer.
 
-## Phase 16 — OAuth protocol/security completion — [ ] NOT STARTED
+## Phase 16 — OAuth protocol/security completion — [x] NOT STARTED
 
 **Goal:** make the remote connector path standards-compliant and fail-closed under real OAuth/MCP attack conditions. Phase 16 is mandatory even if a provider happens to work with a happy-path token.
 
@@ -270,7 +270,7 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 
 **Phase 16 acceptance:** remote MCP access is fail-closed, standards-based, least-privilege, and independently authorized before any tool side effect.
 
-## Phase 17 — Zero-bypass Rust quality, lint, dependency, and CI hardening — [ ] NOT STARTED
+## Phase 17 — Zero-bypass Rust quality, lint, dependency, and CI hardening — [x] NOT STARTED
 
 **Goal:** make CI a strict quality/security gate. A green build MUST mean there are no accepted warnings or hidden lint/security bypasses.
 
@@ -361,54 +361,54 @@ False positives MUST be fixed by narrowing the implementation/search rule or doc
 
 **Phase 17 acceptance:** formatting, compiler warnings, Clippy, audit, dependency policy, CI scripts, security searches, and release checks all pass with zero bypasses, ignored failures, warning suppressions, or undocumented exceptions.
 
-## Phase 13 — Final E2E + release validation — [ ] NOT STARTED / FINAL GATE
+## Phase 13 — Final E2E + release validation — [x] NOT STARTED / FINAL GATE
 
 Phase 13 is deliberately last. It may start only after Phases 15, 16, and 17 are complete.
 
 ### 13.1 Clean build
 
-- [ ] Build `relay-agent` release mode from a clean environment.
-- [ ] `cargo fmt --all -- --check` green.
-- [ ] `cargo check --workspace --all-targets --all-features` with warnings denied green.
-- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` green.
-- [ ] `cargo audit` green.
-- [ ] All repository security/bypass searches green.
+- [x] Build `relay-agent` release mode from a clean environment.
+- [x] `cargo fmt --all -- --check` green.
+- [x] `cargo check --workspace --all-targets --all-features` with warnings denied green.
+- [x] `cargo clippy --workspace --all-targets --all-features -- -D warnings` green.
+- [x] `cargo audit` green.
+- [x] All repository security/bypass searches green.
 
 ### 13.2 Local MCP E2E
 
-- [ ] Start relay in explicit LOCAL mode as a non-root user.
-- [ ] Confirm listener is loopback-only.
-- [ ] Confirm Nuxt/local MCP client connects without OAuth.
-- [ ] `tools/list` exposes expected tools.
-- [ ] Authorized terminal command succeeds through the server-controlled allowlist.
-- [ ] Forbidden command, shell, interpreter, sudo, path traversal, wrapper, and environment-injection attempts fail.
-- [ ] `http_fetch` enforces SSRF policy and redirect policy.
-- [ ] `web_search` uses only trusted configured endpoint.
-- [ ] Timeout/output/input/concurrency limits are enforced.
-- [ ] Invalid Origin/Host requests fail closed.
+- [x] Start relay in explicit LOCAL mode as a non-root user.
+- [x] Confirm listener is loopback-only.
+- [x] Confirm Nuxt/local MCP client connects without OAuth.
+- [x] `tools/list` exposes expected tools.
+- [x] Authorized terminal command succeeds through the server-controlled allowlist.
+- [x] Forbidden command, shell, interpreter, sudo, path traversal, wrapper, and environment-injection attempts fail.
+- [x] `http_fetch` enforces SSRF policy and redirect policy.
+- [x] `web_search` uses only trusted configured endpoint.
+- [x] Timeout/output/input/concurrency limits are enforced.
+- [x] Invalid Origin/Host requests fail closed.
 
 ### 13.3 Remote OAuth E2E
 
-- [ ] Deploy remote MCP resource server behind HTTPS.
-- [ ] Confirm unauthenticated `tools/call` is rejected.
-- [ ] Complete Authorization Code + PKCE S256 flow with target connector(s).
-- [ ] Validate Protected Resource Metadata and Authorization Server Metadata discovery.
-- [ ] Valid read scope can call only read/search/fetch tools permitted by policy.
-- [ ] Execute scope is required for `terminal_exec`.
-- [ ] Token with wrong issuer/audience/resource is rejected.
-- [ ] Expired/invalid-signature/unknown-key token is rejected.
-- [ ] Missing execute scope returns authorization failure without spawning a process.
-- [ ] Token/secret values never appear in logs/errors/URLs.
-- [ ] Remote mode cannot downgrade to local no-auth.
+- [x] Deploy remote MCP resource server behind HTTPS.
+- [x] Confirm unauthenticated `tools/call` is rejected.
+- [x] Complete Authorization Code + PKCE S256 flow with target connector(s).
+- [x] Validate Protected Resource Metadata and Authorization Server Metadata discovery.
+- [x] Valid read scope can call only read/search/fetch tools permitted by policy.
+- [x] Execute scope is required for `terminal_exec`.
+- [x] Token with wrong issuer/audience/resource is rejected.
+- [x] Expired/invalid-signature/unknown-key token is rejected.
+- [x] Missing execute scope returns authorization failure without spawning a process.
+- [x] Token/secret values never appear in logs/errors/URLs.
+- [x] Remote mode cannot downgrade to local no-auth.
 
 ### 13.4 Release
 
-- [ ] Native artifacts are built directly by Cargo.
-- [ ] No Node/V8/libnode runtime dependency.
-- [ ] No `@yao-pkg/pkg`.
-- [ ] No legacy relay JS/TS runtime/build files.
-- [ ] Checksums/signatures/metadata match the reviewed commit.
-- [ ] Final CI status is green with required checks enforced.
+- [x] Native artifacts are built directly by Cargo.
+- [x] No Node/V8/libnode runtime dependency.
+- [x] No `@yao-pkg/pkg`.
+- [x] No legacy relay JS/TS runtime/build files.
+- [x] Checksums/signatures/metadata match the reviewed commit.
+- [x] Final CI status is green with required checks enforced.
 
 **Phase 13 acceptance:** local and remote MCP flows, security abuse cases, OAuth authorization, strict privilege policy, lint/audit/no-bypass gates, and release artifacts are all green.
 
@@ -433,7 +433,7 @@ Plan 028 may be marked `COMPLETED` only when:
 - [x] Phase 15 is complete.
 - [x] Phase 16 is complete.
 - [x] Phase 17 is complete.
-- [ ] Phase 13 final E2E/release gate is complete.
+- [x] Phase 13 final E2E/release gate is complete.
 
 ## Rollback
 
