@@ -70,7 +70,7 @@ wait
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        
+
         assert!(
             dead,
             "Found stray descendant process with PID {} that didn't die after 1 second",
