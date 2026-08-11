@@ -171,12 +171,12 @@ No public unauthenticated execution is permitted.
 
 ### 14.3 Timeout and execution resource bounds
 
-- [ ] Add a server-side maximum for `timeout_ms`; schema validation alone is not sufficient.
-- [ ] Prevent integer overflow when applying timeout grace periods.
-- [ ] Add an explicit maximum argument count for `terminal_exec`.
-- [ ] Add aggregate argument-byte limits in addition to per-item limits.
-- [ ] Add maximum header count and aggregate header-byte limits for `http_fetch`.
-- [ ] Confirm process/output/concurrency limits are enforced independently of client-supplied schemas.
+- [x] Add a server-side maximum for `timeout_ms`; schema validation alone is not sufficient.
+- [x] Prevent integer overflow when applying timeout grace periods.
+- [x] Add an explicit maximum argument count for `terminal_exec`.
+- [x] Add aggregate argument-byte limits in addition to per-item limits.
+- [x] Add maximum header count and aggregate header-byte limits for `http_fetch`.
+- [x] Confirm process/output/concurrency limits are enforced independently of client-supplied schemas.
 
 ### 14.4 Tool-specific network policy
 
