@@ -128,20 +128,20 @@ fn spawn_mock_server() -> u16 {
         for stream in listener.incoming() {
             let mut stream = stream.unwrap();
             let mut buffer = [0; 1024];
-            stream.read(&mut buffer).unwrap();
+            let _ = stream.read(&mut buffer);
 
             let request = String::from_utf8_lossy(&buffer);
 
             if request.contains("GET /search?q=test&format=json") {
                 let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"results\": [{\"title\": \"Mock Result\", \"url\": \"http://mock.local\"}]}";
-                stream.write(response.as_bytes()).unwrap();
+                stream.write_all(response.as_bytes()).unwrap();
             } else if request.contains("GET /timeout") {
                 thread::sleep(std::time::Duration::from_millis(2000));
                 let response = "HTTP/1.1 200 OK\r\n\r\nTimeout";
-                stream.write(response.as_bytes()).unwrap();
+                stream.write_all(response.as_bytes()).unwrap();
             } else {
                 let response = "HTTP/1.1 200 OK\r\n\r\nOK";
-                stream.write(response.as_bytes()).unwrap();
+                stream.write_all(response.as_bytes()).unwrap();
             }
             stream.flush().unwrap();
         }

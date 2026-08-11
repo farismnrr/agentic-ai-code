@@ -28,63 +28,61 @@ fn spawn_mock_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     thread::spawn(move || {
-        for stream in listener.incoming() {
-            if let Ok(mut stream) = stream {
-                let mut buffer = [0; 1024];
-                if stream.read(&mut buffer).is_ok() {
-                    let request = String::from_utf8_lossy(&buffer);
-                    if request.contains("GET /search?q=rust&format=json") {
-                        let body = r#"{"results":[{"title":"Rust (programming language)","url":"https://www.rust-lang.org/","content":"A language empowering everyone to build reliable and efficient software.","snippet":"snippet"}]}"#;
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /search?q=empty&format=json") {
-                        let body = r#"{"results":[]}"#;
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /search?q=malformed&format=json") {
-                        let body = r#"{"results":[{"title":"Unclosed JSON"#;
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /search?q=unexpected&format=json") {
-                        let body = r#"{"random_field": true}"#;
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("GET /search?q=error500&format=json") {
-                        let response = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("q=timeout") {
-                        // Sleep longer than the 5s timeout in the client
-                        thread::sleep(Duration::from_secs(6));
-                        let response = "HTTP/1.1 200 OK\r\n\r\nOK";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("q=hello") {
-                        let body = r#"{"results":[{"title":"Hello World","url":"http://hello.world/","content":"Greeting"}]}"#;
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        let _ = stream.write(response.as_bytes());
-                    } else {
-                        let response = "HTTP/1.1 404 Not Found\r\n\r\nNot Found";
-                        let _ = stream.write(response.as_bytes());
-                    }
+        for mut stream in listener.incoming().flatten() {
+            let mut buffer = [0; 1024];
+            if stream.read(&mut buffer).is_ok() {
+                let request = String::from_utf8_lossy(&buffer);
+                if request.contains("GET /search?q=rust&format=json") {
+                    let body = r#"{"results":[{"title":"Rust (programming language)","url":"https://www.rust-lang.org/","content":"A language empowering everyone to build reliable and efficient software.","snippet":"snippet"}]}"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("GET /search?q=empty&format=json") {
+                    let body = r#"{"results":[]}"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("GET /search?q=malformed&format=json") {
+                    let body = r#"{"results":[{"title":"Unclosed JSON"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("GET /search?q=unexpected&format=json") {
+                    let body = r#"{"random_field": true}"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("GET /search?q=error500&format=json") {
+                    let response = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("q=timeout") {
+                    // Sleep longer than the 5s timeout in the client
+                    thread::sleep(Duration::from_secs(6));
+                    let response = "HTTP/1.1 200 OK\r\n\r\nOK";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("q=hello") {
+                    let body = r#"{"results":[{"title":"Hello World","url":"http://hello.world/","content":"Greeting"}]}"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write(response.as_bytes());
+                } else {
+                    let response = "HTTP/1.1 404 Not Found\r\n\r\nNot Found";
+                    let _ = stream.write(response.as_bytes());
                 }
             }
         }

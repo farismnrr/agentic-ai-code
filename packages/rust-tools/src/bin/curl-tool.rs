@@ -30,10 +30,6 @@ struct Args {
     /// Bypass SSRF guard protection
     #[arg(long = "no-guard")]
     no_guard: bool,
-
-    /// Hidden flag for testing redirect policies with a local mock server
-    #[arg(long = "test-allow-local-initial", hide = true)]
-    test_allow_local_initial: bool,
 }
 
 async fn run_curl(
@@ -43,8 +39,12 @@ async fn run_curl(
     body_data: Option<&str>,
     timeout_ms: u64,
     no_guard: bool,
-    test_allow_local_initial: bool,
 ) -> String {
+    #[cfg(debug_assertions)]
+    let test_allow_local_initial = std::env::var("CURL_TOOL_TEST_ALLOW_LOCAL").is_ok();
+    #[cfg(not(debug_assertions))]
+    let test_allow_local_initial = false;
+
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
         Err(e) => return format!("Error: URL Error: {e}"),
@@ -74,7 +74,6 @@ async fn run_curl(
             }
         }
     }
-
 
     if !no_guard {
         if let Some(host) = parsed_url.host_str() {
@@ -229,7 +228,6 @@ async fn main() {
         args.data.as_deref(),
         args.timeout_ms,
         args.no_guard,
-        args.test_allow_local_initial,
     )
     .await;
 

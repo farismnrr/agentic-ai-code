@@ -27,43 +27,43 @@ fn spawn_mock_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     thread::spawn(move || {
-        for stream in listener.incoming() {
-            if let Ok(mut stream) = stream {
-                let mut buffer = [0; 1024];
-                if stream.read(&mut buffer).is_ok() {
-                    let request = String::from_utf8_lossy(&buffer);
-                    if request.contains("redirect-to-private") {
-                        let response =
-                            "HTTP/1.1 302 Found\r\nLocation: http://192.168.1.1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("redirect-to-loopback") {
-                        let response = "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("redirect-to-link-local") {
-                        let response =
-                            "HTTP/1.1 302 Found\r\nLocation: http://169.254.169.254/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("redirect-to-localhost") {
-                        let response =
-                            "HTTP/1.1 302 Found\r\nLocation: http://localhost/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write(response.as_bytes());
-                    } else if request.contains("redirect-to-mockserver") {
-                        let response =
-                            format!("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-                        let _ = stream.write(response.as_bytes());
-                        let _ = stream.flush();
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                    } else if request.contains("GET /timeout") {
-                        thread::sleep(std::time::Duration::from_millis(1500));
-                        let response = "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nTimeout";
-                        let _ = stream.write(response.as_bytes());
-                        let _ = stream.flush();
-                    } else {
-                        let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
-                        let _ = stream.write(response.as_bytes());
-                        let _ = stream.flush();
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                    }
+        for mut stream in listener.incoming().flatten() {
+            let mut buffer = [0; 1024];
+            if stream.read(&mut buffer).is_ok() {
+                let request = String::from_utf8_lossy(&buffer);
+                if request.contains("redirect-to-private") {
+                    let response =
+                        "HTTP/1.1 302 Found\r\nLocation: http://192.168.1.1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("redirect-to-loopback") {
+                    let response = "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("redirect-to-link-local") {
+                    let response =
+                        "HTTP/1.1 302 Found\r\nLocation: http://169.254.169.254/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("redirect-to-localhost") {
+                    let response =
+                        "HTTP/1.1 302 Found\r\nLocation: http://localhost/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write(response.as_bytes());
+                } else if request.contains("redirect-to-mockserver") {
+                    let response =
+                        format!("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    let _ = stream.write(response.as_bytes());
+                    let _ = stream.flush();
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                } else if request.contains("GET /timeout") {
+                    thread::sleep(std::time::Duration::from_millis(1500));
+                    let response =
+                        "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nTimeout";
+                    let _ = stream.write(response.as_bytes());
+                    let _ = stream.flush();
+                } else {
+                    let response =
+                        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                    let _ = stream.write(response.as_bytes());
+                    let _ = stream.flush();
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 }
             }
         }
@@ -106,7 +106,7 @@ fn test_redirect_to_private_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
         .arg(format!("http://127.0.0.1:{port}/redirect-to-private"))
-        .arg("--test-allow-local-initial")
+        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
         .output()
         .unwrap();
 
@@ -120,7 +120,7 @@ fn test_redirect_to_loopback_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
         .arg(format!("http://127.0.0.1:{port}/redirect-to-loopback"))
-        .arg("--test-allow-local-initial")
+        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
         .output()
         .unwrap();
 
@@ -134,7 +134,7 @@ fn test_redirect_to_link_local_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
         .arg(format!("http://127.0.0.1:{port}/redirect-to-link-local"))
-        .arg("--test-allow-local-initial")
+        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
         .output()
         .unwrap();
 
@@ -151,13 +151,30 @@ fn test_redirect_revalidation_dns() {
     // Since localhost resolves to 127.0.0.1, the redirect policy should block it.
     let output = Command::new(get_bin())
         .arg(format!("http://127.0.0.1:{port}/redirect-to-localhost"))
-        .arg("--test-allow-local-initial")
+        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
         .output()
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     println!("STDOUT: {stdout}");
     assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
+}
+
+#[test]
+fn test_regression_local_blocked_without_bypass() {
+    let port = spawn_mock_server();
+    // Ensure initial request to 127.0.0.1 is blocked when there's no bypass (no env var, no --no-guard)
+    let output = Command::new(get_bin())
+        .arg(format!("http://127.0.0.1:{port}/"))
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    println!("STDOUT: {stdout}");
+    assert!(
+        stdout.contains("SSRF Error")
+            && stdout.contains("SSRF guard blocked request to private/local IP")
+    );
 }
 
 #[test]

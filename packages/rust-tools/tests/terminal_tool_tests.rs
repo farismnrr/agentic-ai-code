@@ -57,18 +57,25 @@ wait
 
     assert!(!pids.is_empty(), "Script did not spawn any children");
 
-    // verify each PID is dead
+    // verify each PID is dead, with a small retry loop to allow OS to reap them
     for pid in pids {
-        // kill -0 returns success if process exists
-        let kill_status = Command::new("kill").arg("-0").arg(pid).status();
-
-        if let Ok(status) = kill_status {
-            assert!(
-                !status.success(),
-                "Found stray descendant process with PID {}",
-                pid
-            );
+        let mut dead = false;
+        for _ in 0..10 {
+            // kill -0 returns success if process exists
+            if let Ok(status) = Command::new("kill").arg("-0").arg(pid).status() {
+                if !status.success() {
+                    dead = true;
+                    break;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        
+        assert!(
+            dead,
+            "Found stray descendant process with PID {} that didn't die after 1 second",
+            pid
+        );
     }
 
     let _ = fs::remove_file(&pid_file);
