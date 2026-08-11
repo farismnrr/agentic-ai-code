@@ -351,13 +351,13 @@ spec-verified implementation.
 - [x] Implement required routing headers and content types. `MCP-Protocol-Version`, `Mcp-Method` (must equal body `method`), and `Mcp-Name` (required for `tools/call`, must equal `params.name`, Base64-sentinel decoding per `streamable-http#value-encoding`) are all validated in `transport.rs::validate_routing_headers`; every request's `params._meta` is cross-checked (`io.modelcontextprotocol/protocolVersion` must equal the header, `io.modelcontextprotocol/clientCapabilities` is required); `Content-Type: application/json` enforced; body bounded via `DefaultBodyLimit` (1 MiB) before parsing; a notification the server accepts gets `202 Accepted` with no body per spec.
 
 
-### Phase 3 — Tool registry and execution — [ ] TODO
+### Phase 3 — Tool registry and execution — [x] DONE
 
-- [ ] Register Plan 027 Rust CLI tools.
+- [x] Register Plan 027 Rust CLI tools.
 - [x] Validate JSON Schema arguments.
-- [ ] Dispatch without shell interpolation.
-- [ ] Apply auth, limits, timeout, and concurrency policy.
-- [ ] Normalize results/errors.
+- [x] Dispatch without shell interpolation.
+- [x] Apply auth, limits, timeout, and concurrency policy.
+- [x] Normalize results/errors.
 
 
 ### Phase 4 — Legacy Nuxt compatibility — [ ] TODO
@@ -532,7 +532,7 @@ Record final evidence as implementation progresses:
 - Contract inventory: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 1 (legacy HTTP/WS) + section 4 (MCP tool catalog).
 - MCP specification/conformance matrix: `[x]` Re-verified against the **live** official spec at `modelcontextprotocol.io/specification/2026-07-28/` (fetched directly: `basic/transports/streamable-http`, `basic/versioning`, `server/discover`, `schema`) — supersedes the earlier `028-phase0-contract-audit.md` section 3, which was written without live access and got the `initialize`/routing-header contract wrong (see the Phase 2 checklist correction note above). Tests in `packages/rust-tools/tests/mcp_transport_tests.rs` (23/23 passing) and `security_policy_tests.rs` (11/11 passing) cover protocol-version handling (including `-32022 UnsupportedProtocolVersion`), `Mcp-Method`/`Mcp-Name`/`_meta` cross-validation (`-32020 HeaderMismatch`), `server/discover`, `tools/list` schema shape, `tools/call` structured-error semantics, `202 Accepted` notifications, malformed JSON-RPC, and oversized body. No official MCP client/harness interoperability run yet — deliberately left open, not faked.
 - Threat model/resource limits: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 6 (frozen numbers); HTTP body limit + Origin/Host policy are enforced in code, the rest (tool-execution limits, concurrency, pairing rate) are Phase 3/4/5 scope.
-- Rust implementation: partial `[~]` — Phase 1/2 (MCP-`2026-07-28`-verified) plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3/4/5 rest).
+- Rust implementation: partial `[~]` — Phase 1/2 (MCP-`2026-07-28`-verified), Phase 3 (Tool registry and execution), plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security/execution modules + relay-agent binary entrypoint). Auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 4/5 rest).
 
 - Security regression suite: partial `[~]` — Origin/Host enforcement fully covered (29 unit tests in `security.rs` + 11 integration tests in `tests/security_policy_tests.rs`, all green; `cargo fmt --check` and `clippy -D warnings` clean). Pairing/credential lifecycle, MCP authorization, and tool-execution-time limits still outstanding.
 - Nuxt E2E parity: `[ ]`
