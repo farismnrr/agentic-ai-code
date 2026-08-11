@@ -2,7 +2,7 @@
 
 Implementation plans for multi-step work, one Markdown file per effort.
 
-**Naming: `NNN-kebab-case.md`** — a zero-padded 3-digit sequence number, then a short descriptive name (`001-chat-ui.md`, `002-auth-flow.md`). Take the next unused number; never reuse one, even after a plan is deleted. The number is the stable handle — it makes plans easy to reference in conversation ("lanjut 002") and keeps them in creation order in the listing.
+**Naming: `NNN-kebab-case.md`** — a zero-padded 3-digit sequence number, then a short descriptive name (`001-chat-ui.md`, `002-auth-flow.md`). Take the next unused number; never reuse one, even after a plan is deleted. The number is the stable handle — it makes plans easy to reference in conversation ("lanjut 002") and keeps plans in creation order in the listing.
 
 Write a plan here when a task spans several sessions or several files, so the next agent can pick it up without re-deriving the approach. A plan should state the goal, the steps in order, the files each step touches, and how to verify it worked. Mark steps done as you go.
 
@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [029-external-mcp-native-mcp-integration.md](029-external-mcp-native-mcp-integration.md) — native external MCP client/external MCP client remote MCP integration: current stateless MCP transport, OAuth discovery/resource-server validation, explicit tool scopes, Secure MCP Tunnel/local connectivity, client E2E, observability, and strict conformance/CI/release gates.
 - [028-relay-agent-rust-rewrite.md](028-relay-agent-rust-rewrite.md) — full rewrite of `packages/relay-agent` from Node.js/TypeScript + `@yao-pkg/pkg` to a standalone Rust binary, with strict Nuxt HTTP/WebSocket parity, localhost security, lifecycle parity, native release CI, and published-binary E2E verification.
 
 ## Completed
