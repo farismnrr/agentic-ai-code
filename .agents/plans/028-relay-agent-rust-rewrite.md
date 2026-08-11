@@ -1,6 +1,6 @@
 # 028 — Relay agent: full Rust rewrite
 
-**Status: IN FLIGHT — implementation plan only; no rewrite work is considered complete until strict frontend/API parity, standalone release verification, and removal of the Node.js implementation all pass.**
+**Status: IN FLIGHT — implementation plan only; no rewrite work is considered complete until strict frontend/API parity, security/resource-limit verification, standalone release verification, and removal of the Node.js implementation all pass.**
 
 ## Context
 
@@ -53,6 +53,7 @@ The hosted server remains outside the terminal data path. This plan changes the 
 - Preserve the browser/API/WebSocket contract exactly enough that the Nuxt frontend requires **zero functional changes**.
 - Preserve localhost-only binding and fail-closed Origin/Host validation.
 - Preserve one-time pairing, credential revocation, command execution, stdout/stderr/exit-code reporting, timeout behavior, and lifecycle semantics.
+- Enforce explicit resource limits so a localhost browser request cannot create an unbounded process, memory, output, or WebSocket workload.
 - Keep the final binary small by using a minimal dependency/features set and release-profile optimization.
 - Make the release workflow build native Rust artifacts directly with Cargo.
 
@@ -65,6 +66,41 @@ The hosted server remains outside the terminal data path. This plan changes the 
 - Do **not** turn `--dir` into a filesystem security boundary; it remains the default starting working directory, matching Plan 026's final behavior.
 - Do **not** introduce a new server-side terminal path.
 - Do **not** preserve Node.js as a fallback runtime after cutover.
+- Do **not** add arbitrary command allowlists, filesystem sandboxes, or privilege-dropping behavior unless required by an independently approved security design; these would change the existing local-agent contract.
+
+## Threat model and security invariants
+
+The primary security boundary is **browser-originated access to a localhost process-execution service**. Binding to loopback reduces remote exposure but does not make the service trusted: any local browser page may attempt requests, and WebSocket credentials must not substitute for browser-origin validation.
+
+Required invariants:
+
+1. Listener binds only to `127.0.0.1`; never `0.0.0.0`, `::`, or another externally reachable interface.
+2. HTTP and WebSocket requests require a valid `Host` and exact configured `Origin`; missing values fail closed.
+3. WebSocket credentials are never accepted without passing Origin/Host validation.
+4. Pairing tokens are single-use, short-lived, cryptographically random, and never logged.
+5. Session credentials are cryptographically random, expire according to the frozen contract, are revocable, and are never logged or returned except through the intended `/pair` response.
+6. Credentials in URLs must never appear in application logs, error messages, telemetry, panic output, or test snapshots.
+7. No wildcard Origin, permissive fallback, implicit localhost Origin, or debug/test-only authentication bypass is allowed.
+8. Request bodies, WebSocket messages, command arguments, output buffers, and concurrent executions are bounded.
+9. Timeouts terminate the intended process tree and leave no known orphan descendants.
+10. Shutdown and pidfile cleanup are ownership-safe and race-safe.
+11. Secrets and command output are not emitted through structured logs by default.
+12. Error responses do not disclose credentials, filesystem secrets, environment variables, or internal stack traces.
+
+### Resource limits
+
+Freeze concrete limits during Phase 0 from the current implementation where they exist; otherwise choose conservative documented defaults and make them configurable only if the existing UX requires it. At minimum define and test:
+
+- maximum HTTP request body size;
+- maximum WebSocket frame/message size;
+- maximum command string/argument payload size;
+- maximum buffered stdout size;
+- maximum buffered stderr size;
+- maximum concurrent command executions per session and globally;
+- maximum command execution duration;
+- maximum pairing attempts per process/window if required by the existing flow.
+
+When a limit is exceeded, fail deterministically with the existing or explicitly documented error contract; never silently truncate security-sensitive input.
 
 ## Architecture decisions
 
@@ -89,6 +125,7 @@ packages/rust-tools/
         ├── pairing.rs
         ├── websocket.rs
         ├── execution.rs
+        ├── limits.rs
         └── pidfile.rs
 ```
 
@@ -113,18 +150,22 @@ Use `clap` derive parsing, matching the existing public flags:
 
 `--dir` defaults to the OS user's home directory. `--port` defaults to `47821`.
 
+Configuration validation must reject invalid ports, empty/invalid origins, unusable directories, and contradictory options before binding/listening. Do not silently normalize an Origin in a way that weakens exact-match security.
+
 ### 4. Pairing and credentials
 
-Use cryptographically secure random bytes for pairing/session credentials. Store only the minimum in-memory state required by the current contract.
+Use a cryptographically secure OS-backed random source for pairing/session credentials. Store only the minimum in-memory state required by the current contract.
 
 - Pairing token is short-lived and single-use.
-- Successful `/pair` invalidates the pairing token.
+- Successful `/pair` invalidates the pairing token atomically.
 - Session credential is required for WebSocket upgrade.
-- `/revoke` removes the credential from the active session set.
+- `/revoke` removes the credential from the active session set atomically.
 - Invalid, expired, reused, or missing credentials fail closed.
+- Credential state is concurrency-safe and cannot be replayed by racing `/pair` requests.
 - Do not persist credentials to disk unless the existing frontend contract proves persistence is required.
+- Credential entropy and expiry are explicitly documented and tested.
 
-### 5. Localhost and origin security
+### 5. Localhost, Host, Origin, and HTTP security
 
 The listener must bind only to `127.0.0.1`.
 
@@ -132,12 +173,15 @@ For HTTP requests and WebSocket upgrade:
 
 - Require `Host` to match the supported localhost forms for the selected port, preserving current behavior.
 - Require `Origin` to be present.
-- Require `Origin` to equal the configured `--origin` / `RELAY_AGENT_ORIGIN` value byte-for-byte.
+- Require `Origin` to equal the configured `--origin` / `RELAY_AGENT_ORIGIN` exactly; do not parse/normalize it into a broader allowlist unless the frozen Node contract requires that exact behavior.
 - Reject missing/mismatched Origin with no fallback or wildcard behavior.
 - Apply the same validation before WebSocket upgrade.
 - Never trust the WebSocket credential as a substitute for Origin/Host validation.
+- Return explicit `Content-Type: application/json` for JSON endpoints where the Node contract does so.
+- Reject unsupported HTTP methods with the same status/shape required by the frozen contract.
+- Apply request-body limits before deserialization where practical.
 
-CORS behavior and preflight responses must remain compatible with the existing frontend.
+CORS behavior and preflight responses must remain compatible with the existing frontend. CORS must not become a permissive wildcard merely because the server is localhost-only.
 
 ### 6. Command execution
 
@@ -165,13 +209,15 @@ Execution response must preserve:
 
 Do not change field names, omission/null behavior, or success/failure semantics without explicit parity evidence.
 
+Output collection must be bounded. If the current contract requires full output, use a documented maximum and return a deterministic overflow error rather than unbounded memory growth.
+
 ### 7. Timeout and process lifecycle
 
 Commands must have the same effective default timeout as the current implementation and must terminate when the timeout expires.
 
 Prefer a process-group-aware termination strategy on Unix so descendants cannot outlive a timed-out command. On Windows, use the platform-appropriate process-tree termination strategy if supported by the chosen implementation.
 
-The implementation must not block the Tokio runtime while waiting for child-process cleanup.
+The implementation must not block the Tokio runtime while waiting for child-process cleanup. Tests must prove that timeout cleanup reaps the direct child and addresses descendants within the supported platform semantics.
 
 ### 8. PID file / singleton lifecycle
 
@@ -180,9 +226,11 @@ Preserve the current port-scoped singleton behavior:
 - Acquire an atomic exclusive lock before starting the server.
 - Detect and recover stale pidfiles.
 - Reject a second live instance on the same port.
-- `stop --port <port>` reads the port-scoped pidfile and sends the appropriate termination signal.
+- `stop --port <port>` reads the port-scoped pidfile and sends the appropriate termination mechanism for the OS.
 - Normal shutdown removes only the pidfile owned by the current process.
 - SIGINT/SIGTERM must close the HTTP/WebSocket server and release state cleanly.
+- Pidfile contents must be minimal and non-secret.
+- Symlink/path races must not allow deletion of an unrelated file.
 
 Use an OS-appropriate per-user runtime/state directory. Do not regress to an unsafe shared pidfile location merely to match the old Node implementation; preserve the behavior users rely on while retaining the current security/race fixes from Plan 026.
 
@@ -190,17 +238,28 @@ Use an OS-appropriate per-user runtime/state directory. Do not regress to an uns
 
 Use Cargo release builds with size-oriented settings where they do not compromise reliability:
 
-- `opt-level = "z"` or another measured size-optimal setting.
-- `lto = true` where supported by the release matrix.
+- Benchmark `opt-level = "z"` versus `"s"`/`3` and keep the measured best result for the supported workload.
+- `lto = "thin"` or `true` based on measured size/build-time tradeoff.
 - `codegen-units = 1` where the size/build-time tradeoff is acceptable.
-- `strip = true` for release artifacts where supported.
-- `panic = "abort"` only if verified safe for the binary and its diagnostics.
+- `strip = "symbols"`/`true` for release artifacts where supported.
+- Keep `panic = "abort"` optional; use it only after verifying panic/error handling and diagnostics remain acceptable.
+
+Cargo officially supports size-oriented `opt-level` settings, LTO, codegen units, and stripping; the plan requires measurement rather than assuming one combination is universally smallest. citeturn0search0turn0search2
 
 Measure the resulting binaries instead of claiming a size target without evidence. Record release artifact sizes and compare against the old pkg bundles.
 
 ## Strict API / protocol contract
 
 Before implementation, create a contract inventory from the current Rust-free implementation and the Nuxt consumers. Capture exact:
+
+- HTTP method/path/status/content-type/body shape/header behavior.
+- CORS/preflight behavior.
+- WebSocket path, query encoding, upgrade rejection behavior, close codes/reasons where observable.
+- Pairing/session credential lifecycle.
+- Command payload parsing and result serialization.
+- Timeout/error semantics.
+- CLI defaults and environment-variable precedence.
+- Artifact names/download URLs.
 
 ### HTTP
 
@@ -216,7 +275,7 @@ Must return HTTP 200 and preserve the existing JSON shape, including:
 }
 ```
 
-The exact serialization and field casing must be verified against the frontend/tests before implementation is marked complete.
+The exact serialization, field casing, content type, and headers must be verified against the frontend/tests before implementation is marked complete.
 
 #### `POST /pair`
 
@@ -226,17 +285,18 @@ Input currently contains the pairing token. Preserve:
 - invalid-token behavior;
 - expired-token behavior;
 - malformed JSON behavior;
-- one-time token semantics.
+- one-time token semantics;
+- content type and error response shape.
 
 Expected successful response currently uses `sessionCredential`.
 
 #### `POST /revoke`
 
-Preserve credential input, success response, invalid-credential behavior, and the fact that a revoked credential can no longer open a WebSocket session.
+Preserve credential input, success response, invalid-credential behavior, content type/error shape, and the fact that a revoked credential can no longer open a WebSocket session.
 
 #### `OPTIONS`
 
-Preserve the frontend-required CORS/preflight behavior for the three HTTP endpoints.
+Preserve the frontend-required CORS/preflight behavior for the three HTTP endpoints, including allowed origin, methods, and headers. Test preflight independently.
 
 ### WebSocket
 
@@ -256,6 +316,8 @@ Upgrade must fail closed for:
 - missing credential;
 - invalid credential;
 - revoked credential.
+
+Credential query parsing must correctly handle URL encoding and must never log the raw URL.
 
 ### Messages
 
@@ -286,26 +348,30 @@ Outgoing execution result:
 
 The examples are a starting point only; **the implementation must derive the final contract from the current Nuxt consumer and existing tests before changing the protocol**.
 
-Unknown message types and malformed JSON must preserve the current error envelope and connection behavior.
+Unknown message types and malformed JSON must preserve the current error envelope and connection behavior. Oversized messages must be rejected deterministically before unbounded deserialization/allocation.
 
 ## Implementation phases
 
-### Phase 0 — Contract freeze and inventory — [ ] TODO
+### Phase 0 — Contract freeze, threat model, and inventory — [ ] TODO
 
 - [ ] Read the entire current relay-agent implementation, including CLI and pidfile modules.
 - [ ] Identify every Nuxt caller/consumer of `/health`, `/pair`, `/revoke`, WebSocket URL, headers, query parameters, and message types.
 - [ ] Identify all release/download consumers and expected artifact names.
-- [ ] Record exact HTTP status codes, JSON shapes, WebSocket path, close/error behavior, timeout values, default values, and environment-variable behavior.
+- [ ] Record exact HTTP status codes, JSON shapes, content types, headers, CORS/preflight behavior, WebSocket path, close/error behavior, timeout values, default values, and environment-variable precedence.
 - [ ] Record current process lifecycle behavior and the Phase 9 atomic pidfile semantics from Plan 026.
+- [ ] Produce a threat model for browser→localhost access, credential theft/replay, origin bypass, resource exhaustion, command execution, and lifecycle races.
+- [ ] Freeze concrete resource limits and document the rationale.
 - [ ] Turn the inventory into contract tests/fixtures before deleting the Node implementation.
+- [ ] Freeze a compatibility matrix mapping every old behavior to a Rust test.
 
 ### Phase 1 — Rust crate and binary skeleton — [ ] TODO
 
 - [ ] Add `relay-agent` as a `[[bin]]` in `packages/rust-tools/Cargo.toml`.
-- [ ] Add only required dependencies/features.
+- [ ] Add only required dependencies/features and justify every runtime dependency.
+- [ ] Pin/verify compatible Rust toolchain/MSRV according to Plan 027 policy.
 - [ ] Implement `clap` CLI and environment fallback.
 - [ ] Implement configuration validation and default directory/port/origin handling.
-- [ ] Add Rust module boundaries for HTTP, WebSocket, pairing, execution, lifecycle, and errors.
+- [ ] Add Rust module boundaries for HTTP, WebSocket, pairing, execution, lifecycle, limits, and errors.
 - [ ] `cargo fmt --check` and Clippy must be clean from the first complete skeleton.
 
 ### Phase 2 — HTTP API parity — [ ] TODO
@@ -315,8 +381,9 @@ Unknown message types and malformed JSON must preserve the current error envelop
 - [ ] Implement `POST /revoke`.
 - [ ] Implement OPTIONS/CORS behavior required by Nuxt.
 - [ ] Implement exact Host/Origin validation.
-- [ ] Add unit/integration tests for success, malformed input, invalid credentials, expiry, reuse, and wrong/missing Origin/Host.
-- [ ] Compare Rust responses against the frozen contract fixtures.
+- [ ] Implement method/content-type/body-size validation required by the frozen contract.
+- [ ] Add unit/integration tests for success, malformed input, invalid credentials, expiry, reuse, wrong/missing Origin/Host, unsupported methods, and oversized requests.
+- [ ] Compare Rust responses against the frozen contract fixtures byte-for-byte where practical and semantically where nondeterministic values exist.
 
 ### Phase 3 — WebSocket/auth parity — [ ] TODO
 
@@ -325,29 +392,35 @@ Unknown message types and malformed JSON must preserve the current error envelop
 - [ ] Validate session credential before upgrade.
 - [ ] Preserve credential revocation semantics.
 - [ ] Implement malformed/unknown message handling.
-- [ ] Add integration tests for accepted and rejected upgrade cases.
+- [ ] Enforce WebSocket message/frame size limits.
+- [ ] Enforce concurrent-execution limits.
+- [ ] Add integration tests for accepted and rejected upgrade cases, including missing/wrong Origin, Host, credential, and URL-encoded credential.
+- [ ] Add tests proving credentials never appear in logs or error output.
 
 ### Phase 4 — Command execution parity — [ ] TODO
 
 - [ ] Implement `tokio::process::Command` execution.
 - [ ] Preserve command/args parsing semantics.
 - [ ] Preserve explicit `cwd` behavior and `--dir` default semantics.
-- [ ] Capture stdout/stderr.
+- [ ] Capture stdout/stderr with bounded buffers.
 - [ ] Return exit code and exact result envelope.
 - [ ] Preserve non-zero exit behavior.
 - [ ] Preserve command-not-found and spawn-error behavior.
 - [ ] Implement timeout and process termination.
-- [ ] Add regression tests for success, failure, empty output, non-zero exit, cwd, arguments containing spaces/shell metacharacters, and timeout.
+- [ ] Add regression tests for success, failure, empty output, non-zero exit, cwd, arguments containing spaces/shell metacharacters, timeout, oversized output, and concurrent execution limits.
+- [ ] Verify no shell interpolation is introduced accidentally.
 
 ### Phase 5 — PID/lifecycle parity and hardening — [ ] TODO
 
 - [ ] Port atomic exclusive pidfile acquisition.
 - [ ] Port stale-lock detection/recovery.
 - [ ] Port second-instance rejection.
-- [ ] Implement `stop --port <port>`.
+- [ ] Implement `stop --port <port>` for each supported OS.
 - [ ] Handle SIGINT/SIGTERM cleanly.
 - [ ] Ensure shutdown does not delete another process's pidfile.
+- [ ] Validate pidfile path/ownership against symlink/path-race scenarios.
 - [ ] Add race/lifecycle integration tests where practical.
+- [ ] Test repeated start/stop cycles and stale-pid recovery.
 
 ### Phase 6 — Frontend E2E parity — [ ] TODO
 
@@ -359,8 +432,10 @@ Unknown message types and malformed JSON must preserve the current error envelop
 - [ ] Verify stdout/stderr/exit code are rendered exactly as before.
 - [ ] Verify failure and timeout behavior.
 - [ ] Verify revoke/disconnect behavior.
+- [ ] Verify wrong/missing Origin is rejected in a browser-like request.
 - [ ] Verify no hosted-server terminal data path is introduced.
 - [ ] Record the exact tested browser/build/runtime versions.
+- [ ] Run the E2E test against the **Rust binary, not a mocked server**.
 
 ### Phase 7 — Remove Node relay implementation — [ ] TODO
 
@@ -391,16 +466,22 @@ Rewrite `.github/workflows/release-relay-agent.yml` to build Rust artifacts dire
 - [ ] Publish release assets from the Rust build output.
 - [ ] Ensure Settings → Local Terminal download URLs still resolve without frontend changes.
 - [ ] Run the release workflow from a disposable tag before marking this phase complete.
+- [ ] Verify each published artifact's target/architecture metadata before release.
+- [ ] Verify checksums from a clean machine/checkout rather than only trusting the build workspace.
 
-### Phase 9 — Binary size and production hardening — [ ] TODO
+### Phase 9 — Binary size, supply chain, and production hardening — [ ] TODO
 
 - [ ] Measure each release artifact size.
-- [ ] Tune release profile based on measurements.
-- [ ] Run `cargo audit` / dependency review as supported by repository CI policy.
+- [ ] Benchmark `opt-level`/LTO choices and keep the smallest acceptable release configuration based on evidence.
 - [ ] Verify no unnecessary Tokio/Axum features are enabled.
 - [ ] Verify symbols/debug data are stripped from release artifacts where appropriate.
 - [ ] Verify startup time and basic resource usage are acceptable.
 - [ ] Verify no Node/V8/libnode dependency is embedded or required.
+- [ ] Run repository-approved dependency vulnerability/license checks (`cargo audit` / `cargo deny` or the project's equivalent) and resolve or explicitly accept findings.
+- [ ] Commit and review `Cargo.lock` changes as part of the migration; do not rely on an unconstrained dependency graph in release CI.
+- [ ] Verify release artifacts from clean checkouts and pinned toolchains.
+- [ ] Generate a machine-readable artifact manifest containing target, version/commit, SHA-256, and byte size.
+- [ ] If repository release policy supports signing/provenance, sign or attest release artifacts and verify the published provenance.
 
 ### Phase 10 — Final removal and closeout — [ ] TODO
 
@@ -412,8 +493,10 @@ Rewrite `.github/workflows/release-relay-agent.yml` to build Rust artifacts dire
 - [ ] `relay-agent stop --port <port>` works without Node.js.
 - [ ] Full Rust test suite passes.
 - [ ] Frontend E2E parity passes without frontend source changes.
+- [ ] Security/resource-limit regression suite passes.
 - [ ] Release workflow passes for all supported targets.
 - [ ] Published binaries are manually smoke-tested from GitHub Release assets.
+- [ ] Checksums and artifact manifest verify from a clean environment.
 - [ ] Plan 028 is marked `COMPLETED` only after all artifact verification is done.
 - [ ] `.agents/plans/README.md` moves Plan 028 from In Flight to Completed with final PR/release evidence.
 
@@ -425,10 +508,12 @@ Cover pure logic independently from networking/process execution:
 
 - CLI/default configuration.
 - Origin/Host validation.
-- pairing token expiry/reuse.
-- credential lookup/revocation.
+- exact Origin comparison and missing-Origin rejection.
+- pairing token entropy/expiry/reuse.
+- credential lookup/revocation and concurrent race behavior.
 - command payload parsing.
 - result serialization.
+- resource-limit configuration.
 - pidfile path/ownership logic.
 
 ### Integration tests
@@ -442,11 +527,16 @@ Required cases:
 - invalid token.
 - expired token.
 - reused token.
+- concurrent pair race: exactly one success.
 - revoke success/failure.
 - missing/wrong Origin.
 - missing/wrong Host.
+- exact Origin mismatch cases that differ only by scheme/host/port/case/trailing slash as applicable to the frozen contract.
 - valid WebSocket credential.
 - invalid/revoked WebSocket credential.
+- URL-encoded credential.
+- oversized HTTP request.
+- oversized WebSocket message.
 - exec success.
 - exec non-zero exit.
 - command-not-found.
@@ -454,11 +544,36 @@ Required cases:
 - explicit cwd.
 - argument boundary preservation.
 - timeout and child termination.
+- output limit enforcement.
+- concurrent execution limit.
 - malformed JSON.
 - unknown message type.
 - second instance rejection.
 - stale pidfile recovery.
+- pidfile ownership/symlink safety where supported by the platform.
 - clean stop.
+- repeated start/stop cycles.
+
+### Security regression tests
+
+The test suite must explicitly prove:
+
+```text
+missing Origin             → reject
+wrong Origin               → reject
+wildcard Origin            → reject
+missing Host               → reject
+wrong Host                 → reject
+invalid credential         → reject
+revoked credential         → reject
+reused pairing token       → reject
+racing pairing requests    → one success only
+oversized message         → bounded rejection
+oversized output          → bounded rejection
+execution timeout         → process cleanup
+```
+
+No security test may rely on a hidden production bypass, debug-only environment variable, or relaxed release configuration.
 
 ### Frontend E2E
 
@@ -484,6 +599,8 @@ tokio::process::Command
 Nuxt UI
 ```
 
+The E2E harness must start/stop the real binary and use local-only fixtures. A passing mock-server test is not sufficient for the final gate.
+
 ## CI gates
 
 The PR is not merge-ready until all applicable checks are green:
@@ -492,13 +609,15 @@ The PR is not merge-ready until all applicable checks are green:
 - [ ] `cargo clippy --all-targets --all-features -- -D warnings`.
 - [ ] `cargo test --workspace`.
 - [ ] Relay-agent integration tests.
-- [ ] Frontend/E2E parity tests.
+- [ ] Security/resource-limit regression tests.
+- [ ] Frontend/E2E parity tests against the real Rust binary.
 - [ ] Repository-wide `@yao-pkg/pkg` absence check.
 - [ ] Repository-wide JS/TS relay-agent executable absence check.
 - [ ] Release build for every supported target.
 - [ ] Release artifact smoke test.
 - [ ] Artifact naming/checksum verification.
 - [ ] Node.js-independent runtime verification.
+- [ ] Dependency vulnerability/license policy check.
 - [ ] No unrelated Nuxt regressions.
 
 ## Definition of Done
@@ -510,7 +629,8 @@ Plan 028 is **CLOSED** only when:
 - [ ] Nuxt requires no functional/source changes to pair/connect/execute commands.
 - [ ] HTTP and WebSocket contracts are strictly parity-tested.
 - [ ] Origin/Host security remains fail-closed.
-- [ ] Pairing is single-use and session credentials are revocable.
+- [ ] Pairing is single-use, race-safe, and session credentials are revocable/expiry-bound according to the frozen contract.
+- [ ] Request/message/output/concurrency limits are enforced and tested.
 - [ ] Command execution uses Tokio and preserves stdout/stderr/exit-code/error semantics.
 - [ ] Timeout terminates the child/process tree appropriately and does not block the async runtime.
 - [ ] PID/stop/singleton lifecycle behavior is preserved and race-safe.
@@ -519,6 +639,7 @@ Plan 028 is **CLOSED** only when:
 - [ ] Release CI builds native Rust binaries directly.
 - [ ] Supported release assets are standalone and Node-free.
 - [ ] Binary sizes are measured and documented.
+- [ ] Dependency/security policy checks pass.
 - [ ] Full CI is green.
 - [ ] Published release binaries are smoke-tested end-to-end.
 - [ ] Documentation and Plan 028 match the final implementation.
@@ -534,11 +655,15 @@ If a Rust release is published and later fails artifact verification, restore th
 Record final evidence here as the work progresses:
 
 - Contract inventory: `[ ]`.
+- Threat model/resource limits: `[ ]`.
 - Rust implementation: `[ ]`.
+- Security regression suite: `[ ]`.
 - Frontend E2E parity: `[ ]`.
 - Node source removal: `[ ]`.
 - `@yao-pkg/pkg` removal: `[ ]`.
 - Release workflow migration: `[ ]`.
+- Dependency/security policy check: `[ ]`.
 - Published binary smoke tests: `[ ]`.
+- Artifact manifest/checksum verification: `[ ]`.
 - Final CI run: `[ ]`.
 - Final release/tag: `[ ]`.
