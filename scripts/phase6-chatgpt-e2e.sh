@@ -14,12 +14,9 @@ required=(
 )
 for file in "${required[@]}"; do test -f "$file"; done
 
-rg -q 'terminal_exec|http_fetch|web_search' "${relay}/mcp.rs"
-rg -q 'relay\.coding' "${relay}/transport.rs"
-rg -q 'oauth-protected-resource' "${relay}/transport.rs"
-rg -q 'MCP-Protocol-Version|Mcp-Method|Mcp-Name' "${relay}/transport.rs"
-rg -q 'Insufficient scope|Invalid.*authorization|Missing or invalid authorization' "${relay}/transport.rs"
-rg -q 'sandbox|workspace|symlink|privilege|docker' "${relay}/execution.rs" "${relay}/security.rs"
+# Behavioral protocol and security checks run in phase4-black-box.sh. Keep this
+# gate limited to structural compatibility invariants that do not claim an HTTP
+# behavior merely because a string exists in source.
 ! rg -q '(/sse|session_id|Mcp-Session-Id)' "${relay}/transport.rs"
 
 if [[ -n "${PHASE6_MCP_URL:-}" ]]; then

@@ -204,21 +204,21 @@ Keep the no-unit-test decision while proving actual protocol/security behavior.
 
 ## Tasks
 
-- [ ] Keep grep only for genuinely structural invariants.
-- [ ] Add deterministic local black-box harness that starts relay with controlled configuration/JWKS fixture or local fixture IdP endpoint.
-- [ ] Assert actual HTTP status, headers, and JSON responses.
-- [ ] Assert OAuth challenge semantics from Phase 2.
-- [ ] Assert Local Origin/Host fail closed behavior.
-- [ ] Assert spoofed forwarded HTTPS cannot bypass Phase 1.
-- [ ] Assert missing `relay.coding` fails before tool execution.
-- [ ] Assert bad tool schema/arguments fail before dispatch.
-- [ ] CI must actually execute the black-box script.
-- [ ] Preserve `cargo fmt`, strict `cargo check`, strict Clippy, `cargo audit`.
-- [ ] Preserve no `continue-on-error`, `|| true`, swallowed exits, broad lint suppression.
+- [x] Keep grep only for genuinely structural invariants.
+- [x] Add deterministic local black-box harness that starts relay with controlled configuration/JWKS fixture or local fixture IdP endpoint.
+- [x] Assert actual HTTP status, headers, and JSON responses.
+- [x] Assert OAuth challenge semantics from Phase 2.
+- [x] Assert Local Origin/Host fail closed behavior.
+- [x] Assert spoofed forwarded HTTPS cannot bypass Phase 1.
+- [x] Assert missing `relay.coding` fails before tool execution.
+- [x] Assert bad tool schema/arguments fail before dispatch.
+- [x] CI must actually execute the black-box script.
+- [x] Preserve `cargo fmt`, strict `cargo check`, strict Clippy, `cargo audit`.
+- [x] Preserve no `continue-on-error`, `|| true`, swallowed exits, broad lint suppression.
 
 ## Exit criteria
 
-- [ ] auth/proxy/protocol regression fails CI even if expected strings still exist in source.
+- [x] auth/proxy/protocol regression fails CI even if expected strings still exist in source.
 
 ---
 

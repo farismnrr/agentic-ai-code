@@ -234,6 +234,7 @@ def run():
             status, _, body = request(local_url, headers=headers(method="tools/call", name="terminal_exec"), body=invalid_call)
             assert_status(status, 400, "invalid tool schema")
             assert body["error"]["code"] == -32602
+            dispatch_marker = os.path.join(temp_dir, "rejected-dispatch-marker")
 
             untrusted_port = free_port()
             remote_untrusted = start_relay(temp_dir, untrusted_port, issuer=issuer)
@@ -282,11 +283,22 @@ def run():
                                      "io.modelcontextprotocol/clientCapabilities": {}}}
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {no_scope}"),
-                body=mcp("tools/call", call_params))
+                body=mcp("tools/call", {"name": "terminal_exec", "arguments": {"command": "touch", "args": [dispatch_marker]},
+                                         "_meta": call_params["_meta"]}))
             assert_status(status, 403, "missing relay.coding scope")
             challenge = challenge_headers.get("www-authenticate", "")
             assert 'error="insufficient_scope"' in challenge and 'scope="relay.coding"' in challenge
             assert body["error"]["code"] == -32600
+            assert not os.path.exists(dispatch_marker), "missing scope reached tool execution"
+
+            invalid_dispatch = {"name": "terminal_exec", "arguments": {"command": "touch", "args": [dispatch_marker], "extra": True},
+                                "_meta": call_params["_meta"]}
+            status, _, body = request(remote_url,
+                headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {make_token(key_path, issuer, 'relay.coding')}"),
+                body=mcp("tools/call", invalid_dispatch))
+            assert_status(status, 400, "invalid tool arguments before dispatch")
+            assert body["error"]["code"] == -32602
+            assert not os.path.exists(dispatch_marker), "invalid tool arguments reached execution"
 
             wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
             status, challenge_headers, body = request(remote_url,
