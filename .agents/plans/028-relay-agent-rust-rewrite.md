@@ -142,37 +142,37 @@ No public unauthenticated execution is permitted.
 
 **Phase 11 acceptance:** all execution/security/resource-limit paths are bounded and fail closed; no untrusted request can disable Plan 027 guards or bypass SSRF policy.
 
-## Phase 12 — Remove legacy relay compatibility — [ ] NOT STARTED
+## Phase 12 — Remove legacy relay compatibility — [x] COMPLETED
 
 **Goal:** make MCP Streamable HTTP the sole relay protocol and delete obsolete legacy Nuxt relay compatibility instead of carrying a permanent compatibility surface.
 
 ### 12.1 Consumer/dependency audit
 
-- [ ] Search Nuxt/frontend and repository consumers for `/pair`, `/revoke`, legacy WebSocket, `credential=`, `exec_result`, and legacy relay-specific message types.
-- [ ] Identify every remaining consumer before deletion.
-- [ ] Confirm required consumers have migrated to MCP or are explicitly approved for removal.
+- [x] Search Nuxt/frontend and repository consumers for `/pair`, `/revoke`, legacy WebSocket, `credential=`, `exec_result`, and legacy relay-specific message types.
+- [x] Identify every remaining consumer before deletion.
+- [x] Confirm required consumers have migrated to MCP or are explicitly approved for removal.
 
 ### 12.2 Delete legacy protocol/runtime
 
-- [ ] Delete `legacy.rs` / legacy compatibility modules once consumers are migrated.
-- [ ] Remove legacy WebSocket server/upgrade path.
-- [ ] Remove `/pair` and `/revoke` legacy HTTP endpoints.
-- [ ] Remove legacy `exec` / `exec_result` message protocol.
-- [ ] Remove legacy credential/session state used only by that protocol.
-- [ ] Remove compatibility-only config, types, helpers, and imports.
+- [x] Delete `legacy.rs` / legacy compatibility modules once consumers are migrated.
+- [x] Remove legacy WebSocket server/upgrade path.
+- [x] Remove `/pair` and `/revoke` legacy HTTP endpoints.
+- [x] Remove legacy `exec` / `exec_result` message protocol.
+- [x] Remove legacy credential/session state used only by that protocol.
+- [x] Remove compatibility-only config, types, helpers, and imports.
 
 ### 12.3 Simplify security/resource model
 
-- [ ] Remove security/resource-limit code that existed solely for legacy WebSocket execution.
-- [ ] Ensure MCP execution retains all Phase 11 guard, authorization, SSRF, timeout, output, and concurrency protections.
-- [ ] Re-run source-level attack-path review after deletion so removed code cannot leave a weaker alternate execution path.
+- [x] Remove security/resource-limit code that existed solely for legacy WebSocket execution.
+- [x] Ensure MCP execution retains all Phase 11 guard, authorization, SSRF, timeout, output, and concurrency protections.
+- [x] Re-run source-level attack-path review after deletion so removed code cannot leave a weaker alternate execution path.
 
 ### 12.4 Frontend/docs/release cleanup
 
-- [ ] Migrate any remaining Nuxt relay calls to MCP before deleting their old endpoint.
-- [ ] Remove legacy protocol documentation/examples.
-- [ ] Remove obsolete release/configuration references.
-- [ ] Ensure no legacy relay symbols remain repository-wide.
+- [x] Migrate any remaining Nuxt relay calls to MCP before deleting their old endpoint.
+- [x] Remove legacy protocol documentation/examples.
+- [x] Remove obsolete release/configuration references.
+- [x] Ensure no legacy relay symbols remain repository-wide.
 
 **Phase 12 acceptance:** there is exactly one relay execution protocol (MCP Streamable HTTP); no legacy WebSocket/pair/revoke execution path remains, and Nuxt uses the supported MCP path.
 

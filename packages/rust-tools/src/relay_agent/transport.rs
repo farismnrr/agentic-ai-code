@@ -64,7 +64,7 @@ const HDR_MCP_NAME: &str = "mcp-name";
 
 pub struct AppState {
     pub config: ServerConfig,
-    pub legacy: std::sync::Arc<std::sync::Mutex<crate::relay_agent::legacy::LegacyState>>,
+    pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
@@ -96,16 +96,13 @@ pub fn create_router(config: ServerConfig) -> Router {
 
     let state = Arc::new(AppState {
         config: config.clone(),
-        legacy: Arc::new(std::sync::Mutex::new(
-            crate::relay_agent::legacy::LegacyState::new(&config),
-        )),
+        execution_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
 
     Router::new()
         .merge(mcp_router)
-        .merge(crate::relay_agent::legacy::router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             local_access_policy,
@@ -195,7 +192,7 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request).await,
+        "tools/call" => handle_tools_call(&request, _state).await,
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -332,7 +329,7 @@ fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-async fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
+async fn handle_tools_call(request: &mcp::Request, _state: Arc<AppState>) -> JsonErr2 {
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -368,6 +365,21 @@ async fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
             &err,
         ));
     }
+
+    // Acquire global execution permit
+    let _permit = match std::sync::Arc::clone(&_state.execution_semaphore)
+        .acquire_owned()
+        .await
+    {
+        Ok(p) => p,
+        Err(_) => {
+            return Err(err_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                Some(request.id.clone()),
+                &McpError::Internal("Execution system unavailable".to_string()),
+            ));
+        }
+    };
 
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
