@@ -222,7 +222,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "Run a command in the full sandboxed coding terminal and return stdout, stderr, and exit status.",
+            description: "Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -255,7 +255,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "http_fetch",
             title: Some("HTTP Fetch"),
-            description: "Fetch a URL over HTTP(S) and return the response.",
+            description: "Make an HTTP(S) request and return the response; methods may mutate remote state.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -292,7 +292,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "web_search",
             title: Some("Web Search"),
-            description: "Search the web through the configured SearxNG backend.",
+            description: "Search the web through the configured SearxNG backend and return matching results.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
