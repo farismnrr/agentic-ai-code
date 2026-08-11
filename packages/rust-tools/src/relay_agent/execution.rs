@@ -113,11 +113,20 @@ pub async fn dispatch_tool_call(
     cmd.args(&proc_args);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    // Kill the immediate child on drop (safety net)
     cmd.kill_on_drop(true);
+
+    #[cfg(unix)]
+    {
+        // Put the child in its own process group so we can kill the tree
+        cmd.process_group(0);
+    }
 
     let child_res = cmd.spawn();
     match child_res {
         Ok(child) => {
+            let pid = child.id();
             let output_res = timeout(
                 Duration::from_millis(to_ms + 5000),
                 child.wait_with_output(),
@@ -173,13 +182,26 @@ pub async fn dispatch_tool_call(
                 Ok(Err(e)) => Err(McpError::Internal(format!(
                     "failed to read tool output: {e}"
                 ))),
-                Err(_) => Ok(ToolCallResult {
-                    content: vec![ToolResultContent {
-                        kind: "text",
-                        text: format!("execution timed out after {} ms", to_ms + 5000),
-                    }],
-                    is_error: true,
-                }),
+                Err(_) => {
+                    // Timeout occurred
+                    if let Some(p) = pid {
+                        #[cfg(unix)]
+                        {
+                            unsafe {
+                                // Kill the entire process group
+                                libc::kill(-(p as i32), libc::SIGKILL);
+                            }
+                        }
+                    }
+
+                    Ok(ToolCallResult {
+                        content: vec![ToolResultContent {
+                            kind: "text",
+                            text: format!("execution timed out after {} ms", to_ms + 5000),
+                        }],
+                        is_error: true,
+                    })
+                }
             }
         }
         Err(e) => Err(McpError::Internal(format!("failed to spawn tool: {e}"))),

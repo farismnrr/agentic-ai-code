@@ -160,4 +160,3 @@ pub fn enforce_local_access_policy(
     validate_host(headers, config)?;
     Ok(())
 }
-
