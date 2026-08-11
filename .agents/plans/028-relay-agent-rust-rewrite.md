@@ -1,0 +1,544 @@
+# 028 — Relay agent: full Rust rewrite
+
+**Status: IN FLIGHT — implementation plan only; no rewrite work is considered complete until strict frontend/API parity, standalone release verification, and removal of the Node.js implementation all pass.**
+
+## Context
+
+Plan 027 migrated the three general-purpose CLI tools to Rust. The remaining executable CLI/runtime dependency is `packages/relay-agent`, which is still implemented as Node.js/TypeScript and packaged with `@yao-pkg/pkg`.
+
+The current relay agent is a localhost-only HTTP/WebSocket bridge used by the Nuxt application for local terminal execution. The rewrite must preserve the browser-facing contract exactly while replacing the runtime and packaging layer with a small standalone Rust binary.
+
+Current implementation to reverse-engineer before changing:
+
+- `packages/relay-agent/src/server.ts` — HTTP/WebSocket server, pairing, credential storage, command execution.
+- `packages/relay-agent/src/index.ts` — server export.
+- `packages/relay-agent/bin/cli.mjs` — CLI parsing, lifecycle, singleton/pidfile handling.
+- `packages/relay-agent/bin/pidfile.mjs` — atomic pidfile/lock and stale-lock recovery.
+- `packages/relay-agent/package.json` — Node build/package contract and `@yao-pkg/pkg` dependency.
+- `.github/workflows/release-relay-agent.yml` — current Node/pkg release pipeline.
+- Nuxt local-terminal composables/components/API integration — the consumer contract that must not require frontend changes.
+
+The final architecture is:
+
+```text
+Nuxt browser
+    │
+    │ HTTP / WebSocket
+    │ Origin = configured Nuxt origin
+    ▼
+127.0.0.1:<port>
+    │
+    ▼
+standalone relay-agent Rust binary
+    │
+    ├── /health
+    ├── /pair
+    ├── /revoke
+    └── WebSocket ?credential=...
+             │
+             ▼
+      tokio::process::Command
+             │
+             ▼
+       local OS process
+```
+
+The hosted server remains outside the terminal data path. This plan changes the relay-agent runtime only; **Nuxt remains Nuxt/TypeScript** and is not being migrated to Rust.
+
+## Goals
+
+- Rewrite `packages/relay-agent` from Node.js/TypeScript to 100% Rust.
+- Produce a single native executable named `relay-agent` for supported release targets.
+- Remove the requirement for Node.js, V8, `node_modules`, `esbuild`, and `@yao-pkg/pkg` to run or package the relay agent.
+- Preserve the browser/API/WebSocket contract exactly enough that the Nuxt frontend requires **zero functional changes**.
+- Preserve localhost-only binding and fail-closed Origin/Host validation.
+- Preserve one-time pairing, credential revocation, command execution, stdout/stderr/exit-code reporting, timeout behavior, and lifecycle semantics.
+- Keep the final binary small by using a minimal dependency/features set and release-profile optimization.
+- Make the release workflow build native Rust artifacts directly with Cargo.
+
+## Non-goals / explicit scope boundary
+
+- Do **not** migrate Nuxt, Vue, TypeScript, or the web application runtime to Rust.
+- Do **not** redesign the relay-agent HTTP/JSON/WebSocket protocol.
+- Do **not** add remote/non-localhost relay access.
+- Do **not** add multi-user sharing, file transfer, or OS-level sandboxing.
+- Do **not** turn `--dir` into a filesystem security boundary; it remains the default starting working directory, matching Plan 026's final behavior.
+- Do **not** introduce a new server-side terminal path.
+- Do **not** preserve Node.js as a fallback runtime after cutover.
+
+## Architecture decisions
+
+### 1. Workspace placement
+
+Use the existing `packages/rust-tools/` Cargo package/workspace as the home for the new binary unless implementation evidence shows a separate Cargo workspace is materially cleaner. Preferred outcome:
+
+```text
+packages/rust-tools/
+├── Cargo.toml
+└── src/
+    ├── bin/
+    │   ├── curl-tool.rs
+    │   ├── relay-agent.rs
+    │   ├── searxng-search-tool.rs
+    │   └── terminal-tool.rs
+    └── relay_agent/
+        ├── mod.rs
+        ├── config.rs
+        ├── error.rs
+        ├── http.rs
+        ├── pairing.rs
+        ├── websocket.rs
+        ├── execution.rs
+        └── pidfile.rs
+```
+
+Keep shared relay-agent logic out of the binary entrypoint. The `[[bin]]` should remain a thin CLI/bootstrap layer.
+
+### 2. HTTP/WebSocket framework
+
+Use `axum` on top of Tokio unless the contract audit demonstrates a concrete reason to use another mature Rust HTTP/WebSocket framework.
+
+Required features should be kept minimal: HTTP routing, JSON, WebSocket upgrade, and Tokio runtime support. Avoid pulling in unrelated framework features.
+
+### 3. CLI
+
+Use `clap` derive parsing, matching the existing public flags:
+
+- `--dir`, `-d`
+- `--port`, `-p`
+- `--origin`, `-o`
+- `stop --port <port>`
+
+`RELAY_AGENT_ORIGIN` remains an environment fallback for `--origin`.
+
+`--dir` defaults to the OS user's home directory. `--port` defaults to `47821`.
+
+### 4. Pairing and credentials
+
+Use cryptographically secure random bytes for pairing/session credentials. Store only the minimum in-memory state required by the current contract.
+
+- Pairing token is short-lived and single-use.
+- Successful `/pair` invalidates the pairing token.
+- Session credential is required for WebSocket upgrade.
+- `/revoke` removes the credential from the active session set.
+- Invalid, expired, reused, or missing credentials fail closed.
+- Do not persist credentials to disk unless the existing frontend contract proves persistence is required.
+
+### 5. Localhost and origin security
+
+The listener must bind only to `127.0.0.1`.
+
+For HTTP requests and WebSocket upgrade:
+
+- Require `Host` to match the supported localhost forms for the selected port, preserving current behavior.
+- Require `Origin` to be present.
+- Require `Origin` to equal the configured `--origin` / `RELAY_AGENT_ORIGIN` value byte-for-byte.
+- Reject missing/mismatched Origin with no fallback or wildcard behavior.
+- Apply the same validation before WebSocket upgrade.
+- Never trust the WebSocket credential as a substitute for Origin/Host validation.
+
+CORS behavior and preflight responses must remain compatible with the existing frontend.
+
+### 6. Command execution
+
+Use `tokio::process::Command` with shell execution disabled by default.
+
+Preserve the current wire contract for the `exec` payload, including:
+
+- `type: "exec"`
+- `id`
+- `command`
+- `args`
+- optional `cwd`
+
+Preserve current command parsing semantics after capturing the exact frontend payload contract. In particular, do not silently change how a command string and explicit `args` are combined.
+
+Execution response must preserve:
+
+- `type: "exec_result"`
+- `id`
+- `success`
+- `exitCode`
+- `stdout`
+- `stderr`
+- `error` where applicable
+
+Do not change field names, omission/null behavior, or success/failure semantics without explicit parity evidence.
+
+### 7. Timeout and process lifecycle
+
+Commands must have the same effective default timeout as the current implementation and must terminate when the timeout expires.
+
+Prefer a process-group-aware termination strategy on Unix so descendants cannot outlive a timed-out command. On Windows, use the platform-appropriate process-tree termination strategy if supported by the chosen implementation.
+
+The implementation must not block the Tokio runtime while waiting for child-process cleanup.
+
+### 8. PID file / singleton lifecycle
+
+Preserve the current port-scoped singleton behavior:
+
+- Acquire an atomic exclusive lock before starting the server.
+- Detect and recover stale pidfiles.
+- Reject a second live instance on the same port.
+- `stop --port <port>` reads the port-scoped pidfile and sends the appropriate termination signal.
+- Normal shutdown removes only the pidfile owned by the current process.
+- SIGINT/SIGTERM must close the HTTP/WebSocket server and release state cleanly.
+
+Use an OS-appropriate per-user runtime/state directory. Do not regress to an unsafe shared pidfile location merely to match the old Node implementation; preserve the behavior users rely on while retaining the current security/race fixes from Plan 026.
+
+### 9. Small standalone binary
+
+Use Cargo release builds with size-oriented settings where they do not compromise reliability:
+
+- `opt-level = "z"` or another measured size-optimal setting.
+- `lto = true` where supported by the release matrix.
+- `codegen-units = 1` where the size/build-time tradeoff is acceptable.
+- `strip = true` for release artifacts where supported.
+- `panic = "abort"` only if verified safe for the binary and its diagnostics.
+
+Measure the resulting binaries instead of claiming a size target without evidence. Record release artifact sizes and compare against the old pkg bundles.
+
+## Strict API / protocol contract
+
+Before implementation, create a contract inventory from the current Rust-free implementation and the Nuxt consumers. Capture exact:
+
+### HTTP
+
+#### `GET /health`
+
+Must return HTTP 200 and preserve the existing JSON shape, including:
+
+```json
+{
+  "status": "ok",
+  "agent": "relay-agent",
+  "defaultCwd": "..."
+}
+```
+
+The exact serialization and field casing must be verified against the frontend/tests before implementation is marked complete.
+
+#### `POST /pair`
+
+Input currently contains the pairing token. Preserve:
+
+- success status and JSON field name for the generated session credential;
+- invalid-token behavior;
+- expired-token behavior;
+- malformed JSON behavior;
+- one-time token semantics.
+
+Expected successful response currently uses `sessionCredential`.
+
+#### `POST /revoke`
+
+Preserve credential input, success response, invalid-credential behavior, and the fact that a revoked credential can no longer open a WebSocket session.
+
+#### `OPTIONS`
+
+Preserve the frontend-required CORS/preflight behavior for the three HTTP endpoints.
+
+### WebSocket
+
+Connection URL remains equivalent to:
+
+```text
+ws://127.0.0.1:<port>/?credential=<sessionCredential>
+```
+
+The exact path must be confirmed from the Nuxt consumer before implementation freezes the route.
+
+Upgrade must fail closed for:
+
+- missing Origin;
+- wrong Origin;
+- missing/wrong Host;
+- missing credential;
+- invalid credential;
+- revoked credential.
+
+### Messages
+
+Incoming execution message:
+
+```json
+{
+  "type": "exec",
+  "id": "...",
+  "command": "...",
+  "args": [],
+  "cwd": "..."
+}
+```
+
+Outgoing execution result:
+
+```json
+{
+  "type": "exec_result",
+  "id": "...",
+  "success": true,
+  "exitCode": 0,
+  "stdout": "...",
+  "stderr": "..."
+}
+```
+
+The examples are a starting point only; **the implementation must derive the final contract from the current Nuxt consumer and existing tests before changing the protocol**.
+
+Unknown message types and malformed JSON must preserve the current error envelope and connection behavior.
+
+## Implementation phases
+
+### Phase 0 — Contract freeze and inventory — [ ] TODO
+
+- [ ] Read the entire current relay-agent implementation, including CLI and pidfile modules.
+- [ ] Identify every Nuxt caller/consumer of `/health`, `/pair`, `/revoke`, WebSocket URL, headers, query parameters, and message types.
+- [ ] Identify all release/download consumers and expected artifact names.
+- [ ] Record exact HTTP status codes, JSON shapes, WebSocket path, close/error behavior, timeout values, default values, and environment-variable behavior.
+- [ ] Record current process lifecycle behavior and the Phase 9 atomic pidfile semantics from Plan 026.
+- [ ] Turn the inventory into contract tests/fixtures before deleting the Node implementation.
+
+### Phase 1 — Rust crate and binary skeleton — [ ] TODO
+
+- [ ] Add `relay-agent` as a `[[bin]]` in `packages/rust-tools/Cargo.toml`.
+- [ ] Add only required dependencies/features.
+- [ ] Implement `clap` CLI and environment fallback.
+- [ ] Implement configuration validation and default directory/port/origin handling.
+- [ ] Add Rust module boundaries for HTTP, WebSocket, pairing, execution, lifecycle, and errors.
+- [ ] `cargo fmt --check` and Clippy must be clean from the first complete skeleton.
+
+### Phase 2 — HTTP API parity — [ ] TODO
+
+- [ ] Implement `GET /health`.
+- [ ] Implement `POST /pair`.
+- [ ] Implement `POST /revoke`.
+- [ ] Implement OPTIONS/CORS behavior required by Nuxt.
+- [ ] Implement exact Host/Origin validation.
+- [ ] Add unit/integration tests for success, malformed input, invalid credentials, expiry, reuse, and wrong/missing Origin/Host.
+- [ ] Compare Rust responses against the frozen contract fixtures.
+
+### Phase 3 — WebSocket/auth parity — [ ] TODO
+
+- [ ] Implement WebSocket upgrade on the exact existing path.
+- [ ] Validate Origin/Host before upgrade.
+- [ ] Validate session credential before upgrade.
+- [ ] Preserve credential revocation semantics.
+- [ ] Implement malformed/unknown message handling.
+- [ ] Add integration tests for accepted and rejected upgrade cases.
+
+### Phase 4 — Command execution parity — [ ] TODO
+
+- [ ] Implement `tokio::process::Command` execution.
+- [ ] Preserve command/args parsing semantics.
+- [ ] Preserve explicit `cwd` behavior and `--dir` default semantics.
+- [ ] Capture stdout/stderr.
+- [ ] Return exit code and exact result envelope.
+- [ ] Preserve non-zero exit behavior.
+- [ ] Preserve command-not-found and spawn-error behavior.
+- [ ] Implement timeout and process termination.
+- [ ] Add regression tests for success, failure, empty output, non-zero exit, cwd, arguments containing spaces/shell metacharacters, and timeout.
+
+### Phase 5 — PID/lifecycle parity and hardening — [ ] TODO
+
+- [ ] Port atomic exclusive pidfile acquisition.
+- [ ] Port stale-lock detection/recovery.
+- [ ] Port second-instance rejection.
+- [ ] Implement `stop --port <port>`.
+- [ ] Handle SIGINT/SIGTERM cleanly.
+- [ ] Ensure shutdown does not delete another process's pidfile.
+- [ ] Add race/lifecycle integration tests where practical.
+
+### Phase 6 — Frontend E2E parity — [ ] TODO
+
+- [ ] Build the Rust binary.
+- [ ] Start it on a local test port.
+- [ ] Pair from the existing Nuxt UI without changing frontend code.
+- [ ] Establish the browser WebSocket connection.
+- [ ] Execute a terminal command through the existing local-terminal flow.
+- [ ] Verify stdout/stderr/exit code are rendered exactly as before.
+- [ ] Verify failure and timeout behavior.
+- [ ] Verify revoke/disconnect behavior.
+- [ ] Verify no hosted-server terminal data path is introduced.
+- [ ] Record the exact tested browser/build/runtime versions.
+
+### Phase 7 — Remove Node relay implementation — [ ] TODO
+
+Only after Phase 6 proves parity:
+
+- [ ] Delete `packages/relay-agent/src/*`.
+- [ ] Delete `packages/relay-agent/bin/cli.mjs`.
+- [ ] Delete `packages/relay-agent/bin/pidfile.mjs`.
+- [ ] Delete `packages/relay-agent/build.mjs`.
+- [ ] Remove `packages/relay-agent/package.json` if the package is no longer needed; otherwise reduce it to non-runtime metadata only after confirming the monorepo package manager/release flow does not require it.
+- [ ] Remove all relay-agent-specific Node dependencies (`ws`, `execa`, `esbuild`, `@types/*` that become unused).
+- [ ] Remove `@yao-pkg/pkg` from the entire monorepo.
+- [ ] Remove obsolete Node build scripts and references.
+- [ ] Ensure no relay-agent runtime entrypoint remains in JS/TS.
+
+### Phase 8 — Rust-native release pipeline — [ ] TODO
+
+Rewrite `.github/workflows/release-relay-agent.yml` to build Rust artifacts directly.
+
+- [ ] Remove pnpm/Node installation from the relay-agent release job.
+- [ ] Install/pin the repository Rust toolchain consistently with `rust-toolchain.toml` / Plan 027 policy.
+- [ ] Build `relay-agent` with Cargo in release mode.
+- [ ] Produce Linux x64, macOS x64, macOS arm64, and Windows x64 artifacts unless the repository's supported matrix is intentionally changed with evidence.
+- [ ] Use native/appropriate cross-compilation or dedicated matrix runners; do not assume an Ubuntu host can transparently produce every target.
+- [ ] Rename artifacts to the stable `relay-agent-*` names expected by the Nuxt download flow.
+- [ ] Generate checksums.
+- [ ] Verify artifacts are standalone and do not require Node.js.
+- [ ] Publish release assets from the Rust build output.
+- [ ] Ensure Settings → Local Terminal download URLs still resolve without frontend changes.
+- [ ] Run the release workflow from a disposable tag before marking this phase complete.
+
+### Phase 9 — Binary size and production hardening — [ ] TODO
+
+- [ ] Measure each release artifact size.
+- [ ] Tune release profile based on measurements.
+- [ ] Run `cargo audit` / dependency review as supported by repository CI policy.
+- [ ] Verify no unnecessary Tokio/Axum features are enabled.
+- [ ] Verify symbols/debug data are stripped from release artifacts where appropriate.
+- [ ] Verify startup time and basic resource usage are acceptable.
+- [ ] Verify no Node/V8/libnode dependency is embedded or required.
+
+### Phase 10 — Final removal and closeout — [ ] TODO
+
+- [ ] Repository-wide search proves no `@yao-pkg/pkg` dependency remains.
+- [ ] Repository-wide search proves no relay-agent executable JS/TS entrypoint remains.
+- [ ] `pnpm install` no longer installs relay-agent-only runtime/build dependencies.
+- [ ] `cargo build --release --bin relay-agent` succeeds from a clean checkout.
+- [ ] `relay-agent --help` works without Node.js.
+- [ ] `relay-agent stop --port <port>` works without Node.js.
+- [ ] Full Rust test suite passes.
+- [ ] Frontend E2E parity passes without frontend source changes.
+- [ ] Release workflow passes for all supported targets.
+- [ ] Published binaries are manually smoke-tested from GitHub Release assets.
+- [ ] Plan 028 is marked `COMPLETED` only after all artifact verification is done.
+- [ ] `.agents/plans/README.md` moves Plan 028 from In Flight to Completed with final PR/release evidence.
+
+## Test strategy
+
+### Unit tests
+
+Cover pure logic independently from networking/process execution:
+
+- CLI/default configuration.
+- Origin/Host validation.
+- pairing token expiry/reuse.
+- credential lookup/revocation.
+- command payload parsing.
+- result serialization.
+- pidfile path/ownership logic.
+
+### Integration tests
+
+Use local ephemeral HTTP/WebSocket servers only. No public internet dependency.
+
+Required cases:
+
+- health success.
+- pair success.
+- invalid token.
+- expired token.
+- reused token.
+- revoke success/failure.
+- missing/wrong Origin.
+- missing/wrong Host.
+- valid WebSocket credential.
+- invalid/revoked WebSocket credential.
+- exec success.
+- exec non-zero exit.
+- command-not-found.
+- stdout/stderr capture.
+- explicit cwd.
+- argument boundary preservation.
+- timeout and child termination.
+- malformed JSON.
+- unknown message type.
+- second instance rejection.
+- stale pidfile recovery.
+- clean stop.
+
+### Frontend E2E
+
+The strongest parity gate is the real Nuxt UI consuming the Rust binary without a frontend code change. It must prove:
+
+```text
+Nuxt UI
+  ↓
+POST /pair
+  ↓
+sessionCredential
+  ↓
+WebSocket ?credential=...
+  ↓
+{ type: "exec", ... }
+  ↓
+Rust relay-agent
+  ↓
+tokio::process::Command
+  ↓
+{ type: "exec_result", ... }
+  ↓
+Nuxt UI
+```
+
+## CI gates
+
+The PR is not merge-ready until all applicable checks are green:
+
+- [ ] `cargo fmt --check`.
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings`.
+- [ ] `cargo test --workspace`.
+- [ ] Relay-agent integration tests.
+- [ ] Frontend/E2E parity tests.
+- [ ] Repository-wide `@yao-pkg/pkg` absence check.
+- [ ] Repository-wide JS/TS relay-agent executable absence check.
+- [ ] Release build for every supported target.
+- [ ] Release artifact smoke test.
+- [ ] Artifact naming/checksum verification.
+- [ ] Node.js-independent runtime verification.
+- [ ] No unrelated Nuxt regressions.
+
+## Definition of Done
+
+Plan 028 is **CLOSED** only when:
+
+- [ ] `relay-agent` is implemented entirely in Rust.
+- [ ] The binary is the sole relay-agent runtime entrypoint.
+- [ ] Nuxt requires no functional/source changes to pair/connect/execute commands.
+- [ ] HTTP and WebSocket contracts are strictly parity-tested.
+- [ ] Origin/Host security remains fail-closed.
+- [ ] Pairing is single-use and session credentials are revocable.
+- [ ] Command execution uses Tokio and preserves stdout/stderr/exit-code/error semantics.
+- [ ] Timeout terminates the child/process tree appropriately and does not block the async runtime.
+- [ ] PID/stop/singleton lifecycle behavior is preserved and race-safe.
+- [ ] Node.js/TypeScript relay-agent source and build scripts are removed.
+- [ ] `@yao-pkg/pkg` is removed from the monorepo.
+- [ ] Release CI builds native Rust binaries directly.
+- [ ] Supported release assets are standalone and Node-free.
+- [ ] Binary sizes are measured and documented.
+- [ ] Full CI is green.
+- [ ] Published release binaries are smoke-tested end-to-end.
+- [ ] Documentation and Plan 028 match the final implementation.
+
+## Rollback
+
+If the Rust agent fails parity or release verification, keep Plan 028 `IN FLIGHT` and do not remove the Node implementation until the Rust binary passes the full contract/E2E gate. The previous Node/pkg release remains the rollback artifact until the Rust release is proven from actual published binaries.
+
+If a Rust release is published and later fails artifact verification, restore the previous known-good relay-agent release where practical, fix the Rust implementation, republish, and repeat the complete artifact smoke test.
+
+## Evidence log
+
+Record final evidence here as the work progresses:
+
+- Contract inventory: `[ ]`.
+- Rust implementation: `[ ]`.
+- Frontend E2E parity: `[ ]`.
+- Node source removal: `[ ]`.
+- `@yao-pkg/pkg` removal: `[ ]`.
+- Release workflow migration: `[ ]`.
+- Published binary smoke tests: `[ ]`.
+- Final CI run: `[ ]`.
+- Final release/tag: `[ ]`.
