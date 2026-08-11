@@ -82,25 +82,102 @@ impl From<&McpError> for RpcError {
         Self {
             code: err.code(),
             message: err.message(),
-            data: None,
+            data: err.data(),
         }
     }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct InitializeParams {
-    #[serde(rename = "protocolVersion")]
-    pub protocol_version: String,
-    #[serde(default)]
-    pub capabilities: Value,
-    #[serde(rename = "clientInfo")]
-    pub client_info: ClientInfo,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ClientInfo {
     pub name: String,
     pub version: String,
+}
+
+/// The `_meta` object modern MCP (`2026-07-28`) requires on every request's
+/// `params`, per the spec's `RequestMetaObject` (`schema#requestmetaobject`).
+/// There is no `initialize` handshake anymore — this is how protocol
+/// version, client identity, and capabilities travel, self-contained, on
+/// every single request.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct RequestMeta {
+    /// Required by spec. Mirrored in and cross-checked against the
+    /// `MCP-Protocol-Version` HTTP header — see `transport.rs`.
+    #[serde(rename = "io.modelcontextprotocol/protocolVersion")]
+    pub protocol_version: Option<String>,
+
+    /// Optional by spec.
+    #[serde(rename = "io.modelcontextprotocol/clientInfo")]
+    pub client_info: Option<ClientInfo>,
+
+    /// Required by spec (may be an empty object).
+    #[serde(rename = "io.modelcontextprotocol/clientCapabilities")]
+    pub client_capabilities: Option<Value>,
+}
+
+/// Extract and parse `params._meta` from a request, if present. Absence (or
+/// a `params` with no `_meta` key) is represented as `None` — callers
+/// distinguish "meta object present but a required field is empty" from
+/// "no meta object at all" so error messages stay precise.
+pub fn extract_meta(params: Option<&Value>) -> Option<RequestMeta> {
+    let meta_val = params?.get("_meta")?;
+    serde_json::from_value(meta_val.clone()).ok()
+}
+
+/// Decode a header value per the spec's Base64 sentinel format
+/// (`streamable-http#value-encoding`): `=?base64?{Base64EncodedValue}?=`.
+/// Values that don't match the sentinel pattern are returned as-is (they
+/// were sent as plain ASCII). Returns `None` only when the value *looks*
+/// like a sentinel but fails to decode as valid UTF-8 Base64 — that is a
+/// malformed header, not a plain value.
+pub fn decode_header_value(raw: &str) -> Option<String> {
+    const PREFIX: &str = "=?base64?";
+    const SUFFIX: &str = "?=";
+    match raw
+        .strip_prefix(PREFIX)
+        .and_then(|s| s.strip_suffix(SUFFIX))
+    {
+        Some(encoded) => {
+            use base64::Engine;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .ok()?;
+            String::from_utf8(bytes).ok()
+        }
+        None => Some(raw.to_string()),
+    }
+}
+
+/// The result of `server/discover` (`server/discover#discoverresult`).
+/// `server/discover` is the modern replacement for the removed
+/// `initialize` handshake: servers **MUST** implement it, but calling it is
+/// optional for clients (any RPC can be invoked inline).
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverResult {
+    #[serde(rename = "resultType")]
+    pub result_type: &'static str,
+    #[serde(rename = "supportedVersions")]
+    pub supported_versions: Vec<&'static str>,
+    pub capabilities: Value,
+    #[serde(rename = "_meta")]
+    pub meta: Value,
+    pub instructions: &'static str,
+}
+
+impl DiscoverResult {
+    pub fn current() -> Self {
+        Self {
+            result_type: "complete",
+            supported_versions: vec![PROTOCOL_VERSION],
+            capabilities: json!({ "tools": { "listChanged": false } }),
+            meta: json!({
+                "io.modelcontextprotocol/serverInfo": {
+                    "name": "relay-agent",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            }),
+            instructions: "Local relay-agent MCP server: exposes terminal_exec, http_fetch, and web_search tools backed by the Plan 027 Rust CLI binaries.",
+        }
+    }
 }
 
 /// A single MCP tool definition: stable name, human description, and a
@@ -286,5 +363,53 @@ mod tests {
         let payload = json!({"not":"a request"});
         let err = parse_request(&payload).unwrap_err();
         assert!(matches!(err, Some(McpError::InvalidRequest(_))));
+    }
+
+    #[test]
+    fn extract_meta_reads_reserved_keys() {
+        let params = json!({
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": { "name": "c", "version": "1.0" },
+                "io.modelcontextprotocol/clientCapabilities": {}
+            }
+        });
+        let meta = extract_meta(Some(&params)).expect("meta present");
+        assert_eq!(meta.protocol_version.as_deref(), Some("2026-07-28"));
+        assert_eq!(meta.client_info.unwrap().name, "c");
+        assert!(meta.client_capabilities.is_some());
+    }
+
+    #[test]
+    fn extract_meta_returns_none_when_absent() {
+        assert!(extract_meta(Some(&json!({}))).is_none());
+        assert!(extract_meta(None).is_none());
+    }
+
+    #[test]
+    fn decode_header_value_passes_through_plain_ascii() {
+        assert_eq!(
+            decode_header_value("get_weather").as_deref(),
+            Some("get_weather")
+        );
+    }
+
+    #[test]
+    fn decode_header_value_decodes_base64_sentinel() {
+        // "Hello, 世界" per the spec's own worked example.
+        let encoded = "=?base64?SGVsbG8sIOS4lueVjA==?=";
+        assert_eq!(decode_header_value(encoded).as_deref(), Some("Hello, 世界"));
+    }
+
+    #[test]
+    fn decode_header_value_rejects_invalid_base64_sentinel() {
+        assert!(decode_header_value("=?base64?not valid base64?=").is_none());
+    }
+
+    #[test]
+    fn discover_result_advertises_current_protocol_version() {
+        let result = DiscoverResult::current();
+        assert_eq!(result.supported_versions, vec![PROTOCOL_VERSION]);
+        assert_eq!(result.result_type, "complete");
     }
 }

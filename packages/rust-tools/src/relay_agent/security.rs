@@ -29,8 +29,17 @@ use super::error::McpError;
 /// - more than one `Origin` header is present,
 /// - the header value isn't valid UTF-8,
 /// - the header value doesn't parse as a clean `scheme://host[:port]` origin
-///   (no path/query/fragment/userinfo), or
-/// - the parsed origin doesn't exactly equal the configured origin.
+///   (no path/query/fragment/userinfo) — this is only a *validity* gate, or
+/// - the header value is not a **byte-for-byte exact match** of the
+///   configured origin string.
+///
+/// The equality check is deliberately not case-folded or re-serialized: the
+/// plan requires an *exact* configured-Origin match, not an equivalence
+/// check, so `http://LOCALHOST:3333` is rejected even though it would
+/// resolve to the same host as a configured `http://localhost:3333` — the
+/// URL-parsing step above exists only to reject garbage input before the
+/// exact comparison, never to normalize it into something that then
+/// compares equal.
 pub fn validate_origin(headers: &HeaderMap, config: &ServerConfig) -> Result<(), McpError> {
     let configured = config.origin.as_deref().ok_or_else(|| {
         McpError::InvalidRequest("server has no allowed Origin configured".to_string())
@@ -51,14 +60,19 @@ pub fn validate_origin(headers: &HeaderMap, config: &ServerConfig) -> Result<(),
         .to_str()
         .map_err(|_| McpError::InvalidRequest("Origin header is not valid UTF-8".to_string()))?;
 
-    let parsed = normalize_origin(origin_str).ok_or_else(|| {
-        McpError::InvalidRequest(format!("malformed Origin header: '{origin_str}'"))
-    })?;
+    if !is_well_formed_origin(origin_str) {
+        return Err(McpError::InvalidRequest(format!(
+            "malformed Origin header: '{origin_str}'"
+        )));
+    }
 
-    let expected = normalize_origin(configured)
-        .ok_or_else(|| McpError::InvalidRequest("configured Origin is malformed".to_string()))?;
+    if !is_well_formed_origin(configured) {
+        return Err(McpError::InvalidRequest(
+            "configured Origin is malformed".to_string(),
+        ));
+    }
 
-    if parsed != expected {
+    if origin_str != configured {
         return Err(McpError::InvalidRequest(format!(
             "Origin '{origin_str}' is not the configured allowed origin"
         )));
@@ -67,28 +81,30 @@ pub fn validate_origin(headers: &HeaderMap, config: &ServerConfig) -> Result<(),
     Ok(())
 }
 
-/// Parse `scheme://host[:port]` into a normalized, comparable tuple.
-///
-/// Returns `None` for anything that isn't a clean absolute origin: a path
-/// beyond `/`, a query, a fragment, or embedded userinfo all make the value
-/// ambiguous rather than a bare origin, so they are rejected rather than
-/// silently stripped.
-fn normalize_origin(raw: &str) -> Option<(String, String, Option<u16>)> {
-    let url = url::Url::parse(raw).ok()?;
+/// Validity gate only — confirms `raw` is a clean absolute `scheme://host[:port]`
+/// origin (`http`/`https`, no path beyond `/`, no query/fragment/userinfo).
+/// Deliberately returns a bare `bool`, not a normalized/parsed value: this
+/// function exists to reject malformed input, never to produce a
+/// case-folded or re-serialized form for comparison — see
+/// [`validate_origin`]'s doc comment for why exact string equality is used
+/// instead.
+fn is_well_formed_origin(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else {
+        return false;
+    };
     if !matches!(url.scheme(), "http" | "https") {
-        return None;
+        return false;
     }
     if !matches!(url.path(), "" | "/") {
-        return None;
+        return false;
     }
     if url.query().is_some() || url.fragment().is_some() || !url.username().is_empty() {
-        return None;
+        return false;
     }
     if url.password().is_some() {
-        return None;
+        return false;
     }
-    let host = url.host_str()?.to_ascii_lowercase();
-    Some((url.scheme().to_string(), host, url.port()))
+    url.host_str().is_some()
 }
 
 /// Validate the `Host` header against this server's own bind address.
@@ -170,6 +186,15 @@ mod tests {
     fn origin_allowed_when_exact_match() {
         let h = headers(&[("origin", "http://localhost:3333")]);
         assert!(validate_origin(&h, &config()).is_ok());
+    }
+
+    #[test]
+    fn origin_rejected_when_case_differs_even_though_host_is_equivalent() {
+        // http://LOCALHOST:3333 and http://localhost:3333 name the same
+        // host per URL semantics, but the plan requires an *exact*
+        // configured-Origin match, not host equivalence.
+        let h = headers(&[("origin", "http://LOCALHOST:3333")]);
+        assert!(validate_origin(&h, &config()).is_err());
     }
 
     #[test]

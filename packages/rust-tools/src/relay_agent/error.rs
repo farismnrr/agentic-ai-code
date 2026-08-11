@@ -58,10 +58,29 @@ pub enum McpError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    /// MCP `2026-07-28`-specific: a `Mcp-Method`/`Mcp-Name`/`MCP-Protocol-Version`
+    /// standard header is missing, malformed, or does not match the
+    /// corresponding request-body value. Per the official spec
+    /// (`basic/transports/streamable-http#server-validation`), this is
+    /// always HTTP `400` with JSON-RPC code `-32020`.
+    #[error("Header mismatch: {0}")]
+    HeaderMismatch(String),
+
+    /// MCP `2026-07-28`-specific: the request's protocol version (from the
+    /// `MCP-Protocol-Version` header, mirrored in `_meta`) is not one this
+    /// server implements. Per spec (`basic/versioning#protocol-version-negotiation`),
+    /// always HTTP `400` with JSON-RPC code `-32022`, and `data` lists the
+    /// versions this server does support.
+    #[error("Unsupported protocol version: requested '{requested}', supported {supported:?}")]
+    UnsupportedProtocolVersion {
+        supported: Vec<String>,
+        requested: String,
+    },
 }
 
 impl McpError {
-    /// JSON-RPC 2.0 reserved error code for this error's category.
+    /// JSON-RPC 2.0 / MCP-reserved error code for this error's category.
     pub fn code(&self) -> i32 {
         match self {
             McpError::ParseError => -32700,
@@ -69,6 +88,8 @@ impl McpError {
             McpError::MethodNotFound(_) => -32601,
             McpError::InvalidParams(_) => -32602,
             McpError::Internal(_) => -32603,
+            McpError::HeaderMismatch(_) => -32020,
+            McpError::UnsupportedProtocolVersion { .. } => -32022,
         }
     }
 
@@ -78,6 +99,24 @@ impl McpError {
     /// into these variants free of that data.
     pub fn message(&self) -> String {
         self.to_string()
+    }
+
+    /// The JSON-RPC error object's optional `data` field. Only
+    /// [`McpError::UnsupportedProtocolVersion`] carries structured data per
+    /// the spec's `UnsupportedProtocolVersionError` shape
+    /// (`{"supported": [...], "requested": "..."}`); every other variant
+    /// has no `data`.
+    pub fn data(&self) -> Option<serde_json::Value> {
+        match self {
+            McpError::UnsupportedProtocolVersion {
+                supported,
+                requested,
+            } => Some(serde_json::json!({
+                "supported": supported,
+                "requested": requested,
+            })),
+            _ => None,
+        }
     }
 }
 
@@ -92,5 +131,31 @@ mod tests {
         assert_eq!(McpError::MethodNotFound("x".into()).code(), -32601);
         assert_eq!(McpError::InvalidParams("x".into()).code(), -32602);
         assert_eq!(McpError::Internal("x".into()).code(), -32603);
+        assert_eq!(McpError::HeaderMismatch("x".into()).code(), -32020);
+        assert_eq!(
+            McpError::UnsupportedProtocolVersion {
+                supported: vec!["2026-07-28".into()],
+                requested: "1900-01-01".into()
+            }
+            .code(),
+            -32022
+        );
+    }
+
+    #[test]
+    fn unsupported_protocol_version_carries_structured_data() {
+        let err = McpError::UnsupportedProtocolVersion {
+            supported: vec!["2026-07-28".into()],
+            requested: "1900-01-01".into(),
+        };
+        let data = err.data().expect("must carry data");
+        assert_eq!(data["supported"], serde_json::json!(["2026-07-28"]));
+        assert_eq!(data["requested"], "1900-01-01");
+    }
+
+    #[test]
+    fn other_variants_carry_no_data() {
+        assert!(McpError::HeaderMismatch("x".into()).data().is_none());
+        assert!(McpError::InvalidRequest("x".into()).data().is_none());
     }
 }
