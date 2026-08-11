@@ -98,7 +98,7 @@ Remaining evidence:
 - [x] Formatting and Clippy checks are enforced.
 - [x] Workspace tests run in CI.
 
-Still required:
+Completed requirements:
 
 - [x] Explicit Rust toolchain pin (`rust-toolchain.toml` or equivalent).
 - [x] Explicit MSRV policy.
@@ -139,7 +139,7 @@ Because the JS entrypoints are now deleted, preserve any required JS-oracle fixt
 
 PR #99 uses Rust process execution with explicit argument vectors, which is the correct architectural direction.
 
-Still required:
+Completed requirements:
 
 #### CLI compatibility
 
@@ -189,7 +189,7 @@ Already verified:
 - [x] Basic IP validation exists.
 - [x] Basic request method/header/body support exists.
 
-Still required:
+Completed requirements:
 
 - [x] Explicit CLI safe-URL policy documented separately from application/runtime SSRF policy.
 - [x] Loopback/private/link-local coverage.
@@ -261,7 +261,7 @@ Required deterministic local/mock HTTP tests:
 - [x] Rust binaries are intended CLI implementations.
 - [x] Nuxt/application runtime remains unchanged.
 
-Still required:
+Completed requirements:
 
 - [x] Document fresh-checkout build/install workflow.
 - [x] Verify no developer-specific absolute paths.
@@ -282,7 +282,7 @@ Already present:
 - [x] Workspace tests.
 - [x] Build job.
 
-Still required:
+Completed requirements:
 
 - [x] Strict parity/integration suite in CI.
 - [x] Pinned Rust toolchain.
@@ -302,7 +302,7 @@ Still required:
 
 **Status: 🟢 DONE.**
 PR #99 contains verified benchmark results proving latency reduction and memory improvements.
-Still required:
+Completed requirements:
 
 - [x] Document benchmark commands.
 - [x] Fixed test inputs/fixtures.
@@ -331,7 +331,7 @@ Already done:
 - [x] Rust binaries are the intended CLI implementations.
 - [x] Nuxt/application TypeScript remains outside the CLI migration scope.
 
-Still required:
+Completed requirements:
 
 - [x] Repository-wide search for old JS CLI launchers.
 - [x] Repository-wide search for `USE_RUST_CLI`.
@@ -443,7 +443,7 @@ If a regression appears:
 | Differential parity | 🟢 Done | Comprehensive test harness created using old JS files as oracle |
 | Basic CI | 🟢 Done | fmt/Clippy/test/build present |
 | Release CI | 🟢 Done | Matrix, checksums, and artifact pipeline configured in rust-ci.yml |
-| Toolchain/MSRV | 🟢 Done | Explicit pin (1.88.0) configured |
+| Toolchain/MSRV | 🟢 Done | Rust toolchain: 1.95.0, MSRV: 1.88.0 configured |
 | Benchmark | 🟢 Done | Methodology recorded; RSS and latency proven significantly improved |
 | Final zero-JS audit | 🟢 Done | Repository‑wide audit completed; see [Zero‑JS‑CLI cutover memory](file:///home/farismnrr/.gemini/antigravity-cli/brain/3dd307aa-d587-4749-a8f9-ef37a39ec212/.agents/memories/027-zero-js-cli-cutover.md) |
 | Plan closeout | 🟢 Done | All gates verified; plan status set to COMPLETED |
@@ -452,7 +452,7 @@ If a regression appears:
 
 **Plan 027 is COMPLETED.**
 
-All remaining red/yellow gates are green, including:
+All red/yellow gates are now green, including:
 
 1. Terminal timeout + child termination.
 2. Curl security parity.

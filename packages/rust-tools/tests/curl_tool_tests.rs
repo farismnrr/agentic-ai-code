@@ -43,9 +43,9 @@ fn spawn_mock_server() -> u16 {
                         let response =
                             "HTTP/1.1 302 Found\r\nLocation: http://169.254.169.254/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
-                    } else if request.contains("redirect-to-localtest") {
+                    } else if request.contains("redirect-to-localhost") {
                         let response =
-                            "HTTP/1.1 302 Found\r\nLocation: http://localtest.me/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            "HTTP/1.1 302 Found\r\nLocation: http://localhost/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write(response.as_bytes());
                     } else if request.contains("redirect-to-mockserver") {
                         let response =
@@ -90,9 +90,9 @@ fn test_ipv4_mapped_ipv6_blocked() {
 
 #[test]
 fn test_hostname_resolves_to_private() {
-    // localtest.me resolves to 127.0.0.1
+    // localhost resolves to 127.0.0.1
     let output = Command::new(get_bin())
-        .arg("http://localtest.me")
+        .arg("http://localhost")
         .output()
         .expect("Failed to run curl-tool");
 
@@ -105,8 +105,8 @@ fn test_hostname_resolves_to_private() {
 fn test_redirect_to_private_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://8.8.8.8/redirect-to-private"))
-        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
+        .arg(format!("http://127.0.0.1:{port}/redirect-to-private"))
+        .arg("--test-allow-local-initial")
         .output()
         .unwrap();
 
@@ -119,8 +119,8 @@ fn test_redirect_to_private_blocked() {
 fn test_redirect_to_loopback_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://8.8.8.8/redirect-to-loopback"))
-        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
+        .arg(format!("http://127.0.0.1:{port}/redirect-to-loopback"))
+        .arg("--test-allow-local-initial")
         .output()
         .unwrap();
 
@@ -133,8 +133,8 @@ fn test_redirect_to_loopback_blocked() {
 fn test_redirect_to_link_local_blocked() {
     let port = spawn_mock_server();
     let output = Command::new(get_bin())
-        .arg(format!("http://8.8.8.8/redirect-to-link-local"))
-        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
+        .arg(format!("http://127.0.0.1:{port}/redirect-to-link-local"))
+        .arg("--test-allow-local-initial")
         .output()
         .unwrap();
 
@@ -147,12 +147,11 @@ fn test_redirect_to_link_local_blocked() {
 fn test_redirect_revalidation_dns() {
     let port = spawn_mock_server();
     // DNS rebinding simulation / redirect to private IP test
-    // initial request OK, but redirect points to localtest.me
-    // Since localtest.me resolves to 127.0.0.1, the redirect policy should block it.
-    // We can just add /redirect-to-localtest to mock server!
+    // initial request OK (bypassed for test), but redirect points to localhost
+    // Since localhost resolves to 127.0.0.1, the redirect policy should block it.
     let output = Command::new(get_bin())
-        .arg(format!("http://8.8.8.8/redirect-to-localtest"))
-        .env("HTTP_PROXY", format!("http://127.0.0.1:{}", port))
+        .arg(format!("http://127.0.0.1:{port}/redirect-to-localhost"))
+        .arg("--test-allow-local-initial")
         .output()
         .unwrap();
 

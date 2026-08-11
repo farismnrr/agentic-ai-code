@@ -30,6 +30,10 @@ struct Args {
     /// Bypass SSRF guard protection
     #[arg(long = "no-guard")]
     no_guard: bool,
+
+    /// Hidden flag for testing redirect policies with a local mock server
+    #[arg(long = "test-allow-local-initial", hide = true)]
+    test_allow_local_initial: bool,
 }
 
 async fn run_curl(
@@ -39,6 +43,7 @@ async fn run_curl(
     body_data: Option<&str>,
     timeout_ms: u64,
     no_guard: bool,
+    test_allow_local_initial: bool,
 ) -> String {
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
@@ -76,14 +81,22 @@ async fn run_curl(
             // Check if it's already an IP string
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
                 if !is_safe_ip(&ip) {
-                    return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
+                    if test_allow_local_initial && ip.is_loopback() {
+                        // Bypass initial check for loopback only during testing
+                    } else {
+                        return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
+                    }
                 }
             } else {
                 use std::net::ToSocketAddrs;
                 if let Ok(addrs) = format!("{host}:80").to_socket_addrs() {
                     for addr in addrs {
                         if !is_safe_ip(&addr.ip()) {
-                            return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
+                            if test_allow_local_initial && addr.ip().is_loopback() {
+                                // Bypass initial check
+                            } else {
+                                return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
+                            }
                         }
                     }
                 } else {
@@ -216,6 +229,7 @@ async fn main() {
         args.data.as_deref(),
         args.timeout_ms,
         args.no_guard,
+        args.test_allow_local_initial,
     )
     .await;
 
