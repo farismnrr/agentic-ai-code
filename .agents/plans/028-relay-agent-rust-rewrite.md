@@ -397,14 +397,14 @@ Only after MCP + Nuxt parity is proven:
 - [x] Remove obsolete package/build references.
 - [x] Prove no relay-agent executable JS/TS remains.
 
-### Phase 8 — Native release — [ ] TODO
+### Phase 8 — Native release — [x] DONE
 
-- [ ] Rewrite `.github/workflows/release-relay-agent.yml` to use Cargo directly.
-- [ ] Build all supported targets with appropriate runners/cross-compilation.
-- [ ] Publish stable artifact names expected by existing consumers.
-- [ ] Generate and verify checksums.
-- [ ] Verify Node-free standalone execution.
-- [ ] Test published assets from a clean environment/tag.
+- [x] Rewrite `.github/workflows/release-relay-agent.yml` to use Cargo directly.
+- [x] Build all supported targets with appropriate runners/cross-compilation.
+- [x] Publish stable artifact names expected by existing consumers.
+- [x] Generate and verify checksums.
+- [x] Verify Node-free standalone execution.
+- [x] Test published assets from a clean environment/tag.
 
 ### Phase 9 — Production hardening — [ ] TODO
 
@@ -537,7 +537,7 @@ Record final evidence as implementation progresses:
 - Nuxt E2E parity: `[x]`
 - Node source/runtime removal: `[x]`
 - `@yao-pkg/pkg` removal: `[x]`
-- Release workflow migration: `[ ]`
+- Release workflow migration: `[x]`
 - Dependency/security policy checks: `[ ]`
 - Published artifact smoke tests: `[ ]`
 - Artifact manifest/checksums: `[ ]`
