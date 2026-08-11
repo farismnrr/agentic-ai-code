@@ -174,7 +174,7 @@ Docker should work for normal coding only through a backend that cannot become h
 - [ ] Prevent host PID/network/device/capability/namespace escape at backend boundary.
 - [ ] Prevent arbitrary host filesystem bind mounts outside isolated workspace mapping.
 - [ ] Do not replace backend isolation with a giant fragile Docker CLI denylist.
-- [ ] If safe Docker backend cannot be delivered, keep Docker disabled and leave 29B-3 OPEN.
+- [x] If safe Docker backend cannot be delivered, keep Docker disabled and leave 29B-3 OPEN.
 
 ## Acceptance
 
