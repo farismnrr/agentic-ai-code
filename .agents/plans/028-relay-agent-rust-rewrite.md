@@ -156,10 +156,10 @@ No public unauthenticated execution is permitted.
 
 ### 14.1 Terminal execution policy
 
-- [ ] Resolve the `terminal-tool` guard/execution-policy contradiction: relay must not pass `--no-guard`, but normal guarded execution must be capable of performing an approved command rather than always rejecting it.
-- [ ] Define the single authoritative execution policy between relay and Plan 027 `terminal-tool`.
-- [ ] Verify untrusted MCP arguments cannot select or disable a privileged execution mode.
-- [ ] Re-run source-level command-injection/argument-boundary review after the policy change.
+- [x] Resolve the `terminal-tool` guard/execution-policy contradiction: relay must not pass `--no-guard`, but normal guarded execution must be capable of performing an approved command rather than always rejecting it.
+- [x] Define the single authoritative execution policy between relay and Plan 027 `terminal-tool`.
+- [x] Verify untrusted MCP arguments cannot select or disable a privileged execution mode.
+- [x] Re-run source-level command-injection/argument-boundary review after the policy change.
 
 ### 14.2 SSRF / DNS rebinding
 
