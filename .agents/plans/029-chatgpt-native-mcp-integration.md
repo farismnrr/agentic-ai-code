@@ -317,18 +317,18 @@ Confirm what Plan 028 already provides and freeze only real Plan 029 work.
 
 ### Tasks
 
-- [ ] Re-read current `dev` implementations of `transport.rs`, `mcp.rs`, `config.rs`, `security.rs`, `execution.rs`, CI, and relay release workflow.
-- [ ] Create/update `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
-- [ ] Mark each capability `EXISTING`, `PARTIAL`, or `MISSING`.
-- [ ] Record exact current ChatGPT custom-app OAuth UI fields.
-- [ ] Re-check official OpenAI developer-mode/custom-MCP docs.
-- [ ] Re-check current MCP authorization/client-registration docs.
-- [ ] Freeze the ChatGPT plan/mode used for write-capable E2E.
-- [ ] Freeze the external OAuth/OIDC provider.
-- [ ] Freeze canonical MCP resource identifier.
-- [ ] Freeze `relay.coding` as the default full-coding resource scope unless implementation evidence requires a different name/model.
-- [ ] Decide whether optional narrow scopes are worth supporting; do not make them mandatory without a real use case.
-- [ ] Do not duplicate Plan 028 functionality.
+- [x] Re-read current `dev` implementations of `transport.rs`, `mcp.rs`, `config.rs`, `security.rs`, `execution.rs`, CI, and relay release workflow.
+- [x] Create/update `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
+- [x] Mark each capability `EXISTING`, `PARTIAL`, or `MISSING`.
+- [x] Record exact current ChatGPT custom-app OAuth UI fields.
+- [x] Re-check official OpenAI developer-mode/custom-MCP docs.
+- [x] Re-check current MCP authorization/client-registration docs.
+- [x] Freeze the ChatGPT plan/mode used for write-capable E2E.
+- [x] Freeze the external OAuth/OIDC provider.
+- [x] Freeze canonical MCP resource identifier.
+- [x] Freeze `relay.coding` as the default full-coding resource scope unless implementation evidence requires a different name/model.
+- [x] Decide whether optional narrow scopes are worth supporting; do not make them mandatory without a real use case.
+- [x] Do not duplicate Plan 028 functionality.
 
 ### Exit criteria
 
