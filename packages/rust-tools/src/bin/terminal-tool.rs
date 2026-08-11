@@ -21,6 +21,10 @@ struct Args {
     #[arg(long = "no-guard")]
     no_guard: bool,
 
+    /// Allowed command for guarded execution (can be specified multiple times)
+    #[arg(long = "allow-command")]
+    allow_command: Vec<String>,
+
     /// Timeout in milliseconds (default: 30000)
     #[arg(long = "timeout")]
     timeout: Option<u64>,
@@ -43,15 +47,9 @@ async fn run_terminal(
     passed_args: &[String],
     cwd: &str,
     no_guard: bool,
+    allow_command: &[String],
     timeout_ms: u64,
 ) -> String {
-    if !no_guard {
-        eprintln!(
-            "WARN: Exec guard is enabled but no external validation is provided in CLI. Pass --no-guard if you want to bypass exec protection."
-        );
-        return "Error: Exec guard blocked request. Use --no-guard to bypass.".to_string();
-    }
-
     let parsed_parts = match shell_words::split(command_str) {
         Ok(parts) => parts,
         Err(e) => return format!("Error: failed to parse command string: {e}"),
@@ -62,6 +60,27 @@ async fn run_terminal(
     }
 
     let binary = &parsed_parts[0];
+
+    if !no_guard {
+        if allow_command.is_empty() {
+            eprintln!(
+                "WARN: Exec guard is enabled but no external validation is provided in CLI. Pass --allow-command <cmd> or --no-guard if you want to bypass exec protection."
+            );
+            return "Error: Exec guard blocked request. Use --allow-command to whitelist."
+                .to_string();
+        }
+        if !allow_command.iter().any(|c| c == binary) {
+            eprintln!(
+                "WARN: Exec guard blocked command '{}'. It is not in the --allow-command list.",
+                binary
+            );
+            return format!(
+                "Error: Exec guard blocked request. Command '{}' is not approved.",
+                binary
+            );
+        }
+    }
+
     let glued_args = &parsed_parts[1..];
 
     let mut final_args: Vec<String> = glued_args.to_vec();
@@ -161,7 +180,15 @@ async fn main() {
 
     let timeout_ms = args.timeout.unwrap_or(30000);
 
-    let output = run_terminal(command, cmd_args, &cwd, args.no_guard, timeout_ms).await;
+    let output = run_terminal(
+        command,
+        cmd_args,
+        &cwd,
+        args.no_guard,
+        &args.allow_command,
+        timeout_ms,
+    )
+    .await;
 
     let is_error = output.starts_with("Error:");
     println!("{output}");

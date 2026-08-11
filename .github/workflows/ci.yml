@@ -3,25 +3,19 @@ name: CI
 on:
   push:
     branches: [main, dev]
+    tags:
+      - 'relay-agent-v*'
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
-  test-and-lint:
+  js-ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "packages/rust-tools"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -44,11 +38,34 @@ jobs:
       - name: JS Audit
         run: pnpm audit
 
+  rust-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "packages/rust-tools"
+
       - name: Check Rust formatting
-        run: cargo fmt -- --check
+        working-directory: packages/rust-tools
+        run: cargo fmt --all -- --check
+
+      - name: Strict cargo check
+        working-directory: packages/rust-tools
+        run: cargo check --workspace --all-targets --all-features --locked
 
       - name: Lint with Clippy
-        run: cargo clippy -- -D warnings
+        working-directory: packages/rust-tools
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Install cargo-audit
         run: |
@@ -58,23 +75,17 @@ jobs:
       - name: Rust Security audit
         run: cargo audit
 
-      - name: Run Rust parity tests
-        run: cargo test --workspace
-
   build-release:
-    needs: test-and-lint
+    needs: [js-ci, rust-ci]
     strategy:
       matrix:
         include:
+          # Platform contract: relay-agent is Linux+bwrap only.
+          # macOS and Windows targets are removed — there is no secure sandbox
+          # equivalent for those platforms and no insecure fallback is acceptable.
+          # See compile_error! in src/bin/relay-agent.rs.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            use-cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -89,23 +100,14 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install cross
-        if: matrix.use-cross == true
-        run: cargo install cross
-
       - name: Build release artifacts
-        run: |
-          if [ "${{ matrix.use-cross }}" == "true" ]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package artifacts and generate checksums
         working-directory: target/${{ matrix.target }}/release
         run: |
           mkdir -p dist
-          for bin in terminal-tool curl-tool searxng-search-tool; do
+          for bin in terminal-tool curl-tool searxng-search-tool relay-agent; do
             if [ -f "$bin" ]; then
               cp "$bin" "dist/${bin}-${{ matrix.target }}"
               cd dist
@@ -121,22 +123,16 @@ jobs:
       - name: Smoke test artifacts
         working-directory: target/${{ matrix.target }}/release/dist
         run: |
-          for bin in terminal-tool curl-tool searxng-search-tool; do
+          for bin in terminal-tool curl-tool searxng-search-tool relay-agent; do
             bin_name="${bin}-${{ matrix.target }}"
-            
+
             # Verify SHA256 checksum file exists
             if [ ! -f "${bin_name}.sha256" ]; then
               echo "Error: Checksum file ${bin_name}.sha256 not found!"
               exit 1
             fi
-            
+
             # Check if this target can be executed on the current runner
-            # GitHub's macos-latest is now ARM-based (macos-14), so both Apple targets work (x86_64 via Rosetta 2)
-            if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
-              echo "Skipping execution for cross-compiled target ${{ matrix.target }}"
-              continue
-            fi
-            
             echo "Running smoke test for ${bin_name}..."
             chmod +x "./${bin_name}"
             "./${bin_name}" --help
@@ -147,3 +143,11 @@ jobs:
         with:
           name: release-artifacts-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/dist/*
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/relay-agent-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/${{ matrix.target }}/release/dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

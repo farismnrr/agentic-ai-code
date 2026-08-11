@@ -4,20 +4,13 @@ import type { RelayExecResult } from '~/composables/useRelayAgent'
 useSeoMeta({ title: 'Local Terminal' })
 
 const {
-  sessionCredential,
   port,
   isConnected,
   isConnecting,
-  error,
-  pair,
-  connect,
-  unpair,
+  error: _error,
+  checkConnection,
   exec
 } = useRelayAgent()
-
-const pairingTokenInput = ref('')
-const pairingPending = ref(false)
-const toast = useToast()
 
 const commandInput = ref('')
 const execPending = ref(false)
@@ -36,8 +29,8 @@ const detectedOs = ref<'linux' | 'macos-arm64' | 'macos-x64' | 'windows' | 'unkn
 const siteOrigin = useRequestURL().origin
 
 onMounted(() => {
-  if (sessionCredential.value && !isConnected.value) {
-    void connect()
+  if (!isConnected.value) {
+    void checkConnection()
   }
 
   if (import.meta.client) {
@@ -59,20 +52,6 @@ onMounted(() => {
   }
 })
 
-async function handlePair() {
-  if (!pairingTokenInput.value.trim()) return
-  pairingPending.value = true
-  const success = await pair(pairingTokenInput.value.trim())
-  pairingPending.value = false
-
-  if (success) {
-    toast.add({ title: 'Paired successfully', icon: 'i-lucide-check', color: 'success' })
-    pairingTokenInput.value = ''
-  } else {
-    toast.add({ title: 'Pairing failed', description: error.value || 'Invalid token', color: 'error' })
-  }
-}
-
 async function handleExec() {
   const cmd = commandInput.value.trim()
   if (!cmd || execPending.value) return
@@ -89,12 +68,6 @@ async function handleExec() {
   } finally {
     execPending.value = false
   }
-}
-
-async function handleUnpair() {
-  await unpair()
-  history.value = []
-  toast.add({ title: 'Unpaired local relay agent', color: 'neutral' })
 }
 
 const downloadLinks = {
@@ -133,37 +106,29 @@ const downloadLinks = {
             <span class="font-medium text-highlighted">Local Agent Status</span>
           </div>
           <UBadge
-            :label="isConnected ? 'Connected' : sessionCredential ? 'Disconnected' : 'Not Paired'"
-            :color="isConnected ? 'success' : sessionCredential ? 'warning' : 'neutral'"
+            :label="isConnected ? 'Connected' : 'Disconnected'"
+            :color="isConnected ? 'success' : 'neutral'"
             variant="subtle"
           />
         </div>
       </template>
 
       <div
-        v-if="sessionCredential"
+        v-if="isConnected"
         class="space-y-4"
       >
         <div class="flex items-center justify-between text-sm">
           <span class="text-muted">Target Host</span>
           <code class="font-mono text-highlighted">http://127.0.0.1:{{ port }}</code>
         </div>
-
         <div class="flex gap-2">
           <UButton
-            v-if="!isConnected"
-            label="Reconnect"
+            label="Refresh Connection"
             icon="i-lucide-refresh-cw"
             :loading="isConnecting"
             color="primary"
-            @click="connect"
-          />
-          <UButton
-            label="Unpair Agent"
-            icon="i-lucide-link-2-off"
-            color="error"
             variant="outline"
-            @click="handleUnpair"
+            @click="checkConnection"
           />
         </div>
       </div>
@@ -235,34 +200,27 @@ const downloadLinks = {
               name="i-lucide-key"
               class="size-4"
             />
-            2. Enter Pairing Token
+            2. Run Agent
           </h3>
           <p class="text-xs text-muted">
-            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --origin {{ siteOrigin }}</code>), then paste the token printed below. This agent has no directory restriction — it can run commands anywhere on this machine your user account can access, not just one project folder (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir ./some/path</code> only to change its default starting directory).
+            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --origin {{ siteOrigin }}</code>). This agent has no directory restriction — it can run commands anywhere on this machine your user account can access, not just one project folder (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir ./some/path</code> only to change its default starting directory).
           </p>
 
           <p class="text-xs text-muted">
             <span class="font-medium text-highlighted">Start:</span> just run the binary as shown above (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code> if not using the default port).
-            <span class="font-medium text-highlighted">Stop:</span> <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code> in that terminal, or from anywhere: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 stop</code> (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code> too if you didn't use the default).
+            <span class="font-medium text-highlighted">Stop:</span> <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code> in that terminal.
           </p>
 
           <p class="text-xs text-muted">
-            <span class="font-medium text-highlighted">Run in the background</span> instead of tying up a terminal: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">nohup ./relay-agent-linux-x64 --origin {{ siteOrigin }} &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code>. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">stop</code> still works the same either way.
+            <span class="font-medium text-highlighted">Run in the background</span> instead of tying up a terminal: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">nohup ./relay-agent-linux-x64 --origin {{ siteOrigin }} &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code>.
           </p>
 
-          <div class="flex max-w-md gap-2">
-            <UInput
-              v-model="pairingTokenInput"
-              placeholder="Enter pairing token..."
-              class="flex-1 font-mono"
-              :disabled="pairingPending"
-              @keyup.enter="handlePair"
-            />
+          <div class="flex gap-2 mt-4">
             <UButton
-              label="Pair"
-              icon="i-lucide-link"
-              :loading="pairingPending"
-              @click="handlePair"
+              label="Check Connection"
+              icon="i-lucide-refresh-cw"
+              :loading="isConnecting"
+              @click="checkConnection"
             />
           </div>
         </div>
