@@ -101,6 +101,7 @@ pub struct AppState {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct Claims {
+    pub iss: Option<String>,
     pub sub: Option<String>,
     pub client_id: Option<String>,
     pub scope: Option<String>,
@@ -713,28 +714,26 @@ async fn handle_tools_call(
         let scopes = claims.scope.as_deref().unwrap_or("");
         let scope_list: Vec<&str> = scopes.split_whitespace().collect();
 
-        let has_execute = scope_list.contains(&"execute");
-        let has_read_or_fetch =
-            scope_list.contains(&"read") || scope_list.contains(&"fetch") || has_execute;
-
-        match call.name.as_str() {
-            "terminal_exec" if !has_execute => {
-                return Err(err_response(
-                    StatusCode::FORBIDDEN,
-                    Some(request.id.clone()),
-                    &McpError::InvalidRequest("Insufficient scope: requires 'execute'".into()),
-                ));
-            }
-            "web_search" | "http_fetch" if !has_read_or_fetch => {
-                return Err(err_response(
-                    StatusCode::FORBIDDEN,
+        let configured_owner = _state.config.oauth_owner_subject.as_deref();
+        if claims.sub.as_deref() != configured_owner {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse::new(
                     Some(request.id.clone()),
                     &McpError::InvalidRequest(
-                        "Insufficient scope: requires 'read' or 'fetch'".into(),
+                        "Authenticated subject is not the configured owner".into(),
                     ),
-                ));
-            }
-            _ => {}
+                )),
+            ));
+        }
+        if !scope_list.contains(&CODING_SCOPE) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse::new(
+                    Some(request.id.clone()),
+                    &McpError::InvalidRequest("Insufficient scope: requires 'relay.coding'".into()),
+                )),
+            ));
         }
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");

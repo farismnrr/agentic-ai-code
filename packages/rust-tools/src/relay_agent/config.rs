@@ -49,6 +49,10 @@ pub struct Cli {
     #[arg(long, env = "OAUTH_AUDIENCE")]
     pub oauth_audience: Option<String>,
 
+    /// Stable OAuth subject allowed to operate this single-owner coding agent.
+    #[arg(long, env = "OAUTH_OWNER_SUBJECT")]
+    pub oauth_owner_subject: Option<String>,
+
     /// Explicit execution root for filesystem containment.
     #[arg(long, env = "EXECUTION_ROOT")]
     pub execution_root: Option<String>,
@@ -85,6 +89,7 @@ pub struct ServerConfig {
     pub oauth_secret: Option<String>,
     pub oauth_issuer: Option<String>,
     pub oauth_audience: Option<String>,
+    pub oauth_owner_subject: Option<String>,
     pub execution_root: Option<String>,
 }
 
@@ -98,6 +103,7 @@ impl Default for ServerConfig {
             oauth_secret: None,
             oauth_issuer: None,
             oauth_audience: None,
+            oauth_owner_subject: None,
             execution_root: None,
         }
     }
@@ -194,10 +200,13 @@ impl ServerConfig {
             }
         }
         if self.mode == SecurityMode::Remote
-            && (self.oauth_issuer.is_none() || self.oauth_audience.is_none())
+            && (self.oauth_issuer.is_none()
+                || self.oauth_audience.is_none()
+                || self.oauth_owner_subject.is_none())
         {
             return Err(RelayError::InvalidConfig(
-                "oauth_issuer and oauth_audience are required in remote mode".to_string(),
+                "oauth_issuer, oauth_audience, and oauth_owner_subject are required in remote mode"
+                    .to_string(),
             ));
         }
         Ok(())
@@ -220,6 +229,7 @@ impl From<&Cli> for ServerConfig {
             oauth_secret: cli.oauth_secret.clone(),
             oauth_issuer: cli.oauth_issuer.clone(),
             oauth_audience: cli.oauth_audience.clone(),
+            oauth_owner_subject: cli.oauth_owner_subject.clone(),
             execution_root: cli.execution_root.clone(),
         }
     }
