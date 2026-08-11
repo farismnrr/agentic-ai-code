@@ -346,27 +346,27 @@ Make the existing tool catalog accurate, stable, understandable and suitable for
 
 ### Tasks
 
-- [ ] Keep existing tool names unless a real compatibility bug requires change.
-- [ ] Add top-level `title` where useful/supported.
-- [ ] Add accurate MCP annotations.
-- [ ] Add `outputSchema` only where output can be described reliably; do not invent structured contracts over free-form terminal output.
-- [ ] Ensure every input schema matches actual runtime behavior.
-- [ ] Remove schema fields execution ignores.
-- [ ] Align schema limits with runtime limits.
-- [ ] Keep `additionalProperties: false` where appropriate.
-- [ ] Make descriptions concise/action-oriented for model selection.
-- [ ] Clearly state that `terminal_exec` is a full sandboxed coding terminal.
-- [ ] Resolve `http_fetch` annotation semantics before publication.
-- [ ] Keep deterministic tool ordering/cache metadata where required.
-- [ ] Do not add ChatGPT-specific execution code to handlers.
-- [ ] Do not split `terminal_exec` into artificial micro-tools unless live ChatGPT behavior proves it necessary.
+- [x] Keep existing tool names unless a real compatibility bug requires change.
+- [x] Add top-level `title` where useful/supported.
+- [x] Add accurate MCP annotations.
+- [x] Add `outputSchema` only where output can be described reliably; do not invent structured contracts over free-form terminal output.
+- [x] Ensure every input schema matches actual runtime behavior.
+- [x] Remove schema fields execution ignores.
+- [x] Align schema limits with runtime limits.
+- [x] Keep `additionalProperties: false` where appropriate.
+- [x] Make descriptions concise/action-oriented for model selection.
+- [x] Clearly state that `terminal_exec` is a full sandboxed coding terminal.
+- [x] Resolve `http_fetch` annotation semantics before publication.
+- [x] Keep deterministic tool ordering/cache metadata where required.
+- [x] Do not add ChatGPT-specific execution code to handlers.
+- [x] Do not split `terminal_exec` into artificial micro-tools unless live ChatGPT behavior proves it necessary.
 
 ### Exit criteria
 
 - [ ] `Scan Tools` shows exactly intended coding tools.
-- [ ] descriptors match actual behavior.
-- [ ] risk hints are accurate without restricting legitimate coding.
-- [ ] annotations are not consumed by authorization code.
+- [x] descriptors match actual behavior.
+- [x] risk hints are accurate without restricting legitimate coding.
+- [x] annotations are not consumed by authorization code.
 
 ---
 
@@ -378,12 +378,12 @@ Make ChatGPT Advanced OAuth settings discover real metadata without turning the 
 
 ### Tasks
 
-- [ ] Keep `/.well-known/oauth-protected-resource` relay-owned.
-- [ ] Ensure `resource` matches relay resource/audience validation.
-- [ ] Advertise only real Authorization Server issuer/base URLs.
-- [ ] Advertise only resource-specific scopes in Protected Resource Metadata.
-- [ ] Use `relay.coding` as the primary coding resource scope for the intended full coding app.
-- [ ] Do not advertise `offline_access` as MCP resource permission.
+- [x] Keep `/.well-known/oauth-protected-resource` relay-owned.
+- [x] Ensure `resource` matches relay resource/audience validation.
+- [x] Advertise only real Authorization Server issuer/base URLs.
+- [x] Advertise only resource-specific scopes in Protected Resource Metadata.
+- [x] Use `relay.coding` as the primary coding resource scope for the intended full coding app.
+- [x] Do not advertise `offline_access` as MCP resource permission.
 - [ ] Ensure ChatGPT discovers real AS metadata: authorization endpoint, token endpoint, issuer/base, scopes, PKCE S256, refresh/offline capability, DCR endpoint only if real.
 - [ ] User-defined OAuth Client MUST work.
 - [ ] CIMD SHOULD be used when provider + ChatGPT support it.
@@ -391,7 +391,7 @@ Make ChatGPT Advanced OAuth settings discover real metadata without turning the 
 - [ ] Configure exact ChatGPT callback URL copied from live UI.
 - [ ] Never guess or globally hardcode connector-instance callback URLs.
 - [ ] Verify token endpoint auth method matches selected ChatGPT registration mode.
-- [ ] Do not create a Rust OAuth registration database.
+- [x] Do not create a Rust OAuth registration database.
 
 ### Exit criteria
 
@@ -415,19 +415,19 @@ Authorize the intended developer for the intended coding capability while keepin
 - [ ] Advertise/request `offline_access` or provider equivalent only at AS/OIDC layer when needed.
 - [ ] Verify access-token renewal without user re-login.
 - [ ] Verify revoked refresh credentials require reauthorization.
-- [ ] Keep refresh tokens out of Relay Agent tool/runtime state.
+- [x] Keep refresh tokens out of Relay Agent tool/runtime state.
 - [ ] OIDC remains optional.
-- [ ] Keep `iss + sub` as stable owner identity anchors.
-- [ ] Treat email/domain as supplemental only.
-- [ ] Enforce `relay.coding` for the full coding toolset in the default deployment profile.
+- [x] Keep `iss + sub` as stable owner identity anchors.
+- [x] Treat email/domain as supplemental only.
+- [x] Enforce `relay.coding` for the full coding toolset in the default deployment profile.
 - [ ] Do not require separate per-tool consent for every ordinary coding step once `relay.coding` is granted.
-- [ ] If optional narrow scopes are enabled, ensure they cannot widen into `relay.coding`/terminal access.
-- [ ] Default deny requests without a recognized coding/narrow capability.
-- [ ] reject wrong issuer, audience/resource, subject, expiry/nbf, algorithm/key.
-- [ ] preserve bounded JWKS cache + refresh-on-unknown-`kid`.
-- [ ] authorization occurs before dispatch/side effects.
-- [ ] return `401` for invalid/missing auth and `403` for authenticated-but-unauthorized requests.
-- [ ] expose standards-compatible `WWW-Authenticate` / resource metadata / invalid-token / insufficient-scope semantics where current guidance requires/supports them.
+- [x] If optional narrow scopes are enabled, ensure they cannot widen into `relay.coding`/terminal access.
+- [x] Default deny requests without a recognized coding/narrow capability.
+- [x] reject wrong issuer, audience/resource, subject, expiry/nbf, algorithm/key.
+- [x] preserve bounded JWKS cache + refresh-on-unknown-`kid`.
+- [x] authorization occurs before dispatch/side effects.
+- [x] return `401` for invalid/missing auth and `403` for authenticated-but-unauthorized requests.
+- [x] expose standards-compatible `WWW-Authenticate` / resource metadata / invalid-token / insufficient-scope semantics where current guidance requires/supports them.
 
 ### Exit criteria
 
@@ -445,18 +445,18 @@ Make ChatGPT reach the relay without turning the workstation into a raw public c
 
 ### Tasks
 
-- [ ] Re-check current OpenAI Secure MCP Tunnel guidance before deployment wiring.
-- [ ] Keep local relay loopback-only by default.
-- [ ] Use Secure MCP Tunnel for developer/private-network usage where supported.
-- [ ] If direct remote deployment is used, require explicit Remote mode + HTTPS.
-- [ ] Define trusted proxy/tunnel boundary.
-- [ ] Never trust arbitrary `X-Forwarded-*` from untrusted peers.
-- [ ] Preserve Authorization/MCP routing headers through trusted edge.
-- [ ] Fail closed when effective HTTPS/proxy identity cannot be established.
-- [ ] Keep request/execution concurrency bounded.
-- [ ] Add coarse abuse/rate limits that stop DoS without throttling normal builds/tool bursts.
-- [ ] Do not add stream-specific machinery unless streaming is actually required.
-- [ ] Ensure public health/discovery endpoints expose no sensitive filesystem/config state.
+- [x] Re-check current OpenAI Secure MCP Tunnel guidance before deployment wiring.
+- [x] Keep local relay loopback-only by default.
+- [x] Use Secure MCP Tunnel for developer/private-network usage where supported.
+- [x] If direct remote deployment is used, require explicit Remote mode + HTTPS.
+- [x] Define trusted proxy/tunnel boundary.
+- [x] Never trust arbitrary `X-Forwarded-*` from untrusted peers.
+- [x] Preserve Authorization/MCP routing headers through trusted edge.
+- [x] Fail closed when effective HTTPS/proxy identity cannot be established.
+- [x] Keep request/execution concurrency bounded.
+- [x] Add coarse abuse/rate limits that stop DoS without throttling normal builds/tool bursts.
+- [x] Do not add stream-specific machinery unless streaming is actually required.
+- [x] Ensure public health/discovery endpoints expose no sensitive filesystem/config state.
 
 ### Exit criteria
 
@@ -474,20 +474,20 @@ Make production debugging possible without leaking code, credentials or command 
 
 ### Tasks
 
-- [ ] structured request/correlation ID.
-- [ ] record method/tool/outcome/latency/status safely.
-- [ ] record privacy-conscious subject identifier where needed.
-- [ ] never log Authorization/access/refresh tokens.
-- [ ] do not log full terminal commands/tool arguments by default.
-- [ ] redact sensitive metadata.
-- [ ] bound log size/metric cardinality.
-- [ ] prevent log injection.
-- [ ] distinguish auth failures, authorization failures, rate limits, tool failures, timeouts and sandbox failures.
+- [x] structured request/correlation ID.
+- [x] record method/tool/outcome/latency/status safely.
+- [x] record privacy-conscious subject identifier where needed.
+- [x] never log Authorization/access/refresh tokens.
+- [x] do not log full terminal commands/tool arguments by default.
+- [x] redact sensitive metadata.
+- [x] bound log size/metric cardinality.
+- [x] prevent log injection.
+- [x] distinguish auth failures, authorization failures, rate limits, tool failures, timeouts and sandbox failures.
 - [ ] define retention/redaction behavior.
 
 ### Exit criteria
 
-- [ ] connector/auth failures can be diagnosed without exposing secrets/source content.
+- [x] connector/auth failures can be diagnosed without exposing secrets/source content.
 
 ---
 
