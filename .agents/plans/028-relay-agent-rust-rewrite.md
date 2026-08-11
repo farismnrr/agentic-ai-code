@@ -180,9 +180,9 @@ No public unauthenticated execution is permitted.
 
 ### 14.4 Tool-specific network policy
 
-- [ ] Restrict `http_fetch` to explicitly supported HTTP methods; reject unsafe/unneeded methods such as `CONNECT`/`TRACE` unless there is a documented requirement.
-- [ ] Restrict `web_search.base_url` to a trusted configured endpoint rather than allowing an MCP caller to select an arbitrary network destination.
-- [ ] Apply the same outbound network policy to every redirect and secondary request.
+- [x] Restrict `http_fetch` to explicitly supported HTTP methods; reject unsafe/unneeded methods such as `CONNECT`/`TRACE` unless there is a documented requirement.
+- [x] Restrict `web_search.base_url` to a trusted configured endpoint rather than allowing an MCP caller to select an arbitrary network destination.
+- [x] Apply the same outbound network policy to every redirect and secondary request.
 
 ### 14.5 Sibling binary trust boundary
 
