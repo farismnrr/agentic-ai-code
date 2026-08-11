@@ -55,7 +55,7 @@ Plan 027 Rust CLI tools
 
 - Phase 11 — Production security + resource-limit remediation.
 - Phase 12 — Remove legacy relay compatibility.
-- Phase 14 — Final security remediation for the current MCP-only execution path.
+- Phase 14 — Final security remediation for the current MCP-only execution path. — [x] DONE
 - Phase 13 — Final E2E + release validation (**final gate**).
 
 Phase 13 is intentionally deferred until all implementation/security/removal work is complete. Do not block incremental development on E2E/release validation before the final phase.
@@ -150,7 +150,7 @@ No public unauthenticated execution is permitted.
 
 **Phase 12 acceptance:** MCP Streamable HTTP is the sole relay execution protocol and no legacy execution path remains.
 
-## Phase 14 — Final security remediation — [ ] IN FLIGHT
+## Phase 14 — Final security remediation — [x] COMPLETED
 
 **Goal:** address the remaining concrete findings discovered after Phase 12 removed the legacy path. This phase is intentionally before the final E2E/release gate.
 
@@ -186,18 +186,18 @@ No public unauthenticated execution is permitted.
 
 ### 14.5 Sibling binary trust boundary
 
-- [ ] Verify `terminal-tool`, `curl-tool`, and `searxng-search-tool` resolved from the relay binary directory cannot be replaced by an untrusted local user.
-- [ ] Ensure release/install directories have appropriate ownership and executable permissions.
-- [ ] Document the sibling-binary trust assumption and installation requirements.
-- [ ] Consider integrity verification only if the deployment threat model requires protection against local binary tampering.
+- [x] Verify `terminal-tool`, `curl-tool`, and `searxng-search-tool` resolved from the relay binary directory cannot be replaced by an untrusted local user.
+- [x] Ensure release/install directories have appropriate ownership and executable permissions.
+- [x] Document the sibling-binary trust assumption and installation requirements.
+- [x] Consider integrity verification only if the deployment threat model requires protection against local binary tampering.
 
 ### 14.6 Final static security gate
 
-- [ ] Review all MCP `tools/call` execution paths from request parsing to OS/network side effects.
-- [ ] Search repository-wide for `--no-guard`, wildcard Origin, unbounded timeout arithmetic, arbitrary `base_url`, and alternate execution entrypoints.
-- [ ] Run `cargo fmt --check`.
-- [ ] Run `cargo clippy --all-targets --all-features -- -D warnings`.
-- [ ] Run `cargo audit`.
+- [x] Review all MCP `tools/call` execution paths from request parsing to OS/network side effects.
+- [x] Search repository-wide for `--no-guard`, wildcard Origin, unbounded timeout arithmetic, arbitrary `base_url`, and alternate execution entrypoints.
+- [x] Run `cargo fmt --check`.
+- [x] Run `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] Run `cargo audit`.
 
 **Phase 14 acceptance:** no known P0/P1 security finding remains in command execution, SSRF, timeout/input limits, network policy, or process-launch paths, and all privileged execution paths have one explicit authoritative policy.
 
@@ -267,11 +267,11 @@ Plan 028 is **CLOSED** only when:
 - [ ] Resource limits and process cleanup are enforced.
 - [ ] SSRF policy cannot be bypassed through `http_fetch`.
 - [ ] Errors/logs do not leak credentials or sensitive internals.
-- [ ] Node.js/TypeScript relay runtime and `@yao-pkg/pkg` are removed.
-- [ ] Release CI builds native binaries directly with Cargo.
-- [ ] Phase 11 is fully checked off.
-- [ ] Phase 12 is fully checked off.
-- [ ] Phase 14 is fully checked off.
+- [x] Node.js/TypeScript relay runtime and `@yao-pkg/pkg` are removed.
+- [x] Release CI builds native binaries directly with Cargo.
+- [x] Phase 11 is fully checked off.
+- [x] Phase 12 is fully checked off.
+- [x] Phase 14 is fully checked off.
 - [ ] Phase 13 final E2E/release gate is fully checked off.
 
 ## Rollback
