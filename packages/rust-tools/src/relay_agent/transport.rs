@@ -44,6 +44,7 @@ use axum::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::config::ServerConfig;
@@ -155,6 +156,7 @@ pub fn create_router(config: ServerConfig) -> Router {
         .merge(mcp_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(state.clone(), access_policy))
+        .layer(ConcurrencyLimitLayer::new(64))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
@@ -196,9 +198,13 @@ async fn access_policy(
 
     if let super::config::SecurityMode::Remote = state.config.mode {
         // Enforce HTTPS
-        let is_https = req.headers().get("x-forwarded-proto").map(|v| v.as_bytes())
-            == Some(b"https")
-            || req.uri().scheme_str() == Some("https");
+        let is_https = req.uri().scheme_str() == Some("https")
+            || (state.config.trusted_proxy
+                && req
+                    .headers()
+                    .get("x-forwarded-proto")
+                    .and_then(|v| v.to_str().ok())
+                    == Some("https"));
 
         if !is_https {
             return (

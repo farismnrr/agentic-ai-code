@@ -56,6 +56,8 @@ pub struct Cli {
     /// Explicit execution root for filesystem containment.
     #[arg(long, env = "EXECUTION_ROOT")]
     pub execution_root: Option<String>,
+    pub bind_host: String,
+    pub trusted_proxy: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
@@ -91,6 +93,8 @@ pub struct ServerConfig {
     pub oauth_audience: Option<String>,
     pub oauth_owner_subject: Option<String>,
     pub execution_root: Option<String>,
+    pub bind_host: String,
+    pub trusted_proxy: bool,
 }
 
 impl Default for ServerConfig {
@@ -105,6 +109,8 @@ impl Default for ServerConfig {
             oauth_audience: None,
             oauth_owner_subject: None,
             execution_root: None,
+            bind_host: "127.0.0.1".into(),
+            trusted_proxy: false,
         }
     }
 }
@@ -209,6 +215,19 @@ impl ServerConfig {
                     .to_string(),
             ));
         }
+        if self.mode == SecurityMode::Local
+            && self.bind_host != "127.0.0.1"
+            && self.bind_host != "::1"
+        {
+            return Err(RelayError::InvalidConfig(
+                "local mode must bind to loopback".into(),
+            ));
+        }
+        if self.mode == SecurityMode::Remote && self.bind_host.trim().is_empty() {
+            return Err(RelayError::InvalidConfig(
+                "remote bind host must not be blank".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -231,6 +250,12 @@ impl From<&Cli> for ServerConfig {
             oauth_audience: cli.oauth_audience.clone(),
             oauth_owner_subject: cli.oauth_owner_subject.clone(),
             execution_root: cli.execution_root.clone(),
+            bind_host: if cli.mode == SecurityMode::Remote {
+                "0.0.0.0".into()
+            } else {
+                "127.0.0.1".into()
+            },
+            trusted_proxy: cli.mode == SecurityMode::Remote,
         }
     }
 }
