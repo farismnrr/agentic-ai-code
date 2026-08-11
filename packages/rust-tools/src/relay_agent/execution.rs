@@ -3,6 +3,7 @@ use crate::relay_agent::mcp::{Tool, ToolCallResult, ToolResultContent};
 use serde_json::Value;
 use std::env;
 use std::process::Stdio;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 
@@ -28,11 +29,7 @@ pub async fn dispatch_tool_call(
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(30000);
-            let mut args = vec![
-                "--no-guard".to_string(),
-                "--timeout".to_string(),
-                to.to_string(),
-            ];
+            let mut args = vec!["--timeout".to_string(), to.to_string()];
 
             if let Some(cwd) = arguments.get("cwd").and_then(|v| v.as_str()) {
                 args.push("--cwd".to_string());
@@ -42,6 +39,11 @@ pub async fn dispatch_tool_call(
             if let Some(arr) = arguments.get("args").and_then(|v| v.as_array()) {
                 for arg in arr {
                     if let Some(s) = arg.as_str() {
+                        if s == "--no-guard" {
+                            return Err(McpError::InvalidRequest(
+                                "argument --no-guard is forbidden".to_string(),
+                            ));
+                        }
                         args.push(s.to_string());
                     }
                 }
@@ -60,7 +62,6 @@ pub async fn dispatch_tool_call(
                 .unwrap_or(30000);
 
             let mut args = vec![
-                "--no-guard".to_string(),
                 "-X".to_string(),
                 method.to_string(),
                 "--timeout".to_string(),
@@ -125,18 +126,55 @@ pub async fn dispatch_tool_call(
 
     let child_res = cmd.spawn();
     match child_res {
-        Ok(child) => {
+        Ok(mut child) => {
             let pid = child.id();
-            let output_res = timeout(
-                Duration::from_millis(to_ms + 5000),
-                child.wait_with_output(),
-            )
-            .await;
+
+            let mut stdout_pipe = child.stdout.take().unwrap();
+            let mut stderr_pipe = child.stderr.take().unwrap();
+
+            let read_stdout = async {
+                let mut stdout_buf = Vec::new();
+                let mut handle = (&mut stdout_pipe).take(MAX_OUTPUT_BYTES as u64 + 1);
+                handle
+                    .read_to_end(&mut stdout_buf)
+                    .await
+                    .map(|_| stdout_buf)
+            };
+            let read_stderr = async {
+                let mut stderr_buf = Vec::new();
+                let mut handle = (&mut stderr_pipe).take(MAX_OUTPUT_BYTES as u64 + 1);
+                handle
+                    .read_to_end(&mut stderr_buf)
+                    .await
+                    .map(|_| stderr_buf)
+            };
+
+            let read_and_wait = async {
+                let (out_res, err_res) = tokio::join!(read_stdout, read_stderr);
+                let stdout_buf = out_res?;
+                let stderr_buf = err_res?;
+
+                if stdout_buf.len() > MAX_OUTPUT_BYTES || stderr_buf.len() > MAX_OUTPUT_BYTES {
+                    if let Some(p) = pid {
+                        #[cfg(unix)]
+                        {
+                            unsafe {
+                                libc::kill(-(p as i32), libc::SIGKILL);
+                            }
+                        }
+                    }
+                }
+
+                let status = child.wait().await?;
+                Ok::<_, std::io::Error>((status, stdout_buf, stderr_buf))
+            };
+
+            let output_res = timeout(Duration::from_millis(to_ms + 5000), read_and_wait).await;
             match output_res {
-                Ok(Ok(output)) => {
-                    let is_error = !output.status.success();
-                    let mut stdout_str = String::from_utf8_lossy(&output.stdout).into_owned();
-                    let mut stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
+                Ok(Ok((status, stdout_bytes, stderr_bytes))) => {
+                    let is_error = !status.success();
+                    let mut stdout_str = String::from_utf8_lossy(&stdout_bytes).into_owned();
+                    let mut stderr_str = String::from_utf8_lossy(&stderr_bytes).into_owned();
 
                     if stdout_str.len() > MAX_OUTPUT_BYTES {
                         stdout_str.truncate(MAX_OUTPUT_BYTES);
@@ -163,7 +201,7 @@ pub async fn dispatch_tool_call(
                     if contents.is_empty() && is_error {
                         contents.push(ToolResultContent {
                             kind: "text",
-                            text: format!("Process exited with status: {}", output.status),
+                            text: format!("Process exited with status: {}", status),
                         });
                     }
 
@@ -179,9 +217,7 @@ pub async fn dispatch_tool_call(
                         is_error,
                     })
                 }
-                Ok(Err(e)) => Err(McpError::Internal(format!(
-                    "failed to read tool output: {e}"
-                ))),
+                Ok(Err(_e)) => Err(McpError::Internal("failed to read tool output".to_string())),
                 Err(_) => {
                     // Timeout occurred
                     if let Some(p) = pid {
@@ -204,6 +240,6 @@ pub async fn dispatch_tool_call(
                 }
             }
         }
-        Err(e) => Err(McpError::Internal(format!("failed to spawn tool: {e}"))),
+        Err(_) => Err(McpError::Internal("failed to spawn tool".to_string())),
     }
 }

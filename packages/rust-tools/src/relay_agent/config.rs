@@ -24,7 +24,7 @@ pub struct Cli {
     #[arg(short, long, default_value_t = DEFAULT_PORT)]
     pub port: u16,
 
-    /// Default working directory (falls back to the OS home directory).
+    /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
     #[arg(short, long)]
     pub dir: Option<String>,
 
