@@ -193,17 +193,26 @@ pub fn create_router(config: ServerConfig) -> Router {
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
-    let well_known_router = Router::new()
-        .route(
-            "/.well-known/oauth-protected-resource",
-            get(handle_well_known_oauth),
-        )
-        .route(
-            "/.well-known/oauth-protected-resource/{*resource_path}",
-            get(handle_path_well_known_oauth),
-        );
+    let mut well_known_router = Router::new().route(
+        "/.well-known/oauth-protected-resource",
+        get(handle_well_known_oauth),
+    );
+    // Axum 0.7's catch-all syntax is not usable here because the metadata
+    // route must remain a concrete path. Register only the RFC 9728 path
+    // derived from the configured resource (normally the resource's `/mcp`
+    // path), leaving all other paths unmatched.
+    if let Some(metadata_url) = protected_resource_metadata_url(&config) {
+        if let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() {
+            let metadata_path = metadata_uri.path();
+            if metadata_path != "/.well-known/oauth-protected-resource" {
+                well_known_router =
+                    well_known_router.route(metadata_path, get(handle_path_well_known_oauth));
+            }
+        }
+    }
 
     Router::new()
+        .route("/health", get(handle_health))
         .merge(mcp_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(state.clone(), access_policy))
@@ -212,6 +221,10 @@ pub fn create_router(config: ServerConfig) -> Router {
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
+}
+
+async fn handle_health() -> StatusCode {
+    StatusCode::OK
 }
 
 async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
@@ -567,11 +580,21 @@ async fn access_policy(
             }
         };
 
+        if !matches!(
+            header.alg,
+            jsonwebtoken::Algorithm::RS256 | jsonwebtoken::Algorithm::ES256
+        ) {
+            return oauth_error_response(
+                StatusCode::UNAUTHORIZED,
+                None,
+                &state.config,
+                Some("invalid_token"),
+                None,
+                &McpError::InvalidRequest("Unsupported token algorithm".into()),
+            );
+        }
+
         let mut validation = jsonwebtoken::Validation::new(header.alg);
-        validation.algorithms = vec![
-            jsonwebtoken::Algorithm::RS256,
-            jsonwebtoken::Algorithm::ES256,
-        ];
         validation.set_audience(&[oauth_audience]);
         validation.set_issuer(&[oauth_issuer]);
         validation.validate_nbf = true;
@@ -603,14 +626,11 @@ async fn access_policy(
 async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
+    axum::extract::Extension(correlation_id): axum::extract::Extension<String>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
     let started = Instant::now();
-    let correlation_id = headers
-        .get(HDR_CORRELATION_ID)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown");
     // Content-Type must be application/json for the Streamable HTTP JSON
     // mode used in this phase (no SSE upgrade implemented yet — see audit
     // doc section 3).
@@ -628,7 +648,7 @@ async fn handle_mcp(
         )
         .into_response();
         audit(
-            correlation_id,
+            &correlation_id,
             "http",
             None,
             "invalid_content_type",
@@ -650,7 +670,7 @@ async fn handle_mcp(
                 &McpError::ParseError,
             ));
             audit(
-                correlation_id,
+                &correlation_id,
                 "http",
                 None,
                 "parse_error",
@@ -691,7 +711,7 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request, _state, auth_ctx, correlation_id).await,
+        "tools/call" => handle_tools_call(&request, _state, auth_ctx, &correlation_id).await,
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
