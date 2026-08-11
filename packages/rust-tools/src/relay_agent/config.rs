@@ -56,8 +56,6 @@ pub struct Cli {
     /// Explicit execution root for filesystem containment.
     #[arg(long, env = "EXECUTION_ROOT")]
     pub execution_root: Option<String>,
-    pub bind_host: String,
-    pub trusted_proxy: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
