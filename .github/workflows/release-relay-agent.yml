@@ -47,7 +47,6 @@ jobs:
           cargo binstall --no-confirm cargo-audit@0.22.2
 
       - name: Rust Security audit
-        working-directory: packages/rust-tools
         run: cargo audit
 
   build-and-release:
