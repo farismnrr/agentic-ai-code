@@ -62,10 +62,37 @@ const HDR_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 const HDR_MCP_METHOD: &str = "mcp-method";
 const HDR_MCP_NAME: &str = "mcp-name";
 
+/// JWKS cache TTL: 5 minutes. After this duration the cached key set is
+/// considered stale and will be re-fetched on the next authentication attempt.
+const JWKS_TTL_SECS: u64 = 300;
+
+/// Maximum time to wait for a JWKS fetch response. Enforced via
+/// `tokio::time::timeout` so a slow IdP endpoint cannot hold the write lock
+/// indefinitely and deny authentication to all concurrent requests.
+const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
+
+/// Cached JWKS with a fetch timestamp for TTL enforcement.
+/// Only used within this module; making it `pub` satisfies the
+/// `private_interfaces` lint because `AppState::jwks_cache` is `pub`.
+pub struct CachedJwks {
+    pub(super) jwk_set: jsonwebtoken::jwk::JwkSet,
+    pub(super) fetched_at: std::time::Instant,
+}
+
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
-    pub jwks_cache: tokio::sync::RwLock<Option<jsonwebtoken::jwk::JwkSet>>,
+    /// JWKS cache with TTL. `None` means not yet fetched.
+    ///
+    /// # OAuth boundary note (P1-3 / Phase 16.4)
+    /// This server acts as an **OAuth 2.0 Resource Server only**. It validates
+    /// Bearer access tokens presented in the `Authorization` header using JWKS
+    /// from the configured issuer. The Authorization Code + PKCE S256 flow,
+    /// state/CSRF parameter handling, and redirect URI validation are the
+    /// responsibility of the Authorization Server or MCP client — not this
+    /// server. Never accept authorization-server URLs or PKCE parameters from
+    /// MCP tool arguments.
+    pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
@@ -223,37 +250,77 @@ async fn access_policy(
 
         let token = &auth_header[7..];
 
-        let mut jwks_cache_write = state.jwks_cache.write().await;
-        if jwks_cache_write.is_none() {
-            let jwks_url = format!("{}/.well-known/jwks.json", oauth_issuer.trim_end_matches('/'));
-            if let Ok(resp) = reqwest::Client::new().get(&jwks_url).send().await {
-                if let Ok(jwks) = resp.json::<jsonwebtoken::jwk::JwkSet>().await {
-                    *jwks_cache_write = Some(jwks);
-                } else {
+        // P1-2: JWKS fetch helper with timeout. Drops the lock before the HTTP
+        // request so a slow IdP cannot hold the write lock and block all auth.
+        let fetch_jwks = |jwks_url: String| async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(JWKS_FETCH_TIMEOUT_SECS))
+                .build()
+                .map_err(|_| "failed to build HTTP client".to_string())?;
+            let resp = client
+                .get(&jwks_url)
+                .send()
+                .await
+                .map_err(|e| format!("JWKS fetch failed: {e}"))?;
+            let jwks = resp
+                .json::<jsonwebtoken::jwk::JwkSet>()
+                .await
+                .map_err(|e| format!("JWKS parse failed: {e}"))?;
+            Ok::<jsonwebtoken::jwk::JwkSet, String>(jwks)
+        };
+
+        let jwks_url = format!(
+            "{}/.well-known/jwks.json",
+            oauth_issuer.trim_end_matches('/')
+        );
+
+        // Check whether the cache is present and fresh (TTL not exceeded).
+        let cache_needs_refresh = {
+            let guard = state.jwks_cache.read().await;
+            match guard.as_ref() {
+                None => true,
+                Some(c) => c.fetched_at.elapsed().as_secs() >= JWKS_TTL_SECS,
+            }
+        };
+
+        if cache_needs_refresh {
+            match fetch_jwks(jwks_url.clone()).await {
+                Ok(new_set) => {
+                    let mut w = state.jwks_cache.write().await;
+                    *w = Some(CachedJwks {
+                        jwk_set: new_set,
+                        fetched_at: std::time::Instant::now(),
+                    });
+                }
+                Err(msg) => {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse::new(None, &McpError::Internal("Failed to parse JWKS".into()))),
-                    ).into_response();
+                        Json(ErrorResponse::new(
+                            None,
+                            &McpError::Internal(format!("JWKS unavailable: {msg}")),
+                        )),
+                    )
+                        .into_response();
                 }
-            } else {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse::new(None, &McpError::Internal("Failed to fetch JWKS".into()))),
-                ).into_response();
             }
         }
-        
-        let jwk_set = jwks_cache_write.as_ref().unwrap().clone();
-        drop(jwks_cache_write);
 
+        // Decode token header to extract kid before acquiring the read lock.
         let header = match jsonwebtoken::decode_header(token) {
             Ok(h) => h,
             Err(_) => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
-                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid token header".into()))),
-                ).into_response();
+                    [(
+                        axum::http::header::WWW_AUTHENTICATE,
+                        "Bearer error=\"invalid_token\"",
+                    )],
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Invalid token header".into()),
+                    )),
+                )
+                    .into_response();
             }
         };
 
@@ -262,52 +329,122 @@ async fn access_policy(
             None => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
-                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Token missing kid".into()))),
-                ).into_response();
+                    [(
+                        axum::http::header::WWW_AUTHENTICATE,
+                        "Bearer error=\"invalid_token\"",
+                    )],
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Token missing kid".into()),
+                    )),
+                )
+                    .into_response();
             }
         };
 
-        let jwk = match jwk_set.find(&kid) {
+        // Try to find the JWK for the token's kid. If it's not found in the
+        // current cache, do ONE re-fetch (refresh-on-unknown-kid) in case the
+        // IdP rotated keys since our last fetch. We never loop to prevent
+        // attacker-controlled refresh storms.
+        let jwk_opt = {
+            let guard = state.jwks_cache.read().await;
+            guard.as_ref().and_then(|c| c.jwk_set.find(&kid)).cloned()
+        };
+
+        let jwk = match jwk_opt {
             Some(j) => j,
             None => {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
-                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Unknown kid".into()))),
-                ).into_response();
+                // kid not in cache — attempt a single re-fetch.
+                match fetch_jwks(jwks_url).await {
+                    Ok(new_set) => {
+                        let found = new_set.find(&kid).cloned();
+                        let mut w = state.jwks_cache.write().await;
+                        *w = Some(CachedJwks {
+                            jwk_set: new_set,
+                            fetched_at: std::time::Instant::now(),
+                        });
+                        match found {
+                            Some(j) => j,
+                            None => {
+                                return (
+                                    StatusCode::UNAUTHORIZED,
+                                    [(
+                                        axum::http::header::WWW_AUTHENTICATE,
+                                        "Bearer error=\"invalid_token\"",
+                                    )],
+                                    Json(ErrorResponse::new(
+                                        None,
+                                        &McpError::InvalidRequest(
+                                            "Unknown signing key (kid not in JWKS)".into(),
+                                        ),
+                                    )),
+                                )
+                                    .into_response();
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            [(
+                                axum::http::header::WWW_AUTHENTICATE,
+                                "Bearer error=\"invalid_token\"",
+                            )],
+                            Json(ErrorResponse::new(
+                                None,
+                                &McpError::InvalidRequest(
+                                    "Unknown signing key (kid not in JWKS)".into(),
+                                ),
+                            )),
+                        )
+                            .into_response();
+                    }
+                }
             }
         };
 
-        let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(jwk) {
+        let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(&jwk) {
             Ok(k) => k,
             Err(_) => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
-                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid JWK".into()))),
-                ).into_response();
+                    [(
+                        axum::http::header::WWW_AUTHENTICATE,
+                        "Bearer error=\"invalid_token\"",
+                    )],
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Invalid JWK".into()),
+                    )),
+                )
+                    .into_response();
             }
         };
 
         let mut validation = jsonwebtoken::Validation::new(header.alg);
-        validation.algorithms = vec![jsonwebtoken::Algorithm::RS256, jsonwebtoken::Algorithm::ES256];
+        validation.algorithms = vec![
+            jsonwebtoken::Algorithm::RS256,
+            jsonwebtoken::Algorithm::ES256,
+        ];
         validation.set_audience(&[oauth_audience]);
         validation.set_issuer(&[oauth_issuer]);
         validation.validate_nbf = true;
 
-        let token_data = match jsonwebtoken::decode::<Claims>(
-            token,
-            &decoding_key,
-            &validation,
-        ) {
+        let token_data = match jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation) {
             Ok(data) => data,
             Err(_) => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
-                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid token".into()))),
-                ).into_response();
+                    [(
+                        axum::http::header::WWW_AUTHENTICATE,
+                        "Bearer error=\"invalid_token\"",
+                    )],
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Invalid token".into()),
+                    )),
+                )
+                    .into_response();
             }
         };
         auth_ctx.claims = Some(token_data.claims);
@@ -609,15 +746,16 @@ async fn handle_tools_call(
 
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
-    let result = crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
-        .await
-        .unwrap_or_else(|e| ToolCallResult {
-            content: vec![super::mcp::ToolResultContent {
-                kind: "text",
-                text: format!("execution failed: {}", e.message()),
-            }],
-            is_error: true,
-        });
+    let result =
+        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
+            .await
+            .unwrap_or_else(|e| ToolCallResult {
+                content: vec![super::mcp::ToolResultContent {
+                    kind: "text",
+                    text: format!("execution failed: {}", e.message()),
+                }],
+                is_error: true,
+            });
 
     let response = Response::new(
         request.id.clone(),

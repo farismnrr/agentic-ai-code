@@ -9,14 +9,63 @@ permissions:
   contents: write
 
 jobs:
+  # P0-6: Quality gate — every release MUST pass fmt, cargo check, clippy, and
+  # audit before any binary is built or published. This mirrors the test-and-lint
+  # gate in ci.yml and prevents bypassing security/quality checks on tag pushes.
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "packages/rust-tools"
+
+      - name: Check Rust formatting
+        working-directory: packages/rust-tools
+        run: cargo fmt --all -- --check
+
+      - name: Strict cargo check
+        working-directory: packages/rust-tools
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Lint with Clippy
+        working-directory: packages/rust-tools
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Install cargo-audit
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-audit@0.22.2
+
+      - name: Rust Security audit
+        working-directory: packages/rust-tools
+        run: cargo audit
+
   build-and-release:
+    # P0-6: Release build cannot start until quality gate is green.
+    needs: quality-gate
     strategy:
       matrix:
         include:
+          # P0-7: Matrix aligned with ci.yml build-release matrix.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             asset_name: relay-agent-linux-x64
             bin_name: relay-agent
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset_name: relay-agent-linux-arm64
+            bin_name: relay-agent
+            use-cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             asset_name: relay-agent-macos-x64
@@ -41,8 +90,18 @@ jobs:
           toolchain: 1.95.0
           targets: ${{ matrix.target }}
 
+      - name: Install cross
+        if: matrix.use-cross == true
+        run: cargo install cross
+
       - name: Build release artifact
-        run: cargo build --release --bin relay-agent --target ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.use-cross }}" == "true" ]; then
+            cross build --release --bin relay-agent --target ${{ matrix.target }}
+          else
+            cargo build --release --bin relay-agent --target ${{ matrix.target }}
+          fi
+        shell: bash
 
       - name: Package and checksum (Unix)
         if: matrix.os != 'windows-latest'
@@ -66,7 +125,7 @@ jobs:
           sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
 
       - name: Smoke test (Unix)
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-latest' && matrix.use-cross != true
         run: |
           cd release-assets
           chmod +x ${{ matrix.asset_name }}

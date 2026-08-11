@@ -7,6 +7,14 @@ use rust_tools::relay_agent::{
 use std::net::SocketAddr;
 use tokio::signal;
 
+// Bubblewrap (bwrap) is a Linux-only tool. Sandboxed execution is not supported
+// on other platforms. Emit a compile-time warning to make this visible.
+#[cfg(not(target_os = "linux"))]
+compile_error!(
+    "relay-agent sandboxed execution requires Linux (bubblewrap/bwrap). \
+     Build with a *-unknown-linux-gnu target only."
+);
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(unix)]
@@ -34,6 +42,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = ServerConfig::from(&cli);
     config.validate().map_err(|e| e.to_string())?;
+
+    // P0-1 / P0-8: verify bwrap is available BEFORE binding. If bwrap is missing or
+    // not executable, execution would silently fail per-call without this gate.
+    // We abort at startup so the operator knows immediately that the sandbox is broken.
+    #[cfg(target_os = "linux")]
+    {
+        let bwrap_check = std::process::Command::new("bwrap")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if bwrap_check.is_err() {
+            return Err("bubblewrap (bwrap) is not available. \
+                 Sandboxed execution requires bwrap to be installed. Refusing to start."
+                .into());
+        }
+    }
 
     let _pidfile = Pidfile::new(config.port)?;
 
