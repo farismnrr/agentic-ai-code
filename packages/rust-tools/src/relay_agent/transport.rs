@@ -44,6 +44,7 @@ use axum::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
+use std::time::Instant;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -75,6 +76,41 @@ const JWKS_TTL_SECS: u64 = 300;
 /// `tokio::time::timeout` so a slow IdP endpoint cannot hold the write lock
 /// indefinitely and deny authentication to all concurrent requests.
 const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
+const MAX_LOG_FIELD: usize = 128;
+const HDR_CORRELATION_ID: &str = "x-correlation-id";
+
+fn safe_log_field(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_LOG_FIELD)
+        .collect()
+}
+
+fn privacy_id(value: Option<&str>) -> &'static str {
+    // Deliberately do not emit subject, client identifiers, commands, arguments,
+    // source, or token material. Presence is sufficient for operational metrics.
+    if value.is_some() {
+        "present"
+    } else {
+        "absent"
+    }
+}
+
+fn audit(
+    correlation_id: &str,
+    method: &str,
+    tool: Option<&str>,
+    outcome: &str,
+    status: StatusCode,
+    started: Instant,
+    subject: Option<&str>,
+) {
+    let tool = tool.map(safe_log_field).unwrap_or_else(|| "-".into());
+    eprintln!("{{\"event\":\"relay_request\",\"correlation_id\":\"{}\",\"method\":\"{}\",\"tool\":\"{}\",\"outcome\":\"{}\",\"status\":{},\"latency_ms\":{},\"subject\":\"{}\"}}",
+        safe_log_field(correlation_id), safe_log_field(method), tool, safe_log_field(outcome),
+        status.as_u16(), started.elapsed().as_millis(), privacy_id(subject));
+}
 
 /// Cached JWKS with a fetch timestamp for TTL enforcement.
 /// Only used within this module; making it `pub` satisfies the
@@ -156,10 +192,29 @@ pub fn create_router(config: ServerConfig) -> Router {
         .merge(mcp_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(state.clone(), access_policy))
+        .layer(middleware::from_fn(correlation_middleware))
         .layer(ConcurrencyLimitLayer::new(64))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
+}
+
+async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
+    let id = req
+        .headers()
+        .get(HDR_CORRELATION_ID)
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| v.len() <= MAX_LOG_FIELD && v.chars().all(|c| c.is_ascii_graphic() && c != '"'))
+        .map(str::to_owned)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    req.extensions_mut().insert(id.clone());
+    let mut response = next.run(req).await;
+    if let Ok(value) = id.parse() {
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static(HDR_CORRELATION_ID), value);
+    }
+    response
 }
 
 type JsonErr = (StatusCode, Json<ErrorResponse>);
@@ -479,6 +534,11 @@ async fn handle_mcp(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
+    let started = Instant::now();
+    let correlation_id = headers
+        .get(HDR_CORRELATION_ID)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown");
     // Content-Type must be application/json for the Streamable HTTP JSON
     // mode used in this phase (no SSE upgrade implemented yet — see audit
     // doc section 3).
@@ -487,7 +547,7 @@ async fn handle_mcp(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     if !content_type.starts_with("application/json") {
-        return err_response(
+        let response = err_response(
             StatusCode::BAD_REQUEST,
             None,
             &McpError::InvalidRequest(format!(
@@ -495,6 +555,16 @@ async fn handle_mcp(
             )),
         )
         .into_response();
+        audit(
+            correlation_id,
+            "http",
+            None,
+            "invalid_content_type",
+            StatusCode::BAD_REQUEST,
+            started,
+            auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
+        );
+        return response;
     }
 
     // Body size is already bounded by DefaultBodyLimit before this handler
@@ -502,8 +572,18 @@ async fn handle_mcp(
     let payload: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => {
-            return err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError)
-                .into_response();
+            let response =
+                err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError).into_response();
+            audit(
+                correlation_id,
+                "http",
+                None,
+                "parse_error",
+                StatusCode::BAD_REQUEST,
+                started,
+                auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
+            );
+            return response;
         }
     };
 
@@ -743,10 +823,14 @@ async fn handle_tools_call(
         }
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
-        let client = claims.client_id.as_deref().unwrap_or("unknown");
-        println!(
-            "AUDIT: subject='{}' client='{}' tool='{}'",
-            subject, client, call.name
+        audit(
+            "pending",
+            "tools/call",
+            Some(&call.name),
+            "authorized",
+            StatusCode::OK,
+            Instant::now(),
+            Some(subject),
         );
     }
 
