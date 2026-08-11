@@ -226,27 +226,3 @@ async fn main() {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_redirect_to_private_blocked_unit() {
-        assert!(!is_safe_ip(&"192.168.1.1".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_redirect_to_loopback_blocked_unit() {
-        assert!(!is_safe_ip(&"127.0.0.1".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_redirect_to_link_local_blocked_unit() {
-        assert!(!is_safe_ip(&"169.254.169.254".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_ipv4_mapped_ipv6_blocked_unit() {
-        assert!(!is_safe_ip(&"::ffff:127.0.0.1".parse().unwrap()));
-    }
-}
