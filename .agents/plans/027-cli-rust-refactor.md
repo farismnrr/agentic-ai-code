@@ -465,4 +465,7 @@ All remaining red/yellow gates are green, including:
 9. Final documentation, rollback, and PR evidence.
 
 **Post-Completion Gap Closure:**
-- **P0/P2 Gap List (10/10):** All post-completion review gaps (SSRF mock injection via `HTTP_PROXY`, deterministic terminal process group reaping via `waitpid`, removal of `CURL_TEST_ALLOW_INITIAL`, and precision in CLI help wording) have been fully resolved, tested, and pushed in PR #99. The plan is now legitimately **10/10**.
+- **P0/P2 Gap List (10/10):** All post-completion review gaps have been fully resolved, tested, and pushed in PR #99. The plan is now legitimately **10/10**:
+  - `curl-tool` security tests now use a local deterministic mock server (no internet dependencies, no `example.com`, isolated validation).
+  - Terminal process group reaping avoids blocking the async runtime while ensuring no zombie descendants remain.
+  - OS support matrix explicitly affirmed (Unix-only for process tree behaviors, CI targets verified).

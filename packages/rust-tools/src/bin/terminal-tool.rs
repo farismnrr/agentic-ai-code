@@ -102,26 +102,11 @@ async fn run_terminal(
 
     let pid = child.id().unwrap_or(0);
 
-    // We only timeout on the wait, so `child` is still available.
-    // However, wait_with_output consumes `child`. 
-    // To do this right, we can just await the child.wait() inside the timeout,
-    // and if it times out, we kill and then child.wait().await again!
-    // But wait() doesn't consume `child`!
-    // Wait, wait_with_output() consumes child. So we can't use wait_with_output if we want to reap after timeout.
-    // BUT we need the output!
-    // We can read stdout and stderr manually first, then wait.
-    
-    
-    // Spawn tasks to read output so we don't block
-    
-    // Actually, if we just wait on the child to exit, the stdout/stderr might fill their pipes and block the child!
-    // We must read concurrently. But if we timeout, we drop the readers and kill.
-    // Instead of doing manual pipes, what if we just use child.wait_with_output() inside the timeout,
-    // and if it times out, the child is dropped by tokio, and we manually call waitpid?
-    // Yes! `waitpid(pid, &mut status, 0)` is completely fine for a synchronous wait, even if Tokio might race to reap it.
-    // Actually, Tokio's `Child::kill` is available if we don't move it. But `wait_with_output` takes `self`.
-    
-    // Let's just use waitpid explicitly:
+    // We use timeout to limit execution time. wait_with_output consumes the child.
+    // If a timeout occurs, the Future is dropped, which drops the Child handle.
+    // Under Unix, we placed the child in its own process group (process_group(0)).
+    // When timeout occurs, we explicitly send SIGKILL to the entire process group
+    // and reap the child to ensure no zombies or orphaned descendants are left behind.
     let output_result = timeout(timeout_duration, child.wait_with_output()).await;
 
     match output_result {
@@ -129,12 +114,13 @@ async fn run_terminal(
             #[cfg(unix)]
             {
                 if pid > 0 {
-                    unsafe {
+                    let _ = tokio::task::spawn_blocking(move || unsafe {
                         libc::kill(-(pid as i32), libc::SIGKILL);
                         let mut status = 0;
                         // wait/reap the process group leader explicitly
                         libc::waitpid(pid as i32, &mut status, 0);
-                    }
+                    })
+                    .await;
                 }
             }
             format!("Error: command timed out after {timeout_ms}ms and was killed.")

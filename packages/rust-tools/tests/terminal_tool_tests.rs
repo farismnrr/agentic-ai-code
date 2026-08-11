@@ -11,6 +11,7 @@ fn get_bin(name: &str) -> String {
 }
 
 #[test]
+#[cfg(unix)]
 fn test_terminal_timeout_descendants_killed() {
     let temp_dir = env::temp_dir();
     let pid_file = temp_dir.join(format!("test_pids_{}.txt", std::process::id()));
