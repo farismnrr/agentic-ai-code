@@ -1,0 +1,8 @@
+{
+  "protocolVersion": "2026-07-28",
+  "tools": [
+    {"name":"terminal_exec","required":["command"],"security":{"readOnly":false,"destructive":true,"idempotent":false,"openWorld":true}},
+    {"name":"http_fetch","required":["url"],"security":{"readOnly":false,"destructive":true,"idempotent":false,"openWorld":true}},
+    {"name":"web_search","required":["query"],"security":{"readOnly":true,"destructive":false,"idempotent":true,"openWorld":true}}
+  ]
+}

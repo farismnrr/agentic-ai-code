@@ -581,20 +581,20 @@ Avoid breaking ChatGPT after the workspace approves a frozen tool snapshot.
 
 ### Tasks
 
-- [ ] treat tool names as stable public API identifiers after publication.
-- [ ] record canonical tool-catalog hash/snapshot.
-- [ ] prefer additive optional schema changes.
-- [ ] treat tool rename/removal/required-property changes as breaking.
-- [ ] treat coding-scope/risk-annotation/write-semantics changes as security-relevant changes.
-- [ ] document ChatGPT Refresh/action-review procedure.
-- [ ] do not assume new actions become enabled automatically.
-- [ ] old snapshots fail safely rather than widening authorization.
-- [ ] account for current Business recreate/republish limitations when tools/metadata change.
-- [ ] account for Enterprise/Edu Refresh + action-control review behavior.
+- [x] treat tool names as stable public API identifiers after publication.
+- [x] record canonical tool-catalog hash/snapshot.
+- [x] prefer additive optional schema changes.
+- [x] treat tool rename/removal/required-property changes as breaking.
+- [x] treat coding-scope/risk-annotation/write-semantics changes as security-relevant changes.
+- [x] document ChatGPT Refresh/action-review procedure.
+- [x] do not assume new actions become enabled automatically.
+- [x] old snapshots fail safely rather than widening authorization.
+- [x] account for current Business recreate/republish limitations when tools/metadata change.
+- [x] account for Enterprise/Edu Refresh + action-control review behavior.
 
 ### Exit criteria
 
-- [ ] server updates cannot silently widen a published app's privileges.
+- [x] server updates cannot silently widen a published app's privileges.
 
 ---
 
