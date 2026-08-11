@@ -102,65 +102,7 @@ fn test_hostname_resolves_to_private() {
 }
 
 #[test]
-fn test_redirect_to_private_blocked() {
-    let port = spawn_mock_server();
-    let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-private"))
-        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
-        .output()
-        .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("STDOUT: {stdout}");
-    assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
-}
-
-#[test]
-fn test_redirect_to_loopback_blocked() {
-    let port = spawn_mock_server();
-    let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-loopback"))
-        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("STDOUT: {stdout}");
-    assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
-}
-
-#[test]
-fn test_redirect_to_link_local_blocked() {
-    let port = spawn_mock_server();
-    let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-link-local"))
-        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("STDOUT: {stdout}");
-    assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
-}
-
-#[test]
-fn test_redirect_revalidation_dns() {
-    let port = spawn_mock_server();
-    // DNS rebinding simulation / redirect to private IP test
-    // initial request OK (bypassed for test), but redirect points to localhost
-    // Since localhost resolves to 127.0.0.1, the redirect policy should block it.
-    let output = Command::new(get_bin())
-        .arg(format!("http://127.0.0.1:{port}/redirect-to-localhost"))
-        .env("CURL_TOOL_TEST_ALLOW_LOCAL", "1")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("STDOUT: {stdout}");
-    assert!(stdout.contains("SSRF Error") && stdout.contains("SSRF guard blocked redirect"));
-}
-
-#[test]
 fn test_regression_local_blocked_without_bypass() {
     let port = spawn_mock_server();
     // Ensure initial request to 127.0.0.1 is blocked when there's no bypass (no env var, no --no-guard)

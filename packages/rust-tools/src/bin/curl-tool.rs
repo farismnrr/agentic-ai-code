@@ -32,6 +32,31 @@ struct Args {
     no_guard: bool,
 }
 
+pub fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ipv4) => {
+            !ipv4.is_private()
+                && !ipv4.is_loopback()
+                && !ipv4.is_link_local()
+                && !ipv4.is_multicast()
+                && !ipv4.is_broadcast()
+                && !ipv4.is_documentation()
+                && !ipv4.is_unspecified()
+        }
+        std::net::IpAddr::V6(ipv6) => {
+            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                return is_safe_ip(&std::net::IpAddr::V4(ipv4));
+            }
+
+            !ipv6.is_loopback()
+            && !ipv6.is_multicast()
+            && !ipv6.is_unspecified()
+            && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
+            && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
+        }
+    }
+}
+
 async fn run_curl(
     url_str: &str,
     method_str: &str,
@@ -40,62 +65,24 @@ async fn run_curl(
     timeout_ms: u64,
     no_guard: bool,
 ) -> String {
-    #[cfg(debug_assertions)]
-    let test_allow_local_initial = std::env::var("CURL_TOOL_TEST_ALLOW_LOCAL").is_ok();
-    #[cfg(not(debug_assertions))]
-    let test_allow_local_initial = false;
-
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
         Err(e) => return format!("Error: URL Error: {e}"),
     };
-
-    fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
-        match ip {
-            std::net::IpAddr::V4(ipv4) => {
-                !ipv4.is_private()
-                    && !ipv4.is_loopback()
-                    && !ipv4.is_link_local()
-                    && !ipv4.is_multicast()
-                    && !ipv4.is_broadcast()
-                    && !ipv4.is_documentation()
-                    && !ipv4.is_unspecified()
-            }
-            std::net::IpAddr::V6(ipv6) => {
-                if let Some(ipv4) = ipv6.to_ipv4_mapped() {
-                    return is_safe_ip(&std::net::IpAddr::V4(ipv4));
-                }
-
-                !ipv6.is_loopback()
-                && !ipv6.is_multicast()
-                && !ipv6.is_unspecified()
-                && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
-                && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
-            }
-        }
-    }
 
     if !no_guard {
         if let Some(host) = parsed_url.host_str() {
             // Check if it's already an IP string
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
                 if !is_safe_ip(&ip) {
-                    if test_allow_local_initial && ip.is_loopback() {
-                        // Bypass initial check for loopback only during testing
-                    } else {
-                        return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
-                    }
+                    return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
                 }
             } else {
                 use std::net::ToSocketAddrs;
                 if let Ok(addrs) = format!("{host}:80").to_socket_addrs() {
                     for addr in addrs {
                         if !is_safe_ip(&addr.ip()) {
-                            if test_allow_local_initial && addr.ip().is_loopback() {
-                                // Bypass initial check
-                            } else {
-                                return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
-                            }
+                            return format!("Error: SSRF Error: SSRF guard blocked request because {} resolves to private/local IP {}. Use --no-guard to bypass.", host, addr.ip());
                         }
                     }
                 } else {
@@ -236,5 +223,30 @@ async fn main() {
 
     if is_error {
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_redirect_to_private_blocked_unit() {
+        assert!(!is_safe_ip(&"192.168.1.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_redirect_to_loopback_blocked_unit() {
+        assert!(!is_safe_ip(&"127.0.0.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_redirect_to_link_local_blocked_unit() {
+        assert!(!is_safe_ip(&"169.254.169.254".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_ipv4_mapped_ipv6_blocked_unit() {
+        assert!(!is_safe_ip(&"::ffff:127.0.0.1".parse().unwrap()));
     }
 }

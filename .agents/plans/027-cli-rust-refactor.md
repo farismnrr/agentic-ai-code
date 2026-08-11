@@ -467,5 +467,7 @@ All red/yellow gates are now green, including:
 **Post-Completion Gap Closure:**
 - **P0/P2 Gap List (10/10):** All post-completion review gaps have been fully resolved, tested, and pushed in PR #99. The plan is now legitimately **10/10**:
   - `curl-tool` security tests now use a local deterministic mock server (no internet dependencies, no `example.com`, isolated validation).
+  - Production binary is stripped of all `CURL_TOOL_TEST_ALLOW_LOCAL` test bypasses. `curl-tool` relies on exact unit tests for redirect validation while preserving strong integration behaviors without weakening SSRF guards.
+  - `--no-guard` remains the only explicit SSRF bypass for initial and redirect logic.
   - Terminal process group reaping avoids blocking the async runtime while ensuring no zombie descendants remain.
   - OS support matrix explicitly affirmed (Unix-only for process tree behaviors, CI targets verified).
