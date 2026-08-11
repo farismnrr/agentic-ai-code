@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [029b-chatgpt-mcp-production-hardening.md](029b-chatgpt-mcp-production-hardening.md) — focused follow-up for unresolved Plan 029 production issues only: trusted-proxy/HTTPS boundary, OAuth challenge semantics, safe Docker coding backend, black-box conformance, abuse admission, authoritative tool snapshot, correlation metadata, and live ChatGPT acceptance.
 - [029-chatgpt-native-mcp-integration.md](029-chatgpt-native-mcp-integration.md) — native ChatGPT/Claude remote MCP integration: current stateless MCP transport, OAuth discovery/resource-server validation, explicit tool scopes, Secure MCP Tunnel/local connectivity, client E2E, observability, and strict conformance/CI/release gates.
 - [028-relay-agent-rust-rewrite.md](028-relay-agent-rust-rewrite.md) — full rewrite of `packages/relay-agent` from Node.js/TypeScript + `@yao-pkg/pkg` to a standalone Rust binary, with strict Nuxt HTTP/WebSocket parity, localhost security, lifecycle parity, native release CI, and published-binary E2E verification.
 
