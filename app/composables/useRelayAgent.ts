@@ -38,24 +38,32 @@ export function useRelayAgent() {
 
     try {
       const payload = {
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id: Math.random().toString(36).substring(2, 9),
-        method: "tools/call",
+        method: 'tools/call',
         params: {
-          name: "terminal_exec",
+          name: 'terminal_exec',
           arguments: {
             command,
             args,
             cwd
           },
           _meta: {
-            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-            "io.modelcontextprotocol/clientCapabilities": {}
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {}
           }
         }
       }
 
-      const res: any = await $fetch(`http://127.0.0.1:${port.value}/mcp`, {
+      interface McpResponse {
+        error?: { message?: string }
+        result?: {
+          isError?: boolean
+          content?: Array<{ type?: string, text?: string }>
+        }
+      }
+
+      const res = await $fetch<McpResponse>(`http://127.0.0.1:${port.value}/mcp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +83,7 @@ export function useRelayAgent() {
       }
 
       if (res.result && res.result.isError) {
-        const textContent = res.result.content?.map((c: any) => c.text).join('\n') || 'Unknown tool error'
+        const textContent = res.result.content?.map(c => c.text).join('\n') || 'Unknown tool error'
         return {
           type: 'exec_result',
           success: false,
@@ -83,7 +91,7 @@ export function useRelayAgent() {
         }
       }
 
-      const textContent = res.result?.content?.find((c: any) => c.type === 'text')?.text || ''
+      const textContent = res.result?.content?.find(c => c.type === 'text')?.text || ''
       let stdout = ''
       let stderr = ''
       let exitCode = 0
@@ -104,7 +112,7 @@ export function useRelayAgent() {
         exitCode
       }
     } catch (err: unknown) {
-      throw new Error((err as Error).message || 'Execution failed via MCP')
+      throw new Error((err as Error).message || 'Execution failed via MCP', { cause: err })
     }
   }
 
