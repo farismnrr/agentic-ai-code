@@ -195,6 +195,8 @@ tool authorization/policy
 tool execution
 ```
 
+The `localhost + Origin/Host policy` layer is implemented for the MCP endpoint (`POST /mcp`) in `packages/rust-tools/src/relay_agent/security.rs`, wired in front of it as axum middleware in `transport.rs`, with unit coverage in `security.rs` and end-to-end HTTP coverage in `tests/security_policy_tests.rs`. It fails closed on missing/wrong/duplicated/malformed `Origin`, on no `Origin` configured at all, and on missing/wrong/lookalike `Host`; it never reads `X-Forwarded-Host`. This is the same reusable policy the Phase 4 legacy compatibility endpoints (`/health`, `/pair`, `/revoke`, WebSocket) should apply once they exist — they are not yet implemented, so this note covers the MCP surface only.
+
 For any remotely deployed MCP endpoint in the future, use standards-based OAuth/protected-resource authorization rather than reusing the localhost pairing credential. Current MCP authorization guidance requires proper authorization-server/resource discovery and HTTP `401` behavior for protected resources. citeturn0search3
 
 For the local Nuxt relay:
@@ -353,11 +355,11 @@ Use `tokio::process::Command` and keep the execution adapter explicit.
 ### Phase 5 — Lifecycle/security hardening — [ ] TODO
 
 - [ ] Pairing/session state machine.
-- [ ] Origin/Host validation.
+- [x] Origin/Host validation — implemented and tested for the MCP endpoint (`security.rs` + `tests/security_policy_tests.rs`). Not yet applied to Phase 4's legacy compatibility endpoints, which don't exist yet.
 - [ ] Resource limits.
 - [ ] Timeout/process-tree cleanup.
 - [ ] Pidfile/stop lifecycle.
-- [ ] Security regression suite.
+- [ ] Security regression suite — Origin/Host cases done; pairing race/credential-lifecycle/resource-limit cases still outstanding, see the Security test-strategy table below.
 
 ### Phase 6 — Real Nuxt E2E — [ ] TODO
 
@@ -429,20 +431,22 @@ Only after MCP + Nuxt parity is proven:
 ### Security
 
 ```text
-missing Origin              → reject
-wrong Origin                → reject
-wildcard Origin             → reject
-missing/wrong Host          → reject
-invalid credential           → reject
-reused pairing token         → reject
-racing pairing requests      → one success only
-invalid MCP authorization    → reject
-oversized request/message    → bounded rejection
-oversized tool output        → bounded rejection
-tool not in registry         → reject
-invalid tool arguments       → reject
-execution timeout            → process cleanup
+missing Origin               → reject   [DONE — tests/security_policy_tests.rs]
+wrong Origin                 → reject   [DONE — tests/security_policy_tests.rs]
+wildcard Origin               → reject  [DONE — ServerConfig::validate() + security.rs unit tests]
+missing/wrong Host            → reject  [DONE — tests/security_policy_tests.rs]
+invalid credential           → reject   (Phase 4/5 — pairing not implemented yet)
+reused pairing token         → reject   (Phase 4/5 — pairing not implemented yet)
+racing pairing requests      → one success only   (Phase 4/5 — pairing not implemented yet)
+invalid MCP authorization    → reject   (out of scope until remote MCP auth is added)
+oversized request/message    → bounded rejection   [DONE for HTTP body — tests/mcp_transport_tests.rs; MCP message-level limit beyond raw body size still TODO]
+oversized tool output        → bounded rejection   (Phase 3 — tool execution not implemented yet)
+tool not in registry         → reject   [DONE — tests/mcp_transport_tests.rs]
+invalid tool arguments       → reject   [PARTIAL — tools/call validates shape, not full JSON Schema enforcement yet]
+execution timeout            → process cleanup   (Phase 3 — tool execution not implemented yet)
 ```
+
+Additional Origin/Host edge cases covered beyond the table above (also in `tests/security_policy_tests.rs` and `security.rs` unit tests): wrong scheme, wrong port, duplicated Origin/Host headers, malformed Origin, lookalike Host, no server-side Origin configured at all, and `X-Forwarded-Host` never overriding the real `Host` header.
 
 No security test may use a hidden production bypass or relaxed debug configuration.
 
@@ -513,9 +517,9 @@ Record final evidence as implementation progresses:
 - Contract inventory: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 1 (legacy HTTP/WS) + section 4 (MCP tool catalog).
 - MCP specification/conformance matrix: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 3 (frozen contract, assumptions noted); tests in `packages/rust-tools/tests/mcp_transport_tests.rs` (16/16 passing) cover protocol-version handling, `tools/list` schema shape, `tools/call` structured-error semantics, malformed JSON-RPC, oversized body, and missing/invalid `MCP-Protocol-Version` header. No official MCP client/harness interoperability run yet.
 - Threat model/resource limits: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 6 (frozen numbers); only the HTTP body limit is enforced in code so far (Phase 2 scope), the rest are Phase 3/4/5 scope.
-- Rust implementation: partial `[~]` — Phase 1/2 only (config/error/mcp/transport modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, limits enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3+).
+- Rust implementation: partial `[~]` — Phase 1/2 plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3/4/5 rest).
 - MCP interoperability tests: `[ ]`
-- Security regression suite: `[ ]`
+- Security regression suite: partial `[~]` — Origin/Host enforcement fully covered (29 unit tests in `security.rs` + 11 integration tests in `tests/security_policy_tests.rs`, all green; `cargo fmt --check` and `clippy -D warnings` clean). Pairing/credential lifecycle, MCP authorization, and tool-execution-time limits still outstanding.
 - Nuxt E2E parity: `[ ]`
 - Node source/runtime removal: `[ ]`
 - `@yao-pkg/pkg` removal: `[ ]`

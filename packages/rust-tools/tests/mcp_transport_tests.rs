@@ -5,16 +5,27 @@ use tokio::net::TcpListener;
 const PROTO_HEADER: &str = "mcp-protocol-version";
 const PROTO_VERSION: &str = "2026-07-28";
 
+/// The origin these protocol-focused tests configure the server with, and
+/// the `Origin` header they send back. Origin/Host enforcement itself is
+/// covered exhaustively in `security_policy_tests.rs` — these tests exist
+/// to exercise JSON-RPC/MCP semantics, so they authenticate with a valid
+/// Origin rather than re-testing the access policy on every case.
+const TEST_ORIGIN: &str = "http://localhost:3333";
+
 async fn spawn_server(origin: Option<&str>) -> String {
+    // Bind first so the `Host` the client will actually send (derived from
+    // the real ephemeral port) matches `config.port` exactly — building the
+    // config with a placeholder `port: 0` while binding to a real ephemeral
+    // port would make every request fail Host validation.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
     let config = ServerConfig {
-        port: 0,
+        port: addr.port(),
         origin: origin.map(|s| s.to_string()),
         ..Default::default()
     };
     let router = create_router(config);
-
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
@@ -25,6 +36,8 @@ async fn spawn_server(origin: Option<&str>) -> String {
 
 #[tokio::test]
 async fn test_mcp_health() {
+    // /health is intentionally ungated by the local-access policy (it's a
+    // liveness probe), so no origin/config is needed here.
     let base = spawn_server(None).await;
     let client = reqwest::Client::new();
     let res = client.get(format!("{base}/health")).send().await.unwrap();
@@ -35,7 +48,7 @@ async fn test_mcp_health() {
 
 #[tokio::test]
 async fn test_mcp_initialize() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({
         "jsonrpc": "2.0",
@@ -51,6 +64,7 @@ async fn test_mcp_initialize() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -65,7 +79,7 @@ async fn test_mcp_initialize() {
 
 #[tokio::test]
 async fn test_mcp_invalid_protocol_version_in_initialize_params() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({
         "jsonrpc": "2.0",
@@ -81,6 +95,7 @@ async fn test_mcp_invalid_protocol_version_in_initialize_params() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -93,12 +108,13 @@ async fn test_mcp_invalid_protocol_version_in_initialize_params() {
 
 #[tokio::test]
 async fn test_missing_protocol_version_header_is_rejected() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -111,13 +127,14 @@ async fn test_missing_protocol_version_header_is_rejected() {
 
 #[tokio::test]
 async fn test_wrong_protocol_version_header_is_rejected() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, "2024-01-01")
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -130,13 +147,14 @@ async fn test_wrong_protocol_version_header_is_rejected() {
 
 #[tokio::test]
 async fn test_tools_list_returns_full_catalog_with_schemas() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 42, "method": "tools/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -157,7 +175,7 @@ async fn test_tools_list_returns_full_catalog_with_schemas() {
 
 #[tokio::test]
 async fn test_tools_call_unknown_tool_is_rejected() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({
         "jsonrpc": "2.0",
@@ -169,6 +187,7 @@ async fn test_tools_call_unknown_tool_is_rejected() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -181,7 +200,7 @@ async fn test_tools_call_unknown_tool_is_rejected() {
 
 #[tokio::test]
 async fn test_tools_call_known_tool_returns_structured_not_implemented() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({
         "jsonrpc": "2.0",
@@ -193,6 +212,7 @@ async fn test_tools_call_known_tool_returns_structured_not_implemented() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -209,13 +229,14 @@ async fn test_tools_call_known_tool_returns_structured_not_implemented() {
 
 #[tokio::test]
 async fn test_tools_call_missing_params_is_invalid_request() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -228,13 +249,14 @@ async fn test_tools_call_missing_params_is_invalid_request() {
 
 #[tokio::test]
 async fn test_unknown_method_returns_method_not_found() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 5, "method": "resources/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -247,12 +269,13 @@ async fn test_unknown_method_returns_method_not_found() {
 
 #[tokio::test]
 async fn test_malformed_json_body_is_parse_error() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .header("content-type", "application/json")
         .body("{not valid json")
         .send()
@@ -266,13 +289,14 @@ async fn test_malformed_json_body_is_parse_error() {
 
 #[tokio::test]
 async fn test_wrong_jsonrpc_version_is_invalid_request() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "1.0", "id": 6, "method": "tools/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -285,13 +309,14 @@ async fn test_wrong_jsonrpc_version_is_invalid_request() {
 
 #[tokio::test]
 async fn test_notification_without_id_gets_no_error_envelope() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -304,7 +329,7 @@ async fn test_notification_without_id_gets_no_error_envelope() {
 
 #[tokio::test]
 async fn test_oversized_body_is_rejected() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
 
     // MAX_BODY_BYTES is 1 MiB; send comfortably over that.
@@ -319,6 +344,7 @@ async fn test_oversized_body_is_rejected() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .json(&payload)
         .send()
         .await
@@ -330,13 +356,14 @@ async fn test_oversized_body_is_rejected() {
 
 #[tokio::test]
 async fn test_wrong_content_type_is_rejected() {
-    let base = spawn_server(None).await;
+    let base = spawn_server(Some(TEST_ORIGIN)).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 8, "method": "tools/list" });
 
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header("origin", TEST_ORIGIN)
         .header("content-type", "text/plain")
         .body(payload.to_string())
         .send()
@@ -351,7 +378,11 @@ async fn test_wrong_content_type_is_rejected() {
 #[tokio::test]
 async fn test_cors_rejects_when_no_origin_configured() {
     // No origin configured → AllowOrigin::list(vec![]) → the CORS layer
-    // will not reflect any Origin, matching the fail-closed invariant.
+    // will not reflect any Origin, matching the fail-closed invariant. The
+    // request itself now also gets rejected earlier by the local-access
+    // policy (403, since there is nothing valid to match), but this test's
+    // job is specifically the CORS *response header* behavior, so it
+    // doesn't assert on status.
     let base = spawn_server(None).await;
     let client = reqwest::Client::new();
     let payload = json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/list" });
