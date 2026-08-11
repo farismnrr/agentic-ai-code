@@ -41,12 +41,43 @@ pub struct Response {
     pub result: Value,
 }
 
+/// Build the server identity metadata required on successful MCP results.
+pub fn server_info_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/serverInfo": {
+            "name": "relay-agent",
+            "version": env!("CARGO_PKG_VERSION")
+        }
+    })
+}
+
+/// Add the server identity to a result without discarding other result
+/// metadata supplied by a handler.
+pub fn with_server_info_meta(mut result: Value) -> Value {
+    let Some(result_object) = result.as_object_mut() else {
+        return result;
+    };
+
+    let meta = result_object
+        .entry("_meta")
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    if let Some(meta_object) = meta.as_object_mut() {
+        meta_object.insert(
+            "io.modelcontextprotocol/serverInfo".to_string(),
+            server_info_meta()["io.modelcontextprotocol/serverInfo"].clone(),
+        );
+    } else {
+        *meta = server_info_meta();
+    }
+    result
+}
+
 impl Response {
     pub fn new(id: Id, result: Value) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id,
-            result,
+            result: with_server_info_meta(result),
         }
     }
 }
@@ -157,8 +188,6 @@ pub struct DiscoverResult {
     #[serde(rename = "supportedVersions")]
     pub supported_versions: Vec<&'static str>,
     pub capabilities: Value,
-    #[serde(rename = "_meta")]
-    pub meta: Value,
     pub instructions: &'static str,
     /// Required on the wire per SEP-2549 (confirmed against a real MCP
     /// client SDK's `DiscoverResult` type, which rejects a response
@@ -178,12 +207,6 @@ impl DiscoverResult {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
             capabilities: json!({ "tools": { "listChanged": false } }),
-            meta: json!({
-                "io.modelcontextprotocol/serverInfo": {
-                    "name": "relay-agent",
-                    "version": env!("CARGO_PKG_VERSION")
-                }
-            }),
             instructions: "Local relay-agent MCP server: exposes terminal_exec, http_fetch, and web_search tools backed by the Plan 027 Rust CLI binaries.",
             ttl_ms: 0,
             cache_scope: "private",
@@ -401,4 +424,46 @@ pub fn parse_request(payload: &Value) -> Result<Request, Option<McpError>> {
     }
 
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_stamps_server_info_without_discarding_result_meta() {
+        let response = Response::new(
+            Id::Number(1),
+            json!({
+                "resultType": "complete",
+                "_meta": { "com.example/trace": "trace-1" }
+            }),
+        );
+        let value = serde_json::to_value(response).expect("response should serialize");
+        let meta = &value["result"]["_meta"];
+
+        assert_eq!(meta["com.example/trace"], "trace-1");
+        assert_eq!(
+            meta["io.modelcontextprotocol/serverInfo"]["name"],
+            "relay-agent"
+        );
+        assert_eq!(
+            meta["io.modelcontextprotocol/serverInfo"]["version"],
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    #[test]
+    fn response_stamps_server_info_on_discovery_result() {
+        let response = Response::new(
+            Id::Number(1),
+            serde_json::to_value(DiscoverResult::current()).expect("discovery should serialize"),
+        );
+        let value = serde_json::to_value(response).expect("response should serialize");
+
+        assert_eq!(
+            value["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
+            "relay-agent"
+        );
+    }
 }

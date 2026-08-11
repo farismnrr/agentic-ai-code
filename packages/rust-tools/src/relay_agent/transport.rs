@@ -104,6 +104,28 @@ fn privacy_id(value: Option<&str>) -> &'static str {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CorrelationId(String);
+
+impl CorrelationId {
+    fn from_headers(headers: &HeaderMap) -> Self {
+        let id = headers
+            .get(HDR_CORRELATION_ID)
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| {
+                value.len() <= MAX_LOG_FIELD
+                    && value.chars().all(|c| c.is_ascii_graphic() && c != '"')
+            })
+            .map(str::to_owned)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        Self(id)
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 fn audit(
     correlation_id: &str,
     method: &str,
@@ -290,16 +312,10 @@ async fn handle_health() -> StatusCode {
 }
 
 async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
-    let id = req
-        .headers()
-        .get(HDR_CORRELATION_ID)
-        .and_then(|v| v.to_str().ok())
-        .filter(|v| v.len() <= MAX_LOG_FIELD && v.chars().all(|c| c.is_ascii_graphic() && c != '"'))
-        .map(str::to_owned)
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = CorrelationId::from_headers(req.headers());
     req.extensions_mut().insert(id.clone());
     let mut response = next.run(req).await;
-    if let Ok(value) = id.parse() {
+    if let Ok(value) = id.as_str().parse() {
         response
             .headers_mut()
             .insert(HeaderName::from_static(HDR_CORRELATION_ID), value);
@@ -708,7 +724,7 @@ async fn access_policy(
 async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
-    axum::extract::Extension(correlation_id): axum::extract::Extension<String>,
+    axum::extract::Extension(correlation_id): axum::extract::Extension<CorrelationId>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
@@ -730,7 +746,7 @@ async fn handle_mcp(
         )
         .into_response();
         audit(
-            &correlation_id,
+            correlation_id.as_str(),
             "http",
             None,
             "invalid_content_type",
@@ -752,7 +768,7 @@ async fn handle_mcp(
                 &McpError::ParseError,
             ));
             audit(
-                &correlation_id,
+                correlation_id.as_str(),
                 "http",
                 None,
                 "parse_error",
@@ -793,7 +809,9 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request, _state, auth_ctx, &correlation_id).await,
+        "tools/call" => {
+            handle_tools_call(&request, _state, auth_ctx, correlation_id.as_str()).await
+        }
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -1145,5 +1163,30 @@ mod tests {
             "resource_metadata=\"https://relay.example/.well-known/oauth-protected-resource/mcp\""
         ));
         assert!(!challenge.contains("offline_access"));
+    }
+
+    #[test]
+    fn correlation_id_reuses_valid_client_value() {
+        let headers = HeaderMap::from_iter([(
+            HeaderName::from_static(HDR_CORRELATION_ID),
+            axum::http::HeaderValue::from_static("client-request-42"),
+        )]);
+
+        assert_eq!(
+            CorrelationId::from_headers(&headers).as_str(),
+            "client-request-42"
+        );
+    }
+
+    #[test]
+    fn correlation_id_generates_uuid_for_invalid_client_value() {
+        let headers = HeaderMap::from_iter([(
+            HeaderName::from_static(HDR_CORRELATION_ID),
+            axum::http::HeaderValue::from_static("bad\"value"),
+        )]);
+        let id = CorrelationId::from_headers(&headers);
+
+        assert_eq!(id.as_str().len(), 36);
+        assert!(uuid::Uuid::parse_str(id.as_str()).is_ok());
     }
 }
