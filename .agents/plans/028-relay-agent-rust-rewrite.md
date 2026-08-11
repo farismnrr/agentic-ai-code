@@ -1,429 +1,440 @@
-# 028 — Relay agent: full Rust rewrite + MCP server
+# 028 — Relay Agent: Full Rust Rewrite + MCP Server
 
-**Status: COMPLETED** — the Rust rewrite and prior security remediation are implemented, but the strict privilege boundary and OAuth authorization phase must be completed before the plan can be closed.
+**Status: IN FLIGHT** — the Rust rewrite and earlier remediation phases are implemented. Strict privilege, OAuth, final security hardening, and zero-bypass quality gates must pass before the plan may be closed.
 
-**Deadline decision:** the automated Rust test suite for `relay_agent` and `cargo test --workspace` were removed to meet the deadline. CI intentionally enforces static checks only: `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo audit`. Runtime behavior is therefore validated by source review/manual verification until a future test strategy is explicitly restored.
+## Deadline / test decision
+
+Automated Rust unit/integration tests for `relay_agent` and `cargo test --workspace` are intentionally not required for this deadline. This does **not** relax static/security gates. Runtime behavior is validated by source review, manual verification, and the final E2E gate.
+
+CI MUST fail on every lint, warning, audit finding, policy violation, or bypass. No `#[allow(...)]`, `#[cfg_attr(...)]`, lint-level downgrade, warning suppression, ignored command failure, or equivalent workaround may be introduced to make CI green. Any warning must be fixed at its source.
 
 ## Context
 
-Plan 027 migrated the general-purpose CLI tools to Rust. The remaining relay runtime was rewritten from Node.js/TypeScript to Rust. The relay is a local MCP server/execution bridge for Nuxt and future MCP clients, while the Plan 027 Rust binaries remain the actual CLI tools.
+Plan 027 migrated the general-purpose CLI tools to Rust. Plan 028 rewrites the remaining relay runtime from Node.js/TypeScript to Rust and makes it a proper MCP server for Nuxt/local MCP clients and future ChatGPT/Claude connectors.
 
-The relay must support two explicitly separated deployment modes:
+The relay has two explicit deployment modes:
 
-1. **Local mode:** loopback-only, suitable for Nuxt/local MCP clients. No OAuth is required for local loopback use, but the process MUST run as a non-root OS user and MUST enforce the strict execution policy below.
-2. **Remote/connector mode:** a separately deployed MCP resource server for ChatGPT/Claude and other remote MCP clients. This mode MUST require OAuth authorization and MUST NOT expose the local unauthenticated execution agent directly to the public internet.
+1. **Local:** loopback-only, no OAuth, intended for Nuxt/local MCP hosts. The process MUST run as a non-root OS user and MUST use the strict execution policy.
+2. **Remote:** separately deployed MCP resource server behind HTTPS and OAuth. It MUST NOT expose the local unauthenticated execution agent publicly.
 
 ## Goals
 
 - Rewrite `packages/relay-agent` to 100% Rust.
-- Produce a standalone native `relay-agent` binary with no Node.js/V8/libnode runtime dependency.
-- Implement actual MCP `2026-07-28`, not a proprietary MCP-like protocol.
-- Keep MCP tool definitions/handlers transport-independent.
-- Preserve Nuxt local compatibility where required.
-- Reuse Plan 027 Rust CLI tools instead of duplicating them.
+- Produce a small standalone native `relay-agent` binary with no Node.js/V8/libnode runtime dependency.
+- Implement MCP `2026-07-28` using Streamable HTTP.
+- Preserve the required Nuxt/tool contract while removing legacy relay protocols.
+- Reuse Plan 027 Rust CLI tools rather than duplicating execution implementations.
 - Keep local execution localhost-only and fail closed on browser-originated access.
-- Provide a clean path for authenticated remote MCP deployment without exposing the localhost execution agent publicly.
-- Remove Node.js, `@yao-pkg/pkg`, and relay-specific JS runtime/build dependencies.
-- Build and publish native Rust artifacts with Cargo.
-- Enforce a strict non-root, no-privilege-escalation execution boundary.
-- Support standards-based OAuth authorization for remote MCP connectors without coupling tool execution to a specific identity provider.
-
-## Deployment boundary
-
-- **Local Nuxt/browser:** Streamable HTTP to `127.0.0.1:<port>`; no public binding.
-- **Local MCP hosts:** use standard MCP transport semantics; local mode remains loopback-only.
-- **Remote ChatGPT/Claude/connectors:** deploy the MCP resource server separately behind HTTPS and OAuth. Do not port-forward or publicly bind the local execution agent.
-- **Authorization server:** may be an existing standards-compliant IdP/OAuth provider. The relay/resource server verifies access tokens; it does not need to become a bespoke identity provider unless a later deployment explicitly requires that.
-
-## Scope boundary
-
-In scope: Rust relay runtime, MCP server/tool catalog/handlers, local execution bridge, local lifecycle, release pipeline, security/resource limits, strict non-root execution policy, OAuth-protected remote MCP deployment, and Node runtime removal.
-
-Out of scope: migrating Nuxt/Vue/TypeScript, replacing Plan 027 CLI tools, arbitrary OS sandboxing, public unauthenticated execution, or a second tool implementation for ChatGPT.
+- Enforce non-root, no-sudo, no-privilege-escalation execution.
+- Add standards-based OAuth resource-server authorization for remote MCP connectors.
+- Build and release native artifacts directly with Cargo.
 
 ## Architecture
 
 ```text
-                    Local deployment
+LOCAL
 Nuxt / local MCP client
-       │ Streamable HTTP / loopback only
-       ▼
-Rust relay-agent
-  ├─ protocol + transport
-  ├─ localhost + Origin/Host policy
-  ├─ tool registry
-  ├─ execution authorization policy
-  ├─ non-root / no-privilege-escalation boundary
-  ├─ resource limits
-  └─ lifecycle
-       │
-       ▼
-Plan 027 Rust CLI tools
-  terminal-tool / curl-tool / searxng-search-tool
+  -> 127.0.0.1 Streamable HTTP
+  -> Rust relay-agent
+  -> protocol + Origin/Host policy
+  -> MCP schema validation
+  -> authoritative execution policy
+  -> Plan 027 Rust tools
 
-                    Remote deployment
+REMOTE
 ChatGPT / Claude / other MCP client
-       │ HTTPS + OAuth access token
-       ▼
-Remote MCP resource server
-  ├─ Protected Resource Metadata
-  ├─ OAuth token validation
-  ├─ audience/resource/scope checks
-  └─ same execution authorization policy
-       │
-       ▼
-Approved tool execution environment
+  -> HTTPS
+  -> OAuth-protected MCP resource server
+  -> token issuer/audience/resource/scope validation
+  -> same MCP validation
+  -> same strict execution policy
+  -> approved tool execution environment
 ```
 
-## Current phase order
+Remote deployment is separate from the local agent. Port-forwarding or publicly binding the local no-auth listener is prohibited.
 
-- Phase 11 — Production security + resource-limit remediation.
-- Phase 12 — Remove legacy relay compatibility.
-- Phase 14 — Final security remediation for the current MCP-only execution path.
-- Phase 15 — Strict privilege boundary + OAuth authorization for remote connectors.
-- Phase 13 — Final E2E + release validation (**final gate**).
+## Phase order
 
-Phase 13 is intentionally deferred until all implementation/security/authorization work is complete. Do not block incremental development on E2E/release validation before the final phase.
+1. Phase 11 — Production security + resource limits — DONE.
+2. Phase 12 — Remove legacy relay compatibility — DONE.
+3. Phase 14 — Final security remediation — DONE.
+4. Phase 15 — Strict privilege boundary + OAuth foundation — IN FLIGHT.
+5. Phase 16 — OAuth protocol/security completion — NOT STARTED.
+6. Phase 17 — Zero-bypass Rust quality/CI/release hardening — NOT STARTED.
+7. Phase 13 — Final E2E + release validation — FINAL GATE.
 
-## MCP protocol requirements
+Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 13 passes.
 
-### Protocol version
+## MCP contract
 
-- [x] Target MCP `2026-07-28`.
-- [x] Do not implement removed `initialize`/`initialized` + `Mcp-Session-Id` as the primary protocol.
-- [x] Use Streamable HTTP; no deprecated legacy HTTP+SSE dependency.
-- [ ] Older-MCP compatibility only if explicitly required later.
-
-### MCP methods
-
-- [x] `server/discover`.
-- [x] `tools/list`.
-- [x] `tools/call` request/structured-error path.
+- [x] MCP `2026-07-28`.
+- [x] Streamable HTTP.
+- [x] `POST /mcp` JSON request/response.
+- [x] Protocol/header/body validation.
+- [x] `tools/list` and `tools/call`.
 - [x] JSON-RPC error semantics.
-- [x] Capability advertisement.
-
-### Tool catalog
-
-- [x] Stable Plan 027 tool names and descriptions.
-- [x] Explicit JSON Schema 2020-12-compatible `inputSchema`.
-- [x] Transport-independent registry.
-- [x] No shell interpolation.
-- [ ] Phase 15 must ensure remote authorization and local privilege policy are enforced before privileged side effects.
-
-### Streamable HTTP
-
-- [x] `POST /mcp` JSON-in/JSON-out.
-- [x] `MCP-Protocol-Version` validation.
-- [x] `Mcp-Method`/`Mcp-Name` validation against request body.
-- [x] Per-request `_meta` validation.
-- [x] `application/json` enforcement.
-- [x] 1 MiB body limit before parsing.
-- [x] Stateless request handling; no hidden session authorization boundary.
-- [x] Explicit CORS allowlist; no wildcard Origin.
-- [ ] Remote mode requires HTTPS at the deployment boundary and valid OAuth access tokens before `tools/call`.
-
-### Authorization
-
-Local policy is layered:
-
-```text
-LOCAL MODE
-HTTP transport
-  ├─ loopback binding
-  ├─ Host policy
-  └─ exact Origin policy
-          │
-          ▼
-MCP request
-  ├─ protocol/version/header validation
-  └─ tool argument/schema validation
-          │
-          ▼
-Execution policy
-  ├─ authoritative command allowlist
-  ├─ no sudo / no privilege escalation
-  ├─ non-root process
-  ├─ resource limits
-  └─ process lifecycle
-
-REMOTE MODE
-HTTPS
-  │
-  ▼
-OAuth access-token validation
-  ├─ issuer
-  ├─ audience/resource
-  ├─ expiry / not-before
-  ├─ signature / JWKS
-  └─ scopes/authorization
-          │
-          ▼
-Same MCP validation + execution policy
-```
-
-Local mode is intentionally no-auth only because it is loopback-only. Remote mode MUST NOT inherit the local no-auth behavior.
-
-No public unauthenticated execution is permitted.
+- [x] Explicit JSON Schema input validation.
+- [x] 1 MiB request body limit before parsing.
+- [x] No wildcard CORS.
+- [x] No legacy WebSocket/pair/revoke/credential execution path.
+- [ ] Remote `tools/call` requires valid OAuth authorization before any side effect.
+- [ ] Scope authorization must be enforced independently of tool arguments.
 
 ## Phase 11 — Production security + resource-limit remediation — [x] DONE
 
-- [x] Remove relay-injected `--no-guard` from terminal/curl execution and prove no untrusted input can disable Plan 027 guards.
-- [x] Make retained session credentials expiry-bound, revocable, and race-safe.
-- [x] Remove credential logging and redact credential query parameters from logs/errors.
-- [x] Remove wildcard/missing-Origin fallbacks and fail closed.
-- [x] Bound retained legacy execution input/output and process lifecycle where applicable.
-- [x] Add global and per-session execution concurrency limits.
-- [x] Make timeout/process-tree kill/reap explicit and deterministic.
-- [x] Preserve Plan 027 SSRF/URL policy at the relay boundary.
-- [x] Sanitize externally visible process/system errors.
-- [x] Document `--dir` as working-directory configuration, not a filesystem sandbox.
-- [x] Perform static/manual security audit for guard bypass, wildcard Origin, secret leakage, unbounded input/output, concurrency, timeout/reap, and SSRF paths.
-- [x] Run `cargo fmt --check`.
-- [x] Run `cargo clippy --all-targets --all-features -- -D warnings`.
-- [x] Run `cargo audit`.
+- [x] Remove relay-injected `--no-guard`.
+- [x] Expiry-bound/revocable credential handling where legacy compatibility existed.
+- [x] No credential logging.
+- [x] Exact Origin and Host validation; fail closed.
+- [x] Execution concurrency limits.
+- [x] Timeout/process-tree lifecycle handling.
+- [x] SSRF policy preservation.
+- [x] Sanitized process errors.
+- [x] `--dir` documented as working directory, not filesystem sandbox.
+- [x] `cargo fmt --check`.
+- [x] `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] `cargo audit`.
 
-## Phase 12 — Remove legacy relay compatibility — [x] COMPLETED
+## Phase 12 — Remove legacy relay compatibility — [x] DONE
 
-- [x] Audit repository consumers for `/pair`, `/revoke`, legacy WebSocket, `credential=`, `exec_result`, and legacy relay message types.
-- [x] Migrate/remove remaining legacy consumers.
-- [x] Delete legacy WebSocket server/upgrade path.
-- [x] Remove `/pair` and `/revoke` endpoints.
+- [x] Remove `/pair` and `/revoke`.
+- [x] Remove legacy WebSocket upgrade/server.
+- [x] Remove `credential=` execution path.
 - [x] Remove legacy `exec` / `exec_result` protocol.
-- [x] Remove legacy credential/session state and compatibility-only helpers.
+- [x] Remove compatibility-only session state/helpers.
 - [x] Remove obsolete docs/config/release references.
-- [x] Re-run source-level attack-path review after deletion.
+- [x] Source-review all remaining execution entrypoints.
 
-**Phase 12 acceptance:** MCP Streamable HTTP is the sole relay execution protocol and no legacy execution path remains.
+**Acceptance:** MCP Streamable HTTP is the only relay execution protocol.
 
-## Phase 14 — Final security remediation — [x] COMPLETED
+## Phase 14 — Final security remediation — [x] DONE
 
-**Goal:** address the remaining concrete findings discovered after Phase 12 removed the legacy path.
+- [x] Authoritative command policy replaces request-derived command authorization.
+- [x] MCP cannot select/disable privileged execution modes.
+- [x] DNS-rebinding/TOCTOU SSRF path addressed.
+- [x] Redirects revalidated against SSRF policy.
+- [x] Server-side timeout maximum and overflow protection.
+- [x] Argument count/aggregate byte limits.
+- [x] Header count/aggregate byte limits.
+- [x] Restricted HTTP methods.
+- [x] Trusted `web_search` endpoint.
+- [x] Sibling binary trust boundary reviewed.
+- [x] MCP request-to-side-effect path manually reviewed.
+- [x] Repository-wide known bypass search.
+- [x] fmt/clippy/audit gates run.
 
-- [x] Resolve the terminal-tool guard/execution-policy contradiction and define one authoritative policy.
-- [x] Verify untrusted MCP arguments cannot select or disable a privileged execution mode.
-- [x] Eliminate DNS TOCTOU in `http_fetch` and revalidate redirects.
-- [x] Preserve scheme/private/link-local/loopback/metadata-address policy after DNS resolution.
-- [x] Add server-side timeout maximum and prevent arithmetic overflow.
-- [x] Add argument count/aggregate byte limits and header count/aggregate byte limits.
-- [x] Restrict `http_fetch` methods.
-- [x] Restrict `web_search` to a trusted configured endpoint.
-- [x] Verify sibling binary trust boundary and installation permissions.
-- [x] Review all MCP `tools/call` execution paths from request parsing to OS/network side effects.
-- [x] Search repository-wide for known guard/Origin/timeout/base_url/alternate-entrypoint bypasses.
-- [x] Run `cargo fmt --check`.
-- [x] Run `cargo clippy --all-targets --all-features -- -D warnings`.
-- [x] Run `cargo audit`.
+## Phase 15 — Strict privilege boundary + OAuth foundation — [ ] IN FLIGHT
 
-**Phase 14 acceptance:** no known P0/P1 finding remained in the previously reviewed command execution, SSRF, timeout/input-limit, network-policy, or process-launch paths.
+### 15.1 Non-root and no privilege escalation
 
-## Phase 15 — Strict privilege boundary + OAuth authorization — [x] COMPLETED
+- [ ] Refuse startup when running as UID 0/root on platforms with a reliable UID check.
+- [ ] Production deployment MUST use a dedicated unprivileged OS/container user.
+- [ ] No `sudo`, `su`, `doas`, `pkexec`, `runas`, or equivalent helper may be invoked by relay code.
+- [ ] Reject those helpers as requested executables and through path aliases/wrappers.
+- [ ] Reject shell/interpreter escape forms such as `sh -c`, `bash -c`, `zsh -c`, `cmd /c`, PowerShell `-Command`, and language `-c`/eval forms unless explicitly reviewed for a non-shell operation.
+- [ ] No generic shell MCP tool.
+- [ ] MCP callers cannot select arbitrary executable paths.
+- [ ] Command authorization comes only from a server-controlled allowlist/policy, never from the request itself.
+- [ ] Policy covers executable identity/path and, where necessary, approved argument patterns.
+- [ ] Reject path traversal, symlink substitution, wrapper aliases, and interpreter aliases.
+- [ ] Use a minimal child environment; prevent `PATH`, loader, preload, plugin, and runtime environment injection.
+- [ ] Relay binary, policy/config, sibling tools, and release artifacts MUST not be writable by the runtime user.
+- [ ] Approved tools MUST not be privilege-escalation trampolines.
+- [ ] Verify representative malicious command inputs manually.
 
-**Goal:** make command execution explicitly non-privileged and add standards-based OAuth protection for remote MCP connectors. This phase is mandatory before the final E2E/release gate.
+**Invariant:** the caller can only request an operation already authorized by server policy. The request can never grant itself execution permission.
 
-### 15.1 Strict no-root / no-sudo execution policy
+### 15.2 OS defense in depth
 
-The relay is an unprivileged automation agent. **It MUST never use or facilitate privilege escalation.** Do not rely on a sudoers configuration as the primary control; the application must reject privilege-escalation paths itself and the process must run as a non-root OS identity.
+- [ ] Document filesystem ownership/permissions.
+- [ ] Document optional container/OS sandboxing as defense in depth.
+- [ ] No dependency on sudoers for the security model.
+- [ ] Verify no code path intentionally requests elevation.
 
-- [x] Refuse startup when the relay process is running as UID 0/root where the platform exposes a reliable UID check.
-- [x] Document and enforce that production service/container users are unprivileged and have no sudo/doas/pkexec-style elevation capability.
-- [x] Explicitly reject executable names/paths for `sudo`, `su`, `doas`, `pkexec`, `runas`, and equivalent privilege-escalation helpers for each supported OS.
-- [x] Reject command forms that attempt to invoke a forbidden helper through path aliases or wrapper indirection.
-- [x] Block shell/interpreter-based bypasses (`sh -c`, `bash -c`, `zsh -c`, PowerShell `-Command`, `cmd /c`, Python/Node/Perl/Ruby `-c`/eval-style execution) unless a specific tool has a narrowly reviewed, non-shell use case.
-- [x] Do not expose a generic shell tool.
-- [x] Do not permit MCP callers to choose an arbitrary executable path.
-- [x] Replace request-derived `--allow-command` behavior with a server-controlled allowlist of approved executable identities/absolute paths and, where needed, approved argument patterns.
-- [x] Reject path traversal, alternate executable paths, symlink-based command substitution, and interpreter aliases that bypass the allowlist.
-- [x] Do not permit environment-variable injection that can change executable resolution or load attacker-controlled code (`PATH`, dynamic-loader variables, language runtime preload/plugin variables, etc.).
-- [x] Set a minimal explicit environment for child processes rather than inheriting the full parent environment where practical.
-- [x] Ensure the relay's working directory and sibling CLI binaries are not writable by untrusted users.
-- [x] Ensure approved commands cannot be used as a privilege-escalation trampoline (for example, commands that themselves can launch arbitrary programs or modify executable policy).
-- [x] Re-run a command-policy review using representative malicious inputs: `sudo`, absolute `/usr/bin/sudo`, `sudo` via shell, symlinked helpers, interpreter `-c`, environment injection, path traversal, and wrapper binaries.
+### 15.3 OAuth resource-server foundation
 
-**Privilege-policy invariant:** an MCP request can only select an operation already approved by server-side policy. The request itself MUST NOT be able to grant permission to the executable it is asking to run.
+- [ ] Remote MCP endpoint is HTTPS-only.
+- [ ] Protected Resource Metadata is implemented correctly.
+- [ ] Authorization Server Metadata/issuer discovery is implemented or consumed according to the selected provider.
+- [ ] Stable resource/audience identifier is configured.
+- [ ] JWT access tokens are verified using issuer JWKS with key rotation/caching, or trusted opaque-token introspection is used.
+- [ ] Validate issuer, audience/resource, expiry, not-before, token type, and allowed signing algorithm.
+- [ ] No shared-secret custom JWT scheme as the long-term connector security boundary.
+- [ ] Define least-privilege scopes for read/search/fetch/execute operations.
+- [ ] Map scopes/claims to tool permissions server-side.
+- [ ] Invalid/missing credentials return correct `401` and `WWW-Authenticate` behavior.
+- [ ] Tokens, authorization codes, refresh tokens, client secrets, and Authorization headers never enter logs, URLs, query strings, tool arguments, or errors.
+- [ ] Remote mode cannot fall back to local no-auth behavior.
 
-### 15.2 OS permission boundary
+### 15.4 Connector compatibility foundation
 
-- [x] Provide deployment guidance for a dedicated unprivileged OS account/container user.
-- [x] Explicitly state that filesystem permissions are a defense-in-depth control, not a substitute for the application allowlist.
-- [x] Ensure the runtime user cannot write to the relay executable directory, approved CLI binaries, configuration/policy files, or release artifacts.
-- [x] Where supported, use OS-level sandboxing/container isolation as optional defense in depth, but do not make it a prerequisite for the application security model.
-- [x] Verify no code path intentionally invokes `sudo` or asks for elevated privileges.
+- [ ] Authorization Code + PKCE S256.
+- [ ] No PKCE downgrade.
+- [ ] Exact redirect URI validation.
+- [ ] Transaction-specific state/CSRF protection.
+- [ ] Authorization-server mix-up protection.
+- [ ] No implicit grant.
+- [ ] No resource-owner-password grant.
+- [ ] Provider credentials remain deployment secrets.
+- [ ] Refresh tokens remain outside the MCP tool layer.
 
-### 15.3 OAuth resource-server model
+## Phase 16 — OAuth protocol/security completion — [ ] NOT STARTED
 
-Remote ChatGPT/Claude connectors use the relay as an OAuth-protected MCP **resource server**. Prefer an existing standards-compliant Authorization Server/IdP rather than implementing password storage or a custom identity system in the relay.
+**Goal:** make the remote connector path standards-compliant and fail-closed under real OAuth/MCP attack conditions. Phase 16 is mandatory even if a provider happens to work with a happy-path token.
 
-- [x] Define the remote MCP endpoint as HTTPS-only.
-- [x] Implement MCP Protected Resource Metadata at `/.well-known/oauth-protected-resource` and advertise the authorization server(s) for the MCP resource.
-- [x] Implement/consume Authorization Server Metadata at `/.well-known/oauth-authorization-server` (or issuer metadata according to the selected provider).
-- [x] Define a stable resource/audience identifier for the MCP server; reject tokens minted for another resource.
-- [x] Validate JWT access-token signature against the configured issuer's JWKS with key rotation/caching and bounded refresh behavior, or use equivalent opaque-token introspection with a trusted provider.
-- [x] Validate `iss`, `aud`/resource, `exp`, `nbf` where applicable, and token type/algorithm according to the provider contract.
-- [x] Use least-privilege scopes, e.g. separate read/search/fetch/execute capabilities rather than one unrestricted scope.
-- [x] Map scopes/claims to explicit tool permissions server-side; never let tool arguments grant authorization.
-- [x] Return standards-compliant `401`/`WWW-Authenticate` behavior for missing/invalid access tokens and advertise the protected-resource metadata location.
-- [x] Never log access tokens, authorization codes, refresh tokens, client secrets, or Authorization headers.
-- [x] Never put OAuth tokens in URLs, query strings, MCP tool arguments, or error messages.
-- [x] Enforce HTTPS and validate proxy/trusted-forwarded-header configuration so the application cannot be tricked into generating insecure redirect/resource metadata.
-- [x] Configure strict CORS/Origin policy for browser-based local flows; do not use `*` for authenticated endpoints.
-- [x] Add rate limits for authorization/token-related endpoints if the relay owns any such endpoints; otherwise rely on the upstream authorization server and protect the MCP resource endpoint itself against abuse.
+### 16.1 Resource-server authorization
 
-### 15.4 OAuth client/connector compatibility
+- [ ] Define the exact protected resource URI and use it consistently in metadata, token audience/resource validation, and connector configuration.
+- [ ] Support issuer discovery only from an explicit trusted issuer/provider configuration; never accept an issuer supplied by an unauthenticated request as trusted configuration.
+- [ ] Validate JWT `iss` exactly against the configured issuer.
+- [ ] Validate `aud` and/or RFC-compliant resource indicator according to the selected provider contract.
+- [ ] Reject missing, malformed, expired, not-yet-valid, wrong-issuer, wrong-audience, or wrong-resource tokens.
+- [ ] Restrict accepted signing algorithms to the configured safe set; reject `none` and algorithm confusion.
+- [ ] Fetch JWKS over HTTPS from trusted issuer metadata only.
+- [ ] Cache JWKS with bounded lifetime and safe refresh-on-unknown-key behavior; avoid attacker-controlled refresh loops.
+- [ ] Handle key rotation without accepting stale/unknown keys indefinitely.
+- [ ] If introspection is used instead of JWT/JWKS, require TLS, provider authentication, active-token response, audience/resource, expiry, and scope validation.
+- [ ] Never mix JWT and opaque-token trust paths accidentally.
 
-The relay/resource server must be compatible with standards-based MCP clients rather than implementing vendor-specific authentication.
+### 16.2 Scope-to-tool authorization
 
-- [x] Support Authorization Code flow with PKCE `S256` for public clients.
-- [x] Reject PKCE downgrade/missing-verifier flows when PKCE is required.
-- [x] Use exact redirect-URI matching for confidential clients; only allow the documented localhost exception for native/public clients where applicable.
-- [x] Bind authorization transactions to the client/user-agent using transaction-specific state where required by the chosen flow; do not use constant state/challenge values.
-- [x] Defend against authorization-server mix-up when multiple issuers are supported; pin/configure trusted issuer(s) and validate issuer identity.
-- [x] Do not implement the OAuth implicit grant or resource-owner-password grant.
-- [x] Support dynamic client registration only if required by the target MCP ecosystem; otherwise prefer pre-registration or Client ID Metadata Documents according to the MCP client ecosystem.
-- [x] Keep provider-specific client credentials outside the repository and inject them through deployment secrets.
-- [x] Ensure refresh tokens, if used by a connector, remain on the client/authorization-server side and are never exposed to the MCP tool layer.
+- [ ] Create a closed server-side map of scopes → tool permissions.
+- [ ] Default deny when scope is missing, malformed, or unknown.
+- [ ] `terminal_exec` requires an explicit execute scope.
+- [ ] `http_fetch` requires its own explicit scope.
+- [ ] `web_search` requires its own explicit scope.
+- [ ] Do not let a broad scope implicitly authorize a more privileged operation unless explicitly documented.
+- [ ] Scope checks happen before child-process spawn/network side effect.
+- [ ] Scope checks are independent from JSON Schema validation.
+- [ ] Tool arguments MUST NOT contain permission/grant fields that can override authorization.
+- [ ] Reject scope escalation attempts and duplicated/conflicting authorization claims.
 
-### 15.5 Tool authorization and privilege separation
+### 16.3 OAuth error and challenge behavior
 
-- [x] Treat OAuth authentication and execution authorization as separate checks: a valid token does not automatically mean unrestricted command execution.
-- [x] Require an explicit execute scope/claim for `terminal_exec`.
-- [x] Allow lower-risk tools such as search/fetch to use narrower scopes if the deployment needs them.
-- [x] Re-apply the same non-root/no-sudo command policy after OAuth authorization; remote users must not gain a stronger OS privilege than local users.
-- [x] Ensure OAuth subject/client identity is available to authorization/audit logic without leaking tokens.
-- [x] Record privacy-safe audit events (subject/client/tool/result category) without command secrets, token values, or sensitive output.
+- [ ] Return `401` for missing/invalid authentication.
+- [ ] Return `403` for authenticated callers lacking required tool scope.
+- [ ] Emit standards-compliant `WWW-Authenticate` challenges.
+- [ ] Include protected-resource metadata location where appropriate.
+- [ ] Do not leak token validation internals, issuer details, keys, or claims in errors.
+- [ ] Never return access/refresh tokens in response bodies unless the endpoint is explicitly an OAuth endpoint designed to do so.
 
-### 15.6 OAuth security verification
+### 16.4 PKCE / browser-flow security
 
-- [x] Manually review authorization-code injection, PKCE downgrade, redirect URI, CSRF/state, issuer mix-up, audience/resource confusion, token replay, expired-token, wrong-scope, and wrong-client cases.
-- [x] Verify a valid token for another MCP/resource is rejected.
-- [x] Verify a valid token with read-only scope cannot invoke `terminal_exec`.
-- [x] Verify expired/revoked/invalid-signature tokens are rejected.
-- [x] Verify missing token produces the expected OAuth challenge/metadata response.
-- [x] Verify no token or authorization code appears in logs, URLs, traces, or errors.
+- [ ] Require PKCE S256 for public clients.
+- [ ] Reject `plain` or missing PKCE where required.
+- [ ] Bind authorization request and callback using unpredictable transaction state.
+- [ ] Validate state before exchanging authorization code.
+- [ ] Exact-match redirect URIs; no prefix, wildcard, or substring matching.
+- [ ] Authorization codes are single-use and short-lived when the resource server owns authorization transactions.
+- [ ] Protect callback endpoints against login CSRF and authorization-code injection.
+- [ ] Pin trusted authorization servers to prevent mix-up attacks.
+- [ ] Do not accept authorization-server URLs from MCP tool arguments.
 
-### 15.7 Static security gate
+### 16.5 Remote deployment boundary
 
-- [x] `cargo fmt --check`.
-- [x] `cargo clippy --all-targets --all-features -- -D warnings`.
-- [x] `cargo audit`.
-- [x] Repository-wide search for `sudo`, `su`, `doas`, `pkexec`, `runas`, `--no-guard`, generic shell execution, and arbitrary executable selection.
-- [x] Repository-wide search for OAuth token/secret logging and query-string token handling.
-- [x] Document the final threat model and privilege/authentication boundaries.
+- [ ] Explicit `LOCAL` vs `REMOTE` security mode; no implicit auth downgrade based only on whether an environment variable exists.
+- [ ] Remote mode refuses plaintext HTTP except explicitly loopback-only internal hops behind a trusted TLS terminator.
+- [ ] Trusted proxy headers are accepted only from configured proxies.
+- [ ] External scheme/host/resource metadata cannot be attacker-controlled.
+- [ ] Local no-auth mode binds only to loopback and cannot be configured to publicly bind accidentally.
+- [ ] Remote mode cannot call local-mode bypass paths.
+- [ ] Add rate limiting/concurrency controls to remote `tools/call` independently of OAuth token validity.
 
-**Phase 15 acceptance:** the relay cannot run as root or invoke/enable privilege escalation through MCP input; executable authorization is server-controlled; remote MCP access is protected by standards-based OAuth with resource/audience/scope validation; and no credential material is exposed to logs or tool inputs.
+### 16.6 OAuth secrets and observability
 
-## Phase 13 — Final E2E + release validation — [x] COMPLETED
+- [ ] Secrets only enter through deployment secret stores/environment injection.
+- [ ] No client secret, private key, token, authorization code, or verifier is committed.
+- [ ] Logs redact Authorization headers and sensitive query parameters.
+- [ ] Metrics/traces contain stable non-secret identifiers only.
+- [ ] Error messages are safe for untrusted remote clients.
+- [ ] Add audit events for authentication failure, authorization denial, and privileged tool invocation without logging tokens or sensitive command contents.
 
-**Goal:** validate the complete finished system only after Phases 11, 12, 14, and 15 are complete. E2E/release validation is deliberately not a blocker for the intermediate implementation phases.
+### 16.7 OAuth manual attack review
 
-### 13.1 Production binary smoke
+- [ ] Wrong issuer.
+- [ ] Wrong audience/resource.
+- [ ] Expired token.
+- [ ] Future `nbf`.
+- [ ] Invalid signature.
+- [ ] Unknown/rotated key.
+- [ ] Algorithm confusion / `none`.
+- [ ] Missing execute scope.
+- [ ] Attempt to inject scope through tool arguments.
+- [ ] PKCE downgrade.
+- [ ] State mismatch.
+- [ ] Redirect URI prefix/wildcard bypass.
+- [ ] Authorization-server mix-up.
+- [ ] Remote endpoint without TLS.
+- [ ] Local endpoint exposed on non-loopback address.
+- [ ] Credential leakage in logs/errors/URLs.
 
-- [x] Build release-mode `relay-agent` from a clean environment.
-- [x] Verify standalone native execution with no Node/V8/libnode runtime dependency.
-- [x] Verify supported artifact names, checksums, and manifest metadata.
-- [x] Verify the binary refuses root execution in the supported deployment environment.
+**Phase 16 acceptance:** remote MCP access is fail-closed, standards-based, least-privilege, and independently authorized before any tool side effect.
 
-### 13.2 End-to-end local MCP flow
+## Phase 17 — Zero-bypass Rust quality, lint, dependency, and CI hardening — [ ] NOT STARTED
 
-- [x] Start the production relay binary as an unprivileged user.
-- [x] Connect Nuxt through MCP Streamable HTTP on loopback.
-- [x] `server/discover` succeeds.
-- [x] `tools/list` exposes the expected Plan 027 tools.
-- [x] `terminal_exec` can execute only server-approved non-privileged commands.
-- [x] `terminal_exec` rejects `sudo`, `su`, `doas`, `pkexec`, `runas`, shell/interpreter bypasses, and arbitrary executable paths.
-- [x] `http_fetch` executes while preserving SSRF policy, including redirects.
-- [x] `web_search` executes only against the configured trusted endpoint.
-- [x] Invalid Origin/Host requests are rejected.
-- [x] Resource limits and timeout behavior are manually smoke-verified.
-- [x] No legacy WebSocket/pair/revoke path is reachable.
+**Goal:** make CI a strict quality/security gate. A green build MUST mean there are no accepted warnings or hidden lint/security bypasses.
 
-### 13.3 End-to-end remote OAuth flow
+### 17.1 Formatting
 
-- [x] Register/configure a test OAuth client using the selected Authorization Server.
-- [x] Discover MCP Protected Resource Metadata.
-- [x] Complete Authorization Code + PKCE `S256` flow.
-- [x] Connect the MCP client with the resulting access token.
-- [x] Verify valid token + correct resource/audience + correct scope succeeds.
-- [x] Verify missing/expired/wrong-audience/wrong-scope tokens fail correctly.
-- [x] Verify read-only scope cannot call `terminal_exec`.
-- [x] Verify execute scope still cannot bypass the no-sudo/non-root command policy.
-- [x] Verify ChatGPT/Claude connector compatibility against the deployed HTTPS MCP endpoint using their supported OAuth flow.
+- [ ] `cargo fmt --all -- --check` passes.
+- [ ] No formatting exception/configuration is added to hide malformed code.
+- [ ] Formatting changes are committed rather than bypassed in CI.
 
-### 13.4 Release/CI evidence
+### 17.2 Clippy
 
-- [x] `cargo fmt --check` green.
-- [x] `cargo clippy --all-targets --all-features -- -D warnings` green.
-- [x] `cargo audit` green.
-- [x] Repository-wide `@yao-pkg/pkg` absence check green.
-- [x] Repository-wide relay-agent JS/TS executable absence check green.
-- [x] Release workflow builds native artifacts directly with Cargo.
-- [x] Final clean-environment smoke verification recorded.
-- [x] OAuth security verification recorded.
-- [x] Final evidence recorded in this plan.
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
+- [ ] Every Clippy warning is fixed at source.
+- [ ] No `#[allow(clippy::...)]` is added merely to make CI green.
+- [ ] No crate/module/function uses broad `#[allow(clippy::all)]`.
+- [ ] No `#![allow(warnings)]` or equivalent global suppression.
+- [ ] No `#[expect(...)]` is used to hide unresolved warnings.
+- [ ] No `RUSTFLAGS`/`CARGO_ENCODED_RUSTFLAGS`/config override downgrades `-D warnings`.
+- [ ] No CI step changes lint level to `warn`, `allow`, or removes Clippy checks.
+- [ ] Security-relevant Clippy warnings are treated as blockers.
 
-**Phase 13 acceptance:** production binary, local MCP E2E, remote OAuth E2E, security smoke checks, and release artifacts are all green. Only then may Plan 028 move to `COMPLETED`.
+### 17.3 Compiler warnings
 
-## Verification strategy
+- [ ] `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features` passes where supported by the project.
+- [ ] No `#[allow(warnings)]`.
+- [ ] No warning suppression via module attributes, Cargo config, build scripts, or environment variables.
+- [ ] No unused/dead code warning is ignored; remove dead code or document a justified compiler-supported reason without suppressing unrelated warnings.
 
-Because runtime unit/integration tests were intentionally removed for the deadline, this plan does not require restoring them as a prerequisite. Static/manual verification is mandatory during Phases 11–12, 14, and 15. Full E2E/release validation is intentionally deferred to Phase 13.
+### 17.4 Dependency and audit hygiene
 
-## CI gates
+- [ ] `cargo audit` passes with zero unreviewed vulnerabilities.
+- [ ] `cargo deny` or equivalent dependency policy check is added if already supported by repository tooling.
+- [ ] Review duplicate/advisory-risk dependencies where practical.
+- [ ] Pin/lock production dependencies through `Cargo.lock` where workspace policy requires it.
+- [ ] No dependency is added solely to bypass an existing lint/security rule.
+- [ ] Review unsafe Rust introduced by dependencies or project code; minimize and document any required `unsafe`.
+- [ ] No yanked/insecure dependency is knowingly accepted without an explicit documented exception.
 
-Required static gates throughout implementation:
+### 17.5 CI script integrity
 
-- [x] `cargo fmt --check`.
-- [x] `cargo clippy --all-targets --all-features -- -D warnings`.
-- [x] `cargo audit`.
-- [x] Repository-wide `@yao-pkg/pkg` absence check.
-- [x] Repository-wide relay-agent JS/TS executable absence check.
-- [x] Repository-wide forbidden privilege-escalation helper scan.
-- [x] Repository-wide OAuth secret/token logging scan.
+- [ ] Every required command uses fail-fast semantics (`set -euo pipefail` where shell applies).
+- [ ] No `|| true`, `; true`, `continue-on-error: true`, `|| :`, or equivalent is used on required lint/security commands.
+- [ ] No command output is piped through a filter that can hide a non-zero exit status.
+- [ ] Pipeline preserves exit codes (`pipefail` where applicable).
+- [ ] No required security/lint job is conditionally skipped for the relay branch.
+- [ ] No `if: false`, branch-specific bypass, manual-only gate, or path filter accidentally excludes relay changes from required checks.
+- [ ] Required jobs are branch-protection-compatible and must be green before merge.
+- [ ] CI does not silently fall back to a weaker local command.
 
-**No unit-test gate:** `cargo test --workspace` and relay-agent unit/integration tests are intentionally not required for the current deadline.
+### 17.6 Static security searches
+
+Add a deterministic CI/source audit for:
+
+- [ ] `sudo`, `su`, `doas`, `pkexec`, `runas` execution paths.
+- [ ] generic shell invocation and shell-string interpolation.
+- [ ] request-derived executable allowlists.
+- [ ] `--no-guard` in MCP/relay execution paths.
+- [ ] wildcard Origin/CORS.
+- [ ] arbitrary `base_url` network pivots.
+- [ ] insecure HTTP remote OAuth endpoints.
+- [ ] hardcoded OAuth secrets/tokens/private keys.
+- [ ] `Authorization` logging.
+- [ ] `#[allow(`, `#![allow(`, `allow(warnings)`, and broad Clippy suppression in production Rust code.
+- [ ] `continue-on-error`, `|| true`, `; true`, and equivalent required-check bypasses in workflows.
+- [ ] committed binaries or generated artifacts that replace source-built release outputs.
+
+False positives MUST be fixed by narrowing the implementation/search rule or documenting a reviewed non-production fixture; never by disabling the entire check.
+
+### 17.7 Release reproducibility
+
+- [ ] Release workflow uses Cargo directly.
+- [ ] No `@yao-pkg/pkg`, Node runtime packaging, or hidden JS build step remains.
+- [ ] Build uses a clean Rust toolchain/environment.
+- [ ] Release artifact is produced from the exact reviewed commit.
+- [ ] Checksums/signing metadata are generated where the repository release policy requires them.
+- [ ] No prebuilt local binary is copied into the release artifact.
+- [ ] Verify the binary has no Node/V8/libnode runtime dependency.
+- [ ] Verify expected target triples and artifact names.
+
+### 17.8 Manual no-bypass review
+
+- [ ] Search all Rust crates/modules for lint suppression.
+- [ ] Search all workflows for failure masking.
+- [ ] Search scripts/Makefiles/package scripts for ignored exit codes.
+- [ ] Review Cargo config, rust-toolchain files, build scripts, and workspace lints.
+- [ ] Verify CI commands executed locally are identical in enforcement strength to CI commands.
+- [ ] Confirm every security gate is fail-closed.
+
+**Phase 17 acceptance:** formatting, compiler warnings, Clippy, audit, dependency policy, CI scripts, security searches, and release checks all pass with zero bypasses, ignored failures, warning suppressions, or undocumented exceptions.
+
+## Phase 13 — Final E2E + release validation — [ ] NOT STARTED / FINAL GATE
+
+Phase 13 is deliberately last. It may start only after Phases 15, 16, and 17 are complete.
+
+### 13.1 Clean build
+
+- [ ] Build `relay-agent` release mode from a clean environment.
+- [ ] `cargo fmt --all -- --check` green.
+- [ ] `cargo check --workspace --all-targets --all-features` with warnings denied green.
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` green.
+- [ ] `cargo audit` green.
+- [ ] All repository security/bypass searches green.
+
+### 13.2 Local MCP E2E
+
+- [ ] Start relay in explicit LOCAL mode as a non-root user.
+- [ ] Confirm listener is loopback-only.
+- [ ] Confirm Nuxt/local MCP client connects without OAuth.
+- [ ] `tools/list` exposes expected tools.
+- [ ] Authorized terminal command succeeds through the server-controlled allowlist.
+- [ ] Forbidden command, shell, interpreter, sudo, path traversal, wrapper, and environment-injection attempts fail.
+- [ ] `http_fetch` enforces SSRF policy and redirect policy.
+- [ ] `web_search` uses only trusted configured endpoint.
+- [ ] Timeout/output/input/concurrency limits are enforced.
+- [ ] Invalid Origin/Host requests fail closed.
+
+### 13.3 Remote OAuth E2E
+
+- [ ] Deploy remote MCP resource server behind HTTPS.
+- [ ] Confirm unauthenticated `tools/call` is rejected.
+- [ ] Complete Authorization Code + PKCE S256 flow with target connector(s).
+- [ ] Validate Protected Resource Metadata and Authorization Server Metadata discovery.
+- [ ] Valid read scope can call only read/search/fetch tools permitted by policy.
+- [ ] Execute scope is required for `terminal_exec`.
+- [ ] Token with wrong issuer/audience/resource is rejected.
+- [ ] Expired/invalid-signature/unknown-key token is rejected.
+- [ ] Missing execute scope returns authorization failure without spawning a process.
+- [ ] Token/secret values never appear in logs/errors/URLs.
+- [ ] Remote mode cannot downgrade to local no-auth.
+
+### 13.4 Release
+
+- [ ] Native artifacts are built directly by Cargo.
+- [ ] No Node/V8/libnode runtime dependency.
+- [ ] No `@yao-pkg/pkg`.
+- [ ] No legacy relay JS/TS runtime/build files.
+- [ ] Checksums/signatures/metadata match the reviewed commit.
+- [ ] Final CI status is green with required checks enforced.
+
+**Phase 13 acceptance:** local and remote MCP flows, security abuse cases, OAuth authorization, strict privilege policy, lint/audit/no-bypass gates, and release artifacts are all green.
 
 ## Definition of Done
 
-Plan 028 is **CLOSED** only when:
+Plan 028 may be marked `COMPLETED` only when:
 
-- [x] `relay-agent` is entirely Rust and the binary is the sole runtime entrypoint.
-- [x] It is a proper MCP server targeting the frozen specification.
-- [x] Tool catalog maps cleanly to Plan 027 Rust CLI tools.
-- [x] Nuxt uses the final MCP path.
-- [x] Legacy compatibility is removed.
-- [x] Origin/Host security is fail-closed.
-- [x] Tool guards cannot be disabled by untrusted relay input.
-- [x] Resource limits and process cleanup are enforced.
-- [x] SSRF policy cannot be bypassed through `http_fetch`.
-- [x] Errors/logs do not leak credentials or sensitive internals.
-- [x] Node.js/TypeScript relay runtime and `@yao-pkg/pkg` are removed.
-- [x] Relay runs only as an unprivileged OS identity in production.
-- [x] No MCP request can invoke or facilitate sudo/privilege escalation.
-- [x] Command authorization is based on server-controlled policy, never on the requested executable itself.
-- [x] Remote MCP access requires OAuth and validates issuer/resource/audience/expiry/scope.
-- [x] OAuth uses standards-based Authorization Code + PKCE `S256` where applicable.
-- [x] Release CI builds native binaries directly with Cargo.
-- [x] Phase 11 is fully checked off.
-- [x] Phase 12 is fully checked off.
-- [x] Phase 14 is fully checked off.
-- [x] Phase 15 is fully checked off.
-- [x] Phase 13 final local/remote E2E and release gate is fully checked off.
+- [ ] Relay is 100% Rust and standalone.
+- [ ] MCP Streamable HTTP is the sole relay protocol.
+- [ ] Local mode is loopback-only and non-root.
+- [ ] No sudo/privilege-escalation path exists.
+- [ ] Command authorization is server-controlled and deny-by-default.
+- [ ] SSRF/resource/process/output policies are enforced server-side.
+- [ ] Remote mode is HTTPS + OAuth protected.
+- [ ] OAuth uses standards-based resource-server validation and least-privilege scopes.
+- [ ] OAuth cannot grant execution beyond the server-side command policy.
+- [ ] No credentials/secrets/tokens are logged or exposed.
+- [ ] No legacy Node relay or `@yao-pkg/pkg` remains.
+- [ ] Clippy/compiler warnings are zero with no suppression/bypass.
+- [ ] fmt, clippy, audit, dependency, CI-integrity, and security-search gates pass.
+- [ ] No required CI command ignores failures or uses `continue-on-error`.
+- [ ] Phase 15 is complete.
+- [ ] Phase 16 is complete.
+- [ ] Phase 17 is complete.
+- [ ] Phase 13 final E2E/release gate is complete.
 
 ## Rollback
 
-Keep the known-good release available until the Rust relay, Nuxt migration, security remediation, privilege hardening, OAuth connector flow, and native artifacts pass final Phase 13 verification. If remediation fails, keep Plan 028 `IN FLIGHT`, restore the known-good release, and repeat the appropriate phase gate.
-
-## Evidence log
-
-- MCP protocol implementation: implemented in Rust and manually reviewed; automated relay tests were intentionally removed.
-- Origin/Host policy: implemented and must be re-verified after Phase 15 changes.
-- Execution: implemented in Rust; Phase 14 closed the previously reviewed guard/SSRF/resource-limit findings. Phase 15 adds the strict non-root/no-sudo policy and server-controlled executable authorization.
-- Legacy compatibility: removed in Phase 12.
-- Node source/runtime removal: completed.
-- `@yao-pkg/pkg` removal: completed.
-- Cargo release workflow: completed.
-- OAuth remote-connector authorization: Phase 15 completed.
-- Final CI/release/E2E evidence: recorded only in Phase 13 after all implementation, security, privilege, and authorization work is complete.
-
-## Security references
-
-- MCP authorization architecture should follow the MCP authorization specification, including Protected Resource Metadata and resource-specific token validation.
-- OAuth security follows the current OAuth 2.0 Security Best Current Practice (RFC 9700), including Authorization Code + PKCE `S256`, exact redirect handling, CSRF/mix-up protections, token privilege restriction, and avoidance of deprecated insecure grants.
+Keep the known-good release available until the final gate passes. If any security, OAuth, privilege, lint, audit, or E2E gate fails, keep the plan `IN FLIGHT`, do not weaken the gate, and fix the underlying issue before proceeding.
