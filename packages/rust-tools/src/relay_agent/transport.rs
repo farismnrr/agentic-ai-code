@@ -4,10 +4,19 @@
 //! local tooling. Localhost-only binding is enforced by the caller
 //! (`src/bin/relay-agent.rs` binds `127.0.0.1` explicitly) — this module
 //! only builds the `Router`, it does not bind sockets.
+//!
+//! `/mcp` is additionally gated by [`super::security::enforce_local_access_policy`]
+//! *before* any MCP/JSON-RPC parsing happens. The [`CorsLayer`] below is a
+//! browser-side convenience only — it does not stop a non-browser HTTP
+//! client from reaching this server, so it must never be relied on as the
+//! security boundary. `/health` is intentionally left ungated: it is a
+//! liveness probe with no sensitive data or side effects.
 
 use axum::{
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::{HeaderMap, Method, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response as AxumResponse},
     routing::{get, post},
     Json, Router,
 };
@@ -21,6 +30,7 @@ use super::mcp::{
     self, parse_request, tool_catalog, ErrorResponse, Id, InitializeParams, Response,
     ToolCallResult, ToolsCallParams,
 };
+use super::security::enforce_local_access_policy;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP
 /// HTTP request body max.
@@ -47,8 +57,19 @@ pub fn create_router(config: ServerConfig) -> Router {
 
     let state = Arc::new(AppState { config });
 
+    // The security middleware is attached to the `/mcp` route only, via
+    // `route_layer` on its own sub-router, so `/health` never goes through
+    // Origin/Host enforcement.
+    let mcp_router =
+        Router::new()
+            .route("/mcp", post(handle_mcp))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                local_access_policy,
+            ));
+
     Router::new()
-        .route("/mcp", post(handle_mcp))
+        .merge(mcp_router)
         .route("/health", get(health_check))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
@@ -63,6 +84,21 @@ type JsonErr = (StatusCode, Json<ErrorResponse>);
 
 fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
     (status, Json(ErrorResponse::new(id, err)))
+}
+
+/// Server-side local-access policy: exact `Origin` + `Host` validation.
+/// Runs before any MCP/JSON-RPC parsing — a rejected request never reaches
+/// [`handle_mcp`]. See `security.rs` for the fail-closed rules and why this
+/// is distinct from (and not replaceable by) the `CorsLayer` below.
+async fn local_access_policy(
+    State(state): State<Arc<AppState>>,
+    req: Request,
+    next: Next,
+) -> AxumResponse {
+    if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
+        return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
+    }
+    next.run(req).await
 }
 
 async fn handle_mcp(

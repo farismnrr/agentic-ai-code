@@ -20,6 +20,9 @@ axum = "0.7"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 uuid = { version = "1.8", features = ["v4", "serde"] }
 
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
 [[bin]]
 name = "searxng-search-tool"
 path = "src/bin/searxng-search-tool.rs"
