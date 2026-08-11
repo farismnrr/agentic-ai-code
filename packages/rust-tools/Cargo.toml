@@ -6,7 +6,7 @@ rust-version = "1.88.0" # MSRV
 
 
 [dependencies]
-clap = { version = "4.5.17", features = ["derive"] }
+clap = { version = "4.5.17", features = ["derive", "env"] }
 tokio = { version = "1.40", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "charset", "macos-system-configuration", "http2"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -16,6 +16,9 @@ thiserror = "1.0"
 shell-words = "1.1.1"
 ipnet = "2.12.1"
 libc = "0.2.189"
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
 
 [[bin]]
 name = "searxng-search-tool"
@@ -28,3 +31,7 @@ path = "src/bin/curl-tool.rs"
 [[bin]]
 name = "terminal-tool"
 path = "src/bin/terminal-tool.rs"
+
+[[bin]]
+name = "relay-agent"
+path = "src/bin/relay-agent.rs"
