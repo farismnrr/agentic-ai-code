@@ -107,9 +107,19 @@ fn audit(
     subject: Option<&str>,
 ) {
     let tool = tool.map(safe_log_field).unwrap_or_else(|| "-".into());
-    eprintln!("{{\"event\":\"relay_request\",\"correlation_id\":\"{}\",\"method\":\"{}\",\"tool\":\"{}\",\"outcome\":\"{}\",\"status\":{},\"latency_ms\":{},\"subject\":\"{}\"}}",
-        safe_log_field(correlation_id), safe_log_field(method), tool, safe_log_field(outcome),
-        status.as_u16(), started.elapsed().as_millis(), privacy_id(subject));
+    eprintln!(
+        "{}",
+        json!({
+            "event": "relay_request",
+            "correlation_id": safe_log_field(correlation_id),
+            "method": safe_log_field(method),
+            "tool": tool,
+            "outcome": safe_log_field(outcome),
+            "status": status.as_u16(),
+            "latency_ms": started.elapsed().as_millis(),
+            "subject": privacy_id(subject)
+        })
+    );
 }
 
 /// Cached JWKS with a fetch timestamp for TTL enforcement.
@@ -613,7 +623,7 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request, _state, auth_ctx).await,
+        "tools/call" => handle_tools_call(&request, _state, auth_ctx, correlation_id).await,
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -762,6 +772,7 @@ async fn handle_tools_call(
     request: &mcp::Request,
     _state: Arc<AppState>,
     auth_ctx: AuthContext,
+    correlation_id: &str,
 ) -> JsonErr2 {
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
@@ -824,7 +835,7 @@ async fn handle_tools_call(
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
         audit(
-            "pending",
+            correlation_id,
             "tools/call",
             Some(&call.name),
             "authorized",
