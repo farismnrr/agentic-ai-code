@@ -1,6 +1,6 @@
 # 028 — Relay agent: full Rust rewrite + MCP server
 
-**Status: IN FLIGHT** — the Rust rewrite and MCP core are implemented, but production security/resource-limit remediation remains before Plan 028 can be closed.
+**Status: IN FLIGHT** — the Rust rewrite and MCP core are implemented, but production security/resource-limit remediation, legacy removal, and final E2E/release validation remain before Plan 028 can be closed.
 
 **Deadline decision:** the automated Rust test suite for `relay_agent` and `cargo test --workspace` were removed to meet the deadline. CI intentionally enforces static checks only: `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo audit`. Runtime behavior is therefore validated by source review/manual verification until a future test strategy is explicitly restored.
 
@@ -23,13 +23,13 @@ Plan 027 migrated the general-purpose CLI tools to Rust. The remaining relay run
 
 ## Deployment boundary
 
-- **Local Nuxt/browser:** Streamable HTTP to `127.0.0.1:<port>` plus the retained legacy compatibility path where required.
+- **Local Nuxt/browser:** Streamable HTTP to `127.0.0.1:<port>` plus the retained legacy compatibility path where required until Phase 12 removes it.
 - **Local MCP hosts:** use standard MCP transport semantics.
 - **Future external MCP client/cloud:** deploy the same tool layer behind a separately authenticated MCP endpoint; never expose the localhost execution agent publicly just to make cloud access work.
 
 ## Scope boundary
 
-In scope: Rust relay runtime, MCP server/tool catalog/handlers, local execution bridge, legacy Nuxt compatibility, local auth/pairing, lifecycle, release pipeline, security/resource limits, and Node runtime removal.
+In scope: Rust relay runtime, MCP server/tool catalog/handlers, local execution bridge, legacy Nuxt compatibility until its explicit removal phase, local auth/pairing, lifecycle, release pipeline, security/resource limits, and Node runtime removal.
 
 Out of scope: migrating Nuxt/Vue/TypeScript, replacing Plan 027 CLI tools, arbitrary OS sandboxing, public unauthenticated execution, or a second tool implementation for external MCP client.
 
@@ -37,7 +37,7 @@ Out of scope: migrating Nuxt/Vue/TypeScript, replacing Plan 027 CLI tools, arbit
 
 ```text
 Nuxt / MCP client
-       │ Streamable HTTP / legacy compatibility
+       │ Streamable HTTP / legacy compatibility (removed in Phase 12)
        ▼
 Rust relay-agent
   ├─ protocol + transport
@@ -52,29 +52,13 @@ Plan 027 Rust CLI tools
   terminal-tool / curl-tool / searxng-search-tool
 ```
 
-Preferred package layout:
+## Current phase order
 
-```text
-packages/rust-tools/
-├── Cargo.toml
-└── src/
-    ├── bin/relay-agent.rs
-    └── relay_agent/
-        ├── mod.rs
-        ├── config.rs
-        ├── error.rs
-        ├── mcp.rs
-        ├── transport.rs
-        ├── security.rs
-        ├── auth.rs
-        ├── pairing.rs
-        ├── tools.rs
-        ├── execution.rs
-        ├── limits.rs
-        ├── http_compat.rs
-        ├── websocket_compat.rs
-        └── pidfile.rs
-```
+- Phase 11 — Production security + resource-limit remediation.
+- Phase 12 — Remove legacy relay compatibility.
+- Phase 13 — Final E2E + release validation (**final gate; not a blocker for Phases 11–12**).
+
+Phase 13 is intentionally deferred until all implementation/security/removal work is complete. Do not block incremental development on E2E/release validation before the final phase.
 
 ## MCP protocol requirements
 
@@ -118,390 +102,129 @@ Local policy is layered:
 
 ```text
 HTTP transport
-  ↓
-localhost + exact Origin/Host policy
-  ↓
-local MCP/legacy authorization
-  ↓
-tool authorization/policy
-  ↓
-execution
+  ├─ loopback binding
+  ├─ Host policy
+  └─ exact Origin policy
+          │
+          ▼
+MCP request
+  ├─ protocol/version/header validation
+  └─ tool argument/schema validation
+          │
+          ▼
+Execution policy
+  ├─ Plan 027 tool guards
+  ├─ resource limits
+  └─ process lifecycle
 ```
 
-- [x] MCP endpoint Origin/Host policy.
-- [ ] Legacy compatibility endpoints must use the same fail-closed policy.
-- [ ] Pairing credentials must be single-use and short-lived.
-- [ ] Session credentials must be random, expiry-bound, revocable, and race-safe.
-- [ ] Credentials must never appear in logs/errors.
-- [ ] No debug/test authentication bypass.
-- [ ] Future remote MCP must use standards-based OAuth/protected-resource authorization.
-
-## Legacy Nuxt compatibility contract
-
-The existing `/health`, `/pair`, `/revoke`, and WebSocket execution protocol is a compatibility adapter, not MCP.
-
-- [ ] Exact `/health` contract.
-- [ ] Exact `/pair` contract.
-- [ ] Exact `/revoke` contract.
-- [ ] Exact OPTIONS/CORS behavior.
-- [ ] Exact WebSocket path/query/header/close behavior.
-- [ ] Exact `exec`/`exec_result` semantics.
-- [ ] CLI defaults/environment precedence.
-- [ ] Existing frontend flow compatibility.
-
-## Security invariants
-
-1. Local mode binds only to `127.0.0.1`.
-2. Browser-facing requests require exact configured Origin and valid Host; missing values fail closed.
-3. Remote MCP authorization must use standards-based OAuth and never the local pairing credential.
-4. Pairing is single-use, short-lived, cryptographically random, and atomically consumed.
-5. Session credentials are random, expiry-bound, revocable, race-safe, and never logged.
-6. No wildcard Origin or hidden/debug/test bypass.
-7. Request bodies, WebSocket messages, tool arguments, command output, and concurrent executions are bounded.
-8. Tool names and arguments are validated before process execution.
-9. No shell interpolation.
-10. Timeouts terminate the intended process tree and reap children.
-11. Pidfile acquisition/release is atomic and ownership-safe.
-12. Errors do not expose secrets, environment variables, stack traces, or credentials.
-13. Public/remote deployment never exposes the local unauthenticated execution path.
-
-## Resource limits
-
-Concrete limits must be enforced deterministically:
-
-- HTTP/MCP body limit;
-- WebSocket message limit;
-- MCP message/frame limit;
-- maximum tool argument payload;
-- stdout/stderr limit;
-- per-session and global concurrent executions;
-- maximum execution duration;
-- pairing attempt rate/limit;
-- queue depth where requests can queue.
-
-Never silently truncate command input or tool arguments.
-
-## CLI contract
-
-- `--dir`, `-d`: default working directory, fallback to OS home directory.
-- `--port`, `-p`: default `47821`.
-- `--origin`, `-o`: allowed origin, with `RELAY_AGENT_ORIGIN` fallback.
-- `stop --port <port>`.
-
-Validate configuration before bind. Never broaden trust through Origin normalization.
-
-## Command execution
-
-Use `tokio::process::Command` and explicit adapters.
-
-- [x] No shell interpolation.
-- [ ] Never disable Plan 027 CLI guard/policy from the relay by default.
-- [ ] Validate/authorize arguments before spawning.
-- [ ] Bound output and arguments.
-- [ ] Enforce concurrency.
-- [ ] Enforce timeout and kill/reap process tree.
-- [ ] Avoid blocking Tokio workers during cleanup.
-- [ ] Normalize stdout/stderr/exit status/errors.
-
-## PID / lifecycle
-
-- [ ] Atomic exclusive pidfile/lock.
-- [ ] Stale pidfile recovery.
-- [ ] Second-instance rejection.
-- [ ] Safe `stop --port` on supported OSes.
-- [ ] Clean SIGINT/SIGTERM shutdown.
-- [ ] Delete only a pidfile owned by the current process.
-- [ ] Protect against symlink/path races.
-
-## Binary and supply chain
-
-- [x] Reuse Plan 027 Rust toolchain/MSRV policy.
-- [x] Minimal dependency/features policy.
-- [ ] Benchmark `opt-level = z` vs `s`/`3` and choose from evidence.
-- [ ] Measure LTO/codegen-unit/strip tradeoffs.
-- [x] Verify no Node/V8/libnode dependency.
-- [x] Review `Cargo.lock` changes.
-- [x] `cargo audit`/approved security policy check.
-- [ ] Record release binary size/startup/resource usage.
-- [ ] Artifact manifest with target, commit/version, SHA-256, and size.
-
-# Implementation phases
-
-### Phase 0 — Contract + MCP freeze — [x] DONE
-
-- [x] Freeze legacy contract and MCP `2026-07-28` target.
-- [x] Define canonical tool names/schemas/annotations.
-- [x] Map each MCP tool to one Plan 027 Rust CLI capability.
-- [x] Define local vs future remote authorization boundary.
-- [x] Freeze concrete resource-limit targets.
-
-### Phase 1 — Rust foundation — [x] DONE
-
-- [x] `relay-agent` `[[bin]]` under `packages/rust-tools`.
-- [x] Axum/Tokio/Clap/Serde-based implementation.
-- [x] Separate protocol, transport, security, execution, config, and lifecycle modules.
-- [x] `cargo fmt --check` clean.
-- [x] `cargo clippy -D warnings` clean.
-
-### Phase 2 — MCP server — [x] DONE
-
-- [x] MCP `2026-07-28` protocol core.
-- [x] Streamable HTTP.
-- [x] `server/discover`.
-- [x] `tools/list`.
-- [x] `tools/call` structured request/error path.
-- [x] JSON-RPC errors.
-- [x] `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, and `_meta` validation.
-- [x] Content type/body limits/CORS.
-
-### Phase 3 — Tool registry and execution — [x] DONE / HARDENING MOVED TO PHASE 11
-
-- [x] Register Plan 027 tools.
-- [x] JSON Schema argument validation.
-- [x] No shell interpolation.
-- [x] Basic execution dispatch/result normalization.
-- [ ] Security/resource-limit fixes are tracked in Phase 11 and must not be considered closed merely because dispatch works.
-
-### Phase 4 — Legacy Nuxt compatibility — [x] DONE / HARDENING MOVED TO PHASE 11
-
-- [x] Legacy `/health`, `/pair`, `/revoke`, CORS, and WebSocket compatibility implemented.
-- [x] Compatibility code isolated from MCP core.
-- [ ] Credential, input-limit, SSRF, and policy hardening tracked in Phase 11.
-
-### Phase 5 — Lifecycle/security hardening — [x] DONE / REMEDIATION MOVED TO PHASE 11
-
-- [x] Core pairing/session state machine.
-- [x] Origin/Host policy.
-- [x] Core resource-limit plumbing.
-- [x] Timeout/process-tree plumbing.
-- [x] Pidfile/stop lifecycle.
-- [ ] Production security remediation in Phase 11.
-
-### Phase 6 — Real Nuxt E2E — [x] DONE
-
-- [x] Real Rust binary.
-- [x] Existing Nuxt UI.
-- [x] Pair/connect.
-- [x] Terminal execution.
-- [x] stdout/stderr/exit/error/timeout rendering.
-- [x] revoke/disconnect.
-- [x] browser-origin security.
-
-### Phase 7 — Remove Node runtime — [x] DONE
-
-- [x] Remove relay-agent Node source/build/runtime.
-- [x] Remove relay-only Node dependencies.
-- [x] Remove `@yao-pkg/pkg`.
-- [x] Remove obsolete build references.
-
-### Phase 8 — Native release — [x] DONE
-
-- [x] Cargo-native release workflow.
-- [x] Supported native targets.
-- [x] Stable artifact names.
-- [x] Checksums.
-- [x] Node-free standalone verification.
-- [x] Clean-environment release smoke check.
-
-### Phase 9 — Production hardening baseline — [x] DONE / REMEDIATION MOVED TO PHASE 11
-
-- [x] Dependency/license/security policy baseline.
-- [x] Existing size/startup/resource measurement baseline.
-- [x] Release/provenance baseline.
-- [ ] Remaining runtime security vulnerabilities are Phase 11 blockers.
-
-### Phase 10 — Closeout — [ ] BLOCKED BY PHASE 11
-
-- [ ] Nuxt E2E and release evidence remains green after Phase 11 changes.
-- [ ] No Node relay runtime remains.
-- [ ] Native artifacts verified.
-- [ ] Documentation matches actual MCP and compatibility behavior.
-- [ ] Final CI/release evidence recorded.
-- [ ] Plan status changed to `COMPLETED` only after Phase 11 closes.
-
-### Phase 11 — Production security + resource-limit remediation — [ ] IN FLIGHT
-
-**Goal:** close the concrete vulnerabilities found by source-level security review after execution and legacy compatibility were wired. No unit-test gate is required for this phase because the project deliberately removed runtime tests for the deadline; every item must instead be validated by direct code-path review, `cargo fmt`, `cargo clippy -D warnings`, `cargo audit`, and manual/runtime smoke verification where available.
-
-#### 11.1 — Remove privileged guard bypass — P0
-
-- [ ] Remove relay-injected `--no-guard` from `terminal-tool` execution.
-- [ ] Remove relay-injected `--no-guard` from `curl-tool` execution.
-- [ ] Preserve the Plan 027 CLI guard/policy by default.
-- [ ] If a privileged bypass is genuinely required internally, make it unreachable from untrusted MCP/legacy input and require an explicit trusted authorization boundary.
-- [ ] Review every execution adapter for equivalent guard bypasses.
-- [ ] Manually trace `tools/call` → adapter → argv and prove no untrusted request can select a guard-bypass flag.
-
-**Acceptance:** an MCP/legacy caller cannot turn off Plan 027 execution/SSRF safeguards through relay-controlled arguments.
-
-#### 11.2 — Credential lifecycle — P0
-
-- [ ] Make session credentials expiry-bound with a short, explicit TTL.
-- [ ] Store credential metadata (`issued_at`, `expires_at`, revocation state) instead of an unbounded live-only credential set.
-- [ ] Reject expired credentials before WebSocket upgrade/command execution.
-- [ ] Remove/garbage-collect expired credentials.
-- [ ] Keep revoke atomic with credential validation/lookup.
-- [ ] Preserve cryptographically random credential generation.
-- [ ] Ensure credential comparison/storage does not leak secrets through errors.
-
-**Acceptance:** a leaked credential stops working automatically after TTL and can be revoked immediately.
-
-#### 11.3 — Secret/log hygiene — P0
-
-- [ ] Remove pairing-token logging from stdout/stderr/application logs.
-- [ ] Never log session credentials.
-- [ ] Redact credential query parameters from request/access logs.
-- [ ] Ensure error responses never contain pairing/session credentials.
-- [ ] Search the entire relay source for token/credential interpolation into logs/errors.
-
-**Acceptance:** credentials cannot appear in normal relay logs or error payloads.
-
-#### 11.4 — Fail-closed Origin configuration — P0
-
-- [ ] Remove any `unwrap_or("*")`/wildcard fallback for configured Origin.
-- [ ] Missing/empty/invalid Origin configuration must fail before binding when execution endpoints require browser-origin authorization.
-- [ ] Ensure no legacy state object can represent missing Origin as a trusted wildcard.
-- [ ] Re-check CORS and server-side Origin policy after this change.
-
-**Acceptance:** there is no code path in which missing Origin becomes `*` or otherwise broadens trust.
-
-#### 11.5 — Legacy WebSocket input limits — P1
-
-- [ ] Enforce a hard maximum WebSocket frame/message size before JSON parsing.
-- [ ] Bound command string length.
-- [ ] Bound argument count and individual argument length.
-- [ ] Bound cwd length.
-- [ ] Reject oversized messages deterministically.
-- [ ] Ensure the limit is enforced before unbounded allocation/parsing.
-
-**Acceptance:** one authenticated WebSocket client cannot cause unbounded JSON/message memory growth.
-
-#### 11.6 — Legacy stdout/stderr limits — P1
-
-- [ ] Replace unbounded `wait_with_output()` capture on legacy execution with bounded stdout/stderr capture.
-- [ ] Define explicit output limits consistent with MCP execution.
-- [ ] Kill the process/process-group when output exceeds the limit.
-- [ ] Reap the child after kill.
-- [ ] Return deterministic bounded-output errors.
-
-**Acceptance:** a command producing unbounded output cannot exhaust relay memory.
-
-#### 11.7 — Execution concurrency limits — P1
-
-- [ ] Add a global execution semaphore.
-- [ ] Add a per-session/per-credential execution limit where appropriate.
-- [ ] Define behavior when the limit is reached: deterministic rejection or bounded queue.
-- [ ] Ensure disconnected clients cannot leave permits permanently held.
-- [ ] Ensure limits cover both MCP and legacy execution paths.
-
-**Acceptance:** one client cannot spawn an unbounded number of child processes and global relay capacity remains bounded.
-
-#### 11.8 — Timeout and process-tree cleanup — P1
-
-- [ ] Make timeout handling explicit for both MCP and legacy paths.
-- [ ] Kill the intended Unix process group/tree where supported.
-- [ ] Wait/reap the child after kill.
-- [ ] Avoid blocking Tokio workers during cleanup.
-- [ ] Ensure `kill_on_drop` is not the only cleanup guarantee.
-- [ ] Return a deterministic timeout error.
-- [ ] Review Windows process cleanup semantics separately where supported.
-
-**Acceptance:** timeout never leaves an orphaned child/process tree running indefinitely.
-
-#### 11.9 — SSRF policy preservation — P0/P1
-
-- [ ] Remove relay-level `--no-guard` from `curl-tool`.
-- [ ] Ensure URL arguments cannot bypass Plan 027 SSRF/URL policy.
-- [ ] Verify allowed schemes are enforced.
-- [ ] Verify local/private/link-local/metadata destinations remain blocked according to Plan 027 policy.
-- [ ] Review redirect handling so redirects cannot bypass the initial URL policy.
-- [ ] Review DNS rebinding/hostname-to-IP behavior against the existing curl-tool guard.
-- [ ] Do not introduce a weaker relay-specific HTTP policy.
-
-**Acceptance:** `http_fetch` cannot be used as a relay-level SSRF bypass.
-
-#### 11.10 — Error sanitization — P2
-
-- [ ] Replace raw `e.to_string()` process/system errors in externally visible responses with stable sanitized messages.
-- [ ] Keep detailed diagnostics only in safe internal logs, with credentials/path secrets redacted.
-- [ ] Ensure stack traces/environment variables/raw command lines are never returned to MCP/legacy callers.
-
-**Acceptance:** external errors contain actionable but non-sensitive information.
-
-#### 11.11 — Legacy credential-in-URL handling — P2
-
-The existing WebSocket `?credential=...` shape is a compatibility contract and must not be changed in this phase. Harden its handling instead:
-
-- [ ] Never log the full URI/query string.
-- [ ] Redact credential query parameters in any HTTP/access logging.
-- [ ] Avoid echoing credential URLs in diagnostics/errors.
-- [ ] Keep future remote/authenticated MCP transport independent of this legacy mechanism.
-
-#### 11.12 — Configuration/working-directory semantics — P2
-
-- [ ] Document that `--dir` is a default working directory, not a filesystem sandbox.
-- [ ] Ensure execution cannot accidentally treat `--dir` as a security boundary.
-- [ ] Verify path/working-directory errors are sanitized externally.
-
-#### 11.13 — Final static/manual security audit — P0
-
-After all remediation items:
-
-- [ ] Search for `--no-guard`, wildcard Origin, raw credential logging, unbounded `wait_with_output`, unbounded WebSocket receive, and raw external error leakage across the whole relay module.
-- [ ] Manually trace every MCP `tools/call` path to process spawn.
-- [ ] Manually trace every legacy `exec` WebSocket path to process spawn.
-- [ ] Confirm both paths enforce authorization, limits, timeout, output bounds, and tool guards.
+No public unauthenticated execution is permitted.
+
+## Phase 11 — Production security + resource-limit remediation — [ ] IN FLIGHT
+
+**Goal:** close concrete vulnerabilities found by source-level security review after execution and legacy compatibility were wired. No unit-test gate is required for this phase; every item is validated by direct code-path review, `cargo fmt`, `cargo clippy -D warnings`, `cargo audit`, and manual/runtime smoke verification where available.
+
+- [ ] Remove relay-injected `--no-guard` from terminal/curl execution and prove no untrusted input can disable Plan 027 guards.
+- [ ] Make session credentials expiry-bound, revocable, and race-safe.
+- [ ] Remove pairing/session credential logging and redact credential query parameters from logs/errors.
+- [ ] Remove wildcard/missing-Origin fallbacks and fail closed.
+- [ ] Bound legacy WebSocket message, command, argument, and cwd sizes.
+- [ ] Bound legacy stdout/stderr capture and kill/reap on output overflow.
+- [ ] Add global and per-session execution concurrency limits.
+- [ ] Make timeout/process-tree kill/reap explicit and deterministic.
+- [ ] Preserve Plan 027 SSRF/URL policy; no relay-level curl guard bypass or redirect/DNS policy bypass.
+- [ ] Sanitize externally visible process/system errors.
+- [ ] Document `--dir` as working-directory configuration, not a filesystem sandbox.
+- [ ] Perform final static/manual security audit for guard bypass, wildcard Origin, secret leakage, unbounded input/output, concurrency, timeout/reap, and SSRF paths.
 - [ ] Run `cargo fmt --check`.
 - [ ] Run `cargo clippy --all-targets --all-features -- -D warnings`.
 - [ ] Run `cargo audit`.
-- [ ] Perform release-mode/manual smoke verification of the relay binary.
-- [ ] Record evidence in this plan without claiming tests that no longer exist.
 
-## Test / verification strategy
+**Phase 11 acceptance:** all execution/security/resource-limit paths are bounded and fail closed; no untrusted request can disable Plan 027 guards or bypass SSRF policy.
 
-Because runtime unit/integration tests were intentionally removed for the deadline, this plan does **not** require restoring them as a prerequisite. Static/manual verification is mandatory instead.
+## Phase 12 — Remove legacy relay compatibility — [ ] NOT STARTED
 
-### MCP
+**Goal:** make MCP Streamable HTTP the sole relay protocol and delete obsolete legacy Nuxt relay compatibility instead of carrying a permanent compatibility surface.
 
-- [ ] Manual protocol-version/header/body validation review.
-- [ ] Manual `server/discover`, `tools/list`, `tools/call` path review.
-- [ ] Verify schema validation code paths.
-- [ ] Verify malformed request/error handling by source review or manual smoke requests where available.
-- [ ] Interoperability with a standards-compliant MCP client/harness is optional for this deadline unless required by release policy.
+### 12.1 Consumer/dependency audit
 
-### Security
+- [ ] Search Nuxt/frontend and repository consumers for `/pair`, `/revoke`, legacy WebSocket, `credential=`, `exec_result`, and legacy relay-specific message types.
+- [ ] Identify every remaining consumer before deletion.
+- [ ] Confirm required consumers have migrated to MCP or are explicitly approved for removal.
 
-- [ ] Origin/Host fail-closed path review.
-- [ ] Credential lifecycle review.
-- [ ] Guard/SSRF bypass review.
-- [ ] WebSocket input/output bound review.
-- [ ] Concurrency review.
-- [ ] Timeout/process-tree review.
-- [ ] Error/log secret-leak review.
+### 12.2 Delete legacy protocol/runtime
 
-### Nuxt E2E
+- [ ] Delete `legacy.rs` / legacy compatibility modules once consumers are migrated.
+- [ ] Remove legacy WebSocket server/upgrade path.
+- [ ] Remove `/pair` and `/revoke` legacy HTTP endpoints.
+- [ ] Remove legacy `exec` / `exec_result` message protocol.
+- [ ] Remove legacy credential/session state used only by that protocol.
+- [ ] Remove compatibility-only config, types, helpers, and imports.
 
-Existing E2E/release evidence remains valid only as historical evidence. After Phase 11 modifies execution/security behavior, perform a minimal manual smoke flow against the real binary where practical:
+### 12.3 Simplify security/resource model
 
-```text
-Nuxt → local relay → tool dispatch → Plan 027 Rust CLI → result
-```
+- [ ] Remove security/resource-limit code that existed solely for legacy WebSocket execution.
+- [ ] Ensure MCP execution retains all Phase 11 guard, authorization, SSRF, timeout, output, and concurrency protections.
+- [ ] Re-run source-level attack-path review after deletion so removed code cannot leave a weaker alternate execution path.
 
-Do not label this as an automated test.
+### 12.4 Frontend/docs/release cleanup
+
+- [ ] Migrate any remaining Nuxt relay calls to MCP before deleting their old endpoint.
+- [ ] Remove legacy protocol documentation/examples.
+- [ ] Remove obsolete release/configuration references.
+- [ ] Ensure no legacy relay symbols remain repository-wide.
+
+**Phase 12 acceptance:** there is exactly one relay execution protocol (MCP Streamable HTTP); no legacy WebSocket/pair/revoke execution path remains, and Nuxt uses the supported MCP path.
+
+## Phase 13 — Final E2E + release validation — [ ] NOT STARTED / FINAL GATE
+
+**Goal:** validate the complete finished system only after Phases 11–12 are complete. E2E/release validation is deliberately not a blocker for the intermediate implementation phases.
+
+### 13.1 Production binary smoke
+
+- [ ] Build release-mode `relay-agent` from a clean environment.
+- [ ] Verify standalone native execution with no Node/V8/libnode runtime dependency.
+- [ ] Verify supported artifact names, checksums, and manifest metadata.
+
+### 13.2 End-to-end MCP flow
+
+- [ ] Start the production relay binary.
+- [ ] Connect Nuxt through MCP Streamable HTTP.
+- [ ] `server/discover` succeeds.
+- [ ] `tools/list` exposes the expected Plan 027 tools.
+- [ ] `terminal_exec` executes through the Plan 027 Rust CLI.
+- [ ] `http_fetch` executes while preserving SSRF policy.
+- [ ] `web_search` executes through the Plan 027 Rust CLI.
+- [ ] Invalid Origin/Host requests are rejected.
+- [ ] Resource limits and timeout behavior are manually smoke-verified.
+- [ ] No legacy WebSocket/pair/revoke path is reachable.
+
+### 13.3 Release/CI evidence
+
+- [ ] `cargo fmt --check` green.
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings` green.
+- [ ] `cargo audit` green.
+- [ ] Repository-wide `@yao-pkg/pkg` absence check green.
+- [ ] Repository-wide relay-agent JS/TS executable absence check green.
+- [ ] Release workflow builds native artifacts directly with Cargo.
+- [ ] Final clean-environment smoke verification recorded.
+- [ ] Final evidence recorded in this plan.
+
+**Phase 13 acceptance:** production binary, Nuxt/MCP E2E, security smoke checks, and release artifacts are all green. Only then may Plan 028 move to `COMPLETED`.
+
+## Verification strategy
+
+Because runtime unit/integration tests were intentionally removed for the deadline, this plan does not require restoring them as a prerequisite. Static/manual verification is mandatory during Phases 11–12. Full E2E/release validation is intentionally deferred to Phase 13.
 
 ## CI gates
 
-Required static gates:
+Required static gates throughout implementation:
 
 - [ ] `cargo fmt --check`.
 - [ ] `cargo clippy --all-targets --all-features -- -D warnings`.
 - [ ] `cargo audit`.
 - [ ] Repository-wide `@yao-pkg/pkg` absence check.
 - [ ] Repository-wide relay-agent JS/TS executable absence check.
-- [ ] Release build for supported targets.
-- [ ] Artifact naming/checksum/manifest verification.
-- [ ] Node-free runtime verification.
-- [ ] Dependency/license/security policy check.
 
 **No unit-test gate:** `cargo test --workspace` and relay-agent unit/integration tests are intentionally not required for the current deadline.
 
@@ -512,32 +235,32 @@ Plan 028 is **CLOSED** only when:
 - [ ] `relay-agent` is entirely Rust and the binary is the sole runtime entrypoint.
 - [ ] It is a proper MCP server targeting the frozen specification.
 - [ ] Tool catalog maps cleanly to Plan 027 Rust CLI tools.
-- [ ] Nuxt compatibility is preserved or explicitly approved.
-- [ ] Legacy compatibility is isolated from MCP.
+- [ ] Nuxt compatibility is preserved through the final MCP path.
+- [ ] Legacy compatibility is removed in Phase 12.
 - [ ] Origin/Host/auth security is fail-closed.
-- [ ] Pairing/session lifecycle is single-use, expiry-bound, revocable, and race-safe.
+- [ ] Pairing/session lifecycle is single-use, expiry-bound, revocable, and race-safe where retained before legacy removal.
 - [ ] Tool guards cannot be disabled by untrusted relay input.
 - [ ] Resource limits and process cleanup are enforced.
-- [ ] WebSocket input/output is bounded.
 - [ ] SSRF policy cannot be bypassed through `http_fetch`.
 - [ ] Errors/logs do not leak credentials or sensitive internals.
 - [ ] Node.js/TypeScript relay runtime and `@yao-pkg/pkg` are removed.
 - [ ] Release CI builds native binaries directly with Cargo.
 - [ ] Published artifacts are standalone, checksummed, and smoke-verified.
-- [ ] Static CI gates are green and final security/release evidence is recorded.
 - [ ] Phase 11 is fully checked off.
+- [ ] Phase 12 is fully checked off.
+- [ ] Phase 13 final E2E/release gate is fully checked off.
 
 ## Rollback
 
-Keep the known-good release available until the Rust relay, Nuxt compatibility, security remediation, and native artifacts pass final verification. If remediation fails, keep Plan 028 `IN FLIGHT`, restore the known-good release, and repeat the Phase 11 security gate.
+Keep the known-good release available until the Rust relay, Nuxt migration, security remediation, legacy removal, and native artifacts pass final Phase 13 verification. If remediation fails, keep Plan 028 `IN FLIGHT`, restore the known-good release, and repeat the appropriate phase gate.
 
 ## Evidence log
 
 - MCP protocol implementation: implemented in Rust and manually reviewed; automated relay tests were intentionally removed.
-- Origin/Host policy: implemented in `security.rs`/`transport.rs`; prior tests are historical only and must not be represented as current CI evidence.
-- Execution: implemented in `execution.rs`; Phase 11 is the production-hardening gate for guard bypass, output bounds, concurrency, timeout/reap, and SSRF preservation.
-- Legacy compatibility: implemented in the compatibility layer; Phase 11 covers credential/log/input-limit hardening.
+- Origin/Host policy: implemented and must be re-verified after Phase 11/12 changes.
+- Execution: implemented in Rust; Phase 11 is the production-hardening gate for guard bypass, output bounds, concurrency, timeout/reap, and SSRF preservation.
+- Legacy compatibility: temporary compatibility layer; Phase 12 removes it.
 - Node source/runtime removal: completed.
 - `@yao-pkg/pkg` removal: completed.
 - Cargo release workflow: completed.
-- Final CI/release evidence: must be re-recorded after Phase 11.
+- Final CI/release/E2E evidence: recorded only in Phase 13 after all implementation and removal work is complete.
