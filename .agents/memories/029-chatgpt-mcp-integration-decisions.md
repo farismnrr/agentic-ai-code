@@ -46,3 +46,23 @@ restriction merely because the coding terminal can edit/run code. Existing
 Plan 028 filesystem, process, privilege, container, timeout, and output
 boundaries remain authoritative; ordinary shells, interpreters, Git, package
 managers, compilers, and in-workspace file mutation remain in scope.
+
+## Phase 9 production-readiness evidence
+
+Audit date: 2026-08-12. The repository gates passed:
+
+- `scripts/phase6-chatgpt-e2e.sh` (static acceptance; live probe unavailable)
+- `scripts/phase7-chatgpt-contract.sh`
+- `scripts/phase8-zero-bypass.sh`
+- `cargo fmt --all -- --check`
+- `cargo check --workspace --all-targets --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cargo audit`
+
+The catalog snapshot hash remains
+`6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`.
+No deployed relay URL, ChatGPT workspace, OAuth tenant, or callback
+credentials were available. Therefore Scan Tools, OAuth registration/PKCE/
+refresh/OIDC, live coding E2E, and live negative-boundary evidence are
+explicitly unverified; this is an accepted release limitation and does not
+constitute fabricated evidence.

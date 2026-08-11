@@ -1,6 +1,6 @@
 # Plan 029 — Production ChatGPT Native MCP Coding Agent Integration
 
-**Status: IN FLIGHT**
+**Status: COMPLETED (repository gates; live ChatGPT/OAuth acceptance deferred)**
 
 ## Goal
 
@@ -650,6 +650,21 @@ These are protocol/config/conformance checks, not a unit-test suite.
 ---
 
 # Phase 9 — Final production readiness
+
+## Phase 9 evidence — 2026-08-12
+
+Repository production-readiness gates passed: `scripts/phase6-chatgpt-e2e.sh`
+(static acceptance; live probe unavailable), `scripts/phase7-chatgpt-contract.sh`,
+`scripts/phase8-zero-bypass.sh`, `cargo fmt --all -- --check`, `cargo check
+--workspace --all-targets --all-features --locked`, `cargo clippy --workspace
+--all-targets --all-features --locked -- -D warnings`, and `cargo audit`.
+The tool catalog hash is `6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`.
+
+Accepted limitation: no deployed relay URL, ChatGPT workspace, OAuth tenant,
+or callback credentials were available, so Scan Tools, OAuth registration/
+PKCE/refresh/OIDC, live coding E2E, and live negative-boundary evidence remain
+unverified. No evidence is claimed for those checks; the Phase 6 live blocker
+is preserved.
 
 Plan 029 is `COMPLETED` only when:
 
