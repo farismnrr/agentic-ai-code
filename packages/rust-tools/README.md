@@ -1,9 +1,11 @@
 # Rust Tools CLI Migration
 
-This workspace contains the Rust migration for `terminal-tool`, `curl-tool`, and `searxng-search-tool`.
+This workspace contains the Rust migration for `relay-agent`, `terminal-tool`, `curl-tool`, and `searxng-search-tool`.
 
 ## Architecture
-These tools were migrated from JS to Rust to enforce strict process boundary checks, safe-URL policies (SSRF protection), and zero JS fallback execution. The tools are designed as thin, statically-compiled binaries that provide precise, contract-preserving behavior mirroring the original JS tools but without the Node.js overhead.
+These tools were migrated from JS to Rust to enforce strict process boundary checks, safe-URL policies (SSRF protection), and zero JS fallback execution. The tools are designed as thin, statically-compiled native binaries that provide precise, contract-preserving behavior mirroring the original JS tools but without the Node.js overhead. 
+
+Specifically, `relay-agent` is a native Rust MCP (Model Context Protocol) server. It exposes a standard Streamable HTTP MCP endpoint (spec 2026-07-28). It does not use Node.js and it is no longer based on a proprietary WebSocket protocol.
 
 ## Toolchain & MSRV
 - **Rust Edition:** 2021
@@ -25,3 +27,11 @@ These tools were migrated from JS to Rust to enforce strict process boundary che
 - Format: `cargo fmt`
 - Lint: `cargo clippy -- -D warnings`
 - Parity Tests: `node tests/parity.mjs`
+
+## Security & Sibling Binary Trust Boundary
+- The `relay-agent` invokes `terminal-tool`, `curl-tool`, and `searxng-search-tool` by explicitly resolving them relative to its own executable directory (`std::env::current_exe()`). It does not rely on the system `$PATH`. 
+- **Trust Assumption:** The directory containing `relay-agent` is considered a trust boundary. Sibling binaries within this directory are trusted. An untrusted local user must not be able to replace or tamper with these binaries.
+- **Deployment & Least Privilege:** The agent MUST be deployed using a dedicated unprivileged OS account or container user. The `relay-agent` explicitly refuses to run as UID 0 (root).
+- **Filesystem Permissions (Defense-in-Depth):** Filesystem permissions are a defense-in-depth control and are NOT a substitute for the application allowlist. The runtime user MUST NOT have write access to the relay executable directory, sibling CLI binaries, configuration/policy files, or release artifacts.
+- **Installation Requirements:** Ensure that the release/install directories are owned by `root` (or an administrative deployment user distinct from the runtime user) and have appropriate restrictive permissions (e.g., `755` for directories and binaries) so that the unprivileged runtime user cannot overwrite them.
+- **Integrity Verification:** Consider implementing binary integrity verification (e.g., checksums or signatures) only if the deployment threat model requires protection against local binary tampering by an attacker who has already gained elevated privileges.
