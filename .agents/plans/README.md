@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [028-relay-agent-rust-rewrite.md](028-relay-agent-rust-rewrite.md) — full rewrite of `packages/relay-agent` from Node.js/TypeScript + `@yao-pkg/pkg` to a standalone Rust binary, with strict Nuxt HTTP/WebSocket parity, localhost security, lifecycle parity, native release CI, and published-binary E2E verification.
 
 ## Completed
 - [027-cli-rust-refactor.md](027-cli-rust-refactor.md) — migrate terminal-tool, curl-tool, and searxng-search-tool CLIs from JavaScript to Rust; full parity, SSRF/security hardening, deterministic test suites, release CI pipeline, benchmarks, and zero-JS cutover. PR #99.
