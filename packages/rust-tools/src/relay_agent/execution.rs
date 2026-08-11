@@ -96,6 +96,18 @@ pub async fn dispatch_tool_call(
                 .get("method")
                 .and_then(|v| v.as_str())
                 .unwrap_or("GET");
+
+            let method_upper = method.to_uppercase();
+            match method_upper.as_str() {
+                "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS" => {}
+                _ => {
+                    return Err(McpError::InvalidRequest(format!(
+                        "HTTP method {} is not allowed",
+                        method
+                    )));
+                }
+            }
+
             let to = arguments
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
@@ -148,10 +160,7 @@ pub async fn dispatch_tool_call(
                 .get("query")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let base_url = arguments
-                .get("base_url")
-                .and_then(|v| v.as_str())
-                .unwrap_or("http://127.0.0.1:8888");
+            let base_url = "http://127.0.0.1:8888";
             let args = vec![
                 "--base-url".to_string(),
                 base_url.to_string(),
