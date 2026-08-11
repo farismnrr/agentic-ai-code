@@ -2,6 +2,8 @@
 
 **Status: IN FLIGHT — implementation plan only.** No rewrite is complete until strict MCP/protocol parity, Nuxt E2E compatibility, security/resource-limit verification, standalone release verification, and complete removal of the Node.js relay runtime all pass.
 
+**Deadline decision (deliberate, on `feat/028-relay-agent-rewrite`):** the automated Rust test suite for `relay_agent` (`mcp_transport_tests.rs`, `security_policy_tests.rs`, and the `#[cfg(test)]` unit tests inside `mcp.rs`) was removed, along with `cargo test --workspace` as a CI gate, to meet a deadline. CI now enforces `cargo fmt --check`, `cargo clippy -D warnings`, and `cargo audit` only — it does **not** verify runtime behavior. Every "tested"/"passing"/`[DONE — tests/...]` claim elsewhere in this document that names one of those now-deleted files describes a state that existed on this branch **before** that removal and is **no longer independently verified**. The code changes those claims describe (Origin/Host policy, MCP routing-header validation, JSON Schema argument validation, the `server/discover` `ttlMs`/`cacheScope` fix) are still present in source — only their test coverage is gone. Treat any such claim as "implemented, unverified by CI" until tests are reinstated.
+
 ## Context
 
 Plan 027 migrated the three general-purpose CLI tools to Rust. The remaining executable runtime is `packages/relay-agent`, currently implemented in Node.js/TypeScript and packaged with `@yao-pkg/pkg`.

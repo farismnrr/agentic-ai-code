@@ -160,6 +160,16 @@ pub struct DiscoverResult {
     #[serde(rename = "_meta")]
     pub meta: Value,
     pub instructions: &'static str,
+    /// Required on the wire per SEP-2549 (confirmed against a real MCP
+    /// client SDK's `DiscoverResult` type, which rejects a response
+    /// missing either field) — not optional caching metadata a
+    /// non-caching server can skip. `0` means "not cached, always fresh".
+    #[serde(rename = "ttlMs")]
+    pub ttl_ms: u64,
+    /// `"private"` per SEP-2549: conservative default for a server that
+    /// implements no caching logic of its own.
+    #[serde(rename = "cacheScope")]
+    pub cache_scope: &'static str,
 }
 
 impl DiscoverResult {
@@ -175,6 +185,8 @@ impl DiscoverResult {
                 }
             }),
             instructions: "Local relay-agent MCP server: exposes terminal_exec, http_fetch, and web_search tools backed by the Plan 027 Rust CLI binaries.",
+            ttl_ms: 0,
+            cache_scope: "private",
         }
     }
 }
@@ -253,6 +265,30 @@ pub fn tool_catalog() -> Vec<Tool> {
 
 pub fn find_tool(name: &str) -> Option<Tool> {
     tool_catalog().into_iter().find(|t| t.name == name)
+}
+
+/// Validate `arguments` against a tool's declared `inputSchema` (JSON
+/// Schema 2020-12) — the enforcement boundary required before execution:
+/// `tools/call` validates argument *shape*, not just that a tool with this
+/// name exists. Returns the first validation error's message on failure.
+pub fn validate_tool_arguments(tool: &Tool, arguments: &Value) -> Result<(), McpError> {
+    let validator = jsonschema::validator_for(&tool.input_schema).map_err(|e| {
+        McpError::Internal(format!(
+            "tool '{}' has an invalid inputSchema: {e}",
+            tool.name
+        ))
+    })?;
+
+    if let Some(first_error) = validator.iter_errors(arguments).next() {
+        return Err(McpError::InvalidParams(format!(
+            "arguments for tool '{}' failed schema validation at '{}': {}",
+            tool.name,
+            first_error.instance_path(),
+            first_error
+        )));
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Deserialize)]
