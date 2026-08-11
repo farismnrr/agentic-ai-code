@@ -61,6 +61,7 @@ pub const MAX_BODY_BYTES: usize = 1024 * 1024; // 1 MiB
 const HDR_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 const HDR_MCP_METHOD: &str = "mcp-method";
 const HDR_MCP_NAME: &str = "mcp-name";
+const TOOLS_LIST_TTL_MS: u64 = 300_000;
 
 /// JWKS cache TTL: 5 minutes. After this duration the cached key set is
 /// considered stale and will be re-fetched on the next authentication attempt.
@@ -651,7 +652,15 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
 
 fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     let tools = tool_catalog();
-    let response = Response::new(request.id.clone(), json!({ "tools": tools }));
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "ttlMs": TOOLS_LIST_TTL_MS,
+            "cacheScope": "public",
+            "tools": tools
+        }),
+    );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 

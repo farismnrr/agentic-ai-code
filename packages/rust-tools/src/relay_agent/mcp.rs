@@ -196,9 +196,22 @@ impl DiscoverResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
     pub name: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'static str>,
     pub description: &'static str,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
 }
 
 /// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
@@ -208,7 +221,8 @@ pub fn tool_catalog() -> Vec<Tool> {
     vec![
         Tool {
             name: "terminal_exec",
-            description: "Run an executable command in a working directory and return its stdout/stderr/exit status. Maps to the terminal-tool Rust CLI binary.",
+            title: Some("Sandboxed Coding Terminal"),
+            description: "Run a command in the full sandboxed coding terminal and return stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -217,47 +231,82 @@ pub fn tool_catalog() -> Vec<Tool> {
                     "args": {
                         "type": "array",
                         "items": { "type": "string", "maxLength": 65536 },
+                        "maxItems": 100,
                         "default": []
                     },
                     "cwd": { "type": "string" },
-                    "timeout_ms": { "type": "integer", "minimum": 1, "default": 30000 }
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 300000,
+                        "default": 30000
+                    }
                 },
                 "required": ["command"],
                 "additionalProperties": false
             }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
         },
         Tool {
             name: "http_fetch",
-            description: "Fetch a URL over HTTP(S) and return the response. Maps to the curl-tool Rust CLI binary.",
+            title: Some("HTTP Fetch"),
+            description: "Fetch a URL over HTTP(S) and return the response.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
                     "url": { "type": "string", "format": "uri", "maxLength": 65536 },
-                    "method": { "type": "string", "default": "GET" },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+                        "default": "GET"
+                    },
                     "headers": {
                         "type": "object",
-                        "additionalProperties": { "type": "string" }
+                        "maxProperties": 100,
+                        "additionalProperties": { "type": "string", "maxLength": 65536 }
                     },
                     "data": { "type": "string", "maxLength": 65536 },
-                    "timeout_ms": { "type": "integer", "minimum": 0, "default": 30000 }
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 300000,
+                        "default": 30000
+                    }
                 },
                 "required": ["url"],
                 "additionalProperties": false
             }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
         },
         Tool {
             name: "web_search",
-            description: "Search the web via a local SearxNG instance. Maps to the searxng-search-tool Rust CLI binary.",
+            title: Some("Web Search"),
+            description: "Search the web through the configured SearxNG backend.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 },
-                    "base_url": { "type": "string", "format": "uri", "default": "http://127.0.0.1:8888" }
+                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 }
                 },
                 "required": ["query"],
                 "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: true,
             }),
         },
     ]
