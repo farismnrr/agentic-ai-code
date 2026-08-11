@@ -62,6 +62,9 @@ const HDR_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 const HDR_MCP_METHOD: &str = "mcp-method";
 const HDR_MCP_NAME: &str = "mcp-name";
 const TOOLS_LIST_TTL_MS: u64 = 300_000;
+/// Resource permission exposed to the external Authorization Server and MCP
+/// client for the default full-coding deployment profile.
+const CODING_SCOPE: &str = "relay.coding";
 
 /// JWKS cache TTL: 5 minutes. After this duration the cached key set is
 /// considered stale and will be re-fetched on the next authentication attempt.
@@ -163,12 +166,16 @@ fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
 }
 
 async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let issuer = state.config.oauth_issuer.clone().unwrap_or_default();
-    let resource = state.config.oauth_audience.clone().unwrap_or_default();
-    Json(json!({
+    let issuer = state.config.oauth_issuer.clone();
+    let resource = state.config.oauth_audience.clone();
+    let mut metadata = json!({
         "resource": resource,
-        "authorization_servers": [issuer]
-    }))
+        "scopes_supported": [CODING_SCOPE]
+    });
+    if let Some(issuer) = issuer {
+        metadata["authorization_servers"] = json!([issuer]);
+    }
+    Json(metadata)
 }
 
 /// Server-side access policy:
