@@ -339,23 +339,44 @@ Close the remaining integration evidence that repository/static checks cannot pr
 
 ## Required gates
 
-- [ ] 29B-1 closed.
-- [ ] 29B-2 closed.
-- [ ] 29B-3 closed or explicitly remains unsupported and therefore plan stays open.
+- [x] 29B-1 closed.
+- [x] 29B-2 closed.
+- [x] 29B-3 explicitly remains unsupported; Docker stays disabled and the plan remains open.
 - [ ] 29B-4 live acceptance closed.
-- [ ] 29B-5 closed.
-- [ ] 29B-6 closed.
-- [ ] 29B-7 closed.
-- [ ] 29B-8 closed.
-- [ ] 29B-9 closed.
-- [ ] 29B-10 closed or documented as unnecessary after current-spec verification.
-- [ ] no Plan 028/029 subsystem was reimplemented unnecessarily.
-- [ ] no broad coding denylist was introduced.
-- [ ] no unit-test requirement was added.
-- [ ] strict format/check/clippy/audit gates pass.
-- [ ] black-box connector/security conformance passes.
+- [x] 29B-5 closed.
+- [x] 29B-6 closed.
+- [x] 29B-7 closed.
+- [x] 29B-8 closed.
+- [x] 29B-9 closed.
+- [x] 29B-10 closed via the centralized response metadata helper.
+- [x] no Plan 028/029 subsystem was reimplemented unnecessarily.
+- [x] no broad coding denylist was introduced.
+- [x] no unit-test requirement was added.
+- [ ] strict format/check/clippy/audit gates pass; `cargo audit` remains blocked by unfixed upstream `RUSTSEC-2023-0071` in `rsa 0.9.10`.
+- [x] black-box connector/security conformance passes.
 - [ ] real ChatGPT acceptance passes.
-- [ ] all commits remain on `feat/029-p0-audit` until the existing Plan 029 branch is intentionally merged through the normal repository workflow.
+- [x] all commits remain on `feat/029-p0-audit` until the existing Plan 029 branch is intentionally merged through the normal repository workflow.
+
+## Phase 9 closeout evidence — 2026-08-12
+
+Available repository gates passed:
+
+- `cargo fmt --all -- --check`
+- `RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `pnpm run lint`, `pnpm run typecheck`, and `pnpm audit`
+- `scripts/phase4-black-box.sh`
+- `scripts/phase7-chatgpt-contract.sh`
+- `scripts/phase8-zero-bypass.sh`
+- `scripts/phase6-chatgpt-e2e.sh` static checks
+
+Open gates and blockers:
+
+- Phase 8 live ChatGPT acceptance is unavailable in this repository run: no approved HTTPS/tunnel deployment, ChatGPT workspace/app, OAuth tenant/client, callback verification, or redacted live evidence is available. The Phase 6 harness reports this as unavailable; it is not treated as a pass.
+- 29B-3 remains unsupported. No isolated Docker worker, restricted broker, or equivalent backend is available, so Docker remains disabled to preserve the host-boundary invariant. See `.agents/memories/029b-docker-capability-blocker.md`.
+- `cargo audit` fails on `RUSTSEC-2023-0071` (Marvin Attack in `rsa 0.9.10`); the advisory reports no fixed upgrade. This remains an open release gate and is not suppressed.
+
+Phase 9 does not close Plan 029b while these gates remain open. No implementation code was changed during closeout.
 
 ---
 
