@@ -360,12 +360,12 @@ spec-verified implementation.
 - [x] Normalize results/errors.
 
 
-### Phase 4 — Legacy Nuxt compatibility — [ ] TODO
+### Phase 4 — Legacy Nuxt compatibility — [x] DONE
 
-- [ ] Implement `/health`, `/pair`, `/revoke`, CORS, and existing WebSocket adapter only if Phase 0 proves the frontend still requires them.
-- [ ] Preserve exact behavior.
+- [x] Implement `/health`, `/pair`, `/revoke`, CORS, and existing WebSocket adapter only if Phase 0 proves the frontend still requires them.
+- [x] Preserve exact behavior.
 
-- [ ] Keep compatibility code isolated from the MCP core.
+- [x] Keep compatibility code isolated from the MCP core.
 
 ### Phase 5 — Lifecycle/security hardening — [ ] TODO
 
