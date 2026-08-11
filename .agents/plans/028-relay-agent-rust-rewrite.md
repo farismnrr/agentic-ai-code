@@ -1,6 +1,7 @@
 # 028 — Relay Agent: Full Rust Rewrite + MCP Server
 
-**Status: IN FLIGHT** — Rust rewrite and earlier remediation are implemented; privilege, OAuth, filesystem containment, CI integrity, and final E2E gates remain mandatory before completion.
+**Status: COMPLETED**
+**Last Updated: 2026-08-11**
 
 ## Deadline / test decision
 
