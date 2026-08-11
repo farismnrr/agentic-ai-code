@@ -128,19 +128,19 @@ pub async fn dispatch_tool_call(
                     ));
                 }
 
-                if binary_name == "docker" {
-                    if parts.iter().any(|arg| {
+                if binary_name == "docker"
+                    && parts.iter().any(|arg| {
                         arg == "--privileged"
                             || arg.starts_with("--cap-add")
                             || arg == "--pid=host"
                             || arg == "--network=host"
                             || arg.starts_with("-v")
                             || arg.starts_with("--mount")
-                    }) {
-                        return Err(McpError::InvalidRequest(
-                            "docker privilege escalation flags (mounts, cap-add, host namespaces, privileged) are forbidden".to_string()
-                        ));
-                    }
+                    })
+                {
+                    return Err(McpError::InvalidRequest(
+                        "docker privilege escalation flags (mounts, cap-add, host namespaces, privileged) are forbidden".to_string()
+                    ));
                 }
 
                 let allowed_commands = [
