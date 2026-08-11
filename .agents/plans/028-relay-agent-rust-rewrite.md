@@ -386,16 +386,16 @@ spec-verified implementation.
 - [x] Verify browser-origin security.
 - [x] Run against the real binary, not a mock server.
 
-### Phase 7 — Remove Node runtime — [ ] TODO
+### Phase 7 — Remove Node runtime — [x] DONE
 
 Only after MCP + Nuxt parity is proven:
 
-- [ ] Delete `packages/relay-agent/src/*`.
-- [ ] Delete Node CLI/pidfile/build scripts.
-- [ ] Remove relay-agent-only Node dependencies.
-- [ ] Remove `@yao-pkg/pkg` repository-wide.
-- [ ] Remove obsolete package/build references.
-- [ ] Prove no relay-agent executable JS/TS remains.
+- [x] Delete `packages/relay-agent/src/*`.
+- [x] Delete Node CLI/pidfile/build scripts.
+- [x] Remove relay-agent-only Node dependencies.
+- [x] Remove `@yao-pkg/pkg` repository-wide.
+- [x] Remove obsolete package/build references.
+- [x] Prove no relay-agent executable JS/TS remains.
 
 ### Phase 8 — Native release — [ ] TODO
 
@@ -535,8 +535,8 @@ Record final evidence as implementation progresses:
 
 - Security regression suite: partial `[~]` — Origin/Host enforcement fully covered (29 unit tests in `security.rs` + 11 integration tests in `tests/security_policy_tests.rs`, all green; `cargo fmt --check` and `clippy -D warnings` clean). Pairing/credential lifecycle, MCP authorization, and tool-execution-time limits still outstanding.
 - Nuxt E2E parity: `[x]`
-- Node source/runtime removal: `[ ]`
-- `@yao-pkg/pkg` removal: `[ ]`
+- Node source/runtime removal: `[x]`
+- `@yao-pkg/pkg` removal: `[x]`
 - Release workflow migration: `[ ]`
 - Dependency/security policy checks: `[ ]`
 - Published artifact smoke tests: `[ ]`
