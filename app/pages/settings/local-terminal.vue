@@ -7,11 +7,10 @@ const {
   port,
   isConnected,
   isConnecting,
-  error,
+  error: _error,
   checkConnection,
   exec
 } = useRelayAgent()
-
 
 const commandInput = ref('')
 const execPending = ref(false)
@@ -53,7 +52,6 @@ onMounted(() => {
   }
 })
 
-
 async function handleExec() {
   const cmd = commandInput.value.trim()
   if (!cmd || execPending.value) return
@@ -71,8 +69,6 @@ async function handleExec() {
     execPending.value = false
   }
 }
-
-
 
 const downloadLinks = {
   'linux': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-linux-x64',
