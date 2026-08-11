@@ -47,6 +47,10 @@ pub struct Cli {
     /// OAuth audience expected in JWT 'aud' claim
     #[arg(long, env = "OAUTH_AUDIENCE")]
     pub oauth_audience: Option<String>,
+
+    /// Explicit execution root for filesystem containment.
+    #[arg(long, env = "EXECUTION_ROOT")]
+    pub execution_root: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
@@ -80,6 +84,7 @@ pub struct ServerConfig {
     pub oauth_secret: Option<String>,
     pub oauth_issuer: Option<String>,
     pub oauth_audience: Option<String>,
+    pub execution_root: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -92,6 +97,7 @@ impl Default for ServerConfig {
             oauth_secret: None,
             oauth_issuer: None,
             oauth_audience: None,
+            execution_root: None,
         }
     }
 }
@@ -108,6 +114,17 @@ impl ServerConfig {
                 )
             }),
         }
+    }
+
+    /// Resolve the effective execution root.
+    pub fn resolved_execution_root(&self) -> Result<std::path::PathBuf, RelayError> {
+        let root = match &self.execution_root {
+            Some(d) => std::path::PathBuf::from(d),
+            None => self.resolved_dir()?,
+        };
+        std::fs::canonicalize(&root).map_err(|e| {
+            RelayError::InvalidConfig(format!("execution root cannot be resolved: {}", e))
+        })
     }
 
     /// Validate configuration before binding. Never broadens trust (e.g.
@@ -162,6 +179,7 @@ impl From<&Cli> for ServerConfig {
             oauth_secret: cli.oauth_secret.clone(),
             oauth_issuer: cli.oauth_issuer.clone(),
             oauth_audience: cli.oauth_audience.clone(),
+            execution_root: cli.execution_root.clone(),
         }
     }
 }

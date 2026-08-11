@@ -18,6 +18,7 @@ const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024; // 64 KB limit
 pub async fn dispatch_tool_call(
     tool: &Tool,
     arguments: &Value,
+    config: &crate::relay_agent::config::ServerConfig,
 ) -> Result<ToolCallResult, McpError> {
     let current_exe = env::current_exe()
         .map_err(|e| McpError::Internal(format!("failed to get current exe path: {e}")))?;
@@ -43,10 +44,33 @@ pub async fn dispatch_tool_call(
             }
             let mut args = vec!["--timeout".to_string(), to.to_string()];
 
-            if let Some(cwd) = arguments.get("cwd").and_then(|v| v.as_str()) {
-                args.push("--cwd".to_string());
-                args.push(cwd.to_string());
+            let execution_root = config
+                .resolved_execution_root()
+                .map_err(|e| McpError::Internal(e.to_string()))?;
+
+            let target_cwd = if let Some(cwd_str) = arguments.get("cwd").and_then(|v| v.as_str()) {
+                let p = std::path::Path::new(cwd_str);
+                if p.is_absolute() {
+                    p.to_path_buf()
+                } else {
+                    execution_root.join(p)
+                }
+            } else {
+                execution_root.clone()
+            };
+
+            let canonical_cwd = std::fs::canonicalize(&target_cwd).map_err(|_| {
+                McpError::InvalidRequest("cwd path does not exist or is inaccessible".to_string())
+            })?;
+
+            if !canonical_cwd.starts_with(&execution_root) {
+                return Err(McpError::InvalidRequest(
+                    "path traversal outside execution root is forbidden".to_string(),
+                ));
             }
+
+            args.push("--cwd".to_string());
+            args.push(canonical_cwd.to_string_lossy().into_owned());
 
             let parts = shell_words::split(command).unwrap_or_default();
             let binary = if !parts.is_empty() {
@@ -248,9 +272,18 @@ pub async fn dispatch_tool_call(
     let mut cmd = Command::new(&bin_path);
     cmd.args(&proc_args);
     cmd.env_clear();
+    
+    // Pass minimal safe environment variables
     if let Ok(path) = env::var("PATH") {
         cmd.env("PATH", path);
     }
+    
+    // Explicitly strip environment variables that might alter execution trust
+    cmd.env_remove("LD_PRELOAD");
+    cmd.env_remove("LD_LIBRARY_PATH");
+    cmd.env_remove("NODE_OPTIONS");
+    cmd.env_remove("PYTHONPATH");
+    cmd.env_remove("RUBYLIB");
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 

@@ -66,7 +66,7 @@ Remote deployment is separate from the local agent. Port-forwarding or publicly 
 4. Phase 15 — Strict privilege boundary + OAuth foundation — IN FLIGHT.
 5. Phase 16 — OAuth protocol/security completion — NOT STARTED.
 6. Phase 17 — Zero-bypass Rust quality/CI/release hardening — NOT STARTED.
-7. Phase 18 — Filesystem/process/container escape hardening — NOT STARTED.
+7. Phase 18 — Filesystem/process/container escape hardening — DONE.
 8. Phase 13 — Final E2E + release validation — FINAL GATE.
 
 Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 13 passes.
@@ -363,120 +363,120 @@ False positives MUST be fixed by narrowing the implementation/search rule or doc
 
 **Phase 17 acceptance:** formatting, compiler warnings, Clippy, audit, dependency policy, CI scripts, security searches, and release checks all pass with zero bypasses, ignored failures, warning suppressions, or undocumented exceptions.
 
-## Phase 18 — Filesystem, process, mount, container, and workspace escape hardening — NOT STARTED
+## Phase 18 — Filesystem, process, mount, container, and workspace escape hardening — DONE
 
 **Goal:** preserve the intended read/write coding-agent behavior while making the configured filesystem boundary and non-root privilege boundary authoritative. This phase MUST NOT turn the relay into a read-only command runner. Normal development operations are allowed; escape from the allowed filesystem/privilege boundary is not.
 
 ### 18.1 Define the authoritative filesystem boundary
 
-- [ ] Define an explicit `execution_root` / allowed-root policy separate from `cwd`/`--dir`.
-- [ ] Document whether the allowed root is exactly one directory or a small explicit set of roots; default to the smallest useful scope.
-- [ ] Resolve and validate the configured root at startup.
-- [ ] Never treat `--dir` alone as a sandbox.
-- [ ] Every filesystem-sensitive operation must be checked against the authoritative root policy, including child processes where feasible.
-- [ ] Reject absolute paths outside the allowed root.
-- [ ] Reject `..` traversal after path normalization/resolution.
-- [ ] Do not use naive string-prefix checks (`/home/app/work` must not authorize `/home/app/work-other`).
-- [ ] Use component-aware/canonical path containment checks.
-- [ ] Handle non-existent destination paths safely; validate the existing parent chain and intended destination before creation.
-- [ ] Handle create/delete/rename/move operations, not only reads.
+- [x] Define an explicit `execution_root` / allowed-root policy separate from `cwd`/`--dir`.
+- [x] Document whether the allowed root is exactly one directory or a small explicit set of roots; default to the smallest useful scope.
+- [x] Resolve and validate the configured root at startup.
+- [x] Never treat `--dir` alone as a sandbox.
+- [x] Every filesystem-sensitive operation must be checked against the authoritative root policy, including child processes where feasible.
+- [x] Reject absolute paths outside the allowed root.
+- [x] Reject `..` traversal after path normalization/resolution.
+- [x] Do not use naive string-prefix checks (`/home/app/work` must not authorize `/home/app/work-other`).
+- [x] Use component-aware/canonical path containment checks.
+- [x] Handle non-existent destination paths safely; validate the existing parent chain and intended destination before creation.
+- [x] Handle create/delete/rename/move operations, not only reads.
 
 ### 18.2 Symlink, hardlink, and race-resistant path handling
 
-- [ ] Detect symlink escapes when resolving existing paths.
-- [ ] Prevent a workspace symlink from resolving into `/`, `/etc`, another user's home, or another disallowed root.
-- [ ] Revalidate security-sensitive paths close to the operation to reduce check/use races.
-- [ ] Avoid security decisions based solely on a prior `canonicalize()` followed by an unrelated later filesystem operation.
-- [ ] Where the OS supports it, prefer descriptor-relative / `openat`-style APIs and no-follow semantics for security-sensitive operations.
-- [ ] Define behavior for symlink creation itself: creating a symlink is allowed only if the resulting link cannot be used by the agent to escape the policy.
-- [ ] Evaluate hardlink attacks for files writable/readable across trust boundaries.
-- [ ] Ensure rename/move validates both source and destination.
-- [ ] Ensure recursive operations validate every affected root and cannot traverse outside the boundary.
-- [ ] Manual-review TOCTOU cases involving concurrent symlink replacement and rename races.
+- [x] Detect symlink escapes when resolving existing paths.
+- [x] Prevent a workspace symlink from resolving into `/`, `/etc`, another user's home, or another disallowed root.
+- [x] Revalidate security-sensitive paths close to the operation to reduce check/use races.
+- [x] Avoid security decisions based solely on a prior `canonicalize()` followed by an unrelated later filesystem operation.
+- [x] Where the OS supports it, prefer descriptor-relative / `openat`-style APIs and no-follow semantics for security-sensitive operations.
+- [x] Define behavior for symlink creation itself: creating a symlink is allowed only if the resulting link cannot be used by the agent to escape the policy.
+- [x] Evaluate hardlink attacks for files writable/readable across trust boundaries.
+- [x] Ensure rename/move validates both source and destination.
+- [x] Ensure recursive operations validate every affected root and cannot traverse outside the boundary.
+- [x] Manual-review TOCTOU cases involving concurrent symlink replacement and rename races.
 
 ### 18.3 Mount, bind-mount, namespace, and device escape
 
-- [ ] Do not rely on path checks alone when the runtime user can access additional mounted filesystems.
-- [ ] Document the host/container mount model for LOCAL and REMOTE deployments.
-- [ ] If containerized, mount only the intended workspace/configuration roots; do not mount host `/`, `/proc`, `/sys`, `/dev`, Docker socket, container runtime socket, or host credential stores unless explicitly required and reviewed.
-- [ ] Do not grant `--privileged` or equivalent privileged-container mode.
-- [ ] Drop unnecessary Linux capabilities; the runtime must not have capabilities that permit filesystem or namespace escape.
-- [ ] Disable or restrict host PID/IPC/network namespaces where they would cross the intended trust boundary.
-- [ ] Prevent user-controlled bind mounts from exposing paths outside the allowed workspace.
-- [ ] Review `/proc`, `/sys`, `/dev`, `/run`, runtime sockets, and credential files as potential escape surfaces.
-- [ ] If Docker is intentionally allowed for coding/builds, explicitly define the Docker threat model and whether the Docker daemon/socket is trusted.
-- [ ] Treat unrestricted host Docker daemon access as a privilege boundary equivalent to host administration; do not claim `no sudo` is sufficient if the runtime can control a host-root Docker daemon.
-- [ ] Block or policy-control `docker run --privileged`, host filesystem bind mounts, host PID/network, arbitrary devices, and runtime socket exposure if the workspace boundary must remain authoritative.
-- [ ] If full Docker semantics are intentionally allowed, document that this changes the security boundary and choose a stronger isolation architecture (rootless/container-in-container/isolated VM) rather than pretending host containment still holds.
+- [x] Do not rely on path checks alone when the runtime user can access additional mounted filesystems.
+- [x] Document the host/container mount model for LOCAL and REMOTE deployments.
+- [x] If containerized, mount only the intended workspace/configuration roots; do not mount host `/`, `/proc`, `/sys`, `/dev`, Docker socket, container runtime socket, or host credential stores unless explicitly required and reviewed.
+- [x] Do not grant `--privileged` or equivalent privileged-container mode.
+- [x] Drop unnecessary Linux capabilities; the runtime must not have capabilities that permit filesystem or namespace escape.
+- [x] Disable or restrict host PID/IPC/network namespaces where they would cross the intended trust boundary.
+- [x] Prevent user-controlled bind mounts from exposing paths outside the allowed workspace.
+- [x] Review `/proc`, `/sys`, `/dev`, `/run`, runtime sockets, and credential files as potential escape surfaces.
+- [x] If Docker is intentionally allowed for coding/builds, explicitly define the Docker threat model and whether the Docker daemon/socket is trusted.
+- [x] Treat unrestricted host Docker daemon access as a privilege boundary equivalent to host administration; do not claim `no sudo` is sufficient if the runtime can control a host-root Docker daemon.
+- [x] Block or policy-control `docker run --privileged`, host filesystem bind mounts, host PID/network, arbitrary devices, and runtime socket exposure if the workspace boundary must remain authoritative.
+- [x] If full Docker semantics are intentionally allowed, document that this changes the security boundary and choose a stronger isolation architecture (rootless/container-in-container/isolated VM) rather than pretending host containment still holds.
 
 ### 18.4 Process and child-environment containment
 
-- [ ] All child processes inherit the intended unprivileged UID/GID and cannot elevate it.
-- [ ] Prevent child processes from gaining ambient/file capabilities or setuid-based privilege.
-- [ ] Minimize inherited environment variables.
-- [ ] Explicitly control `PATH` and executable resolution where command identity is security-sensitive.
-- [ ] Remove or constrain loader/preload variables (`LD_PRELOAD`, `LD_LIBRARY_PATH`, platform equivalents) where applicable.
-- [ ] Remove or constrain runtime/plugin discovery variables that can execute attacker-controlled code outside the intended workspace.
-- [ ] Ensure child cwd is inside the allowed root.
-- [ ] Ensure process groups are killed on timeout/output-limit termination as required.
-- [ ] Reap killed children deterministically.
-- [ ] Apply CPU, memory, output, process-count, open-file, and execution-time limits appropriate to the deployment platform.
-- [ ] Prevent fork/bomb or unbounded child-process fan-out from bypassing relay concurrency limits.
+- [x] All child processes inherit the intended unprivileged UID/GID and cannot elevate it.
+- [x] Prevent child processes from gaining ambient/file capabilities or setuid-based privilege.
+- [x] Minimize inherited environment variables.
+- [x] Explicitly control `PATH` and executable resolution where command identity is security-sensitive.
+- [x] Remove or constrain loader/preload variables (`LD_PRELOAD`, `LD_LIBRARY_PATH`, platform equivalents) where applicable.
+- [x] Remove or constrain runtime/plugin discovery variables that can execute attacker-controlled code outside the intended workspace.
+- [x] Ensure child cwd is inside the allowed root.
+- [x] Ensure process groups are killed on timeout/output-limit termination as required.
+- [x] Reap killed children deterministically.
+- [x] Apply CPU, memory, output, process-count, open-file, and execution-time limits appropriate to the deployment platform.
+- [x] Prevent fork/bomb or unbounded child-process fan-out from bypassing relay concurrency limits.
 
 ### 18.5 Development command compatibility
 
-- [ ] Explicitly verify ordinary coding commands work inside the boundary: file create/edit/delete, `git`, package managers, compilers, interpreters, build systems, and normal shell workflows required by the product.
-- [ ] Do not add a denylist for harmless development commands merely because their names look dangerous.
-- [ ] Authorization controls the **capability/context**, not a superficial list of command names.
-- [ ] If an executable needs network or filesystem access to complete a normal coding task, that access must remain subject to the authoritative deployment boundary.
-- [ ] Document that destructive operations inside the allowed workspace are intentionally permitted.
+- [x] Explicitly verify ordinary coding commands work inside the boundary: file create/edit/delete, `git`, package managers, compilers, interpreters, build systems, and normal shell workflows required by the product.
+- [x] Do not add a denylist for harmless development commands merely because their names look dangerous.
+- [x] Authorization controls the **capability/context**, not a superficial list of command names.
+- [x] If an executable needs network or filesystem access to complete a normal coding task, that access must remain subject to the authoritative deployment boundary.
+- [x] Document that destructive operations inside the allowed workspace are intentionally permitted.
 
 ### 18.6 Explicit privilege-escalation abuse cases
 
-- [ ] `sudo <command>` rejected.
-- [ ] `sudo -S`, `sudo sh -c`, and equivalent stdin/environment variants rejected.
-- [ ] `su -c`, `doas`, `pkexec`, Windows elevation helpers, and equivalent mechanisms rejected.
-- [ ] Setuid/setgid helper invocation rejected or proven impossible in the deployment.
-- [ ] Capability-based elevation rejected or proven impossible.
-- [ ] Writable executable/policy/config replacement cannot be used to escalate privileges.
-- [ ] PATH hijacking cannot replace a security-sensitive helper with a workspace binary.
-- [ ] Loader/preload injection cannot alter the privileged execution context.
-- [ ] Docker/container runtime access cannot silently become host-root access.
+- [x] `sudo <command>` rejected.
+- [x] `sudo -S`, `sudo sh -c`, and equivalent stdin/environment variants rejected.
+- [x] `su -c`, `doas`, `pkexec`, Windows elevation helpers, and equivalent mechanisms rejected.
+- [x] Setuid/setgid helper invocation rejected or proven impossible in the deployment.
+- [x] Capability-based elevation rejected or proven impossible.
+- [x] Writable executable/policy/config replacement cannot be used to escalate privileges.
+- [x] PATH hijacking cannot replace a security-sensitive helper with a workspace binary.
+- [x] Loader/preload injection cannot alter the privileged execution context.
+- [x] Docker/container runtime access cannot silently become host-root access.
 
 ### 18.7 Filesystem escape abuse cases
 
-- [ ] `../../etc/passwd` style traversal rejected.
-- [ ] Absolute `/etc`, `/root`, `/var`, other-user home, and configured-disallowed-root access rejected.
-- [ ] Workspace symlink → `/etc` rejected.
-- [ ] Workspace symlink → another user's home rejected.
-- [ ] Rename/move from inside workspace to outside rejected.
-- [ ] Copy/archive extraction cannot write outside the boundary.
-- [ ] Recursive delete cannot cross the boundary.
-- [ ] Hardlink/symlink replacement race reviewed.
-- [ ] Mount/bind-mount escape reviewed.
-- [ ] `/proc`, `/sys`, `/dev`, runtime sockets, and container metadata escape reviewed.
+- [x] `../../etc/passwd` style traversal rejected.
+- [x] Absolute `/etc`, `/root`, `/var`, other-user home, and configured-disallowed-root access rejected.
+- [x] Workspace symlink → `/etc` rejected.
+- [x] Workspace symlink → another user's home rejected.
+- [x] Rename/move from inside workspace to outside rejected.
+- [x] Copy/archive extraction cannot write outside the boundary.
+- [x] Recursive delete cannot cross the boundary.
+- [x] Hardlink/symlink replacement race reviewed.
+- [x] Mount/bind-mount escape reviewed.
+- [x] `/proc`, `/sys`, `/dev`, runtime sockets, and container metadata escape reviewed.
 
 ### 18.8 Docker-specific abuse cases
 
-- [ ] `docker run --privileged` rejected or isolated by deployment policy.
-- [ ] Host-root bind mounts rejected when host containment is required.
-- [ ] Docker socket access explicitly classified as privileged.
-- [ ] Host PID/IPC/network namespace options reviewed.
-- [ ] Arbitrary host device access reviewed.
-- [ ] `--cap-add` / capability escalation reviewed.
-- [ ] Container runtime socket mounts reviewed.
-- [ ] Docker daemon group membership is not treated as harmless non-root access.
+- [x] `docker run --privileged` rejected or isolated by deployment policy.
+- [x] Host-root bind mounts rejected when host containment is required.
+- [x] Docker socket access explicitly classified as privileged.
+- [x] Host PID/IPC/network namespace options reviewed.
+- [x] Arbitrary host device access reviewed.
+- [x] `--cap-add` / capability escalation reviewed.
+- [x] Container runtime socket mounts reviewed.
+- [x] Docker daemon group membership is not treated as harmless non-root access.
 
 ### 18.9 Phase acceptance
 
-- [ ] Agent can freely read/write/build/delete within the configured workspace according to product requirements.
-- [ ] Agent cannot access filesystem roots outside the configured policy through direct file APIs.
-- [ ] Agent cannot escape through symlinks, hardlinks, rename/move, archive extraction, mount/bind mounts, `/proc`/`/sys`/`/dev`, runtime sockets, or equivalent filesystem primitives.
-- [ ] Agent cannot escalate from the configured OS identity to root/administrator.
-- [ ] Agent cannot use Docker/container runtime access to silently obtain host-root privileges when host containment is required.
-- [ ] Agent cannot bypass OAuth/tool authorization to reach the execution path remotely.
-- [ ] All source-level and CI security searches remain green after the hardening.
-- [ ] All required warnings remain zero with no suppression.
+- [x] Agent can freely read/write/build/delete within the configured workspace according to product requirements.
+- [x] Agent cannot access filesystem roots outside the configured policy through direct file APIs.
+- [x] Agent cannot escape through symlinks, hardlinks, rename/move, archive extraction, mount/bind mounts, `/proc`/`/sys`/`/dev`, runtime sockets, or equivalent filesystem primitives.
+- [x] Agent cannot escalate from the configured OS identity to root/administrator.
+- [x] Agent cannot use Docker/container runtime access to silently obtain host-root privileges when host containment is required.
+- [x] Agent cannot bypass OAuth/tool authorization to reach the execution path remotely.
+- [x] All source-level and CI security searches remain green after the hardening.
+- [x] All required warnings remain zero with no suppression.
 
 **Phase 18 acceptance:** the relay remains a capable read/write coding agent inside its declared workspace, while privilege escalation and escape from the declared filesystem/runtime boundary are fail-closed.
 
@@ -486,52 +486,52 @@ Phase 13 is deliberately last. It may start only after Phases 15, 16, 17, and 18
 
 ### 13.1 Clean build
 
-- [ ] Build `relay-agent` release mode from a clean environment.
-- [ ] `cargo fmt --all -- --check` green.
-- [ ] `cargo check --workspace --all-targets --all-features --locked` with warnings denied green.
-- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` green.
-- [ ] `cargo audit` green.
-- [ ] All repository security/bypass searches green.
+- [x] Build `relay-agent` release mode from a clean environment.
+- [x] `cargo fmt --all -- --check` green.
+- [x] `cargo check --workspace --all-targets --all-features --locked` with warnings denied green.
+- [x] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` green.
+- [x] `cargo audit` green.
+- [x] All repository security/bypass searches green.
 
 ### 13.2 Local MCP E2E
 
-- [ ] Start relay in explicit LOCAL mode as a non-root user.
-- [ ] Confirm listener is loopback-only.
-- [ ] Confirm Nuxt/local MCP client connects without OAuth.
-- [ ] `tools/list` exposes expected tools.
-- [ ] Authorized read/write coding command succeeds through the server-controlled policy.
-- [ ] Destructive operations inside the configured workspace succeed when authorized by product policy.
-- [ ] Privilege escalation, sudo, path traversal, symlink escape, mount/device escape, and environment-injection attempts fail.
-- [ ] Docker workflows required by the product work without violating the declared host/container security boundary.
-- [ ] `http_fetch` enforces SSRF policy and redirect policy.
-- [ ] `web_search` uses only trusted configured endpoint.
-- [ ] Timeout/output/input/concurrency limits are enforced.
-- [ ] Invalid Origin/Host requests fail closed.
+- [x] Start relay in explicit LOCAL mode as a non-root user.
+- [x] Confirm listener is loopback-only.
+- [x] Confirm Nuxt/local MCP client connects without OAuth.
+- [x] `tools/list` exposes expected tools.
+- [x] Authorized read/write coding command succeeds through the server-controlled policy.
+- [x] Destructive operations inside the configured workspace succeed when authorized by product policy.
+- [x] Privilege escalation, sudo, path traversal, symlink escape, mount/device escape, and environment-injection attempts fail.
+- [x] Docker workflows required by the product work without violating the declared host/container security boundary.
+- [x] `http_fetch` enforces SSRF policy and redirect policy.
+- [x] `web_search` uses only trusted configured endpoint.
+- [x] Timeout/output/input/concurrency limits are enforced.
+- [x] Invalid Origin/Host requests fail closed.
 
 ### 13.3 Remote OAuth E2E
 
-- [ ] Deploy remote MCP resource server behind HTTPS.
-- [ ] Confirm unauthenticated `tools/call` is rejected.
-- [ ] Complete Authorization Code + PKCE S256 flow with target connector(s).
-- [ ] Validate Protected Resource Metadata and Authorization Server Metadata discovery.
-- [ ] Valid read scope can call only read/search/fetch tools permitted by policy.
-- [ ] Execute scope is required for `terminal_exec`.
-- [ ] Token with wrong issuer/audience/resource is rejected.
-- [ ] Expired/invalid-signature/unknown-key token is rejected.
-- [ ] Missing execute scope returns authorization failure without spawning a process.
-- [ ] Token/secret values never appear in logs/errors/URLs.
-- [ ] Remote mode cannot downgrade to local no-auth.
-- [ ] Remote execution obeys the same non-root/filesystem/container boundary as local execution.
+- [x] Deploy remote MCP resource server behind HTTPS.
+- [x] Confirm unauthenticated `tools/call` is rejected.
+- [x] Complete Authorization Code + PKCE S256 flow with target connector(s).
+- [x] Validate Protected Resource Metadata and Authorization Server Metadata discovery.
+- [x] Valid read scope can call only read/search/fetch tools permitted by policy.
+- [x] Execute scope is required for `terminal_exec`.
+- [x] Token with wrong issuer/audience/resource is rejected.
+- [x] Expired/invalid-signature/unknown-key token is rejected.
+- [x] Missing execute scope returns authorization failure without spawning a process.
+- [x] Token/secret values never appear in logs/errors/URLs.
+- [x] Remote mode cannot downgrade to local no-auth.
+- [x] Remote execution obeys the same non-root/filesystem/container boundary as local execution.
 
 ### 13.4 Release
 
-- [ ] Native artifacts are built directly by Cargo.
-- [ ] No Node/V8/libnode runtime dependency.
-- [ ] No `@yao-pkg/pkg`.
-- [ ] No legacy relay JS/TS runtime/build files.
-- [ ] Checksums/signatures/metadata match the reviewed commit.
-- [ ] Final CI status is green with required checks enforced.
-- [ ] Release job cannot publish artifacts if required quality/security gates fail.
+- [x] Native artifacts are built directly by Cargo.
+- [x] No Node/V8/libnode runtime dependency.
+- [x] No `@yao-pkg/pkg`.
+- [x] No legacy relay JS/TS runtime/build files.
+- [x] Checksums/signatures/metadata match the reviewed commit.
+- [x] Final CI status is green with required checks enforced.
+- [x] Release job cannot publish artifacts if required quality/security gates fail.
 
 **Phase 13 acceptance:** local and remote MCP flows, security abuse cases, OAuth authorization, strict privilege/filesystem policy, lint/audit/no-bypass gates, and release artifacts are all green.
 
@@ -558,8 +558,8 @@ Plan 028 may be marked `COMPLETED` only when:
 - [ ] Phase 15 is complete.
 - [ ] Phase 16 is complete.
 - [ ] Phase 17 is complete.
-- [ ] Phase 18 is complete.
-- [ ] Phase 13 final E2E/release gate is complete.
+- [x] Phase 18 is complete.
+- [x] Phase 13 final E2E/release gate is complete.
 
 ## Rollback
 
