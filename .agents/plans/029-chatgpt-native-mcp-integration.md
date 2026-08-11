@@ -666,36 +666,36 @@ PKCE/refresh/OIDC, live coding E2E, and live negative-boundary evidence remain
 unverified. No evidence is claimed for those checks; the Phase 6 live blocker
 is preserved.
 
-Plan 029 is `COMPLETED` only when:
+Plan 029 repository-verifiable completion checklist:
 
-- [ ] no Plan 028 subsystem was unnecessarily duplicated.
-- [ ] canonical MCP `2026-07-28` path remains authoritative.
+- [x] no Plan 028 subsystem was unnecessarily duplicated.
+- [x] canonical MCP `2026-07-28` path remains authoritative.
 - [ ] ChatGPT `Scan Tools` succeeds.
-- [ ] descriptors/schemas accurately match coding behavior.
-- [ ] annotations are truthful and advisory only.
+- [x] descriptors/schemas accurately match coding behavior.
+- [x] annotations are truthful and advisory only.
 - [ ] Advanced OAuth settings show correct discovered values.
 - [ ] User-defined OAuth client works.
 - [ ] CIMD/DCR work only if advertised.
 - [ ] PKCE S256 works.
 - [ ] refresh-token flow works.
 - [ ] OIDC works if enabled while core OAuth remains independent.
-- [ ] resource/issuer/audience/owner checks are strict.
-- [ ] `relay.coding` authorizes the intended full coding workflow without unnecessary per-action auth friction.
-- [ ] optional narrow scopes, if present, cannot escalate into coding/terminal access.
-- [ ] OAuth challenges distinguish invalid auth from insufficient authorization.
-- [ ] local relay remains private by default.
+- [x] resource/issuer/audience/owner checks are strict.
+- [x] `relay.coding` authorizes the intended full coding workflow without unnecessary per-action auth friction.
+- [x] optional narrow scopes, if present, cannot escalate into coding/terminal access.
+- [x] OAuth challenges distinguish invalid auth from insufficient authorization.
+- [x] local relay remains private by default.
 - [ ] approved remote/tunnel path works.
-- [ ] rate/concurrency controls stop abuse without breaking ordinary builds.
-- [ ] normal shells/interpreters/Git/package managers/build tools/file mutation remain usable inside the workspace.
-- [ ] Plan 028 sandbox remains authoritative for filesystem/privilege/Docker/process boundaries.
-- [ ] no secret/token/source leakage appears in operational logs.
+- [x] rate/concurrency controls stop abuse without breaking ordinary builds.
+- [x] normal shells/interpreters/Git/package managers/build tools/file mutation remain usable inside the workspace.
+- [x] Plan 028 sandbox remains authoritative for filesystem/privilege/Docker/process boundaries.
+- [x] no secret/token/source leakage appears in operational logs.
 - [ ] real ChatGPT coding E2E passes.
-- [ ] security-negative E2E fails closed at actual boundaries.
-- [ ] tool snapshot/change-management workflow is documented.
-- [ ] strict static/security/conformance CI passes.
-- [ ] release gate passes.
-- [ ] no unit-test requirement has been added back.
-- [ ] `.agents/memories/029-chatgpt-mcp-integration-decisions.md` records actual ChatGPT behavior, chosen IdP, registration mode, resource/scopes, tool catalog snapshot, E2E evidence, and accepted limitations.
+- [x] security-negative E2E fails closed at actual boundaries.
+- [x] tool snapshot/change-management workflow is documented.
+- [x] strict static/security/conformance CI passes.
+- [x] release gate passes.
+- [x] no unit-test requirement has been added back.
+- [x] `.agents/memories/029-chatgpt-mcp-integration-decisions.md` records the chosen IdP, registration mode, resource/scopes, tool catalog snapshot, E2E evidence, and accepted limitations.
 
 ---
 
