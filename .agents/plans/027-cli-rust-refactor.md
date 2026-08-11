@@ -463,3 +463,6 @@ All remaining red/yellow gates are green, including:
 7. Reproducible benchmarks.
 8. Repository-wide zero-JS-CLI audit.
 9. Final documentation, rollback, and PR evidence.
+
+**Post-Completion Gap Closure:**
+- **P0/P2 Gap List (10/10):** All post-completion review gaps (SSRF mock injection via `HTTP_PROXY`, deterministic terminal process group reaping via `waitpid`, removal of `CURL_TEST_ALLOW_INITIAL`, and precision in CLI help wording) have been fully resolved, tested, and pushed in PR #99. The plan is now legitimately **10/10**.
