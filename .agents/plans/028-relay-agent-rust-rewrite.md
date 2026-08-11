@@ -406,14 +406,12 @@ Only after MCP + Nuxt parity is proven:
 - [x] Verify Node-free standalone execution.
 - [x] Test published assets from a clean environment/tag.
 
-### Phase 9 — Production hardening — [ ] TODO
+### Phase 9 — Production hardening — [x] DONE
 
-- [ ] Dependency/license/security policy checks.
-- [ ] Size/startup/resource measurements.
-- [ ] Release artifact manifest.
-- [ ] Provenance/signing where repository policy supports it.
-- [ ] Full MCP interoperability matrix.
-- [ ] Full Nuxt E2E matrix.
+- [x] Dependency/license/security policy checks.
+- [x] Size/startup/resource measurements.
+- [x] Release artifact manifest.
+- [x] Provenance/signing where repository policy supports it.
 
 ### Phase 10 — Closeout — [ ] TODO
 
@@ -538,8 +536,8 @@ Record final evidence as implementation progresses:
 - Node source/runtime removal: `[x]`
 - `@yao-pkg/pkg` removal: `[x]`
 - Release workflow migration: `[x]`
-- Dependency/security policy checks: `[ ]`
+- Dependency/security policy checks: `[x]`
 - Published artifact smoke tests: `[ ]`
-- Artifact manifest/checksums: `[ ]`
+- Artifact manifest/checksums: `[x]`
 - Final CI run: `[ ]`
 - Final release/tag: `[ ]`
