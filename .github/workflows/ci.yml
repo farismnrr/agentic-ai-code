@@ -3,7 +3,12 @@ name: CI
 on:
   push:
     branches: [main, dev]
+    tags:
+      - 'relay-agent-v*'
   pull_request:
+
+permissions:
+  contents: write
 
 jobs:
   test-and-lint:
@@ -108,7 +113,7 @@ jobs:
         working-directory: target/${{ matrix.target }}/release
         run: |
           mkdir -p dist
-          for bin in terminal-tool curl-tool searxng-search-tool; do
+          for bin in terminal-tool curl-tool searxng-search-tool relay-agent; do
             if [ -f "$bin" ]; then
               cp "$bin" "dist/${bin}-${{ matrix.target }}"
               cd dist
@@ -124,7 +129,7 @@ jobs:
       - name: Smoke test artifacts
         working-directory: target/${{ matrix.target }}/release/dist
         run: |
-          for bin in terminal-tool curl-tool searxng-search-tool; do
+          for bin in terminal-tool curl-tool searxng-search-tool relay-agent; do
             bin_name="${bin}-${{ matrix.target }}"
 
             # Verify SHA256 checksum file exists
@@ -150,3 +155,11 @@ jobs:
         with:
           name: release-artifacts-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/dist/*
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/relay-agent-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/${{ matrix.target }}/release/dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
