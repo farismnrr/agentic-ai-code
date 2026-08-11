@@ -332,9 +332,9 @@ Confirm what Plan 028 already provides and freeze only real Plan 029 work.
 
 ### Exit criteria
 
-- [ ] Every implementation task maps to a documented `PARTIAL`/`MISSING` gap.
-- [ ] No unit-test work is scheduled.
-- [ ] No new restriction is scheduled merely because the server is capable of editing/running code.
+- [x] Every implementation task maps to a documented `PARTIAL`/`MISSING` gap.
+- [x] No unit-test work is scheduled.
+- [x] No new restriction is scheduled merely because the server is capable of editing/running code.
 
 ---
 
