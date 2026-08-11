@@ -65,6 +65,7 @@ const HDR_MCP_NAME: &str = "mcp-name";
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    pub jwks_cache: tokio::sync::RwLock<Option<jsonwebtoken::jwk::JwkSet>>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
@@ -109,6 +110,7 @@ pub fn create_router(config: ServerConfig) -> Router {
     let state = Arc::new(AppState {
         config: config.clone(),
         execution_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
+        jwks_cache: tokio::sync::RwLock::new(None),
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
@@ -173,20 +175,34 @@ async fn access_policy(
                 .into_response();
         }
 
-        // OAuth must be validated in Remote mode. If secret is missing, it's a misconfiguration.
-        if state.config.oauth_secret.is_none() {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse::new(
-                    None,
-                    &McpError::Internal("OAuth is not configured for Remote mode".into()),
-                )),
-            )
-                .into_response();
-        }
-    }
+        let oauth_issuer = match &state.config.oauth_issuer {
+            Some(i) => i.clone(),
+            None => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::Internal("oauth_issuer is required for Remote mode".into()),
+                    )),
+                )
+                    .into_response();
+            }
+        };
 
-    if let Some(secret) = &state.config.oauth_secret {
+        let oauth_audience = match &state.config.oauth_audience {
+            Some(a) => a.clone(),
+            None => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::Internal("oauth_audience is required for Remote mode".into()),
+                    )),
+                )
+                    .into_response();
+            }
+        };
+
         let auth_header = req
             .headers()
             .get(axum::http::header::AUTHORIZATION)
@@ -206,30 +222,92 @@ async fn access_policy(
         }
 
         let token = &auth_header[7..];
-        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
-        validation.set_audience(&[state.config.oauth_audience.clone().unwrap()]);
-        validation.set_issuer(&[state.config.oauth_issuer.clone().unwrap()]);
+
+        let mut jwks_cache_write = state.jwks_cache.write().await;
+        if jwks_cache_write.is_none() {
+            let jwks_url = format!("{}/.well-known/jwks.json", oauth_issuer.trim_end_matches('/'));
+            if let Ok(resp) = reqwest::Client::new().get(&jwks_url).send().await {
+                if let Ok(jwks) = resp.json::<jsonwebtoken::jwk::JwkSet>().await {
+                    *jwks_cache_write = Some(jwks);
+                } else {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse::new(None, &McpError::Internal("Failed to parse JWKS".into()))),
+                    ).into_response();
+                }
+            } else {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(None, &McpError::Internal("Failed to fetch JWKS".into()))),
+                ).into_response();
+            }
+        }
+        
+        let jwk_set = jwks_cache_write.as_ref().unwrap().clone();
+        drop(jwks_cache_write);
+
+        let header = match jsonwebtoken::decode_header(token) {
+            Ok(h) => h,
+            Err(_) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid token header".into()))),
+                ).into_response();
+            }
+        };
+
+        let kid = match header.kid {
+            Some(k) => k,
+            None => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Token missing kid".into()))),
+                ).into_response();
+            }
+        };
+
+        let jwk = match jwk_set.find(&kid) {
+            Some(j) => j,
+            None => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Unknown kid".into()))),
+                ).into_response();
+            }
+        };
+
+        let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(jwk) {
+            Ok(k) => k,
+            Err(_) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid JWK".into()))),
+                ).into_response();
+            }
+        };
+
+        let mut validation = jsonwebtoken::Validation::new(header.alg);
+        validation.algorithms = vec![jsonwebtoken::Algorithm::RS256, jsonwebtoken::Algorithm::ES256];
+        validation.set_audience(&[oauth_audience]);
+        validation.set_issuer(&[oauth_issuer]);
         validation.validate_nbf = true;
 
         let token_data = match jsonwebtoken::decode::<Claims>(
             token,
-            &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+            &decoding_key,
             &validation,
         ) {
             Ok(data) => data,
             Err(_) => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid token".into()),
-                    )),
-                )
-                    .into_response();
+                    [(axum::http::header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+                    Json(ErrorResponse::new(None, &McpError::InvalidRequest("Invalid token".into()))),
+                ).into_response();
             }
         };
         auth_ctx.claims = Some(token_data.claims);
@@ -477,7 +555,7 @@ async fn handle_tools_call(
         ));
     }
 
-    if _state.config.oauth_secret.is_some() {
+    if let super::config::SecurityMode::Remote = _state.config.mode {
         let claims = auth_ctx.claims.as_ref().unwrap();
         let scopes = claims.scope.as_deref().unwrap_or("");
         let scope_list: Vec<&str> = scopes.split_whitespace().collect();
