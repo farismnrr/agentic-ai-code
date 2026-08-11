@@ -8,6 +8,12 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MB limit
+const MAX_TIMEOUT_MS: u64 = 300_000; // 5 mins
+const TIMEOUT_GRACE_MS: u64 = 5_000;
+const MAX_EXEC_ARGS: usize = 100;
+const MAX_EXEC_ARG_BYTES: usize = 64 * 1024; // 64 KB limit
+const MAX_HTTP_HEADERS: usize = 100;
+const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024; // 64 KB limit
 
 pub async fn dispatch_tool_call(
     tool: &Tool,
@@ -29,6 +35,12 @@ pub async fn dispatch_tool_call(
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(30000);
+            if to > MAX_TIMEOUT_MS {
+                return Err(McpError::InvalidRequest(format!(
+                    "timeout_ms exceeds maximum of {} ms",
+                    MAX_TIMEOUT_MS
+                )));
+            }
             let mut args = vec!["--timeout".to_string(), to.to_string()];
 
             if let Some(cwd) = arguments.get("cwd").and_then(|v| v.as_str()) {
@@ -47,6 +59,13 @@ pub async fn dispatch_tool_call(
 
             args.push(command.to_string());
             if let Some(arr) = arguments.get("args").and_then(|v| v.as_array()) {
+                if arr.len() > MAX_EXEC_ARGS {
+                    return Err(McpError::InvalidRequest(format!(
+                        "argument count exceeds maximum of {}",
+                        MAX_EXEC_ARGS
+                    )));
+                }
+                let mut total_arg_bytes = 0;
                 for arg in arr {
                     if let Some(s) = arg.as_str() {
                         if s == "--no-guard"
@@ -56,6 +75,13 @@ pub async fn dispatch_tool_call(
                             return Err(McpError::InvalidRequest(format!(
                                 "argument {} is forbidden",
                                 s
+                            )));
+                        }
+                        total_arg_bytes += s.len();
+                        if total_arg_bytes > MAX_EXEC_ARG_BYTES {
+                            return Err(McpError::InvalidRequest(format!(
+                                "total argument bytes exceed maximum of {}",
+                                MAX_EXEC_ARG_BYTES
                             )));
                         }
                         args.push(s.to_string());
@@ -74,6 +100,12 @@ pub async fn dispatch_tool_call(
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(30000);
+            if to > MAX_TIMEOUT_MS {
+                return Err(McpError::InvalidRequest(format!(
+                    "timeout_ms exceeds maximum of {} ms",
+                    MAX_TIMEOUT_MS
+                )));
+            }
 
             let mut args = vec![
                 "-X".to_string(),
@@ -87,8 +119,22 @@ pub async fn dispatch_tool_call(
                 args.push(data.to_string());
             }
             if let Some(headers) = arguments.get("headers").and_then(|v| v.as_object()) {
+                if headers.len() > MAX_HTTP_HEADERS {
+                    return Err(McpError::InvalidRequest(format!(
+                        "header count exceeds maximum of {}",
+                        MAX_HTTP_HEADERS
+                    )));
+                }
+                let mut total_header_bytes = 0;
                 for (k, v) in headers {
                     if let Some(vs) = v.as_str() {
+                        total_header_bytes += k.len() + vs.len();
+                        if total_header_bytes > MAX_HTTP_HEADER_BYTES {
+                            return Err(McpError::InvalidRequest(format!(
+                                "total header bytes exceed maximum of {}",
+                                MAX_HTTP_HEADER_BYTES
+                            )));
+                        }
                         args.push("-H".to_string());
                         args.push(format!("{k}: {vs}"));
                     }
@@ -183,7 +229,8 @@ pub async fn dispatch_tool_call(
                 Ok::<_, std::io::Error>((status, stdout_buf, stderr_buf))
             };
 
-            let output_res = timeout(Duration::from_millis(to_ms + 5000), read_and_wait).await;
+            let wait_duration = to_ms.saturating_add(TIMEOUT_GRACE_MS);
+            let output_res = timeout(Duration::from_millis(wait_duration), read_and_wait).await;
             match output_res {
                 Ok(Ok((status, stdout_bytes, stderr_bytes))) => {
                     let is_error = !status.success();
@@ -247,7 +294,7 @@ pub async fn dispatch_tool_call(
                     Ok(ToolCallResult {
                         content: vec![ToolResultContent {
                             kind: "text",
-                            text: format!("execution timed out after {} ms", to_ms + 5000),
+                            text: format!("execution timed out after {} ms", wait_duration),
                         }],
                         is_error: true,
                     })
