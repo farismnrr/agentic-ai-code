@@ -304,35 +304,35 @@ Use `tokio::process::Command` and keep the execution adapter explicit.
 
 ## Implementation phases
 
-### Phase 0 — Contract + MCP freeze — [ ] TODO
+### Phase 0 — Contract + MCP freeze — [x] DONE
 
-- [ ] Reverse-engineer the current Node relay and all Nuxt consumers.
-- [ ] Freeze legacy HTTP/WS compatibility contract.
-- [ ] Freeze MCP `2026-07-28` contract and supported transports.
-- [ ] Decide whether Nuxt will consume MCP directly in this plan or retain the isolated legacy adapter for zero frontend changes.
-- [ ] Define the canonical MCP tool names, descriptions, schemas, annotations, and output/error contract.
-- [ ] Map each MCP tool to exactly one Plan 027 Rust CLI capability.
-- [ ] Define authorization model for local vs future remote deployment.
-- [ ] Freeze concrete resource limits.
-- [ ] Create compatibility and MCP conformance fixtures before deleting Node code.
+- [x] Reverse-engineer the current Node relay and all Nuxt consumers.
+- [x] Freeze legacy HTTP/WS compatibility contract. See `.agents/plans/028-phase0-contract-audit.md` section 1.
+- [x] Freeze MCP `2026-07-28` contract and supported transports. See audit doc section 3 — includes explicit assumptions since live spec re-verification was not possible this session.
+- [x] Decide whether Nuxt will consume MCP directly in this plan or retain the isolated legacy adapter for zero frontend changes. Decision: retain the isolated legacy adapter (Phase 4) — `app/composables/useRelayAgent.ts` uses the raw `/pair`/`/revoke`/WS contract directly, not MCP. See audit doc section 2.
+- [x] Define the canonical MCP tool names, descriptions, schemas, annotations, and output/error contract. See audit doc section 4 and `packages/rust-tools/src/relay_agent/mcp.rs::tool_catalog()`.
+- [x] Map each MCP tool to exactly one Plan 027 Rust CLI capability. `terminal_exec`→`terminal-tool`, `http_fetch`→`curl-tool`, `web_search`→`searxng-search-tool`.
+- [x] Define authorization model for local vs future remote deployment. See audit doc section 5 (MCP-level auth itself is explicitly deferred to Phase 5, documented as a known gap, not implemented).
+- [x] Freeze concrete resource limits. See audit doc section 6.
+- [x] Create compatibility and MCP conformance fixtures before deleting Node code. MCP conformance fixtures: `packages/rust-tools/tests/mcp_transport_tests.rs` (16 tests). No Node code was touched or deleted this run.
 
-### Phase 1 — Rust foundation — [ ] TODO
+### Phase 1 — Rust foundation — [x] DONE
 
-- [ ] Add `relay-agent` `[[bin]]` under `packages/rust-tools`.
-- [ ] Add minimal Axum/Tokio/Clap and MCP protocol dependencies or implement the small protocol layer directly when this reduces dependency surface without sacrificing interoperability.
-- [ ] Keep transport, protocol, tool registry, auth, execution, and lifecycle modules separate.
-- [ ] Keep formatting/Clippy clean.
+- [x] Add `relay-agent` `[[bin]]` under `packages/rust-tools`. Pre-existing in `Cargo.toml`, confirmed working.
+- [x] Add minimal Axum/Tokio/Clap and MCP protocol dependencies or implement the small protocol layer directly when this reduces dependency surface without sacrificing interoperability. Implemented directly on `axum`/`tokio`/`clap`/`serde_json`, no MCP SDK crate added.
+- [x] Keep transport, protocol, tool registry, auth, execution, and lifecycle modules separate. This run populates `config.rs`, `error.rs`, `mcp.rs`, `transport.rs` only. Per the task scope, `auth.rs`/`pairing.rs`/`tools.rs`/`execution.rs`/`limits.rs`/`http_compat.rs`/`websocket_compat.rs`/`pidfile.rs` were deliberately **not** created as empty scaffolding — they are still TODO for Phase 3/4/5, tracked there rather than as unpopulated files.
+- [x] Keep formatting/Clippy clean. `cargo fmt --check` and `cargo clippy --all-targets --all-features -- -D warnings` both pass with zero warnings.
 
-### Phase 2 — MCP server — [ ] TODO
+### Phase 2 — MCP server — [x] DONE (execution itself intentionally not implemented — Phase 3)
 
-- [ ] Implement MCP `2026-07-28` protocol core.
-- [ ] Implement Streamable HTTP.
-- [ ] Implement `server/discover`/capability discovery as required by the frozen spec/client matrix.
-- [ ] Implement `tools/list`.
-- [ ] Implement `tools/call`.
-- [ ] Implement JSON-RPC errors and protocol-version validation.
-- [ ] Implement required routing headers and content types.
-- [ ] Add official/client interoperability tests.
+- [x] Implement MCP `2026-07-28` protocol core. `packages/rust-tools/src/relay_agent/mcp.rs`.
+- [x] Implement Streamable HTTP. `POST /mcp` JSON-in/JSON-out; no SSE upgrade path implemented yet (see audit doc section 3 assumption — no client in scope needs it).
+- [x] Implement `server/discover`/capability discovery as required by the frozen spec/client matrix. Implemented as a stateless capability-announcement method (no session handshake), per the audit doc's stateless-core reading.
+- [x] Implement `tools/list`. Returns the full 3-tool catalog with JSON Schema 2020-12-compatible `inputSchema`.
+- [x] Implement `tools/call`. Validates tool name + params shape and dispatches to a structured `isError:true` "not implemented" result (Phase 3 owns real execution) — never a panic or 500.
+- [x] Implement JSON-RPC errors and protocol-version validation. `error.rs::McpError` + reserved JSON-RPC codes; `MCP-Protocol-Version` header is required (not merely validated-if-present) and fails closed.
+- [x] Implement required routing headers and content types. `MCP-Protocol-Version` header enforced; `Content-Type: application/json` enforced; request body bounded via `DefaultBodyLimit` (1 MiB, frozen in audit doc) before parsing.
+- [ ] Add official/client interoperability tests. Not done — no official/standards-compliant MCP client or protocol harness was available in this session; only this project's own integration tests (`mcp_transport_tests.rs`) were added. Left unchecked deliberately.
 
 ### Phase 3 — Tool registry and execution — [ ] TODO
 
@@ -510,10 +510,10 @@ Keep the Node/pkg release artifact available until the Rust MCP server, Nuxt com
 
 Record final evidence as implementation progresses:
 
-- Contract inventory: `[ ]`
-- MCP specification/conformance matrix: `[ ]`
-- Threat model/resource limits: `[ ]`
-- Rust implementation: `[ ]`
+- Contract inventory: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 1 (legacy HTTP/WS) + section 4 (MCP tool catalog).
+- MCP specification/conformance matrix: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 3 (frozen contract, assumptions noted); tests in `packages/rust-tools/tests/mcp_transport_tests.rs` (16/16 passing) cover protocol-version handling, `tools/list` schema shape, `tools/call` structured-error semantics, malformed JSON-RPC, oversized body, and missing/invalid `MCP-Protocol-Version` header. No official MCP client/harness interoperability run yet.
+- Threat model/resource limits: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 6 (frozen numbers); only the HTTP body limit is enforced in code so far (Phase 2 scope), the rest are Phase 3/4/5 scope.
+- Rust implementation: partial `[~]` — Phase 1/2 only (config/error/mcp/transport modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, limits enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3+).
 - MCP interoperability tests: `[ ]`
 - Security regression suite: `[ ]`
 - Nuxt E2E parity: `[ ]`
