@@ -1,437 +1,574 @@
-# Plan 029 — ChatGPT Native MCP Integration
+# Plan 029 — ChatGPT / Claude Native MCP Connector Integration
 
-Status: IN FLIGHT
+**Status: IN FLIGHT**
 
 ## Goal
 
-Extend the Rust Relay Agent from the Plan 028 local/legacy-compatible MCP server into a production-grade **remote MCP server** that can be connected natively from ChatGPT and also remain compatible with Claude remote MCP clients.
+Turn the existing Plan 028 Rust Relay Agent into a production-grade **remote MCP app/connector endpoint** that works natively with ChatGPT and Claude without duplicating the MCP core, OAuth resource-server logic, or execution sandbox already implemented.
 
-The primary goal is **not** to build a custom ChatGPT-only protocol. The implementation should target the current MCP standard first, then add compatibility only where a real client requires it. As of the current MCP release (`2026-07-28`), the standard HTTP transport is stateless and uses a single MCP endpoint with POST/GET semantics; the older HTTP+SSE transport is deprecated. ChatGPT currently supports remote MCP apps and full write/modify actions in developer mode for supported Business/Enterprise/Edu plans, and local servers must be reached through the supported secure tunnel rather than being exposed directly. citeturn1search1turn3search0
+Plan 029 is explicitly a **delta/integration plan**, not a second MCP implementation. Existing Plan 028 behavior remains authoritative unless this plan identifies a concrete compatibility gap.
+
+The primary target is the current MCP `2026-07-28` protocol and ChatGPT's current custom MCP app flow. ChatGPT/Claude compatibility is validated at the client boundary; client-specific code must not fork tool execution, authorization, or sandbox logic.
+
+## Current implementation baseline — DO NOT REIMPLEMENT
+
+The following already exists in `dev` and must be reused rather than rebuilt:
+
+- [x] Rust `relay-agent` binary and transport-independent MCP core.
+- [x] Canonical `POST /mcp` JSON-RPC endpoint.
+- [x] MCP `2026-07-28` protocol version constant.
+- [x] Stateless request model; no legacy `Mcp-Session-Id` authorization boundary.
+- [x] `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` request validation.
+- [x] Request `_meta` parsing/validation.
+- [x] `server/discover`.
+- [x] `tools/list`.
+- [x] `tools/call` dispatch.
+- [x] JSON Schema 2020-12-compatible tool input validation before execution.
+- [x] Existing tools: `terminal_exec`, `http_fetch`, `web_search`.
+- [x] Local-mode fail-closed `Origin` + `Host` policy.
+- [x] Explicit local vs remote security mode.
+- [x] OAuth Resource Server boundary in remote mode.
+- [x] Bearer-token validation.
+- [x] Asymmetric JWKS validation.
+- [x] JWKS TTL cache.
+- [x] Refresh-on-unknown-`kid`.
+- [x] JWKS fetch timeout/fail-closed behavior.
+- [x] issuer + audience/resource validation foundation.
+- [x] Plan 028 execution sandbox/resource limits remain authoritative.
+- [x] Zero-warning Rust CI/release quality gates from Plan 028 remain authoritative.
+
+If implementation review proves any item above is incomplete, reopen only that concrete gap; do not duplicate the subsystem in Plan 029.
+
+---
 
 ## Non-goals
 
-- Do not build a bespoke OAuth Authorization Server in Rust unless a later plan explicitly requires it.
-- Do not make ChatGPT-specific behavior the core protocol implementation.
-- Do not replace the Plan 028 execution sandbox/security boundary.
-- Do not add unit-test requirements; this project currently validates behavior with compile/lint/audit checks, protocol conformance checks, focused integration/E2E scenarios, and manual security review.
-- Do not expose the relay directly to the public internet merely to make ChatGPT connectivity work.
-- Do not treat legacy HTTP+SSE as the primary transport for a new implementation.
+- Do not build a bespoke OAuth Authorization Server in Rust.
+- Do not create a ChatGPT-only REST API or legacy ChatGPT Plugin API.
+- Do not create a second Claude-specific MCP server.
+- Do not replace or weaken the Plan 028 filesystem/process/container sandbox.
+- Do not duplicate existing JWKS/token validation just to satisfy ChatGPT setup UI.
+- Do not make ChatGPT confirmation prompts a security boundary.
+- Do not expose local no-auth mode to the public internet.
+- Do not reintroduce deprecated HTTP+SSE as the canonical protocol.
+- Do not require new unit tests for this deadline; use strict compile/lint/audit, protocol checks, targeted integration/E2E, and manual security review.
 
-## Architecture decisions
+---
 
-### A. MCP transport
-
-Implement the current MCP `2026-07-28` stateless HTTP model as the primary remote transport:
-
-- One canonical MCP endpoint, preferably `POST/GET /mcp`.
-- POST accepts self-contained JSON-RPC requests/notifications/responses.
-- GET may establish an SSE stream only when the current protocol requires/permits server-to-client streaming; it must not recreate the deprecated 2024-style `/sse` + `/message?session_id=` architecture as the primary design.
-- Do not require `Mcp-Session-Id` or the old initialize/initialized session lifecycle for the new protocol version.
-- Support `MCP-Protocol-Version` and the new method/name headers required by the current protocol.
-- Keep the old `POST /mcp` behavior only as a compatibility path where it does not conflict with the current standard.
-- If a real target client still requires legacy HTTP+SSE, implement it as an explicitly isolated compatibility adapter and document its deprecation/removal path.
-
-The current MCP transport specification requires Origin validation to prevent DNS rebinding and recommends localhost binding for local deployments. citeturn1search0turn1search6
-
-### B. ChatGPT connectivity
-
-ChatGPT custom MCP apps connect to **remote MCP servers**. A relay running on a developer machine should therefore be exposed through the supported Secure MCP Tunnel instead of opening a raw public listener. Full MCP write/modify actions are currently available in beta for ChatGPT Business and Enterprise/Edu, while availability and permissions may change. citeturn3search0
-
-The plan must support both deployment modes:
-
-1. Local developer mode: relay bound to loopback and reached by the supported secure tunnel.
-2. Remote/server mode: relay deployed behind HTTPS/reverse proxy with strict authentication, authorization, rate limits, and security headers.
-
-### C. OAuth
-
-Keep the Relay Agent as the **OAuth Resource Server**, not the Authorization Server.
-
-Preferred architecture:
+# Architecture
 
 ```text
 ChatGPT / Claude
-      |
-      | OAuth authorization
-      v
-External IdP / Authorization Server
-      |
-      | access token
-      v
-Remote MCP endpoint
-      |
-      | JWT/JWKS validation + scope/subject checks
-      v
-Rust Relay Agent
-      |
-      v
-Plan 028 sandboxed terminal execution
+        |
+        | MCP over HTTPS
+        v
+Canonical /mcp endpoint
+        |
+        +--> OAuth Protected Resource discovery
+        |       |
+        |       v
+        |   External IdP / Authorization Server
+        |       |
+        |       +--> Authorization Code + PKCE S256
+        |       +--> refresh/offline access
+        |       +--> OIDC optional
+        |
+        +--> Access token
+                |
+                v
+        Rust Relay Agent
+        OAuth Resource Server
+                |
+                +--> issuer/resource/audience validation
+                +--> subject policy
+                +--> scope -> tool authorization
+                |
+                v
+        Existing MCP tool core
+                |
+                v
+        Plan 028 sandbox/execution boundary
 ```
 
-Use an established provider (Auth0, Clerk, Supabase Auth, or another OIDC/OAuth provider that satisfies the requirements) instead of implementing account login, consent, authorization-code handling, refresh-token storage, and key management from scratch.
+## Security invariant
 
-The MCP 2026-07-28 direction formally shifts client registration toward Client ID Metadata Documents (CIMD) and deprecates Dynamic Client Registration (DCR), while retaining compatibility during migration. The implementation should prefer the current standard and isolate any DCR compatibility behind a feature/configuration boundary. citeturn1search1turn1search2
+A ChatGPT/Claude connection may change **transport/authentication context**, but it must never create a weaker execution path.
 
-### D. ChatGPT OAuth metadata
+Every side effect must preserve:
 
-ChatGPT expects an MCP app to provide endpoint/metadata information and, when OAuth is configured, the provider must support a refresh-token strategy. OpenAI specifically recommends verifying that the provider advertises and issues `offline_access` (or the provider-equivalent refresh capability), otherwise ChatGPT may lose connectivity after access-token expiry. citeturn0search1
-
-The exact ChatGPT callback URL must be copied from the ChatGPT app setup UI and registered exactly at the IdP; do not hardcode or invent a generic callback URL. citeturn0search3turn0search4
-
-### E. Tool authorization
-
-The MCP server must expose explicit scopes/capabilities. Terminal execution is the highest-risk capability.
-
-Minimum conceptual policy:
-
-- `mcp:tools:list` / discovery: low-risk.
-- `mcp:terminal:exec`: high-risk and requires explicit authorization.
-- Future tools must declare required scopes instead of inheriting terminal access.
-- Authorization must happen before any side effect.
-- Subject identity must be bound to the intended developer/account when the relay is exposed remotely.
-- Do not accept a valid token from an arbitrary subject merely because the signature is valid.
-
-ChatGPT itself can provide action controls and confirmations for write/modify actions, but these are client-side safety UX and must never replace server-side authorization or sandbox enforcement. citeturn3search0
-
-### F. Claude compatibility
-
-Claude Code supports remote MCP over HTTP and SSE and supports OAuth for remote MCP servers. Anthropic's MCP connector also supports remote HTTP MCP servers with OAuth bearer tokens. Therefore, the canonical implementation should target standard Streamable HTTP first while keeping a narrow compatibility strategy for clients that still require legacy SSE. citeturn2search0turn2search1
+```text
+request
+  -> MCP validation
+  -> authentication
+  -> subject authorization
+  -> scope/tool authorization
+  -> schema validation
+  -> Plan 028 sandbox/resource policy
+  -> side effect
+```
 
 ---
 
-# Phase 0 — Resource & Protocol Baseline
+# ChatGPT compatibility contract
+
+ChatGPT's current custom MCP app UI exposes these integration concepts and Plan 029 must explicitly support or intentionally document each one.
+
+| Capability | Requirement | Plan 029 treatment |
+|---|---|---|
+| Remote MCP Server URL | MUST | Canonical HTTPS `/mcp` URL |
+| Tool discovery/scan | MUST | Reuse `tools/list`, harden descriptors |
+| Tool invocation | MUST | Reuse `tools/call` |
+| User-defined OAuth client | MUST | Supported/config documented |
+| Dynamic Client Registration (DCR) | SHOULD | Support through external IdP when advertised; compatibility path |
+| Client Identifier Metadata Document (CIMD) | SHOULD | Prefer when supported by current MCP/client registration flow |
+| Authorization endpoint | MUST for OAuth | Discover from Authorization Server metadata |
+| Token endpoint | MUST for OAuth | Discover from Authorization Server metadata |
+| Registration endpoint | CONDITIONAL | Required for DCR only |
+| Authorization Server base/issuer | MUST | Stable trusted issuer |
+| Resource identifier | MUST | Stable canonical MCP resource |
+| Base scopes | MUST define | Small minimum scopes requested on every auth |
+| Default scopes | MUST define | Fallback when action-level scopes are incomplete |
+| Action/tool scopes | MUST | Tool descriptors map capabilities to scopes |
+| PKCE S256 | MUST for public clients | External Authorization Server responsibility |
+| Refresh tokens | MUST for durable ChatGPT connection | IdP issues and rotates appropriately |
+| `offline_access` or provider equivalent | SHOULD/MUST where IdP requires | Advertised/configured |
+| OIDC discovery | SHOULD | Enable when provider supports it |
+| Userinfo/email | OPTIONAL/SHOULD | Useful for domain/user identity claiming |
+| Write/modify tools | SUPPORTED | Server auth remains authoritative; ChatGPT confirmation is UX only |
+| Frozen tool snapshot compatibility | MUST account for | Treat tool schema changes as versioned public API |
+
+---
+
+# Tool authorization model
+
+Define stable scopes before client integration. Recommended initial scope model:
+
+- `relay.tools.read` — discovery/listing and non-side-effect metadata.
+- `relay.search` — `web_search`.
+- `relay.http.fetch` — `http_fetch`.
+- `relay.terminal.execute` — `terminal_exec`.
+- `offline_access` — provider-standard refresh-token request where applicable.
+
+Rules:
+
+- `terminal_exec` never inherits permission from a generic read scope.
+- A token valid for one tool must not automatically authorize another tool.
+- Default authorization is deny.
+- Required scope is determined by server-owned tool metadata, never request arguments.
+- Scope validation happens before execution or any side effect.
+- ChatGPT action confirmation does not grant scope and cannot override server denial.
+
+For single-developer/local-relay deployments, additionally bind `sub` (and optionally tenant/domain/client identity) to the configured owner identity.
+
+---
+
+# Phase 0 — Existing-Code & External-Contract Audit
 
 ### Objective
 
-Freeze the external contracts against current official documentation before changing code.
+Freeze exactly what already exists and identify only real gaps against current ChatGPT, MCP, and Claude behavior.
 
 ### Tasks
 
-- [ ] Record MCP `2026-07-28` as the target protocol version.
-- [ ] Read and document current MCP Streamable HTTP requirements.
-- [ ] Read current MCP authorization requirements, including Protected Resource Metadata, Authorization Server Metadata, issuer validation, resource/audience binding, and client registration direction.
-- [ ] Read OpenAI ChatGPT custom MCP app/developer-mode requirements.
-- [ ] Read OpenAI requirements around OAuth refresh tokens and exact callback URL registration.
-- [ ] Read Anthropic remote MCP HTTP/SSE/OAuth compatibility requirements.
-- [ ] Inventory Plan 028's current `/mcp`, OAuth, Origin/Host, JWKS, and execution-security behavior.
-- [ ] Identify which existing behavior must remain backward compatible and which legacy transport behavior can be deprecated.
-- [ ] Store implementation-specific decisions in `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
+- [ ] Re-read `packages/rust-tools/src/relay_agent/transport.rs`, `mcp.rs`, `config.rs`, `security.rs`, and `execution.rs` from current `dev` before implementation.
+- [ ] Record existing routes, protocol methods, OAuth behavior, scopes, subject checks, tool schemas, and sandbox entrypoints.
+- [ ] Mark every existing capability in this plan as `EXISTING`, `PARTIAL`, or `MISSING` in `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
+- [ ] Capture the actual ChatGPT Custom Tool/App setup fields observed in the current UI.
+- [ ] Verify current official OpenAI documentation for developer mode/custom MCP apps.
+- [ ] Verify current official MCP transport + authorization + client-registration documents.
+- [ ] Verify current Claude remote MCP requirements.
+- [ ] Freeze a ChatGPT/Claude compatibility matrix.
+- [ ] Do not implement anything in this phase.
 
 ### Exit criteria
 
-- [ ] No implementation decision relies on the old 2024/2025 MCP SSE model when the current 2026-07-28 standard provides a better path.
-- [ ] Target ChatGPT and Claude client compatibility matrix is documented.
+- [ ] No Plan 028 functionality is scheduled for reimplementation without a documented gap.
+- [ ] Every Phase 1+ task corresponds to a concrete missing/partial behavior.
 
 ---
 
-# Phase 1 — Canonical Streamable HTTP Transport
+# Phase 1 — Canonical Remote MCP Endpoint Hardening
 
 ### Objective
 
-Implement the current stateless MCP HTTP transport without introducing session state that the current protocol removed.
+Reuse the existing `/mcp` implementation and fill only remote-client protocol gaps.
 
-### Files
+### Already implemented
 
-- `packages/rust-tools/src/relay_agent/transport.rs`
-- `packages/rust-tools/src/relay_agent/mcp.rs`
-- relevant router/config/error modules
+- [x] `POST /mcp`.
+- [x] Stateless MCP `2026-07-28` JSON-RPC core.
+- [x] Protocol/method/name headers.
+- [x] `server/discover`.
+- [x] `tools/list` / `tools/call`.
+- [x] body-size limit.
+
+### Remaining tasks
+
+- [ ] Verify whether ChatGPT's current scanner requires `GET /mcp`, POST SSE responses, or a specific `Accept` behavior; implement only requirements confirmed against the live client/current MCP docs.
+- [ ] If GET SSE is needed by current Streamable HTTP semantics, implement it on `/mcp`, not a separate legacy core.
+- [ ] Do not add `/sse` + `/message?session_id=` unless a real supported client demonstrably requires legacy compatibility.
+- [ ] If legacy SSE compatibility is required, route it into the exact same auth/tool-dispatch core.
+- [ ] Verify `Content-Type` and `Accept` negotiation against ChatGPT's real tool scanner.
+- [ ] Verify notification behavior/status codes against the current MCP client.
+- [ ] Verify proxy/tunnel forwarding does not strip MCP metadata headers.
+- [ ] Preserve local fail-closed Origin/Host semantics; remote mode must use its own explicit trusted-proxy/HTTPS policy rather than weakening local checks.
+
+### Exit criteria
+
+- [ ] ChatGPT can scan the existing canonical MCP endpoint without introducing a second MCP protocol implementation.
+- [ ] Claude can consume the same canonical endpoint.
+
+---
+
+# Phase 2 — ChatGPT-Grade Tool Descriptors & Schema Stability
+
+### Objective
+
+Make existing tools safe, understandable, scope-aware, and stable when ChatGPT freezes their definitions.
+
+### Existing baseline
+
+- [x] Stable tool names exist.
+- [x] JSON Schema input validation exists.
+- [x] Tool dispatch exists.
 
 ### Tasks
 
-- [ ] Add/normalize the canonical `/mcp` endpoint for POST and GET.
-- [ ] Implement current `MCP-Protocol-Version` handling.
-- [ ] Implement required `Mcp-Method` and `Mcp-Name` routing metadata where applicable.
-- [ ] Ensure each request is independently routable and does not depend on sticky sessions.
-- [ ] Remove any new dependence on `Mcp-Session-Id` for the 2026-07-28 path.
-- [ ] Preserve valid JSON-RPC request/notification/response semantics.
-- [ ] Implement correct `Accept: application/json, text/event-stream` handling for POST requests.
-- [ ] Support GET SSE only for the current protocol's server-to-client streaming semantics where needed.
-- [ ] Do not implement `/sse` + `/message?session_id=` as the canonical new protocol.
-- [ ] If legacy SSE compatibility is required, isolate it behind a clearly named compatibility module/route.
-- [ ] Enforce body-size and request-time limits.
-- [ ] Preserve fail-closed Origin/Host protections.
-- [ ] Preserve loopback-only default behavior for local mode.
+- [ ] Audit `Tool` wire shape against current MCP + OpenAI Apps SDK/custom-app descriptor expectations.
+- [ ] Add `title` where supported/valuable.
+- [ ] Add output schemas where supported and where the result is structured enough to describe safely.
+- [ ] Add MCP annotations/tool metadata needed to distinguish read-only, write, destructive, idempotent, and open-world behavior where supported.
+- [ ] Add ChatGPT-compatible OAuth/security metadata or scope tags at the tool/action descriptor layer where the current OpenAI contract supports them.
+- [ ] Ensure `terminal_exec` is explicitly classified as write/destructive/high-risk capability.
+- [ ] Classify `http_fetch` accurately; GET-like behavior is read/network access while arbitrary methods may mutate remote state.
+- [ ] Classify `web_search` as read-only/network access.
+- [ ] Remove stale schema fields that execution ignores.
+- [ ] Synchronize schema maxima with actual server-side limits (`timeout_ms`, args count, header count, etc.).
+- [ ] Ensure descriptions explain user-visible behavior, not internal implementation details like binary filenames unless useful.
+- [ ] Freeze tool names once ChatGPT app is published.
+- [ ] Treat removing/renaming required fields or tools as breaking changes requiring ChatGPT action refresh/republication.
+- [ ] Document backward-compatible tool evolution rules: additive optional fields are preferred.
+- [ ] Ensure deterministic tool ordering and descriptor serialization.
 
 ### Exit criteria
 
-- [ ] A current MCP client can POST an initialize/discovery-equivalent request according to the target protocol without requiring a session handshake.
-- [ ] Multiple independent requests can be served without shared per-client session state.
-- [ ] Legacy compatibility, if present, cannot bypass authentication or execution policy.
+- [ ] ChatGPT Scan Tools presents clear, stable actions.
+- [ ] Tool schemas match actual server behavior and scope requirements.
+- [ ] Future schema changes cannot silently break ChatGPT's frozen snapshot without documented migration.
 
 ---
 
-# Phase 2 — MCP Capability & Tool Contract
+# Phase 3 — OAuth Discovery Bridge (External IdP, No Custom Auth Server)
 
 ### Objective
 
-Make the relay's MCP surface deterministic and safe for ChatGPT tool scanning and Claude tool discovery.
+Make ChatGPT's OAuth setup UI automatically discover real endpoints while the relay remains only an OAuth Resource Server.
+
+### Existing baseline
+
+- [x] `/.well-known/oauth-protected-resource` exists.
+- [x] Resource-server JWKS validation exists.
 
 ### Tasks
 
-- [ ] Define stable `tools/list` output.
-- [ ] Provide complete tool names, descriptions, input schemas, and output schemas.
-- [ ] Use JSON Schema 2020-12-compatible schemas where required by the target MCP version.
-- [ ] Ensure schemas do not advertise capabilities the server does not actually enforce.
-- [ ] Ensure deterministic tool ordering.
-- [ ] Add cache hints (`ttlMs`/`cacheScope`) where supported and useful by the target protocol.
-- [ ] Return standards-compliant JSON-RPC/MCP errors for malformed requests and invalid tool arguments.
-- [ ] Ensure tool argument validation occurs before command execution.
-- [ ] Ensure no tool argument can disable sandbox, authentication, authorization, timeout, or resource policies.
-- [ ] Explicitly mark terminal execution as a write/dangerous capability in server metadata/tool description.
-- [ ] Ensure tool descriptions are concise enough for client tool scanning while still documenting destructive behavior.
+- [ ] Select/freeze the production Authorization Server/IdP.
+- [ ] Define one canonical resource identifier for the MCP server.
+- [ ] Ensure `resource` in Protected Resource Metadata exactly matches the audience/resource policy enforced during token validation.
+- [ ] Advertise real `authorization_servers` values.
+- [ ] Populate/bridge current Authorization Server Metadata so ChatGPT discovers:
+  - [ ] authorization endpoint,
+  - [ ] token endpoint,
+  - [ ] issuer/authorization-server base,
+  - [ ] supported scopes,
+  - [ ] PKCE S256 support,
+  - [ ] refresh/offline capability,
+  - [ ] registration endpoint when DCR is supported.
+- [ ] Do not return fabricated placeholder endpoints.
+- [ ] Decide registration methods explicitly:
+  - [ ] User-defined OAuth client — MUST work.
+  - [ ] DCR — support only when provider advertises and is safely configured.
+  - [ ] CIMD — advertise/support when current MCP + ChatGPT integration path supports it.
+- [ ] Do not implement a Rust registration database merely to make DCR available; use IdP capability.
+- [ ] Configure exact ChatGPT callback URL copied from the live setup UI.
+- [ ] Document that callback URLs are connector-instance-specific and must not be guessed/hardcoded globally.
+- [ ] Verify token endpoint auth method expected by chosen ChatGPT client mode (`none`, client secret, etc.).
 
 ### Exit criteria
 
-- [ ] ChatGPT tool scan discovers the intended tools with correct names/schemas.
-- [ ] Claude remote MCP discovery sees the same intended tool contract.
-- [ ] No tool is exposed accidentally through an internal/debug route.
+- [ ] ChatGPT's Advanced OAuth settings populate from discovery with no fake values.
+- [ ] At least User-defined OAuth Client registration works end-to-end.
+- [ ] DCR/CIMD availability shown by ChatGPT matches what the server/IdP actually advertises.
 
 ---
 
-# Phase 3 — OAuth Discovery & Provider Integration
+# Phase 4 — Refresh, PKCE, and Optional OIDC
 
 ### Objective
 
-Make ChatGPT/Claude able to discover and complete the external OAuth flow without the relay becoming an Authorization Server.
+Make authentication durable and compatible with ChatGPT's production connector lifecycle.
 
 ### Tasks
 
-- [ ] Choose the production IdP and document why it satisfies OAuth/OIDC/MCP requirements.
-- [ ] Configure issuer, authorization endpoint, token endpoint, JWKS URI, and resource metadata.
-- [ ] Implement `/.well-known/oauth-protected-resource` according to the current MCP authorization model.
-- [ ] Implement `/.well-known/oauth-authorization-server` only when required by the chosen authorization-server/discovery model.
-- [ ] Prefer current client metadata/CIMD behavior; isolate DCR fallback if a target client still needs it.
-- [ ] Advertise supported scopes accurately.
-- [ ] Advertise refresh/offline capability accurately.
-- [ ] Configure exact ChatGPT callback URI from the ChatGPT UI; never guess it.
-- [ ] Configure the corresponding Claude/Anthropic OAuth callback requirements where applicable.
-- [ ] Configure consent/audience/resource identifiers correctly at the IdP.
-- [ ] Ensure refresh tokens are issued for the intended connector flow where required.
-- [ ] Ensure client secrets are stored only in the external provider/secret manager and never in the Rust repository.
-- [ ] Document local development OAuth versus production OAuth configuration.
+- [ ] Authorization Code flow handled by the external Authorization Server.
+- [ ] Require PKCE S256 for public-client flows.
+- [ ] Reject PKCE downgrade where controlled by the IdP/configuration.
+- [ ] Ensure refresh tokens are issued where required for ChatGPT persistent connectivity.
+- [ ] Request/advertise `offline_access` or provider-equivalent scope when required.
+- [ ] Configure refresh-token rotation/reuse policy according to IdP best practice.
+- [ ] Verify expired access token can be renewed without user re-login.
+- [ ] Verify revoked refresh token forces reauthorization.
+- [ ] Do not pass refresh tokens to the Relay Agent tool layer.
+- [ ] If OIDC is enabled, advertise real `/.well-known/openid-configuration` from the IdP.
+- [ ] If OIDC is enabled, verify userinfo endpoint and supported OIDC scopes.
+- [ ] Use OIDC email/domain only as an additional identity claim; keep `sub`/issuer as stable identity anchors.
+- [ ] Do not implement local password/login/session UI in the relay.
 
 ### Exit criteria
 
-- [ ] ChatGPT can discover the authorization metadata.
-- [ ] OAuth authorization succeeds.
-- [ ] Token refresh succeeds without manual re-login.
-- [ ] Claude remote MCP OAuth flow succeeds where supported by the chosen client/provider.
+- [ ] ChatGPT reconnects after normal access-token expiry.
+- [ ] No token/secret enters tool arguments, command lines, workspace files, or logs.
 
 ---
 
-# Phase 4 — Resource Server Validation & Scope Enforcement
+# Phase 5 — Per-Tool Scope & Subject Authorization
 
 ### Objective
 
-Turn OAuth authentication into strict per-tool authorization.
+Convert existing authentication into explicit least-privilege tool authorization.
+
+### Existing baseline
+
+- [x] Auth context and parsed token claims exist.
+- [x] JWT issuer/audience/signature validation foundation exists.
 
 ### Tasks
 
-- [ ] Validate JWT signature using trusted JWKS with bounded caching and refresh-on-unknown-`kid`.
-- [ ] Validate issuer, audience/resource, algorithm, expiry, not-before, and token type as required.
-- [ ] Bind accepted tokens to the configured MCP resource/server.
-- [ ] Extract subject identity and enforce the intended developer/account identity policy.
-- [ ] Reject valid-but-wrong-subject tokens for single-user relay deployments.
-- [ ] Map OAuth scopes to MCP capabilities.
-- [ ] Default deny when a tool requires a missing scope.
-- [ ] Require terminal-execution scope before `tools/call` can execute commands.
-- [ ] Ensure tool discovery does not leak protected capability details unnecessarily.
-- [ ] Ensure authorization runs before execution, filesystem access, or other side effects.
-- [ ] Return correct 401/403 semantics.
-- [ ] Prevent token reuse across different issuers/resources.
-- [ ] Never log bearer/access/refresh tokens.
+- [ ] Freeze scope names and server-owned `tool -> required scopes` mapping.
+- [ ] Enforce `relay.terminal.execute` for `terminal_exec`.
+- [ ] Enforce `relay.http.fetch` for `http_fetch`.
+- [ ] Enforce `relay.search` for `web_search`.
+- [ ] Keep discovery/listing policy explicit; do not accidentally grant execution through discovery scopes.
+- [ ] Default deny missing scopes.
+- [ ] Parse scope formats supported by the chosen IdP without accepting malformed/ambiguous values.
+- [ ] Enforce subject ownership for single-user relay deployments.
+- [ ] Optionally enforce tenant/domain/client ID where deployment requires it.
+- [ ] Reject valid JWTs for the wrong developer/tenant.
+- [ ] Authorization must run before schema-driven side effects and before tool dispatch.
+- [ ] Use correct `401` for missing/invalid authentication and `403` for authenticated-but-insufficient authorization.
+- [ ] `WWW-Authenticate` should expose standards-compatible error/scope information without leaking internals.
+- [ ] Ensure local no-auth mode cannot accidentally enter remote mode through missing configuration.
 
 ### Exit criteria
 
-- [ ] Valid token + valid scope + valid subject succeeds.
-- [ ] Valid token + wrong scope fails.
-- [ ] Valid token + wrong subject fails.
-- [ ] Wrong issuer/audience/expired/not-before/unknown-key tokens fail.
-- [ ] No MCP execution path can bypass authorization.
+- [ ] Valid token + right subject + right scope succeeds.
+- [ ] Any wrong-subject/wrong-scope combination fails before execution.
 
 ---
 
-# Phase 5 — Remote Exposure & Secure Tunnel Integration
+# Phase 6 — Remote Exposure / Secure MCP Tunnel / Proxy Boundary
 
 ### Objective
 
-Make local development usable from ChatGPT without turning the developer machine into a public unauthenticated command server.
+Expose a local developer relay to ChatGPT without making the workstation a raw public command server.
 
 ### Tasks
 
-- [ ] Document the supported Secure MCP Tunnel workflow for ChatGPT local/developer-machine deployments.
-- [ ] Ensure relay itself remains bound to loopback by default.
-- [ ] Ensure tunnel/reverse-proxy forwarding preserves the required `Host`, `Origin`, authorization, and MCP headers.
-- [ ] Define trusted proxy behavior explicitly; never trust arbitrary forwarded headers.
-- [ ] Reject direct public exposure unless remote mode is explicitly configured.
-- [ ] Require HTTPS for remote production mode.
-- [ ] Add rate limiting for `/mcp` and connection/stream establishment.
-- [ ] Add request concurrency limits.
-- [ ] Add per-token/per-subject execution rate limits where appropriate.
-- [ ] Add idle and maximum request/stream lifetimes.
-- [ ] Prevent connection exhaustion and slow-client resource leaks.
-- [ ] Ensure error responses do not leak filesystem paths, tokens, command environment, or internal configuration.
+- [ ] Use OpenAI Secure MCP Tunnel for supported local/private-network ChatGPT development when available/applicable.
+- [ ] Keep relay loopback-only by default.
+- [ ] Remote server mode requires explicit configuration.
+- [ ] Remote mode requires HTTPS at the trusted ingress.
+- [ ] Define exact trusted-proxy IP/network configuration.
+- [ ] Never trust arbitrary `X-Forwarded-*` headers from direct clients.
+- [ ] Ensure proxy preserves Authorization and required MCP headers.
+- [ ] Define canonical public MCP URL and resource identifier relationship.
+- [ ] Add/verify request rate limiting.
+- [ ] Add per-subject/token tool-call rate limiting for dangerous actions.
+- [ ] Keep execution concurrency limits.
+- [ ] Bound stream/connection lifetime if GET/SSE is implemented.
+- [ ] Prevent slow-client and connection-exhaustion DoS.
+- [ ] Keep internal paths/errors redacted.
 
 ### Exit criteria
 
-- [ ] Local relay can be connected through the supported secure tunnel.
-- [ ] Direct unauthenticated internet access is not a supported accidental configuration.
-- [ ] Rate/concurrency limits prevent trivial MCP DoS.
+- [ ] ChatGPT can reach a developer-machine relay through the approved tunnel path.
+- [ ] Closing the tunnel removes remote reachability.
+- [ ] No unauthenticated remote fallback exists.
 
 ---
 
-# Phase 6 — ChatGPT Native Integration E2E
+# Phase 7 — Real ChatGPT Custom MCP App E2E
 
 ### Objective
 
-Prove that ChatGPT can discover, authorize, and use the relay as a real custom MCP app.
+Validate the exact current ChatGPT UI and runtime, not only protocol-level mocks.
+
+### Setup verification
+
+- [ ] Create Custom Tool/App using the actual MCP server URL.
+- [ ] Confirm OAuth discovery populates real endpoints.
+- [ ] Verify User-defined OAuth Client flow.
+- [ ] Verify DCR if advertised/supported.
+- [ ] Verify CIMD if advertised/supported.
+- [ ] Copy/register the exact ChatGPT callback URL.
+- [ ] Verify Default scopes.
+- [ ] Verify Base scopes.
+- [ ] Verify action-level/tool-level scopes.
+- [ ] Verify OIDC fields if enabled.
+
+### Tool scan
+
+- [ ] `Scan Tools` succeeds.
+- [ ] Only intended tools appear.
+- [ ] Names, descriptions, schemas, and write/read semantics are correct.
+- [ ] Tool scope tags/security metadata appear as expected.
+
+### Coding workflow
+
+- [ ] Inspect repository/workspace.
+- [ ] Read files.
+- [ ] Create/edit files.
+- [ ] Move/delete files inside the permitted workspace.
+- [ ] Run shell/interpreter commands.
+- [ ] Run package-manager/build commands.
+- [ ] Run a realistic compile/build flow.
+- [ ] Use Docker only within Plan 028 policy.
+- [ ] Verify terminal output/errors are returned correctly.
+
+### Negative security scenarios
+
+- [ ] Missing token.
+- [ ] Invalid signature.
+- [ ] Wrong issuer.
+- [ ] Wrong resource/audience.
+- [ ] Wrong subject.
+- [ ] Missing tool scope.
+- [ ] Expired access token.
+- [ ] Revoked/invalid refresh token.
+- [ ] Unknown/rotated signing key.
+- [ ] malformed MCP request.
+- [ ] unauthorized write tool.
+- [ ] Plan 028 filesystem escape attempt.
+- [ ] privilege escalation attempt.
+- [ ] Docker escape attempt.
+- [ ] rate/concurrency abuse.
+
+### Frozen snapshot behavior
+
+- [ ] Publish/test a tool snapshot.
+- [ ] Verify additive optional schema change behavior.
+- [ ] Document that breaking action/tool changes require ChatGPT action refresh/republication.
+
+### Exit criteria
+
+- [ ] A real ChatGPT conversation can inspect, modify, build, and run code through the relay.
+- [ ] No server-side security rule depends on ChatGPT confirmation UX.
+
+---
+
+# Phase 8 — Claude Compatibility E2E
+
+### Objective
+
+Prove vendor-neutral MCP behavior using the same implementation.
 
 ### Tasks
 
-- [ ] Create a ChatGPT custom MCP app in developer mode using the actual endpoint and metadata.
-- [ ] Verify tool scanning completes successfully.
-- [ ] Verify OAuth authorization prompt appears when expected.
-- [ ] Verify exact callback URL configuration.
-- [ ] Verify refresh-token behavior after access-token expiry/renewal.
-- [ ] Verify tool list appears with expected descriptions and schemas.
-- [ ] Execute a harmless read command.
-- [ ] Execute a file creation/edit operation inside the workspace.
-- [ ] Execute a build command.
-- [ ] Execute a shell command required by a realistic coding workflow.
-- [ ] Verify destructive operations still require the intended ChatGPT confirmation/permission behavior where applicable, while server-side authorization remains authoritative.
-- [ ] Verify the relay's Plan 028 sandbox remains enforced during all ChatGPT calls.
-- [ ] Verify an unauthorized tool call fails before command execution.
-- [ ] Verify wrong-subject token fails.
-- [ ] Verify expired/revoked token fails.
-- [ ] Verify malformed MCP request cannot reach terminal execution.
+- [ ] Connect Claude remote MCP client to the canonical `/mcp` endpoint.
+- [ ] Verify discovery/tools/call.
+- [ ] Verify OAuth using the same Authorization Server/resource policy.
+- [ ] Verify scope enforcement is identical.
+- [ ] Verify real coding workflow.
+- [ ] Add legacy SSE adapter only if an actual supported Claude target cannot use the canonical transport.
+- [ ] If legacy adapter is required, no separate auth/tool/sandbox implementation is allowed.
 
 ### Exit criteria
 
-- [ ] Real ChatGPT conversation can inspect, modify, build, and run code through the relay.
-- [ ] No frontend application code change is required to consume the MCP server.
-- [ ] All security boundaries remain intact during real remote execution.
+- [ ] ChatGPT and Claude share exactly one MCP/tool/security core.
 
 ---
 
-# Phase 7 — Claude Remote MCP Compatibility
+# Phase 9 — Observability & Audit
 
 ### Objective
 
-Use the same MCP server for Claude integrations without maintaining a second implementation.
+Make remote tool use diagnosable without creating a new data-leak surface.
 
 ### Tasks
 
-- [ ] Connect Claude Code to the canonical HTTP MCP endpoint.
-- [ ] Verify `tools/list` and `tools/call`.
-- [ ] Verify OAuth authentication and token refresh.
-- [ ] Verify legacy SSE compatibility only if an actual target client requires it.
-- [ ] If legacy SSE is needed, ensure it delegates to the same MCP/auth/tool execution core.
-- [ ] Verify Claude cannot access terminal execution without the same required scope.
-- [ ] Verify Claude can complete a realistic coding workflow.
-- [ ] Verify no client-specific branch weakens security controls.
-
-Anthropic documents remote HTTP and SSE MCP transports and OAuth support for remote MCP connections, so this phase should validate the shared server rather than build a Claude-specific API. citeturn2search0turn2search1
-
-### Exit criteria
-
-- [ ] ChatGPT and Claude use the same canonical MCP tool implementation.
-- [ ] Any compatibility adapter is isolated and security-equivalent.
+- [ ] Correlation/request IDs.
+- [ ] Record client type when reliably known without trusting spoofable data for authorization.
+- [ ] Record method/tool/outcome/latency/status/subject identifier.
+- [ ] Never log bearer/refresh tokens.
+- [ ] Redact command arguments likely to contain secrets.
+- [ ] Avoid dumping source-file contents into logs.
+- [ ] Metrics for auth failures, scope failures, tool calls, timeouts, rate limits, sandbox failures, JWKS refresh/failure.
+- [ ] Bound metrics label cardinality.
+- [ ] Audit events must not be writable to attacker-controlled workspace paths.
 
 ---
 
-# Phase 8 — Observability, Audit & Operational Safety
+# Phase 10 — Zero-Bypass CI / Conformance / Release Gate
 
 ### Objective
 
-Make remote MCP execution supportable without leaking secrets or source data.
+Prevent ChatGPT compatibility work from weakening Plan 028 quality/security guarantees.
 
-### Tasks
+### Required gates
 
-- [ ] Add structured request IDs/correlation IDs.
-- [ ] Log MCP method/tool name, outcome, latency, status, subject ID, and request ID without logging tokens or sensitive arguments.
-- [ ] Record command execution audit events without copying secrets or entire source files into logs.
-- [ ] Add metrics for request rate, auth failures, authorization failures, tool failures, command duration, timeout count, and sandbox failures.
-- [ ] Add bounded log/output sizes.
-- [ ] Define retention and redaction behavior.
-- [ ] Ensure logs cannot be written into the workspace through an attacker-controlled path.
-- [ ] Ensure metrics/logging cannot become a denial-of-service vector.
-
-### Exit criteria
-
-- [ ] An operator can diagnose failed ChatGPT/Claude connections without accessing secrets.
-- [ ] Security events are distinguishable from ordinary tool failures.
+- [ ] `cargo fmt --all -- --check`.
+- [ ] `cargo check --workspace --all-targets --all-features --locked` with warnings denied by repository policy.
+- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
+- [ ] `cargo audit`.
+- [ ] No blanket `allow`/`expect`/warning suppression to hide failures.
+- [ ] No `continue-on-error`, `|| true`, swallowed failures, or equivalent lint/security bypasses.
+- [ ] Protocol conformance check for current `/mcp` contract.
+- [ ] OAuth metadata/discovery conformance check.
+- [ ] Static check that every tool-call side-effect path passes authorization.
+- [ ] Static check that remote mode cannot fall back to local no-auth access.
+- [ ] Static check that no second MCP execution core was introduced.
+- [ ] Static check that Node/pkg relay runtime is not reintroduced.
+- [ ] Release job must depend on the complete quality/security gate.
+- [ ] Release artifact built from exact reviewed commit.
 
 ---
 
-# Phase 9 — CI, Conformance & Release Gate
+# Phase 11 — Final Production Readiness
 
-### Objective
+Plan 029 may be marked `COMPLETED` only when all are true:
 
-Make the new remote MCP capability impossible to ship while violating the transport/auth/security contract.
-
-### Tasks
-
-- [ ] Keep `cargo fmt --all -- --check` strict.
-- [ ] Keep workspace-wide `cargo check --workspace --all-targets --all-features --locked` strict.
-- [ ] Keep workspace-wide Clippy with `-D warnings` strict.
-- [ ] Keep `cargo audit` mandatory.
-- [ ] Add protocol conformance validation for the canonical MCP endpoint.
-- [ ] Add static checks that reject accidental legacy-only transport implementations.
-- [ ] Add checks for missing Origin validation, missing auth middleware, or tool dispatch paths that bypass authorization.
-- [ ] Add checks that no production route exposes debug/no-auth terminal execution.
-- [ ] Ensure release jobs depend on the complete quality/security/conformance gate.
-- [ ] Ensure release artifacts are built from the exact reviewed commit.
-- [ ] Ensure no Node/pkg relay runtime is reintroduced.
-- [ ] Ensure deployment documentation matches the released binary behavior.
-
-### Exit criteria
-
-- [ ] CI proves protocol, security, lint, and dependency gates.
-- [ ] Release cannot publish an artifact if a required gate fails.
-
----
-
-# Phase 10 — Final Production Readiness Review
-
-### Objective
-
-Close the plan only after an end-to-end production review, not merely a successful local connection.
-
-### Checklist
-
-- [ ] ChatGPT native MCP connection works.
-- [ ] Claude remote MCP connection works.
-- [ ] Current MCP `2026-07-28` transport path is the canonical implementation.
-- [ ] Legacy SSE, if present, is explicitly compatibility-only and has no weaker security path.
-- [ ] OAuth discovery is correct.
-- [ ] OAuth authorization and refresh work.
-- [ ] Issuer/resource/audience/subject/scope validation is strict.
-- [ ] Local Secure MCP Tunnel workflow works without public listener exposure.
-- [ ] Remote HTTPS deployment works with trusted proxy configuration.
-- [ ] Rate/concurrency/timeout controls work.
-- [ ] Plan 028 sandbox remains authoritative for terminal execution.
-- [ ] MCP cannot bypass filesystem/privilege/Docker/process controls.
-- [ ] Tool schemas match actual authorization and execution behavior.
-- [ ] No tokens/secrets appear in logs or tool output.
-- [ ] CI is green with zero warnings and no suppression/bypass.
+- [ ] Current ChatGPT Custom MCP App connects successfully.
+- [ ] ChatGPT Scan Tools succeeds.
+- [ ] User-defined OAuth client works.
+- [ ] DCR/CIMD behavior exactly matches advertised support.
+- [ ] Authorization/token/resource metadata is correctly discovered.
+- [ ] Refresh-token flow survives access-token expiry.
+- [ ] Optional OIDC flow works if enabled.
+- [ ] Per-tool scope enforcement is default-deny.
+- [ ] Wrong subject cannot execute tools.
+- [ ] Claude uses the same canonical server successfully.
+- [ ] Plan 028 sandbox remains the only execution security boundary.
+- [ ] Remote/tunnel path cannot bypass auth/sandbox.
+- [ ] Tool schemas match actual implementation limits and behavior.
+- [ ] Breaking tool-schema changes have a documented ChatGPT refresh/republication process.
+- [ ] Observability does not leak tokens/source/secrets.
+- [ ] CI is zero-warning and zero-bypass.
 - [ ] Release gate is green.
-- [ ] Real coding E2E passes: inspect → edit → install/build → execute → verify.
-- [ ] Security-negative E2E passes: invalid auth, wrong scope, wrong subject, expired token, malformed MCP, origin/host abuse, rate-limit abuse, and execution-policy bypass attempts all fail closed.
-- [ ] Update `.agents/memories/029-chatgpt-mcp-integration-decisions.md` with final decisions and actual client behavior observed during E2E.
-- [ ] Change plan status to `COMPLETED` only after all acceptance criteria are independently verified.
+- [ ] Real coding E2E passes.
+- [ ] Security-negative E2E fails closed.
+- [ ] `.agents/memories/029-chatgpt-mcp-integration-decisions.md` records actual client behavior and final decisions.
 
 ---
 
-## External references / best-practice baseline
+## Source-of-truth references
 
-- OpenAI — Developer mode and MCP apps in ChatGPT: current remote-MCP requirements, custom app lifecycle, OAuth/refresh-token considerations, write-action behavior, and Secure MCP Tunnel guidance. citeturn3search0
-- OpenAI — Apps in ChatGPT: custom MCP apps, app/plugin relationship, workspace administration, and publishing model. citeturn0search0
-- OpenAI — ChatGPT app templates: exact callback URL handling and provider configuration guidance. citeturn0search3turn0search4
-- MCP — current transport specification: Streamable HTTP, Origin validation, localhost guidance, session behavior, and legacy HTTP+SSE compatibility. citeturn1search0
-- MCP — `2026-07-28` release: stateless protocol core, header-based routing, authorization hardening, CIMD direction, DCR deprecation, and legacy HTTP+SSE deprecation. citeturn1search1
-- MCP — authorization implementation guidance: Protected Resource Metadata, Authorization Server Metadata, token verification, and resource-specific token validation. citeturn0search6
-- Anthropic — Claude Code MCP: remote HTTP/SSE transport and OAuth support. citeturn2search0
-- Anthropic — MCP Connector: remote HTTP MCP, OAuth bearer tokens, and compatibility testing with Streamable HTTP/SSE. citeturn2search1
+Review these again at implementation time because ChatGPT/MCP integration behavior is actively evolving:
+
+- OpenAI — Developer mode and MCP apps in ChatGPT: https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt
+- OpenAI — Apps in ChatGPT: https://help.openai.com/en/articles/11487775-connectors-in-chatgpt
+- OpenAI — Build with the Apps SDK: https://help.openai.com/en/articles/12515353-build-with-the-apps-sdk
+- Model Context Protocol specification/release documentation for the current `2026-07-28` protocol and authorization/client-registration model.
+- Anthropic current Claude Code / remote MCP documentation.
 
 ## Definition of Done
 
-Plan 029 is complete only when the same Rust Relay Agent can be securely consumed as a remote MCP server by ChatGPT and Claude, using the current MCP transport as the canonical path, with standards-compliant OAuth discovery/authorization, explicit scope/subject enforcement, the existing Plan 028 sandbox as the authoritative execution boundary, strict CI/release gates, and a successful real-world coding workflow. No client-specific compatibility path may weaken the security model.
+Plan 029 is complete when the **existing** Rust Relay Agent from Plan 028 can be consumed by ChatGPT and Claude as a remote MCP app using one canonical MCP/tool/security implementation, with standards-compliant OAuth discovery and client registration, durable refresh-token behavior, least-privilege per-tool scopes, owner/subject binding, secure remote exposure, strict CI/release gates, and a real coding E2E — without duplicating the MCP core or weakening the Plan 028 sandbox.
