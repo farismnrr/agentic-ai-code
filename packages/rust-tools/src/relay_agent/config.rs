@@ -28,6 +28,11 @@ pub struct Cli {
     #[arg(long, value_enum, env = "RELAY_AGENT_MODE", default_value = "local")]
     pub mode: SecurityMode,
 
+    /// Trust X-Forwarded-Proto from a reverse proxy that is bound to this
+    /// relay's loopback listener. Remote mode never enables this implicitly.
+    #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY", default_value_t = false)]
+    pub trusted_proxy: bool,
+
     /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
     #[arg(short, long)]
     pub dir: Option<String>,
@@ -221,9 +226,30 @@ impl ServerConfig {
                 "local mode must bind to loopback".into(),
             ));
         }
-        if self.mode == SecurityMode::Remote && self.bind_host.trim().is_empty() {
+        if self.mode == SecurityMode::Remote {
+            if self.bind_host.trim().is_empty() {
+                return Err(RelayError::InvalidConfig(
+                    "remote bind host must not be blank".into(),
+                ));
+            }
+            if self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+                return Err(RelayError::InvalidConfig(
+                    "remote mode must bind to loopback; terminate HTTPS at a trusted local edge \
+                     or secure tunnel and opt in with --trusted-proxy"
+                        .into(),
+                ));
+            }
+        }
+        if self.trusted_proxy && self.mode != SecurityMode::Remote {
             return Err(RelayError::InvalidConfig(
-                "remote bind host must not be blank".into(),
+                "--trusted-proxy is only valid in remote mode".into(),
+            ));
+        }
+        if self.trusted_proxy && self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+            return Err(RelayError::InvalidConfig(
+                "trusted proxy mode requires a loopback relay bind; forwarded headers from \
+                 public or arbitrary peers are never trusted"
+                    .into(),
             ));
         }
         Ok(())
@@ -241,6 +267,7 @@ impl From<&Cli> for ServerConfig {
         Self {
             port: cli.port,
             mode: cli.mode,
+            trusted_proxy: cli.trusted_proxy,
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
             oauth_secret: cli.oauth_secret.clone(),
@@ -248,12 +275,52 @@ impl From<&Cli> for ServerConfig {
             oauth_audience: cli.oauth_audience.clone(),
             oauth_owner_subject: cli.oauth_owner_subject.clone(),
             execution_root: cli.execution_root.clone(),
-            bind_host: if cli.mode == SecurityMode::Remote {
-                "0.0.0.0".into()
-            } else {
-                "127.0.0.1".into()
-            },
-            trusted_proxy: cli.mode == SecurityMode::Remote,
+            // Remote mode is loopback-first. A local HTTPS edge/tunnel may be
+            // explicitly trusted with --trusted-proxy; remote mode never
+            // exposes a public plaintext listener by default.
+            bind_host: "127.0.0.1".into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_cli_defaults_to_loopback_without_proxy_trust() {
+        let cli = Cli::try_parse_from(["relay-agent", "--mode", "remote"])
+            .expect("remote CLI should parse");
+        let config = ServerConfig::from(&cli);
+
+        assert_eq!(config.bind_host, "127.0.0.1");
+        assert!(!config.trusted_proxy);
+        let config = ServerConfig {
+            oauth_issuer: Some("https://issuer.example".into()),
+            oauth_audience: Some("https://relay.example/mcp".into()),
+            oauth_owner_subject: Some("owner".into()),
+            ..config
+        };
+        config.validate().expect("default remote config is valid");
+    }
+
+    #[test]
+    fn trusted_proxy_requires_loopback() {
+        let mut config = ServerConfig {
+            mode: SecurityMode::Remote,
+            trusted_proxy: true,
+            bind_host: "0.0.0.0".into(),
+            oauth_issuer: Some("https://issuer.example".into()),
+            oauth_audience: Some("https://relay.example/mcp".into()),
+            oauth_owner_subject: Some("owner".into()),
+            ..ServerConfig::default()
+        };
+
+        assert!(config.validate().is_err());
+
+        config.bind_host = "127.0.0.1".into();
+        config
+            .validate()
+            .expect("trusted proxy is valid on loopback");
     }
 }

@@ -1,8 +1,8 @@
 //! Streamable HTTP transport for the MCP `2026-07-28` server core.
 //!
 //! Single JSON-RPC route (`POST /mcp`) plus a plain `/health` probe used by
-//! local tooling. Localhost-only binding is enforced by the caller
-//! (`src/bin/relay-agent.rs` binds `127.0.0.1` explicitly) — this module
+//! local tooling. Loopback binding is enforced by the caller/configuration
+//! (`src/bin/relay-agent.rs` binds the validated loopback address) — this module
 //! only builds the `Router`, it does not bind sockets.
 //!
 //! `/mcp` is additionally gated by [`super::security::enforce_local_access_policy`]
@@ -229,6 +229,15 @@ async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
 
 type JsonErr = (StatusCode, Json<ErrorResponse>);
 
+fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
+    config.trusted_proxy
+        && req
+            .headers()
+            .get("x-forwarded-proto")
+            .and_then(|v| v.to_str().ok())
+            == Some("https")
+}
+
 fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
     (status, Json(ErrorResponse::new(id, err)))
 }
@@ -262,14 +271,13 @@ async fn access_policy(
     let mut auth_ctx = AuthContext::default();
 
     if let super::config::SecurityMode::Remote = state.config.mode {
-        // Enforce HTTPS
-        let is_https = req.uri().scheme_str() == Some("https")
-            || (state.config.trusted_proxy
-                && req
-                    .headers()
-                    .get("x-forwarded-proto")
-                    .and_then(|v| v.to_str().ok())
-                    == Some("https"));
+        // This listener is plaintext by design. The only supported HTTPS
+        // termination point is an explicitly trusted local edge/tunnel. Do
+        // not treat the request URI scheme as proof of TLS: a direct peer can
+        // supply an absolute-form HTTP request target. Likewise, forwarded
+        // headers are ignored unless the operator explicitly opted in and the
+        // configuration validation has restricted the listener to loopback.
+        let is_https = request_uses_trusted_https(&req, &state.config);
 
         if !is_https {
             return (
@@ -885,3 +893,37 @@ async fn handle_tools_call(
 /// [`AxumResponse`] by `.into_response()` in [`handle_mcp`] — this alias
 /// just keeps their signatures short.
 type JsonErr2 = Result<Json<Value>, JsonErr>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forwarded_https_is_ignored_without_explicit_proxy_trust() {
+        let request = Request::builder()
+            .uri("https://relay.example/mcp")
+            .header("x-forwarded-proto", "https")
+            .header("x-forwarded-host", "relay.example")
+            .body(axum::body::Body::empty())
+            .expect("request should build");
+        let config = ServerConfig::default();
+
+        assert!(!request_uses_trusted_https(&request, &config));
+    }
+
+    #[test]
+    fn explicitly_trusted_loopback_edge_can_assert_https() {
+        let request = Request::builder()
+            .uri("/mcp")
+            .header("x-forwarded-proto", "https")
+            .body(axum::body::Body::empty())
+            .expect("request should build");
+        let config = ServerConfig {
+            mode: super::super::config::SecurityMode::Remote,
+            trusted_proxy: true,
+            ..ServerConfig::default()
+        };
+
+        assert!(request_uses_trusted_https(&request, &config));
+    }
+}
