@@ -56,7 +56,9 @@ jobs:
     strategy:
       matrix:
         include:
-          # P0-7: Matrix aligned with ci.yml build-release matrix.
+          # Platform contract: relay-agent is Linux+bwrap only.
+          # macOS and Windows are removed — no secure sandbox equivalent exists
+          # for those platforms and no insecure fallback is acceptable.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             asset_name: relay-agent-linux-x64
@@ -66,18 +68,6 @@ jobs:
             asset_name: relay-agent-linux-arm64
             bin_name: relay-agent
             use-cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            asset_name: relay-agent-macos-x64
-            bin_name: relay-agent
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            asset_name: relay-agent-macos-arm64
-            bin_name: relay-agent
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            asset_name: relay-agent-win-x64.exe
-            bin_name: relay-agent.exe
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -103,39 +93,18 @@ jobs:
           fi
         shell: bash
 
-      - name: Package and checksum (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          mkdir -p release-assets
-          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} release-assets/${{ matrix.asset_name }}
-          cd release-assets
-          if command -v sha256sum >/dev/null; then
-            sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
-          else
-            shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
-          fi
-
-      - name: Package and checksum (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
+      - name: Package and checksum
         run: |
           mkdir -p release-assets
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} release-assets/${{ matrix.asset_name }}
           cd release-assets
           sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
 
-      - name: Smoke test (Unix)
-        if: matrix.os != 'windows-latest' && matrix.use-cross != true
+      - name: Smoke test
+        if: matrix.use-cross != true
         run: |
           cd release-assets
           chmod +x ${{ matrix.asset_name }}
-          ./${{ matrix.asset_name }} --help
-
-      - name: Smoke test (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          cd release-assets
           ./${{ matrix.asset_name }} --help
 
       - name: Create Release

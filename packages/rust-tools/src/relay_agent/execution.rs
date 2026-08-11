@@ -85,41 +85,24 @@ pub async fn dispatch_tool_call(
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
 
+                // Privilege escalation: these commands bypass the non-root execution
+                // invariant even inside bwrap (they can call setuid/kernel interfaces).
+                // This check remains even though bwrap provides filesystem containment.
                 let forbidden = ["sudo", "su", "doas", "pkexec", "runas"];
                 if forbidden.contains(&binary_name) {
                     return Err(McpError::InvalidRequest(format!(
-                        "execution of '{}' is forbidden",
+                        "execution of '{}' is forbidden: privilege escalation is not allowed",
                         binary_name
                     )));
                 }
 
-                let interpreters = [
-                    "sh",
-                    "bash",
-                    "zsh",
-                    "python",
-                    "python3",
-                    "node",
-                    "ruby",
-                    "perl",
-                    "cmd",
-                    "powershell",
-                    "pwsh",
-                ];
-                if interpreters.contains(&binary_name)
-                    && parts.iter().any(|arg| {
-                        arg == "-c"
-                            || arg == "-e"
-                            || arg == "--eval"
-                            || arg == "-Command"
-                            || arg == "/c"
-                    })
-                {
-                    return Err(McpError::InvalidRequest(format!(
-                        "shell/interpreter bypass is forbidden for '{}'",
-                        binary_name
-                    )));
-                }
+                // NOTE: Shell/interpreter flags like `bash -c` are intentionally NOT
+                // blocked here. bwrap is the containment boundary — it provides
+                // filesystem isolation, PID namespace, and process group kill-on-timeout.
+                // Blocking `bash -c` only breaks legitimate coding workflows (e.g.
+                // `bash -c 'npm install && npm run build'`) without adding meaningful
+                // security when the sandbox is already active. If bwrap is not available
+                // the server refuses to start (see relay-agent.rs startup check).
 
                 if binary.contains('/') || binary.contains('\\') || binary == ".." {
                     return Err(McpError::InvalidRequest(
