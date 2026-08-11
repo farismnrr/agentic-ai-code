@@ -39,7 +39,7 @@ use axum::{
     http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response as AxumResponse},
-    routing::{get, post},
+    routing::post,
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -64,6 +64,7 @@ const HDR_MCP_NAME: &str = "mcp-name";
 
 pub struct AppState {
     pub config: ServerConfig,
+    pub legacy: std::sync::Arc<std::sync::Mutex<crate::relay_agent::legacy::LegacyState>>,
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
@@ -93,29 +94,25 @@ pub fn create_router(config: ServerConfig) -> Router {
         .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers(cors_headers);
 
-    let state = Arc::new(AppState { config });
+    let state = Arc::new(AppState {
+        config: config.clone(),
+        legacy: Arc::new(std::sync::Mutex::new(
+            crate::relay_agent::legacy::LegacyState::new(&config),
+        )),
+    });
 
-    // The security middleware is attached to the `/mcp` route only, via
-    // `route_layer` on its own sub-router, so `/health` never goes through
-    // Origin/Host enforcement.
-    let mcp_router =
-        Router::new()
-            .route("/mcp", post(handle_mcp))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                local_access_policy,
-            ));
+    let mcp_router = Router::new().route("/mcp", post(handle_mcp));
 
     Router::new()
         .merge(mcp_router)
-        .route("/health", get(health_check))
+        .merge(crate::relay_agent::legacy::router())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            local_access_policy,
+        ))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
-}
-
-async fn health_check() -> (StatusCode, &'static str) {
-    (StatusCode::OK, "OK")
 }
 
 type JsonErr = (StatusCode, Json<ErrorResponse>);
