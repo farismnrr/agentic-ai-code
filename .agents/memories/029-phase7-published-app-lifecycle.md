@@ -4,7 +4,7 @@ The frozen v1 catalog is `.agents/contracts/029-tool-catalog-v1.json`.
 Its canonical sorted compact JSON SHA-256 is recorded below and checked by
 `scripts/phase7-chatgpt-contract.sh`.
 
-catalogSha256: `6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`
+catalogSha256: `2013d96380857c93336d722d63290047bece81962ad2af839f182fb5f8e931ce`
 
 Tool names are public API identifiers after publication. Renames, removals,
 new required properties, changed write/destructive semantics, coding-scope
