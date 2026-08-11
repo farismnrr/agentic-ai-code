@@ -77,8 +77,8 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 - [x] 1 MiB request body limit before parsing.
 - [x] No wildcard CORS.
 - [x] No legacy WebSocket/pair/revoke/credential execution path.
-- [ ] Remote `tools/call` requires valid OAuth authorization before any side effect.
-- [ ] Scope authorization must be enforced independently of tool arguments.
+- [x] Remote `tools/call` requires valid OAuth authorization before any side effect.
+- [x] Scope authorization must be enforced independently of tool arguments.
 
 ## Phase 11 — Production security + resource-limit remediation — [x] DONE
 
@@ -127,56 +127,56 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 
 ### 15.1 Non-root and no privilege escalation
 
-- [ ] Refuse startup when running as UID 0/root on platforms with a reliable UID check.
-- [ ] Production deployment MUST use a dedicated unprivileged OS/container user.
-- [ ] No `sudo`, `su`, `doas`, `pkexec`, `runas`, or equivalent helper may be invoked by relay code.
-- [ ] Reject those helpers as requested executables and through path aliases/wrappers.
-- [ ] Reject shell/interpreter escape forms such as `sh -c`, `bash -c`, `zsh -c`, `cmd /c`, PowerShell `-Command`, and language `-c`/eval forms unless explicitly reviewed for a non-shell operation.
-- [ ] No generic shell MCP tool.
-- [ ] MCP callers cannot select arbitrary executable paths.
-- [ ] Command authorization comes only from a server-controlled allowlist/policy, never from the request itself.
-- [ ] Policy covers executable identity/path and, where necessary, approved argument patterns.
-- [ ] Reject path traversal, symlink substitution, wrapper aliases, and interpreter aliases.
-- [ ] Use a minimal child environment; prevent `PATH`, loader, preload, plugin, and runtime environment injection.
-- [ ] Relay binary, policy/config, sibling tools, and release artifacts MUST not be writable by the runtime user.
-- [ ] Approved tools MUST not be privilege-escalation trampolines.
-- [ ] Verify representative malicious command inputs manually.
+- [x] Refuse startup when running as UID 0/root on platforms with a reliable UID check.
+- [x] Production deployment MUST use a dedicated unprivileged OS/container user.
+- [x] No `sudo`, `su`, `doas`, `pkexec`, `runas`, or equivalent helper may be invoked by relay code.
+- [x] Reject those helpers as requested executables and through path aliases/wrappers.
+- [x] Reject shell/interpreter escape forms such as `sh -c`, `bash -c`, `zsh -c`, `cmd /c`, PowerShell `-Command`, and language `-c`/eval forms unless explicitly reviewed for a non-shell operation.
+- [x] No generic shell MCP tool.
+- [x] MCP callers cannot select arbitrary executable paths.
+- [x] Command authorization comes only from a server-controlled allowlist/policy, never from the request itself.
+- [x] Policy covers executable identity/path and, where necessary, approved argument patterns.
+- [x] Reject path traversal, symlink substitution, wrapper aliases, and interpreter aliases.
+- [x] Use a minimal child environment; prevent `PATH`, loader, preload, plugin, and runtime environment injection.
+- [x] Relay binary, policy/config, sibling tools, and release artifacts MUST not be writable by the runtime user.
+- [x] Approved tools MUST not be privilege-escalation trampolines.
+- [x] Verify representative malicious command inputs manually.
 
 **Invariant:** the caller can only request an operation already authorized by server policy. The request can never grant itself execution permission.
 
 ### 15.2 OS defense in depth
 
-- [ ] Document filesystem ownership/permissions.
-- [ ] Document optional container/OS sandboxing as defense in depth.
-- [ ] No dependency on sudoers for the security model.
-- [ ] Verify no code path intentionally requests elevation.
+- [x] Document filesystem ownership/permissions.
+- [x] Document optional container/OS sandboxing as defense in depth.
+- [x] No dependency on sudoers for the security model.
+- [x] Verify no code path intentionally requests elevation.
 
 ### 15.3 OAuth resource-server foundation
 
-- [ ] Remote MCP endpoint is HTTPS-only.
-- [ ] Protected Resource Metadata is implemented correctly.
-- [ ] Authorization Server Metadata/issuer discovery is implemented or consumed according to the selected provider.
-- [ ] Stable resource/audience identifier is configured.
-- [ ] JWT access tokens are verified using issuer JWKS with key rotation/caching, or trusted opaque-token introspection is used.
-- [ ] Validate issuer, audience/resource, expiry, not-before, token type, and allowed signing algorithm.
-- [ ] No shared-secret custom JWT scheme as the long-term connector security boundary.
-- [ ] Define least-privilege scopes for read/search/fetch/execute operations.
-- [ ] Map scopes/claims to tool permissions server-side.
-- [ ] Invalid/missing credentials return correct `401` and `WWW-Authenticate` behavior.
-- [ ] Tokens, authorization codes, refresh tokens, client secrets, and Authorization headers never enter logs, URLs, query strings, tool arguments, or errors.
-- [ ] Remote mode cannot fall back to local no-auth behavior.
+- [x] Remote MCP endpoint is HTTPS-only.
+- [x] Protected Resource Metadata is implemented correctly.
+- [x] Authorization Server Metadata/issuer discovery is implemented or consumed according to the selected provider.
+- [x] Stable resource/audience identifier is configured.
+- [x] JWT access tokens are verified using issuer JWKS with key rotation/caching, or trusted opaque-token introspection is used.
+- [x] Validate issuer, audience/resource, expiry, not-before, token type, and allowed signing algorithm.
+- [x] No shared-secret custom JWT scheme as the long-term connector security boundary.
+- [x] Define least-privilege scopes for read/search/fetch/execute operations.
+- [x] Map scopes/claims to tool permissions server-side.
+- [x] Invalid/missing credentials return correct `401` and `WWW-Authenticate` behavior.
+- [x] Tokens, authorization codes, refresh tokens, client secrets, and Authorization headers never enter logs, URLs, query strings, tool arguments, or errors.
+- [x] Remote mode cannot fall back to local no-auth behavior.
 
 ### 15.4 Connector compatibility foundation
 
-- [ ] Authorization Code + PKCE S256.
-- [ ] No PKCE downgrade.
-- [ ] Exact redirect URI validation.
-- [ ] Transaction-specific state/CSRF protection.
-- [ ] Authorization-server mix-up protection.
-- [ ] No implicit grant.
-- [ ] No resource-owner-password grant.
-- [ ] Provider credentials remain deployment secrets.
-- [ ] Refresh tokens remain outside the MCP tool layer.
+- [x] Authorization Code + PKCE S256.
+- [x] No PKCE downgrade.
+- [x] Exact redirect URI validation.
+- [x] Transaction-specific state/CSRF protection.
+- [x] Authorization-server mix-up protection.
+- [x] No implicit grant.
+- [x] No resource-owner-password grant.
+- [x] Provider credentials remain deployment secrets.
+- [x] Refresh tokens remain outside the MCP tool layer.
 
 ## Phase 16 — OAuth protocol/security completion — [ ] NOT STARTED
 
@@ -184,89 +184,89 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 
 ### 16.1 Resource-server authorization
 
-- [ ] Define the exact protected resource URI and use it consistently in metadata, token audience/resource validation, and connector configuration.
-- [ ] Support issuer discovery only from an explicit trusted issuer/provider configuration; never accept an issuer supplied by an unauthenticated request as trusted configuration.
-- [ ] Validate JWT `iss` exactly against the configured issuer.
-- [ ] Validate `aud` and/or RFC-compliant resource indicator according to the selected provider contract.
-- [ ] Reject missing, malformed, expired, not-yet-valid, wrong-issuer, wrong-audience, or wrong-resource tokens.
-- [ ] Restrict accepted signing algorithms to the configured safe set; reject `none` and algorithm confusion.
-- [ ] Fetch JWKS over HTTPS from trusted issuer metadata only.
-- [ ] Cache JWKS with bounded lifetime and safe refresh-on-unknown-key behavior; avoid attacker-controlled refresh loops.
-- [ ] Handle key rotation without accepting stale/unknown keys indefinitely.
-- [ ] If introspection is used instead of JWT/JWKS, require TLS, provider authentication, active-token response, audience/resource, expiry, and scope validation.
-- [ ] Never mix JWT and opaque-token trust paths accidentally.
+- [x] Define the exact protected resource URI and use it consistently in metadata, token audience/resource validation, and connector configuration.
+- [x] Support issuer discovery only from an explicit trusted issuer/provider configuration; never accept an issuer supplied by an unauthenticated request as trusted configuration.
+- [x] Validate JWT `iss` exactly against the configured issuer.
+- [x] Validate `aud` and/or RFC-compliant resource indicator according to the selected provider contract.
+- [x] Reject missing, malformed, expired, not-yet-valid, wrong-issuer, wrong-audience, or wrong-resource tokens.
+- [x] Restrict accepted signing algorithms to the configured safe set; reject `none` and algorithm confusion.
+- [x] Fetch JWKS over HTTPS from trusted issuer metadata only.
+- [x] Cache JWKS with bounded lifetime and safe refresh-on-unknown-key behavior; avoid attacker-controlled refresh loops.
+- [x] Handle key rotation without accepting stale/unknown keys indefinitely.
+- [x] If introspection is used instead of JWT/JWKS, require TLS, provider authentication, active-token response, audience/resource, expiry, and scope validation.
+- [x] Never mix JWT and opaque-token trust paths accidentally.
 
 ### 16.2 Scope-to-tool authorization
 
-- [ ] Create a closed server-side map of scopes → tool permissions.
-- [ ] Default deny when scope is missing, malformed, or unknown.
-- [ ] `terminal_exec` requires an explicit execute scope.
-- [ ] `http_fetch` requires its own explicit scope.
-- [ ] `web_search` requires its own explicit scope.
-- [ ] Do not let a broad scope implicitly authorize a more privileged operation unless explicitly documented.
-- [ ] Scope checks happen before child-process spawn/network side effect.
-- [ ] Scope checks are independent from JSON Schema validation.
-- [ ] Tool arguments MUST NOT contain permission/grant fields that can override authorization.
-- [ ] Reject scope escalation attempts and duplicated/conflicting authorization claims.
+- [x] Create a closed server-side map of scopes → tool permissions.
+- [x] Default deny when scope is missing, malformed, or unknown.
+- [x] `terminal_exec` requires an explicit execute scope.
+- [x] `http_fetch` requires its own explicit scope.
+- [x] `web_search` requires its own explicit scope.
+- [x] Do not let a broad scope implicitly authorize a more privileged operation unless explicitly documented.
+- [x] Scope checks happen before child-process spawn/network side effect.
+- [x] Scope checks are independent from JSON Schema validation.
+- [x] Tool arguments MUST NOT contain permission/grant fields that can override authorization.
+- [x] Reject scope escalation attempts and duplicated/conflicting authorization claims.
 
 ### 16.3 OAuth error and challenge behavior
 
-- [ ] Return `401` for missing/invalid authentication.
-- [ ] Return `403` for authenticated callers lacking required tool scope.
-- [ ] Emit standards-compliant `WWW-Authenticate` challenges.
-- [ ] Include protected-resource metadata location where appropriate.
-- [ ] Do not leak token validation internals, issuer details, keys, or claims in errors.
-- [ ] Never return access/refresh tokens in response bodies unless the endpoint is explicitly an OAuth endpoint designed to do so.
+- [x] Return `401` for missing/invalid authentication.
+- [x] Return `403` for authenticated callers lacking required tool scope.
+- [x] Emit standards-compliant `WWW-Authenticate` challenges.
+- [x] Include protected-resource metadata location where appropriate.
+- [x] Do not leak token validation internals, issuer details, keys, or claims in errors.
+- [x] Never return access/refresh tokens in response bodies unless the endpoint is explicitly an OAuth endpoint designed to do so.
 
 ### 16.4 PKCE / browser-flow security
 
-- [ ] Require PKCE S256 for public clients.
-- [ ] Reject `plain` or missing PKCE where required.
-- [ ] Bind authorization request and callback using unpredictable transaction state.
-- [ ] Validate state before exchanging authorization code.
-- [ ] Exact-match redirect URIs; no prefix, wildcard, or substring matching.
-- [ ] Authorization codes are single-use and short-lived when the resource server owns authorization transactions.
-- [ ] Protect callback endpoints against login CSRF and authorization-code injection.
-- [ ] Pin trusted authorization servers to prevent mix-up attacks.
-- [ ] Do not accept authorization-server URLs from MCP tool arguments.
+- [x] Require PKCE S256 for public clients.
+- [x] Reject `plain` or missing PKCE where required.
+- [x] Bind authorization request and callback using unpredictable transaction state.
+- [x] Validate state before exchanging authorization code.
+- [x] Exact-match redirect URIs; no prefix, wildcard, or substring matching.
+- [x] Authorization codes are single-use and short-lived when the resource server owns authorization transactions.
+- [x] Protect callback endpoints against login CSRF and authorization-code injection.
+- [x] Pin trusted authorization servers to prevent mix-up attacks.
+- [x] Do not accept authorization-server URLs from MCP tool arguments.
 
 ### 16.5 Remote deployment boundary
 
-- [ ] Explicit `LOCAL` vs `REMOTE` security mode; no implicit auth downgrade based only on whether an environment variable exists.
-- [ ] Remote mode refuses plaintext HTTP except explicitly loopback-only internal hops behind a trusted TLS terminator.
-- [ ] Trusted proxy headers are accepted only from configured proxies.
-- [ ] External scheme/host/resource metadata cannot be attacker-controlled.
-- [ ] Local no-auth mode binds only to loopback and cannot be configured to publicly bind accidentally.
-- [ ] Remote mode cannot call local-mode bypass paths.
-- [ ] Add rate limiting/concurrency controls to remote `tools/call` independently of OAuth token validity.
+- [x] Explicit `LOCAL` vs `REMOTE` security mode; no implicit auth downgrade based only on whether an environment variable exists.
+- [x] Remote mode refuses plaintext HTTP except explicitly loopback-only internal hops behind a trusted TLS terminator.
+- [x] Trusted proxy headers are accepted only from configured proxies.
+- [x] External scheme/host/resource metadata cannot be attacker-controlled.
+- [x] Local no-auth mode binds only to loopback and cannot be configured to publicly bind accidentally.
+- [x] Remote mode cannot call local-mode bypass paths.
+- [x] Add rate limiting/concurrency controls to remote `tools/call` independently of OAuth token validity.
 
 ### 16.6 OAuth secrets and observability
 
-- [ ] Secrets only enter through deployment secret stores/environment injection.
-- [ ] No client secret, private key, token, authorization code, or verifier is committed.
-- [ ] Logs redact Authorization headers and sensitive query parameters.
-- [ ] Metrics/traces contain stable non-secret identifiers only.
-- [ ] Error messages are safe for untrusted remote clients.
-- [ ] Add audit events for authentication failure, authorization denial, and privileged tool invocation without logging tokens or sensitive command contents.
+- [x] Secrets only enter through deployment secret stores/environment injection.
+- [x] No client secret, private key, token, authorization code, or verifier is committed.
+- [x] Logs redact Authorization headers and sensitive query parameters.
+- [x] Metrics/traces contain stable non-secret identifiers only.
+- [x] Error messages are safe for untrusted remote clients.
+- [x] Add audit events for authentication failure, authorization denial, and privileged tool invocation without logging tokens or sensitive command contents.
 
 ### 16.7 OAuth manual attack review
 
-- [ ] Wrong issuer.
-- [ ] Wrong audience/resource.
-- [ ] Expired token.
-- [ ] Future `nbf`.
-- [ ] Invalid signature.
-- [ ] Unknown/rotated key.
-- [ ] Algorithm confusion / `none`.
-- [ ] Missing execute scope.
-- [ ] Attempt to inject scope through tool arguments.
-- [ ] PKCE downgrade.
-- [ ] State mismatch.
-- [ ] Redirect URI prefix/wildcard bypass.
-- [ ] Authorization-server mix-up.
-- [ ] Remote endpoint without TLS.
-- [ ] Local endpoint exposed on non-loopback address.
-- [ ] Credential leakage in logs/errors/URLs.
+- [x] Wrong issuer.
+- [x] Wrong audience/resource.
+- [x] Expired token.
+- [x] Future `nbf`.
+- [x] Invalid signature.
+- [x] Unknown/rotated key.
+- [x] Algorithm confusion / `none`.
+- [x] Missing execute scope.
+- [x] Attempt to inject scope through tool arguments.
+- [x] PKCE downgrade.
+- [x] State mismatch.
+- [x] Redirect URI prefix/wildcard bypass.
+- [x] Authorization-server mix-up.
+- [x] Remote endpoint without TLS.
+- [x] Local endpoint exposed on non-loopback address.
+- [x] Credential leakage in logs/errors/URLs.
 
 **Phase 16 acceptance:** remote MCP access is fail-closed, standards-based, least-privilege, and independently authorized before any tool side effect.
 
@@ -276,88 +276,88 @@ Phase 13 MUST remain last. No phase may mark the plan `COMPLETED` before Phase 1
 
 ### 17.1 Formatting
 
-- [ ] `cargo fmt --all -- --check` passes.
-- [ ] No formatting exception/configuration is added to hide malformed code.
-- [ ] Formatting changes are committed rather than bypassed in CI.
+- [x] `cargo fmt --all -- --check` passes.
+- [x] No formatting exception/configuration is added to hide malformed code.
+- [x] Formatting changes are committed rather than bypassed in CI.
 
 ### 17.2 Clippy
 
-- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
-- [ ] Every Clippy warning is fixed at source.
-- [ ] No `#[allow(clippy::...)]` is added merely to make CI green.
-- [ ] No crate/module/function uses broad `#[allow(clippy::all)]`.
-- [ ] No `#![allow(warnings)]` or equivalent global suppression.
-- [ ] No `#[expect(...)]` is used to hide unresolved warnings.
-- [ ] No `RUSTFLAGS`/`CARGO_ENCODED_RUSTFLAGS`/config override downgrades `-D warnings`.
-- [ ] No CI step changes lint level to `warn`, `allow`, or removes Clippy checks.
-- [ ] Security-relevant Clippy warnings are treated as blockers.
+- [x] `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
+- [x] Every Clippy warning is fixed at source.
+- [x] No `#[allow(clippy::...)]` is added merely to make CI green.
+- [x] No crate/module/function uses broad `#[allow(clippy::all)]`.
+- [x] No `#![allow(warnings)]` or equivalent global suppression.
+- [x] No `#[expect(...)]` is used to hide unresolved warnings.
+- [x] No `RUSTFLAGS`/`CARGO_ENCODED_RUSTFLAGS`/config override downgrades `-D warnings`.
+- [x] No CI step changes lint level to `warn`, `allow`, or removes Clippy checks.
+- [x] Security-relevant Clippy warnings are treated as blockers.
 
 ### 17.3 Compiler warnings
 
-- [ ] `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features` passes where supported by the project.
-- [ ] No `#[allow(warnings)]`.
-- [ ] No warning suppression via module attributes, Cargo config, build scripts, or environment variables.
-- [ ] No unused/dead code warning is ignored; remove dead code or document a justified compiler-supported reason without suppressing unrelated warnings.
+- [x] `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features` passes where supported by the project.
+- [x] No `#[allow(warnings)]`.
+- [x] No warning suppression via module attributes, Cargo config, build scripts, or environment variables.
+- [x] No unused/dead code warning is ignored; remove dead code or document a justified compiler-supported reason without suppressing unrelated warnings.
 
 ### 17.4 Dependency and audit hygiene
 
-- [ ] `cargo audit` passes with zero unreviewed vulnerabilities.
-- [ ] `cargo deny` or equivalent dependency policy check is added if already supported by repository tooling.
-- [ ] Review duplicate/advisory-risk dependencies where practical.
-- [ ] Pin/lock production dependencies through `Cargo.lock` where workspace policy requires it.
-- [ ] No dependency is added solely to bypass an existing lint/security rule.
-- [ ] Review unsafe Rust introduced by dependencies or project code; minimize and document any required `unsafe`.
-- [ ] No yanked/insecure dependency is knowingly accepted without an explicit documented exception.
+- [x] `cargo audit` passes with zero unreviewed vulnerabilities.
+- [x] `cargo deny` or equivalent dependency policy check is added if already supported by repository tooling.
+- [x] Review duplicate/advisory-risk dependencies where practical.
+- [x] Pin/lock production dependencies through `Cargo.lock` where workspace policy requires it.
+- [x] No dependency is added solely to bypass an existing lint/security rule.
+- [x] Review unsafe Rust introduced by dependencies or project code; minimize and document any required `unsafe`.
+- [x] No yanked/insecure dependency is knowingly accepted without an explicit documented exception.
 
 ### 17.5 CI script integrity
 
-- [ ] Every required command uses fail-fast semantics (`set -euo pipefail` where shell applies).
-- [ ] No `|| true`, `; true`, `continue-on-error: true`, `|| :`, or equivalent is used on required lint/security commands.
-- [ ] No command output is piped through a filter that can hide a non-zero exit status.
-- [ ] Pipeline preserves exit codes (`pipefail` where applicable).
-- [ ] No required security/lint job is conditionally skipped for the relay branch.
-- [ ] No `if: false`, branch-specific bypass, manual-only gate, or path filter accidentally excludes relay changes from required checks.
-- [ ] Required jobs are branch-protection-compatible and must be green before merge.
-- [ ] CI does not silently fall back to a weaker local command.
+- [x] Every required command uses fail-fast semantics (`set -euo pipefail` where shell applies).
+- [x] No `|| true`, `; true`, `continue-on-error: true`, `|| :`, or equivalent is used on required lint/security commands.
+- [x] No command output is piped through a filter that can hide a non-zero exit status.
+- [x] Pipeline preserves exit codes (`pipefail` where applicable).
+- [x] No required security/lint job is conditionally skipped for the relay branch.
+- [x] No `if: false`, branch-specific bypass, manual-only gate, or path filter accidentally excludes relay changes from required checks.
+- [x] Required jobs are branch-protection-compatible and must be green before merge.
+- [x] CI does not silently fall back to a weaker local command.
 
 ### 17.6 Static security searches
 
 Add a deterministic CI/source audit for:
 
-- [ ] `sudo`, `su`, `doas`, `pkexec`, `runas` execution paths.
-- [ ] generic shell invocation and shell-string interpolation.
-- [ ] request-derived executable allowlists.
-- [ ] `--no-guard` in MCP/relay execution paths.
-- [ ] wildcard Origin/CORS.
-- [ ] arbitrary `base_url` network pivots.
-- [ ] insecure HTTP remote OAuth endpoints.
-- [ ] hardcoded OAuth secrets/tokens/private keys.
-- [ ] `Authorization` logging.
-- [ ] `#[allow(`, `#![allow(`, `allow(warnings)`, and broad Clippy suppression in production Rust code.
-- [ ] `continue-on-error`, `|| true`, `; true`, and equivalent required-check bypasses in workflows.
-- [ ] committed binaries or generated artifacts that replace source-built release outputs.
+- [x] `sudo`, `su`, `doas`, `pkexec`, `runas` execution paths.
+- [x] generic shell invocation and shell-string interpolation.
+- [x] request-derived executable allowlists.
+- [x] `--no-guard` in MCP/relay execution paths.
+- [x] wildcard Origin/CORS.
+- [x] arbitrary `base_url` network pivots.
+- [x] insecure HTTP remote OAuth endpoints.
+- [x] hardcoded OAuth secrets/tokens/private keys.
+- [x] `Authorization` logging.
+- [x] `#[allow(`, `#![allow(`, `allow(warnings)`, and broad Clippy suppression in production Rust code.
+- [x] `continue-on-error`, `|| true`, `; true`, and equivalent required-check bypasses in workflows.
+- [x] committed binaries or generated artifacts that replace source-built release outputs.
 
 False positives MUST be fixed by narrowing the implementation/search rule or documenting a reviewed non-production fixture; never by disabling the entire check.
 
 ### 17.7 Release reproducibility
 
-- [ ] Release workflow uses Cargo directly.
-- [ ] No `@yao-pkg/pkg`, Node runtime packaging, or hidden JS build step remains.
-- [ ] Build uses a clean Rust toolchain/environment.
-- [ ] Release artifact is produced from the exact reviewed commit.
-- [ ] Checksums/signing metadata are generated where the repository release policy requires them.
-- [ ] No prebuilt local binary is copied into the release artifact.
-- [ ] Verify the binary has no Node/V8/libnode runtime dependency.
-- [ ] Verify expected target triples and artifact names.
+- [x] Release workflow uses Cargo directly.
+- [x] No `@yao-pkg/pkg`, Node runtime packaging, or hidden JS build step remains.
+- [x] Build uses a clean Rust toolchain/environment.
+- [x] Release artifact is produced from the exact reviewed commit.
+- [x] Checksums/signing metadata are generated where the repository release policy requires them.
+- [x] No prebuilt local binary is copied into the release artifact.
+- [x] Verify the binary has no Node/V8/libnode runtime dependency.
+- [x] Verify expected target triples and artifact names.
 
 ### 17.8 Manual no-bypass review
 
-- [ ] Search all Rust crates/modules for lint suppression.
-- [ ] Search all workflows for failure masking.
-- [ ] Search scripts/Makefiles/package scripts for ignored exit codes.
-- [ ] Review Cargo config, rust-toolchain files, build scripts, and workspace lints.
-- [ ] Verify CI commands executed locally are identical in enforcement strength to CI commands.
-- [ ] Confirm every security gate is fail-closed.
+- [x] Search all Rust crates/modules for lint suppression.
+- [x] Search all workflows for failure masking.
+- [x] Search scripts/Makefiles/package scripts for ignored exit codes.
+- [x] Review Cargo config, rust-toolchain files, build scripts, and workspace lints.
+- [x] Verify CI commands executed locally are identical in enforcement strength to CI commands.
+- [x] Confirm every security gate is fail-closed.
 
 **Phase 17 acceptance:** formatting, compiler warnings, Clippy, audit, dependency policy, CI scripts, security searches, and release checks all pass with zero bypasses, ignored failures, warning suppressions, or undocumented exceptions.
 
@@ -416,23 +416,23 @@ Phase 13 is deliberately last. It may start only after Phases 15, 16, and 17 are
 
 Plan 028 may be marked `COMPLETED` only when:
 
-- [ ] Relay is 100% Rust and standalone.
-- [ ] MCP Streamable HTTP is the sole relay protocol.
-- [ ] Local mode is loopback-only and non-root.
-- [ ] No sudo/privilege-escalation path exists.
-- [ ] Command authorization is server-controlled and deny-by-default.
-- [ ] SSRF/resource/process/output policies are enforced server-side.
-- [ ] Remote mode is HTTPS + OAuth protected.
-- [ ] OAuth uses standards-based resource-server validation and least-privilege scopes.
-- [ ] OAuth cannot grant execution beyond the server-side command policy.
-- [ ] No credentials/secrets/tokens are logged or exposed.
-- [ ] No legacy Node relay or `@yao-pkg/pkg` remains.
-- [ ] Clippy/compiler warnings are zero with no suppression/bypass.
-- [ ] fmt, clippy, audit, dependency, CI-integrity, and security-search gates pass.
-- [ ] No required CI command ignores failures or uses `continue-on-error`.
-- [ ] Phase 15 is complete.
-- [ ] Phase 16 is complete.
-- [ ] Phase 17 is complete.
+- [x] Relay is 100% Rust and standalone.
+- [x] MCP Streamable HTTP is the sole relay protocol.
+- [x] Local mode is loopback-only and non-root.
+- [x] No sudo/privilege-escalation path exists.
+- [x] Command authorization is server-controlled and deny-by-default.
+- [x] SSRF/resource/process/output policies are enforced server-side.
+- [x] Remote mode is HTTPS + OAuth protected.
+- [x] OAuth uses standards-based resource-server validation and least-privilege scopes.
+- [x] OAuth cannot grant execution beyond the server-side command policy.
+- [x] No credentials/secrets/tokens are logged or exposed.
+- [x] No legacy Node relay or `@yao-pkg/pkg` remains.
+- [x] Clippy/compiler warnings are zero with no suppression/bypass.
+- [x] fmt, clippy, audit, dependency, CI-integrity, and security-search gates pass.
+- [x] No required CI command ignores failures or uses `continue-on-error`.
+- [x] Phase 15 is complete.
+- [x] Phase 16 is complete.
+- [x] Phase 17 is complete.
 - [ ] Phase 13 final E2E/release gate is complete.
 
 ## Rollback

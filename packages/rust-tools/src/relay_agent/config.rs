@@ -24,6 +24,10 @@ pub struct Cli {
     #[arg(short, long, default_value_t = DEFAULT_PORT)]
     pub port: u16,
 
+    /// Explicit security mode: local (loopback only) or remote (OAuth required).
+    #[arg(long, value_enum, env = "RELAY_AGENT_MODE", default_value = "local")]
+    pub mode: SecurityMode,
+
     /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
     #[arg(short, long)]
     pub dir: Option<String>,
@@ -45,6 +49,14 @@ pub struct Cli {
     pub oauth_audience: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
+pub enum SecurityMode {
+    #[serde(rename = "local")]
+    Local,
+    #[serde(rename = "remote")]
+    Remote,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Stop the port-scoped local agent instance.
@@ -62,6 +74,7 @@ pub enum Command {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
     pub port: u16,
+    pub mode: SecurityMode,
     pub dir: Option<String>,
     pub origin: Option<String>,
     pub oauth_secret: Option<String>,
@@ -73,6 +86,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             port: DEFAULT_PORT,
+            mode: SecurityMode::Local,
             dir: None,
             origin: None,
             oauth_secret: None,
@@ -116,6 +130,11 @@ impl ServerConfig {
                 ));
             }
         }
+        if self.mode == SecurityMode::Remote && self.oauth_secret.is_none() {
+            return Err(RelayError::InvalidConfig(
+                "oauth_secret must be set in remote mode".to_string(),
+            ));
+        }
         if self.oauth_secret.is_some()
             && (self.oauth_issuer.is_none() || self.oauth_audience.is_none())
         {
@@ -137,6 +156,7 @@ impl From<&Cli> for ServerConfig {
     fn from(cli: &Cli) -> Self {
         Self {
             port: cli.port,
+            mode: cli.mode,
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
             oauth_secret: cli.oauth_secret.clone(),
