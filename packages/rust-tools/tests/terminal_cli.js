@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util'
-import { createTerminalTool } from '../src/index.ts'
+import { createTerminalTool } from '../../terminal-tool/src/index.ts'
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
   options: {
     'cwd': { type: 'string', default: process.cwd() },
-    'no-guard': { type: 'boolean' }
+    'no-guard': { type: 'boolean' },
+    'timeout': { type: 'string' }
   },
   allowPositionals: true
 })

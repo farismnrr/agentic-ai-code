@@ -35,3 +35,4 @@ logs
 # Agent session state (regenerated per session)
 .agents/.sync-state
 .agents/.last-sync
+target/

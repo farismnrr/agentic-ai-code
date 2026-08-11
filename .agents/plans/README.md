@@ -13,6 +13,7 @@ Keep shipped plans; move them to the Done list below rather than deleting, so th
 ## In Flight
 
 ## Completed
+- [027-cli-rust-refactor.md](027-cli-rust-refactor.md) — migrate terminal-tool, curl-tool, and searxng-search-tool CLIs from JavaScript to Rust; full parity, SSRF/security hardening, deterministic test suites, release CI pipeline, benchmarks, and zero-JS cutover. PR #99.
 - [026-local-cli-relay-agent.md](026-local-cli-relay-agent.md) — Relay agent: browser-to-localhost bridge, no internet in the data path.
 - [025-skeleton-lazy-loading.md](025-skeleton-lazy-loading.md) — convert blocking `useFetch`/`useAsyncData` calls (sidebar/layout, settings pages, chat conversation load) to Nuxt's lazy pattern with `USkeleton` loading states and inline retry on error, so a slow/failed API degrades one panel instead of crashing the whole app.
 - [024-context-compaction.md](024-context-compaction.md) — trim/summarize long chat histories against the model's `contextWindow` instead of sending the full message array unbounded every turn; four phases (heuristic then real usage-accounting compaction, bounded DB reads, context-usage indicator/freeze fix/tool-approval race fix) merged via PR #84 and #85.
