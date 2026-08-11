@@ -36,7 +36,8 @@ pub struct Cli {
     #[arg(short, long, env = "RELAY_AGENT_ORIGIN")]
     pub origin: Option<String>,
 
-    /// OAuth symmetric secret for validating JWTs
+    /// Legacy OAuth symmetric secret retained for compatibility; the remote
+    /// auth path validates JWTs with issuer/audience and JWKS instead.
     #[arg(long, env = "OAUTH_SECRET")]
     pub oauth_secret: Option<String>,
 
@@ -192,16 +193,11 @@ impl ServerConfig {
                 ));
             }
         }
-        if self.mode == SecurityMode::Remote && self.oauth_secret.is_none() {
-            return Err(RelayError::InvalidConfig(
-                "oauth_secret must be set in remote mode".to_string(),
-            ));
-        }
-        if self.oauth_secret.is_some()
+        if self.mode == SecurityMode::Remote
             && (self.oauth_issuer.is_none() || self.oauth_audience.is_none())
         {
             return Err(RelayError::InvalidConfig(
-                "oauth_issuer and oauth_audience are required when oauth_secret is set".to_string(),
+                "oauth_issuer and oauth_audience are required in remote mode".to_string(),
             ));
         }
         Ok(())
