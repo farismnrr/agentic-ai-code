@@ -284,8 +284,35 @@ pub async fn dispatch_tool_call(
         )));
     }
 
-    let mut cmd = Command::new(&bin_path);
-    cmd.args(&proc_args);
+    let execution_root_str = config
+        .resolved_execution_root()
+        .map_err(|e| McpError::Internal(format!("failed to resolve execution root: {e}")))?
+        .to_string_lossy()
+        .into_owned();
+    let bin_dir_str = bin_dir.to_string_lossy().into_owned();
+
+    let mut cmd = Command::new("bwrap");
+    
+    let mut bwrap_args = vec![
+        "--ro-bind".to_string(), "/usr".to_string(), "/usr".to_string(),
+        "--ro-bind".to_string(), "/lib".to_string(), "/lib".to_string(),
+        "--ro-bind-try".to_string(), "/lib64".to_string(), "/lib64".to_string(),
+        "--ro-bind-try".to_string(), "/etc".to_string(), "/etc".to_string(),
+        "--ro-bind-try".to_string(), "/bin".to_string(), "/bin".to_string(),
+        "--ro-bind-try".to_string(), "/sbin".to_string(), "/sbin".to_string(),
+        "--ro-bind-try".to_string(), "/opt".to_string(), "/opt".to_string(),
+        "--dev".to_string(), "/dev".to_string(),
+        "--proc".to_string(), "/proc".to_string(),
+        "--bind".to_string(), execution_root_str.clone(), execution_root_str,
+        "--ro-bind".to_string(), bin_dir_str.clone(), bin_dir_str,
+        "--tmpfs".to_string(), "/tmp".to_string(),
+        "--unshare-pid".to_string(),
+        "--die-with-parent".to_string(),
+        bin_path.to_string_lossy().into_owned(),
+    ];
+    bwrap_args.extend(proc_args);
+
+    cmd.args(&bwrap_args);
     cmd.env_clear();
     
     // Pass minimal safe environment variables
