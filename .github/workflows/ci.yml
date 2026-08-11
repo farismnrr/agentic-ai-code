@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   push:
@@ -6,37 +6,144 @@ on:
   pull_request:
 
 jobs:
-  ci:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [22]
-
+  test-and-lint:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "packages/rust-tools"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
 
       - name: Install node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Lint
+      - name: JS Lint
         run: pnpm run lint
 
-      - name: Typecheck
+      - name: JS Typecheck
         run: pnpm run typecheck
 
-      # Fails the build on any advisory. Fix by pinning the patched version
-      # under `overrides:` in pnpm-workspace.yaml — see .agents/knowledge/git.md.
-      - name: Audit
+      - name: JS Audit
         run: pnpm audit
+
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+
+      - name: Lint with Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Install cargo-audit
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-audit@0.22.2
+
+      - name: Rust Security audit
+        run: cargo audit
+
+      - name: Run Rust parity tests
+        run: cargo test --workspace
+
+  build-release:
+    needs: test-and-lint
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use-cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          targets: ${{ matrix.target }}
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use-cross == true
+        run: cargo install cross
+
+      - name: Build release artifacts
+        run: |
+          if [ "${{ matrix.use-cross }}" == "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Package artifacts and generate checksums
+        working-directory: target/${{ matrix.target }}/release
+        run: |
+          mkdir -p dist
+          for bin in terminal-tool curl-tool searxng-search-tool; do
+            if [ -f "$bin" ]; then
+              cp "$bin" "dist/${bin}-${{ matrix.target }}"
+              cd dist
+              if command -v sha256sum >/dev/null; then
+                sha256sum "${bin}-${{ matrix.target }}" > "${bin}-${{ matrix.target }}.sha256"
+              else
+                shasum -a 256 "${bin}-${{ matrix.target }}" > "${bin}-${{ matrix.target }}.sha256"
+              fi
+              cd ..
+            fi
+          done
+
+      - name: Smoke test artifacts
+        working-directory: target/${{ matrix.target }}/release/dist
+        run: |
+          for bin in terminal-tool curl-tool searxng-search-tool; do
+            bin_name="${bin}-${{ matrix.target }}"
+            
+            # Verify SHA256 checksum file exists
+            if [ ! -f "${bin_name}.sha256" ]; then
+              echo "Error: Checksum file ${bin_name}.sha256 not found!"
+              exit 1
+            fi
+            
+            # Check if this target can be executed on the current runner
+            # GitHub's macos-latest is now ARM-based (macos-14), so both Apple targets work (x86_64 via Rosetta 2)
+            if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
+              echo "Skipping execution for cross-compiled target ${{ matrix.target }}"
+              continue
+            fi
+            
+            echo "Running smoke test for ${bin_name}..."
+            chmod +x "./${bin_name}"
+            "./${bin_name}" --help
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/dist/*

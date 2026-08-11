@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util'
-import { createSearxngSearchTool } from '../src/index.ts'
+import { createSearxngSearchTool } from '../../searxng-search-tool/src/index.ts'
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),

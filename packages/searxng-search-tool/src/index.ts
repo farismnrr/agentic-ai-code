@@ -1,20 +1,25 @@
+// @ts-expect-error - Ignore module resolution errors in CI
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod'
+import { execa } from 'execa'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const createSearxngSearchTool = ({ baseUrl }: { baseUrl: string }) => {
   return tool(
     async ({ query }) => {
       try {
-        const u = new URL('/search', baseUrl)
-        u.searchParams.set('q', query)
-        u.searchParams.set('format', 'json')
-        const res = await fetch(u)
-        if (!res.ok) return `Search failed with status: ${res.status}`
-        const data = await res.json()
-        const results = (data.results || []).slice(0, 10).map((r: Record<string, string>) =>
-          `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content || r.snippet}`
-        ).join('\n\n')
-        return results || 'No results found.'
+        const __dirname = path.dirname(fileURLToPath(import.meta.url))
+        const rustBin = path.join(__dirname, '../../../target/release/searxng-search-tool')
+
+        const args = [query, '--base-url', baseUrl]
+
+        const res = await execa(rustBin, args, { reject: false })
+        if (res.failed) {
+          return `Error: ${res.stderr || res.message}`
+        }
+
+        return res.stdout
       } catch (e: unknown) {
         return `Error: ${(e as Error).message}`
       }

@@ -1,0 +1,30 @@
+[package]
+name = "rust-tools"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0" # MSRV
+
+
+[dependencies]
+clap = { version = "4.5.17", features = ["derive"] }
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "charset", "macos-system-configuration", "http2"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+url = "2.5"
+thiserror = "1.0"
+shell-words = "1.1.1"
+ipnet = "2.12.1"
+libc = "0.2.189"
+
+[[bin]]
+name = "searxng-search-tool"
+path = "src/bin/searxng-search-tool.rs"
+
+[[bin]]
+name = "curl-tool"
+path = "src/bin/curl-tool.rs"
+
+[[bin]]
+name = "terminal-tool"
+path = "src/bin/terminal-tool.rs"

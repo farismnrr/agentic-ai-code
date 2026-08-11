@@ -1,0 +1,5 @@
+- **RustSec audit policy**: `cargo audit` runs in CI on every PR. No unpatched vulnerabilities in direct dependencies allowed to merge.
+- **Dependency update policy**: dependencies are updated monthly or when a RustSec advisory is published. Use `cargo update` then run `cargo audit`.
+- **Lockfile policy**: `Cargo.lock` IS committed to the repo (workspace binary crate, not a library). This ensures reproducible builds.
+- **cargo deny**: not currently configured. If direct dependency count grows beyond 30 crates, consider adding `cargo deny` for license/duplicate dep checks.
+- **License policy**: all dependencies must be MIT, Apache-2.0, or MIT/Apache-2.0 dual-licensed. No GPL-licensed dependencies.

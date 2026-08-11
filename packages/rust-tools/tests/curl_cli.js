@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util'
-import { createCurlTool } from '../src/index.ts'
+
+import { createCurlTool } from '../../curl-tool/src/index.ts'
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
