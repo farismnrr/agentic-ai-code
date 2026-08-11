@@ -354,7 +354,7 @@ spec-verified implementation.
 ### Phase 3 — Tool registry and execution — [ ] TODO
 
 - [ ] Register Plan 027 Rust CLI tools.
-- [ ] Validate JSON Schema arguments.
+- [x] Validate JSON Schema arguments.
 - [ ] Dispatch without shell interpolation.
 - [ ] Apply auth, limits, timeout, and concurrency policy.
 - [ ] Normalize results/errors.
