@@ -28,7 +28,7 @@ pub struct Cli {
     #[arg(short, long)]
     pub dir: Option<String>,
 
-    /// Allowed Nuxt/browser origin for legacy compatibility endpoints.
+    /// Allowed Nuxt/browser origin for MCP requests.
     #[arg(short, long, env = "RELAY_AGENT_ORIGIN")]
     pub origin: Option<String>,
 }
