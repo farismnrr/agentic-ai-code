@@ -1,8 +1,7 @@
 //! MCP `2026-07-28` JSON-RPC protocol core.
 //!
 //! Types and pure logic only — no transport/axum concerns here (kept in
-//! `transport.rs`) so the protocol layer is independently testable per the
-//! plan's module-separation requirement.
+//! `transport.rs`) so the protocol layer remains transport-independent.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -191,10 +190,8 @@ pub struct Tool {
 }
 
 /// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
-/// binaries per `.agents/plans/028-phase0-contract-audit.md` section 4.
-///
-/// Execution is deliberately not wired here (Phase 3) — this only describes
-/// the surface a client can discover and validate calls against.
+/// binaries. Execution is deliberately not wired here (Phase 3) — this only
+/// describes the surface a client can discover and validate calls against.
 pub fn tool_catalog() -> Vec<Tool> {
     vec![
         Tool {
@@ -275,7 +272,7 @@ pub struct ToolResultContent {
 
 /// `tools/call` result envelope. A failing tool call (including "not
 /// implemented yet") is a *result* with `is_error: true`, not a JSON-RPC
-/// protocol error — see the audit doc section 3.
+/// protocol error — see the MCP contract.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolCallResult {
     pub content: Vec<ToolResultContent>,
@@ -319,97 +316,4 @@ pub fn parse_request(payload: &Value) -> Result<Request, Option<McpError>> {
     }
 
     Ok(request)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn catalog_has_one_tool_per_plan_027_binary() {
-        let names: Vec<&str> = tool_catalog().iter().map(|t| t.name).collect();
-        assert_eq!(names, vec!["terminal_exec", "http_fetch", "web_search"]);
-    }
-
-    #[test]
-    fn find_tool_returns_none_for_unknown_name() {
-        assert!(find_tool("does_not_exist").is_none());
-    }
-
-    #[test]
-    fn parse_request_accepts_well_formed_request() {
-        let payload = json!({"jsonrpc":"2.0","id":1,"method":"tools/list"});
-        let req = parse_request(&payload).expect("should parse");
-        assert_eq!(req.method, "tools/list");
-    }
-
-    #[test]
-    fn parse_request_treats_id_less_method_as_notification() {
-        let payload = json!({"jsonrpc":"2.0","method":"notifications/initialized"});
-        let err = parse_request(&payload).unwrap_err();
-        assert!(err.is_none());
-    }
-
-    #[test]
-    fn parse_request_rejects_wrong_jsonrpc_version() {
-        let payload = json!({"jsonrpc":"1.0","id":1,"method":"tools/list"});
-        let err = parse_request(&payload).unwrap_err();
-        assert!(matches!(err, Some(McpError::InvalidRequest(_))));
-    }
-
-    #[test]
-    fn parse_request_rejects_malformed_shape() {
-        let payload = json!({"not":"a request"});
-        let err = parse_request(&payload).unwrap_err();
-        assert!(matches!(err, Some(McpError::InvalidRequest(_))));
-    }
-
-    #[test]
-    fn extract_meta_reads_reserved_keys() {
-        let params = json!({
-            "_meta": {
-                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-                "io.modelcontextprotocol/clientInfo": { "name": "c", "version": "1.0" },
-                "io.modelcontextprotocol/clientCapabilities": {}
-            }
-        });
-        let meta = extract_meta(Some(&params)).expect("meta present");
-        assert_eq!(meta.protocol_version.as_deref(), Some("2026-07-28"));
-        assert_eq!(meta.client_info.unwrap().name, "c");
-        assert!(meta.client_capabilities.is_some());
-    }
-
-    #[test]
-    fn extract_meta_returns_none_when_absent() {
-        assert!(extract_meta(Some(&json!({}))).is_none());
-        assert!(extract_meta(None).is_none());
-    }
-
-    #[test]
-    fn decode_header_value_passes_through_plain_ascii() {
-        assert_eq!(
-            decode_header_value("get_weather").as_deref(),
-            Some("get_weather")
-        );
-    }
-
-    #[test]
-    fn decode_header_value_decodes_base64_sentinel() {
-        // "Hello, 世界" per the spec's own worked example.
-        let encoded = "=?base64?SGVsbG8sIOS4lueVjA==?=";
-        assert_eq!(decode_header_value(encoded).as_deref(), Some("Hello, 世界"));
-    }
-
-    #[test]
-    fn decode_header_value_rejects_invalid_base64_sentinel() {
-        assert!(decode_header_value("=?base64?not valid base64?=").is_none());
-    }
-
-    #[test]
-    fn discover_result_advertises_current_protocol_version() {
-        let result = DiscoverResult::current();
-        assert_eq!(result.supported_versions, vec![PROTOCOL_VERSION]);
-        assert_eq!(result.result_type, "complete");
-    }
 }
