@@ -156,7 +156,8 @@ fn test_environment_filtering() {
 #[test]
 fn test_terminal_exit_code_contract_invalid_usage() {
     let output = std::process::Command::new(get_bin("terminal-tool"))
-        .arg("--this-flag-does-not-exist")
+        .arg("--timeout")
+        .arg("notanumber")
         .output()
         .unwrap();
     assert_eq!(

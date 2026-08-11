@@ -153,5 +153,11 @@ async fn main() {
     let timeout_ms = args.timeout.unwrap_or(30000);
 
     let output = run_terminal(command, cmd_args, &cwd, args.no_guard, timeout_ms).await;
+
+    let is_error = output.starts_with("Error:");
     println!("{output}");
+
+    if is_error {
+        std::process::exit(1);
+    }
 }
