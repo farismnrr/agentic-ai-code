@@ -9,6 +9,7 @@ use serde_json::json;
 use tokio::net::TcpListener;
 
 const PROTO_HEADER: &str = "mcp-protocol-version";
+const METHOD_HEADER: &str = "mcp-method";
 const PROTO_VERSION: &str = "2026-07-28";
 const TEST_ORIGIN: &str = "http://localhost:3333";
 
@@ -31,7 +32,17 @@ async fn spawn_server(origin: Option<&str>) -> String {
 }
 
 fn tools_list_payload() -> serde_json::Value {
-    json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" })
+    json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": PROTO_VERSION,
+                "io.modelcontextprotocol/clientCapabilities": {}
+            }
+        }
+    })
 }
 
 #[tokio::test]
@@ -42,6 +53,7 @@ async fn allowed_origin_and_host_reach_the_mcp_handler() {
     let res = client
         .post(format!("{base}/mcp"))
         .header(PROTO_HEADER, PROTO_VERSION)
+        .header(METHOD_HEADER, "tools/list")
         .header("origin", TEST_ORIGIN)
         .json(&tools_list_payload())
         .send()

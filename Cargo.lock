@@ -949,6 +949,7 @@ name = "rust-tools"
 version = "0.0.5-beta"
 dependencies = [
  "axum",
+ "base64",
  "clap",
  "ipnet",
  "libc",

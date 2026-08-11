@@ -100,45 +100,79 @@ Phase 4 as scoped. This run does not implement it; only the MCP core (Phase 1/2)
 
 ## 3. MCP `2026-07-28` contract frozen for this implementation
 
-No live web access was available to re-verify the spec text in this session. The following is
-carried over from the plan document's own citations/description (`Streamable HTTP`, stateless
-core, JSON-RPC 2.0 base, routing headers) plus conservative, spec-shaped choices where the plan
-text does not give an exact wire detail. **Assumptions are marked explicitly** — they should be
-checked against the live spec before Phase 2 is considered conformance-final, not just
-protocol-shaped.
+**Revision history for this section:** the original version of this section was written without
+live web access and carried an explicit "assumptions, verify before conformance-final" caveat. A
+later review caught that two of those assumptions were wrong — `initialize` was kept as a working
+capability-announcement method, and only `MCP-Protocol-Version` was validated — which is not what
+the modern spec requires. This section was then rewritten against the **live official spec**,
+fetched and quoted directly at `modelcontextprotocol.io/specification/2026-07-28/` (pages:
+`basic/transports`, `basic/transports/streamable-http`, `basic/versioning`, `server/discover`,
+`schema`). Everything below is sourced from that live fetch, not carried over from the plan
+document's own paraphrase.
 
+- **No `initialize`/`initialized` handshake exists in this revision.** It was retired along with
+  `Mcp-Session-Id`. `server/discover` is the modern replacement: servers **MUST** implement it, but
+  calling it is optional for clients — any RPC can be invoked inline and the server validates each
+  request independently. This server does not recognize `initialize` as a method at all; it falls
+  through to the ordinary unknown-method path (`404`, `-32601`), which is itself spec-correct
+  behavior for a modern-only server receiving a legacy request.
 - Transport: Streamable HTTP only. One route, `POST /mcp`, JSON body in, JSON body out (no SSE
-  stream in this phase — streaming responses are not implemented; every `tools/call` response is
-  a single JSON object, which is a spec-legal degenerate case of Streamable HTTP for
-  non-streaming tools). **Assumption**: not implementing the optional `GET /mcp` SSE-upgrade path
-  in this phase — no MCP client in this repo's scope needs it yet, and the plan defers it if a
-  concrete client needs it later.
+  stream in this phase — streaming responses are not implemented; every response is a single JSON
+  object, which is a spec-legal degenerate case of Streamable HTTP for non-streaming tools). Not
+  implementing the optional `GET`/SSE-upgrade response mode in this phase — no MCP client in this
+  repo's scope needs it yet.
   Content type: `application/json` in, `application/json` out (no legacy HTTP+SSE
   `text/event-stream` used).
   - HTTP status codes: `200` for a well-formed JSON-RPC response (including a JSON-RPC-level
-    error object — JSON-RPC errors are not necessarily HTTP errors), `400` for a transport-level
-    parse/shape failure (invalid JSON, missing `jsonrpc`, wrong protocol version, oversized body),
-    `404`/`405` for wrong path/method.
-- Required header: `MCP-Protocol-Version: 2026-07-28`. **Decision for this implementation**: the
-  header is *required* on every `POST /mcp` request (not merely validated-if-present as the
-  pre-existing stub code did) — missing or mismatched version fails closed with `400` and a
-  JSON-RPC `-32600 Invalid Request` envelope naming the expected version. This matches the plan's
-  instruction to "validate `MCP-Protocol-Version` ... where applicable" and the security invariant
-  of failing closed on ambiguous protocol state.
+    error object — JSON-RPC errors are not necessarily HTTP errors), `202` with **no body** for an
+    accepted notification (spec-mandated, not `200`), `400` for a transport-level or
+    header/body-validation failure, `404` for an unimplemented method or unknown tool,
+    `413` for an oversized body.
+- **Standard request-metadata headers** (`streamable-http#request-metadata`), all required on
+  every request:
+  - `MCP-Protocol-Version` — must equal `2026-07-28`. If a different-but-known-format value is
+    sent, the server responds `400` with JSON-RPC code `-32022`
+    (`UnsupportedProtocolVersionError`) and `data: {supported: ["2026-07-28"], requested: "<value>"}`.
+  - `Mcp-Method` — must exactly equal the JSON-RPC body's `method` field (case-sensitive).
+  - `Mcp-Name` — required specifically for `tools/call`, `resources/read`, and `prompts/get`
+    (mirrors `params.name`/`params.uri`); this server implements only `tools/call` among those
+    three, so `Mcp-Name` is required there and nowhere else. Values that aren't safe plain ASCII
+    are carried as `=?base64?{Base64EncodedValue}?=` per the spec's Value Encoding rules; the
+    server decodes that sentinel form before comparing.
+  - Any missing or body-mismatched standard header is rejected with `400` and JSON-RPC code
+    `-32020` (`HeaderMismatchError`) — this is the *single* error code for "missing" and
+    "mismatched" alike; only the human-readable `message` distinguishes them.
+- **`_meta` request envelope** (`schema#requestmetaobject`): every request's `params._meta` must
+  carry `io.modelcontextprotocol/protocolVersion` (required, cross-checked byte-for-byte against
+  the `MCP-Protocol-Version` header) and `io.modelcontextprotocol/clientCapabilities` (required,
+  may be `{}`); `io.modelcontextprotocol/clientInfo` is optional. There is no server-side session —
+  this `_meta` object is how protocol version and identity travel, self-contained, on every single
+  request, replacing what `initialize` used to carry once per connection.
 - JSON-RPC 2.0 envelope: `{jsonrpc:"2.0", id, method, params}` in;
-  `{jsonrpc:"2.0", id, result}` or `{jsonrpc:"2.0", id, error:{code,message,data?}}` out. Standard
-  error codes used: `-32700` parse error, `-32600` invalid request, `-32601` method not found,
-  `-32602` invalid params, `-32603` internal error. Tool-execution-domain errors (e.g. "tool not
-  yet implemented") are returned as `tools/call` *results* with `isError: true` per MCP tool-result
-  convention, not as JSON-RPC protocol errors — a failing tool call is not a protocol failure.
-- Methods implemented this run: `tools/list`, `tools/call`. `initialize`/`server/discover` are
-  kept as a thin capability-announcement method (pre-existing in the stub) since a JSON-RPC/HTTP
-  client still benefits from a self-description endpoint, but per the plan's explicit instruction
-  this is **not** treated as a stateful session handshake — no `Mcp-Session-Id` is issued or
-  required, and `tools/list`/`tools/call` work identically whether or not `initialize` was ever
-  called. This is the stateless-core reading of the frozen spec.
+  `{jsonrpc:"2.0", id, result}` or `{jsonrpc:"2.0", id, error:{code,message,data?}}` out. Error
+  codes used: `-32700` parse error, `-32600` invalid request, `-32601` method not found, `-32602`
+  invalid params, `-32603` internal error (standard JSON-RPC), plus the MCP-reserved `-32020`
+  (`HeaderMismatch`) and `-32022` (`UnsupportedProtocolVersion`) above. Tool-execution-domain
+  errors (e.g. "tool not yet implemented") are returned as `tools/call` *results* with
+  `isError: true` per MCP tool-result convention, not as JSON-RPC protocol errors — a failing tool
+  call is not a protocol failure.
+- Methods implemented this run: `server/discover`, `tools/list`, `tools/call`. `server/discover`'s
+  result shape (`server/discover#discoverresult`) is `{resultType, supportedVersions, capabilities,
+  _meta: {"io.modelcontextprotocol/serverInfo": {name, version}}, instructions}` — `resultType` and
+  `supportedVersions` are required by the schema; `ttlMs`/`cacheScope` (the optional caching
+  fields) are omitted since this server implements no caching.
+- A **notification** (no `id`) that the server accepts gets `202 Accepted` with **no body** —
+  never a JSON envelope. Header requirements for notification POSTs are explicitly left undefined
+  by this revision, so no header/`_meta` validation runs for them.
 - Body size limit enforced by `axum::extract::DefaultBodyLimit` before JSON deserialization (see
   resource limits below) so an oversized request is rejected before allocating a parsed value.
+- **CORS is not part of the MCP spec's authorization model** — the spec's own Security & Endpoint
+  section requires server-side `Origin` validation (403 on invalid Origin) independent of CORS, and
+  recommends binding to `127.0.0.1` locally. This server implements that as
+  `security.rs::enforce_local_access_policy`, layered *underneath* MCP parsing (see plan section
+  "Authorization"); the `CorsLayer` in `transport.rs` is a separate, non-security convenience for
+  browser callers, with `allow_headers` restricted to an explicit list
+  (`Content-Type`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) rather than `Any`.
 
 ## 4. Canonical MCP tool catalog (1:1 with Plan 027 binaries)
 

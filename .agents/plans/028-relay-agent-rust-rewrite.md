@@ -22,7 +22,7 @@ The current Node implementation and Nuxt consumers are the compatibility source 
 - Rewrite `packages/relay-agent` from Node.js/TypeScript to 100% Rust.
 - Produce a standalone `relay-agent` native binary with no Node.js/V8/libnode runtime dependency.
 - Implement **proper MCP server semantics**, not merely rename the existing WebSocket protocol.
-- Target the current MCP specification (`2026-07-28`) and document any intentionally supported compatibility version. The current specification is stateless at the protocol core and uses Streamable HTTP; legacy HTTP+SSE is deprecated. citeturn0search0turn0search2
+- Target the current MCP specification (`2026-07-28`) and document any intentionally supported compatibility version. The current specification is stateless at the protocol core and uses Streamable HTTP; legacy HTTP+SSE is deprecated.
 - Make the MCP tool catalog reusable across transports and clients.
 - Preserve existing Nuxt local-terminal behavior with zero functional/source changes unless a Phase 0 contract audit proves a compatibility fix is unavoidable.
 - Reuse the Rust CLI tools from Plan 027 rather than duplicating their implementations in the relay.
@@ -110,23 +110,23 @@ The binary entrypoint remains thin. Protocol, tool registry, auth, execution, an
 
 ### Protocol version
 
-- [ ] Freeze the MCP specification version during Phase 0.
-- [ ] Target **MCP `2026-07-28`** for the new server contract.
-- [ ] Do not implement the removed legacy `initialize`/`initialized` + `Mcp-Session-Id` model as the primary protocol.
-- [ ] Do not build new dependencies on deprecated legacy HTTP+SSE transport. Streamable HTTP is the required HTTP transport. citeturn0search0turn0search2
-- [ ] If backward compatibility with an older MCP client is required, isolate it behind an explicit compatibility layer and test it separately.
+- [x] Freeze the MCP specification version during Phase 0. `2026-07-28`, confirmed live at `modelcontextprotocol.io/specification/2026-07-28/`.
+- [x] Target **MCP `2026-07-28`** for the new server contract.
+- [x] Do not implement the removed legacy `initialize`/`initialized` + `Mcp-Session-Id` model as the primary protocol. `initialize` is not a recognized method (falls through to `404`/`-32601`); no session or `Mcp-Session-Id` exists anywhere in this server.
+- [x] Do not build new dependencies on deprecated legacy HTTP+SSE transport. Streamable HTTP is the required HTTP transport. Only `POST /mcp` (JSON-in/JSON-out) is implemented; no `text/event-stream` path exists.
+- [ ] If backward compatibility with an older MCP client is required, isolate it behind an explicit compatibility layer and test it separately. Not needed yet — no legacy-MCP client is in this server's scope; the Nuxt legacy HTTP/WS adapter (Phase 4) is a separate, non-MCP concern.
 
 ### JSON-RPC / MCP methods
 
 Implement the MCP methods/extensions actually required by the selected spec and product scope. At minimum the tool-server surface must correctly support:
 
-- `server/discover` when required by the selected spec/client flow;
+- `server/discover` — **implemented**, required by `2026-07-28` (servers MUST implement it; calling it is optional for clients);
 - `tools/list`;
 - `tools/call`;
 - protocol errors and JSON-RPC error semantics;
 - capability advertisement appropriate to the implementation.
 
-Do **not** implement deprecated/removed MCP methods merely because they existed in an older SDK. The current spec explicitly removed the old initialization/session handshake and redesigned long-lived server-to-client interactions. citeturn0search0
+Do **not** implement deprecated/removed MCP methods merely because they existed in an older SDK. The current spec explicitly removed the old initialization/session handshake and redesigned long-lived server-to-client interactions.
 
 ### Tool catalog
 
@@ -168,16 +168,16 @@ Tool annotations/metadata must accurately describe risk and behavior. Treat anno
 
 For the HTTP MCP endpoint:
 
-- [ ] Implement the transport requirements of MCP `2026-07-28`.
-- [ ] Validate `MCP-Protocol-Version` and the required MCP routing headers where applicable.
-- [ ] Preserve JSON-RPC request/response semantics.
-- [ ] Support the response/content types required by the selected transport mode.
-- [ ] Enforce request/message size limits before unbounded allocation.
-- [ ] Do not rely on a hidden server-side session as an authorization boundary.
-- [ ] Implement required CORS behavior for Nuxt without wildcarding security-sensitive origins.
-- [ ] Add interoperability tests using an official/standards-compliant MCP client or protocol harness where available.
+- [x] Implement the transport requirements of MCP `2026-07-28`. `POST /mcp` only, JSON-in/JSON-out (no SSE upgrade — see audit doc assumption).
+- [x] Validate `MCP-Protocol-Version` and the required MCP routing headers where applicable. `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` (for `tools/call`) are all validated against the request body per `streamable-http#server-validation`, including Base64-sentinel decoding for `Mcp-Name`.
+- [x] Preserve JSON-RPC request/response semantics.
+- [x] Support the response/content types required by the selected transport mode. `application/json` only; notifications get `202 Accepted` with no body per spec.
+- [x] Enforce request/message size limits before unbounded allocation. 1 MiB `DefaultBodyLimit`, enforced before JSON parsing.
+- [x] Do not rely on a hidden server-side session as an authorization boundary. There is no session at all — every request is validated independently via headers + `_meta`.
+- [x] Implement required CORS behavior for Nuxt without wildcarding security-sensitive origins. `allow_headers` is an explicit list (`Content-Type`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`), not `Any`; Origin is never wildcarded (fails closed on `*`/missing).
+- [ ] Add interoperability tests using an official/standards-compliant MCP client or protocol harness where available. Still open — see Phase 2 checklist note.
 
-The current 2026-07-28 spec adds method/name HTTP headers for routing and a stateless core; these must be treated as protocol requirements rather than custom headers invented by this project. citeturn0search0
+The `2026-07-28` spec adds `Mcp-Method`/`Mcp-Name` HTTP headers for routing (mirroring `method`/`params.name`) and a stateless core with per-request `_meta` instead of a session handshake; these are implemented as protocol requirements, verified against the live spec text at `modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http`, not as custom headers invented by this project.
 
 ### Authorization
 
@@ -197,7 +197,7 @@ tool execution
 
 The `localhost + Origin/Host policy` layer is implemented for the MCP endpoint (`POST /mcp`) in `packages/rust-tools/src/relay_agent/security.rs`, wired in front of it as axum middleware in `transport.rs`, with unit coverage in `security.rs` and end-to-end HTTP coverage in `tests/security_policy_tests.rs`. It fails closed on missing/wrong/duplicated/malformed `Origin`, on no `Origin` configured at all, and on missing/wrong/lookalike `Host`; it never reads `X-Forwarded-Host`. This is the same reusable policy the Phase 4 legacy compatibility endpoints (`/health`, `/pair`, `/revoke`, WebSocket) should apply once they exist — they are not yet implemented, so this note covers the MCP surface only.
 
-For any remotely deployed MCP endpoint in the future, use standards-based OAuth/protected-resource authorization rather than reusing the localhost pairing credential. Current MCP authorization guidance requires proper authorization-server/resource discovery and HTTP `401` behavior for protected resources. citeturn0search3
+For any remotely deployed MCP endpoint in the future, use standards-based OAuth/protected-resource authorization rather than reusing the localhost pairing credential. Current MCP authorization guidance requires proper authorization-server/resource discovery and HTTP `401` behavior for protected resources.
 
 For the local Nuxt relay:
 
@@ -327,14 +327,27 @@ Use `tokio::process::Command` and keep the execution adapter explicit.
 
 ### Phase 2 — MCP server — [x] DONE (execution itself intentionally not implemented — Phase 3)
 
+**Correction (superseding an earlier, incorrect pass of this phase):** an earlier
+version of this checklist marked `server/discover` and "routing headers" done
+based on the plan document's own paraphrase of MCP `2026-07-28`, written
+without live spec access (see the audit doc's original section 3 caveat).
+That implementation incorrectly kept `initialize` as a working protocol
+path (aliased into a capability-announcement response) and validated only
+`MCP-Protocol-Version`, not `Mcp-Method`/`Mcp-Name` or the request `_meta`
+envelope. This was caught in review and corrected against the live official
+spec at `modelcontextprotocol.io/specification/2026-07-28/` (fetched and
+quoted directly — `basic/transports/streamable-http`, `basic/versioning`,
+`server/discover`, `schema`). The bullets below describe the corrected,
+spec-verified implementation.
+
 - [x] Implement MCP `2026-07-28` protocol core. `packages/rust-tools/src/relay_agent/mcp.rs`.
 - [x] Implement Streamable HTTP. `POST /mcp` JSON-in/JSON-out; no SSE upgrade path implemented yet (see audit doc section 3 assumption — no client in scope needs it).
-- [x] Implement `server/discover`/capability discovery as required by the frozen spec/client matrix. Implemented as a stateless capability-announcement method (no session handshake), per the audit doc's stateless-core reading.
+- [x] Implement `server/discover` as the modern discovery method. `initialize` is **no longer a recognized method** — it falls through to the ordinary unknown-method path (`404`, `-32601`), matching the spec's guidance for a modern-only server receiving a legacy handshake. `server/discover` returns `resultType`, `supportedVersions`, `capabilities`, `_meta['io.modelcontextprotocol/serverInfo']`, and `instructions` per `server/discover#discoverresult`.
 - [x] Implement `tools/list`. Returns the full 3-tool catalog with JSON Schema 2020-12-compatible `inputSchema`.
-- [x] Implement `tools/call`. Validates tool name + params shape and dispatches to a structured `isError:true` "not implemented" result (Phase 3 owns real execution) — never a panic or 500.
-- [x] Implement JSON-RPC errors and protocol-version validation. `error.rs::McpError` + reserved JSON-RPC codes; `MCP-Protocol-Version` header is required (not merely validated-if-present) and fails closed.
-- [x] Implement required routing headers and content types. `MCP-Protocol-Version` header enforced; `Content-Type: application/json` enforced; request body bounded via `DefaultBodyLimit` (1 MiB, frozen in audit doc) before parsing.
-- [ ] Add official/client interoperability tests. Not done — no official/standards-compliant MCP client or protocol harness was available in this session; only this project's own integration tests (`mcp_transport_tests.rs`) were added. Left unchecked deliberately.
+- [x] Implement `tools/call`. Validates tool name + params shape (plus the `Mcp-Name` routing header, see below) and dispatches to a structured `isError:true` "not implemented" result (Phase 3 owns real execution) — never a panic or 500.
+- [x] Implement JSON-RPC errors and protocol-version validation. `error.rs::McpError` now includes the spec's `-32020 HeaderMismatch` and `-32022 UnsupportedProtocolVersion` (with `data: {supported, requested}`) in addition to the standard JSON-RPC codes.
+- [x] Implement required routing headers and content types. `MCP-Protocol-Version`, `Mcp-Method` (must equal body `method`), and `Mcp-Name` (required for `tools/call`, must equal `params.name`, Base64-sentinel decoding per `streamable-http#value-encoding`) are all validated in `transport.rs::validate_routing_headers`; every request's `params._meta` is cross-checked (`io.modelcontextprotocol/protocolVersion` must equal the header, `io.modelcontextprotocol/clientCapabilities` is required); `Content-Type: application/json` enforced; body bounded via `DefaultBodyLimit` (1 MiB) before parsing; a notification the server accepts gets `202 Accepted` with no body per spec.
+- [ ] Add official/client interoperability tests. Still not done — no official/standards-compliant MCP client or protocol harness (e.g. the official Rust/TS SDK) was available/wired in this session; only this project's own integration tests (`mcp_transport_tests.rs`, `security_policy_tests.rs`) exist, now built directly against the live spec text rather than a paraphrase. Left unchecked deliberately — do not mark this done without an actual external client run.
 
 ### Phase 3 — Tool registry and execution — [ ] TODO
 
@@ -515,9 +528,9 @@ Keep the Node/pkg release artifact available until the Rust MCP server, Nuxt com
 Record final evidence as implementation progresses:
 
 - Contract inventory: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 1 (legacy HTTP/WS) + section 4 (MCP tool catalog).
-- MCP specification/conformance matrix: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 3 (frozen contract, assumptions noted); tests in `packages/rust-tools/tests/mcp_transport_tests.rs` (16/16 passing) cover protocol-version handling, `tools/list` schema shape, `tools/call` structured-error semantics, malformed JSON-RPC, oversized body, and missing/invalid `MCP-Protocol-Version` header. No official MCP client/harness interoperability run yet.
-- Threat model/resource limits: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 6 (frozen numbers); only the HTTP body limit is enforced in code so far (Phase 2 scope), the rest are Phase 3/4/5 scope.
-- Rust implementation: partial `[~]` — Phase 1/2 plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3/4/5 rest).
+- MCP specification/conformance matrix: `[x]` Re-verified against the **live** official spec at `modelcontextprotocol.io/specification/2026-07-28/` (fetched directly: `basic/transports/streamable-http`, `basic/versioning`, `server/discover`, `schema`) — supersedes the earlier `028-phase0-contract-audit.md` section 3, which was written without live access and got the `initialize`/routing-header contract wrong (see the Phase 2 checklist correction note above). Tests in `packages/rust-tools/tests/mcp_transport_tests.rs` (23/23 passing) and `security_policy_tests.rs` (11/11 passing) cover protocol-version handling (including `-32022 UnsupportedProtocolVersion`), `Mcp-Method`/`Mcp-Name`/`_meta` cross-validation (`-32020 HeaderMismatch`), `server/discover`, `tools/list` schema shape, `tools/call` structured-error semantics, `202 Accepted` notifications, malformed JSON-RPC, and oversized body. No official MCP client/harness interoperability run yet — deliberately left open, not faked.
+- Threat model/resource limits: `[x]` `.agents/plans/028-phase0-contract-audit.md` section 6 (frozen numbers); HTTP body limit + Origin/Host policy are enforced in code, the rest (tool-execution limits, concurrency, pairing rate) are Phase 3/4/5 scope.
+- Rust implementation: partial `[~]` — Phase 1/2 (MCP-`2026-07-28`-verified) plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security modules + relay-agent binary entrypoint). Tool registry, execution, auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 3/4/5 rest).
 - MCP interoperability tests: `[ ]`
 - Security regression suite: partial `[~]` — Origin/Host enforcement fully covered (29 unit tests in `security.rs` + 11 integration tests in `tests/security_policy_tests.rs`, all green; `cargo fmt --check` and `clippy -D warnings` clean). Pairing/credential lifecycle, MCP authorization, and tool-execution-time limits still outstanding.
 - Nuxt E2E parity: `[ ]`

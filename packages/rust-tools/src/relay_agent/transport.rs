@@ -11,10 +11,32 @@
 //! client from reaching this server, so it must never be relied on as the
 //! security boundary. `/health` is intentionally left ungated: it is a
 //! liveness probe with no sensitive data or side effects.
+//!
+//! Header/body validation below follows the official MCP `2026-07-28`
+//! specification (`modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http`),
+//! verified live for this implementation:
+//! - There is no `initialize`/`initialized` handshake in this revision.
+//!   `server/discover` is the modern, optional-to-call discovery method;
+//!   every other request is self-contained.
+//! - Every request **MUST** carry `MCP-Protocol-Version`, `Mcp-Method`
+//!   (mirroring `method`), and — for `tools/call` — `Mcp-Name` (mirroring
+//!   `params.name`). A missing or body-mismatched standard header is
+//!   rejected with HTTP `400` and JSON-RPC code `-32020` (`HeaderMismatch`).
+//! - A protocol version the server doesn't implement is HTTP `400` with
+//!   JSON-RPC code `-32022` (`UnsupportedProtocolVersion`), carrying
+//!   `data: {supported, requested}`.
+//! - Every request's `params._meta` carries
+//!   `io.modelcontextprotocol/protocolVersion` (required, cross-checked
+//!   against the header) and `io.modelcontextprotocol/clientCapabilities`
+//!   (required, may be `{}`); `io.modelcontextprotocol/clientInfo` is
+//!   optional. There is no server-side session — every request is
+//!   validated independently.
+//! - A notification (no `id`) that the server accepts gets `202 Accepted`
+//!   with no body, never a JSON envelope.
 
 use axum::{
     extract::{DefaultBodyLimit, Request, State},
-    http::{HeaderMap, Method, StatusCode},
+    http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response as AxumResponse},
     routing::{get, post},
@@ -27,14 +49,18 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use super::config::ServerConfig;
 use super::error::McpError;
 use super::mcp::{
-    self, parse_request, tool_catalog, ErrorResponse, Id, InitializeParams, Response,
-    ToolCallResult, ToolsCallParams,
+    self, decode_header_value, extract_meta, parse_request, tool_catalog, DiscoverResult,
+    ErrorResponse, Id, Response, ToolCallResult, ToolsCallParams,
 };
 use super::security::enforce_local_access_policy;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP
 /// HTTP request body max.
 pub const MAX_BODY_BYTES: usize = 1024 * 1024; // 1 MiB
+
+const HDR_PROTOCOL_VERSION: &str = "mcp-protocol-version";
+const HDR_MCP_METHOD: &str = "mcp-method";
+const HDR_MCP_NAME: &str = "mcp-name";
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -50,10 +76,22 @@ pub fn create_router(config: ServerConfig) -> Router {
         _ => AllowOrigin::list(vec![]),
     };
 
+    // Explicit allow-list, not `Any`: only the headers this server's own
+    // clients actually need to send. `Mcp-Param-*` (the optional
+    // `x-mcp-header` tool-parameter mirroring extension) is not implemented
+    // in this server, so it is deliberately not allow-listed here — add it
+    // if/when that extension is implemented.
+    let cors_headers = [
+        axum::http::header::CONTENT_TYPE,
+        HeaderName::from_static(HDR_PROTOCOL_VERSION),
+        HeaderName::from_static(HDR_MCP_METHOD),
+        HeaderName::from_static(HDR_MCP_NAME),
+    ];
+
     let cors = CorsLayer::new()
         .allow_origin(cors_origin)
         .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers(tower_http::cors::Any);
+        .allow_headers(cors_headers);
 
     let state = Arc::new(AppState { config });
 
@@ -105,37 +143,7 @@ async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
     headers: HeaderMap,
     body: axum::body::Bytes,
-) -> Result<Json<Value>, JsonErr> {
-    // MCP-Protocol-Version is required on every request per the frozen audit
-    // (section 3): missing or mismatched fails closed, it is not merely
-    // validated-if-present.
-    let proto_header = headers
-        .get("mcp-protocol-version")
-        .and_then(|v| v.to_str().ok());
-    match proto_header {
-        Some(v) if v == mcp::PROTOCOL_VERSION => {}
-        Some(other) => {
-            return Err(err_response(
-                StatusCode::BAD_REQUEST,
-                None,
-                &McpError::InvalidRequest(format!(
-                    "unsupported MCP-Protocol-Version '{other}', expected '{}'",
-                    mcp::PROTOCOL_VERSION
-                )),
-            ));
-        }
-        None => {
-            return Err(err_response(
-                StatusCode::BAD_REQUEST,
-                None,
-                &McpError::InvalidRequest(format!(
-                    "missing required header MCP-Protocol-Version: expected '{}'",
-                    mcp::PROTOCOL_VERSION
-                )),
-            ));
-        }
-    }
-
+) -> AxumResponse {
     // Content-Type must be application/json for the Streamable HTTP JSON
     // mode used in this phase (no SSE upgrade implemented yet — see audit
     // doc section 3).
@@ -144,37 +152,51 @@ async fn handle_mcp(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     if !content_type.starts_with("application/json") {
-        return Err(err_response(
+        return err_response(
             StatusCode::BAD_REQUEST,
             None,
             &McpError::InvalidRequest(format!(
                 "unsupported Content-Type '{content_type}', expected application/json"
             )),
-        ));
+        )
+        .into_response();
     }
 
     // Body size is already bounded by DefaultBodyLimit before this handler
     // runs; parse only after that gate, never before.
-    let payload: Value = serde_json::from_slice(&body)
-        .map_err(|_| err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError))?;
+    let payload: Value = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => {
+            return err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError)
+                .into_response();
+        }
+    };
 
     let request = match parse_request(&payload) {
         Ok(req) => req,
         Err(None) => {
-            // A notification: no response body is meaningful; return an
-            // empty JSON object with 200 rather than a JSON-RPC envelope.
-            return Ok(Json(json!({})));
+            // A notification the server accepts: MCP `2026-07-28` mandates
+            // `202 Accepted` with no body, never a JSON envelope. Header
+            // requirements for notification POSTs are explicitly left
+            // undefined by this revision (see module docs), so no further
+            // validation runs here.
+            return StatusCode::ACCEPTED.into_response();
         }
         Err(Some(mcp_err)) => {
             let id = payload
                 .get("id")
                 .and_then(|v| serde_json::from_value::<Id>(v.clone()).ok());
-            return Err(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
+            return err_response(StatusCode::BAD_REQUEST, id, &mcp_err).into_response();
         }
     };
 
+    if let Err(err) = validate_routing_headers(&headers, &request) {
+        return err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err)
+            .into_response();
+    }
+
     match request.method.as_str() {
-        "server/discover" | "initialize" => handle_initialize(&request),
+        "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
         "tools/call" => handle_tools_call(&request),
         other => Err(err_response(
@@ -183,60 +205,137 @@ async fn handle_mcp(
             &McpError::MethodNotFound(other.to_string()),
         )),
     }
+    .into_response()
 }
 
-fn handle_initialize(request: &mcp::Request) -> Result<Json<Value>, JsonErr> {
-    if request.method == "initialize" {
-        let params_val = request.params.clone().ok_or_else(|| {
-            err_response(
-                StatusCode::BAD_REQUEST,
-                Some(request.id.clone()),
-                &McpError::InvalidParams("missing initialize parameters".to_string()),
-            )
-        })?;
+/// Validate the MCP `2026-07-28` standard request-metadata headers against
+/// the parsed JSON-RPC body, per `streamable-http#server-validation`. Every
+/// failure here is `-32020 HeaderMismatch` — the spec does not distinguish
+/// "missing" from "mismatched" at the error-code level, only in the human
+/// `message`.
+///
+/// Order: `MCP-Protocol-Version` (including the separate `-32022`
+/// unsupported-version case), then `Mcp-Method`, then `Mcp-Name` (only for
+/// methods that carry a name — `tools/call` in this server's scope).
+fn validate_routing_headers(headers: &HeaderMap, request: &mcp::Request) -> Result<(), McpError> {
+    let protocol_header = headers
+        .get(HDR_PROTOCOL_VERSION)
+        .and_then(|v| v.to_str().ok());
 
-        let init_params: InitializeParams = serde_json::from_value(params_val).map_err(|e| {
-            err_response(
-                StatusCode::BAD_REQUEST,
-                Some(request.id.clone()),
-                &McpError::InvalidParams(format!("invalid initialize parameters: {e}")),
-            )
-        })?;
+    let protocol_value = match protocol_header {
+        None => {
+            return Err(McpError::HeaderMismatch(format!(
+                "required standard header '{HDR_PROTOCOL_VERSION}' is missing"
+            )));
+        }
+        Some(v) if v != mcp::PROTOCOL_VERSION => {
+            return Err(McpError::UnsupportedProtocolVersion {
+                supported: vec![mcp::PROTOCOL_VERSION.to_string()],
+                requested: v.to_string(),
+            });
+        }
+        Some(v) => v,
+    };
 
-        if init_params.protocol_version != mcp::PROTOCOL_VERSION {
-            return Err(err_response(
-                StatusCode::BAD_REQUEST,
-                Some(request.id.clone()),
-                &McpError::InvalidParams(format!(
-                    "unsupported protocol version '{}', requires '{}'",
-                    init_params.protocol_version,
-                    mcp::PROTOCOL_VERSION
-                )),
+    let meta = extract_meta(request.params.as_ref());
+    let meta_protocol_version = meta.as_ref().and_then(|m| m.protocol_version.as_deref());
+    match meta_protocol_version {
+        Some(v) if v == protocol_value => {}
+        Some(v) => {
+            return Err(McpError::HeaderMismatch(format!(
+                "'{HDR_PROTOCOL_VERSION}' header value '{protocol_value}' does not match body \
+                 params._meta['io.modelcontextprotocol/protocolVersion'] value '{v}'"
+            )));
+        }
+        None => {
+            return Err(McpError::HeaderMismatch(
+                "required params._meta['io.modelcontextprotocol/protocolVersion'] is missing \
+                 from the request body"
+                    .to_string(),
             ));
         }
     }
 
-    // Stateless core: this is a capability-announcement convenience, not a
-    // session handshake. No Mcp-Session-Id is issued or required, and
-    // tools/list + tools/call work identically without ever calling this.
+    if meta
+        .as_ref()
+        .and_then(|m| m.client_capabilities.as_ref())
+        .is_none()
+    {
+        return Err(McpError::HeaderMismatch(
+            "required params._meta['io.modelcontextprotocol/clientCapabilities'] is missing \
+             from the request body"
+                .to_string(),
+        ));
+    }
+
+    let mcp_method_header = headers.get(HDR_MCP_METHOD).and_then(|v| v.to_str().ok());
+    match mcp_method_header {
+        None => {
+            return Err(McpError::HeaderMismatch(format!(
+                "required standard header '{HDR_MCP_METHOD}' is missing"
+            )));
+        }
+        Some(v) if v != request.method => {
+            return Err(McpError::HeaderMismatch(format!(
+                "'{HDR_MCP_METHOD}' header value '{v}' does not match body method '{}'",
+                request.method
+            )));
+        }
+        Some(_) => {}
+    }
+
+    // Mcp-Name is only required for methods that carry a name/uri in their
+    // params — of the three listed in the spec (`tools/call`,
+    // `resources/read`, `prompts/get`), only `tools/call` is implemented by
+    // this server.
+    if request.method == "tools/call" {
+        let expected_name = request
+            .params
+            .as_ref()
+            .and_then(|p| p.get("name"))
+            .and_then(|v| v.as_str());
+
+        let header_raw = headers.get(HDR_MCP_NAME).and_then(|v| v.to_str().ok());
+
+        match (header_raw, expected_name) {
+            (None, _) => {
+                return Err(McpError::HeaderMismatch(format!(
+                    "required standard header '{HDR_MCP_NAME}' is missing for method 'tools/call'"
+                )));
+            }
+            (Some(raw), expected) => {
+                let decoded = decode_header_value(raw).ok_or_else(|| {
+                    McpError::HeaderMismatch(format!(
+                        "'{HDR_MCP_NAME}' header value '{raw}' is not valid Base64-sentinel or ASCII"
+                    ))
+                })?;
+                if Some(decoded.as_str()) != expected {
+                    return Err(McpError::HeaderMismatch(format!(
+                        "'{HDR_MCP_NAME}' header value '{decoded}' does not match body params.name"
+                    )));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_discover(request: &mcp::Request) -> JsonErr2 {
     let response = Response::new(
         request.id.clone(),
-        json!({
-            "protocolVersion": mcp::PROTOCOL_VERSION,
-            "capabilities": { "tools": { "listChanged": false } },
-            "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") }
-        }),
+        serde_json::to_value(DiscoverResult::current()).unwrap_or(json!({})),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_tools_list(request: &mcp::Request) -> Result<Json<Value>, JsonErr> {
+fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     let tools = tool_catalog();
     let response = Response::new(request.id.clone(), json!({ "tools": tools }));
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_tools_call(request: &mcp::Request) -> Result<Json<Value>, JsonErr> {
+fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -272,3 +371,9 @@ fn handle_tools_call(request: &mcp::Request) -> Result<Json<Value>, JsonErr> {
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
+
+/// The three dispatch handlers above return `Json<Value>` on success or a
+/// pre-built `JsonErr` on failure, and are converted to a full
+/// [`AxumResponse`] by `.into_response()` in [`handle_mcp`] — this alias
+/// just keeps their signatures short.
+type JsonErr2 = Result<Json<Value>, JsonErr>;
