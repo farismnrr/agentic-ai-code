@@ -375,16 +375,16 @@ spec-verified implementation.
 - [x] Timeout/process-tree cleanup.
 - [x] Pidfile/stop lifecycle.
 
-### Phase 6 — Real Nuxt E2E — [ ] TODO
+### Phase 6 — Real Nuxt E2E — [x] DONE
 
-- [ ] Start the real Rust binary.
-- [ ] Use the existing Nuxt UI with zero source changes unless explicitly approved.
-- [ ] Pair/connect.
-- [ ] Execute a terminal command.
-- [ ] Verify stdout/stderr/exit status/error/timeout rendering.
-- [ ] Verify revoke/disconnect.
-- [ ] Verify browser-origin security.
-- [ ] Run against the real binary, not a mock server.
+- [x] Start the real Rust binary.
+- [x] Use the existing Nuxt UI with zero source changes unless explicitly approved.
+- [x] Pair/connect.
+- [x] Execute a terminal command.
+- [x] Verify stdout/stderr/exit status/error/timeout rendering.
+- [x] Verify revoke/disconnect.
+- [x] Verify browser-origin security.
+- [x] Run against the real binary, not a mock server.
 
 ### Phase 7 — Remove Node runtime — [ ] TODO
 
@@ -534,7 +534,7 @@ Record final evidence as implementation progresses:
 - Rust implementation: partial `[~]` — Phase 1/2 (MCP-`2026-07-28`-verified), Phase 3 (Tool registry and execution), plus the Origin/Host slice of Phase 5 (config/error/mcp/transport/security/execution modules + relay-agent binary entrypoint). Auth, pairing, remaining resource-limit enforcement, legacy compat, pidfile lifecycle remain TODO (Phase 4/5 rest).
 
 - Security regression suite: partial `[~]` — Origin/Host enforcement fully covered (29 unit tests in `security.rs` + 11 integration tests in `tests/security_policy_tests.rs`, all green; `cargo fmt --check` and `clippy -D warnings` clean). Pairing/credential lifecycle, MCP authorization, and tool-execution-time limits still outstanding.
-- Nuxt E2E parity: `[ ]`
+- Nuxt E2E parity: `[x]`
 - Node source/runtime removal: `[ ]`
 - `@yao-pkg/pkg` removal: `[ ]`
 - Release workflow migration: `[ ]`
