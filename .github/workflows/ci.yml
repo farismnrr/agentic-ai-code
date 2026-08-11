@@ -45,10 +45,16 @@ jobs:
         run: pnpm audit
 
       - name: Check Rust formatting
-        run: cargo fmt -- --check
+        working-directory: packages/rust-tools
+        run: cargo fmt --all -- --check
+
+      - name: Strict cargo check
+        working-directory: packages/rust-tools
+        run: cargo check --workspace --all-targets --all-features --locked
 
       - name: Lint with Clippy
-        run: cargo clippy -- -D warnings
+        working-directory: packages/rust-tools
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Install cargo-audit
         run: |
@@ -56,6 +62,7 @@ jobs:
           cargo binstall --no-confirm cargo-audit@0.22.2
 
       - name: Rust Security audit
+        working-directory: packages/rust-tools
         run: cargo audit
 
   build-release:
@@ -72,6 +79,9 @@ jobs:
             os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
+          # P0-7: Windows target aligned with release-relay-agent.yml matrix
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout

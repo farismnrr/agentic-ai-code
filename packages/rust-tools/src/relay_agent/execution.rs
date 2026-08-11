@@ -130,16 +130,31 @@ pub async fn dispatch_tool_call(
 
                 if binary_name == "docker"
                     && parts.iter().any(|arg| {
+                        // Privilege / namespace escape flags
                         arg == "--privileged"
                             || arg.starts_with("--cap-add")
+                            // PID namespace: --pid=host or --pid host
                             || arg == "--pid=host"
                             || arg == "--network=host"
+                            // Volume mounts: short -v and long --volume / --volume=
                             || arg.starts_with("-v")
+                            || arg == "--volume"
+                            || arg.starts_with("--volume=")
+                            // Bind mounts via --mount
                             || arg.starts_with("--mount")
+                            // Host device access
+                            || arg == "--device"
+                            || arg.starts_with("--device=")
+                            // User namespace escape
+                            || arg == "--userns=host"
+                            // IPC namespace escape
+                            || arg == "--ipc=host"
                     })
                 {
                     return Err(McpError::InvalidRequest(
-                        "docker privilege escalation flags (mounts, cap-add, host namespaces, privileged) are forbidden".to_string()
+                        "docker privilege escalation flags (mounts, cap-add, host namespaces, \
+                         devices, privileged, userns, ipc) are forbidden"
+                            .to_string(),
                     ));
                 }
 
@@ -292,20 +307,41 @@ pub async fn dispatch_tool_call(
     let bin_dir_str = bin_dir.to_string_lossy().into_owned();
 
     let mut cmd = Command::new("bwrap");
-    
+
     let mut bwrap_args = vec![
-        "--ro-bind".to_string(), "/usr".to_string(), "/usr".to_string(),
-        "--ro-bind".to_string(), "/lib".to_string(), "/lib".to_string(),
-        "--ro-bind-try".to_string(), "/lib64".to_string(), "/lib64".to_string(),
-        "--ro-bind-try".to_string(), "/etc".to_string(), "/etc".to_string(),
-        "--ro-bind-try".to_string(), "/bin".to_string(), "/bin".to_string(),
-        "--ro-bind-try".to_string(), "/sbin".to_string(), "/sbin".to_string(),
-        "--ro-bind-try".to_string(), "/opt".to_string(), "/opt".to_string(),
-        "--dev".to_string(), "/dev".to_string(),
-        "--proc".to_string(), "/proc".to_string(),
-        "--bind".to_string(), execution_root_str.clone(), execution_root_str,
-        "--ro-bind".to_string(), bin_dir_str.clone(), bin_dir_str,
-        "--tmpfs".to_string(), "/tmp".to_string(),
+        "--ro-bind".to_string(),
+        "/usr".to_string(),
+        "/usr".to_string(),
+        "--ro-bind".to_string(),
+        "/lib".to_string(),
+        "/lib".to_string(),
+        "--ro-bind-try".to_string(),
+        "/lib64".to_string(),
+        "/lib64".to_string(),
+        "--ro-bind-try".to_string(),
+        "/etc".to_string(),
+        "/etc".to_string(),
+        "--ro-bind-try".to_string(),
+        "/bin".to_string(),
+        "/bin".to_string(),
+        "--ro-bind-try".to_string(),
+        "/sbin".to_string(),
+        "/sbin".to_string(),
+        "--ro-bind-try".to_string(),
+        "/opt".to_string(),
+        "/opt".to_string(),
+        "--dev".to_string(),
+        "/dev".to_string(),
+        "--proc".to_string(),
+        "/proc".to_string(),
+        "--bind".to_string(),
+        execution_root_str.clone(),
+        execution_root_str,
+        "--ro-bind".to_string(),
+        bin_dir_str.clone(),
+        bin_dir_str,
+        "--tmpfs".to_string(),
+        "/tmp".to_string(),
         "--unshare-pid".to_string(),
         "--die-with-parent".to_string(),
         bin_path.to_string_lossy().into_owned(),
@@ -314,12 +350,17 @@ pub async fn dispatch_tool_call(
 
     cmd.args(&bwrap_args);
     cmd.env_clear();
-    
-    // Pass minimal safe environment variables
-    if let Ok(path) = env::var("PATH") {
-        cmd.env("PATH", path);
-    }
-    
+
+    // P1-4: Use a hardcoded safe PATH instead of inheriting the parent process PATH.
+    // Inheriting the parent PATH could allow an attacker who controls the relay-agent
+    // launch environment to substitute malicious binaries via PATH manipulation.
+    // The bwrap binary is invoked by its name above; callers should ensure bwrap is
+    // installed to a standard system path (/usr/bin/bwrap is typical).
+    cmd.env(
+        "PATH",
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    );
+
     // Explicitly strip environment variables that might alter execution trust
     cmd.env_remove("LD_PRELOAD");
     cmd.env_remove("LD_LIBRARY_PATH");

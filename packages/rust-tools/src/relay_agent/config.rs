@@ -116,15 +116,60 @@ impl ServerConfig {
         }
     }
 
-    /// Resolve the effective execution root.
+    /// Resolve the effective execution root, and reject unsafe system paths.
     pub fn resolved_execution_root(&self) -> Result<std::path::PathBuf, RelayError> {
         let root = match &self.execution_root {
             Some(d) => std::path::PathBuf::from(d),
             None => self.resolved_dir()?,
         };
-        std::fs::canonicalize(&root).map_err(|e| {
+        let canonical = std::fs::canonicalize(&root).map_err(|e| {
             RelayError::InvalidConfig(format!("execution root cannot be resolved: {}", e))
-        })
+        })?;
+
+        // P0-2: Reject system-level directories that would neutralize filesystem containment.
+        // If execution_root is "/", every starts_with check passes — containment is void.
+        let forbidden_roots: &[&std::path::Path] = &[
+            std::path::Path::new("/"),
+            std::path::Path::new("/tmp"),
+            std::path::Path::new("/etc"),
+            std::path::Path::new("/proc"),
+            std::path::Path::new("/sys"),
+            std::path::Path::new("/dev"),
+            std::path::Path::new("/root"),
+            std::path::Path::new("/var"),
+            std::path::Path::new("/usr"),
+            std::path::Path::new("/bin"),
+            std::path::Path::new("/sbin"),
+            std::path::Path::new("/lib"),
+            std::path::Path::new("/lib64"),
+            std::path::Path::new("/boot"),
+            std::path::Path::new("/run"),
+            std::path::Path::new("/opt"),
+            std::path::Path::new("/srv"),
+        ];
+        for bad in forbidden_roots {
+            if canonical.as_path() == *bad {
+                return Err(RelayError::InvalidConfig(format!(
+                    "execution root '{}' is a forbidden system path and cannot be used as a \
+                     filesystem boundary. Configure a user-owned project directory instead \
+                     (e.g. /home/user/project).",
+                    canonical.display()
+                )));
+            }
+        }
+        // Also reject shallow roots (depth < 3 components e.g. /home/user is allowed, / is not).
+        // This catches unnamed top-level dirs that aren't in the explicit list above.
+        let depth = canonical.components().count();
+        if depth < 3 {
+            return Err(RelayError::InvalidConfig(format!(
+                "execution root '{}' is too shallow (depth {}). \
+                 Use a directory at least 2 levels deep (e.g. /home/user/project).",
+                canonical.display(),
+                depth
+            )));
+        }
+
+        Ok(canonical)
     }
 
     /// Validate configuration before binding. Never broadens trust (e.g.
