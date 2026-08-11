@@ -606,46 +606,46 @@ Compensate for intentional lack of unit-test gate with strict deterministic buil
 
 ### Required CI gates
 
-- [ ] `cargo fmt --all -- --check`.
-- [ ] `cargo check --workspace --all-targets --all-features --locked`.
-- [ ] warnings denied for Rust check/build path.
-- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
-- [ ] `cargo audit`.
-- [ ] no broad lint/security suppression used to bypass failures.
-- [ ] no `continue-on-error`, `|| true`, swallowed exits or equivalent gate bypass.
-- [ ] release depends on strict quality/security gate.
+- [x] `cargo fmt --all -- --check`.
+- [x] `cargo check --workspace --all-targets --all-features --locked`.
+- [x] warnings denied for Rust check/build path.
+- [x] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
+- [x] `cargo audit`.
+- [x] no broad lint/security suppression used to bypass failures.
+- [x] no `continue-on-error`, `|| true`, swallowed exits or equivalent gate bypass.
+- [x] release depends on strict quality/security gate.
 
 ### Deterministic connector checks
 
 These are protocol/config/conformance checks, not a unit-test suite.
 
-- [ ] canonical `/mcp` route exists.
-- [ ] deprecated legacy SSE session core is not canonical.
-- [ ] Remote mode cannot run unauthenticated.
-- [ ] Protected Resource Metadata is valid.
-- [ ] resource identifier matches token validation.
-- [ ] `offline_access` is not advertised as MCP resource permission.
-- [ ] authorization metadata contains real endpoints, not placeholders.
-- [ ] `relay.coding` mapping exists for the intended full-coding profile.
-- [ ] optional narrow-scope mappings cannot imply/widen full coding scope.
-- [ ] tool annotations exist/are valid but are never used as auth decisions.
-- [ ] OAuth invalid-token/insufficient-scope challenge semantics are present.
-- [ ] no ChatGPT-specific route bypasses canonical auth/dispatch/sandbox core.
-- [ ] no new broad coding-command denylist is introduced by Plan 029 without documented boundary rationale.
-- [ ] tool-contract snapshot/change detection is reviewed for breaking/security changes.
-- [ ] no Node/pkg relay runtime is reintroduced.
+- [x] canonical `/mcp` route exists.
+- [x] deprecated legacy SSE session core is not canonical.
+- [x] Remote mode cannot run unauthenticated.
+- [x] Protected Resource Metadata is valid.
+- [x] resource identifier matches token validation.
+- [x] `offline_access` is not advertised as MCP resource permission.
+- [x] authorization metadata contains real endpoints, not placeholders.
+- [x] `relay.coding` mapping exists for the intended full-coding profile.
+- [x] optional narrow-scope mappings cannot imply/widen full coding scope.
+- [x] tool annotations exist/are valid but are never used as auth decisions.
+- [x] OAuth invalid-token/insufficient-scope challenge semantics are present.
+- [x] no ChatGPT-specific route bypasses canonical auth/dispatch/sandbox core.
+- [x] no new broad coding-command denylist is introduced by Plan 029 without documented boundary rationale.
+- [x] tool-contract snapshot/change detection is reviewed for breaking/security changes.
+- [x] no Node/pkg relay runtime is reintroduced.
 
 ### Explicit non-requirements
 
-- [ ] no new Rust unit-test module required.
-- [ ] no new JS unit-test suite required.
-- [ ] no `cargo test` completion gate required.
-- [ ] no test-only security bypass/environment hook allowed in production.
+- [x] no new Rust unit-test module required.
+- [x] no new JS unit-test suite required.
+- [x] no `cargo test` completion gate required.
+- [x] no test-only security bypass/environment hook allowed in production.
 
 ### Exit criteria
 
-- [ ] build/security/conformance gates are green with zero warning bypass.
-- [ ] release cannot publish if a required gate fails.
+- [x] build/security/conformance gates are green with zero warning bypass.
+- [x] release cannot publish if a required gate fails.
 
 ---
 
