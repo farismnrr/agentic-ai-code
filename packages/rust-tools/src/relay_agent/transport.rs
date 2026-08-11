@@ -79,6 +79,13 @@ const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 const MAX_LOG_FIELD: usize = 128;
 const HDR_CORRELATION_ID: &str = "x-correlation-id";
 
+/// Coarse relay-side admission control for the remote MCP edge. The burst is
+/// intentionally large enough for an agent's normal request burst, while the
+/// refill rate bounds sustained floods. A long-running tool call consumes one
+/// token when admitted; it does not consume tokens while it remains active.
+const REQUEST_ADMISSION_BURST: f64 = 32.0;
+const REQUEST_ADMISSION_RATE_PER_SEC: f64 = 8.0;
+
 fn safe_log_field(value: &str) -> String {
     value
         .chars()
@@ -133,6 +140,10 @@ pub struct CachedJwks {
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Coarse request admission is deliberately separate from both the HTTP
+    /// concurrency limit and the execution semaphore. It runs before OAuth
+    /// validation so unauthenticated floods cannot reach JWKS or execution.
+    pub request_admission: std::sync::Arc<RequestAdmission>,
     /// JWKS cache with TTL. `None` means not yet fetched.
     ///
     /// # OAuth boundary note (P1-3 / Phase 16.4)
@@ -144,6 +155,53 @@ pub struct AppState {
     /// server. Never accept authorization-server URLs or PKCE parameters from
     /// MCP tool arguments.
     pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
+}
+
+struct AdmissionState {
+    tokens: f64,
+    updated_at: Instant,
+}
+
+/// A small in-process token bucket. This is intentionally global to the relay
+/// instance: deployments with multiple public replicas should also enforce a
+/// distributed limit at their trusted edge.
+pub struct RequestAdmission {
+    capacity: f64,
+    refill_per_sec: f64,
+    state: std::sync::Mutex<AdmissionState>,
+}
+
+impl RequestAdmission {
+    fn new(capacity: f64, refill_per_sec: f64) -> Self {
+        Self {
+            capacity,
+            refill_per_sec,
+            state: std::sync::Mutex::new(AdmissionState {
+                tokens: capacity,
+                updated_at: Instant::now(),
+            }),
+        }
+    }
+
+    fn try_acquire(&self, now: Instant) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            // A poisoned limiter must fail closed rather than turn a panic in
+            // the admission path into an unlimited request path.
+            return false;
+        };
+
+        let elapsed = now
+            .saturating_duration_since(state.updated_at)
+            .as_secs_f64();
+        state.tokens = (state.tokens + elapsed * self.refill_per_sec).min(self.capacity);
+        state.updated_at = now;
+
+        if state.tokens < 1.0 {
+            return false;
+        }
+        state.tokens -= 1.0;
+        true
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
@@ -189,6 +247,10 @@ pub fn create_router(config: ServerConfig) -> Router {
     let state = Arc::new(AppState {
         config: config.clone(),
         execution_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
+        request_admission: Arc::new(RequestAdmission::new(
+            REQUEST_ADMISSION_BURST,
+            REQUEST_ADMISSION_RATE_PER_SEC,
+        )),
         jwks_cache: tokio::sync::RwLock::new(None),
     });
 
@@ -353,6 +415,26 @@ async fn access_policy(
     // Only apply policy to /mcp
     if req.uri().path() != "/mcp" {
         return next.run(req).await;
+    }
+
+    // Admit before parsing, OAuth/JWKS work, or tool dispatch. This protects
+    // the expensive/authenticated path without changing the separate HTTP
+    // concurrency and execution semaphore limits.
+    if !state.request_admission.try_acquire(Instant::now()) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::RETRY_AFTER,
+            axum::http::HeaderValue::from_static("1"),
+        );
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            headers,
+            Json(ErrorResponse::new(
+                None,
+                &McpError::InvalidRequest("Request temporarily unavailable".into()),
+            )),
+        )
+            .into_response();
     }
 
     let mut auth_ctx = AuthContext::default();
@@ -983,6 +1065,37 @@ type JsonErr2 = Result<Json<Value>, JsonErr>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn request_admission_allows_burst_then_refills() {
+        let admission = RequestAdmission::new(3.0, 1.0);
+        let start = Instant::now();
+
+        assert!(admission.try_acquire(start));
+        assert!(admission.try_acquire(start));
+        assert!(admission.try_acquire(start));
+        assert!(!admission.try_acquire(start));
+
+        let after_one_second = start
+            .checked_add(std::time::Duration::from_secs(1))
+            .expect("test instant should support one second");
+        assert!(admission.try_acquire(after_one_second));
+    }
+
+    #[test]
+    fn request_admission_does_not_charge_for_active_time() {
+        let admission = RequestAdmission::new(1.0, 1.0);
+        let start = Instant::now();
+
+        assert!(admission.try_acquire(start));
+        let after_build = start
+            .checked_add(std::time::Duration::from_secs(60))
+            .expect("test instant should support one minute");
+
+        // The bucket refills while a long-running admitted request is active;
+        // it is not charged repeatedly for the duration of that request.
+        assert!(admission.try_acquire(after_build));
+    }
 
     #[test]
     fn forwarded_https_is_ignored_without_explicit_proxy_trust() {
