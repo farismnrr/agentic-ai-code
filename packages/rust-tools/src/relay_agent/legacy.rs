@@ -257,6 +257,11 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                             .stderr(Stdio::piped())
                             .kill_on_drop(true);
 
+                        #[cfg(unix)]
+                        {
+                            cmd.process_group(0);
+                        }
+
                         // We can't easily do set extendEnv: false completely but we can clear_env
                         // and explicitly set PATH, HOME, LANG.
                         cmd.env_clear();
@@ -270,55 +275,84 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                             cmd.env("LANG", v);
                         }
 
-                        match tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
+                        let child_opt = cmd.spawn().ok();
+
+                        if let Some(child) = child_opt {
+                            let pid = child.id();
+                            match tokio::time::timeout(
+                                Duration::from_millis(timeout_ms),
+                                child.wait_with_output(),
+                            )
                             .await
-                        {
-                            Ok(Ok(output)) => {
-                                let exit_code = output.status.code();
-                                let success = output.status.success();
-                                let mut res = json!({
-                                    "type": "exec_result",
-                                    "id": id,
-                                    "success": success,
-                                    "exitCode": exit_code,
-                                    "stdout": String::from_utf8_lossy(&output.stdout),
-                                    "stderr": String::from_utf8_lossy(&output.stderr),
-                                });
-                                if !success {
-                                    if let Some(code) = exit_code {
-                                        res["error"] = json!(format!(
-                                            "Command failed with exit code {}",
-                                            code
-                                        ));
-                                    } else {
-                                        res["error"] = json!("Command failed (killed by signal)");
-                                    }
-                                }
-                                let _ = socket
-                                    .send(Message::Text(serde_json::to_string(&res).unwrap()))
-                                    .await;
-                            }
-                            Ok(Err(e)) => {
-                                let _ = socket
-                                    .send(Message::Text(
-                                        serde_json::to_string(&json!({
+                            {
+                                Ok(Ok(output)) => {
+                                    let exit_code = output.status.code();
+                                    let success = output.status.success();
+                                    let mut res = json!({
                                             "type": "exec_result",
-                                            "id": id,
-                                            "success": false,
-                                            "error": e.to_string()
-                                        }))
-                                        .unwrap(),
-                                    ))
-                                    .await;
+                                        "id": id,
+                                        "success": success,
+                                        "exitCode": exit_code,
+                                        "stdout": String::from_utf8_lossy(&output.stdout),
+                                        "stderr": String::from_utf8_lossy(&output.stderr),
+                                    });
+                                    if !success {
+                                        if let Some(code) = exit_code {
+                                            res["error"] = json!(format!(
+                                                "Command failed with exit code {}",
+                                                code
+                                            ));
+                                        } else {
+                                            res["error"] =
+                                                json!("Command failed (killed by signal)");
+                                        }
+                                    }
+                                    let _ = socket
+                                        .send(Message::Text(serde_json::to_string(&res).unwrap()))
+                                        .await;
+                                }
+                                Ok(Err(e)) => {
+                                    let _ = socket
+                                        .send(Message::Text(
+                                            serde_json::to_string(&json!({
+                                                "type": "exec_result",
+                                                "id": id,
+                                                "success": false,
+                                                "error": e.to_string()
+                                            }))
+                                            .unwrap(),
+                                        ))
+                                        .await;
+                                }
+                                Err(_) => {
+                                    if let Some(p) = pid {
+                                        #[cfg(unix)]
+                                        {
+                                            unsafe {
+                                                libc::kill(-(p as i32), libc::SIGKILL);
+                                            }
+                                        }
+                                    }
+                                    let _ = socket.send(Message::Text(serde_json::to_string(&json!({
+                                        "type": "exec_result",
+                                        "id": id,
+                                        "success": false,
+                                        "error": format!("Command timed out after {}s", timeout_ms / 1000)
+                                    })).unwrap())).await;
+                                }
                             }
-                            Err(_) => {
-                                let _ = socket.send(Message::Text(serde_json::to_string(&json!({
-                                    "type": "exec_result",
-                                    "id": id,
-                                    "success": false,
-                                    "error": format!("Command timed out after {}s", timeout_ms / 1000)
-                                })).unwrap())).await;
-                            }
+                        } else {
+                            let _ = socket
+                                .send(Message::Text(
+                                    serde_json::to_string(&json!({
+                                        "type": "exec_result",
+                                        "id": id,
+                                        "success": false,
+                                        "error": "Failed to spawn command"
+                                    }))
+                                    .unwrap(),
+                                ))
+                                .await;
                         }
                     }
                 } else {

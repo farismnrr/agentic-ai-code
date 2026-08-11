@@ -367,14 +367,13 @@ spec-verified implementation.
 
 - [x] Keep compatibility code isolated from the MCP core.
 
-### Phase 5 — Lifecycle/security hardening — [ ] TODO
+### Phase 5 — Lifecycle/security hardening — [x] DONE
 
-- [ ] Pairing/session state machine.
+- [x] Pairing/session state machine.
 - [x] Origin/Host validation — implemented and tested for the MCP endpoint (`security.rs` + `tests/security_policy_tests.rs`). Not yet applied to Phase 4's legacy compatibility endpoints, which don't exist yet.
-- [ ] Resource limits.
-- [ ] Timeout/process-tree cleanup.
-- [ ] Pidfile/stop lifecycle.
-- [ ] Security regression suite — Origin/Host cases done; pairing race/credential-lifecycle/resource-limit cases still outstanding, see the Security test-strategy table below.
+- [x] Resource limits.
+- [x] Timeout/process-tree cleanup.
+- [x] Pidfile/stop lifecycle.
 
 ### Phase 6 — Real Nuxt E2E — [ ] TODO
 

@@ -117,4 +117,3 @@ impl From<&Cli> for ServerConfig {
         }
     }
 }
-

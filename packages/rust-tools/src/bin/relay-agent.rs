@@ -1,25 +1,33 @@
 use clap::Parser;
 use rust_tools::relay_agent::{
     config::{Cli, Command, ServerConfig},
+    pidfile::Pidfile,
     transport::create_router,
 };
 use std::net::SocketAddr;
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     if let Some(Command::Stop { port }) = cli.command {
-        // Pidfile-based stop lifecycle is out of scope for Phase 1/2 (see
-        // Plan 028 "PID / lifecycle" section, deferred to Phase 5). This is
-        // a placeholder that keeps the CLI surface stable without silently
-        // pretending to have stopped anything.
-        eprintln!("relay-agent: `stop --port {port}` is not implemented yet (Plan 028 Phase 5).");
-        std::process::exit(1);
+        match Pidfile::stop(port) {
+            Ok(_) => {
+                println!("relay-agent: stopped port {port}");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("relay-agent: error stopping port {port}: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 
     let config = ServerConfig::from(&cli);
     config.validate().map_err(|e| e.to_string())?;
+
+    let _pidfile = Pidfile::new(config.port)?;
 
     // Fail fast if the resolved working directory doesn't exist, matching
     // the legacy relay's startup behavior.
@@ -35,7 +43,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("relay-agent listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, router).await?;
+
+    // Support graceful shutdown
+    let shutdown_signal = async {
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("failed to install signal handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+        }
+        println!("Shutting down gracefuly...");
+    };
+
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal)
+        .await?;
 
     Ok(())
 }
