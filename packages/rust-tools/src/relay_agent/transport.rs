@@ -531,7 +531,7 @@ async fn handle_tools_call(
 
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
-    let result = crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments)
+    let result = crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
         .await
         .unwrap_or_else(|e| ToolCallResult {
             content: vec![super::mcp::ToolResultContent {
