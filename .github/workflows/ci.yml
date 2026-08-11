@@ -11,22 +11,11 @@ permissions:
   contents: write
 
 jobs:
-  test-and-lint:
+  js-ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "packages/rust-tools"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -49,6 +38,23 @@ jobs:
       - name: JS Audit
         run: pnpm audit
 
+  rust-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "packages/rust-tools"
+
       - name: Check Rust formatting
         working-directory: packages/rust-tools
         run: cargo fmt --all -- --check
@@ -70,7 +76,7 @@ jobs:
         run: cargo audit
 
   build-release:
-    needs: test-and-lint
+    needs: [js-ci, rust-ci]
     strategy:
       matrix:
         include:
