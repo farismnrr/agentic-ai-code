@@ -163,11 +163,11 @@ No public unauthenticated execution is permitted.
 
 ### 14.2 SSRF / DNS rebinding
 
-- [ ] Eliminate DNS TOCTOU in `http_fetch`: validation must apply to the addresses actually used for the outbound connection, not a separate preliminary lookup.
-- [ ] Preserve scheme, private/link-local/loopback/metadata-address policy after DNS resolution.
-- [ ] Ensure redirects are revalidated against the same SSRF policy.
-- [ ] Ensure IPv4/IPv6, DNS aliases, and hostname edge cases cannot bypass the policy.
-- [ ] Manually review the complete `url -> resolve -> connect -> redirect` path.
+- [x] Eliminate DNS TOCTOU in `http_fetch`: validation must apply to the addresses actually used for the outbound connection, not a separate preliminary lookup.
+- [x] Preserve scheme, private/link-local/loopback/metadata-address policy after DNS resolution.
+- [x] Ensure redirects are revalidated against the same SSRF policy.
+- [x] Ensure IPv4/IPv6, DNS aliases, and hostname edge cases cannot bypass the policy.
+- [x] Manually review the complete `url -> resolve -> connect -> redirect` path.
 
 ### 14.3 Timeout and execution resource bounds
 
