@@ -35,14 +35,28 @@ pub async fn dispatch_tool_call(
                 args.push("--cwd".to_string());
                 args.push(cwd.to_string());
             }
+
+            let binary = match shell_words::split(command) {
+                Ok(parts) if !parts.is_empty() => parts[0].clone(),
+                _ => String::new(),
+            };
+            if !binary.is_empty() {
+                args.push("--allow-command".to_string());
+                args.push(binary);
+            }
+
             args.push(command.to_string());
             if let Some(arr) = arguments.get("args").and_then(|v| v.as_array()) {
                 for arg in arr {
                     if let Some(s) = arg.as_str() {
-                        if s == "--no-guard" {
-                            return Err(McpError::InvalidRequest(
-                                "argument --no-guard is forbidden".to_string(),
-                            ));
+                        if s == "--no-guard"
+                            || s == "--allow-command"
+                            || s.starts_with("--allow-command=")
+                        {
+                            return Err(McpError::InvalidRequest(format!(
+                                "argument {} is forbidden",
+                                s
+                            )));
                         }
                         args.push(s.to_string());
                     }
