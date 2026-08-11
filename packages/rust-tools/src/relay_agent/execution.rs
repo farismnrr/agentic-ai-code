@@ -88,7 +88,7 @@ pub async fn dispatch_tool_call(
                 // Privilege escalation: these commands bypass the non-root execution
                 // invariant even inside bwrap (they can call setuid/kernel interfaces).
                 // This check remains even though bwrap provides filesystem containment.
-                let forbidden = ["sudo", "su", "doas", "pkexec", "runas"];
+                let forbidden = ["sudo", "su", "doas", "pkexec", "runas", "docker"];
                 if forbidden.contains(&binary_name) {
                     return Err(McpError::InvalidRequest(format!(
                         "execution of '{}' is forbidden: privilege escalation is not allowed",
@@ -109,51 +109,6 @@ pub async fn dispatch_tool_call(
                         "path traversal or absolute paths in executable name are forbidden"
                             .to_string(),
                     ));
-                }
-
-                if binary_name == "docker"
-                    && parts.iter().any(|arg| {
-                        // Privilege / namespace escape flags
-                        arg == "--privileged"
-                            || arg.starts_with("--cap-add")
-                            // PID namespace: --pid=host or --pid host
-                            || arg == "--pid=host"
-                            || arg == "--network=host"
-                            // Volume mounts: short -v and long --volume / --volume=
-                            || arg.starts_with("-v")
-                            || arg == "--volume"
-                            || arg.starts_with("--volume=")
-                            // Bind mounts via --mount
-                            || arg.starts_with("--mount")
-                            // Host device access
-                            || arg == "--device"
-                            || arg.starts_with("--device=")
-                            // User namespace escape
-                            || arg == "--userns=host"
-                            // IPC namespace escape
-                            || arg == "--ipc=host"
-                    })
-                {
-                    return Err(McpError::InvalidRequest(
-                        "docker privilege escalation flags (mounts, cap-add, host namespaces, \
-                         devices, privileged, userns, ipc) are forbidden"
-                            .to_string(),
-                    ));
-                }
-
-                let allowed_commands = [
-                    "npm", "npx", "node", "cargo", "rustc", "git", "ls", "cat", "grep", "rg",
-                    "pwd", "echo", "head", "tail", "wc", "stat", "file", "tree", "diff", "find",
-                    "sed", "python", "python3", "pip", "sh", "bash", "zsh", "env", "rustup",
-                    "make", "gcc", "g++", "cc", "c++", "yarn", "pnpm", "nvm", "go", "jq", "curl",
-                    "wget", "tar", "gzip", "unzip", "cp", "mv", "rm", "mkdir", "rmdir", "touch",
-                ];
-
-                if !allowed_commands.contains(&binary_name) {
-                    return Err(McpError::InvalidRequest(format!(
-                        "command '{}' is not in the server-approved allowlist",
-                        binary_name
-                    )));
                 }
 
                 args.push("--allow-command".to_string());
