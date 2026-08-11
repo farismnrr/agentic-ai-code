@@ -27,3 +27,9 @@ Specifically, `relay-agent` is a native Rust MCP (Model Context Protocol) server
 - Format: `cargo fmt`
 - Lint: `cargo clippy -- -D warnings`
 - Parity Tests: `node tests/parity.mjs`
+
+## Security & Sibling Binary Trust Boundary
+- The `relay-agent` invokes `terminal-tool`, `curl-tool`, and `searxng-search-tool` by explicitly resolving them relative to its own executable directory (`std::env::current_exe()`). It does not rely on the system `$PATH`. 
+- **Trust Assumption:** The directory containing `relay-agent` is considered a trust boundary. Sibling binaries within this directory are trusted. An untrusted local user must not be able to replace or tamper with these binaries.
+- **Installation Requirements:** Ensure that the release/install directories are owned by `root` (or a dedicated service user) and have appropriate restrictive permissions (e.g., `755` for directories and binaries) so that unprivileged users cannot overwrite them.
+- **Integrity Verification:** Consider implementing binary integrity verification (e.g., checksums or signatures) only if the deployment threat model requires protection against local binary tampering by an attacker who has already gained elevated privileges.
