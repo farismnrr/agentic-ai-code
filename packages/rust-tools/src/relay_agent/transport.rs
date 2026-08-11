@@ -352,7 +352,7 @@ fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
         )
     })?;
 
-    let Some(_tool) = mcp::find_tool(&call.name) else {
+    let Some(tool) = mcp::find_tool(&call.name) else {
         return Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -360,10 +360,23 @@ fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
         ));
     };
 
-    // Tool exists in the registry and the request shape is valid; actual
-    // execution is Phase 3 scope. Per the audit doc, this is a *result*
-    // with isError:true, not a JSON-RPC protocol error, matching MCP
-    // tool-result conventions for a failing (here: unimplemented) call.
+    // Argument validation against the tool's declared inputSchema is a
+    // JSON-RPC protocol-level rejection (InvalidParams/-32602), not a tool
+    // result — the request itself is malformed, distinct from a tool that
+    // ran and failed.
+    if let Err(err) = mcp::validate_tool_arguments(&tool, &call.arguments) {
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &err,
+        ));
+    }
+
+    // Tool exists in the registry and both the request shape and its
+    // arguments are schema-valid; actual execution is Phase 3 scope. This
+    // is a *result* with isError:true, not a JSON-RPC protocol error,
+    // matching MCP tool-result conventions for a failing (here:
+    // unimplemented) call.
     let result = ToolCallResult::not_implemented(&call.name);
     let response = Response::new(
         request.id.clone(),
