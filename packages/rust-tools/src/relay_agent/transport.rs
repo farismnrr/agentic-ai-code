@@ -233,6 +233,9 @@ pub struct Claims {
     pub sub: Option<String>,
     pub client_id: Option<String>,
     pub scope: Option<String>,
+    pub exp: Option<u64>,
+    pub iat: Option<u64>,
+    pub nbf: Option<u64>,
 }
 
 #[derive(Clone, Default)]
@@ -723,6 +726,35 @@ async fn access_policy(
             }
         };
         auth_ctx.claims = Some(token_data.claims);
+
+        let claims = auth_ctx.claims.as_ref().expect("claims were just stored");
+        if claims.sub.as_deref() != state.config.oauth_owner_subject.as_deref() {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse::new(
+                    None,
+                    &McpError::InvalidRequest("Authenticated subject is not authorized".into()),
+                )),
+            )
+                .into_response();
+        }
+
+        let has_coding_scope = claims
+            .scope
+            .as_deref()
+            .unwrap_or_default()
+            .split_whitespace()
+            .any(|scope| scope == CODING_SCOPE);
+        if !has_coding_scope {
+            return oauth_error_response(
+                StatusCode::FORBIDDEN,
+                None,
+                &state.config,
+                Some("insufficient_scope"),
+                Some(CODING_SCOPE),
+                &McpError::InvalidRequest("Insufficient scope".into()),
+            );
+        }
     } else {
         if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
             return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
@@ -1008,36 +1040,6 @@ async fn handle_tools_call(
 
     if let super::config::SecurityMode::Remote = _state.config.mode {
         let claims = auth_ctx.claims.as_ref().unwrap();
-        let scopes = claims.scope.as_deref().unwrap_or("");
-        let scope_list: Vec<&str> = scopes.split_whitespace().collect();
-
-        let configured_owner = _state.config.oauth_owner_subject.as_deref();
-        if claims.sub.as_deref() != configured_owner {
-            return Err(Box::new((
-                StatusCode::FORBIDDEN,
-                HeaderMap::new(),
-                Json(ErrorResponse::new(
-                    Some(request.id.clone()),
-                    &McpError::InvalidRequest(
-                        "Authenticated subject is not the configured owner".into(),
-                    ),
-                )),
-            )));
-        }
-        if !scope_list.contains(&CODING_SCOPE) {
-            return Err(Box::new((
-                StatusCode::FORBIDDEN,
-                bearer_challenge(
-                    &_state.config,
-                    Some("insufficient_scope"),
-                    Some(CODING_SCOPE),
-                ),
-                Json(ErrorResponse::new(
-                    Some(request.id.clone()),
-                    &McpError::InvalidRequest("Insufficient scope: requires 'relay.coding'".into()),
-                )),
-            )));
-        }
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
         audit(

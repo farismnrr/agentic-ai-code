@@ -119,26 +119,26 @@ Make authentication failures and insufficient-scope failures recoverable by stan
 
 ## Tasks
 
-- [ ] Add one reusable Bearer challenge helper so auth paths do not drift.
-- [ ] Missing authentication -> HTTP `401` with standards-compatible `WWW-Authenticate`.
-- [ ] Invalid/expired token -> HTTP `401` + `error="invalid_token"`.
-- [ ] Include Protected Resource Metadata reference (`resource_metadata`) where applicable to current MCP OAuth guidance.
-- [ ] Valid authenticated request without `relay.coding` -> HTTP `403` + `error="insufficient_scope"` + required `scope="relay.coding"` where applicable.
-- [ ] Wrong owner stays an authorization failure before dispatch and does not leak claim internals.
-- [ ] Keep `offline_access` out of Protected Resource scopes.
-- [ ] Validate configured resource identifier for Remote mode as canonical absolute HTTPS URI with no fragment.
-- [ ] Keep resource identifier identical to audience/resource validation policy.
-- [ ] Preserve root Protected Resource Metadata route.
-- [ ] Add path-derived RFC 9728 route for `/mcp` only if current client/spec verification says it is applicable.
-- [ ] Do not implement Authorization Server endpoints inside the relay.
+- [x] Add one reusable Bearer challenge helper so auth paths do not drift.
+- [x] Missing authentication -> HTTP `401` with standards-compatible `WWW-Authenticate`.
+- [x] Invalid/expired token -> HTTP `401` + `error="invalid_token"`.
+- [x] Include Protected Resource Metadata reference (`resource_metadata`) where applicable to current MCP OAuth guidance.
+- [x] Valid authenticated request without `relay.coding` -> HTTP `403` + `error="insufficient_scope"` + required `scope="relay.coding"` where applicable.
+- [x] Wrong owner stays an authorization failure before dispatch and does not leak claim internals.
+- [x] Keep `offline_access` out of Protected Resource scopes.
+- [x] Validate configured resource identifier for Remote mode as canonical absolute HTTPS URI with no fragment.
+- [x] Keep resource identifier identical to audience/resource validation policy.
+- [x] Preserve root Protected Resource Metadata route.
+- [x] Add path-derived RFC 9728 route for `/mcp` only if current client/spec verification says it is applicable.
+- [x] Do not implement Authorization Server endpoints inside the relay.
 
 ## Black-box acceptance
 
-- [ ] unauthenticated `/mcp` -> expected `401` challenge.
-- [ ] invalid/expired token -> `401 invalid_token`.
-- [ ] valid owner without `relay.coding` -> `403 insufficient_scope`.
-- [ ] metadata resource exactly matches enforced audience/resource.
-- [ ] metadata includes `relay.coding` and excludes `offline_access`.
+- [x] unauthenticated `/mcp` -> expected `401` challenge.
+- [x] invalid/expired token -> `401 invalid_token`.
+- [x] valid owner without `relay.coding` -> `403 insufficient_scope`.
+- [x] metadata resource exactly matches enforced audience/resource.
+- [x] metadata includes `relay.coding` and excludes `offline_access`.
 
 ---
 

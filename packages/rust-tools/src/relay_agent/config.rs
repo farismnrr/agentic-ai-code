@@ -236,7 +236,8 @@ impl ServerConfig {
                     "oauth_audience must be a canonical absolute HTTPS URI".into(),
                 )
             })?;
-            if parsed.scheme() != "https"
+            if parsed.as_str() != audience
+                || parsed.scheme() != "https"
                 || parsed.host_str().is_none()
                 || parsed.cannot_be_a_base()
                 || !parsed.has_authority()

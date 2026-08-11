@@ -161,7 +161,7 @@ def start_relay(temp_dir, port, issuer=None, trusted_proxy=False):
         args += ["--mode", "remote", "--oauth-issuer", issuer, "--oauth-audience", AUDIENCE,
                  "--oauth-owner-subject", "owner"]
         if trusted_proxy:
-            args.append("--trusted-proxy")
+            args += ["--trusted-proxy", "--trusted-proxy-cidr", "127.0.0.1/32"]
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     wait_for_health(port, process)
     return process
@@ -176,11 +176,11 @@ def stop_relay(process):
         process.wait(timeout=5)
 
 
-def make_token(key_path, issuer, scope, subject="owner"):
+def make_token(key_path, issuer, scope, subject="owner", expires_in=600):
     now = int(time.time())
     header = b64(json.dumps({"alg": "RS256", "kid": "fixture-key", "typ": "JWT"}, separators=(",", ":")).encode())
     payload = b64(json.dumps({"iss": issuer, "aud": AUDIENCE, "sub": subject,
-                              "scope": scope, "iat": now, "exp": now + 600}, separators=(",", ":")).encode())
+                              "scope": scope, "iat": now - 120, "exp": now + expires_in}, separators=(",", ":")).encode())
     signing_input = f"{header}.{payload}".encode()
     with tempfile.NamedTemporaryFile() as input_file, tempfile.NamedTemporaryFile() as signature_file:
         input_file.write(signing_input)
@@ -250,6 +250,10 @@ def run():
             assert_status(metadata_status, 200, "protected resource metadata")
             assert metadata["resource"] == AUDIENCE
             assert metadata["scopes_supported"] == ["relay.coding"]
+            path_metadata_status, _, path_metadata = request(
+                f"http://127.0.0.1:{remote_port}/.well-known/oauth-protected-resource/mcp")
+            assert_status(path_metadata_status, 200, "path-derived protected resource metadata")
+            assert path_metadata == metadata
 
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="https"), body=valid_discover)
@@ -265,6 +269,13 @@ def run():
             assert 'error="invalid_token"' in challenge_headers.get("www-authenticate", "")
             assert body["error"]["code"] == -32600
 
+            expired = make_token(key_path, issuer, "relay.coding", expires_in=-120)
+            status, challenge_headers, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {expired}"), body=valid_discover)
+            assert_status(status, 401, "expired bearer token")
+            assert 'error="invalid_token"' in challenge_headers.get("www-authenticate", "")
+            assert body["error"]["code"] == -32600
+
             no_scope = make_token(key_path, issuer, "openid")
             call_params = {"name": "terminal_exec", "arguments": {"command": "true"},
                            "_meta": {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
@@ -276,6 +287,13 @@ def run():
             challenge = challenge_headers.get("www-authenticate", "")
             assert 'error="insufficient_scope"' in challenge and 'scope="relay.coding"' in challenge
             assert body["error"]["code"] == -32600
+
+            wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
+            status, challenge_headers, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {wrong_owner}"), body=valid_discover)
+            assert_status(status, 403, "wrong owner")
+            assert "Authenticated subject is not authorized" in body["error"]["message"]
+            assert "other" not in body["error"]["message"]
         finally:
             for process in (remote, remote_untrusted, local):
                 if process is not None:
