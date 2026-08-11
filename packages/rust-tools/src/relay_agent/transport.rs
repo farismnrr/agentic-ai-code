@@ -198,7 +198,7 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request),
+        "tools/call" => handle_tools_call(&request).await,
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -335,7 +335,7 @@ fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
+async fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -373,11 +373,17 @@ fn handle_tools_call(request: &mcp::Request) -> JsonErr2 {
     }
 
     // Tool exists in the registry and both the request shape and its
-    // arguments are schema-valid; actual execution is Phase 3 scope. This
-    // is a *result* with isError:true, not a JSON-RPC protocol error,
-    // matching MCP tool-result conventions for a failing (here:
-    // unimplemented) call.
-    let result = ToolCallResult::not_implemented(&call.name);
+    // actual execution is Phase 3 scope.
+    let result = crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments)
+        .await
+        .unwrap_or_else(|e| ToolCallResult {
+            content: vec![super::mcp::ToolResultContent {
+                kind: "text",
+                text: format!("execution failed: {}", e.message()),
+            }],
+            is_error: true,
+        });
+
     let response = Response::new(
         request.id.clone(),
         serde_json::to_value(result).unwrap_or(json!({})),
