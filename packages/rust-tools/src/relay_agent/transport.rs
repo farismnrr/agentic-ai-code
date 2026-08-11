@@ -39,7 +39,7 @@ use axum::{
     http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response as AxumResponse},
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -65,6 +65,18 @@ const HDR_MCP_NAME: &str = "mcp-name";
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct Claims {
+    pub sub: Option<String>,
+    pub client_id: Option<String>,
+    pub scope: Option<String>,
+}
+
+#[derive(Clone, Default)]
+pub struct AuthContext {
+    pub claims: Option<Claims>,
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
@@ -100,13 +112,15 @@ pub fn create_router(config: ServerConfig) -> Router {
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
+    let well_known_router = Router::new().route(
+        "/.well-known/oauth-protected-resource",
+        get(handle_well_known_oauth),
+    );
 
     Router::new()
         .merge(mcp_router)
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            local_access_policy,
-        ))
+        .merge(well_known_router)
+        .layer(middleware::from_fn_with_state(state.clone(), access_policy))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
@@ -118,23 +132,90 @@ fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
     (status, Json(ErrorResponse::new(id, err)))
 }
 
-/// Server-side local-access policy: exact `Origin` + `Host` validation.
-/// Runs before any MCP/JSON-RPC parsing — a rejected request never reaches
-/// [`handle_mcp`]. See `security.rs` for the fail-closed rules and why this
-/// is distinct from (and not replaceable by) the `CorsLayer` below.
-async fn local_access_policy(
+async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let issuer = state.config.oauth_issuer.clone().unwrap_or_default();
+    let resource = state.config.oauth_audience.clone().unwrap_or_default();
+    Json(json!({
+        "resource": resource,
+        "authorization_servers": [issuer]
+    }))
+}
+
+/// Server-side access policy:
+/// If OAuth is configured, it validates the JWT Bearer token.
+/// If OAuth is NOT configured (local mode), it runs exact `Origin` + `Host` validation.
+async fn access_policy(
     State(state): State<Arc<AppState>>,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> AxumResponse {
-    if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
-        return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
+    // Only apply policy to /mcp
+    if req.uri().path() != "/mcp" {
+        return next.run(req).await;
     }
+
+    let mut auth_ctx = AuthContext::default();
+
+    if let Some(secret) = &state.config.oauth_secret {
+        let auth_header = req
+            .headers()
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+
+        if !auth_header.starts_with("Bearer ") {
+            return (
+                StatusCode::UNAUTHORIZED,
+                [(axum::http::header::WWW_AUTHENTICATE, "Bearer realm=\"mcp\"")],
+                Json(ErrorResponse::new(
+                    None,
+                    &McpError::InvalidRequest("Missing or invalid authorization".into()),
+                )),
+            )
+                .into_response();
+        }
+
+        let token = &auth_header[7..];
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+        validation.set_audience(&[state.config.oauth_audience.clone().unwrap()]);
+        validation.set_issuer(&[state.config.oauth_issuer.clone().unwrap()]);
+        validation.validate_nbf = true;
+
+        let token_data = match jsonwebtoken::decode::<Claims>(
+            token,
+            &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+            &validation,
+        ) {
+            Ok(data) => data,
+            Err(_) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(
+                        axum::http::header::WWW_AUTHENTICATE,
+                        "Bearer error=\"invalid_token\"",
+                    )],
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Invalid token".into()),
+                    )),
+                )
+                    .into_response();
+            }
+        };
+        auth_ctx.claims = Some(token_data.claims);
+    } else {
+        if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
+            return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
+        }
+    }
+
+    req.extensions_mut().insert(auth_ctx);
     next.run(req).await
 }
 
 async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
+    axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
@@ -192,7 +273,7 @@ async fn handle_mcp(
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request, _state).await,
+        "tools/call" => handle_tools_call(&request, _state, auth_ctx).await,
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -329,7 +410,11 @@ fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-async fn handle_tools_call(request: &mcp::Request, _state: Arc<AppState>) -> JsonErr2 {
+async fn handle_tools_call(
+    request: &mcp::Request,
+    _state: Arc<AppState>,
+    auth_ctx: AuthContext,
+) -> JsonErr2 {
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -354,16 +439,49 @@ async fn handle_tools_call(request: &mcp::Request, _state: Arc<AppState>) -> Jso
         ));
     };
 
-    // Argument validation against the tool's declared inputSchema is a
-    // JSON-RPC protocol-level rejection (InvalidParams/-32602), not a tool
-    // result — the request itself is malformed, distinct from a tool that
-    // ran and failed.
     if let Err(err) = mcp::validate_tool_arguments(&tool, &call.arguments) {
         return Err(err_response(
             StatusCode::BAD_REQUEST,
             Some(request.id.clone()),
             &err,
         ));
+    }
+
+    if _state.config.oauth_secret.is_some() {
+        let claims = auth_ctx.claims.as_ref().unwrap();
+        let scopes = claims.scope.as_deref().unwrap_or("");
+        let scope_list: Vec<&str> = scopes.split_whitespace().collect();
+
+        let has_execute = scope_list.contains(&"execute");
+        let has_read_or_fetch =
+            scope_list.contains(&"read") || scope_list.contains(&"fetch") || has_execute;
+
+        match call.name.as_str() {
+            "terminal_exec" if !has_execute => {
+                return Err(err_response(
+                    StatusCode::FORBIDDEN,
+                    Some(request.id.clone()),
+                    &McpError::InvalidRequest("Insufficient scope: requires 'execute'".into()),
+                ));
+            }
+            "web_search" | "http_fetch" if !has_read_or_fetch => {
+                return Err(err_response(
+                    StatusCode::FORBIDDEN,
+                    Some(request.id.clone()),
+                    &McpError::InvalidRequest(
+                        "Insufficient scope: requires 'read' or 'fetch'".into(),
+                    ),
+                ));
+            }
+            _ => {}
+        }
+
+        let subject = claims.sub.as_deref().unwrap_or("unknown");
+        let client = claims.client_id.as_deref().unwrap_or("unknown");
+        println!(
+            "AUDIT: subject='{}' client='{}' tool='{}'",
+            subject, client, call.name
+        );
     }
 
     // Acquire global execution permit

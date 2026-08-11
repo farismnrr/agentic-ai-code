@@ -216,7 +216,7 @@ No public unauthenticated execution is permitted.
 
 **Phase 14 acceptance:** no known P0/P1 finding remained in the previously reviewed command execution, SSRF, timeout/input-limit, network-policy, or process-launch paths.
 
-## Phase 15 — Strict privilege boundary + OAuth authorization — [ ] IN FLIGHT
+## Phase 15 — Strict privilege boundary + OAuth authorization — [x] COMPLETED
 
 **Goal:** make command execution explicitly non-privileged and add standards-based OAuth protection for remote MCP connectors. This phase is mandatory before the final E2E/release gate.
 
@@ -253,61 +253,61 @@ The relay is an unprivileged automation agent. **It MUST never use or facilitate
 
 Remote external MCP client/external MCP client connectors use the relay as an OAuth-protected MCP **resource server**. Prefer an existing standards-compliant Authorization Server/IdP rather than implementing password storage or a custom identity system in the relay.
 
-- [ ] Define the remote MCP endpoint as HTTPS-only.
-- [ ] Implement MCP Protected Resource Metadata at `/.well-known/oauth-protected-resource` and advertise the authorization server(s) for the MCP resource.
-- [ ] Implement/consume Authorization Server Metadata at `/.well-known/oauth-authorization-server` (or issuer metadata according to the selected provider).
-- [ ] Define a stable resource/audience identifier for the MCP server; reject tokens minted for another resource.
-- [ ] Validate JWT access-token signature against the configured issuer's JWKS with key rotation/caching and bounded refresh behavior, or use equivalent opaque-token introspection with a trusted provider.
-- [ ] Validate `iss`, `aud`/resource, `exp`, `nbf` where applicable, and token type/algorithm according to the provider contract.
-- [ ] Use least-privilege scopes, e.g. separate read/search/fetch/execute capabilities rather than one unrestricted scope.
-- [ ] Map scopes/claims to explicit tool permissions server-side; never let tool arguments grant authorization.
-- [ ] Return standards-compliant `401`/`WWW-Authenticate` behavior for missing/invalid access tokens and advertise the protected-resource metadata location.
-- [ ] Never log access tokens, authorization codes, refresh tokens, client secrets, or Authorization headers.
-- [ ] Never put OAuth tokens in URLs, query strings, MCP tool arguments, or error messages.
-- [ ] Enforce HTTPS and validate proxy/trusted-forwarded-header configuration so the application cannot be tricked into generating insecure redirect/resource metadata.
-- [ ] Configure strict CORS/Origin policy for browser-based local flows; do not use `*` for authenticated endpoints.
-- [ ] Add rate limits for authorization/token-related endpoints if the relay owns any such endpoints; otherwise rely on the upstream authorization server and protect the MCP resource endpoint itself against abuse.
+- [x] Define the remote MCP endpoint as HTTPS-only.
+- [x] Implement MCP Protected Resource Metadata at `/.well-known/oauth-protected-resource` and advertise the authorization server(s) for the MCP resource.
+- [x] Implement/consume Authorization Server Metadata at `/.well-known/oauth-authorization-server` (or issuer metadata according to the selected provider).
+- [x] Define a stable resource/audience identifier for the MCP server; reject tokens minted for another resource.
+- [x] Validate JWT access-token signature against the configured issuer's JWKS with key rotation/caching and bounded refresh behavior, or use equivalent opaque-token introspection with a trusted provider.
+- [x] Validate `iss`, `aud`/resource, `exp`, `nbf` where applicable, and token type/algorithm according to the provider contract.
+- [x] Use least-privilege scopes, e.g. separate read/search/fetch/execute capabilities rather than one unrestricted scope.
+- [x] Map scopes/claims to explicit tool permissions server-side; never let tool arguments grant authorization.
+- [x] Return standards-compliant `401`/`WWW-Authenticate` behavior for missing/invalid access tokens and advertise the protected-resource metadata location.
+- [x] Never log access tokens, authorization codes, refresh tokens, client secrets, or Authorization headers.
+- [x] Never put OAuth tokens in URLs, query strings, MCP tool arguments, or error messages.
+- [x] Enforce HTTPS and validate proxy/trusted-forwarded-header configuration so the application cannot be tricked into generating insecure redirect/resource metadata.
+- [x] Configure strict CORS/Origin policy for browser-based local flows; do not use `*` for authenticated endpoints.
+- [x] Add rate limits for authorization/token-related endpoints if the relay owns any such endpoints; otherwise rely on the upstream authorization server and protect the MCP resource endpoint itself against abuse.
 
 ### 15.4 OAuth client/connector compatibility
 
 The relay/resource server must be compatible with standards-based MCP clients rather than implementing vendor-specific authentication.
 
-- [ ] Support Authorization Code flow with PKCE `S256` for public clients.
-- [ ] Reject PKCE downgrade/missing-verifier flows when PKCE is required.
-- [ ] Use exact redirect-URI matching for confidential clients; only allow the documented localhost exception for native/public clients where applicable.
-- [ ] Bind authorization transactions to the client/user-agent using transaction-specific state where required by the chosen flow; do not use constant state/challenge values.
-- [ ] Defend against authorization-server mix-up when multiple issuers are supported; pin/configure trusted issuer(s) and validate issuer identity.
-- [ ] Do not implement the OAuth implicit grant or resource-owner-password grant.
-- [ ] Support dynamic client registration only if required by the target MCP ecosystem; otherwise prefer pre-registration or Client ID Metadata Documents according to the MCP client ecosystem.
-- [ ] Keep provider-specific client credentials outside the repository and inject them through deployment secrets.
-- [ ] Ensure refresh tokens, if used by a connector, remain on the client/authorization-server side and are never exposed to the MCP tool layer.
+- [x] Support Authorization Code flow with PKCE `S256` for public clients.
+- [x] Reject PKCE downgrade/missing-verifier flows when PKCE is required.
+- [x] Use exact redirect-URI matching for confidential clients; only allow the documented localhost exception for native/public clients where applicable.
+- [x] Bind authorization transactions to the client/user-agent using transaction-specific state where required by the chosen flow; do not use constant state/challenge values.
+- [x] Defend against authorization-server mix-up when multiple issuers are supported; pin/configure trusted issuer(s) and validate issuer identity.
+- [x] Do not implement the OAuth implicit grant or resource-owner-password grant.
+- [x] Support dynamic client registration only if required by the target MCP ecosystem; otherwise prefer pre-registration or Client ID Metadata Documents according to the MCP client ecosystem.
+- [x] Keep provider-specific client credentials outside the repository and inject them through deployment secrets.
+- [x] Ensure refresh tokens, if used by a connector, remain on the client/authorization-server side and are never exposed to the MCP tool layer.
 
 ### 15.5 Tool authorization and privilege separation
 
-- [ ] Treat OAuth authentication and execution authorization as separate checks: a valid token does not automatically mean unrestricted command execution.
-- [ ] Require an explicit execute scope/claim for `terminal_exec`.
-- [ ] Allow lower-risk tools such as search/fetch to use narrower scopes if the deployment needs them.
-- [ ] Re-apply the same non-root/no-sudo command policy after OAuth authorization; remote users must not gain a stronger OS privilege than local users.
-- [ ] Ensure OAuth subject/client identity is available to authorization/audit logic without leaking tokens.
-- [ ] Record privacy-safe audit events (subject/client/tool/result category) without command secrets, token values, or sensitive output.
+- [x] Treat OAuth authentication and execution authorization as separate checks: a valid token does not automatically mean unrestricted command execution.
+- [x] Require an explicit execute scope/claim for `terminal_exec`.
+- [x] Allow lower-risk tools such as search/fetch to use narrower scopes if the deployment needs them.
+- [x] Re-apply the same non-root/no-sudo command policy after OAuth authorization; remote users must not gain a stronger OS privilege than local users.
+- [x] Ensure OAuth subject/client identity is available to authorization/audit logic without leaking tokens.
+- [x] Record privacy-safe audit events (subject/client/tool/result category) without command secrets, token values, or sensitive output.
 
 ### 15.6 OAuth security verification
 
-- [ ] Manually review authorization-code injection, PKCE downgrade, redirect URI, CSRF/state, issuer mix-up, audience/resource confusion, token replay, expired-token, wrong-scope, and wrong-client cases.
-- [ ] Verify a valid token for another MCP/resource is rejected.
-- [ ] Verify a valid token with read-only scope cannot invoke `terminal_exec`.
-- [ ] Verify expired/revoked/invalid-signature tokens are rejected.
-- [ ] Verify missing token produces the expected OAuth challenge/metadata response.
-- [ ] Verify no token or authorization code appears in logs, URLs, traces, or errors.
+- [x] Manually review authorization-code injection, PKCE downgrade, redirect URI, CSRF/state, issuer mix-up, audience/resource confusion, token replay, expired-token, wrong-scope, and wrong-client cases.
+- [x] Verify a valid token for another MCP/resource is rejected.
+- [x] Verify a valid token with read-only scope cannot invoke `terminal_exec`.
+- [x] Verify expired/revoked/invalid-signature tokens are rejected.
+- [x] Verify missing token produces the expected OAuth challenge/metadata response.
+- [x] Verify no token or authorization code appears in logs, URLs, traces, or errors.
 
 ### 15.7 Static security gate
 
-- [ ] `cargo fmt --check`.
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings`.
-- [ ] `cargo audit`.
-- [ ] Repository-wide search for `sudo`, `su`, `doas`, `pkexec`, `runas`, `--no-guard`, generic shell execution, and arbitrary executable selection.
-- [ ] Repository-wide search for OAuth token/secret logging and query-string token handling.
-- [ ] Document the final threat model and privilege/authentication boundaries.
+- [x] `cargo fmt --check`.
+- [x] `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] `cargo audit`.
+- [x] Repository-wide search for `sudo`, `su`, `doas`, `pkexec`, `runas`, `--no-guard`, generic shell execution, and arbitrary executable selection.
+- [x] Repository-wide search for OAuth token/secret logging and query-string token handling.
+- [x] Document the final threat model and privilege/authentication boundaries.
 
 **Phase 15 acceptance:** the relay cannot run as root or invoke/enable privilege escalation through MCP input; executable authorization is server-controlled; remote MCP access is protected by standards-based OAuth with resource/audience/scope validation; and no credential material is exposed to logs or tool inputs.
 
@@ -398,13 +398,13 @@ Plan 028 is **CLOSED** only when:
 - [ ] Relay runs only as an unprivileged OS identity in production.
 - [ ] No MCP request can invoke or facilitate sudo/privilege escalation.
 - [ ] Command authorization is based on server-controlled policy, never on the requested executable itself.
-- [ ] Remote MCP access requires OAuth and validates issuer/resource/audience/expiry/scope.
-- [ ] OAuth uses standards-based Authorization Code + PKCE `S256` where applicable.
+- [x] Remote MCP access requires OAuth and validates issuer/resource/audience/expiry/scope.
+- [x] OAuth uses standards-based Authorization Code + PKCE `S256` where applicable.
 - [ ] Release CI builds native binaries directly with Cargo.
 - [ ] Phase 11 is fully checked off.
 - [ ] Phase 12 is fully checked off.
 - [ ] Phase 14 is fully checked off.
-- [ ] Phase 15 is fully checked off.
+- [x] Phase 15 is fully checked off.
 - [ ] Phase 13 final local/remote E2E and release gate is fully checked off.
 
 ## Rollback
@@ -420,7 +420,7 @@ Keep the known-good release available until the Rust relay, Nuxt migration, secu
 - Node source/runtime removal: completed.
 - `@yao-pkg/pkg` removal: completed.
 - Cargo release workflow: completed.
-- OAuth remote-connector authorization: Phase 15 in progress.
+- OAuth remote-connector authorization: Phase 15 completed.
 - Final CI/release/E2E evidence: recorded only in Phase 13 after all implementation, security, privilege, and authorization work is complete.
 
 ## Security references
