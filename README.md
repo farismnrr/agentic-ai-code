@@ -27,7 +27,7 @@ packages/
   searxng-search-tool/  AI SDK-facing search tool package
   relay-agent/          Relay package surface
   rust-tools/           Native implementations for all four binaries
-scripts/                Local quality/hook helpers plus deterministic acceptance scripts
+scripts/                Local policy/quality/hook helpers plus deterministic acceptance scripts
 .githooks/              Mandatory tracked local Git hooks
 .agents/                Agent knowledge, skills, plans, memories, and contracts
 ```
@@ -66,6 +66,7 @@ The pre-commit hook runs this automatically. Never bypass it with `git commit --
 
 The gate includes:
 
+- repository policy enforcement that rejects tracked CI workflows and conventional unit-test suites;
 - agent-doc/index integrity;
 - all configured JS/Vue and Rust lint checks;
 - all configured Nuxt/Vue and Rust type/compile checks.
