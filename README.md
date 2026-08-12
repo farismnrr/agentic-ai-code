@@ -29,7 +29,7 @@ packages/
   rust-tools/           Native implementations for all four binaries
 scripts/                Local policy/quality/hook helpers plus deterministic acceptance scripts
 .githooks/              Mandatory tracked local Git hooks
-.agents/                Agent knowledge, skills, plans, memories, and contracts
+.agents/                Agent knowledge, skills, plans, canonical memory, and contracts
 ```
 
 This repository intentionally has **no CI workflow** and **no unit-test suite**.
@@ -64,14 +64,7 @@ pnpm verify:commit
 
 The pre-commit hook runs this automatically. Never bypass it with `git commit --no-verify`.
 
-The gate includes:
-
-- repository policy enforcement that rejects tracked CI workflows and conventional unit-test suites;
-- agent-doc/index integrity;
-- all configured JS/Vue and Rust lint checks;
-- all configured Nuxt/Vue and Rust type/compile checks.
-
-A failing gate blocks the commit until fixed. There is no remote CI safety net.
+The gate includes repository policy enforcement, compact agent-doc integrity, all configured JS/Vue and Rust lint checks, and all configured Nuxt/Vue and Rust type/compile checks. A failing gate blocks the commit until fixed. There is no remote CI safety net.
 
 ## Common commands
 
@@ -92,20 +85,22 @@ For local runtime verification, prefer a clean `pnpm build` followed by `pnpm pr
 
 ## Verification policy
 
-There is no CI and no unit-test suite. Quality is enforced locally before each commit.
+There is no CI and no unit-test suite. Quality is enforced locally before each normal commit.
 
 For dependency changes, also run `pnpm audit` before merge. For security-sensitive Rust/MCP changes, run the relevant deterministic scripts under `scripts/` and `cargo audit` when applicable.
 
 Existing deterministic acceptance/security scripts are targeted local verification tools; they are not unit tests and are not CI.
 
-## Agent workflow
+## Agent workflow and durable context
 
 Agent guidance is centralized and vendor-neutral:
 
 - [`AGENTS.md`](AGENTS.md) — the only repository agent entrypoint
-- [`.agents/README.md`](.agents/README.md) — authoritative guidance index and closeout rules
+- [`.agents/README.md`](.agents/README.md) — authoritative guidance index and context model
+- [`.agents/memories/README.md`](.agents/memories/README.md) — **single canonical durable memory**
+- [`.agents/plans/030-previous-plans-summary.md`](.agents/plans/030-previous-plans-summary.md) — one-time compact history of Plans 001–029b
 
-Implementation plans are stored in [`.agents/plans/`](.agents/plans/README.md); durable decisions and traps are indexed in [`.agents/memories/`](.agents/memories/README.md).
+Future plans start at **031** under `.agents/plans/`, stay as separate incrementing files, and are not automatically folded into Plan 030.
 
 ## Branching
 

@@ -7,7 +7,7 @@ This workspace contains the native implementations of:
 - `searxng-search-tool`
 - `relay-agent`
 
-The three tool CLIs were migrated from JavaScript in Plan 027. `relay-agent` was subsequently rewritten as a native Rust MCP server in Plan 028. There is no supported JavaScript CLI fallback path.
+The three tool CLIs were migrated from JavaScript during historical Plan 027. `relay-agent` was subsequently rewritten as a native Rust MCP server during historical Plan 028. There is no supported JavaScript CLI fallback path.
 
 ## Toolchain
 
@@ -22,23 +22,21 @@ Use the pinned toolchain for repository development/verification. The MSRV is a 
 The sibling CLIs are small native executors:
 
 - `terminal-tool` — process execution with explicit guard/allow controls and timeout/process-group handling.
-- `curl-tool` — HTTP client with SSRF protections unless an explicit local bypass is requested.
+- `curl-tool` — HTTP client with SSRF protections unless the explicit guard bypass is requested.
 - `searxng-search-tool` — SearXNG query client.
-- `relay-agent` — MCP `2026-07-28` server that exposes controlled coding capabilities and invokes the sibling tools through the relay security boundary.
+- `relay-agent` — MCP `2026-07-28` server exposing controlled coding capabilities through the relay security boundary.
 
-`relay-agent` resolves trusted sibling binaries relative to its own executable rather than trusting an arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
+`relay-agent` resolves trusted sibling binaries relative to its own executable rather than trusting arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
 
 ## Relay security/platform contract
 
-The current relay contract is deliberately stricter than the generic sibling CLI contract:
-
-- **Linux only.** The relay binary fails compilation on non-Linux targets because its execution sandbox requires Bubblewrap (`bwrap`).
-- **Unprivileged runtime.** The relay refuses to run as UID 0.
-- **Filesystem containment.** Execution is constrained to the configured execution root and enforced through Bubblewrap plus server policy.
-- **Local/remote modes.** Local mode is loopback-oriented; remote mode is OAuth-protected and must fail closed.
+- **Linux only.** Relay containment requires Bubblewrap (`bwrap`).
+- **Unprivileged runtime.** The relay refuses UID 0.
+- **Filesystem containment.** Execution is constrained to the configured execution root through Bubblewrap plus server policy.
+- **Local/remote modes.** Local is loopback-oriented; remote is OAuth-protected and fail-closed.
 - **Docker is deferred.** Do not expose the host Docker socket as a workaround for missing isolated Docker execution.
 
-See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), [Plan 028](../../.agents/plans/028-relay-agent-rust-rewrite.md), and [Plan 029b](../../.agents/plans/029b-external-mcp-mcp-production-hardening.md) before changing these boundaries.
+See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), the canonical [memory](../../.agents/memories/README.md#rust-cli-migration-invariants), and [Plan 030 history](../../.agents/plans/030-previous-plans-summary.md) before changing these boundaries.
 
 ## Build
 
@@ -70,14 +68,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 ```
 
-Security-sensitive relay/MCP changes may additionally require:
-
-```bash
-cargo audit
-bash scripts/phase8-zero-bypass.sh
-```
-
-and the deterministic acceptance scripts relevant to Plan 029/029b.
+Security-sensitive relay/MCP changes may additionally require `cargo audit`, `scripts/phase8-zero-bypass.sh`, and the deterministic acceptance scripts relevant to the current relay/MCP contract.
 
 The old JavaScript parity harness is obsolete and is not a current verification source of truth.
 
@@ -85,25 +76,18 @@ The old JavaScript parity harness is obsolete and is not a current verification 
 
 There is **no automated GitHub Actions release workflow**. Native releases are a manual/operator action after local verification.
 
-The supported relay release target remains **`x86_64-unknown-linux-gnu`** because production containment requires Linux + Bubblewrap. Do not document macOS/Windows relay support merely because one of the simpler sibling CLI binaries can compile there.
+The supported relay release target remains **`x86_64-unknown-linux-gnu`** because production containment requires Linux + Bubblewrap. Do not document macOS/Windows relay support merely because simpler sibling CLI binaries may compile there.
 
 When publishing native artifacts manually:
 
 - build from the reviewed commit with the pinned Rust toolchain;
 - run the mandatory local commit gate plus applicable Rust security checks;
-- package the intended Linux artifact(s);
+- package intended Linux artifact(s);
 - generate and publish SHA-256 checksums;
-- do not weaken the sandbox/platform contract merely to broaden the release matrix.
+- do not weaken sandbox/platform contracts merely to broaden the release matrix.
 
 ## CLI notes
 
-The package-level TypeScript tool factories under sibling `packages/*-tool/` are still application APIs, but the standalone executable CLIs are the Rust binaries in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
+Package-level TypeScript tool factories under sibling `packages/*-tool/` are still application APIs, but standalone executable CLIs are Rust binaries in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
 
-Use each binary's `--help` as the command-line source of truth:
-
-```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin terminal-tool -- --help
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin curl-tool -- --help
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin searxng-search-tool -- --help
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin relay-agent -- --help
-```
+Use each binary's `--help` as the command-line source of truth.
