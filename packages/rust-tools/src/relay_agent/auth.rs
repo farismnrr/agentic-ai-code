@@ -297,9 +297,11 @@ mod tests {
 
     #[test]
     fn challenge_and_metadata_preserve_oauth_projection() {
-        let mut config = ServerConfig::default();
-        config.oauth_issuer = Some("https://issuer.example".into());
-        config.oauth_audience = Some("https://resource.example/mcp".into());
+        let config = ServerConfig {
+            oauth_issuer: Some("https://issuer.example".into()),
+            oauth_audience: Some("https://resource.example/mcp".into()),
+            ..ServerConfig::default()
+        };
 
         assert_eq!(
             protected_resource_metadata_url(&config).as_deref(),
