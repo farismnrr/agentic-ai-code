@@ -28,6 +28,16 @@ pub struct Cli {
     #[arg(long, value_enum, env = "RELAY_AGENT_MODE", default_value = "local")]
     pub mode: SecurityMode,
 
+    /// Trust X-Forwarded-Proto from a reverse proxy that is bound to this
+    /// relay's loopback listener. Remote mode never enables this implicitly.
+    #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY", default_value_t = false)]
+    pub trusted_proxy: bool,
+
+    /// CIDR containing the local HTTPS edge/tunnel peer. Required when
+    /// --trusted-proxy is enabled; forwarded headers from other peers are ignored.
+    #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY_CIDR")]
+    pub trusted_proxy_cidr: Option<String>,
+
     /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
     #[arg(short, long)]
     pub dir: Option<String>,
@@ -36,7 +46,8 @@ pub struct Cli {
     #[arg(short, long, env = "RELAY_AGENT_ORIGIN")]
     pub origin: Option<String>,
 
-    /// OAuth symmetric secret for validating JWTs
+    /// Legacy OAuth symmetric secret retained for compatibility; the remote
+    /// auth path validates JWTs with issuer/audience and JWKS instead.
     #[arg(long, env = "OAUTH_SECRET")]
     pub oauth_secret: Option<String>,
 
@@ -47,6 +58,10 @@ pub struct Cli {
     /// OAuth audience expected in JWT 'aud' claim
     #[arg(long, env = "OAUTH_AUDIENCE")]
     pub oauth_audience: Option<String>,
+
+    /// Stable OAuth subject allowed to operate this single-owner coding agent.
+    #[arg(long, env = "OAUTH_OWNER_SUBJECT")]
+    pub oauth_owner_subject: Option<String>,
 
     /// Explicit execution root for filesystem containment.
     #[arg(long, env = "EXECUTION_ROOT")]
@@ -84,7 +99,11 @@ pub struct ServerConfig {
     pub oauth_secret: Option<String>,
     pub oauth_issuer: Option<String>,
     pub oauth_audience: Option<String>,
+    pub oauth_owner_subject: Option<String>,
     pub execution_root: Option<String>,
+    pub bind_host: String,
+    pub trusted_proxy: bool,
+    pub trusted_proxy_cidr: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -97,7 +116,11 @@ impl Default for ServerConfig {
             oauth_secret: None,
             oauth_issuer: None,
             oauth_audience: None,
+            oauth_owner_subject: None,
             execution_root: None,
+            bind_host: "127.0.0.1".into(),
+            trusted_proxy: false,
+            trusted_proxy_cidr: None,
         }
     }
 }
@@ -192,16 +215,120 @@ impl ServerConfig {
                 ));
             }
         }
-        if self.mode == SecurityMode::Remote && self.oauth_secret.is_none() {
-            return Err(RelayError::InvalidConfig(
-                "oauth_secret must be set in remote mode".to_string(),
-            ));
-        }
-        if self.oauth_secret.is_some()
-            && (self.oauth_issuer.is_none() || self.oauth_audience.is_none())
+        if self.mode == SecurityMode::Remote
+            && (self.oauth_issuer.is_none()
+                || self.oauth_audience.is_none()
+                || self.oauth_owner_subject.is_none())
         {
             return Err(RelayError::InvalidConfig(
-                "oauth_issuer and oauth_audience are required when oauth_secret is set".to_string(),
+                "oauth_issuer, oauth_audience, and oauth_owner_subject are required in remote mode"
+                    .to_string(),
+            ));
+        }
+        if self.mode == SecurityMode::Remote {
+            let Some(issuer) = self.oauth_issuer.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_issuer is required in remote mode".into(),
+                ));
+            };
+            let parsed = url::Url::parse(issuer).map_err(|_| {
+                RelayError::InvalidConfig(
+                    "oauth_issuer must be a canonical absolute HTTPS URI".into(),
+                )
+            })?;
+            let fixture_override = cfg!(debug_assertions)
+                && std::env::var("RELAY_AGENT_ALLOW_INSECURE_OAUTH_ISSUER_FIXTURE").as_deref()
+                    == Ok("1");
+            if !fixture_override
+                && (parsed.as_str() != issuer
+                    || parsed.scheme() != "https"
+                    || parsed.host_str().is_none()
+                    || parsed.cannot_be_a_base()
+                    || !parsed.has_authority()
+                    || parsed.username() != ""
+                    || parsed.password().is_some()
+                    || parsed.query().is_some()
+                    || parsed.fragment().is_some())
+            {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_issuer must be a canonical absolute HTTPS URI without credentials, query, or fragment".into(),
+                ));
+            }
+            // The only plaintext exception is a debug-only local JWKS fixture
+            // used by deterministic black-box conformance. Release builds
+            // cannot enable this path.
+            let Some(audience) = self.oauth_audience.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_audience is required in remote mode".into(),
+                ));
+            };
+            let parsed = url::Url::parse(audience).map_err(|_| {
+                RelayError::InvalidConfig(
+                    "oauth_audience must be a canonical absolute HTTPS URI".into(),
+                )
+            })?;
+            if parsed.as_str() != audience
+                || parsed.scheme() != "https"
+                || parsed.host_str().is_none()
+                || parsed.cannot_be_a_base()
+                || !parsed.has_authority()
+                || parsed.username() != ""
+                || parsed.password().is_some()
+                || parsed.query().is_some()
+                || parsed.fragment().is_some()
+            {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_audience must be a canonical absolute HTTPS URI without credentials, query, or fragment".into(),
+                ));
+            }
+        }
+        if self.mode == SecurityMode::Local
+            && self.bind_host != "127.0.0.1"
+            && self.bind_host != "::1"
+        {
+            return Err(RelayError::InvalidConfig(
+                "local mode must bind to loopback".into(),
+            ));
+        }
+        if self.mode == SecurityMode::Remote {
+            if self.bind_host.trim().is_empty() {
+                return Err(RelayError::InvalidConfig(
+                    "remote bind host must not be blank".into(),
+                ));
+            }
+            if self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+                return Err(RelayError::InvalidConfig(
+                    "remote mode must bind to loopback; terminate HTTPS at a trusted local edge \
+                     or secure tunnel and opt in with --trusted-proxy"
+                        .into(),
+                ));
+            }
+        }
+        if self.trusted_proxy && self.mode != SecurityMode::Remote {
+            return Err(RelayError::InvalidConfig(
+                "--trusted-proxy is only valid in remote mode".into(),
+            ));
+        }
+        if self.trusted_proxy {
+            let Some(cidr) = self.trusted_proxy_cidr.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "--trusted-proxy requires --trusted-proxy-cidr to identify the edge peer"
+                        .into(),
+                ));
+            };
+            cidr.parse::<ipnet::IpNet>().map_err(|_| {
+                RelayError::InvalidConfig("--trusted-proxy-cidr must be a valid IP CIDR".into())
+            })?;
+        } else if self.trusted_proxy_cidr.is_some() {
+            return Err(RelayError::InvalidConfig(
+                "--trusted-proxy-cidr requires --trusted-proxy".into(),
+            ));
+        }
+        if self.trusted_proxy && self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+            return Err(RelayError::InvalidConfig(
+                "trusted proxy mode requires a loopback relay bind; forwarded headers from \
+                 public or arbitrary peers are never trusted"
+                    .into(),
             ));
         }
         Ok(())
@@ -219,12 +346,19 @@ impl From<&Cli> for ServerConfig {
         Self {
             port: cli.port,
             mode: cli.mode,
+            trusted_proxy: cli.trusted_proxy,
+            trusted_proxy_cidr: cli.trusted_proxy_cidr.clone(),
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
             oauth_secret: cli.oauth_secret.clone(),
             oauth_issuer: cli.oauth_issuer.clone(),
             oauth_audience: cli.oauth_audience.clone(),
+            oauth_owner_subject: cli.oauth_owner_subject.clone(),
             execution_root: cli.execution_root.clone(),
+            // Remote mode is loopback-first. A local HTTPS edge/tunnel may be
+            // explicitly trusted with --trusted-proxy; remote mode never
+            // exposes a public plaintext listener by default.
+            bind_host: "127.0.0.1".into(),
         }
     }
 }

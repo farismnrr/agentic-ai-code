@@ -71,16 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router = create_router(config.clone());
 
-    // Localhost-only binding per the plan's security invariant #1.
-    // In REMOTE mode, we bind to 0.0.0.0 (or similar) behind a reverse proxy.
-    let addr = match config.mode {
-        rust_tools::relay_agent::config::SecurityMode::Local => {
-            SocketAddr::from(([127, 0, 0, 1], config.port))
-        }
-        rust_tools::relay_agent::config::SecurityMode::Remote => {
-            SocketAddr::from(([0, 0, 0, 0], config.port))
-        }
-    };
+    let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port).parse()?;
     println!("relay-agent listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -111,9 +102,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Shutting down gracefuly...");
     };
 
-    axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown_signal)
-        .await?;
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal)
+    .await?;
 
     Ok(())
 }

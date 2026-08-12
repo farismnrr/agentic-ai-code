@@ -11,6 +11,7 @@ Write a plan here when a task spans several sessions or several files, so the ne
 Keep shipped plans; move them to the Done list below rather than deleting, so the numbering stays meaningful and past decisions stay readable.
 
 ## In Flight
+- [029b-external-mcp-mcp-production-hardening.md](029b-external-mcp-mcp-production-hardening.md) — unresolved Plan 029 production gaps only; must remain on `feat/029-p0-audit` with no separate branch.
 - [029-external-mcp-native-mcp-integration.md](029-external-mcp-native-mcp-integration.md) — native external MCP client/external MCP client remote MCP integration: current stateless MCP transport, OAuth discovery/resource-server validation, explicit tool scopes, Secure MCP Tunnel/local connectivity, client E2E, observability, and strict conformance/CI/release gates.
 - [028-relay-agent-rust-rewrite.md](028-relay-agent-rust-rewrite.md) — full rewrite of `packages/relay-agent` from Node.js/TypeScript + `@yao-pkg/pkg` to a standalone Rust binary, with strict Nuxt HTTP/WebSocket parity, localhost security, lifecycle parity, native release CI, and published-binary E2E verification.
 
