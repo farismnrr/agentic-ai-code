@@ -71,11 +71,12 @@ The tracked pre-commit hook runs the same command automatically after `pnpm inst
 
 `pnpm verify:commit` runs:
 
-1. agent-doc/index integrity;
-2. `pnpm lint`;
-3. `pnpm typecheck`.
+1. repository policy checks that reject tracked CI workflows and unit-test suites;
+2. agent-doc/index integrity;
+3. `pnpm lint`;
+4. `pnpm typecheck`.
 
-`pnpm lint` covers ESLint plus Rust formatting and Clippy. `pnpm typecheck` covers generated Nuxt/Vue type verification plus warnings-denied Rust `cargo check`. A failing lint/type gate blocks the commit until fixed.
+`pnpm lint` covers ESLint plus Rust formatting and Clippy. `pnpm typecheck` performs a Nuxt production build, explicit generated-project Vue type verification, and warnings-denied Rust `cargo check`. A failing lint/type gate blocks the commit until fixed.
 
 There is no remote CI safety net. PR descriptions must record the local verification performed; GitHub reporting a branch as mergeable is not proof of quality.
 
@@ -83,9 +84,9 @@ See [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-g
 
 ### Web application
 
-`pnpm typecheck` runs `nuxt prepare --dotenv .env.example` to generate the Nuxt type project, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
+`pnpm typecheck` runs `nuxt build --dotenv .env.example` to generate and compile the complete Nuxt project, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck` or `nuxt prepare`; this repository previously observed incomplete/silent type gates on those paths.
 
-Use `pnpm build` separately when runtime bundling/SSR output itself needs verification beyond the mandatory commit gate. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+Because the mandatory typecheck already performs a production build, a separate `pnpm build` is only needed when rerunning/inspecting bundling output independently. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
 
 ### Run the built app for local verification
 
