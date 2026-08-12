@@ -1,16 +1,6 @@
-export interface Model {
-  id: string
-  providerId: string
-  modelId: string
-  label: string
-  description: string
-  icon: string
-  contextWindow: number | null
-  maxOutputTokens: number | null
-  thinkingEnabled: boolean | null
-  thinkingMinTokens: number | null
-  thinkingMaxTokens: number | null
-}
+import type { ChatModel } from '#shared/types/chat'
+
+export type Model = ChatModel
 
 export function useModels() {
   const models = useState<Model[]>('models', () => [])

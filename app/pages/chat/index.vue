@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
+
 useSeoMeta({ title: 'New chat' })
 
 const { create, update, titleFrom } = useConversations()
@@ -48,20 +50,11 @@ const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
 // capability. Collected here, then applied once the conversation exists.
 const enabledToolIds = ref<string[]>([])
 
-const modeItems = [
-  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
-  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
-]
-
-const effortItems = [
-  { label: 'Low Effort', value: 'low' },
-  { label: 'Medium Effort', value: 'medium' },
-  { label: 'High Effort', value: 'high' },
-  { label: 'Max Effort', value: 'max' }
-]
+const modeItems = chatModeItems
+const effortItems = reasoningEffortItems
 
 const supportsReasoning = computed(() => {
-  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
+  return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
 })
 
 const suggestions = [

@@ -1,12 +1,6 @@
-export interface ModelProvider {
-  id: string
-  type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
-  name: string
-  baseUrl: string | null
-  customHeaders: Record<string, string>
-  enabled: boolean
-  hasApiKey: boolean
-}
+import type { ModelProvider } from '#shared/types/chat'
+
+export type { ModelProvider }
 
 export interface ModelProviderTypeOption {
   label: string
