@@ -8,6 +8,7 @@ New filenames use kebab-case. One historical Plan 028 file predates that convent
 
 ## Application and tooling
 
+- [no-ci-local-commit-gates.md](no-ci-local-commit-gates.md) — repository policy: no CI and no unit-test suite; every commit must pass the tracked local lint/typecheck gate without bypassing it.
 - [port-3333.md](port-3333.md) — why the local Nuxt server uses port 3333 instead of the usual 3000.
 - [pnpm-over-bun.md](pnpm-over-bun.md) — why pnpm was chosen for this project.
 - [no-type-aware-linting.md](no-type-aware-linting.md) — why typescript-eslint type-aware lint rules are disabled.
