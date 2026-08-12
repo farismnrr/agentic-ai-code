@@ -226,7 +226,8 @@ pub struct Tool {
     pub input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ToolAnnotations>,
-    pub security: ToolSecurity,
+    #[serde(rename = "securitySchemes")]
+    pub security_schemes: Vec<ToolSecurityScheme>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,11 +241,10 @@ pub struct ToolAnnotations {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ToolSecurity {
-    pub read_only: bool,
-    pub destructive: bool,
-    pub idempotent: bool,
-    pub open_world: bool,
+pub struct ToolSecurityScheme {
+    #[serde(rename = "type")]
+    pub scheme_type: &'static str,
+    pub scopes: Vec<&'static str>,
 }
 
 /// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
@@ -284,7 +284,10 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: false,
                 open_world_hint: true,
             }),
-            security: ToolSecurity { read_only: false, destructive: true, idempotent: false, open_world: true },
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
         Tool {
             name: "http_fetch",
@@ -322,7 +325,10 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: false,
                 open_world_hint: true,
             }),
-            security: ToolSecurity { read_only: false, destructive: true, idempotent: false, open_world: true },
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
         Tool {
             name: "web_search",
@@ -343,7 +349,10 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: true,
                 open_world_hint: true,
             }),
-            security: ToolSecurity { read_only: true, destructive: false, idempotent: true, open_world: true },
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
     ]
 }

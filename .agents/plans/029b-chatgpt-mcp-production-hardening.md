@@ -526,18 +526,18 @@ Current OpenAI Plugin authentication guidance requires each OAuth-protected MCP 
 
 Tasks:
 
-- [ ] Remove the custom top-level `ToolSecurity` / `security` descriptor field from the on-wire tool contract.
-- [ ] Keep MCP risk annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) unchanged unless actual side effects changed.
-- [ ] Add per-tool `securitySchemes` to `terminal_exec`, `http_fetch`, and `web_search`.
-- [ ] For the current coarse coding profile, declare OAuth-required semantics using `oauth2` with scope `relay.coding` for all three tools.
-- [ ] Do not introduce fake per-tool scopes merely to make metadata look granular; server-side authorization remains the existing `relay.coding` policy.
-- [ ] Treat `securitySchemes` as client-visible auth metadata only; token signature, issuer, audience, expiry, owner and scope checks remain authoritative server-side controls.
-- [ ] Regenerate the frozen runtime `tools/list` snapshot only from the actual serialized descriptors after this change.
-- [ ] Make Phase 7 fail if `securitySchemes` disappears or drifts from the reviewed OAuth policy.
+- [x] Remove the custom top-level `ToolSecurity` / `security` descriptor field from the on-wire tool contract.
+- [x] Keep MCP risk annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) unchanged unless actual side effects changed.
+- [x] Add per-tool `securitySchemes` to `terminal_exec`, `http_fetch`, and `web_search`.
+- [x] For the current coarse coding profile, declare OAuth-required semantics using `oauth2` with scope `relay.coding` for all three tools.
+- [x] Do not introduce fake per-tool scopes merely to make metadata look granular; server-side authorization remains the existing `relay.coding` policy.
+- [x] Treat `securitySchemes` as client-visible auth metadata only; token signature, issuer, audience, expiry, owner and scope checks remain authoritative server-side controls.
+- [x] Regenerate the frozen runtime `tools/list` snapshot only from the actual serialized descriptors after this change.
+- [x] Make Phase 7 fail if `securitySchemes` disappears or drifts from the reviewed OAuth policy.
 
 Exit:
 
-- [ ] runtime `tools/list` exposes standards-compatible per-tool `securitySchemes` and no longer exposes the custom duplicate `security` field.
+- [x] runtime `tools/list` exposes standards-compatible per-tool `securitySchemes` and no longer exposes the custom duplicate `security` field.
 
 ## I. ChatGPT tool-level OAuth challenge — pre-E2E repository blocker
 

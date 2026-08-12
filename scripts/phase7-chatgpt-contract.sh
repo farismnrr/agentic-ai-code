@@ -10,7 +10,7 @@ command -v jq >/dev/null
 command -v sha256sum >/dev/null
 command -v bwrap >/dev/null
 
-jq -e 'type == "array" and all(.[]; (.name and .description and .inputSchema and .annotations and .security))' "$catalog" >/dev/null
+jq -e 'type == "array" and all(.[]; (.name and .description and .inputSchema and .annotations and (.securitySchemes == [{"type":"oauth2","scopes":["relay.coding"]}]) and (has("security") | not)))' "$catalog" >/dev/null
 test "$(jq -r '.[].name' "$catalog" | paste -sd' ' -)" = "terminal_exec http_fetch web_search"
 test "$(jq -r '.[].title' "$catalog" | paste -sd' ' -)" = "Sandboxed Coding Terminal HTTP Fetch Web Search"
 
