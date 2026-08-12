@@ -1,10 +1,9 @@
 import { eq, and } from 'drizzle-orm'
 import { modelProviders, type ModelProviderType } from '../database/schema'
+import { providerRequiresBaseUrl } from '#shared/utils/providers'
 import { encryptSecret } from './crypto'
 import { notFound, badRequest, badGateway } from './http-errors'
 import { listProviderModels } from './providers/index'
-
-const PROVIDER_TYPES_REQUIRING_BASE_URL: ModelProviderType[] = ['openai_compatible', 'anthropic_compatible']
 
 export async function listModelProviders(userId: string) {
   const db = useDb()
@@ -66,7 +65,7 @@ export async function updateModelProvider(userId: string, id: string, updates: {
   if (!existing) throw notFound('Provider not found')
 
   const nextBaseUrl = updates.baseUrl !== undefined ? updates.baseUrl : existing.baseUrl
-  if (PROVIDER_TYPES_REQUIRING_BASE_URL.includes(existing.type) && !nextBaseUrl) {
+  if (providerRequiresBaseUrl(existing.type) && !nextBaseUrl) {
     throw badRequest('Base URL is required for this provider type')
   }
 
@@ -126,7 +125,7 @@ export async function listProviderModelIds(userId: string, providerId: string) {
     .limit(1)
 
   if (!provider) throw notFound('Provider not found')
-  if (PROVIDER_TYPES_REQUIRING_BASE_URL.includes(provider.type) && !provider.baseUrl) {
+  if (providerRequiresBaseUrl(provider.type) && !provider.baseUrl) {
     throw badRequest(`${provider.name} has no base URL set — edit the provider and add one before listing models`)
   }
   // Vertex AI Express Mode has no discovery endpoint at all — that's not a

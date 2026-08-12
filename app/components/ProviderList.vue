@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { ModelProvider } from '~/composables/useModelProviders'
+import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
 const { providers, types, create, update, remove } = useModelProviders()
 const toast = useToast()
-
-const BASE_URL_TYPES: ModelProvider['type'][] = ['openai_compatible', 'anthropic_compatible']
 
 type EditingProvider = Omit<Partial<ModelProvider>, 'baseUrl' | 'customHeaders'> & { apiKey?: string, baseUrl?: string }
 
@@ -15,6 +14,8 @@ const headerRows = ref<{ key: string, value: string }[]>([])
 function typeLabel(type: ModelProvider['type']) {
   return types.value.find(t => t.value === type)?.label ?? type
 }
+
+const requiresBaseUrl = computed(() => providerRequiresBaseUrl(editingProvider.value.type ?? 'openai_compatible'))
 
 function headersToRows(headers: Record<string, string> | undefined) {
   return Object.entries(headers ?? {}).map(([key, value]) => ({ key, value }))
@@ -131,7 +132,7 @@ async function removeProvider(id: string) {
             />
           </UFormField>
           <UFormField
-            v-if="editingProvider.type && BASE_URL_TYPES.includes(editingProvider.type)"
+            v-if="requiresBaseUrl"
             label="Base URL"
           >
             <UInput
@@ -149,7 +150,7 @@ async function removeProvider(id: string) {
           </UFormField>
 
           <UFormField
-            v-if="editingProvider.type && BASE_URL_TYPES.includes(editingProvider.type)"
+            v-if="requiresBaseUrl"
             label="Custom Headers"
             description="Extra HTTP headers sent with every request to this provider — for gateways/proxies that need something beyond the API key."
           >

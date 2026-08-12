@@ -1,6 +1,7 @@
 import { useChat } from '@ai-sdk/vue'
 import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
+import { friendlyChatErrorMessage } from '../utils/chat-errors'
 
 /**
  * Wires one conversation to the AI SDK.
@@ -11,8 +12,6 @@ import type { Conversation, UIMessage } from '#shared/types/chat'
  *
  *   new DefaultChatTransport({ api: '/api/chat' })
  */
-const GENERIC_PROVIDER_ERROR = 'The model provider returned an error. Try again, or switch models.'
-
 // AI SDK errors from a failed provider call carry a JSON blob as the
 // message (e.g. `[503]: {"error":{"message":"Upstream request failed..."}}`)
 // rather than something fit for a toast — pull the human-readable part out
@@ -21,21 +20,6 @@ const GENERIC_PROVIDER_ERROR = 'The model provider returned an error. Try again,
 // server/utils/logger.ts's errorAttributes) can only stringify as the
 // literal text "[object Object]" — that's not a message, so treat it (and
 // any other non-informative raw message) the same as no message at all.
-function friendlyChatErrorMessage(error: Error): string {
-  const match = error.message.match(/\{.*\}/s)
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[0])
-      const nested = parsed?.error?.message
-      if (typeof nested === 'string' && nested.length > 0) return nested
-    } catch {
-      // Not JSON after all — fall through to the raw message below.
-    }
-  }
-  if (!error.message || error.message === '[object Object]') return GENERIC_PROVIDER_ERROR
-  return error.message
-}
-
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages, loadOne } = useConversations()
   const toast = useToast()

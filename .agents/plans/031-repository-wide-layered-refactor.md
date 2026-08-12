@@ -378,11 +378,11 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Centralize chat mode options and reasoning-effort options that currently have duplicated source-of-truth.
-- [ ] Centralize model capability/config mapping used by both new-chat and existing-chat controls.
-- [ ] Move pure error/format/value transformations out of large presentation/composable files when they have independent reuse.
-- [ ] Audit duplicated provider-type/base-URL requirements and establish one authoritative server policy while keeping request-schema validation user-friendly.
-- [ ] Reconcile duplicated types currently declared inside composables with shared contracts only when both client and server truly need them.
+- [x] Centralize chat mode options and reasoning-effort options that currently have duplicated source-of-truth.
+- [x] Centralize model capability/config mapping used by both new-chat and existing-chat controls.
+- [x] Move pure error/format/value transformations out of large presentation/composable files when they have independent reuse.
+- [x] Audit duplicated provider-type/base-URL requirements and establish one authoritative server policy while keeping request-schema validation user-friendly.
+- [x] Reconcile duplicated types currently declared inside composables with shared contracts only when both client and server truly need them.
 
 ### Guardrails
 

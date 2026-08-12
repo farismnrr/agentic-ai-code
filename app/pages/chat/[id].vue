@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { getTextFromMessage } from '@nuxt/ui/utils/ai'
+import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
 
 const route = useRoute()
 const toast = useToast()
@@ -103,13 +104,7 @@ const modelItems = computed(() =>
   models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
 
-// Matches app/pages/chat/index.vue's modeItems — same labels/icons for the
-// same setting, just editable after creation here instead of only at
-// creation time.
-const modeItems = [
-  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
-  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
-]
+const modeItems = chatModeItems
 
 const modelId = computed({
   get: () => conversation.value?.modelId ?? models.value[0]?.id,
@@ -132,15 +127,10 @@ const reasoningEffort = computed({
   }
 })
 
-const effortItems = [
-  { label: 'Low Effort', value: 'low' },
-  { label: 'Medium Effort', value: 'medium' },
-  { label: 'High Effort', value: 'high' },
-  { label: 'Max Effort', value: 'max' }
-]
+const effortItems = reasoningEffortItems
 
 const supportsReasoning = computed(() => {
-  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
+  return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
 })
 
 function submit() {
