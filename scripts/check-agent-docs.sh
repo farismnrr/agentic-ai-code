@@ -20,10 +20,10 @@ for path in EXTERNAL MCP CLIENT.md GEMINI.md .external-mcp .gemini; do
   fi
 done
 
-# Shared guidance and package skills must stay client/vendor neutral. Product
-# runtime/provider support is intentionally outside this scan; an
-# Anthropic-compatible inference adapter is a product capability, not repo agent
-# guidance.
+# Shared guidance, the root README, and package skills must stay client/vendor
+# neutral. Product runtime/provider support is intentionally outside this scan;
+# an Anthropic-compatible inference adapter is a product capability, not repo
+# agent guidance.
 if grep -RInE \
   --exclude='check-agent-docs.sh' \
   --exclude-dir='.git' \
@@ -31,7 +31,7 @@ if grep -RInE \
   --exclude-dir='.nuxt' \
   --exclude-dir='.output' \
   '([Cc]laude|EXTERNAL MCP CLIENT\.md|\.external-mcp/|GEMINI\.md|\.gemini/|Gemini/Antigravity)' \
-  AGENTS.md .agents packages/*/SKILL.md 2>/dev/null; then
+  README.md AGENTS.md .agents packages/*/SKILL.md 2>/dev/null; then
   fail 'vendor-specific agent guidance/reference found; use general agent wording instead'
 fi
 
