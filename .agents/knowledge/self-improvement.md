@@ -1,6 +1,6 @@
 # Self-improvement — keep `.agents/` current
 
-`.agents/` is the project's durable agent memory. **Reviewing it before finish is part of every task.** The policy applies to Claude Code, Gemini/Antigravity, and any other agent working in this repository even when its client has no automatic reminder hook.
+`.agents/` is the project's durable agent memory. **Reviewing it before finish is part of every task, regardless of which coding agent/client performs the work.**
 
 ## Before declaring a task finished
 
@@ -10,6 +10,7 @@
 4. Update [`../plans/README.md`](../plans/README.md) when a plan starts, completes, becomes blocked, or changes status.
 5. Remove or amend guidance that became false because of the task.
 6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing a memory just to satisfy the process.
+7. Run `bash scripts/check-agent-docs.sh` before finish.
 
 A task is not documentation-complete when its implementation and `.agents/` tell different stories.
 
@@ -44,44 +45,21 @@ Durable docs may summarize implementation facts when they are needed to orient f
 - Delete or clearly supersede stale memories. Stale memory is worse than missing memory.
 - Preserve historical plan evidence, but mark historical snapshots as such when their checklists no longer describe current status.
 
-## Automatic reminder coverage
+## General enforcement
 
-### Claude Code
+The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-`.claude/settings.json` registers a `Stop` hook that runs [`../hooks/check-agents-sync.sh`](../hooks/check-agents-sync.sh). The hook is a **best-effort reminder only**.
+[`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) is the vendor-neutral structural backstop. CI runs it on every pull request. It currently verifies that:
 
-Current script behavior:
+- repository-owned vendor-specific agent entrypoints/settings are absent;
+- shared guidance does not reintroduce vendor-specific agent lifecycle/discovery instructions;
+- every Markdown memory is linked from `memories/README.md`;
+- every Markdown plan/sub-plan is linked from `plans/README.md`.
 
-- watches source/config paths such as `app/`, `server/`, `shared/`, `modules/`, `plugins/`, `nuxt.config.ts`, `package.json`, `eslint.config.mjs`, and `.mcp.json`;
-- compares watched files against `.agents/.last-sync`;
-- blocks at most once per session by recording session state under `.agents/.sync-state/`;
-- tells the agent to update `.agents/` or explicitly acknowledge that nothing durable was learned.
+The script deliberately does **not** try to infer whether source code "deserves" a memory update. That decision is semantic and belongs to the closeout review above. CI proves structural integrity; the working agent is responsible for capturing durable knowledge when the task creates it.
 
-To acknowledge that no durable agent-memory update is needed:
-
-```sh
-touch .agents/.last-sync
-```
-
-### Important limitations of the current hook
-
-Do **not** describe the hook as proving that "source changed but `.agents/` did not." The implementation does not compare source modification times with `.agents/` modification times; it only checks whether watched source is newer than `.agents/.last-sync`.
-
-Consequences:
-
-- editing a file under `.agents/` does **not** by itself move `.agents/.last-sync`;
-- a missing `.last-sync` marker is created when the hook runs, so a fresh clone/session can miss changes made before that first marker creation;
-- the hook depends on its shell environment/tools and is not a cross-agent repository service;
-- hook silence is not evidence that documentation is synchronized.
-
-These are implementation limitations, not documentation semantics. Fixing them requires changing the hook/config and is outside a docs-only task.
-
-### Gemini/Antigravity and other agents
-
-There is no repository-level equivalent Stop hook for these clients today. `GEMINI.md` imports the shared guidance and `AGENTS.md` points to it, so the closeout protocol above is mandatory **by instruction**, not automatically enforced by this repository.
-
-If a client later gains an equivalent hook, keep the behavior centralized around this same closeout policy rather than forking a second set of rules.
+If a future agent client offers its own local automation, keep it personal/untracked. Do not fork repository guidance or add a second repository-owned lifecycle path.
 
 ## Principle
 
-The reminder exists to catch forgetting. The real self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful**.
+The self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful → run the shared integrity gate**.
