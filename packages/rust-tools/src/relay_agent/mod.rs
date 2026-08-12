@@ -1,6 +1,7 @@
 pub mod admission;
 pub mod auth;
 pub mod config;
+pub mod dispatcher;
 pub mod error;
 pub mod execution;
 pub mod observability;
