@@ -30,7 +30,7 @@ Or directly:
 cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked --bin relay-agent
 ```
 
-The repository pins Rust 1.95.0. CI/release policy is documented in [`../rust-tools/README.md`](../rust-tools/README.md).
+The repository pins Rust 1.95.0. Current local verification/release policy is documented in [`../rust-tools/README.md`](../rust-tools/README.md).
 
 ## Local mode
 
@@ -90,19 +90,22 @@ Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure t
 
 ## Verification
 
-The repository's authoritative verification is CI plus deterministic scripts, not an old JavaScript parity harness:
+This repository intentionally has **no CI workflow and no unit-test suite**. The mandatory local commit gate is the baseline:
 
 ```bash
-cd packages/rust-tools
-cargo fmt --all -- --check
-RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+pnpm verify:commit
+```
+
+For security-sensitive relay/MCP changes, also run the applicable local security/acceptance checks, typically including:
+
+```bash
 cargo audit
-cd ../..
 bash scripts/phase4-black-box.sh
 bash scripts/phase7-external-mcp-contract.sh
 bash scripts/phase8-zero-bypass.sh
 ```
+
+The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through the root `pnpm lint` / `pnpm typecheck` scripts. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
 
 Live external MCP client/OAuth acceptance remains a separate operator gate; repository/static checks must not be described as proof that live OAuth/external MCP client acceptance passed.
 
