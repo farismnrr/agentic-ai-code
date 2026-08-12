@@ -23,13 +23,13 @@ The Nuxt application and TypeScript LangChain/AI SDK tool factories were explici
 | No obsolete CLI-only JS deps | ✅ PASS | Plan 027 audit removed/verified CLI-only dependency residue for the migrated layer |
 | TypeScript application APIs intact | ✅ PASS | `packages/{terminal,curl,searxng-search}-tool/src/index.ts` remain the application-facing APIs |
 | Rust binaries present | ✅ PASS | `packages/rust-tools/src/bin/{terminal-tool,curl-tool,searxng-search-tool}.rs` are the executable implementations |
-| CI/toolchain gate | ✅ PASS | Current consolidated workflow is `.github/workflows/ci.yml`; Rust 1.95.0 is pinned while `Cargo.toml` declares MSRV 1.88.0, with fmt/check/Clippy/audit enforcement |
+| Historical quality gate | ✅ PASS | At Plan 027 closeout the repository used workflow-backed Rust fmt/check/Clippy/audit. That CI evidence is historical; the current repository uses the mandatory local commit gate documented in [`no-ci-local-commit-gates.md`](no-ci-local-commit-gates.md). |
 | Benchmark evidence | ✅ PASS | [`027-performance-benchmark.md`](027-performance-benchmark.md) records the migration measurements |
-| Rollback documented | ✅ PASS | [`027-rust-release-supply-chain.md`](027-rust-release-supply-chain.md) documents release/rollback posture |
+| Rollback documented | ✅ PASS | [`027-rust-release-supply-chain.md`](027-rust-release-supply-chain.md) documents current manual release/rollback posture |
 | PR/merge evidence | ✅ PASS | PR #99 (`feat/027-p1-rust-cli-tools` → `dev`) |
 | Plan index updated | ✅ PASS | [`../plans/README.md`](../plans/README.md) lists Plan 027 as completed |
 
-> The workflow filename changed after Plan 027. Older evidence may mention `.github/workflows/rust-ci.yml`; the current repository workflow is `.github/workflows/ci.yml`. This does not reopen the migration decision.
+> Historical Plan 027 evidence may mention `.github/workflows/rust-ci.yml` or the later consolidated `.github/workflows/ci.yml`. The repository intentionally has no CI now. Those old workflow names document what was used during the migration; they are not current operating instructions.
 
 ---
 
@@ -56,4 +56,5 @@ Additional Plan 027 memories are indexed in [`README.md`](README.md).
 
 - **Hard invariant:** No JavaScript executable CLI implementation, launcher, fallback, or npm `bin` mapping is supported for the three migrated tools.
 - **Scope invariant:** Nuxt/Vue application code and TypeScript tool factories are separate application concerns, not JavaScript CLI fallbacks.
+- **Quality invariant (current):** every commit must pass the repository-local policy/lint/type gate; CI and unit-test suites are intentionally absent.
 - **Rollback:** A permanent JavaScript CLI fallback is disallowed; rollback uses a known-good Rust artifact or reverts the integration/release change.
