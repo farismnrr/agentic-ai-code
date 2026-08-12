@@ -1,37 +1,94 @@
-# Rust Tools CLI Migration
+# Rust Tools
 
-This workspace contains the Rust migration for `relay-agent`, `terminal-tool`, `curl-tool`, and `searxng-search-tool`.
+This workspace contains the native implementations of:
+
+- `terminal-tool`
+- `curl-tool`
+- `searxng-search-tool`
+- `relay-agent`
+
+The three tool CLIs were migrated from JavaScript in Plan 027. `relay-agent` was subsequently rewritten as a native Rust MCP server in Plan 028. There is no supported JavaScript CLI fallback path.
+
+## Toolchain
+
+- **Edition:** Rust 2021
+- **MSRV:** 1.88.0 (`Cargo.toml`)
+- **Repository-pinned toolchain:** Rust 1.95.0 (`rust-toolchain.toml` and CI)
+
+Use the pinned toolchain for repository development/verification. The MSRV is a package compatibility floor, not the version CI uses.
 
 ## Architecture
-These tools were migrated from JS to Rust to enforce strict process boundary checks, safe-URL policies (SSRF protection), and zero JS fallback execution. The tools are designed as thin, statically-compiled native binaries that provide precise, contract-preserving behavior mirroring the original JS tools but without the Node.js overhead. 
 
-Specifically, `relay-agent` is a native Rust MCP (Model Context Protocol) server. It exposes a standard Streamable HTTP MCP endpoint (spec 2026-07-28). It does not use Node.js and it is no longer based on a proprietary WebSocket protocol.
+The sibling CLIs are small native executors:
 
-## Toolchain & MSRV
-- **Rust Edition:** 2021
-- **Toolchain:** Stable (latest)
-- **MSRV:** 1.88.0 (Minimum Supported Rust Version)
+- `terminal-tool` — process execution with explicit guard/allow controls and timeout/process-group handling.
+- `curl-tool` — HTTP client with SSRF protections unless an explicit local bypass is requested.
+- `searxng-search-tool` — SearXNG query client.
+- `relay-agent` — MCP `2026-07-28` server that exposes controlled coding capabilities and invokes the sibling tools through the relay security boundary.
 
-## Release Policy
-- Binaries are built in `release` mode for production.
-- Supported targets: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
-- Releases are managed through GitHub Actions and attached to GitHub releases.
+`relay-agent` resolves trusted sibling binaries relative to its own executable rather than trusting an arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
 
-## Error Model
-- All errors are typed internally.
-- Expected contractual errors (like SSRF blocks or empty commands) return an output string prefix `Error:` and exit code `0` to match the JS oracle's behavior.
-- Argument parsing errors return exit code `2`.
-- Any underlying execution or missing binary errors exit with `1`.
+## Relay security/platform contract
 
-## Development
-- Format: `cargo fmt`
-- Lint: `cargo clippy -- -D warnings`
-- Parity Tests: `node tests/parity.mjs`
+The current relay contract is deliberately stricter than the generic sibling CLI contract:
 
-## Security & Sibling Binary Trust Boundary
-- The `relay-agent` invokes `terminal-tool`, `curl-tool`, and `searxng-search-tool` by explicitly resolving them relative to its own executable directory (`std::env::current_exe()`). It does not rely on the system `$PATH`. 
-- **Trust Assumption:** The directory containing `relay-agent` is considered a trust boundary. Sibling binaries within this directory are trusted. An untrusted local user must not be able to replace or tamper with these binaries.
-- **Deployment & Least Privilege:** The agent MUST be deployed using a dedicated unprivileged OS account or container user. The `relay-agent` explicitly refuses to run as UID 0 (root).
-- **Filesystem Permissions (Defense-in-Depth):** Filesystem permissions are a defense-in-depth control and are NOT a substitute for the application allowlist. The runtime user MUST NOT have write access to the relay executable directory, sibling CLI binaries, configuration/policy files, or release artifacts.
-- **Installation Requirements:** Ensure that the release/install directories are owned by `root` (or an administrative deployment user distinct from the runtime user) and have appropriate restrictive permissions (e.g., `755` for directories and binaries) so that the unprivileged runtime user cannot overwrite them.
-- **Integrity Verification:** Consider implementing binary integrity verification (e.g., checksums or signatures) only if the deployment threat model requires protection against local binary tampering by an attacker who has already gained elevated privileges.
+- **Linux only.** The relay binary fails compilation on non-Linux targets because its execution sandbox requires Bubblewrap (`bwrap`).
+- **Unprivileged runtime.** The relay refuses to run as UID 0.
+- **Filesystem containment.** Execution is constrained to the configured execution root and enforced through Bubblewrap plus server policy.
+- **Local/remote modes.** Local mode is loopback-oriented; remote mode is OAuth-protected and must fail closed.
+- **Docker is deferred.** Do not expose the host Docker socket as a workaround for missing isolated Docker execution.
+
+See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), [Plan 028](../../.agents/plans/028-relay-agent-rust-rewrite.md), and [Plan 029b](../../.agents/plans/029b-chatgpt-mcp-production-hardening.md) before changing these boundaries.
+
+## Build
+
+From repository root:
+
+```bash
+pnpm build:tools
+```
+
+Or directly:
+
+```bash
+cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked
+```
+
+## Verification
+
+Repository CI currently enforces:
+
+```bash
+cd packages/rust-tools
+cargo fmt --all -- --check
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo audit
+cd ../..
+bash scripts/phase8-zero-bypass.sh
+```
+
+MCP-specific changes may also require the deterministic Phase 4/6/7 scripts described by the active Plan 029/029b acceptance criteria.
+
+The old `node tests/parity.mjs` instruction is obsolete; that JavaScript parity harness is not the current verification source of truth.
+
+## Release policy
+
+Current GitHub Actions release packaging for the native binaries is **`x86_64-unknown-linux-gnu`**. The workflow intentionally removed macOS/Windows relay targets because there is no supported equivalent to the required Bubblewrap sandbox and no insecure fallback is allowed.
+
+Do not document a platform as a supported relay release target merely because one of the simpler sibling CLI binaries can compile there.
+
+Release artifacts are built from source with Cargo, packaged with SHA-256 checksums, and gated by the JS/Rust CI jobs before tagged relay releases are created.
+
+## CLI notes
+
+The package-level TypeScript tool factories under sibling `packages/*-tool/` are still application APIs, but the standalone executable CLIs are the Rust binaries in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
+
+Use each binary's `--help` as the command-line source of truth:
+
+```bash
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin terminal-tool -- --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin curl-tool -- --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin searxng-search-tool -- --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin relay-agent -- --help
+```
