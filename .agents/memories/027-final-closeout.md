@@ -8,10 +8,9 @@
 
 ## Summary
 
-Plan 027 is fully complete. All three JavaScript CLI implementations
-(`terminal-tool`, `curl-tool`, `searxng-search-tool`) have been migrated to
-Rust and the repository is 100 % free of JavaScript CLI entrypoints,
-launchers, and fallbacks.
+Plan 027 is complete. The executable CLI layer for `terminal-tool`, `curl-tool`, and `searxng-search-tool` was migrated from JavaScript to Rust. Those three tools no longer have supported JavaScript CLI entrypoints, launchers, npm `bin` mappings, or permanent JavaScript fallback paths.
+
+The Nuxt application and TypeScript LangChain/AI SDK tool factories were explicitly outside this CLI migration and remain valid application APIs.
 
 ---
 
@@ -19,41 +18,42 @@ launchers, and fallbacks.
 
 | Gate | Result | Evidence |
 |------|--------|----------|
-| Zero JS CLI entrypoints | ✅ PASS | `grep -R "cli.mjs" packages/{terminal,curl,searxng-search}-tool` → no results |
-| No stale `bin` mappings | ✅ PASS | `find packages -name package.json | xargs grep -l '"bin"'` → no results |
-| No obsolete CLI-only JS deps | ✅ PASS | `minimist`, `yargs`, `commander` absent from all three tool `package.json` |
-| TypeScript sources intact | ✅ PASS | `packages/{terminal,curl,searxng-search}-tool/src/index.ts` all exist |
-| Rust binaries present | ✅ PASS | `packages/rust-tools/src/bin/{terminal-tool,curl-tool,searxng-search-tool}.rs` all exist |
-| CI config valid | ✅ PASS | `.github/workflows/rust-ci.yml` present; Rust 1.95.0 pinned (MSRV 1.88.0), `cargo audit` configured |
-| Benchmark evidence | ✅ PASS | `.agents/memories/027-performance-benchmark.md` exists (RSS: 155 MB → 14 MB; latency: 250 ms → 2 ms) |
-| Rollback documented | ✅ PASS | `.agents/memories/027-rust-release-supply-chain.md` exists |
+| Zero JS CLI entrypoints | ✅ PASS | The three migrated package `bin/cli.mjs` entrypoints were removed; see [`027-zero-js-cli-cutover.md`](027-zero-js-cli-cutover.md) |
+| No stale `bin` mappings | ✅ PASS | The three migrated package manifests no longer expose JavaScript CLI `bin` mappings |
+| No obsolete CLI-only JS deps | ✅ PASS | Plan 027 audit removed/verified CLI-only dependency residue for the migrated layer |
+| TypeScript application APIs intact | ✅ PASS | `packages/{terminal,curl,searxng-search}-tool/src/index.ts` remain the application-facing APIs |
+| Rust binaries present | ✅ PASS | `packages/rust-tools/src/bin/{terminal-tool,curl-tool,searxng-search-tool}.rs` are the executable implementations |
+| CI/toolchain gate | ✅ PASS | Current consolidated workflow is `.github/workflows/ci.yml`; Rust 1.95.0 is pinned while `Cargo.toml` declares MSRV 1.88.0, with fmt/check/Clippy/audit enforcement |
+| Benchmark evidence | ✅ PASS | [`027-performance-benchmark.md`](027-performance-benchmark.md) records the migration measurements |
+| Rollback documented | ✅ PASS | [`027-rust-release-supply-chain.md`](027-rust-release-supply-chain.md) documents release/rollback posture |
 | PR/merge evidence | ✅ PASS | PR #99 (`feat/027-p1-rust-cli-tools` → `dev`) |
-| README updated | ✅ PASS | `.agents/plans/README.md` moved 027 to Completed list |
+| Plan index updated | ✅ PASS | [`../plans/README.md`](../plans/README.md) lists Plan 027 as completed |
+
+> The workflow filename changed after Plan 027. Older evidence may mention `.github/workflows/rust-ci.yml`; the current repository workflow is `.github/workflows/ci.yml`. This does not reopen the migration decision.
 
 ---
 
-## Memory files created during plan 027
+## Core memory files from Plan 027
 
-| File | Step |
-|------|------|
-| `027-rust-architecture-toolchain.md` | Step 1-2 |
-| `027-strict-differential-parity.md` | Step 3 |
-| `027-terminal-tool-process-safety.md` | Step 4 |
-| `027-curl-tool-ssrf-policy.md` | Step 5 |
-| `027-searxng-deterministic-fixtures.md` | Step 6 |
-| `027-pnpm-workspace-integration.md` | Step 7 |
-| `027-rust-release-supply-chain.md` | Step 8 |
-| `027-performance-benchmark.md` | Step 9 |
-| `027-zero-js-cli-cutover.md` | Step 10 |
-| `027-final-closeout.md` | Step 11 (this file) |
+| File | Covers |
+|------|--------|
+| [`027-rust-architecture-toolchain.md`](027-rust-architecture-toolchain.md) | Rust workspace/toolchain boundary |
+| [`027-strict-differential-parity.md`](027-strict-differential-parity.md) | Migration parity strategy |
+| [`027-terminal-tool-process-safety.md`](027-terminal-tool-process-safety.md) | Terminal process safety |
+| [`027-curl-tool-ssrf-policy.md`](027-curl-tool-ssrf-policy.md) | Curl SSRF policy |
+| [`027-searxng-deterministic-fixtures.md`](027-searxng-deterministic-fixtures.md) | SearXNG deterministic fixtures |
+| [`027-pnpm-workspace-integration.md`](027-pnpm-workspace-integration.md) | pnpm/Rust workspace integration |
+| [`027-rust-release-supply-chain.md`](027-rust-release-supply-chain.md) | Release and rollback |
+| [`027-performance-benchmark.md`](027-performance-benchmark.md) | Performance evidence |
+| [`027-zero-js-cli-cutover.md`](027-zero-js-cli-cutover.md) | Final executable-layer cutover invariant |
+| `027-final-closeout.md` | Final closeout (this file) |
+
+Additional Plan 027 memories are indexed in [`README.md`](README.md).
 
 ---
 
 ## Invariants upheld
 
-- **Hard invariant:** No JavaScript executable CLI implementation, launcher,
-  fallback, or `bin` mapping exists for any of the three migrated tools.
-- **Scope invariant:** The Nuxt/Vue web application and TypeScript tool
-  factories are unchanged and remain out of scope.
-- **Rollback:** A permanent JavaScript fallback is disallowed; rollback uses a
-  known-good Rust artifact or reverts the integration/release commit.
+- **Hard invariant:** No JavaScript executable CLI implementation, launcher, fallback, or npm `bin` mapping is supported for the three migrated tools.
+- **Scope invariant:** Nuxt/Vue application code and TypeScript tool factories are separate application concerns, not JavaScript CLI fallbacks.
+- **Rollback:** A permanent JavaScript CLI fallback is disallowed; rollback uses a known-good Rust artifact or reverts the integration/release change.
