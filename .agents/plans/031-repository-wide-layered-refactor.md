@@ -415,13 +415,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Keep `default.vue` as a thin dashboard composition root.
-- [ ] Extract workspace/sidebar rendering into cohesive feature components.
-- [ ] Extract conversation row actions/dialog state from layout markup.
-- [ ] Extract workspace create/confirm/rename/details interaction into workspace-focused presentation/controller units.
-- [ ] Extract dashboard search UI/group mapping from unrelated workspace mutation logic.
-- [ ] Keep account menu/logout as a small shell concern or focused component depending on resulting cohesion.
-- [ ] Introduce one shell/sidebar controller composable only if it meaningfully coordinates shared state; avoid a giant replacement composable.
+- [x] Keep `default.vue` as a thin dashboard composition root.
+- [x] Extract workspace/sidebar rendering into cohesive feature components.
+- [x] Extract conversation row actions/dialog state from layout markup.
+- [x] Extract workspace create/confirm/rename/details interaction into workspace-focused presentation/controller units.
+- [x] Extract dashboard search UI/group mapping from unrelated workspace mutation logic.
+- [x] Keep account menu/logout as a small shell concern or focused component depending on resulting cohesion.
+- [x] Introduce one shell/sidebar controller composable only if it meaningfully coordinates shared state; avoid a giant replacement composable.
 
 ### Critical preserved invariants
 
