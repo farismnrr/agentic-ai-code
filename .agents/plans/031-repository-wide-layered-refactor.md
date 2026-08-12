@@ -764,6 +764,10 @@ If splitting the schema adds indirection without improving ownership/navigation,
 
 **Risk: very high / security-critical**
 
+**Status: complete** — boundary review and Rust verification passed; bearer-auth
+HTTP orchestration intentionally remains in `transport.rs` as the composition
+root.
+
 ### Primary target
 
 - `packages/rust-tools/src/relay_agent/transport.rs`
@@ -774,11 +778,19 @@ If splitting the schema adds indirection without improving ownership/navigation,
 > centralized in `auth.rs`; fetch, cache, token validation, and request flow
 > remain in `transport.rs`.
 
+> Boundary decision: keep bearer-auth orchestration in `transport.rs` as the
+> HTTP/security composition root. It owns request middleware, trusted transport
+> gates, ordering, `Next` continuation, and HTTP response/challenge mapping;
+> `auth.rs` owns the focused policy, fetch, cache, refresh, and token helpers.
+> Moving orchestration again would add indirection without clearer ownership
+> and would risk the established security ordering. No runtime change is
+> required for this boundary.
+
 - [x] Keep router construction and HTTP middleware composition in transport ownership.
 - [x] Extract correlation/audit helpers into an observability-focused module.
 - [x] Extract request-admission token bucket into a focused admission module.
 - [x] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
-- [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
+- [x] Extract JWKS fetch/cache/refresh/token-validation flow into focused auth helpers; keep HTTP bearer orchestration in transport by the boundary decision above.
 - [x] Micro-step 10D: OIDC discovery/JWKS HTTP helpers now live in `auth.rs`; cache ownership and JWT validation remain in `transport.rs`.
 - [x] Micro-step 10E: pure owner/scope claim policy now lives in `auth.rs`; cache refresh and JWT signature/issuer/audience/expiry validation remain in `transport.rs`.
 - [x] Micro-step 10F: JWKS cache TTL/URI/key lookup and missing-key single-refresh decision operations now live in `auth.rs`; lock ownership and refresh orchestration remain in `transport.rs`.
