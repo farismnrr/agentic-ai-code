@@ -13,9 +13,9 @@ The three tool CLIs were migrated from JavaScript in Plan 027. `relay-agent` was
 
 - **Edition:** Rust 2021
 - **MSRV:** 1.88.0 (`Cargo.toml`)
-- **Repository-pinned toolchain:** Rust 1.95.0 (`rust-toolchain.toml` and CI)
+- **Repository-pinned toolchain:** Rust 1.95.0 (`rust-toolchain.toml`)
 
-Use the pinned toolchain for repository development/verification. The MSRV is a package compatibility floor, not the version CI uses.
+Use the pinned toolchain for repository development/verification. The MSRV is a package compatibility floor, not the normal repository compiler.
 
 ## Architecture
 
@@ -54,31 +54,46 @@ Or directly:
 cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked
 ```
 
-## Verification
+## Mandatory commit verification
 
-Repository CI currently enforces:
+The repository has **no CI** and **no unit-test suite**. Rust quality is part of the mandatory local commit gate:
 
 ```bash
-cd packages/rust-tools
+pnpm verify:commit
+```
+
+The root commands include:
+
+```bash
 cargo fmt --all -- --check
-RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
+```
+
+Security-sensitive relay/MCP changes may additionally require:
+
+```bash
 cargo audit
-cd ../..
 bash scripts/phase8-zero-bypass.sh
 ```
 
-MCP-specific changes may also require the deterministic Phase 4/6/7 scripts described by the active Plan 029/029b acceptance criteria.
+and the deterministic acceptance scripts relevant to Plan 029/029b.
 
-The old `node tests/parity.mjs` instruction is obsolete; that JavaScript parity harness is not the current verification source of truth.
+The old JavaScript parity harness is obsolete and is not a current verification source of truth.
 
 ## Release policy
 
-Current GitHub Actions release packaging for the native binaries is **`x86_64-unknown-linux-gnu`**. The workflow intentionally removed macOS/Windows relay targets because there is no supported equivalent to the required Bubblewrap sandbox and no insecure fallback is allowed.
+There is **no automated GitHub Actions release workflow**. Native releases are a manual/operator action after local verification.
 
-Do not document a platform as a supported relay release target merely because one of the simpler sibling CLI binaries can compile there.
+The supported relay release target remains **`x86_64-unknown-linux-gnu`** because production containment requires Linux + Bubblewrap. Do not document macOS/Windows relay support merely because one of the simpler sibling CLI binaries can compile there.
 
-Release artifacts are built from source with Cargo, packaged with SHA-256 checksums, and gated by the JS/Rust CI jobs before tagged relay releases are created.
+When publishing native artifacts manually:
+
+- build from the reviewed commit with the pinned Rust toolchain;
+- run the mandatory local commit gate plus applicable Rust security checks;
+- package the intended Linux artifact(s);
+- generate and publish SHA-256 checksums;
+- do not weaken the sandbox/platform contract merely to broaden the release matrix.
 
 ## CLI notes
 
