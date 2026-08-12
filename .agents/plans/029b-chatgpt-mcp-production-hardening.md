@@ -545,19 +545,19 @@ OpenAI's current Plugin authentication guidance requires both tool auth metadata
 
 Tasks:
 
-- [ ] Extend tool error results so they can emit result `_meta["mcp/www_authenticate"]` without affecting normal successful tool results.
-- [ ] Generate the challenge from the same protected-resource metadata URL/auth policy used by the HTTP `WWW-Authenticate` helper so the two paths cannot drift.
-- [ ] Include an OAuth error parameter and a human-safe `error_description` in the tool-level challenge, as required by current OpenAI guidance.
-- [ ] Do not place bearer tokens, claims, owner identifiers, client secrets or sensitive command/source content inside `_meta` or `error_description`.
-- [ ] Preserve HTTP `401 invalid_token` and `403 insufficient_scope` responses for resource-server enforcement.
-- [ ] Preserve authorization-before-execution: an unauthenticated, wrong-owner or missing-scope request must never reach tool dispatch merely to manufacture a tool-level challenge.
-- [ ] Implement the ChatGPT-compatible challenge path at the correct MCP result boundary without weakening the existing middleware/resource-server checks.
-- [ ] Add deterministic black-box coverage for the emitted `_meta["mcp/www_authenticate"]` shape and verify the value references the same protected-resource metadata URL.
-- [ ] Verify both the metadata half (`securitySchemes`) and runtime challenge half are present before live ChatGPT OAuth testing.
+- [x] Extend tool error results so they can emit result `_meta["mcp/www_authenticate"]` without affecting normal successful tool results.
+- [x] Generate the challenge from the same protected-resource metadata URL/auth policy used by the HTTP `WWW-Authenticate` helper so the two paths cannot drift.
+- [x] Include an OAuth error parameter and a human-safe `error_description` in the tool-level challenge, as required by current OpenAI guidance.
+- [x] Do not place bearer tokens, claims, owner identifiers, client secrets or sensitive command/source content inside `_meta` or `error_description`.
+- [x] Preserve HTTP `401 invalid_token` and `403 insufficient_scope` responses for resource-server enforcement.
+- [x] Preserve authorization-before-execution: an unauthenticated, wrong-owner or missing-scope request must never reach tool dispatch merely to manufacture a tool-level challenge.
+- [x] Implement the ChatGPT-compatible challenge path at the correct MCP result boundary without weakening the existing middleware/resource-server checks.
+- [x] Add deterministic black-box coverage for the emitted `_meta["mcp/www_authenticate"]` shape and verify the value references the same protected-resource metadata URL.
+- [x] Verify both the metadata half (`securitySchemes`) and runtime challenge half are present before live ChatGPT OAuth testing.
 
 Exit:
 
-- [ ] a deterministic auth-required tool flow can return an MCP error result carrying `_meta["mcp/www_authenticate"]` with `error` + `error_description`, while existing HTTP auth enforcement remains intact.
+- [x] a deterministic auth-required tool flow can return an MCP error result carrying `_meta["mcp/www_authenticate"]` with `error` + `error_description`, while existing HTTP auth enforcement remains intact.
 
 ## J. Discovery metadata wording — pre-E2E polish
 
@@ -660,48 +660,48 @@ This is the **authoritative execution order** for the final repository pass. It 
 
 #### 2A. One challenge formatter
 
-- [ ] Refactor the existing Bearer challenge construction so there is one canonical function that produces the challenge value/string.
-- [ ] Reuse that exact value for the HTTP `WWW-Authenticate` header and `_meta["mcp/www_authenticate"]`; do not maintain two independently formatted challenges.
-- [ ] Challenge must reference the existing canonical protected-resource metadata URL.
-- [ ] Tool-level challenge must include both `error` and `error_description`.
-- [ ] Keep `error_description` generic and safe; never include token text, subject, claims, command args, source contents, or IdP secrets.
+- [x] Refactor the existing Bearer challenge construction so there is one canonical function that produces the challenge value/string.
+- [x] Reuse that exact value for the HTTP `WWW-Authenticate` header and `_meta["mcp/www_authenticate"]`; do not maintain two independently formatted challenges.
+- [x] Challenge must reference the existing canonical protected-resource metadata URL.
+- [x] Tool-level challenge must include both `error` and `error_description`.
+- [x] Keep `error_description` generic and safe; never include token text, subject, claims, command args, source contents, or IdP secrets.
 
 #### 2B. Narrow auth-state handling; never dispatch unauthorized tools
 
 The runtime challenge needs a request-aware auth failure state, but it must **not** weaken the execution boundary.
 
-- [ ] Introduce an explicit internal auth decision/state (name is implementation-defined) instead of representing every auth failure only as an immediate HTTP response.
-- [ ] Keep malformed/expired/unverifiable bearer tokens on the existing hard HTTP `401 invalid_token` path.
-- [ ] Keep wrong-owner authorization on a hard deny path; do not turn an owner mismatch into a normal executable tool request.
-- [ ] For a `tools/call` that needs initial linking or additional `relay.coding` authorization, allow only enough request processing to construct the MCP auth-required result; **never** acquire the execution semaphore or call `dispatch_tool_call`.
-- [ ] A missing-auth challenge uses a safe auth error such as `invalid_token`/authentication-required semantics.
-- [ ] A valid token missing `relay.coding` uses `insufficient_scope` and identifies the required `relay.coding` scope in the challenge where applicable.
-- [ ] If the implementation changes the exact HTTP status for the `tools/call` challenge path from the older Phase 2 baseline, make that exception explicit in the black-box assertions; do not silently weaken the hard-deny behavior for malformed tokens or wrong owners.
-- [ ] Preserve normal server-side signature, issuer, audience, `exp`/`nbf`, subject, and scope enforcement before any side effect.
+- [x] Introduce an explicit internal auth decision/state (name is implementation-defined) instead of representing every auth failure only as an immediate HTTP response.
+- [x] Keep malformed/expired/unverifiable bearer tokens on the existing hard HTTP `401 invalid_token` path.
+- [x] Keep wrong-owner authorization on a hard deny path; do not turn an owner mismatch into a normal executable tool request.
+- [x] For a `tools/call` that needs initial linking or additional `relay.coding` authorization, allow only enough request processing to construct the MCP auth-required result; **never** acquire the execution semaphore or call `dispatch_tool_call`.
+- [x] A missing-auth challenge uses a safe auth error such as `invalid_token`/authentication-required semantics.
+- [x] A valid token missing `relay.coding` uses `insufficient_scope` and identifies the required `relay.coding` scope in the challenge where applicable.
+- [x] If the implementation changes the exact HTTP status for the `tools/call` challenge path from the older Phase 2 baseline, make that exception explicit in the black-box assertions; do not silently weaken the hard-deny behavior for malformed tokens or wrong owners.
+- [x] Preserve normal server-side signature, issuer, audience, `exp`/`nbf`, subject, and scope enforcement before any side effect.
 
 #### 2C. Build the challenge result
 
 The resulting JSON-RPC success envelope for the auth-required tool condition must contain a normal MCP tool error result:
 
-- [ ] `result.resultType == "complete"`.
-- [ ] `result.isError == true`.
-- [ ] `result.content` contains a short generic authentication-required message.
-- [ ] `result._meta["mcp/www_authenticate"]` is an array of challenge strings.
-- [ ] the challenge contains the same `resource_metadata` URL used by HTTP auth challenges.
-- [ ] `Response::new()` merges `io.modelcontextprotocol/serverInfo` into `_meta` without deleting `mcp/www_authenticate`.
+- [x] `result.resultType == "complete"`.
+- [x] `result.isError == true`.
+- [x] `result.content` contains a short generic authentication-required message.
+- [x] `result._meta["mcp/www_authenticate"]` is an array of challenge strings.
+- [x] the challenge contains the same `resource_metadata` URL used by HTTP auth challenges.
+- [x] `Response::new()` merges `io.modelcontextprotocol/serverInfo` into `_meta` without deleting `mcp/www_authenticate`.
 
 #### 2D. Deterministic auth black-box matrix
 
 Extend `scripts/phase4-black-box.sh` so the final behavior is explicit:
 
-- [ ] no/missing auth on the selected `tools/call` linking path returns the intended auth-required behavior and **does not create the dispatch marker**.
-- [ ] malformed bearer remains HTTP `401` + `invalid_token`; no dispatch.
-- [ ] expired bearer remains HTTP `401` + `invalid_token`; no dispatch.
-- [ ] wrong owner remains hard denied; no dispatch and no subject leakage.
-- [ ] valid owner token missing `relay.coding` produces the intended reauthorization challenge or documented hard-deny exception; no dispatch.
-- [ ] challenge result includes `resultType: "complete"`, `isError: true`, and `_meta["mcp/www_authenticate"]`.
-- [ ] challenge string includes `error`, `error_description`, and exact `resource_metadata`.
-- [ ] valid owner + valid audience + `relay.coding` reaches real tool execution and returns a normal completed result.
+- [x] no/missing auth on the selected `tools/call` linking path returns the intended auth-required behavior and **does not create the dispatch marker**.
+- [x] malformed bearer remains HTTP `401` + `invalid_token`; no dispatch.
+- [x] expired bearer remains HTTP `401` + `invalid_token`; no dispatch.
+- [x] wrong owner remains hard denied; no dispatch and no subject leakage.
+- [x] valid owner token missing `relay.coding` produces the intended reauthorization challenge or documented hard-deny exception; no dispatch.
+- [x] challenge result includes `resultType: "complete"`, `isError: true`, and `_meta["mcp/www_authenticate"]`.
+- [x] challenge string includes `error`, `error_description`, and exact `resource_metadata`.
+- [x] valid owner + valid audience + `relay.coding` reaches real tool execution and returns a normal completed result.
 
 **Stop condition:** a request without effective coding authorization must have zero path to `dispatch_tool_call`.
 

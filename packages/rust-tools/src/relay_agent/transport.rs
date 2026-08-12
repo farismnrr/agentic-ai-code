@@ -241,9 +241,18 @@ pub struct Claims {
     pub nbf: Option<u64>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
+pub enum AuthDecision {
+    #[default]
+    Authorized,
+    Missing,
+    InsufficientScope,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct AuthContext {
     pub claims: Option<Claims>,
+    pub decision: AuthDecision,
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
@@ -345,20 +354,37 @@ fn protected_resource_metadata_url(config: &ServerConfig) -> Option<String> {
     Some(resource.to_string())
 }
 
-fn bearer_challenge(config: &ServerConfig, error: Option<&str>, scope: Option<&str>) -> HeaderMap {
+fn bearer_challenge_value(
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+) -> String {
     let mut parameters = vec!["realm=\"mcp\"".to_owned()];
     if let Some(error) = error {
         parameters.push(format!("error=\"{error}\""));
     }
+    let description = match error {
+        Some("invalid_token") => "The access token is invalid or expired",
+        Some("insufficient_scope") => "The access token lacks the required scope",
+        _ => "Authentication is required",
+    };
+    parameters.push(format!("error_description=\"{description}\""));
     if let Some(scope) = scope {
         parameters.push(format!("scope=\"{scope}\""));
     }
     if let Some(metadata_url) = protected_resource_metadata_url(config) {
         parameters.push(format!("resource_metadata=\"{metadata_url}\""));
     }
+    format!("Bearer {}", parameters.join(", "))
+}
 
+fn bearer_challenge_headers(
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    if let Ok(value) = format!("Bearer {}", parameters.join(", ")).parse() {
+    if let Ok(value) = bearer_challenge_value(config, error, scope).parse() {
         headers.insert(axum::http::header::WWW_AUTHENTICATE, value);
     }
     headers
@@ -374,7 +400,7 @@ fn oauth_error_response(
 ) -> AxumResponse {
     (
         status,
-        bearer_challenge(config, error, scope),
+        bearer_challenge_headers(config, error, scope),
         Json(ErrorResponse::new(id, message)),
     )
         .into_response()
@@ -527,17 +553,24 @@ async fn access_policy(
             .and_then(|v| v.to_str().ok())
             .unwrap_or_default();
 
+        let is_tools_call = req
+            .headers()
+            .get(HDR_MCP_METHOD)
+            .and_then(|value| value.to_str().ok())
+            == Some("tools/call");
+
         if !auth_header.starts_with("Bearer ") {
-            let error = if auth_header.is_empty() {
-                None
-            } else {
-                Some("invalid_token")
-            };
+            if auth_header.is_empty() && is_tools_call {
+                auth_ctx.decision = AuthDecision::Missing;
+                req.extensions_mut().insert(auth_ctx);
+                return next.run(req).await;
+            }
+
             return oauth_error_response(
                 StatusCode::UNAUTHORIZED,
                 None,
                 &state.config,
-                error,
+                (!auth_header.is_empty()).then_some("invalid_token"),
                 None,
                 &McpError::InvalidRequest("Missing or invalid authorization".into()),
             );
@@ -749,6 +782,12 @@ async fn access_policy(
             .split_whitespace()
             .any(|scope| scope == CODING_SCOPE);
         if !has_coding_scope {
+            if is_tools_call {
+                auth_ctx.decision = AuthDecision::InsufficientScope;
+                req.extensions_mut().insert(auth_ctx);
+                return next.run(req).await;
+            }
+
             return oauth_error_response(
                 StatusCode::FORBIDDEN,
                 None,
@@ -1005,10 +1044,29 @@ fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
 
 async fn handle_tools_call(
     request: &mcp::Request,
-    _state: Arc<AppState>,
+    state: Arc<AppState>,
     auth_ctx: AuthContext,
     correlation_id: &str,
 ) -> JsonErr2 {
+    let auth_challenge = match auth_ctx.decision {
+        AuthDecision::Authorized => None,
+        AuthDecision::Missing => Some(("invalid_token", None)),
+        AuthDecision::InsufficientScope => Some(("insufficient_scope", Some(CODING_SCOPE))),
+    };
+    if let Some((error, scope)) = auth_challenge {
+        let challenge = bearer_challenge_value(&state.config, Some(error), scope);
+        let result = ToolCallResult::error(vec![super::mcp::ToolResultContent {
+            kind: "text",
+            text: "Authentication is required to use this tool".to_string(),
+        }])
+        .with_meta(json!({ "mcp/www_authenticate": [challenge] }));
+        let response = Response::new(
+            request.id.clone(),
+            serde_json::to_value(result).unwrap_or(json!({})),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -1041,8 +1099,11 @@ async fn handle_tools_call(
         ));
     }
 
-    if let super::config::SecurityMode::Remote = _state.config.mode {
-        let claims = auth_ctx.claims.as_ref().unwrap();
+    if let super::config::SecurityMode::Remote = state.config.mode {
+        let claims = auth_ctx
+            .claims
+            .as_ref()
+            .expect("authorized remote requests have validated claims");
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
         audit(
@@ -1057,7 +1118,7 @@ async fn handle_tools_call(
     }
 
     // Acquire global execution permit
-    let _permit = match std::sync::Arc::clone(&_state.execution_semaphore)
+    let _permit = match std::sync::Arc::clone(&state.execution_semaphore)
         .acquire_owned()
         .await
     {
@@ -1074,7 +1135,7 @@ async fn handle_tools_call(
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
     let result =
-        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
+        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
             .await
             .unwrap_or_else(|e| {
                 ToolCallResult::error(vec![super::mcp::ToolResultContent {

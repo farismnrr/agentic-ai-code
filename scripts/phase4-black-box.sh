@@ -289,11 +289,43 @@ def run():
             assert "offline_access" not in challenge
             assert body["error"]["code"] == -32600
 
+            auth_call = lambda marker: mcp("tools/call", {
+                "name": "terminal_exec",
+                "arguments": {"command": "touch", "args": [marker]},
+                "_meta": {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
+                          "io.modelcontextprotocol/clientCapabilities": {}},
+            })
+            status, _, body = request(remote_url,
+                headers=headers(method="tools/call", name="terminal_exec", forwarded="https"),
+                body=auth_call(dispatch_marker))
+            assert_status(status, 200, "missing bearer tools/call challenge")
+            result = body["result"]
+            assert result["resultType"] == "complete" and result["isError"] is True
+            assert isinstance(result["content"], list) and result["content"]
+            assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
+            missing_challenges = result["_meta"]["mcp/www_authenticate"]
+            assert isinstance(missing_challenges, list) and len(missing_challenges) == 1
+            missing_challenge = missing_challenges[0]
+            assert 'error="invalid_token"' in missing_challenge
+            assert 'error_description="Authentication is required"' not in missing_challenge
+            assert "error_description=" in missing_challenge
+            assert 'resource_metadata="https://relay.example/.well-known/oauth-protected-resource/mcp"' in missing_challenge
+            assert not os.path.exists(dispatch_marker), "missing auth reached tool execution"
+
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="https", auth="Bearer malformed"), body=valid_discover)
             assert_status(status, 401, "invalid bearer token")
             assert 'error="invalid_token"' in challenge_headers.get("www-authenticate", "")
             assert body["error"]["code"] == -32600
+
+            malformed_http_challenge = challenge_headers.get("www-authenticate", "")
+            assert missing_challenge == malformed_http_challenge
+            status, _, body = request(remote_url,
+                headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth="Bearer malformed"),
+                body=auth_call(dispatch_marker))
+            assert_status(status, 401, "malformed bearer tools/call")
+            assert body["error"]["code"] == -32600
+            assert not os.path.exists(dispatch_marker), "malformed bearer reached tool execution"
 
             expired = make_token(key_path, issuer, "relay.coding", expires_in=-120)
             status, challenge_headers, body = request(remote_url,
@@ -302,18 +334,39 @@ def run():
             assert 'error="invalid_token"' in challenge_headers.get("www-authenticate", "")
             assert body["error"]["code"] == -32600
 
+            status, _, body = request(remote_url,
+                headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {expired}"),
+                body=auth_call(dispatch_marker))
+            assert_status(status, 401, "expired bearer tools/call")
+            assert body["error"]["code"] == -32600
+            assert not os.path.exists(dispatch_marker), "expired bearer reached tool execution"
+
             no_scope = make_token(key_path, issuer, "openid")
             call_params = {"name": "terminal_exec", "arguments": {"command": "true"},
                            "_meta": {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
                                      "io.modelcontextprotocol/clientCapabilities": {}}}
             status, challenge_headers, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {no_scope}"),
+                body=valid_discover)
+            assert_status(status, 403, "missing relay.coding scope on protected resource")
+            insufficient_scope_http_challenge = challenge_headers.get("www-authenticate", "")
+            assert 'error="insufficient_scope"' in insufficient_scope_http_challenge
+            assert 'scope="relay.coding"' in insufficient_scope_http_challenge
+
+            status, challenge_headers, body = request(remote_url,
                 headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {no_scope}"),
                 body=mcp("tools/call", {"name": "terminal_exec", "arguments": {"command": "touch", "args": [dispatch_marker]},
                                          "_meta": call_params["_meta"]}))
-            assert_status(status, 403, "missing relay.coding scope")
-            challenge = challenge_headers.get("www-authenticate", "")
-            assert 'error="insufficient_scope"' in challenge and 'scope="relay.coding"' in challenge
-            assert body["error"]["code"] == -32600
+            assert_status(status, 200, "missing relay.coding scope tools/call challenge")
+            assert "www-authenticate" not in challenge_headers
+            result = body["result"]
+            assert result["resultType"] == "complete" and result["isError"] is True
+            assert isinstance(result["content"], list) and result["content"]
+            assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
+            scope_challenges = result["_meta"]["mcp/www_authenticate"]
+            assert isinstance(scope_challenges, list) and len(scope_challenges) == 1
+            assert scope_challenges[0] == insufficient_scope_http_challenge
+            assert "error_description=" in scope_challenges[0]
             assert not os.path.exists(dispatch_marker), "missing scope reached tool execution"
 
             invalid_dispatch = {"name": "terminal_exec", "arguments": {"command": "touch", "args": [dispatch_marker], "extra": True},
@@ -327,10 +380,12 @@ def run():
 
             wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
             status, challenge_headers, body = request(remote_url,
-                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {wrong_owner}"), body=valid_discover)
+                headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {wrong_owner}"),
+                body=auth_call(dispatch_marker))
             assert_status(status, 403, "wrong owner")
             assert "Authenticated subject is not authorized" in body["error"]["message"]
             assert "other" not in body["error"]["message"]
+            assert not os.path.exists(dispatch_marker), "wrong owner reached tool execution"
         finally:
             for process in (remote, remote_untrusted, local):
                 if process is not None:
