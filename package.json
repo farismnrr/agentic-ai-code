@@ -10,7 +10,7 @@
     "postinstall": "pnpm build:tools && nuxt prepare",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "nuxt build --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
