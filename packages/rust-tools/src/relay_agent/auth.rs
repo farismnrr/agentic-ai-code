@@ -49,6 +49,38 @@ pub fn validate_claims(
 }
 pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 
+pub struct CachedJwks {
+    pub jwk_set: jsonwebtoken::jwk::JwkSet,
+    pub jwks_uri: String,
+    pub fetched_at: std::time::Instant,
+}
+
+impl CachedJwks {
+    pub fn is_stale(&self, now: std::time::Instant) -> bool {
+        cache_is_stale(self.fetched_at, now)
+    }
+    pub fn jwks_uri(&self) -> &str {
+        &self.jwks_uri
+    }
+    pub fn find_key(&self, kid: &str) -> Option<jsonwebtoken::jwk::Jwk> {
+        self.jwk_set.find(kid).cloned()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CacheKeyDecision {
+    Found,
+    RefreshOnce,
+}
+
+pub fn key_lookup_decision(key_found: bool) -> CacheKeyDecision {
+    if key_found {
+        CacheKeyDecision::Found
+    } else {
+        CacheKeyDecision::RefreshOnce
+    }
+}
+
 pub fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(JWKS_FETCH_TIMEOUT_SECS))
@@ -294,5 +326,11 @@ mod tests {
             validate_claims(&no_scope, Some("owner"), CODING_SCOPE),
             Err(ClaimValidationError::InsufficientScope)
         );
+    }
+
+    #[test]
+    fn cache_key_lookup_refreshes_once_only_when_missing() {
+        assert_eq!(key_lookup_decision(true), CacheKeyDecision::Found);
+        assert_eq!(key_lookup_decision(false), CacheKeyDecision::RefreshOnce);
     }
 }

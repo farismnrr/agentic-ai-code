@@ -781,6 +781,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
 - [x] Micro-step 10D: OIDC discovery/JWKS HTTP helpers now live in `auth.rs`; cache ownership and JWT validation remain in `transport.rs`.
 - [x] Micro-step 10E: pure owner/scope claim policy now lives in `auth.rs`; cache refresh and JWT signature/issuer/audience/expiry validation remain in `transport.rs`.
+- [x] Micro-step 10F: JWKS cache TTL/URI/key lookup and missing-key single-refresh decision operations now live in `auth.rs`; lock ownership and refresh orchestration remain in `transport.rs`.
 - [x] Extract trusted-proxy HTTPS decision with explicit security ownership (micro-step 10C: pure, tested policy helper; transport retains the same gate position and inputs).
 - [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
 - [ ] Extract MCP route handler dispatch once dependencies are explicit.
