@@ -141,4 +141,30 @@ mod tests {
             start + std::time::Duration::from_secs(JWKS_TTL_SECS)
         ));
     }
+
+    #[test]
+    fn challenge_and_metadata_preserve_oauth_projection() {
+        let mut config = ServerConfig::default();
+        config.oauth_issuer = Some("https://issuer.example".into());
+        config.oauth_audience = Some("https://resource.example/mcp".into());
+
+        assert_eq!(
+            protected_resource_metadata_url(&config).as_deref(),
+            Some("https://resource.example/.well-known/oauth-protected-resource/mcp")
+        );
+        let challenge =
+            bearer_challenge_value(&config, Some("insufficient_scope"), Some(CODING_SCOPE));
+        assert!(challenge.starts_with("Bearer realm=\"mcp\", error=\"insufficient_scope\""));
+        assert!(challenge.contains("scope=\"relay.coding\""));
+        assert!(challenge.contains("resource_metadata=\"https://resource.example/.well-known/oauth-protected-resource/mcp\""));
+        assert_eq!(
+            metadata(&config)["resource"],
+            json!("https://resource.example/mcp")
+        );
+        assert_eq!(
+            metadata(&config)["authorization_servers"],
+            json!(["https://issuer.example"])
+        );
+        assert_eq!(bearer_challenge_headers(&config, None, None).len(), 1);
+    }
 }

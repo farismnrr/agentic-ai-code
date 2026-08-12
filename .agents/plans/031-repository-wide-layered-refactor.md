@@ -777,7 +777,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [ ] Keep router construction and HTTP middleware composition in transport ownership.
 - [x] Extract correlation/audit helpers into an observability-focused module.
 - [x] Extract request-admission token bucket into a focused admission module.
-- [ ] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
+- [x] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
 - [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
 - [ ] Extract trusted-proxy HTTPS decision with explicit security ownership.
 - [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.

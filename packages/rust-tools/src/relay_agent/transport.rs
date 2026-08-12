@@ -52,6 +52,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::admission::RequestAdmission;
 use super::auth;
+use super::auth::{bearer_challenge_value, oauth_error_response};
 use super::config::ServerConfig;
 use super::error::McpError;
 use super::mcp::{
@@ -180,7 +181,7 @@ pub fn create_router(config: ServerConfig) -> Router {
     // route must remain a concrete path. Register only the RFC 9728 path
     // derived from the configured resource (normally the resource's `/mcp`
     // path), leaving all other paths unmatched.
-    if let Some(metadata_url) = protected_resource_metadata_url(&config) {
+    if let Some(metadata_url) = auth::protected_resource_metadata_url(&config) {
         if let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() {
             let metadata_path = metadata_uri.path();
             if metadata_path != "/.well-known/oauth-protected-resource" {
@@ -216,71 +217,6 @@ async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
 
 type JsonErr = Box<(StatusCode, HeaderMap, Json<ErrorResponse>)>;
 
-fn protected_resource_metadata_url(config: &ServerConfig) -> Option<String> {
-    let audience = config.oauth_audience.as_deref()?;
-    let mut resource = url::Url::parse(audience).ok()?;
-    let path = resource.path().trim_start_matches('/').to_owned();
-    let metadata_path = if path.is_empty() {
-        "/.well-known/oauth-protected-resource".to_owned()
-    } else {
-        format!("/.well-known/oauth-protected-resource/{path}")
-    };
-    resource.set_path(&metadata_path);
-    Some(resource.to_string())
-}
-
-fn bearer_challenge_value(
-    config: &ServerConfig,
-    error: Option<&str>,
-    scope: Option<&str>,
-) -> String {
-    let mut parameters = vec!["realm=\"mcp\"".to_owned()];
-    if let Some(error) = error {
-        parameters.push(format!("error=\"{error}\""));
-    }
-    let description = match error {
-        Some("invalid_token") => "The access token is invalid or expired",
-        Some("insufficient_scope") => "The access token lacks the required scope",
-        _ => "Authentication is required",
-    };
-    parameters.push(format!("error_description=\"{description}\""));
-    if let Some(scope) = scope {
-        parameters.push(format!("scope=\"{scope}\""));
-    }
-    if let Some(metadata_url) = protected_resource_metadata_url(config) {
-        parameters.push(format!("resource_metadata=\"{metadata_url}\""));
-    }
-    format!("Bearer {}", parameters.join(", "))
-}
-
-fn bearer_challenge_headers(
-    config: &ServerConfig,
-    error: Option<&str>,
-    scope: Option<&str>,
-) -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    if let Ok(value) = bearer_challenge_value(config, error, scope).parse() {
-        headers.insert(axum::http::header::WWW_AUTHENTICATE, value);
-    }
-    headers
-}
-
-fn oauth_error_response(
-    status: StatusCode,
-    id: Option<Id>,
-    config: &ServerConfig,
-    error: Option<&str>,
-    scope: Option<&str>,
-    message: &McpError,
-) -> AxumResponse {
-    (
-        status,
-        bearer_challenge_headers(config, error, scope),
-        Json(ErrorResponse::new(id, message)),
-    )
-        .into_response()
-}
-
 fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
     let trusted_peer = req
         .extensions()
@@ -311,23 +247,14 @@ fn json_error_response(error: JsonErr) -> AxumResponse {
 }
 
 async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> AxumResponse {
-    let issuer = state.config.oauth_issuer.clone();
-    let resource = state.config.oauth_audience.clone();
-    let mut metadata = json!({
-        "resource": resource,
-        "scopes_supported": [CODING_SCOPE]
-    });
-    if let Some(issuer) = issuer {
-        metadata["authorization_servers"] = json!([issuer]);
-    }
-    Json(metadata).into_response()
+    Json(auth::metadata(&state.config)).into_response()
 }
 
 async fn handle_path_well_known_oauth(
     State(state): State<Arc<AppState>>,
     uri: axum::http::Uri,
 ) -> AxumResponse {
-    let Some(metadata_url) = protected_resource_metadata_url(&state.config) else {
+    let Some(metadata_url) = auth::protected_resource_metadata_url(&state.config) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() else {
