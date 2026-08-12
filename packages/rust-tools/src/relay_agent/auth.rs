@@ -10,6 +10,59 @@ use serde_json::json;
 
 pub const CODING_SCOPE: &str = "relay.coding";
 pub const JWKS_TTL_SECS: u64 = 300;
+pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
+
+pub fn http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(JWKS_FETCH_TIMEOUT_SECS))
+        .build()
+        .map_err(|_| "failed to build HTTP client".to_string())
+}
+
+pub fn parse_discovery_metadata(metadata: &serde_json::Value) -> Result<String, String> {
+    metadata
+        .get("jwks_uri")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| "OIDC discovery missing jwks_uri".to_string())
+}
+
+pub async fn fetch_discovery(
+    client: Result<reqwest::Client, String>,
+    discovery_url: String,
+) -> Result<String, String> {
+    let client = client?;
+    let response = client
+        .get(&discovery_url)
+        .send()
+        .await
+        .map_err(|e| format!("OIDC discovery fetch failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("OIDC discovery request failed: {e}"))?;
+    let metadata = response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("OIDC discovery parse failed: {e}"))?;
+    parse_discovery_metadata(&metadata)
+}
+
+pub async fn fetch_jwks(
+    client: Result<reqwest::Client, String>,
+    jwks_url: String,
+) -> Result<jsonwebtoken::jwk::JwkSet, String> {
+    let client = client?;
+    let response = client
+        .get(&jwks_url)
+        .send()
+        .await
+        .map_err(|e| format!("JWKS fetch failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("JWKS request failed: {e}"))?;
+    response
+        .json::<jsonwebtoken::jwk::JwkSet>()
+        .await
+        .map_err(|e| format!("JWKS parse failed: {e}"))
+}
 
 /// Validate the `jwks_uri` returned by OIDC discovery.
 ///
@@ -166,5 +219,17 @@ mod tests {
             json!(["https://issuer.example"])
         );
         assert_eq!(bearer_challenge_headers(&config, None, None).len(), 1);
+    }
+
+    #[test]
+    fn discovery_metadata_requires_jwks_uri() {
+        assert_eq!(
+            parse_discovery_metadata(&json!({"jwks_uri": "https://issuer.example/keys"})).unwrap(),
+            "https://issuer.example/keys"
+        );
+        assert_eq!(
+            parse_discovery_metadata(&json!({})).unwrap_err(),
+            "OIDC discovery missing jwks_uri"
+        );
     }
 }
