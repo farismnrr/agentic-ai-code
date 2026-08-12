@@ -1,4 +1,5 @@
 import type { ChatModel } from '#shared/types/chat'
+import { removeById, replaceById } from '../utils/collection'
 
 export type Model = ChatModel
 
@@ -24,14 +25,13 @@ export function useModels() {
       method: 'PUT',
       body: data
     })
-    const index = models.value.findIndex(m => m.id === id)
-    if (index !== -1) models.value[index] = updatedModel
+    if (models.value.some(model => model.id === id)) models.value = replaceById(models.value, id, updatedModel)
     return updatedModel
   }
 
   async function remove(id: string) {
     await $fetch(`/api/models/${id}`, { method: 'DELETE' })
-    models.value = models.value.filter(m => m.id !== id)
+    models.value = removeById(models.value, id)
   }
 
   return { models, load, create, update, remove }

@@ -497,12 +497,12 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Separate state mutation helpers from remote API concerns where doing so improves reuse/readability.
-- [ ] Normalize repeated collection replacement/upsert/remove logic with small pure helpers only when semantics match.
-- [ ] Preserve per-entity differences in optimistic update/rollback; do not force one generic CRUD composable.
-- [ ] Introduce narrow API adapter/fetcher factories only where multiple application composables benefit and SSR request-fetch requirements remain explicit.
-- [ ] Keep public Nuxt composable entrypoints stable during migration.
-- [ ] Standardize loaded/pending/error semantics where the underlying lifecycle is actually the same.
+- [x] Separate state mutation helpers from remote API concerns where doing so improves reuse/readability.
+- [x] Normalize repeated collection replacement/upsert/remove logic with small pure helpers only when semantics match.
+- [x] Preserve per-entity differences in optimistic update/rollback; do not force one generic CRUD composable.
+- [x] Audit narrow API adapter/fetcher factories; no extraction was justified without weakening explicit SSR request-fetch context.
+- [x] Keep public Nuxt composable entrypoints stable during migration.
+- [x] Audit loaded/pending/error semantics; no common lifecycle exists across these composables beyond the existing workspace contract.
 
 ### Critical preserved invariants
 
