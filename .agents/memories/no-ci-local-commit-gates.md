@@ -16,9 +16,9 @@ The hook runs [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh)
 The repository-policy check fails if a tracked GitHub Actions workflow or conventional unit-test suite is introduced. The root lint/type commands cover both application and native code:
 
 - `pnpm lint` = ESLint + Rust formatting check + Clippy with warnings denied.
-- `pnpm typecheck` = Nuxt production build + explicit generated-project `vue-tsc` + Rust `cargo check` with warnings denied.
+- `pnpm typecheck` = Nuxt type generation + explicit generated-project `vue-tsc` + Rust `cargo check` with warnings denied.
 
-The Nuxt build is intentionally part of typecheck. Earlier `nuxt prepare`/bare `nuxt typecheck` paths were not strong enough for this repository's generated project.
+The Nuxt/Vue type gate intentionally uses `nuxt prepare` followed by direct `vue-tsc`, rather than bare `nuxt typecheck`. Production bundling remains a separate local verification command (`pnpm build`) when the change needs runtime/bundle proof.
 
 A failed gate means **do not commit**. Fix the failure first.
 
