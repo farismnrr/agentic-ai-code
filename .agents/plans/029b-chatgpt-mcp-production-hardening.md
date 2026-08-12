@@ -590,3 +590,160 @@ Before handoff to live ChatGPT testing:
 - [ ] `server/discover.instructions` contains no `Local`/internal-plan wording.
 
 Once those checks pass, the only remaining Plan 029b release gate is the real ChatGPT/OAuth acceptance already listed in section G.
+
+---
+
+## K. MCP `2026-07-28` `tools/call` result wire conformance — pre-E2E repository blocker
+
+### Why this is open
+
+The final review found that `tools/list` already returns `resultType: "complete"`, but `ToolCallResult` currently serializes only `content` + `isError`. MCP `2026-07-28` requires a `resultType` discriminator on wire results; a completed normal tool invocation must therefore carry `resultType: "complete"`.
+
+Do this **before** implementing section I so the OAuth challenge result is built on the correct `tools/call` wire shape from the start.
+
+### Files expected to change
+
+- `packages/rust-tools/src/relay_agent/mcp.rs`
+- `packages/rust-tools/src/relay_agent/execution.rs`
+- `packages/rust-tools/src/relay_agent/transport.rs`
+- `scripts/phase4-black-box.sh`
+- Plan 029b evidence only if needed
+
+### Implementation checklist
+
+- [ ] Add `result_type` to `ToolCallResult` with `#[serde(rename = "resultType")]`.
+- [ ] Completed success results serialize exactly `resultType: "complete"`.
+- [ ] Completed tool/business errors (`isError: true`) also serialize `resultType: "complete"`; `isError` does **not** change the result discriminator.
+- [ ] Do not emit `resultType: "input_required"` unless a future MRTR flow is actually implemented.
+- [ ] Add one or more constructors/helpers (`complete`, `error`, or equivalent) so callers cannot accidentally build a `ToolCallResult` without `resultType`.
+- [ ] Replace every direct `ToolCallResult { ... }` construction in `execution.rs` with the canonical helper or include the required discriminator explicitly.
+- [ ] Replace the execution-error fallback construction in `transport.rs` with the same canonical path.
+- [ ] Keep `Response::new()` server `_meta` stamping intact; adding `resultType` must not overwrite existing result `_meta`.
+- [ ] Keep `content` non-empty and `isError` semantics unchanged unless a concrete protocol requirement says otherwise.
+
+### Required black-box acceptance
+
+Extend `scripts/phase4-black-box.sh` with **real successful and failed tool execution**, not source grep:
+
+- [ ] valid local `terminal_exec` call using a harmless command such as `true` returns HTTP `200`.
+- [ ] success response has `result.resultType == "complete"`.
+- [ ] success response has `result.isError == false` and a `content` array.
+- [ ] a harmless failing command such as `false` returns a normal MCP tool result, not a JSON-RPC protocol error.
+- [ ] failed tool response still has `result.resultType == "complete"`.
+- [ ] failed tool response has `result.isError == true`.
+- [ ] both responses retain `_meta["io.modelcontextprotocol/serverInfo"]`.
+
+### Exit
+
+- [ ] no reachable `tools/call` success/error path can serialize a completed result without `resultType: "complete"`.
+
+---
+
+## L. Exact implementation sequence for remaining I + J + K work
+
+This is the **authoritative execution order** for the final repository pass. It clarifies the unchecked H/I/J addendum without rewriting completed sections above.
+
+### Step 1 — Fix the base `ToolCallResult` shape (K)
+
+**Target:** `mcp.rs`, `execution.rs`, `transport.rs`.
+
+- [ ] implement `resultType` first.
+- [ ] add optional result metadata support to `ToolCallResult`, preferably `meta: Option<Value>` serialized as `_meta` and omitted when empty.
+- [ ] centralize constructors so `resultType`, `isError`, `content`, and optional `_meta` are created consistently.
+- [ ] run the new local success/failure `tools/call` black-box assertions before touching OAuth challenge behavior.
+
+**Stop condition:** do not continue if a strict 2026-07-28 client would still receive a completed tool result without `resultType`.
+
+### Step 2 — Add the ChatGPT OAuth result challenge (I)
+
+**Target:** primarily `transport.rs` + `mcp.rs`; touch `execution.rs` only if result constructors require it.
+
+#### 2A. One challenge formatter
+
+- [ ] Refactor the existing Bearer challenge construction so there is one canonical function that produces the challenge value/string.
+- [ ] Reuse that exact value for the HTTP `WWW-Authenticate` header and `_meta["mcp/www_authenticate"]`; do not maintain two independently formatted challenges.
+- [ ] Challenge must reference the existing canonical protected-resource metadata URL.
+- [ ] Tool-level challenge must include both `error` and `error_description`.
+- [ ] Keep `error_description` generic and safe; never include token text, subject, claims, command args, source contents, or IdP secrets.
+
+#### 2B. Narrow auth-state handling; never dispatch unauthorized tools
+
+The runtime challenge needs a request-aware auth failure state, but it must **not** weaken the execution boundary.
+
+- [ ] Introduce an explicit internal auth decision/state (name is implementation-defined) instead of representing every auth failure only as an immediate HTTP response.
+- [ ] Keep malformed/expired/unverifiable bearer tokens on the existing hard HTTP `401 invalid_token` path.
+- [ ] Keep wrong-owner authorization on a hard deny path; do not turn an owner mismatch into a normal executable tool request.
+- [ ] For a `tools/call` that needs initial linking or additional `relay.coding` authorization, allow only enough request processing to construct the MCP auth-required result; **never** acquire the execution semaphore or call `dispatch_tool_call`.
+- [ ] A missing-auth challenge uses a safe auth error such as `invalid_token`/authentication-required semantics.
+- [ ] A valid token missing `relay.coding` uses `insufficient_scope` and identifies the required `relay.coding` scope in the challenge where applicable.
+- [ ] If the implementation changes the exact HTTP status for the `tools/call` challenge path from the older Phase 2 baseline, make that exception explicit in the black-box assertions; do not silently weaken the hard-deny behavior for malformed tokens or wrong owners.
+- [ ] Preserve normal server-side signature, issuer, audience, `exp`/`nbf`, subject, and scope enforcement before any side effect.
+
+#### 2C. Build the challenge result
+
+The resulting JSON-RPC success envelope for the auth-required tool condition must contain a normal MCP tool error result:
+
+- [ ] `result.resultType == "complete"`.
+- [ ] `result.isError == true`.
+- [ ] `result.content` contains a short generic authentication-required message.
+- [ ] `result._meta["mcp/www_authenticate"]` is an array of challenge strings.
+- [ ] the challenge contains the same `resource_metadata` URL used by HTTP auth challenges.
+- [ ] `Response::new()` merges `io.modelcontextprotocol/serverInfo` into `_meta` without deleting `mcp/www_authenticate`.
+
+#### 2D. Deterministic auth black-box matrix
+
+Extend `scripts/phase4-black-box.sh` so the final behavior is explicit:
+
+- [ ] no/missing auth on the selected `tools/call` linking path returns the intended auth-required behavior and **does not create the dispatch marker**.
+- [ ] malformed bearer remains HTTP `401` + `invalid_token`; no dispatch.
+- [ ] expired bearer remains HTTP `401` + `invalid_token`; no dispatch.
+- [ ] wrong owner remains hard denied; no dispatch and no subject leakage.
+- [ ] valid owner token missing `relay.coding` produces the intended reauthorization challenge or documented hard-deny exception; no dispatch.
+- [ ] challenge result includes `resultType: "complete"`, `isError: true`, and `_meta["mcp/www_authenticate"]`.
+- [ ] challenge string includes `error`, `error_description`, and exact `resource_metadata`.
+- [ ] valid owner + valid audience + `relay.coding` reaches real tool execution and returns a normal completed result.
+
+**Stop condition:** a request without effective coding authorization must have zero path to `dispatch_tool_call`.
+
+### Step 3 — Clean discovery wording (J)
+
+**Target:** `packages/rust-tools/src/relay_agent/mcp.rs` and existing black-box script.
+
+- [ ] replace the current `Local relay-agent MCP server...Plan 027...` text.
+- [ ] use deployment-neutral product wording only.
+- [ ] mention the actual v1 capabilities: sandboxed coding terminal, HTTP requests, web search, and configured workspace policy.
+- [ ] do not mention internal Plan 027/028/029 history.
+- [ ] do not claim Docker support.
+- [ ] add/extend `server/discover` black-box assertion so the returned instruction text contains neither `Local` nor `Plan 0`/internal plan wording.
+
+Suggested intent, not mandatory exact copy:
+
+> Relay Agent MCP coding server exposing a sandboxed coding terminal, HTTP requests, and web search within the configured workspace policy.
+
+### Step 4 — Re-run the repository handoff gates
+
+Run in this order after code changes:
+
+- [ ] `cargo fmt --all -- --check`
+- [ ] `RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked`
+- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- [ ] `cargo audit`
+- [ ] `bash scripts/phase4-black-box.sh`
+- [ ] `bash scripts/phase7-chatgpt-contract.sh`
+- [ ] `bash scripts/phase8-zero-bypass.sh`
+- [ ] `bash scripts/phase6-chatgpt-e2e.sh` for its repository/static portion
+
+### Step 5 — Final pre-E2E evidence review
+
+Do **not** start ChatGPT live E2E until all are true:
+
+- [ ] H remains green: every tool exposes `securitySchemes: [{"type":"oauth2","scopes":["relay.coding"]}]` and no custom top-level `security` field.
+- [ ] K is green: real successful and failed `tools/call` responses carry `resultType: "complete"`.
+- [ ] I is green: deterministic auth-required tool flow emits `_meta["mcp/www_authenticate"]` with safe `error` + `error_description`, and unauthorized requests never dispatch.
+- [ ] J is green: discovery wording is deployment-neutral and contains no internal Plan references.
+- [ ] HTTP `401 invalid_token`, protected-resource metadata, issuer/audience validation, trusted-proxy boundary, owner binding, admission control, and bwrap sandbox regressions remain green.
+- [ ] Phase 7 runtime descriptor snapshot still matches the reviewed frozen tool catalog; update the snapshot only if actual `tools/list` descriptors changed.
+- [ ] `cargo audit` remains clean with no advisory ignore.
+- [ ] Docker remains explicitly unsupported/deferred and host Docker socket remains unavailable.
+
+When Step 5 passes, repository review status becomes **GO FOR LIVE CHATGPT E2E**. Section G is then the only remaining acceptance work.
