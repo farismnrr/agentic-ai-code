@@ -34,14 +34,14 @@ correctly; this plan reuses it rather than re-deriving it.
   (server-only, not `public`). The real key (`sk-b779a94bf4382cee-...`, found
   in `~/.9router/db.json` under `apiKeys[0].key`) goes in the gitignored
   `.env` only — never hardcoded or committed.
-- **`shared/utils/fixtures/models.ts`**: replace the three fake ids
-  (`external-mcp-opus-5` etc.) with real ids 9Router actually serves — confirmed
-  live via `GET /v1/models`: `high-thinking-models`, `free-models`,
-  `vx/gemini-3-flash-preview` (or similar flash-tier id from that list).
-  Keep the existing `label`/`description`/`icon` shape, just point `id` at
-  something the router will accept. Update `defaultModelId` to match, and
-  update `userSettings.defaultModelId` wherever it's seeded (register
-  handler / DB default) to the new default.
+- **`shared/utils/fixtures/models.ts`**: replace the old fake model ids
+  with real ids 9Router actually serves — confirmed live via `GET /v1/models`:
+  `high-thinking-models`, `free-models`, `vx/gemini-3-flash-preview` (or
+  similar flash-tier id from that list). Keep the existing
+  `label`/`description`/`icon` shape, just point `id` at something the router
+  will accept. Update `defaultModelId` to match, and update
+  `userSettings.defaultModelId` wherever it's seeded (register handler / DB
+  default) to the new default.
 - **`server/api/chat.post.ts`**: replace `pickScenario(prompt).build(...)`
   with a real call:
   - Map `messages: UIMessage[]` → OpenAI `messages` (role + flattened text
