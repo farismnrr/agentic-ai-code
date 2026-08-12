@@ -21,8 +21,8 @@ export interface NativeTool {
 // The AI never executes shell commands on this server — `native.terminal`
 // (workspace-sandboxed, server-side) was removed by deliberate decision: the
 // only shell execution path is now `local_terminal`, which runs on the
-// user's own machine via their paired relay-agent CLI (see plan 026,
-// .agents/plans/026-local-cli-relay-agent.md).
+// user's own machine via their relay-agent CLI. The historical Plan 026
+// decision is compacted in .agents/plans/030-previous-plans-summary.md.
 export const nativeTools: NativeTool[] = [
   {
     id: NATIVE_LOCAL_TERMINAL_TOOL_ID,
