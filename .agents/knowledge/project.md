@@ -1,41 +1,115 @@
 # Project
 
-Nuxt 4 application built on the official Nuxt UI v4 starter template.
+AI Code is a Nuxt 4 application with a native Rust tool/relay workspace. It started from the Nuxt UI starter, but the repository now includes authenticated AI chat, configurable providers, persistent workspaces/conversations, inbound/outbound MCP surfaces, telemetry, and sandboxed native coding tools.
 
-- **Nuxt** 4.5 — `srcDir` is `app/` (Nuxt 4 default directory structure)
-- **Nuxt UI** 4.10 — component library (Reka UI + Tailwind Variants)
-- **Tailwind CSS** 4.3 — configured via CSS, not `tailwind.config.js`
-- **Package manager: pnpm** (pinned in `package.json` → `packageManager`)
+Use this file as the orientation map, not as a replacement for runtime source/config. Exact dependency versions live in [`../../package.json`](../../package.json), and exact Rust toolchain/release configuration lives under [`../../packages/rust-tools/`](../../packages/rust-tools/) plus CI.
+
+## Main stack
+
+- **Nuxt 4 / Vue / Nuxt UI 4 / Tailwind CSS 4** — web application and UI.
+- **AI SDK 7 + LangChain** — chat/model/tool orchestration.
+- **Anthropic, OpenAI-compatible, Vertex AI** — configurable model-provider families.
+- **PostgreSQL + Drizzle ORM** — application persistence and migrations.
+- **`nuxt-auth-utils`** — application session/auth integration.
+- **Model Context Protocol** — application MCP integration plus the Rust relay server.
+- **Rust 1.95.0** — pinned native-tool workspace for `terminal-tool`, `curl-tool`, `searxng-search-tool`, and `relay-agent`.
+- **pnpm 11** — JavaScript workspace/package manager; exact version is pinned in `package.json`.
+
+## Repository layout
+
+```text
+app/
+  components/           Nuxt/Vue UI components
+  composables/          Client/shared application state and chat helpers
+  layouts/              Application layouts
+  pages/                File-based routes
+  plugins/              Nuxt client/runtime plugins
+  assets/               CSS and static app assets
+
+server/
+  api/                  Nitro API routes (auth, chat, workspaces, providers, MCP, etc.)
+  database/             Drizzle schema/persistence support
+  utils/                Server-side helpers and integrations
+  plugins/              Server runtime/telemetry hooks
+
+shared/                 Types/schemas shared across client and server
+
+packages/
+  terminal-tool/        AI-facing package/skill for terminal execution
+  curl-tool/            AI-facing package/skill for HTTP requests
+  searxng-search-tool/  AI-facing package/skill for search
+  relay-agent/          Relay packaging/release surface
+  rust-tools/           Native Rust implementations for all four binaries
+
+scripts/                Deterministic MCP/security/release acceptance scripts
+.agents/                Shared agent knowledge, skills, plans, memories, contracts
+.github/workflows/       CI and release automation
+nuxt.config.ts           Nuxt/runtime/module configuration
+.mcp.json                Project-scoped MCP client configuration
+```
+
+Do not assume a directory is disposable from its name. Check its contents and existing memories first; this repo has previously lost real configuration by treating fixture-like paths as throwaway.
 
 ## Commands
 
 | Task | Command |
 | --- | --- |
-| Local verification | `pnpm build && pnpm preview` → http://localhost:3333 (see note below) |
-| Dev server (rarely — see note) | `pnpm dev` → http://localhost:3333 |
+| Install/prepare | `pnpm install` |
 | Production build | `pnpm build` |
-| Preview build | `pnpm preview` — serves the real `.output`, same as production |
+| Build native tools | `pnpm build:tools` |
+| Local production-like verification | `pnpm build && pnpm preview` |
+| Dev server (use intentionally) | `pnpm dev` |
 | Lint | `pnpm lint` |
-| Autofix | `pnpm lint:fix` |
-| Type check | `pnpm typecheck` |
-| Audit dependencies | `pnpm audit` — must report zero before any merge |
-| Regenerate `.nuxt` types | `pnpm postinstall` (runs `nuxt prepare`) |
+| Nuxt typecheck | `pnpm typecheck` |
+| Dependency audit | `pnpm audit` |
+| Generate DB migration | `pnpm db:generate` |
+| Apply DB migrations | `pnpm db:migrate` |
+| Regenerate Nuxt types/native postinstall artifacts | `pnpm postinstall` |
 
-Before declaring work done, run `pnpm lint`, `pnpm typecheck` and `pnpm audit`. All three gate every PR in CI.
+## Verification rules
 
-**Run the built app, not `pnpm dev`, for local verification.** `pnpm dev`'s on-demand Vite/Nitro compilation is slow to warm up and — worse — its file-watcher gets confused by the branch switches, worktree removals, and file moves that happen constantly during agent work, producing spurious `ENOTDIR`/stale-module errors that look like real bugs but aren't (see `.agents/memories/dev-mode-vs-build.md`). After every merge to `dev`, rebuild (`rm -rf .nuxt .output && pnpm build`) and run `pnpm preview` — it serves the actual `.output`, starts instantly since nothing compiles per-request, and is what CI/production actually run. Reach for `pnpm dev` only when actively iterating on a single file's HMR feedback loop, not as the default way to check the app works.
+### Web application
 
-## Layout
+Before declaring web/application work complete, run the gates relevant to the change. At minimum the normal repository gates are:
 
+```sh
+pnpm lint
+pnpm typecheck
+pnpm audit
 ```
-app/
-  app.vue              # root — wraps everything in <UApp>, UHeader/UMain/UFooter
-  app.config.ts        # runtime UI config (primary/neutral color tokens)
-  assets/css/main.css  # @import "tailwindcss" + @import "@nuxt/ui"
-  components/          # auto-imported, no explicit import needed
-  pages/               # file-based routing
-nuxt.config.ts         # modules, css, runtimeConfig, routeRules, devServer, eslint
-public/                # served at site root
-.agents/               # all agent-facing material (this folder)
-.mcp.json              # project-scoped MCP servers
+
+**Known typecheck caveat:** `pnpm typecheck` / `nuxt typecheck` has previously returned success for code that did not compile. For changes where Vue/Nuxt type correctness matters, also use the explicit generated-project gate after a build:
+
+```sh
+pnpm build
+pnpm exec vue-tsc -p .nuxt/tsconfig.json --noEmit
 ```
+
+See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+
+### Run the built app for local verification
+
+Prefer `pnpm build && pnpm preview` over `pnpm dev` when verifying completed work. The dev watcher has produced stale-module/`ENOTDIR` failures after branch switches and file moves. Rebuild and restart preview after the output changes; preview does not pick up a new `.output` automatically.
+
+See [`../memories/dev-mode-vs-build.md`](../memories/dev-mode-vs-build.md).
+
+### Rust workspace
+
+CI pins Rust 1.95.0 and currently enforces the native workspace with commands equivalent to:
+
+```sh
+cd packages/rust-tools
+cargo fmt --all -- --check
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo audit
+```
+
+The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
+
+## Runtime/config orientation
+
+- Start from [`.env.example`](../../.env.example) for available environment keys.
+- Runtime config conventions and stable setup notes live in [`tooling.md`](tooling.md).
+- Provider, MCP, relay, auth, and database behavior should be verified against current source/config before editing docs because those surfaces have changed substantially across recent plans.
+- Client-visible MCP contracts that are intentionally frozen live in [`../contracts/`](../contracts/); do not change them casually.
