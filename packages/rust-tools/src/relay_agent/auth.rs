@@ -47,6 +47,37 @@ pub fn validate_claims(
     }
     Ok(())
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenValidationError {
+    InvalidJwk,
+    UnsupportedAlgorithm,
+    InvalidToken,
+}
+
+pub fn validate_token_signature(
+    token: &str,
+    jwk: &jsonwebtoken::jwk::Jwk,
+    algorithm: jsonwebtoken::Algorithm,
+    issuer: &str,
+    audience: &str,
+) -> Result<Claims, TokenValidationError> {
+    if !matches!(
+        algorithm,
+        jsonwebtoken::Algorithm::RS256 | jsonwebtoken::Algorithm::ES256
+    ) {
+        return Err(TokenValidationError::UnsupportedAlgorithm);
+    }
+    let decoding_key =
+        jsonwebtoken::DecodingKey::from_jwk(jwk).map_err(|_| TokenValidationError::InvalidJwk)?;
+    let mut validation = jsonwebtoken::Validation::new(algorithm);
+    validation.set_audience(&[audience]);
+    validation.set_issuer(&[issuer]);
+    validation.validate_nbf = true;
+    jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation)
+        .map(|data| data.claims)
+        .map_err(|_| TokenValidationError::InvalidToken)
+}
 pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 
 pub struct CachedJwks {
@@ -332,5 +363,33 @@ mod tests {
     fn cache_key_lookup_refreshes_once_only_when_missing() {
         assert_eq!(key_lookup_decision(true), CacheKeyDecision::Found);
         assert_eq!(key_lookup_decision(false), CacheKeyDecision::RefreshOnce);
+    }
+
+    #[test]
+    fn token_validation_rejects_malformed_signature_input() {
+        let jwk: jsonwebtoken::jwk::Jwk = serde_json::from_value(json!({
+            "kty": "RSA", "n": "AQ", "e": "AQAB"
+        }))
+        .unwrap();
+        assert!(matches!(
+            validate_token_signature(
+                "not.a.token",
+                &jwk,
+                jsonwebtoken::Algorithm::RS256,
+                "issuer",
+                "audience"
+            ),
+            Err(TokenValidationError::InvalidToken)
+        ));
+        assert!(matches!(
+            validate_token_signature(
+                "not.a.token",
+                &jwk,
+                jsonwebtoken::Algorithm::HS256,
+                "issuer",
+                "audience"
+            ),
+            Err(TokenValidationError::UnsupportedAlgorithm)
+        ));
     }
 }
