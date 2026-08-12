@@ -10,7 +10,7 @@
     "postinstall": "pnpm build:tools && nuxt prepare",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "nuxt build --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit",
+    "typecheck": "nuxt prepare --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
@@ -50,7 +50,7 @@
     "langchain": "^1.5.5",
     "nodemailer": "^9.0.4",
     "nuxt": "^4.5.1",
-    "nuxt-auth-utils": "0.5.30",
+    "nuxt-auth-utils": "^0.5.30",
     "postgres": "^3.4.9",
     "tailwindcss": "^4.3.3",
     "valibot": "^1.4.2",
