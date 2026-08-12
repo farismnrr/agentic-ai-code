@@ -1,8 +1,8 @@
 # AI Code
 
-AI Code is a workspace-scoped AI coding application built with Nuxt 4. It combines an authenticated web chat, configurable model providers, MCP integrations, project workspaces, and native Rust execution tools behind a local/remote relay boundary.
+AI Code is a workspace-scoped AI coding application built with Nuxt 4. It combines authenticated web chat, configurable model providers, MCP integrations, project workspaces, and native Rust execution tools behind a local/remote relay boundary.
 
-This repository is no longer the stock Nuxt UI starter. The authoritative agent-facing project notes live in [`.agents/`](.agents/README.md).
+The authoritative agent-facing project notes live in [`.agents/`](.agents/README.md).
 
 ## Stack
 
@@ -13,7 +13,7 @@ This repository is no longer the stock Nuxt UI starter. The authoritative agent-
 - **Native tools:** Rust binaries for terminal execution, HTTP requests, SearXNG search, and the relay agent
 - **Package manager:** pnpm
 
-See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for the current implementation/toolchain details.
+See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
 
 ## Repository layout
 
@@ -25,21 +25,24 @@ packages/
   terminal-tool/        AI SDK-facing terminal tool package
   curl-tool/            AI SDK-facing HTTP tool package
   searxng-search-tool/  AI SDK-facing search tool package
-  relay-agent/          Relay package/release surface
+  relay-agent/          Relay package surface
   rust-tools/           Native implementations for all four binaries
-scripts/                Deterministic MCP/security/release acceptance scripts
-.agents/                Agent knowledge, skills, plans, memories, and hook docs
+scripts/                Local quality/hook helpers plus deterministic acceptance scripts
+.githooks/              Mandatory tracked local Git hooks
+.agents/                Agent knowledge, skills, plans, memories, and contracts
 ```
+
+This repository intentionally has **no CI workflow** and **no unit-test suite**.
 
 ## Setup
 
 Requirements:
 
 - Node.js 22+
-- pnpm 11 (the exact version is pinned by `packageManager`)
+- pnpm 11 (exact version pinned by `packageManager`)
 - Rust 1.95.0 for native tool builds
 - PostgreSQL for application persistence
-- Linux + Bubblewrap for the production `relay-agent` sandbox/release target
+- Linux + Bubblewrap for the production `relay-agent` sandbox boundary
 
 Install dependencies and prepare generated Nuxt/native artifacts:
 
@@ -47,46 +50,59 @@ Install dependencies and prepare generated Nuxt/native artifacts:
 pnpm install
 ```
 
-Copy `.env.example` to `.env` and fill the values required by the feature you are running. Runtime configuration is documented in [`.agents/knowledge/tooling.md`](.agents/knowledge/tooling.md); `.env.example` is the source of truth for available environment keys.
+`pnpm install` also activates the tracked pre-commit hook via `core.hooksPath=.githooks`.
+
+Copy `.env.example` to `.env` and fill the values required by the feature you are running. Runtime configuration is documented in [`.agents/knowledge/tooling.md`](.agents/knowledge/tooling.md).
+
+## Mandatory commit gate
+
+Every commit must pass:
+
+```bash
+pnpm verify:commit
+```
+
+The pre-commit hook runs this automatically. Never bypass it with `git commit --no-verify`.
+
+The gate includes:
+
+- agent-doc/index integrity;
+- all configured JS/Vue and Rust lint checks;
+- all configured Nuxt/Vue and Rust type/compile checks.
+
+A failing gate blocks the commit until fixed. There is no remote CI safety net.
 
 ## Common commands
 
 | Task | Command |
 | --- | --- |
+| Mandatory commit gate | `pnpm verify:commit` |
 | Production build | `pnpm build` |
 | Build native Rust tools | `pnpm build:tools` |
 | Preview production build | `pnpm preview` |
 | Dev server | `pnpm dev` |
-| Lint | `pnpm lint` |
-| Type check | `pnpm typecheck` |
+| All linters | `pnpm lint` |
+| All type/compile checks | `pnpm typecheck` |
 | Dependency audit | `pnpm audit` |
 | Generate DB migration | `pnpm db:generate` |
 | Apply DB migrations | `pnpm db:migrate` |
 
-For local verification, prefer a clean `pnpm build` followed by `pnpm preview`; the repo has known dev-watcher and typecheck caveats documented under [`.agents/memories/`](.agents/memories/README.md).
+For local runtime verification, prefer a clean `pnpm build` followed by `pnpm preview` when relevant.
 
-## Native tool verification
+## Verification policy
 
-The Rust workspace is under `packages/rust-tools/` and pins Rust 1.95.0. CI currently enforces:
+There is no CI and no unit-test suite. Quality is enforced locally before each commit.
 
-```bash
-cd packages/rust-tools
-cargo fmt --all -- --check
-RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo audit
-```
+For dependency changes, also run `pnpm audit` before merge. For security-sensitive Rust/MCP changes, run the relevant deterministic scripts under `scripts/` and `cargo audit` when applicable.
 
-The release contract for `relay-agent` is Linux + Bubblewrap; do not infer macOS/Windows relay support from the sibling CLI binaries.
+Existing deterministic acceptance/security scripts are targeted local verification tools; they are not unit tests and are not CI.
 
 ## Agent workflow
 
-Agent guidance is centralized so external MCP client Code, Gemini/Antigravity, and other agents do not maintain separate copies:
+Agent guidance is centralized and vendor-neutral:
 
-- [`AGENTS.md`](AGENTS.md) — generic entrypoint
-- [`EXTERNAL MCP CLIENT.md`](EXTERNAL MCP CLIENT.md) — external MCP client Code entrypoint
-- [`GEMINI.md`](GEMINI.md) — Gemini/Antigravity entrypoint
-- [`.agents/README.md`](.agents/README.md) — authoritative index and closeout rules
+- [`AGENTS.md`](AGENTS.md) — the only repository agent entrypoint
+- [`.agents/README.md`](.agents/README.md) — authoritative guidance index and closeout rules
 
 Implementation plans are stored in [`.agents/plans/`](.agents/plans/README.md); durable decisions and traps are indexed in [`.agents/memories/`](.agents/memories/README.md).
 
