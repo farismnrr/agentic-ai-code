@@ -1,4 +1,5 @@
 import type { ModelProvider } from '#shared/types/chat'
+import { removeById, replaceById } from '../utils/collection'
 
 export type { ModelProvider }
 
@@ -31,14 +32,13 @@ export function useModelProviders() {
       method: 'PUT',
       body: data
     })
-    const index = providers.value.findIndex(p => p.id === id)
-    if (index !== -1) providers.value[index] = updatedProvider
+    if (providers.value.some(provider => provider.id === id)) providers.value = replaceById(providers.value, id, updatedProvider)
     return updatedProvider
   }
 
   async function remove(id: string) {
     await $fetch(`/api/providers/${id}`, { method: 'DELETE' })
-    providers.value = providers.value.filter(p => p.id !== id)
+    providers.value = removeById(providers.value, id)
   }
 
   function listModels(providerId: string) {
