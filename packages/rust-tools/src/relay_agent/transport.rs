@@ -78,7 +78,6 @@ const CODING_SCOPE: &str = "relay.coding";
 /// Maximum time to wait for a JWKS fetch response. Enforced via
 /// `tokio::time::timeout` so a slow IdP endpoint cannot hold the write lock
 /// indefinitely and deny authentication to all concurrent requests.
-const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 /// Coarse relay-side admission control for the remote MCP edge. The burst is
 /// intentionally large enough for an agent's normal request burst, while the
 /// refill rate bounds sustained floods. A long-running tool call consumes one
@@ -374,45 +373,7 @@ async fn access_policy(
 
         // P1-2: OAuth metadata and JWKS fetch helpers with timeout. Drops the lock before the HTTP
         // request so a slow IdP cannot hold the write lock and block all auth.
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(JWKS_FETCH_TIMEOUT_SECS))
-            .build()
-            .map_err(|_| "failed to build HTTP client".to_string());
-        let fetch_discovery = |client: Result<reqwest::Client, String>, discovery_url: String| async move {
-            let client = client?;
-            let resp = client
-                .get(&discovery_url)
-                .send()
-                .await
-                .map_err(|e| format!("OIDC discovery fetch failed: {e}"))?
-                .error_for_status()
-                .map_err(|e| format!("OIDC discovery request failed: {e}"))?;
-            let metadata = resp
-                .json::<serde_json::Value>()
-                .await
-                .map_err(|e| format!("OIDC discovery parse failed: {e}"))?;
-            let jwks_uri = metadata
-                .get("jwks_uri")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "OIDC discovery missing jwks_uri".to_string())?
-                .to_owned();
-            Ok::<String, String>(jwks_uri)
-        };
-        let fetch_jwks = |client: Result<reqwest::Client, String>, jwks_url: String| async move {
-            let client = client?;
-            let resp = client
-                .get(&jwks_url)
-                .send()
-                .await
-                .map_err(|e| format!("JWKS fetch failed: {e}"))?
-                .error_for_status()
-                .map_err(|e| format!("JWKS request failed: {e}"))?;
-            let jwks = resp
-                .json::<jsonwebtoken::jwk::JwkSet>()
-                .await
-                .map_err(|e| format!("JWKS parse failed: {e}"))?;
-            Ok::<jsonwebtoken::jwk::JwkSet, String>(jwks)
-        };
+        let client = auth::http_client();
 
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
@@ -431,7 +392,7 @@ async fn access_policy(
         };
 
         let jwks_url = if cache_needs_refresh {
-            let discovered_url = match fetch_discovery(client.clone(), discovery_url).await {
+            let discovered_url = match auth::fetch_discovery(client.clone(), discovery_url).await {
                 Ok(url) => url,
                 Err(msg) => {
                     return (
@@ -478,7 +439,7 @@ async fn access_policy(
         };
 
         if cache_needs_refresh {
-            match fetch_jwks(client.clone(), jwks_url.clone()).await {
+            match auth::fetch_jwks(client.clone(), jwks_url.clone()).await {
                 Ok(new_set) => {
                     let mut w = state.jwks_cache.write().await;
                     *w = Some(CachedJwks {
@@ -542,7 +503,7 @@ async fn access_policy(
             Some(j) => j,
             None => {
                 // kid not in cache — attempt a single re-fetch.
-                match fetch_jwks(client, jwks_url.clone()).await {
+                match auth::fetch_jwks(client, jwks_url.clone()).await {
                     Ok(new_set) => {
                         let found = new_set.find(&kid).cloned();
                         let mut w = state.jwks_cache.write().await;
