@@ -41,12 +41,43 @@ pub struct Response {
     pub result: Value,
 }
 
+/// Build the server identity metadata required on successful MCP results.
+pub fn server_info_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/serverInfo": {
+            "name": "relay-agent",
+            "version": env!("CARGO_PKG_VERSION")
+        }
+    })
+}
+
+/// Add the server identity to a result without discarding other result
+/// metadata supplied by a handler.
+pub fn with_server_info_meta(mut result: Value) -> Value {
+    let Some(result_object) = result.as_object_mut() else {
+        return result;
+    };
+
+    let meta = result_object
+        .entry("_meta")
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    if let Some(meta_object) = meta.as_object_mut() {
+        meta_object.insert(
+            "io.modelcontextprotocol/serverInfo".to_string(),
+            server_info_meta()["io.modelcontextprotocol/serverInfo"].clone(),
+        );
+    } else {
+        *meta = server_info_meta();
+    }
+    result
+}
+
 impl Response {
     pub fn new(id: Id, result: Value) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id,
-            result,
+            result: with_server_info_meta(result),
         }
     }
 }
@@ -157,8 +188,6 @@ pub struct DiscoverResult {
     #[serde(rename = "supportedVersions")]
     pub supported_versions: Vec<&'static str>,
     pub capabilities: Value,
-    #[serde(rename = "_meta")]
-    pub meta: Value,
     pub instructions: &'static str,
     /// Required on the wire per SEP-2549 (confirmed against a real MCP
     /// client SDK's `DiscoverResult` type, which rejects a response
@@ -178,13 +207,7 @@ impl DiscoverResult {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
             capabilities: json!({ "tools": { "listChanged": false } }),
-            meta: json!({
-                "io.modelcontextprotocol/serverInfo": {
-                    "name": "relay-agent",
-                    "version": env!("CARGO_PKG_VERSION")
-                }
-            }),
-            instructions: "Local relay-agent MCP server: exposes terminal_exec, http_fetch, and web_search tools backed by the Plan 027 Rust CLI binaries.",
+            instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
             ttl_ms: 0,
             cache_scope: "private",
         }
@@ -196,9 +219,32 @@ impl DiscoverResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
     pub name: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'static str>,
     pub description: &'static str,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
+    #[serde(rename = "securitySchemes")]
+    pub security_schemes: Vec<ToolSecurityScheme>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSecurityScheme {
+    #[serde(rename = "type")]
+    pub scheme_type: &'static str,
+    pub scopes: Vec<&'static str>,
 }
 
 /// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
@@ -208,7 +254,8 @@ pub fn tool_catalog() -> Vec<Tool> {
     vec![
         Tool {
             name: "terminal_exec",
-            description: "Run an executable command in a working directory and return its stdout/stderr/exit status. Maps to the terminal-tool Rust CLI binary.",
+            title: Some("Sandboxed Coding Terminal"),
+            description: "Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -217,48 +264,95 @@ pub fn tool_catalog() -> Vec<Tool> {
                     "args": {
                         "type": "array",
                         "items": { "type": "string", "maxLength": 65536 },
+                        "maxItems": 100,
                         "default": []
                     },
                     "cwd": { "type": "string" },
-                    "timeout_ms": { "type": "integer", "minimum": 1, "default": 30000 }
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 300000,
+                        "default": 30000
+                    }
                 },
                 "required": ["command"],
                 "additionalProperties": false
             }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
         Tool {
             name: "http_fetch",
-            description: "Fetch a URL over HTTP(S) and return the response. Maps to the curl-tool Rust CLI binary.",
+            title: Some("HTTP Fetch"),
+            description: "Make an HTTP(S) request and return the response; methods may mutate remote state.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
                     "url": { "type": "string", "format": "uri", "maxLength": 65536 },
-                    "method": { "type": "string", "default": "GET" },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+                        "default": "GET"
+                    },
                     "headers": {
                         "type": "object",
-                        "additionalProperties": { "type": "string" }
+                        "maxProperties": 100,
+                        "additionalProperties": { "type": "string", "maxLength": 65536 }
                     },
                     "data": { "type": "string", "maxLength": 65536 },
-                    "timeout_ms": { "type": "integer", "minimum": 0, "default": 30000 }
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 300000,
+                        "default": 30000
+                    }
                 },
                 "required": ["url"],
                 "additionalProperties": false
             }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
         Tool {
             name: "web_search",
-            description: "Search the web via a local SearxNG instance. Maps to the searxng-search-tool Rust CLI binary.",
+            title: Some("Web Search"),
+            description: "Search the web through the configured SearxNG backend and return matching results.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 },
-                    "base_url": { "type": "string", "format": "uri", "default": "http://127.0.0.1:8888" }
+                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 }
                 },
                 "required": ["query"],
                 "additionalProperties": false
             }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: true,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
         },
     ]
 }
@@ -311,21 +405,44 @@ pub struct ToolResultContent {
 /// protocol error — see the MCP contract.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolCallResult {
+    #[serde(rename = "resultType")]
+    result_type: &'static str,
     pub content: Vec<ToolResultContent>,
     #[serde(rename = "isError")]
     pub is_error: bool,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Value>,
 }
 
 impl ToolCallResult {
+    pub fn complete(content: Vec<ToolResultContent>) -> Self {
+        Self::new(content, false)
+    }
+
+    pub fn error(content: Vec<ToolResultContent>) -> Self {
+        Self::new(content, true)
+    }
+
+    pub fn with_meta(mut self, meta: Value) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+
     pub fn not_implemented(tool_name: &str) -> Self {
-        Self {
-            content: vec![ToolResultContent {
+        Self::error(vec![ToolResultContent {
                 kind: "text",
                 text: format!(
                     "tool '{tool_name}' is registered but execution is not implemented yet (Plan 028 Phase 3)"
                 ),
-            }],
-            is_error: true,
+            }])
+    }
+
+    fn new(content: Vec<ToolResultContent>, is_error: bool) -> Self {
+        Self {
+            result_type: "complete",
+            content,
+            is_error,
+            meta: None,
         }
     }
 }

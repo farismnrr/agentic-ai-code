@@ -55,13 +55,16 @@ jobs:
         with:
           workspaces: "packages/rust-tools"
 
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
+
       - name: Check Rust formatting
         working-directory: packages/rust-tools
         run: cargo fmt --all -- --check
 
       - name: Strict cargo check
         working-directory: packages/rust-tools
-        run: cargo check --workspace --all-targets --all-features --locked
+        run: RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 
       - name: Lint with Clippy
         working-directory: packages/rust-tools
@@ -74,6 +77,9 @@ jobs:
 
       - name: Rust Security audit
         run: cargo audit
+
+      - name: Deterministic connector and zero-bypass gate
+        run: bash scripts/phase8-zero-bypass.sh
 
   build-release:
     needs: [js-ci, rust-ci]
@@ -101,7 +107,7 @@ jobs:
         run: rustup target add ${{ matrix.target }}
 
       - name: Build release artifacts
-        run: cargo build --release --target ${{ matrix.target }}
+        run: RUSTFLAGS='-D warnings' cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package artifacts and generate checksums
         working-directory: target/${{ matrix.target }}/release

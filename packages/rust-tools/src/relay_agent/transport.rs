@@ -1,8 +1,8 @@
 //! Streamable HTTP transport for the MCP `2026-07-28` server core.
 //!
 //! Single JSON-RPC route (`POST /mcp`) plus a plain `/health` probe used by
-//! local tooling. Localhost-only binding is enforced by the caller
-//! (`src/bin/relay-agent.rs` binds `127.0.0.1` explicitly) — this module
+//! local tooling. Loopback binding is enforced by the caller/configuration
+//! (`src/bin/relay-agent.rs` binds the validated loopback address) — this module
 //! only builds the `Router`, it does not bind sockets.
 //!
 //! `/mcp` is additionally gated by [`super::security::enforce_local_access_policy`]
@@ -43,7 +43,10 @@ use axum::{
     Json, Router,
 };
 use serde_json::{json, Value};
+use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::config::ServerConfig;
@@ -61,6 +64,10 @@ pub const MAX_BODY_BYTES: usize = 1024 * 1024; // 1 MiB
 const HDR_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 const HDR_MCP_METHOD: &str = "mcp-method";
 const HDR_MCP_NAME: &str = "mcp-name";
+const TOOLS_LIST_TTL_MS: u64 = 300_000;
+/// Resource permission exposed to the external Authorization Server and MCP
+/// client for the default full-coding deployment profile.
+const CODING_SCOPE: &str = "relay.coding";
 
 /// JWKS cache TTL: 5 minutes. After this duration the cached key set is
 /// considered stale and will be re-fetched on the next authentication attempt.
@@ -70,6 +77,83 @@ const JWKS_TTL_SECS: u64 = 300;
 /// `tokio::time::timeout` so a slow IdP endpoint cannot hold the write lock
 /// indefinitely and deny authentication to all concurrent requests.
 const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
+const MAX_LOG_FIELD: usize = 128;
+const HDR_CORRELATION_ID: &str = "x-correlation-id";
+
+/// Coarse relay-side admission control for the remote MCP edge. The burst is
+/// intentionally large enough for an agent's normal request burst, while the
+/// refill rate bounds sustained floods. A long-running tool call consumes one
+/// token when admitted; it does not consume tokens while it remains active.
+const REQUEST_ADMISSION_BURST: f64 = 32.0;
+const REQUEST_ADMISSION_RATE_PER_SEC: f64 = 8.0;
+
+fn safe_log_field(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_LOG_FIELD)
+        .collect()
+}
+
+fn privacy_id(value: Option<&str>) -> &'static str {
+    // Deliberately do not emit subject, client identifiers, commands, arguments,
+    // source, or token material. Presence is sufficient for operational metrics.
+    if value.is_some() {
+        "present"
+    } else {
+        "absent"
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CorrelationId(String);
+
+impl CorrelationId {
+    fn from_request(req: &Request) -> Self {
+        Self::from_headers(req.headers())
+    }
+
+    fn from_headers(headers: &HeaderMap) -> Self {
+        let id = headers
+            .get(HDR_CORRELATION_ID)
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| {
+                value.len() <= MAX_LOG_FIELD
+                    && value.chars().all(|c| c.is_ascii_graphic() && c != '"')
+            })
+            .map(str::to_owned)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        Self(id)
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn audit(
+    correlation_id: &str,
+    method: &str,
+    tool: Option<&str>,
+    outcome: &str,
+    status: StatusCode,
+    started: Instant,
+    subject: Option<&str>,
+) {
+    eprintln!(
+        "{}",
+        json!({
+            "event": "relay_request",
+            "correlation_id": safe_log_field(correlation_id),
+            "method": safe_log_field(method),
+            "tool": privacy_id(tool),
+            "outcome": safe_log_field(outcome),
+            "status": status.as_u16(),
+            "latency_ms": started.elapsed().as_millis(),
+            "subject": privacy_id(subject)
+        })
+    );
+}
 
 /// Cached JWKS with a fetch timestamp for TTL enforcement.
 /// Only used within this module; making it `pub` satisfies the
@@ -82,6 +166,10 @@ pub struct CachedJwks {
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Coarse request admission is deliberately separate from both the HTTP
+    /// concurrency limit and the execution semaphore. It runs before OAuth
+    /// validation so unauthenticated floods cannot reach JWKS or execution.
+    pub request_admission: std::sync::Arc<RequestAdmission>,
     /// JWKS cache with TTL. `None` means not yet fetched.
     ///
     /// # OAuth boundary note (P1-3 / Phase 16.4)
@@ -95,16 +183,76 @@ pub struct AppState {
     pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
 }
 
+struct AdmissionState {
+    tokens: f64,
+    updated_at: Instant,
+}
+
+/// A small in-process token bucket. This is intentionally global to the relay
+/// instance: deployments with multiple public replicas should also enforce a
+/// distributed limit at their trusted edge.
+pub struct RequestAdmission {
+    capacity: f64,
+    refill_per_sec: f64,
+    state: std::sync::Mutex<AdmissionState>,
+}
+
+impl RequestAdmission {
+    fn new(capacity: f64, refill_per_sec: f64) -> Self {
+        Self {
+            capacity,
+            refill_per_sec,
+            state: std::sync::Mutex::new(AdmissionState {
+                tokens: capacity,
+                updated_at: Instant::now(),
+            }),
+        }
+    }
+
+    fn try_acquire(&self, now: Instant) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            // A poisoned limiter must fail closed rather than turn a panic in
+            // the admission path into an unlimited request path.
+            return false;
+        };
+
+        let elapsed = now
+            .saturating_duration_since(state.updated_at)
+            .as_secs_f64();
+        state.tokens = (state.tokens + elapsed * self.refill_per_sec).min(self.capacity);
+        state.updated_at = now;
+
+        if state.tokens < 1.0 {
+            return false;
+        }
+        state.tokens -= 1.0;
+        true
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct Claims {
+    pub iss: Option<String>,
     pub sub: Option<String>,
     pub client_id: Option<String>,
     pub scope: Option<String>,
+    pub exp: Option<u64>,
+    pub iat: Option<u64>,
+    pub nbf: Option<u64>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
+pub enum AuthDecision {
+    #[default]
+    Authorized,
+    Missing,
+    InsufficientScope,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct AuthContext {
     pub claims: Option<Claims>,
+    pub decision: AuthDecision,
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
@@ -137,37 +285,183 @@ pub fn create_router(config: ServerConfig) -> Router {
     let state = Arc::new(AppState {
         config: config.clone(),
         execution_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
+        request_admission: Arc::new(RequestAdmission::new(
+            REQUEST_ADMISSION_BURST,
+            REQUEST_ADMISSION_RATE_PER_SEC,
+        )),
         jwks_cache: tokio::sync::RwLock::new(None),
     });
 
     let mcp_router = Router::new().route("/mcp", post(handle_mcp));
-    let well_known_router = Router::new().route(
+    let mut well_known_router = Router::new().route(
         "/.well-known/oauth-protected-resource",
         get(handle_well_known_oauth),
     );
+    // Axum 0.7's catch-all syntax is not usable here because the metadata
+    // route must remain a concrete path. Register only the RFC 9728 path
+    // derived from the configured resource (normally the resource's `/mcp`
+    // path), leaving all other paths unmatched.
+    if let Some(metadata_url) = protected_resource_metadata_url(&config) {
+        if let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() {
+            let metadata_path = metadata_uri.path();
+            if metadata_path != "/.well-known/oauth-protected-resource" {
+                well_known_router =
+                    well_known_router.route(metadata_path, get(handle_path_well_known_oauth));
+            }
+        }
+    }
 
     Router::new()
+        .route("/health", get(handle_health))
         .merge(mcp_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(state.clone(), access_policy))
+        .layer(middleware::from_fn(correlation_middleware))
+        .layer(ConcurrencyLimitLayer::new(64))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(cors)
         .with_state(state)
 }
 
-type JsonErr = (StatusCode, Json<ErrorResponse>);
+async fn handle_health() -> StatusCode {
+    StatusCode::OK
+}
+
+async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
+    let id = CorrelationId::from_request(&req);
+    req.extensions_mut().insert(id.clone());
+    let mut response = next.run(req).await;
+    if let Ok(value) = id.as_str().parse() {
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static(HDR_CORRELATION_ID), value);
+    }
+    response
+}
+
+type JsonErr = Box<(StatusCode, HeaderMap, Json<ErrorResponse>)>;
+
+fn protected_resource_metadata_url(config: &ServerConfig) -> Option<String> {
+    let audience = config.oauth_audience.as_deref()?;
+    let mut resource = url::Url::parse(audience).ok()?;
+    let path = resource.path().trim_start_matches('/').to_owned();
+    let metadata_path = if path.is_empty() {
+        "/.well-known/oauth-protected-resource".to_owned()
+    } else {
+        format!("/.well-known/oauth-protected-resource/{path}")
+    };
+    resource.set_path(&metadata_path);
+    Some(resource.to_string())
+}
+
+fn bearer_challenge_value(
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+) -> String {
+    let mut parameters = vec!["realm=\"mcp\"".to_owned()];
+    if let Some(error) = error {
+        parameters.push(format!("error=\"{error}\""));
+    }
+    let description = match error {
+        Some("invalid_token") => "The access token is invalid or expired",
+        Some("insufficient_scope") => "The access token lacks the required scope",
+        _ => "Authentication is required",
+    };
+    parameters.push(format!("error_description=\"{description}\""));
+    if let Some(scope) = scope {
+        parameters.push(format!("scope=\"{scope}\""));
+    }
+    if let Some(metadata_url) = protected_resource_metadata_url(config) {
+        parameters.push(format!("resource_metadata=\"{metadata_url}\""));
+    }
+    format!("Bearer {}", parameters.join(", "))
+}
+
+fn bearer_challenge_headers(
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    if let Ok(value) = bearer_challenge_value(config, error, scope).parse() {
+        headers.insert(axum::http::header::WWW_AUTHENTICATE, value);
+    }
+    headers
+}
+
+fn oauth_error_response(
+    status: StatusCode,
+    id: Option<Id>,
+    config: &ServerConfig,
+    error: Option<&str>,
+    scope: Option<&str>,
+    message: &McpError,
+) -> AxumResponse {
+    (
+        status,
+        bearer_challenge_headers(config, error, scope),
+        Json(ErrorResponse::new(id, message)),
+    )
+        .into_response()
+}
+
+fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
+    let trusted_peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<SocketAddr>>()
+        .map(|peer| peer.0.ip())
+        .and_then(|ip| config.trusted_proxy_cidr.as_deref().map(|cidr| (ip, cidr)))
+        .is_some_and(|(ip, cidr)| {
+            cidr.parse::<ipnet::IpNet>()
+                .is_ok_and(|net| net.contains(&ip))
+        });
+
+    config.trusted_proxy
+        && trusted_peer
+        && req
+            .headers()
+            .get("x-forwarded-proto")
+            .and_then(|v| v.to_str().ok())
+            == Some("https")
+}
 
 fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
-    (status, Json(ErrorResponse::new(id, err)))
+    Box::new((status, HeaderMap::new(), Json(ErrorResponse::new(id, err))))
+}
+
+fn json_error_response(error: JsonErr) -> AxumResponse {
+    let (status, headers, body) = *error;
+    (status, headers, body).into_response()
 }
 
 async fn handle_well_known_oauth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let issuer = state.config.oauth_issuer.clone().unwrap_or_default();
-    let resource = state.config.oauth_audience.clone().unwrap_or_default();
-    Json(json!({
+    let issuer = state.config.oauth_issuer.clone();
+    let resource = state.config.oauth_audience.clone();
+    let mut metadata = json!({
         "resource": resource,
-        "authorization_servers": [issuer]
-    }))
+        "scopes_supported": [CODING_SCOPE]
+    });
+    if let Some(issuer) = issuer {
+        metadata["authorization_servers"] = json!([issuer]);
+    }
+    Json(metadata)
+}
+
+async fn handle_path_well_known_oauth(
+    State(state): State<Arc<AppState>>,
+    uri: axum::http::Uri,
+) -> AxumResponse {
+    let Some(metadata_url) = protected_resource_metadata_url(&state.config) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(metadata_uri) = metadata_url.parse::<axum::http::Uri>() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if uri.path() != metadata_uri.path() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    handle_well_known_oauth(State(state)).await.into_response()
 }
 
 /// Server-side access policy:
@@ -183,13 +477,36 @@ async fn access_policy(
         return next.run(req).await;
     }
 
+    // Admit before parsing, OAuth/JWKS work, or tool dispatch. This protects
+    // the expensive/authenticated path without changing the separate HTTP
+    // concurrency and execution semaphore limits.
+    if !state.request_admission.try_acquire(Instant::now()) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::RETRY_AFTER,
+            axum::http::HeaderValue::from_static("1"),
+        );
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            headers,
+            Json(ErrorResponse::new(
+                None,
+                &McpError::InvalidRequest("Request temporarily unavailable".into()),
+            )),
+        )
+            .into_response();
+    }
+
     let mut auth_ctx = AuthContext::default();
 
     if let super::config::SecurityMode::Remote = state.config.mode {
-        // Enforce HTTPS
-        let is_https = req.headers().get("x-forwarded-proto").map(|v| v.as_bytes())
-            == Some(b"https")
-            || req.uri().scheme_str() == Some("https");
+        // This listener is plaintext by design. The only supported HTTPS
+        // termination point is an explicitly trusted local edge/tunnel. Do
+        // not treat the request URI scheme as proof of TLS: a direct peer can
+        // supply an absolute-form HTTP request target. Likewise, forwarded
+        // headers are ignored unless the operator explicitly opted in and the
+        // configuration validation has restricted the listener to loopback.
+        let is_https = request_uses_trusted_https(&req, &state.config);
 
         if !is_https {
             return (
@@ -236,16 +553,27 @@ async fn access_policy(
             .and_then(|v| v.to_str().ok())
             .unwrap_or_default();
 
+        let is_tools_call = req
+            .headers()
+            .get(HDR_MCP_METHOD)
+            .and_then(|value| value.to_str().ok())
+            == Some("tools/call");
+
         if !auth_header.starts_with("Bearer ") {
-            return (
+            if auth_header.is_empty() && is_tools_call {
+                auth_ctx.decision = AuthDecision::Missing;
+                req.extensions_mut().insert(auth_ctx);
+                return next.run(req).await;
+            }
+
+            return oauth_error_response(
                 StatusCode::UNAUTHORIZED,
-                [(axum::http::header::WWW_AUTHENTICATE, "Bearer realm=\"mcp\"")],
-                Json(ErrorResponse::new(
-                    None,
-                    &McpError::InvalidRequest("Missing or invalid authorization".into()),
-                )),
-            )
-                .into_response();
+                None,
+                &state.config,
+                (!auth_header.is_empty()).then_some("invalid_token"),
+                None,
+                &McpError::InvalidRequest("Missing or invalid authorization".into()),
+            );
         }
 
         let token = &auth_header[7..];
@@ -309,36 +637,28 @@ async fn access_policy(
         let header = match jsonwebtoken::decode_header(token) {
             Ok(h) => h,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid token header".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid token header".into()),
+                );
             }
         };
 
         let kid = match header.kid {
             Some(k) => k,
             None => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Token missing kid".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Token missing kid".into()),
+                );
             }
         };
 
@@ -366,38 +686,30 @@ async fn access_policy(
                         match found {
                             Some(j) => j,
                             None => {
-                                return (
+                                return oauth_error_response(
                                     StatusCode::UNAUTHORIZED,
-                                    [(
-                                        axum::http::header::WWW_AUTHENTICATE,
-                                        "Bearer error=\"invalid_token\"",
-                                    )],
-                                    Json(ErrorResponse::new(
-                                        None,
-                                        &McpError::InvalidRequest(
-                                            "Unknown signing key (kid not in JWKS)".into(),
-                                        ),
-                                    )),
-                                )
-                                    .into_response();
+                                    None,
+                                    &state.config,
+                                    Some("invalid_token"),
+                                    None,
+                                    &McpError::InvalidRequest(
+                                        "Unknown signing key (kid not in JWKS)".into(),
+                                    ),
+                                );
                             }
                         }
                     }
                     Err(_) => {
-                        return (
+                        return oauth_error_response(
                             StatusCode::UNAUTHORIZED,
-                            [(
-                                axum::http::header::WWW_AUTHENTICATE,
-                                "Bearer error=\"invalid_token\"",
-                            )],
-                            Json(ErrorResponse::new(
-                                None,
-                                &McpError::InvalidRequest(
-                                    "Unknown signing key (kid not in JWKS)".into(),
-                                ),
-                            )),
-                        )
-                            .into_response();
+                            None,
+                            &state.config,
+                            Some("invalid_token"),
+                            None,
+                            &McpError::InvalidRequest(
+                                "Unknown signing key (kid not in JWKS)".into(),
+                            ),
+                        );
                     }
                 }
             }
@@ -406,26 +718,32 @@ async fn access_policy(
         let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(&jwk) {
             Ok(k) => k,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid JWK".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid JWK".into()),
+                );
             }
         };
 
+        if !matches!(
+            header.alg,
+            jsonwebtoken::Algorithm::RS256 | jsonwebtoken::Algorithm::ES256
+        ) {
+            return oauth_error_response(
+                StatusCode::UNAUTHORIZED,
+                None,
+                &state.config,
+                Some("invalid_token"),
+                None,
+                &McpError::InvalidRequest("Unsupported token algorithm".into()),
+            );
+        }
+
         let mut validation = jsonwebtoken::Validation::new(header.alg);
-        validation.algorithms = vec![
-            jsonwebtoken::Algorithm::RS256,
-            jsonwebtoken::Algorithm::ES256,
-        ];
         validation.set_audience(&[oauth_audience]);
         validation.set_issuer(&[oauth_issuer]);
         validation.validate_nbf = true;
@@ -433,21 +751,52 @@ async fn access_policy(
         let token_data = match jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation) {
             Ok(data) => data,
             Err(_) => {
-                return (
+                return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
-                    [(
-                        axum::http::header::WWW_AUTHENTICATE,
-                        "Bearer error=\"invalid_token\"",
-                    )],
-                    Json(ErrorResponse::new(
-                        None,
-                        &McpError::InvalidRequest("Invalid token".into()),
-                    )),
-                )
-                    .into_response();
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Invalid token".into()),
+                );
             }
         };
         auth_ctx.claims = Some(token_data.claims);
+
+        let claims = auth_ctx.claims.as_ref().expect("claims were just stored");
+        if claims.sub.as_deref() != state.config.oauth_owner_subject.as_deref() {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse::new(
+                    None,
+                    &McpError::InvalidRequest("Authenticated subject is not authorized".into()),
+                )),
+            )
+                .into_response();
+        }
+
+        let has_coding_scope = claims
+            .scope
+            .as_deref()
+            .unwrap_or_default()
+            .split_whitespace()
+            .any(|scope| scope == CODING_SCOPE);
+        if !has_coding_scope {
+            if is_tools_call {
+                auth_ctx.decision = AuthDecision::InsufficientScope;
+                req.extensions_mut().insert(auth_ctx);
+                return next.run(req).await;
+            }
+
+            return oauth_error_response(
+                StatusCode::FORBIDDEN,
+                None,
+                &state.config,
+                Some("insufficient_scope"),
+                Some(CODING_SCOPE),
+                &McpError::InvalidRequest("Insufficient scope".into()),
+            );
+        }
     } else {
         if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
             return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
@@ -461,9 +810,11 @@ async fn access_policy(
 async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
+    axum::extract::Extension(correlation_id): axum::extract::Extension<CorrelationId>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
+    let started = Instant::now();
     // Content-Type must be application/json for the Streamable HTTP JSON
     // mode used in this phase (no SSE upgrade implemented yet — see audit
     // doc section 3).
@@ -472,7 +823,7 @@ async fn handle_mcp(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     if !content_type.starts_with("application/json") {
-        return err_response(
+        let response = err_response(
             StatusCode::BAD_REQUEST,
             None,
             &McpError::InvalidRequest(format!(
@@ -480,6 +831,16 @@ async fn handle_mcp(
             )),
         )
         .into_response();
+        audit(
+            correlation_id.as_str(),
+            "http",
+            None,
+            "invalid_content_type",
+            StatusCode::BAD_REQUEST,
+            started,
+            auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
+        );
+        return response;
     }
 
     // Body size is already bounded by DefaultBodyLimit before this handler
@@ -487,8 +848,21 @@ async fn handle_mcp(
     let payload: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => {
-            return err_response(StatusCode::BAD_REQUEST, None, &McpError::ParseError)
-                .into_response();
+            let response = json_error_response(err_response(
+                StatusCode::BAD_REQUEST,
+                None,
+                &McpError::ParseError,
+            ));
+            audit(
+                correlation_id.as_str(),
+                "http",
+                None,
+                "parse_error",
+                StatusCode::BAD_REQUEST,
+                started,
+                auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
+            );
+            return response;
         }
     };
 
@@ -506,26 +880,31 @@ async fn handle_mcp(
             let id = payload
                 .get("id")
                 .and_then(|v| serde_json::from_value::<Id>(v.clone()).ok());
-            return err_response(StatusCode::BAD_REQUEST, id, &mcp_err).into_response();
+            return json_error_response(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
         }
     };
 
     if let Err(err) = validate_routing_headers(&headers, &request) {
-        return err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err)
-            .into_response();
+        return json_error_response(err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &err,
+        ));
     }
 
     match request.method.as_str() {
         "server/discover" => handle_discover(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tools_call(&request, _state, auth_ctx).await,
+        "tools/call" => {
+            handle_tools_call(&request, _state, auth_ctx, correlation_id.as_str()).await
+        }
         other => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
             &McpError::MethodNotFound(other.to_string()),
         )),
     }
-    .into_response()
+    .map_or_else(json_error_response, |body| body.into_response())
 }
 
 /// Validate the MCP `2026-07-28` standard request-metadata headers against
@@ -651,15 +1030,43 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
 
 fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
     let tools = tool_catalog();
-    let response = Response::new(request.id.clone(), json!({ "tools": tools }));
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "ttlMs": TOOLS_LIST_TTL_MS,
+            "cacheScope": "public",
+            "tools": tools
+        }),
+    );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
 async fn handle_tools_call(
     request: &mcp::Request,
-    _state: Arc<AppState>,
+    state: Arc<AppState>,
     auth_ctx: AuthContext,
+    correlation_id: &str,
 ) -> JsonErr2 {
+    let auth_challenge = match auth_ctx.decision {
+        AuthDecision::Authorized => None,
+        AuthDecision::Missing => Some(("invalid_token", None)),
+        AuthDecision::InsufficientScope => Some(("insufficient_scope", Some(CODING_SCOPE))),
+    };
+    if let Some((error, scope)) = auth_challenge {
+        let challenge = bearer_challenge_value(&state.config, Some(error), scope);
+        let result = ToolCallResult::error(vec![super::mcp::ToolResultContent {
+            kind: "text",
+            text: "Authentication is required to use this tool".to_string(),
+        }])
+        .with_meta(json!({ "mcp/www_authenticate": [challenge] }));
+        let response = Response::new(
+            request.id.clone(),
+            serde_json::to_value(result).unwrap_or(json!({})),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -692,45 +1099,26 @@ async fn handle_tools_call(
         ));
     }
 
-    if let super::config::SecurityMode::Remote = _state.config.mode {
-        let claims = auth_ctx.claims.as_ref().unwrap();
-        let scopes = claims.scope.as_deref().unwrap_or("");
-        let scope_list: Vec<&str> = scopes.split_whitespace().collect();
-
-        let has_execute = scope_list.contains(&"execute");
-        let has_read_or_fetch =
-            scope_list.contains(&"read") || scope_list.contains(&"fetch") || has_execute;
-
-        match call.name.as_str() {
-            "terminal_exec" if !has_execute => {
-                return Err(err_response(
-                    StatusCode::FORBIDDEN,
-                    Some(request.id.clone()),
-                    &McpError::InvalidRequest("Insufficient scope: requires 'execute'".into()),
-                ));
-            }
-            "web_search" | "http_fetch" if !has_read_or_fetch => {
-                return Err(err_response(
-                    StatusCode::FORBIDDEN,
-                    Some(request.id.clone()),
-                    &McpError::InvalidRequest(
-                        "Insufficient scope: requires 'read' or 'fetch'".into(),
-                    ),
-                ));
-            }
-            _ => {}
-        }
+    if let super::config::SecurityMode::Remote = state.config.mode {
+        let claims = auth_ctx
+            .claims
+            .as_ref()
+            .expect("authorized remote requests have validated claims");
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
-        let client = claims.client_id.as_deref().unwrap_or("unknown");
-        println!(
-            "AUDIT: subject='{}' client='{}' tool='{}'",
-            subject, client, call.name
+        audit(
+            correlation_id,
+            "tools/call",
+            Some(&call.name),
+            "authorized",
+            StatusCode::OK,
+            Instant::now(),
+            Some(subject),
         );
     }
 
     // Acquire global execution permit
-    let _permit = match std::sync::Arc::clone(&_state.execution_semaphore)
+    let _permit = match std::sync::Arc::clone(&state.execution_semaphore)
         .acquire_owned()
         .await
     {
@@ -747,14 +1135,13 @@ async fn handle_tools_call(
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
     let result =
-        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
+        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
             .await
-            .unwrap_or_else(|e| ToolCallResult {
-                content: vec![super::mcp::ToolResultContent {
+            .unwrap_or_else(|e| {
+                ToolCallResult::error(vec![super::mcp::ToolResultContent {
                     kind: "text",
                     text: format!("execution failed: {}", e.message()),
-                }],
-                is_error: true,
+                }])
             });
 
     let response = Response::new(

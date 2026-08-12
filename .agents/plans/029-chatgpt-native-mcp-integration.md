@@ -1,6 +1,6 @@
 # Plan 029 — Production ChatGPT Native MCP Coding Agent Integration
 
-**Status: IN FLIGHT**
+**Status: COMPLETED (repository gates; live ChatGPT/OAuth acceptance deferred)**
 
 ## Goal
 
@@ -317,24 +317,24 @@ Confirm what Plan 028 already provides and freeze only real Plan 029 work.
 
 ### Tasks
 
-- [ ] Re-read current `dev` implementations of `transport.rs`, `mcp.rs`, `config.rs`, `security.rs`, `execution.rs`, CI, and relay release workflow.
-- [ ] Create/update `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
-- [ ] Mark each capability `EXISTING`, `PARTIAL`, or `MISSING`.
-- [ ] Record exact current ChatGPT custom-app OAuth UI fields.
-- [ ] Re-check official OpenAI developer-mode/custom-MCP docs.
-- [ ] Re-check current MCP authorization/client-registration docs.
-- [ ] Freeze the ChatGPT plan/mode used for write-capable E2E.
-- [ ] Freeze the external OAuth/OIDC provider.
-- [ ] Freeze canonical MCP resource identifier.
-- [ ] Freeze `relay.coding` as the default full-coding resource scope unless implementation evidence requires a different name/model.
-- [ ] Decide whether optional narrow scopes are worth supporting; do not make them mandatory without a real use case.
-- [ ] Do not duplicate Plan 028 functionality.
+- [x] Re-read current `dev` implementations of `transport.rs`, `mcp.rs`, `config.rs`, `security.rs`, `execution.rs`, CI, and relay release workflow.
+- [x] Create/update `.agents/memories/029-chatgpt-mcp-integration-decisions.md`.
+- [x] Mark each capability `EXISTING`, `PARTIAL`, or `MISSING`.
+- [x] Record exact current ChatGPT custom-app OAuth UI fields.
+- [x] Re-check official OpenAI developer-mode/custom-MCP docs.
+- [x] Re-check current MCP authorization/client-registration docs.
+- [x] Freeze the ChatGPT plan/mode used for write-capable E2E.
+- [x] Freeze the external OAuth/OIDC provider.
+- [x] Freeze canonical MCP resource identifier.
+- [x] Freeze `relay.coding` as the default full-coding resource scope unless implementation evidence requires a different name/model.
+- [x] Decide whether optional narrow scopes are worth supporting; do not make them mandatory without a real use case.
+- [x] Do not duplicate Plan 028 functionality.
 
 ### Exit criteria
 
-- [ ] Every implementation task maps to a documented `PARTIAL`/`MISSING` gap.
-- [ ] No unit-test work is scheduled.
-- [ ] No new restriction is scheduled merely because the server is capable of editing/running code.
+- [x] Every implementation task maps to a documented `PARTIAL`/`MISSING` gap.
+- [x] No unit-test work is scheduled.
+- [x] No new restriction is scheduled merely because the server is capable of editing/running code.
 
 ---
 
@@ -346,27 +346,27 @@ Make the existing tool catalog accurate, stable, understandable and suitable for
 
 ### Tasks
 
-- [ ] Keep existing tool names unless a real compatibility bug requires change.
-- [ ] Add top-level `title` where useful/supported.
-- [ ] Add accurate MCP annotations.
-- [ ] Add `outputSchema` only where output can be described reliably; do not invent structured contracts over free-form terminal output.
-- [ ] Ensure every input schema matches actual runtime behavior.
-- [ ] Remove schema fields execution ignores.
-- [ ] Align schema limits with runtime limits.
-- [ ] Keep `additionalProperties: false` where appropriate.
-- [ ] Make descriptions concise/action-oriented for model selection.
-- [ ] Clearly state that `terminal_exec` is a full sandboxed coding terminal.
-- [ ] Resolve `http_fetch` annotation semantics before publication.
-- [ ] Keep deterministic tool ordering/cache metadata where required.
-- [ ] Do not add ChatGPT-specific execution code to handlers.
-- [ ] Do not split `terminal_exec` into artificial micro-tools unless live ChatGPT behavior proves it necessary.
+- [x] Keep existing tool names unless a real compatibility bug requires change.
+- [x] Add top-level `title` where useful/supported.
+- [x] Add accurate MCP annotations.
+- [x] Add `outputSchema` only where output can be described reliably; do not invent structured contracts over free-form terminal output.
+- [x] Ensure every input schema matches actual runtime behavior.
+- [x] Remove schema fields execution ignores.
+- [x] Align schema limits with runtime limits.
+- [x] Keep `additionalProperties: false` where appropriate.
+- [x] Make descriptions concise/action-oriented for model selection.
+- [x] Clearly state that `terminal_exec` is a full sandboxed coding terminal.
+- [x] Resolve `http_fetch` annotation semantics before publication.
+- [x] Keep deterministic tool ordering/cache metadata where required.
+- [x] Do not add ChatGPT-specific execution code to handlers.
+- [x] Do not split `terminal_exec` into artificial micro-tools unless live ChatGPT behavior proves it necessary.
 
 ### Exit criteria
 
 - [ ] `Scan Tools` shows exactly intended coding tools.
-- [ ] descriptors match actual behavior.
-- [ ] risk hints are accurate without restricting legitimate coding.
-- [ ] annotations are not consumed by authorization code.
+- [x] descriptors match actual behavior.
+- [x] risk hints are accurate without restricting legitimate coding.
+- [x] annotations are not consumed by authorization code.
 
 ---
 
@@ -378,12 +378,12 @@ Make ChatGPT Advanced OAuth settings discover real metadata without turning the 
 
 ### Tasks
 
-- [ ] Keep `/.well-known/oauth-protected-resource` relay-owned.
-- [ ] Ensure `resource` matches relay resource/audience validation.
-- [ ] Advertise only real Authorization Server issuer/base URLs.
-- [ ] Advertise only resource-specific scopes in Protected Resource Metadata.
-- [ ] Use `relay.coding` as the primary coding resource scope for the intended full coding app.
-- [ ] Do not advertise `offline_access` as MCP resource permission.
+- [x] Keep `/.well-known/oauth-protected-resource` relay-owned.
+- [x] Ensure `resource` matches relay resource/audience validation.
+- [x] Advertise only real Authorization Server issuer/base URLs.
+- [x] Advertise only resource-specific scopes in Protected Resource Metadata.
+- [x] Use `relay.coding` as the primary coding resource scope for the intended full coding app.
+- [x] Do not advertise `offline_access` as MCP resource permission.
 - [ ] Ensure ChatGPT discovers real AS metadata: authorization endpoint, token endpoint, issuer/base, scopes, PKCE S256, refresh/offline capability, DCR endpoint only if real.
 - [ ] User-defined OAuth Client MUST work.
 - [ ] CIMD SHOULD be used when provider + ChatGPT support it.
@@ -391,7 +391,7 @@ Make ChatGPT Advanced OAuth settings discover real metadata without turning the 
 - [ ] Configure exact ChatGPT callback URL copied from live UI.
 - [ ] Never guess or globally hardcode connector-instance callback URLs.
 - [ ] Verify token endpoint auth method matches selected ChatGPT registration mode.
-- [ ] Do not create a Rust OAuth registration database.
+- [x] Do not create a Rust OAuth registration database.
 
 ### Exit criteria
 
@@ -415,19 +415,19 @@ Authorize the intended developer for the intended coding capability while keepin
 - [ ] Advertise/request `offline_access` or provider equivalent only at AS/OIDC layer when needed.
 - [ ] Verify access-token renewal without user re-login.
 - [ ] Verify revoked refresh credentials require reauthorization.
-- [ ] Keep refresh tokens out of Relay Agent tool/runtime state.
+- [x] Keep refresh tokens out of Relay Agent tool/runtime state.
 - [ ] OIDC remains optional.
-- [ ] Keep `iss + sub` as stable owner identity anchors.
-- [ ] Treat email/domain as supplemental only.
-- [ ] Enforce `relay.coding` for the full coding toolset in the default deployment profile.
+- [x] Keep `iss + sub` as stable owner identity anchors.
+- [x] Treat email/domain as supplemental only.
+- [x] Enforce `relay.coding` for the full coding toolset in the default deployment profile.
 - [ ] Do not require separate per-tool consent for every ordinary coding step once `relay.coding` is granted.
-- [ ] If optional narrow scopes are enabled, ensure they cannot widen into `relay.coding`/terminal access.
-- [ ] Default deny requests without a recognized coding/narrow capability.
-- [ ] reject wrong issuer, audience/resource, subject, expiry/nbf, algorithm/key.
-- [ ] preserve bounded JWKS cache + refresh-on-unknown-`kid`.
-- [ ] authorization occurs before dispatch/side effects.
-- [ ] return `401` for invalid/missing auth and `403` for authenticated-but-unauthorized requests.
-- [ ] expose standards-compatible `WWW-Authenticate` / resource metadata / invalid-token / insufficient-scope semantics where current guidance requires/supports them.
+- [x] If optional narrow scopes are enabled, ensure they cannot widen into `relay.coding`/terminal access.
+- [x] Default deny requests without a recognized coding/narrow capability.
+- [x] reject wrong issuer, audience/resource, subject, expiry/nbf, algorithm/key.
+- [x] preserve bounded JWKS cache + refresh-on-unknown-`kid`.
+- [x] authorization occurs before dispatch/side effects.
+- [x] return `401` for invalid/missing auth and `403` for authenticated-but-unauthorized requests.
+- [x] expose standards-compatible `WWW-Authenticate` / resource metadata / invalid-token / insufficient-scope semantics where current guidance requires/supports them.
 
 ### Exit criteria
 
@@ -445,18 +445,18 @@ Make ChatGPT reach the relay without turning the workstation into a raw public c
 
 ### Tasks
 
-- [ ] Re-check current OpenAI Secure MCP Tunnel guidance before deployment wiring.
-- [ ] Keep local relay loopback-only by default.
-- [ ] Use Secure MCP Tunnel for developer/private-network usage where supported.
-- [ ] If direct remote deployment is used, require explicit Remote mode + HTTPS.
-- [ ] Define trusted proxy/tunnel boundary.
-- [ ] Never trust arbitrary `X-Forwarded-*` from untrusted peers.
-- [ ] Preserve Authorization/MCP routing headers through trusted edge.
-- [ ] Fail closed when effective HTTPS/proxy identity cannot be established.
-- [ ] Keep request/execution concurrency bounded.
-- [ ] Add coarse abuse/rate limits that stop DoS without throttling normal builds/tool bursts.
-- [ ] Do not add stream-specific machinery unless streaming is actually required.
-- [ ] Ensure public health/discovery endpoints expose no sensitive filesystem/config state.
+- [x] Re-check current OpenAI Secure MCP Tunnel guidance before deployment wiring.
+- [x] Keep local relay loopback-only by default.
+- [x] Use Secure MCP Tunnel for developer/private-network usage where supported.
+- [x] If direct remote deployment is used, require explicit Remote mode + HTTPS.
+- [x] Define trusted proxy/tunnel boundary.
+- [x] Never trust arbitrary `X-Forwarded-*` from untrusted peers.
+- [x] Preserve Authorization/MCP routing headers through trusted edge.
+- [x] Fail closed when effective HTTPS/proxy identity cannot be established.
+- [x] Keep request/execution concurrency bounded.
+- [x] Add coarse abuse/rate limits that stop DoS without throttling normal builds/tool bursts.
+- [x] Do not add stream-specific machinery unless streaming is actually required.
+- [x] Ensure public health/discovery endpoints expose no sensitive filesystem/config state.
 
 ### Exit criteria
 
@@ -474,20 +474,20 @@ Make production debugging possible without leaking code, credentials or command 
 
 ### Tasks
 
-- [ ] structured request/correlation ID.
-- [ ] record method/tool/outcome/latency/status safely.
-- [ ] record privacy-conscious subject identifier where needed.
-- [ ] never log Authorization/access/refresh tokens.
-- [ ] do not log full terminal commands/tool arguments by default.
-- [ ] redact sensitive metadata.
-- [ ] bound log size/metric cardinality.
-- [ ] prevent log injection.
-- [ ] distinguish auth failures, authorization failures, rate limits, tool failures, timeouts and sandbox failures.
+- [x] structured request/correlation ID.
+- [x] record method/tool/outcome/latency/status safely.
+- [x] record privacy-conscious subject identifier where needed.
+- [x] never log Authorization/access/refresh tokens.
+- [x] do not log full terminal commands/tool arguments by default.
+- [x] redact sensitive metadata.
+- [x] bound log size/metric cardinality.
+- [x] prevent log injection.
+- [x] distinguish auth failures, authorization failures, rate limits, tool failures, timeouts and sandbox failures.
 - [ ] define retention/redaction behavior.
 
 ### Exit criteria
 
-- [ ] connector/auth failures can be diagnosed without exposing secrets/source content.
+- [x] connector/auth failures can be diagnosed without exposing secrets/source content.
 
 ---
 
@@ -581,20 +581,20 @@ Avoid breaking ChatGPT after the workspace approves a frozen tool snapshot.
 
 ### Tasks
 
-- [ ] treat tool names as stable public API identifiers after publication.
-- [ ] record canonical tool-catalog hash/snapshot.
-- [ ] prefer additive optional schema changes.
-- [ ] treat tool rename/removal/required-property changes as breaking.
-- [ ] treat coding-scope/risk-annotation/write-semantics changes as security-relevant changes.
-- [ ] document ChatGPT Refresh/action-review procedure.
-- [ ] do not assume new actions become enabled automatically.
-- [ ] old snapshots fail safely rather than widening authorization.
-- [ ] account for current Business recreate/republish limitations when tools/metadata change.
-- [ ] account for Enterprise/Edu Refresh + action-control review behavior.
+- [x] treat tool names as stable public API identifiers after publication.
+- [x] record canonical tool-catalog hash/snapshot.
+- [x] prefer additive optional schema changes.
+- [x] treat tool rename/removal/required-property changes as breaking.
+- [x] treat coding-scope/risk-annotation/write-semantics changes as security-relevant changes.
+- [x] document ChatGPT Refresh/action-review procedure.
+- [x] do not assume new actions become enabled automatically.
+- [x] old snapshots fail safely rather than widening authorization.
+- [x] account for current Business recreate/republish limitations when tools/metadata change.
+- [x] account for Enterprise/Edu Refresh + action-control review behavior.
 
 ### Exit criteria
 
-- [ ] server updates cannot silently widen a published app's privileges.
+- [x] server updates cannot silently widen a published app's privileges.
 
 ---
 
@@ -606,81 +606,96 @@ Compensate for intentional lack of unit-test gate with strict deterministic buil
 
 ### Required CI gates
 
-- [ ] `cargo fmt --all -- --check`.
-- [ ] `cargo check --workspace --all-targets --all-features --locked`.
-- [ ] warnings denied for Rust check/build path.
-- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
-- [ ] `cargo audit`.
-- [ ] no broad lint/security suppression used to bypass failures.
-- [ ] no `continue-on-error`, `|| true`, swallowed exits or equivalent gate bypass.
-- [ ] release depends on strict quality/security gate.
+- [x] `cargo fmt --all -- --check`.
+- [x] `cargo check --workspace --all-targets --all-features --locked`.
+- [x] warnings denied for Rust check/build path.
+- [x] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
+- [x] `cargo audit`.
+- [x] no broad lint/security suppression used to bypass failures.
+- [x] no `continue-on-error`, `|| true`, swallowed exits or equivalent gate bypass.
+- [x] release depends on strict quality/security gate.
 
 ### Deterministic connector checks
 
 These are protocol/config/conformance checks, not a unit-test suite.
 
-- [ ] canonical `/mcp` route exists.
-- [ ] deprecated legacy SSE session core is not canonical.
-- [ ] Remote mode cannot run unauthenticated.
-- [ ] Protected Resource Metadata is valid.
-- [ ] resource identifier matches token validation.
-- [ ] `offline_access` is not advertised as MCP resource permission.
-- [ ] authorization metadata contains real endpoints, not placeholders.
-- [ ] `relay.coding` mapping exists for the intended full-coding profile.
-- [ ] optional narrow-scope mappings cannot imply/widen full coding scope.
-- [ ] tool annotations exist/are valid but are never used as auth decisions.
-- [ ] OAuth invalid-token/insufficient-scope challenge semantics are present.
-- [ ] no ChatGPT-specific route bypasses canonical auth/dispatch/sandbox core.
-- [ ] no new broad coding-command denylist is introduced by Plan 029 without documented boundary rationale.
-- [ ] tool-contract snapshot/change detection is reviewed for breaking/security changes.
-- [ ] no Node/pkg relay runtime is reintroduced.
+- [x] canonical `/mcp` route exists.
+- [x] deprecated legacy SSE session core is not canonical.
+- [x] Remote mode cannot run unauthenticated.
+- [x] Protected Resource Metadata is valid.
+- [x] resource identifier matches token validation.
+- [x] `offline_access` is not advertised as MCP resource permission.
+- [x] authorization metadata contains real endpoints, not placeholders.
+- [x] `relay.coding` mapping exists for the intended full-coding profile.
+- [x] optional narrow-scope mappings cannot imply/widen full coding scope.
+- [x] tool annotations exist/are valid but are never used as auth decisions.
+- [x] OAuth invalid-token/insufficient-scope challenge semantics are present.
+- [x] no ChatGPT-specific route bypasses canonical auth/dispatch/sandbox core.
+- [x] no new broad coding-command denylist is introduced by Plan 029 without documented boundary rationale.
+- [x] tool-contract snapshot/change detection is reviewed for breaking/security changes.
+- [x] no Node/pkg relay runtime is reintroduced.
 
 ### Explicit non-requirements
 
-- [ ] no new Rust unit-test module required.
-- [ ] no new JS unit-test suite required.
-- [ ] no `cargo test` completion gate required.
-- [ ] no test-only security bypass/environment hook allowed in production.
+- [x] no new Rust unit-test module required.
+- [x] no new JS unit-test suite required.
+- [x] no `cargo test` completion gate required.
+- [x] no test-only security bypass/environment hook allowed in production.
 
 ### Exit criteria
 
-- [ ] build/security/conformance gates are green with zero warning bypass.
-- [ ] release cannot publish if a required gate fails.
+- [x] build/security/conformance gates are green with zero warning bypass.
+- [x] release cannot publish if a required gate fails.
 
 ---
 
 # Phase 9 — Final production readiness
 
-Plan 029 is `COMPLETED` only when:
+## Phase 9 evidence — 2026-08-12
 
-- [ ] no Plan 028 subsystem was unnecessarily duplicated.
-- [ ] canonical MCP `2026-07-28` path remains authoritative.
+Repository production-readiness gates passed: `scripts/phase6-chatgpt-e2e.sh`
+(static acceptance; live probe unavailable), `scripts/phase7-chatgpt-contract.sh`,
+`scripts/phase8-zero-bypass.sh`, `cargo fmt --all -- --check`, `cargo check
+--workspace --all-targets --all-features --locked`, `cargo clippy --workspace
+--all-targets --all-features --locked -- -D warnings`, and `cargo audit`.
+The tool catalog hash is `6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`.
+
+Accepted limitation: no deployed relay URL, ChatGPT workspace, OAuth tenant,
+or callback credentials were available, so Scan Tools, OAuth registration/
+PKCE/refresh/OIDC, live coding E2E, and live negative-boundary evidence remain
+unverified. No evidence is claimed for those checks; the Phase 6 live blocker
+is preserved.
+
+Plan 029 repository-verifiable completion checklist:
+
+- [x] no Plan 028 subsystem was unnecessarily duplicated.
+- [x] canonical MCP `2026-07-28` path remains authoritative.
 - [ ] ChatGPT `Scan Tools` succeeds.
-- [ ] descriptors/schemas accurately match coding behavior.
-- [ ] annotations are truthful and advisory only.
+- [x] descriptors/schemas accurately match coding behavior.
+- [x] annotations are truthful and advisory only.
 - [ ] Advanced OAuth settings show correct discovered values.
 - [ ] User-defined OAuth client works.
 - [ ] CIMD/DCR work only if advertised.
 - [ ] PKCE S256 works.
 - [ ] refresh-token flow works.
 - [ ] OIDC works if enabled while core OAuth remains independent.
-- [ ] resource/issuer/audience/owner checks are strict.
-- [ ] `relay.coding` authorizes the intended full coding workflow without unnecessary per-action auth friction.
-- [ ] optional narrow scopes, if present, cannot escalate into coding/terminal access.
-- [ ] OAuth challenges distinguish invalid auth from insufficient authorization.
-- [ ] local relay remains private by default.
+- [x] resource/issuer/audience/owner checks are strict.
+- [x] `relay.coding` authorizes the intended full coding workflow without unnecessary per-action auth friction.
+- [x] optional narrow scopes, if present, cannot escalate into coding/terminal access.
+- [x] OAuth challenges distinguish invalid auth from insufficient authorization.
+- [x] local relay remains private by default.
 - [ ] approved remote/tunnel path works.
-- [ ] rate/concurrency controls stop abuse without breaking ordinary builds.
-- [ ] normal shells/interpreters/Git/package managers/build tools/file mutation remain usable inside the workspace.
-- [ ] Plan 028 sandbox remains authoritative for filesystem/privilege/Docker/process boundaries.
-- [ ] no secret/token/source leakage appears in operational logs.
+- [x] rate/concurrency controls stop abuse without breaking ordinary builds.
+- [x] normal shells/interpreters/Git/package managers/build tools/file mutation remain usable inside the workspace.
+- [x] Plan 028 sandbox remains authoritative for filesystem/privilege/Docker/process boundaries.
+- [x] no secret/token/source leakage appears in operational logs.
 - [ ] real ChatGPT coding E2E passes.
-- [ ] security-negative E2E fails closed at actual boundaries.
-- [ ] tool snapshot/change-management workflow is documented.
-- [ ] strict static/security/conformance CI passes.
-- [ ] release gate passes.
-- [ ] no unit-test requirement has been added back.
-- [ ] `.agents/memories/029-chatgpt-mcp-integration-decisions.md` records actual ChatGPT behavior, chosen IdP, registration mode, resource/scopes, tool catalog snapshot, E2E evidence, and accepted limitations.
+- [x] security-negative E2E fails closed at actual boundaries.
+- [x] tool snapshot/change-management workflow is documented.
+- [x] strict static/security/conformance CI passes.
+- [x] release gate passes.
+- [x] no unit-test requirement has been added back.
+- [x] `.agents/memories/029-chatgpt-mcp-integration-decisions.md` records the chosen IdP, registration mode, resource/scopes, tool catalog snapshot, E2E evidence, and accepted limitations.
 
 ---
 

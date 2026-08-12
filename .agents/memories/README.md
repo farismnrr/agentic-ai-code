@@ -33,3 +33,5 @@ One Markdown file per fact, kebab-case, starting with a one-line summary. Don't 
 - [playwright-testing-real-dev-db.md](playwright-testing-real-dev-db.md) — automated Playwright verification hits the real shared dev DB, not an isolated one; 5 real conversations were lost this way once
 - [019-search-forced-tool-choice-unreliable.md](019-search-forced-tool-choice-unreliable.md) — `ChatOpenAI.withConfig({ tool_choice })` doesn't survive `createAgent()` in the installed langchain versions; `@search` calls the tool directly instead
 - [chat-client-errors-were-silent.md](chat-client-errors-were-silent.md) — `useConversationChat`'s `onError` only logged to console; provider failures looked like an unresponsive chat, now toasted with a parsed-friendly message
+- [029-chatgpt-mcp-integration-decisions.md](029-chatgpt-mcp-integration-decisions.md) — Plan 029 freezes the ChatGPT MCP target around stateless `POST /mcp`, Auth0-backed OAuth, and `relay.coding`
+- [029b-trusted-proxy-boundary.md](029b-trusted-proxy-boundary.md) — Remote relay proxy trust is explicit and loopback-scoped
