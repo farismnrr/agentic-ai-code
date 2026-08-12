@@ -9,19 +9,7 @@ Vue component library built on [Reka UI](https://reka-ui.com/) + [Tailwind CSS](
 
 ## MCP Server
 
-For component API details (props, slots, events, full documentation, examples), use the [Nuxt UI MCP server](https://ui.nuxt.com/docs/getting-started/ai/mcp). If not already configured, add it:
-
-**Cursor** — `.cursor/mcp.json`:
-
-```json
-{ "mcpServers": { "nuxt-ui": { "type": "http", "url": "https://ui.nuxt.com/mcp" } } }
-```
-
-**external MCP client Code**:
-
-```bash
-external-mcp mcp add --transport http nuxt-ui https://ui.nuxt.com/mcp
-```
+For component API details (props, slots, events, full documentation, examples), use the [Nuxt UI MCP server](https://ui.nuxt.com/docs/getting-started/ai/mcp). This repository already declares the project-scoped server in `.mcp.json`; use the MCP configuration mechanism supported by your agent client rather than adding repository-owned client-specific settings.
 
 Key MCP tools:
 - `search_components` — find components by name, description, or category (no params = list all)
