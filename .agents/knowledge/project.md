@@ -60,7 +60,7 @@ Do not assume a directory is disposable from its name. Check its contents and ex
 | Local production-like verification | `pnpm build && pnpm preview` |
 | Dev server (use intentionally) | `pnpm dev` |
 | Lint | `pnpm lint` |
-| Nuxt typecheck | `pnpm typecheck` |
+| Nuxt/Vue type gate | `pnpm typecheck` |
 | Dependency audit | `pnpm audit` |
 | Generate DB migration | `pnpm db:generate` |
 | Apply DB migrations | `pnpm db:migrate` |
@@ -78,14 +78,9 @@ pnpm typecheck
 pnpm audit
 ```
 
-**Known typecheck caveat:** `pnpm typecheck` / `nuxt typecheck` has previously returned success for code that did not compile. For changes where Vue/Nuxt type correctness matters, also use the explicit generated-project gate after a build:
+`pnpm typecheck` is intentionally a generated-project gate: it builds Nuxt against `.env.example`, then runs `vue-tsc -p .nuxt/tsconfig.json --noEmit`. Do not replace it with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
 
-```sh
-pnpm build
-pnpm exec vue-tsc -p .nuxt/tsconfig.json --noEmit
-```
-
-See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+Use `pnpm build` separately when runtime bundling/SSR output itself needs verification beyond the type gate. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
 
 ### Run the built app for local verification
 
