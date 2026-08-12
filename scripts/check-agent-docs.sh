@@ -20,17 +20,18 @@ for path in CLAUDE.md GEMINI.md .claude .gemini; do
   fi
 done
 
-# Vendor-specific lifecycle/discovery wording is also forbidden in shared agent
-# guidance. Product-level model/provider support (for example Anthropic-compatible
-# inference) is intentionally outside this check.
+# Shared guidance and package skills must stay client/vendor neutral. Product
+# runtime/provider support is intentionally outside this scan; an
+# Anthropic-compatible inference adapter is a product capability, not repo agent
+# guidance.
 if grep -RInE \
   --exclude='check-agent-docs.sh' \
   --exclude-dir='.git' \
   --exclude-dir='node_modules' \
   --exclude-dir='.nuxt' \
   --exclude-dir='.output' \
-  '(Claude Code|CLAUDE\.md|\.claude/|GEMINI\.md|\.gemini/|Gemini/Antigravity)' \
-  AGENTS.md .agents packages app 2>/dev/null; then
+  '([Cc]laude|CLAUDE\.md|\.claude/|GEMINI\.md|\.gemini/|Gemini/Antigravity)' \
+  AGENTS.md .agents packages/*/SKILL.md 2>/dev/null; then
   fail 'vendor-specific agent guidance/reference found; use general agent wording instead'
 fi
 
