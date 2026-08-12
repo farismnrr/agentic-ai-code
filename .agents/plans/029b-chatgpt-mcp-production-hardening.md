@@ -284,19 +284,19 @@ Close small observability/conformance gaps without redesigning logging.
 
 ## Tasks
 
-- [ ] Store/read correlation ID from one canonical request extension/helper.
-- [ ] Valid client-provided correlation ID is reused.
-- [ ] Otherwise generated UUID is used.
-- [ ] Audit log and response header always share the same correlation ID.
-- [ ] Keep subject privacy-preserving; never log raw token/command/source args by default.
-- [ ] Add reusable response `_meta` helper for `io.modelcontextprotocol/serverInfo` if current MCP `2026-07-28` spec/client guidance recommends it across responses.
-- [ ] Avoid duplicate per-handler serialization logic.
+- [x] Store/read correlation ID from one canonical request extension/helper.
+- [x] Valid client-provided correlation ID is reused.
+- [x] Otherwise generated UUID is used.
+- [x] Audit log and response header always share the same correlation ID.
+- [x] Keep subject privacy-preserving; never log raw token/command/source args by default.
+- [x] Add reusable response `_meta` helper for `io.modelcontextprotocol/serverInfo` if current MCP `2026-07-28` spec/client guidance recommends it across responses.
+- [x] Avoid duplicate per-handler serialization logic.
 
 ## Acceptance
 
-- [ ] no client correlation header -> generated ID matches audit + response.
-- [ ] supplied valid ID -> same ID in audit + response.
-- [ ] no raw bearer token/command/source content in audit output.
+- [x] no client correlation header -> generated ID matches audit + response.
+- [x] supplied valid ID -> same ID in audit + response.
+- [x] no raw bearer token/command/source content in audit output.
 
 ---
 

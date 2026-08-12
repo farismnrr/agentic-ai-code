@@ -109,6 +109,10 @@ fn privacy_id(value: Option<&str>) -> &'static str {
 struct CorrelationId(String);
 
 impl CorrelationId {
+    fn from_request(req: &Request) -> Self {
+        Self::from_headers(req.headers())
+    }
+
     fn from_headers(headers: &HeaderMap) -> Self {
         let id = headers
             .get(HDR_CORRELATION_ID)
@@ -136,14 +140,13 @@ fn audit(
     started: Instant,
     subject: Option<&str>,
 ) {
-    let tool = tool.map(safe_log_field).unwrap_or_else(|| "-".into());
     eprintln!(
         "{}",
         json!({
             "event": "relay_request",
             "correlation_id": safe_log_field(correlation_id),
             "method": safe_log_field(method),
-            "tool": tool,
+            "tool": privacy_id(tool),
             "outcome": safe_log_field(outcome),
             "status": status.as_u16(),
             "latency_ms": started.elapsed().as_millis(),
@@ -316,7 +319,7 @@ async fn handle_health() -> StatusCode {
 }
 
 async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
-    let id = CorrelationId::from_headers(req.headers());
+    let id = CorrelationId::from_request(&req);
     req.extensions_mut().insert(id.clone());
     let mut response = next.run(req).await;
     if let Ok(value) = id.as_str().parse() {
