@@ -31,46 +31,61 @@ The Rust `relay-agent` has its own CLI/environment contract under [`../../packag
 
 - Use **pnpm**; the exact pnpm version is pinned in root `package.json`.
 - The native workspace is under `packages/rust-tools/`.
-- Repository development/CI pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
+- Repository development pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
 - `pnpm build:tools` builds the native binaries used by the local tool/relay packages.
+- This repository intentionally has **no CI** and **no unit-test suite**.
 
 See [`project.md`](project.md) and [`../../packages/rust-tools/README.md`](../../packages/rust-tools/README.md) for current verification/release boundaries.
 
-## Linting
+## Mandatory local commit gate
 
-`@nuxt/eslint` runs in flat-config mode. `eslint.config.mjs` extends the generated `.nuxt/eslint.config.mjs`; project-level Nuxt ESLint options are configured from `nuxt.config.ts`, while targeted overrides can use the chainable `withNuxt()` API in `eslint.config.mjs`.
+`pnpm install` ends by running [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh). In a Git worktree it:
 
-Current conventions:
+1. makes [`.githooks/pre-commit`](../../.githooks/pre-commit) executable;
+2. configures local `core.hooksPath=.githooks`.
 
-- **Stylistic linting** owns JS/TS/Vue formatting. Do not add Prettier for those files unless the project deliberately changes formatting ownership.
-- **typescript-eslint strict rules** are enabled without type-aware linting. Nuxt 4's root `tsconfig.json` is references-oriented, so there is no single root program for type-aware ESLint to consume cleanly.
-- **Formatters** cover formats such as CSS/JSON/Markdown through the Nuxt ESLint setup.
-- **Checker integration** surfaces lint errors during development.
+The hook executes:
 
-Example targeted override:
-
-```js
-export default withNuxt()
-  .override('nuxt/vue/rules', {
-    rules: {
-      'vue/multi-word-component-names': 'off'
-    }
-  })
+```sh
+pnpm verify:commit
 ```
 
-Config names are discoverable through the generated Nuxt ESLint configuration/inspector; verify against the installed version instead of copying names from an old plan.
+That command runs agent-doc/index integrity, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass the repository gate.
+
+If a clone/worktree does not have the hook active, run:
+
+```sh
+bash scripts/install-git-hooks.sh
+```
+
+## Linting
+
+`pnpm lint` is the repository-wide linter gate. It runs:
+
+```sh
+eslint .
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+```
+
+`pnpm lint:fix` applies ESLint fixes and Rust formatting. Clippy findings still require deliberate code fixes.
+
+`@nuxt/eslint` runs in flat-config mode. `eslint.config.mjs` extends the generated `.nuxt/eslint.config.mjs`; project-level Nuxt ESLint options are configured from `nuxt.config.ts`.
 
 ## Type-checking
 
-The root `pnpm typecheck` script intentionally avoids the historically silent bare `nuxt typecheck` wrapper. It uses Nuxt's CI-oriented `prepare` command to generate the `.nuxt` type project against `.env.example`, then runs Vue TypeScript directly:
+`pnpm typecheck` is the repository-wide type/compile gate. It intentionally avoids the historically silent bare `nuxt typecheck` wrapper and runs:
 
 ```sh
-pnpm typecheck
-# equivalent to:
 nuxt prepare --dotenv .env.example
 vue-tsc -p .nuxt/tsconfig.json --noEmit
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 ```
 
-`nuxt prepare` is the supported Nuxt command for generating `.nuxt` and its types without starting a production bundle. Keep `pnpm build` as a separate bundling/SSR verification gate when the change affects runtime output.
+`nuxt prepare` generates the `.nuxt` type project without starting a production bundle. Keep `pnpm build` as a separate bundling/SSR verification step when runtime output matters.
 
-Do not simplify the type gate back to plain `nuxt typecheck`: this repository previously observed that command exit successfully while real generated-project errors remained. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+Do not simplify the type gate back to plain `nuxt typecheck`: this repository previously observed that command exit successfully while real generated-project errors remained. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md), [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md), and [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
+
+## Dependency/security verification
+
+`pnpm audit` is not run by the pre-commit hook because it depends on registry/network state. It remains mandatory for dependency changes before merge. Security-sensitive Rust changes may additionally require `cargo audit` and the relevant deterministic acceptance/security scripts under `scripts/`.
