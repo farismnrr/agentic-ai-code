@@ -1,64 +1,95 @@
-# Nuxt Starter Template
+# AI Code
 
-[![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
+AI Code is a workspace-scoped AI coding application built with Nuxt 4. It combines an authenticated web chat, configurable model providers, MCP integrations, project workspaces, and native Rust execution tools behind a local/remote relay boundary.
 
-Use this template to get started with [Nuxt UI](https://ui.nuxt.com) quickly.
+This repository is no longer the stock Nuxt UI starter. The authoritative agent-facing project notes live in [`.agents/`](.agents/README.md).
 
-- [Live demo](https://starter-template.nuxt.dev/)
-- [Documentation](https://ui.nuxt.com/docs/getting-started/installation/nuxt)
+## Stack
 
-<a href="https://starter-template.nuxt.dev/" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://ui.nuxt.com/assets/templates/nuxt/starter-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://ui.nuxt.com/assets/templates/nuxt/starter-light.png">
-    <img alt="Nuxt Starter Template" src="https://ui.nuxt.com/assets/templates/nuxt/starter-light.png" width="830" height="466">
-  </picture>
-</a>
+- **Web:** Nuxt 4, Vue, Nuxt UI 4, Tailwind CSS 4
+- **AI:** AI SDK 7, LangChain, Anthropic/OpenAI-compatible/Vertex providers
+- **Data/Auth:** PostgreSQL, Drizzle ORM, `nuxt-auth-utils`
+- **MCP:** Model Context Protocol SDK plus the native `relay-agent`
+- **Native tools:** Rust binaries for terminal execution, HTTP requests, SearXNG search, and the relay agent
+- **Package manager:** pnpm
 
-> The starter template for Vue is on https://github.com/nuxt-ui-templates/starter-vue.
+See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for the current implementation/toolchain details.
 
-## Quick Start
+## Repository layout
 
-```bash [Terminal]
-npm create nuxt@latest -- -t ui
+```text
+app/                    Nuxt UI, pages, components, composables, plugins
+server/                 Nitro API routes, auth, chat, MCP, persistence, telemetry
+shared/                 Types and schemas shared across client/server
+packages/
+  terminal-tool/        AI SDK-facing terminal tool package
+  curl-tool/            AI SDK-facing HTTP tool package
+  searxng-search-tool/  AI SDK-facing search tool package
+  relay-agent/          Relay package/release surface
+  rust-tools/           Native implementations for all four binaries
+scripts/                Deterministic MCP/security/release acceptance scripts
+.agents/                Agent knowledge, skills, plans, memories, and hook docs
 ```
-
-## Deploy your own
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-name=starter&repository-url=https%3A%2F%2Fgithub.com%2Fnuxt-ui-templates%2Fstarter&demo-image=https%3A%2F%2Fui.nuxt.com%2Fassets%2Ftemplates%2Fnuxt%2Fstarter-dark.png&demo-url=https%3A%2F%2Fstarter-template.nuxt.dev%2F&demo-title=Nuxt%20Starter%20Template&demo-description=A%20minimal%20template%20to%20get%20started%20with%20Nuxt%20UI.)
 
 ## Setup
 
-Make sure to install the dependencies:
+Requirements:
+
+- Node.js 22+
+- pnpm 11 (the exact version is pinned by `packageManager`)
+- Rust 1.95.0 for native tool builds
+- PostgreSQL for application persistence
+- Linux + Bubblewrap for the production `relay-agent` sandbox/release target
+
+Install dependencies and prepare generated Nuxt/native artifacts:
 
 ```bash
 pnpm install
 ```
 
-## Development Server
+Copy `.env.example` to `.env` and fill the values required by the feature you are running. Runtime configuration is documented in [`.agents/knowledge/tooling.md`](.agents/knowledge/tooling.md); `.env.example` is the source of truth for available environment keys.
 
-Start the development server on `http://localhost:3000`:
+## Common commands
+
+| Task | Command |
+| --- | --- |
+| Production build | `pnpm build` |
+| Build native Rust tools | `pnpm build:tools` |
+| Preview production build | `pnpm preview` |
+| Dev server | `pnpm dev` |
+| Lint | `pnpm lint` |
+| Type check | `pnpm typecheck` |
+| Dependency audit | `pnpm audit` |
+| Generate DB migration | `pnpm db:generate` |
+| Apply DB migrations | `pnpm db:migrate` |
+
+For local verification, prefer a clean `pnpm build` followed by `pnpm preview`; the repo has known dev-watcher and typecheck caveats documented under [`.agents/memories/`](.agents/memories/README.md).
+
+## Native tool verification
+
+The Rust workspace is under `packages/rust-tools/` and pins Rust 1.95.0. CI currently enforces:
 
 ```bash
-pnpm dev
+cd packages/rust-tools
+cargo fmt --all -- --check
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo audit
 ```
 
-## Production
+The release contract for `relay-agent` is Linux + Bubblewrap; do not infer macOS/Windows relay support from the sibling CLI binaries.
 
-Build the application for production:
+## Agent workflow
 
-```bash
-pnpm build
-```
+Agent guidance is centralized so external MCP client Code, Gemini/Antigravity, and other agents do not maintain separate copies:
 
-Locally preview production build:
+- [`AGENTS.md`](AGENTS.md) — generic entrypoint
+- [`EXTERNAL MCP CLIENT.md`](EXTERNAL MCP CLIENT.md) — external MCP client Code entrypoint
+- [`GEMINI.md`](GEMINI.md) — Gemini/Antigravity entrypoint
+- [`.agents/README.md`](.agents/README.md) — authoritative index and closeout rules
 
-```bash
-pnpm preview
-```
+Implementation plans are stored in [`.agents/plans/`](.agents/plans/README.md); durable decisions and traps are indexed in [`.agents/memories/`](.agents/memories/README.md).
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+## Branching
 
-## Renovate integration
-
-Install [Renovate GitHub app](https://github.com/apps/renovate/installations/select_target) on your repository and you are good to go.
+Do not commit directly to `main` or `dev`. Work branches target `dev`; promotion from `dev` to `main` only happens when explicitly requested. See [`.agents/knowledge/git.md`](.agents/knowledge/git.md).
