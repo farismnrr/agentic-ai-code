@@ -51,7 +51,9 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::admission::RequestAdmission;
 use super::auth;
-use super::auth::{bearer_challenge_value, oauth_error_response};
+use super::auth::{
+    bearer_challenge_value, oauth_error_response, validate_claims, ClaimValidationError, Claims,
+};
 use super::config::ServerConfig;
 use super::error::McpError;
 use super::mcp::{
@@ -109,17 +111,6 @@ pub struct AppState {
     /// server. Never accept authorization-server URLs or PKCE parameters from
     /// MCP tool arguments.
     pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-pub struct Claims {
-    pub iss: Option<String>,
-    pub sub: Option<String>,
-    pub client_id: Option<String>,
-    pub scope: Option<String>,
-    pub exp: Option<u64>,
-    pub iat: Option<u64>,
-    pub nbf: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -593,38 +584,38 @@ async fn access_policy(
         auth_ctx.claims = Some(token_data.claims);
 
         let claims = auth_ctx.claims.as_ref().expect("claims were just stored");
-        if claims.sub.as_deref() != state.config.oauth_owner_subject.as_deref() {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse::new(
-                    None,
-                    &McpError::InvalidRequest("Authenticated subject is not authorized".into()),
-                )),
-            )
-                .into_response();
-        }
-
-        let has_coding_scope = claims
-            .scope
-            .as_deref()
-            .unwrap_or_default()
-            .split_whitespace()
-            .any(|scope| scope == CODING_SCOPE);
-        if !has_coding_scope {
-            if is_tools_call {
-                auth_ctx.decision = AuthDecision::InsufficientScope;
-                req.extensions_mut().insert(auth_ctx);
-                return next.run(req).await;
+        match validate_claims(
+            claims,
+            state.config.oauth_owner_subject.as_deref(),
+            CODING_SCOPE,
+        ) {
+            Ok(()) => {}
+            Err(ClaimValidationError::UnauthorizedSubject) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse::new(
+                        None,
+                        &McpError::InvalidRequest("Authenticated subject is not authorized".into()),
+                    )),
+                )
+                    .into_response();
             }
+            Err(ClaimValidationError::InsufficientScope) => {
+                if is_tools_call {
+                    auth_ctx.decision = AuthDecision::InsufficientScope;
+                    req.extensions_mut().insert(auth_ctx);
+                    return next.run(req).await;
+                }
 
-            return oauth_error_response(
-                StatusCode::FORBIDDEN,
-                None,
-                &state.config,
-                Some("insufficient_scope"),
-                Some(CODING_SCOPE),
-                &McpError::InvalidRequest("Insufficient scope".into()),
-            );
+                return oauth_error_response(
+                    StatusCode::FORBIDDEN,
+                    None,
+                    &state.config,
+                    Some("insufficient_scope"),
+                    Some(CODING_SCOPE),
+                    &McpError::InvalidRequest("Insufficient scope".into()),
+                );
+            }
         }
     } else {
         if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
