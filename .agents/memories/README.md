@@ -56,6 +56,7 @@ New filenames use kebab-case. One historical Plan 028 file predates that convent
 - [027-rust-release-supply-chain.md](027-rust-release-supply-chain.md) — native artifact/release supply-chain decisions and rollback posture.
 - [027-supply-chain-policy.md](027-supply-chain-policy.md) — concise dependency/supply-chain policy from the migration.
 - [027-performance-benchmark.md](027-performance-benchmark.md) — recorded JS→Rust performance evidence.
+- [027-zero-js-cli-cutover.md](027-zero-js-cli-cutover.md) — hard cutover invariant: Rust owns the executable CLI layer; no permanent JavaScript CLI fallback or npm bin mapping.
 - [027-final-closeout.md](027-final-closeout.md) — Plan 027 completion summary and final invariants.
 
 ## Plan 028 — relay-agent Rust rewrite
