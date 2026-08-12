@@ -774,7 +774,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 > centralized in `auth.rs`; fetch, cache, token validation, and request flow
 > remain in `transport.rs`.
 
-- [ ] Keep router construction and HTTP middleware composition in transport ownership.
+- [x] Keep router construction and HTTP middleware composition in transport ownership.
 - [x] Extract correlation/audit helpers into an observability-focused module.
 - [x] Extract request-admission token bucket into a focused admission module.
 - [x] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
@@ -784,12 +784,11 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [x] Micro-step 10F: JWKS cache TTL/URI/key lookup and missing-key single-refresh decision operations now live in `auth.rs`; lock ownership and refresh orchestration remain in `transport.rs`.
 - [x] Micro-step 10G: JWT signature/algorithm/issuer/audience/expiry/nbf validation now lives in `auth.rs`; HTTP/cache/lookup orchestration remains in `transport.rs`.
 - [x] Micro-step 10J: initial/stale and unknown-`kid` JWKS cache writes/refresh operations now use focused async helpers in `auth.rs`; transport retains auth gate/order and error mapping.
+- [x] Micro-step 10K: cache snapshot/URI reads and cached-`kid` lookup now use lock-owning async helpers in `auth.rs`; transport retains auth gate/order and refresh/error mapping.
 - [x] Extract trusted-proxy HTTPS decision with explicit security ownership (micro-step 10C: pure, tested policy helper; transport retains the same gate position and inputs).
-- [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
 - [x] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs` (Phase 10H complete; all call sites use `transport_validation.rs`).
-- [ ] Extract MCP route handler dispatch once dependencies are explicit.
-- [x] Micro-step 10I: MCP method dispatch is centralized in `dispatcher.rs`; transport retains validation, handler internals, execution, and error mapping.
-- [ ] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
+- [x] Extract MCP route handler dispatch once dependencies are explicit (Phase 10I complete; all method selection uses `dispatcher.rs`).
+- [x] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
 
 ### Security ordering that must remain true
 
