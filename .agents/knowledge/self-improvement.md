@@ -10,7 +10,7 @@
 4. Update [`../plans/README.md`](../plans/README.md) when a plan starts, completes, becomes blocked, or changes status.
 5. Remove or amend guidance that became false because of the task.
 6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing a memory just to satisfy the process.
-7. Run `bash scripts/check-agent-docs.sh` before finish.
+7. Run `pnpm verify:commit` and do not finish with a failing local gate.
 
 A task is not documentation-complete when its implementation and `.agents/` tell different stories.
 
@@ -49,17 +49,19 @@ Durable docs may summarize implementation facts when they are needed to orient f
 
 The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-[`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) is the vendor-neutral structural backstop. CI runs it on every pull request. It currently verifies that:
+The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
 
-- repository-owned vendor-specific agent entrypoints/settings are absent;
-- shared guidance does not reintroduce vendor-specific agent lifecycle/discovery instructions;
-- every Markdown memory is linked from `memories/README.md`;
-- every Markdown plan/sub-plan is linked from `plans/README.md`.
+- [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance and complete plan/memory indexes;
+- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs that integrity check plus `pnpm lint` and `pnpm typecheck`;
+- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
+- [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
 
-The script deliberately does **not** try to infer whether source code "deserves" a memory update. That decision is semantic and belongs to the closeout review above. CI proves structural integrity; the working agent is responsible for capturing durable knowledge when the task creates it.
+A failed gate means fix the issue before committing. `git commit --no-verify` and disabling the tracked hook are not acceptable shortcuts.
 
-If a future agent client offers its own local automation, keep it personal/untracked. Do not fork repository guidance or add a second repository-owned lifecycle path.
+The integrity script deliberately does **not** try to infer whether source code "deserves" a memory update. That decision is semantic and belongs to the closeout review above. The local hook proves only that configured structural/lint/type gates passed on that machine; the working agent is still responsible for capturing durable knowledge when the task creates it.
+
+If a future agent client offers its own local automation, keep it personal/untracked. Do not fork repository guidance or add a second repository-owned agent lifecycle path.
 
 ## Principle
 
-The self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful → run the shared integrity gate**.
+The self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful → pass the local commit gate without bypassing it**.
