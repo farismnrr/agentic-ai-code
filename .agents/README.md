@@ -1,38 +1,62 @@
 # .agents
 
-Everything an AI agent needs for this repo lives here. `CLAUDE.md` and `AGENTS.md` at the repo root are pointers to this folder and nothing more — don't grow them, grow this.
+Authoritative agent guidance for this repository lives here. Root `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` are entrypoints into this folder; keep repo-specific guidance centralized here instead of copying it into per-agent files.
 
 ## Read this first
 
-**This is a Nuxt 4 + Nuxt UI 4 project. Do things the idiomatic Nuxt way — dependencies, config, code, file placement — and prefer the framework's own mechanism over a generic JS/Vue solution, even when the generic one is shorter or more familiar.** The details are in [`knowledge/nuxt-way.md`](knowledge/nuxt-way.md); read it before writing code or adding a dependency.
+This is a **Nuxt 4 application plus a Rust native-tool workspace**. Use Nuxt-native mechanisms for web application work, and preserve the explicit Rust/MCP security boundaries for native execution work.
+
+Before changing anything, read the files relevant to the task:
+
+1. [`knowledge/project.md`](knowledge/project.md) — current stack, layout, and verification commands.
+2. [`knowledge/git.md`](knowledge/git.md) — branch/PR rules; never commit directly to `main` or `dev`.
+3. [`knowledge/nuxt-way.md`](knowledge/nuxt-way.md) — required approach for Nuxt/Vue work.
+4. [`knowledge/conventions.md`](knowledge/conventions.md) — project conventions.
+5. [`plans/README.md`](plans/README.md) — check whether the task belongs to an existing plan.
+6. [`memories/README.md`](memories/README.md) — check for durable decisions or known traps before repeating old mistakes.
 
 ## What's where
 
 | Folder | Contents | When to read it |
 | --- | --- | --- |
-| [`knowledge/`](knowledge/) | How this project works and the rules for changing it | Before any code change |
-| [`skills/`](skills/) | Installed agent skills (`nuxt`, `nuxt-ui`) | Before framework or UI work |
-| [`plans/`](plans/) | Implementation plans for in-flight work | When picking up a multi-step task |
-| [`memories/`](memories/) | Durable decisions and context that outlive a session | At session start; append when you learn something lasting |
-| [`hooks/`](hooks/) | Scripts wired into Claude Code via `.claude/settings.json` | Rarely — when changing the reminder behavior |
-
-**Before you finish a task, update this folder.** Read [`knowledge/self-improvement.md`](knowledge/self-improvement.md) for what belongs where. A `Stop` hook nudges you once per session if source changed and `.agents/` didn't.
+| [`knowledge/`](knowledge/) | Stable project rules and operating knowledge | Before changing the relevant subsystem |
+| [`skills/`](skills/) | Framework/UI/tool skills and package skill links | Before work covered by a skill |
+| [`plans/`](plans/) | Multi-step implementation plans and their status | Before continuing planned work |
+| [`memories/`](memories/) | Durable decisions, constraints, incidents, and traps | At task start and task closeout |
+| [`contracts/`](contracts/) | Frozen client-visible contracts used by acceptance gates | Before changing a published contract |
+| [`hooks/`](hooks/) | Claude Code reminder hooks | Only when investigating agent closeout automation |
 
 ### knowledge/
 
 | File | Covers |
 | --- | --- |
-| [`nuxt-way.md`](knowledge/nuxt-way.md) | **The working agreement.** Dependency install rules, Nuxt-native mechanism table |
-| [`self-improvement.md`](knowledge/self-improvement.md) | **Keeping this folder current.** What to record, where, and what not to record |
-| [`project.md`](knowledge/project.md) | Stack, versions, directory layout, commands |
-| [`conventions.md`](knowledge/conventions.md) | Coding rules — colors, icons, auto-imports, gotchas |
-| [`git.md`](knowledge/git.md) | **Branching, commits, PRs.** Never commit to `main`; never commit unasked |
-| [`tooling.md`](knowledge/tooling.md) | ESLint setup, environment variables, runtime config |
-| [`resources.md`](knowledge/resources.md) | Skills and the Nuxt UI MCP server — what each is for |
+| [`nuxt-way.md`](knowledge/nuxt-way.md) | Nuxt-native dependency/config/code placement rules |
+| [`self-improvement.md`](knowledge/self-improvement.md) | Mandatory agent closeout and durable-memory rules |
+| [`project.md`](knowledge/project.md) | Current stack, repository layout, commands, runtime surfaces |
+| [`conventions.md`](knowledge/conventions.md) | Coding and UI conventions |
+| [`git.md`](knowledge/git.md) | Branching, commits, PRs, and release boundaries |
+| [`tooling.md`](knowledge/tooling.md) | Environment/runtime config and lint tooling |
+| [`resources.md`](knowledge/resources.md) | Installed skills, MCP resources, and Agentation |
+
+## Agent closeout is mandatory
+
+**Every agent must perform the closeout review in [`knowledge/self-improvement.md`](knowledge/self-improvement.md) before declaring a task finished.** This is the mechanism that keeps plans, memories, and knowledge from drifting away from the repository.
+
+Do not rely on an automatic hook as proof that `.agents/` is current:
+
+- **Claude Code:** `.claude/settings.json` wires a `Stop` reminder to `.agents/hooks/check-agents-sync.sh`. It is a best-effort backstop, not the source of truth.
+- **Gemini/Antigravity:** `GEMINI.md` imports this index and the core knowledge files, but there is no equivalent repository Stop hook.
+- **Other agents:** `AGENTS.md` points here; closeout is instruction-driven unless the client supplies its own automation.
+
+The current hook's exact behavior and limitations are documented in [`knowledge/self-improvement.md`](knowledge/self-improvement.md). If the hook and this documentation disagree, treat the script as current behavior and fix the documentation or hook deliberately; never claim cross-agent automation that does not exist.
 
 ## Conventions for this folder
 
-- **Skills are the source of truth here.** `.claude/skills/*` are symlinks into `.agents/skills/*`, so Claude Code auto-discovers them while the real files stay in one place. Other agents can point at `.agents/skills/` directly.
-- `skills-lock.json` stays at the repo root — the `skills` CLI expects it there. Update with `npx skills update`.
-- Plans and memories are Markdown, one file per topic, named in kebab-case.
-- When you learn something durable — a decision, a constraint, a trap — write it to `memories/` rather than leaving it in the conversation.
+- `.agents/` is the source of truth for shared agent guidance.
+- `.claude/skills/*` are Claude-discovery symlinks; do not duplicate the underlying skill content there.
+- `skills-lock.json` remains at repo root because the `skills` CLI expects it there.
+- Plans and memories are Markdown, one topic per file.
+- New memory files must be added to [`memories/README.md`](memories/README.md) in the same change.
+- New plans or status changes must be reflected in [`plans/README.md`](plans/README.md).
+- Use kebab-case for new plan/memory filenames. Preserve oddly named historical files unless they can be renamed without breaking references.
+- Delete or amend durable guidance when it stops being true; stale memory is worse than missing memory.
