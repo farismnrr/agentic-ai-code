@@ -1,6 +1,6 @@
 # Plan 031 — Repository-wide Layered Refactor
 
-**Status: PLANNED / NOT STARTED**  
+**Status: PHASE 0 COMPLETE / IMPLEMENTATION IN PROGRESS**
 **Created: 2026-08-12**  
 **Baseline branch: `dev`**  
 **Baseline commit: `46b926ffd103b2ec50055eb11b6a824b13642b1e`**
@@ -344,12 +344,12 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Inventory current feature boundaries/import graph for app, server, shared, packages, and Rust relay.
-- [ ] Record public contracts that must not change: API response shapes, shared chat/provider/workspace types, MCP tool catalog, MCP protocol/version behavior, native CLI behavior, security ordering.
-- [ ] Build a duplication ledger grouped into **knowledge duplication**, **behavior duplication**, and **presentation-only duplication**.
-- [ ] Mark current hotspots by responsibilities/reasons-to-change, not only file size.
-- [ ] Define the first set of dependency-direction rules that can later be enforced by ESLint/module layout.
-- [ ] Confirm no pending product feature is being silently folded into the refactor.
+- [x] Inventory current feature boundaries/import graph for app, server, shared, packages, and Rust relay.
+- [x] Record public contracts that must not change: API response shapes, shared chat/provider/workspace types, MCP tool catalog, MCP protocol/version behavior, native CLI behavior, security ordering.
+- [x] Build a duplication ledger grouped into **knowledge duplication**, **behavior duplication**, and **presentation-only duplication**.
+- [x] Mark current hotspots by responsibilities/reasons-to-change, not only file size.
+- [x] Define the first set of dependency-direction rules that can later be enforced by ESLint/module layout.
+- [x] Confirm no pending product feature is being silently folded into the refactor.
 
 ### Acceptance
 
