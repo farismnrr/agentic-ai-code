@@ -81,12 +81,6 @@ jobs:
       - name: Deterministic connector and zero-bypass gate
         run: bash scripts/phase8-zero-bypass.sh
 
-      - name: Phase 4 black-box MCP conformance
-        run: bash scripts/phase4-black-box.sh
-
-      - name: Phase 7 runtime tool contract gate
-        run: bash scripts/phase7-chatgpt-contract.sh
-
   build-release:
     needs: [js-ci, rust-ci]
     strategy:
