@@ -50,7 +50,7 @@ The hook executes:
 pnpm verify:commit
 ```
 
-That command runs agent-doc/index integrity, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass the repository gate.
+That command runs repository policy enforcement, agent-doc/index integrity, `pnpm lint`, and `pnpm typecheck`. Repository policy enforcement rejects tracked CI workflows and conventional unit-test suites. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass the repository gate.
 
 If a clone/worktree does not have the hook active, run:
 
@@ -74,17 +74,17 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 ## Type-checking
 
-`pnpm typecheck` is the repository-wide type/compile gate. It intentionally avoids the historically silent bare `nuxt typecheck` wrapper and runs:
+`pnpm typecheck` is the repository-wide type/compile gate. It intentionally uses the strongest locally proven Nuxt path rather than the historically silent bare `nuxt typecheck` wrapper:
 
 ```sh
-nuxt prepare --dotenv .env.example
+nuxt build --dotenv .env.example
 vue-tsc -p .nuxt/tsconfig.json --noEmit
 RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 ```
 
-`nuxt prepare` generates the `.nuxt` type project without starting a production bundle. Keep `pnpm build` as a separate bundling/SSR verification step when runtime output matters.
+The production build generates the complete `.nuxt` type project before the explicit Vue check. This is intentionally heavier than `nuxt prepare`: this repository previously observed incomplete generated-project state from prepare-only verification and silent success from bare `nuxt typecheck`.
 
-Do not simplify the type gate back to plain `nuxt typecheck`: this repository previously observed that command exit successfully while real generated-project errors remained. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md), [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md), and [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
+Do not weaken this gate for commit speed. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md), [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md), and [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
 
 ## Dependency/security verification
 
