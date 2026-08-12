@@ -44,7 +44,6 @@ use axum::{
     Json, Router,
 };
 use serde_json::{json, Value};
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tower::limit::ConcurrencyLimitLayer;
@@ -217,26 +216,6 @@ async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
 
 type JsonErr = Box<(StatusCode, HeaderMap, Json<ErrorResponse>)>;
 
-fn request_uses_trusted_https(req: &Request, config: &ServerConfig) -> bool {
-    let trusted_peer = req
-        .extensions()
-        .get::<axum::extract::ConnectInfo<SocketAddr>>()
-        .map(|peer| peer.0.ip())
-        .and_then(|ip| config.trusted_proxy_cidr.as_deref().map(|cidr| (ip, cidr)))
-        .is_some_and(|(ip, cidr)| {
-            cidr.parse::<ipnet::IpNet>()
-                .is_ok_and(|net| net.contains(&ip))
-        });
-
-    config.trusted_proxy
-        && trusted_peer
-        && req
-            .headers()
-            .get("x-forwarded-proto")
-            .and_then(|v| v.to_str().ok())
-            == Some("https")
-}
-
 fn err_response(status: StatusCode, id: Option<Id>, err: &McpError) -> JsonErr {
     Box::new((status, HeaderMap::new(), Json(ErrorResponse::new(id, err))))
 }
@@ -308,7 +287,20 @@ async fn access_policy(
         // supply an absolute-form HTTP request target. Likewise, forwarded
         // headers are ignored unless the operator explicitly opted in and the
         // configuration validation has restricted the listener to loopback.
-        let is_https = request_uses_trusted_https(&req, &state.config);
+        let peer = req
+            .extensions()
+            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+            .map(|peer| peer.0.ip());
+        let forwarded_proto = req
+            .headers()
+            .get("x-forwarded-proto")
+            .and_then(|value| value.to_str().ok());
+        let is_https = super::security::trusted_proxy_https(
+            peer,
+            forwarded_proto,
+            state.config.trusted_proxy,
+            state.config.trusted_proxy_cidr.as_deref(),
+        );
 
         if !is_https {
             return (

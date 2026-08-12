@@ -779,7 +779,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [x] Extract request-admission token bucket into a focused admission module.
 - [x] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
 - [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
-- [ ] Extract trusted-proxy HTTPS decision with explicit security ownership.
+- [x] Extract trusted-proxy HTTPS decision with explicit security ownership (micro-step 10C: pure, tested policy helper; transport retains the same gate position and inputs).
 - [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
 - [ ] Extract MCP route handler dispatch once dependencies are explicit.
 - [ ] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
