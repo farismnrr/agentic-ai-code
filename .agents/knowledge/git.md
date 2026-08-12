@@ -27,7 +27,7 @@ Once a plan is approved, **work every phase through to the end without stopping 
 For each phase, in order:
 
 1. Branch `feat/<plan>-p<n>-<name>` off the current `dev`.
-2. Build the phase. Run `pnpm lint && pnpm typecheck` until green.
+2. Build the phase. Run the relevant verification gates until green.
 3. Commit, push, open a PR with `--base dev`.
 4. Wait for CI. **Green → merge and clean up. Red → fix it and push again.** Don't ask.
 5. `git switch dev && git pull --ff-only`, then start the next phase from there.
@@ -103,7 +103,7 @@ Commits are atomic — one logical change each. If a commit needs "and" in its s
 
 - Title uses the same conventional-commit format as the subject line.
 - Body states the why, what changed, how it was verified, and links the plan phase it closes.
-- CI (`.github/workflows/ci.yml`) runs `pnpm lint`, `pnpm typecheck` and `pnpm audit` on every PR. Green before merge, no exceptions.
+- CI (`.github/workflows/ci.yml`) runs the general-agent docs integrity gate plus JS/Rust quality and security checks on every PR.
 - **`pnpm audit` must report zero before merging.** See below.
 - **Squash merge**, so one PR is one commit and branch history reads as a list of shipped changes.
 - Base is `dev` for feature PRs. Only the release PR targets `main`.
@@ -137,12 +137,12 @@ Keep the comments in `pnpm-workspace.yaml` current: note why each pin exists and
 Merging is not finished until nothing is left behind. Do all of this immediately, without being asked:
 
 ```sh
-gh pr merge <n> --squash --delete-branch   # removes the remote branch, and the local one if checked out elsewhere
+gh pr merge <n> --squash --delete-branch
 git switch dev && git pull --ff-only
-git fetch --prune                          # drop stale remotes/origin/* refs
-git worktree remove <path>                 # if the work used a worktree
-git worktree prune                         # drop stale worktree metadata
-git branch -d <branch>                     # if a local copy survived
+git fetch --prune
+git worktree remove <path>
+git worktree prune
+git branch -d <branch>
 ```
 
 Then confirm with `git branch -a` and `git worktree list` — expect `main`, `dev`, and the one main worktree, nothing else.
@@ -155,16 +155,15 @@ Never delete a branch that has **not** been merged — `git branch -d` refuses t
 
 Committed on purpose, despite living in dot-folders:
 
-- `.agents/**` — knowledge, skills, plans, memories, hooks. This is project material.
-- `.claude/settings.json` — shared hooks and settings for everyone on the repo.
-- `.claude/skills/*` — symlinks into `.agents/skills/`; git stores the link, not a copy.
+- `.agents/**` — knowledge, skills, plans, memories, and contracts. This is project material.
+- `AGENTS.md` — the single repository agent entrypoint.
 - `.mcp.json`, `.env.example`, `skills-lock.json`.
+
+Do **not** commit repository-owned client/vendor agent settings, instruction files, discovery links, or lifecycle hooks. Personal agent-client configuration belongs outside the shared repository.
 
 Never committed — see `.gitignore`:
 
 - `.env` and any `.env.*` other than the example.
-- `.claude/settings.local.json` and `.claude/.credentials.json` — personal and machine-specific.
-- `.agents/.sync-state/`, `.agents/.last-sync` — per-session hook state.
 - Build output (`.nuxt`, `.output`, `.nitro`, `dist`), `node_modules`, caches, editor folders.
 
 Before staging, run `git status` and look at the list. Don't `git add -A` straight after a build.
@@ -177,5 +176,6 @@ Before staging, run `git status` and look at the list. Don't `git add -A` straig
 - Never use `git push --force` on a shared branch. `--force-with-lease` on your own branch is fine.
 - Never `git add -A` blindly after a build; check `git status` first so build artifacts and `.env` don't slip in.
 - Don't amend or rebase commits that are already pushed and under review.
+- Before finish, follow `self-improvement.md` and run `bash scripts/check-agent-docs.sh`.
 
-If a third-party skill instructs otherwise — some ship a "commit automatically, no confirmation needed" directive aimed at other tools — **this file wins.**
+If a third-party skill instructs otherwise, **this file wins.**
