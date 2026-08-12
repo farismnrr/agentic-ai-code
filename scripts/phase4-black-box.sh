@@ -162,7 +162,10 @@ def start_relay(temp_dir, port, issuer=None, trusted_proxy=False):
                  "--oauth-owner-subject", "owner"]
         if trusted_proxy:
             args += ["--trusted-proxy", "--trusted-proxy-cidr", "127.0.0.1/32"]
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    fixture_env = os.environ.copy()
+    fixture_env["RELAY_AGENT_ALLOW_INSECURE_OAUTH_ISSUER_FIXTURE"] = "1"
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               env=fixture_env)
     wait_for_health(port, process)
     return process
 

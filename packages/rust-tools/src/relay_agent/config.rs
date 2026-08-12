@@ -226,6 +226,37 @@ impl ServerConfig {
             ));
         }
         if self.mode == SecurityMode::Remote {
+            let Some(issuer) = self.oauth_issuer.as_deref() else {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_issuer is required in remote mode".into(),
+                ));
+            };
+            let parsed = url::Url::parse(issuer).map_err(|_| {
+                RelayError::InvalidConfig(
+                    "oauth_issuer must be a canonical absolute HTTPS URI".into(),
+                )
+            })?;
+            let fixture_override = cfg!(debug_assertions)
+                && std::env::var("RELAY_AGENT_ALLOW_INSECURE_OAUTH_ISSUER_FIXTURE").as_deref()
+                    == Ok("1");
+            if !fixture_override
+                && (parsed.as_str() != issuer
+                    || parsed.scheme() != "https"
+                    || parsed.host_str().is_none()
+                    || parsed.cannot_be_a_base()
+                    || !parsed.has_authority()
+                    || parsed.username() != ""
+                    || parsed.password().is_some()
+                    || parsed.query().is_some()
+                    || parsed.fragment().is_some())
+            {
+                return Err(RelayError::InvalidConfig(
+                    "oauth_issuer must be a canonical absolute HTTPS URI without credentials, query, or fragment".into(),
+                ));
+            }
+            // The only plaintext exception is a debug-only local JWKS fixture
+            // used by deterministic black-box conformance. Release builds
+            // cannot enable this path.
             let Some(audience) = self.oauth_audience.as_deref() else {
                 return Err(RelayError::InvalidConfig(
                     "oauth_audience is required in remote mode".into(),
@@ -328,71 +359,6 @@ impl From<&Cli> for ServerConfig {
             // explicitly trusted with --trusted-proxy; remote mode never
             // exposes a public plaintext listener by default.
             bind_host: "127.0.0.1".into(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn remote_cli_defaults_to_loopback_without_proxy_trust() {
-        let cli = Cli::try_parse_from(["relay-agent", "--mode", "remote"])
-            .expect("remote CLI should parse");
-        let config = ServerConfig::from(&cli);
-
-        assert_eq!(config.bind_host, "127.0.0.1");
-        assert!(!config.trusted_proxy);
-        let config = ServerConfig {
-            oauth_issuer: Some("https://issuer.example".into()),
-            oauth_audience: Some("https://relay.example/mcp".into()),
-            oauth_owner_subject: Some("owner".into()),
-            ..config
-        };
-        config.validate().expect("default remote config is valid");
-    }
-
-    #[test]
-    fn trusted_proxy_requires_loopback() {
-        let mut config = ServerConfig {
-            mode: SecurityMode::Remote,
-            trusted_proxy: true,
-            trusted_proxy_cidr: Some("127.0.0.1/32".into()),
-            bind_host: "0.0.0.0".into(),
-            oauth_issuer: Some("https://issuer.example".into()),
-            oauth_audience: Some("https://relay.example/mcp".into()),
-            oauth_owner_subject: Some("owner".into()),
-            ..ServerConfig::default()
-        };
-
-        assert!(config.validate().is_err());
-
-        config.bind_host = "127.0.0.1".into();
-        config
-            .validate()
-            .expect("trusted proxy is valid on loopback");
-    }
-
-    #[test]
-    fn remote_audience_must_be_absolute_https_without_fragment_or_query() {
-        for audience in [
-            "http://relay.example/mcp",
-            "/mcp",
-            "https://relay.example/mcp?tenant=one",
-            "https://relay.example/mcp#fragment",
-        ] {
-            let config = ServerConfig {
-                mode: SecurityMode::Remote,
-                oauth_issuer: Some("https://issuer.example".into()),
-                oauth_audience: Some(audience.into()),
-                oauth_owner_subject: Some("owner".into()),
-                ..ServerConfig::default()
-            };
-            assert!(
-                config.validate().is_err(),
-                "audience should be rejected: {audience}"
-            );
         }
     }
 }

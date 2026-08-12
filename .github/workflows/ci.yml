@@ -55,6 +55,9 @@ jobs:
         with:
           workspaces: "packages/rust-tools"
 
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
+
       - name: Check Rust formatting
         working-directory: packages/rust-tools
         run: cargo fmt --all -- --check
@@ -80,6 +83,9 @@ jobs:
 
       - name: Phase 4 black-box MCP conformance
         run: bash scripts/phase4-black-box.sh
+
+      - name: Phase 7 runtime tool contract gate
+        run: bash scripts/phase7-chatgpt-contract.sh
 
   build-release:
     needs: [js-ci, rust-ci]
