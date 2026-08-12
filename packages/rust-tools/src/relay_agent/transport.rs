@@ -52,7 +52,8 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use super::admission::RequestAdmission;
 use super::auth;
 use super::auth::{
-    bearer_challenge_value, oauth_error_response, validate_claims, ClaimValidationError, Claims,
+    bearer_challenge_value, oauth_error_response, validate_claims, validate_token_signature,
+    ClaimValidationError, Claims, TokenValidationError,
 };
 use super::auth::{CacheKeyDecision, CachedJwks};
 use super::config::ServerConfig;
@@ -527,53 +528,42 @@ async fn access_policy(
             }
         };
 
-        let decoding_key = match jsonwebtoken::DecodingKey::from_jwk(&jwk) {
-            Ok(k) => k,
-            Err(_) => {
-                return oauth_error_response(
-                    StatusCode::UNAUTHORIZED,
-                    None,
-                    &state.config,
-                    Some("invalid_token"),
-                    None,
-                    &McpError::InvalidRequest("Invalid JWK".into()),
-                );
-            }
-        };
-
-        if !matches!(
-            header.alg,
-            jsonwebtoken::Algorithm::RS256 | jsonwebtoken::Algorithm::ES256
-        ) {
-            return oauth_error_response(
-                StatusCode::UNAUTHORIZED,
-                None,
-                &state.config,
-                Some("invalid_token"),
-                None,
-                &McpError::InvalidRequest("Unsupported token algorithm".into()),
-            );
-        }
-
-        let mut validation = jsonwebtoken::Validation::new(header.alg);
-        validation.set_audience(&[oauth_audience]);
-        validation.set_issuer(&[oauth_issuer]);
-        validation.validate_nbf = true;
-
-        let token_data = match jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation) {
-            Ok(data) => data,
-            Err(_) => {
-                return oauth_error_response(
-                    StatusCode::UNAUTHORIZED,
-                    None,
-                    &state.config,
-                    Some("invalid_token"),
-                    None,
-                    &McpError::InvalidRequest("Invalid token".into()),
-                );
-            }
-        };
-        auth_ctx.claims = Some(token_data.claims);
+        let claims =
+            match validate_token_signature(token, &jwk, header.alg, &oauth_issuer, &oauth_audience)
+            {
+                Ok(claims) => claims,
+                Err(TokenValidationError::InvalidJwk) => {
+                    return oauth_error_response(
+                        StatusCode::UNAUTHORIZED,
+                        None,
+                        &state.config,
+                        Some("invalid_token"),
+                        None,
+                        &McpError::InvalidRequest("Invalid JWK".into()),
+                    )
+                }
+                Err(TokenValidationError::UnsupportedAlgorithm) => {
+                    return oauth_error_response(
+                        StatusCode::UNAUTHORIZED,
+                        None,
+                        &state.config,
+                        Some("invalid_token"),
+                        None,
+                        &McpError::InvalidRequest("Unsupported token algorithm".into()),
+                    )
+                }
+                Err(TokenValidationError::InvalidToken) => {
+                    return oauth_error_response(
+                        StatusCode::UNAUTHORIZED,
+                        None,
+                        &state.config,
+                        Some("invalid_token"),
+                        None,
+                        &McpError::InvalidRequest("Invalid token".into()),
+                    )
+                }
+            };
+        auth_ctx.claims = Some(claims);
 
         let claims = auth_ctx.claims.as_ref().expect("claims were just stored");
         match validate_claims(
