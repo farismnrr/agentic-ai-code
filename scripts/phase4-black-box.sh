@@ -107,6 +107,18 @@ def request(url, headers=None, body=None):
     return status, response_headers, parsed
 
 
+def request_after_admission(url, headers=None, body=None):
+    deadline = time.monotonic() + 5
+    while True:
+        status, response_headers, parsed = request(url, headers=headers, body=body)
+        if status != 429:
+            return status, response_headers, parsed
+        if time.monotonic() >= deadline:
+            return status, response_headers, parsed
+        time.sleep(min(float(response_headers.get("retry-after", "1")),
+                       max(0, deadline - time.monotonic())))
+
+
 def assert_status(actual, expected, label):
     if actual != expected:
         raise AssertionError(f"{label}: expected HTTP {expected}, got {actual}")
@@ -237,7 +249,7 @@ def run():
             invalid_call = mcp("tools/call", {"name": "terminal_exec", "arguments": {"command": "true", "extra": True},
                                                "_meta": {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
                                                          "io.modelcontextprotocol/clientCapabilities": {}}})
-            status, _, body = request(local_url, headers=headers(method="tools/call", name="terminal_exec"), body=invalid_call)
+            status, _, body = request_after_admission(local_url, headers=headers(method="tools/call", name="terminal_exec"), body=invalid_call)
             assert_status(status, 400, "invalid tool schema")
             assert body["error"]["code"] == -32602
 
