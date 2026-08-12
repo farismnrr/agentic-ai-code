@@ -3,6 +3,7 @@ import type { RelayExecResult } from '~/composables/useRelayAgent'
 
 useSeoMeta({ title: 'Local Terminal' })
 
+const toast = useToast()
 const {
   port,
   isConnected,
