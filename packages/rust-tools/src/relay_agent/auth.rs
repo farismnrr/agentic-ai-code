@@ -10,6 +10,43 @@ use serde_json::json;
 
 pub const CODING_SCOPE: &str = "relay.coding";
 pub const JWKS_TTL_SECS: u64 = 300;
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct Claims {
+    pub iss: Option<String>,
+    pub sub: Option<String>,
+    pub client_id: Option<String>,
+    pub scope: Option<String>,
+    pub exp: Option<u64>,
+    pub iat: Option<u64>,
+    pub nbf: Option<u64>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClaimValidationError {
+    UnauthorizedSubject,
+    InsufficientScope,
+}
+
+pub fn validate_claims(
+    claims: &Claims,
+    owner_subject: Option<&str>,
+    required_scope: &str,
+) -> Result<(), ClaimValidationError> {
+    if claims.sub.as_deref() != owner_subject {
+        return Err(ClaimValidationError::UnauthorizedSubject);
+    }
+    if !claims
+        .scope
+        .as_deref()
+        .unwrap_or_default()
+        .split_whitespace()
+        .any(|scope| scope == required_scope)
+    {
+        return Err(ClaimValidationError::InsufficientScope);
+    }
+    Ok(())
+}
 pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 
 pub fn http_client() -> Result<reqwest::Client, String> {
@@ -230,6 +267,32 @@ mod tests {
         assert_eq!(
             parse_discovery_metadata(&json!({})).unwrap_err(),
             "OIDC discovery missing jwks_uri"
+        );
+    }
+
+    #[test]
+    fn claim_policy_accepts_owner_scope_and_rejects_each_failure() {
+        let valid = Claims {
+            iss: None,
+            sub: Some("owner".into()),
+            client_id: None,
+            scope: Some("read relay.coding".into()),
+            exp: None,
+            iat: None,
+            nbf: None,
+        };
+        assert_eq!(validate_claims(&valid, Some("owner"), CODING_SCOPE), Ok(()));
+        assert_eq!(
+            validate_claims(&valid, Some("other"), CODING_SCOPE),
+            Err(ClaimValidationError::UnauthorizedSubject)
+        );
+        let no_scope = Claims {
+            scope: None,
+            ..valid.clone()
+        };
+        assert_eq!(
+            validate_claims(&no_scope, Some("owner"), CODING_SCOPE),
+            Err(ClaimValidationError::InsufficientScope)
         );
     }
 }
