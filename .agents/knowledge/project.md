@@ -53,22 +53,39 @@ The TypeScript package APIs remain valid application integration surfaces. Plan 
 - `.agents/plans/` — multi-step plans and historical execution records.
 - `.agents/memories/` — durable decisions, incidents, and traps.
 - `.agents/contracts/` — frozen client-visible contract evidence.
+- `.githooks/pre-commit` — mandatory local commit gate.
+
+The repository intentionally has **no CI workflow** and **no unit-test suite**.
 
 ## Normal verification
 
-### Web application
+### Mandatory before every commit
 
-Before declaring web/application work complete, run the gates relevant to the change. At minimum the normal repository gates are:
+Every commit must pass:
 
 ```sh
-pnpm lint
-pnpm typecheck
-pnpm audit
+pnpm verify:commit
 ```
 
-`pnpm typecheck` is intentionally a generated-project gate: it runs `nuxt prepare --dotenv .env.example` to generate `.nuxt` and its type project, then runs `vue-tsc -p .nuxt/tsconfig.json --noEmit`. Do not replace it with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
+The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-Use `pnpm build` separately when runtime bundling/SSR output itself needs verification beyond the type gate. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+`pnpm verify:commit` runs:
+
+1. agent-doc/index integrity;
+2. `pnpm lint`;
+3. `pnpm typecheck`.
+
+`pnpm lint` covers ESLint plus Rust formatting and Clippy. `pnpm typecheck` covers generated Nuxt/Vue type verification plus warnings-denied Rust `cargo check`. A failing lint/type gate blocks the commit until fixed.
+
+There is no remote CI safety net. PR descriptions must record the local verification performed; GitHub reporting a branch as mergeable is not proof of quality.
+
+See [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
+
+### Web application
+
+`pnpm typecheck` runs `nuxt prepare --dotenv .env.example` to generate the Nuxt type project, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
+
+Use `pnpm build` separately when runtime bundling/SSR output itself needs verification beyond the mandatory commit gate. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
 
 ### Run the built app for local verification
 
@@ -78,17 +95,13 @@ See [`../memories/dev-mode-vs-build.md`](../memories/dev-mode-vs-build.md).
 
 ### Rust workspace
 
-CI pins Rust 1.95.0 and currently enforces the native workspace with commands equivalent to:
-
-```sh
-cd packages/rust-tools
-cargo fmt --all -- --check
-RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo audit
-```
+The mandatory local gates pin the repository toolchain and cover formatting, warnings-denied `cargo check`, and Clippy. Security-sensitive Rust changes may additionally require `cargo audit` and the relevant deterministic scripts under `scripts/`.
 
 The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
+
+### No unit tests
+
+Do not introduce a unit-test framework or unit-test suite by default. Existing deterministic acceptance/security scripts may remain as explicit local verification for protocol/security boundaries; they are not CI and are not a substitute for the mandatory lint/typecheck gate.
 
 ## Runtime/config orientation
 
