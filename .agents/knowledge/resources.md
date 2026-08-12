@@ -21,13 +21,7 @@ These are still authoritative and must be consulted directly when relevant:
 - [`packages/terminal-tool/SKILL.md`](../../packages/terminal-tool/SKILL.md) — TypeScript terminal tool factory + current Rust CLI backend.
 - [`packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) — current Rust MCP relay, local/remote modes, Bubblewrap boundary, and verification.
 
-Do not assume every package skill is auto-discovered by every agent client. This index exists so missing discovery symlinks do not make a skill invisible.
-
-## Claude skill discovery
-
-`.claude/skills/*` contains Claude Code discovery symlinks into selected `.agents/skills/*` entries. The real shared skill content stays under `.agents/` or the package skill it links to.
-
-Do not copy skill bodies into `.claude/skills/`; duplicated guidance will drift.
+Do not assume every agent client auto-discovers repository skills. `AGENTS.md` and this index are the portable discovery path; do not add client/vendor-specific discovery symlinks or duplicate skill bodies.
 
 ## Nuxt UI MCP server
 
