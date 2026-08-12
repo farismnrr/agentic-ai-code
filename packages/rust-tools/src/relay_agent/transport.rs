@@ -367,13 +367,9 @@ async fn access_policy(
             && std::env::var("RELAY_AGENT_ALLOW_INSECURE_OAUTH_ISSUER_FIXTURE").as_deref()
                 == Ok("1");
         // Check whether the cache is present and fresh (TTL not exceeded).
-        let cache_needs_refresh = {
-            let guard = state.jwks_cache.read().await;
-            match guard.as_ref() {
-                None => true,
-                Some(c) => c.is_stale(std::time::Instant::now()),
-            }
-        };
+        let cache_snapshot =
+            auth::read_cache_snapshot(&state.jwks_cache, std::time::Instant::now()).await;
+        let cache_needs_refresh = cache_snapshot.needs_refresh;
 
         let jwks_url = if cache_needs_refresh {
             let discovered_url = match auth::fetch_discovery(client.clone(), discovery_url).await {
@@ -413,12 +409,8 @@ async fn access_policy(
             }
             discovered_url
         } else {
-            state
-                .jwks_cache
-                .read()
-                .await
-                .as_ref()
-                .map(|cached| cached.jwks_uri().to_owned())
+            cache_snapshot
+                .jwks_uri
                 .expect("fresh JWKS cache must contain its discovery URI")
         };
 
@@ -471,10 +463,7 @@ async fn access_policy(
         // current cache, do ONE re-fetch (refresh-on-unknown-kid) in case the
         // IdP rotated keys since our last fetch. We never loop to prevent
         // attacker-controlled refresh storms.
-        let jwk_opt = {
-            let guard = state.jwks_cache.read().await;
-            guard.as_ref().and_then(|c| c.find_key(&kid))
-        };
+        let jwk_opt = auth::lookup_cached_key(&state.jwks_cache, &kid).await;
 
         let jwk = match auth::key_lookup_decision(jwk_opt.is_some()) {
             CacheKeyDecision::Found => jwk_opt.expect("found cache key must be present"),

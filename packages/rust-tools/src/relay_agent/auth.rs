@@ -86,6 +86,40 @@ pub struct CachedJwks {
     pub fetched_at: std::time::Instant,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct CacheSnapshot {
+    pub needs_refresh: bool,
+    pub jwks_uri: Option<String>,
+}
+
+pub async fn read_cache_snapshot(
+    cache: &tokio::sync::RwLock<Option<CachedJwks>>,
+    now: std::time::Instant,
+) -> CacheSnapshot {
+    let guard = cache.read().await;
+    match guard.as_ref() {
+        None => CacheSnapshot {
+            needs_refresh: true,
+            jwks_uri: None,
+        },
+        Some(cached) => CacheSnapshot {
+            needs_refresh: cached.is_stale(now),
+            jwks_uri: Some(cached.jwks_uri().to_owned()),
+        },
+    }
+}
+
+pub async fn lookup_cached_key(
+    cache: &tokio::sync::RwLock<Option<CachedJwks>>,
+    kid: &str,
+) -> Option<jsonwebtoken::jwk::Jwk> {
+    cache
+        .read()
+        .await
+        .as_ref()
+        .and_then(|cached| cached.find_key(kid))
+}
+
 impl CachedJwks {
     pub fn is_stale(&self, now: std::time::Instant) -> bool {
         cache_is_stale(self.fetched_at, now)
@@ -425,5 +459,18 @@ mod tests {
             ),
             Err(TokenValidationError::UnsupportedAlgorithm)
         ));
+    }
+
+    #[tokio::test]
+    async fn cache_snapshot_reports_missing_cache_as_refresh() {
+        let cache = tokio::sync::RwLock::new(None);
+        assert_eq!(
+            read_cache_snapshot(&cache, std::time::Instant::now()).await,
+            CacheSnapshot {
+                needs_refresh: true,
+                jwks_uri: None
+            }
+        );
+        assert!(lookup_cached_key(&cache, "missing").await.is_none());
     }
 }
