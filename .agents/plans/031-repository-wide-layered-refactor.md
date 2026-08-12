@@ -459,13 +459,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Extract reusable chat configuration controls for model/mode/reasoning/tool selection without hiding persistence ownership.
-- [ ] Reuse the same option/config mapping between new-chat and existing-chat pages.
-- [ ] Extract message action UI (copy/edit/regenerate/feedback) into focused components where contracts are stable.
-- [ ] Extract edit-message modal/dialog behavior if it materially simplifies the page.
-- [ ] Isolate new-conversation creation/handoff orchestration in a focused composable.
-- [ ] Isolate existing-conversation page state/config mutation logic from template concerns.
-- [ ] Keep `useChatEditor` as the shared editor behavior boundary; improve it rather than duplicating editor keyboard/mention logic.
+- [x] Extract reusable chat configuration controls for model/mode/reasoning/tool selection without hiding persistence ownership.
+- [x] Reuse the same option/config mapping between new-chat and existing-chat pages.
+- [x] Extract message action UI (copy/edit/regenerate/feedback) into focused components where contracts are stable.
+- [x] Extract edit-message modal/dialog behavior if it materially simplifies the page.
+- [x] Isolate new-conversation creation/handoff orchestration in a focused composable.
+- [x] Isolate existing-conversation page state/config mutation logic from template concerns.
+- [x] Keep `useChatEditor` as the shared editor behavior boundary; improve it rather than duplicating editor keyboard/mention logic.
 
 ### Acceptance
 
