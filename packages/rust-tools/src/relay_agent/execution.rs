@@ -366,9 +366,10 @@ pub async fn dispatch_tool_call(
             let output_res = timeout(Duration::from_millis(wait_duration), read_and_wait).await;
             match output_res {
                 Ok(Ok((status, stdout_bytes, stderr_bytes))) => {
-                    let is_error = !status.success();
                     let mut stdout_str = String::from_utf8_lossy(&stdout_bytes).into_owned();
                     let mut stderr_str = String::from_utf8_lossy(&stderr_bytes).into_owned();
+                    let is_error = !status.success()
+                        || (bin_name == "terminal-tool" && !stdout_str.starts_with("Exit: 0\n"));
 
                     if stdout_str.len() > MAX_OUTPUT_BYTES {
                         stdout_str.truncate(MAX_OUTPUT_BYTES);
@@ -406,10 +407,11 @@ pub async fn dispatch_tool_call(
                         });
                     }
 
-                    Ok(ToolCallResult {
-                        content: contents,
-                        is_error,
-                    })
+                    if is_error {
+                        Ok(ToolCallResult::error(contents))
+                    } else {
+                        Ok(ToolCallResult::complete(contents))
+                    }
                 }
                 Ok(Err(_e)) => Err(McpError::Internal("failed to read tool output".to_string())),
                 Err(_) => {
@@ -424,13 +426,10 @@ pub async fn dispatch_tool_call(
                         }
                     }
 
-                    Ok(ToolCallResult {
-                        content: vec![ToolResultContent {
-                            kind: "text",
-                            text: format!("execution timed out after {} ms", wait_duration),
-                        }],
-                        is_error: true,
-                    })
+                    Ok(ToolCallResult::error(vec![ToolResultContent {
+                        kind: "text",
+                        text: format!("execution timed out after {} ms", wait_duration),
+                    }]))
                 }
             }
         }

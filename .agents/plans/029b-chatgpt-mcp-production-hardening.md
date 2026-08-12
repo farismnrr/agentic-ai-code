@@ -611,31 +611,31 @@ Do this **before** implementing section I so the OAuth challenge result is built
 
 ### Implementation checklist
 
-- [ ] Add `result_type` to `ToolCallResult` with `#[serde(rename = "resultType")]`.
-- [ ] Completed success results serialize exactly `resultType: "complete"`.
-- [ ] Completed tool/business errors (`isError: true`) also serialize `resultType: "complete"`; `isError` does **not** change the result discriminator.
-- [ ] Do not emit `resultType: "input_required"` unless a future MRTR flow is actually implemented.
-- [ ] Add one or more constructors/helpers (`complete`, `error`, or equivalent) so callers cannot accidentally build a `ToolCallResult` without `resultType`.
-- [ ] Replace every direct `ToolCallResult { ... }` construction in `execution.rs` with the canonical helper or include the required discriminator explicitly.
-- [ ] Replace the execution-error fallback construction in `transport.rs` with the same canonical path.
-- [ ] Keep `Response::new()` server `_meta` stamping intact; adding `resultType` must not overwrite existing result `_meta`.
-- [ ] Keep `content` non-empty and `isError` semantics unchanged unless a concrete protocol requirement says otherwise.
+- [x] Add `result_type` to `ToolCallResult` with `#[serde(rename = "resultType")]`.
+- [x] Completed success results serialize exactly `resultType: "complete"`.
+- [x] Completed tool/business errors (`isError: true`) also serialize `resultType: "complete"`; `isError` does **not** change the result discriminator.
+- [x] Do not emit `resultType: "input_required"` unless a future MRTR flow is actually implemented.
+- [x] Add one or more constructors/helpers (`complete`, `error`, or equivalent) so callers cannot accidentally build a `ToolCallResult` without `resultType`.
+- [x] Replace every direct `ToolCallResult { ... }` construction in `execution.rs` with the canonical helper or include the required discriminator explicitly.
+- [x] Replace the execution-error fallback construction in `transport.rs` with the same canonical path.
+- [x] Keep `Response::new()` server `_meta` stamping intact; adding `resultType` must not overwrite existing result `_meta`.
+- [x] Keep `content` non-empty and `isError` semantics unchanged unless a concrete protocol requirement says otherwise.
 
 ### Required black-box acceptance
 
 Extend `scripts/phase4-black-box.sh` with **real successful and failed tool execution**, not source grep:
 
-- [ ] valid local `terminal_exec` call using a harmless command such as `true` returns HTTP `200`.
-- [ ] success response has `result.resultType == "complete"`.
-- [ ] success response has `result.isError == false` and a `content` array.
-- [ ] a harmless failing command such as `false` returns a normal MCP tool result, not a JSON-RPC protocol error.
-- [ ] failed tool response still has `result.resultType == "complete"`.
-- [ ] failed tool response has `result.isError == true`.
-- [ ] both responses retain `_meta["io.modelcontextprotocol/serverInfo"]`.
+- [x] valid local `terminal_exec` call using a harmless command such as `true` returns HTTP `200`.
+- [x] success response has `result.resultType == "complete"`.
+- [x] success response has `result.isError == false` and a `content` array.
+- [x] a harmless failing command such as `false` returns a normal MCP tool result, not a JSON-RPC protocol error.
+- [x] failed tool response still has `result.resultType == "complete"`.
+- [x] failed tool response has `result.isError == true`.
+- [x] both responses retain `_meta["io.modelcontextprotocol/serverInfo"]`.
 
 ### Exit
 
-- [ ] no reachable `tools/call` success/error path can serialize a completed result without `resultType: "complete"`.
+- [x] no reachable `tools/call` success/error path can serialize a completed result without `resultType: "complete"`.
 
 ---
 
@@ -647,10 +647,10 @@ This is the **authoritative execution order** for the final repository pass. It 
 
 **Target:** `mcp.rs`, `execution.rs`, `transport.rs`.
 
-- [ ] implement `resultType` first.
-- [ ] add optional result metadata support to `ToolCallResult`, preferably `meta: Option<Value>` serialized as `_meta` and omitted when empty.
-- [ ] centralize constructors so `resultType`, `isError`, `content`, and optional `_meta` are created consistently.
-- [ ] run the new local success/failure `tools/call` black-box assertions before touching OAuth challenge behavior.
+- [x] implement `resultType` first.
+- [x] add optional result metadata support to `ToolCallResult`, preferably `meta: Option<Value>` serialized as `_meta` and omitted when empty.
+- [x] centralize constructors so `resultType`, `isError`, `content`, and optional `_meta` are created consistently.
+- [x] run the new local success/failure `tools/call` black-box assertions before touching OAuth challenge behavior.
 
 **Stop condition:** do not continue if a strict 2026-07-28 client would still receive a completed tool result without `resultType`.
 

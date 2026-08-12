@@ -1076,12 +1076,11 @@ async fn handle_tools_call(
     let result =
         crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &_state.config)
             .await
-            .unwrap_or_else(|e| ToolCallResult {
-                content: vec![super::mcp::ToolResultContent {
+            .unwrap_or_else(|e| {
+                ToolCallResult::error(vec![super::mcp::ToolResultContent {
                     kind: "text",
                     text: format!("execution failed: {}", e.message()),
-                }],
-                is_error: true,
+                }])
             });
 
     let response = Response::new(

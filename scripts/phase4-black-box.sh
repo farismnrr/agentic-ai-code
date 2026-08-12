@@ -237,6 +237,28 @@ def run():
             status, _, body = request(local_url, headers=headers(method="tools/call", name="terminal_exec"), body=invalid_call)
             assert_status(status, 400, "invalid tool schema")
             assert body["error"]["code"] == -32602
+
+            call_meta = {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
+                         "io.modelcontextprotocol/clientCapabilities": {}}
+            for command, expected_error in (("true", False), ("false", True)):
+                tool_call = mcp("tools/call", {
+                    "name": "terminal_exec",
+                    "arguments": {"command": command},
+                    "_meta": call_meta,
+                })
+                status, _, body = request(
+                    local_url,
+                    headers=headers(method="tools/call", name="terminal_exec"),
+                    body=tool_call,
+                )
+                assert_status(status, 200, f"terminal_exec {command}")
+                assert "error" not in body, f"terminal_exec {command} returned a JSON-RPC error"
+                result = body["result"]
+                assert result["resultType"] == "complete"
+                assert result["isError"] is expected_error
+                assert isinstance(result["content"], list) and result["content"]
+                assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
+
             dispatch_marker = os.path.join(temp_dir, "rejected-dispatch-marker")
 
             untrusted_port = free_port()

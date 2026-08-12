@@ -405,21 +405,44 @@ pub struct ToolResultContent {
 /// protocol error — see the MCP contract.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolCallResult {
+    #[serde(rename = "resultType")]
+    result_type: &'static str,
     pub content: Vec<ToolResultContent>,
     #[serde(rename = "isError")]
     pub is_error: bool,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Value>,
 }
 
 impl ToolCallResult {
+    pub fn complete(content: Vec<ToolResultContent>) -> Self {
+        Self::new(content, false)
+    }
+
+    pub fn error(content: Vec<ToolResultContent>) -> Self {
+        Self::new(content, true)
+    }
+
+    pub fn with_meta(mut self, meta: Value) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+
     pub fn not_implemented(tool_name: &str) -> Self {
-        Self {
-            content: vec![ToolResultContent {
+        Self::error(vec![ToolResultContent {
                 kind: "text",
                 text: format!(
                     "tool '{tool_name}' is registered but execution is not implemented yet (Plan 028 Phase 3)"
                 ),
-            }],
-            is_error: true,
+            }])
+    }
+
+    fn new(content: Vec<ToolResultContent>, is_error: bool) -> Self {
+        Self {
+            result_type: "complete",
+            content,
+            is_error,
+            meta: None,
         }
     }
 }
