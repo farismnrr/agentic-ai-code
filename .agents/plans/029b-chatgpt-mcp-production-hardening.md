@@ -515,3 +515,78 @@ Plan 029b closes only the unresolved production gaps left by Plan 029 while pres
 Docker is an explicitly deferred v1 capability unless/until an isolated backend exists; its absence must not be hidden, but it does not justify exposing the host Docker daemon or blocking the otherwise production-ready coding agent.
 
 **Branch invariant:** every 029b change is implemented and documented on `feat/029-p0-audit`; this plan does not create or use another implementation branch.
+
+---
+
+## H. ChatGPT tool auth metadata — pre-E2E repository blocker
+
+This is an **append-only follow-up** from the final repository review. Do not reopen or rewrite completed sections above.
+
+Current OpenAI Plugin authentication guidance requires each OAuth-protected MCP tool to declare its auth policy with `securitySchemes`. The current custom top-level `security` object only duplicates risk annotations and does not express ChatGPT's OAuth tool policy.
+
+Tasks:
+
+- [ ] Remove the custom top-level `ToolSecurity` / `security` descriptor field from the on-wire tool contract.
+- [ ] Keep MCP risk annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) unchanged unless actual side effects changed.
+- [ ] Add per-tool `securitySchemes` to `terminal_exec`, `http_fetch`, and `web_search`.
+- [ ] For the current coarse coding profile, declare OAuth-required semantics using `oauth2` with scope `relay.coding` for all three tools.
+- [ ] Do not introduce fake per-tool scopes merely to make metadata look granular; server-side authorization remains the existing `relay.coding` policy.
+- [ ] Treat `securitySchemes` as client-visible auth metadata only; token signature, issuer, audience, expiry, owner and scope checks remain authoritative server-side controls.
+- [ ] Regenerate the frozen runtime `tools/list` snapshot only from the actual serialized descriptors after this change.
+- [ ] Make Phase 7 fail if `securitySchemes` disappears or drifts from the reviewed OAuth policy.
+
+Exit:
+
+- [ ] runtime `tools/list` exposes standards-compatible per-tool `securitySchemes` and no longer exposes the custom duplicate `security` field.
+
+## I. ChatGPT tool-level OAuth challenge — pre-E2E repository blocker
+
+OpenAI's current Plugin authentication guidance requires both tool auth metadata and a runtime tool-result challenge for ChatGPT's tool-level OAuth linking/re-linking UI. Existing HTTP `401/403` `WWW-Authenticate` behavior remains required and must not be removed.
+
+Tasks:
+
+- [ ] Extend tool error results so they can emit result `_meta["mcp/www_authenticate"]` without affecting normal successful tool results.
+- [ ] Generate the challenge from the same protected-resource metadata URL/auth policy used by the HTTP `WWW-Authenticate` helper so the two paths cannot drift.
+- [ ] Include an OAuth error parameter and a human-safe `error_description` in the tool-level challenge, as required by current OpenAI guidance.
+- [ ] Do not place bearer tokens, claims, owner identifiers, client secrets or sensitive command/source content inside `_meta` or `error_description`.
+- [ ] Preserve HTTP `401 invalid_token` and `403 insufficient_scope` responses for resource-server enforcement.
+- [ ] Preserve authorization-before-execution: an unauthenticated, wrong-owner or missing-scope request must never reach tool dispatch merely to manufacture a tool-level challenge.
+- [ ] Implement the ChatGPT-compatible challenge path at the correct MCP result boundary without weakening the existing middleware/resource-server checks.
+- [ ] Add deterministic black-box coverage for the emitted `_meta["mcp/www_authenticate"]` shape and verify the value references the same protected-resource metadata URL.
+- [ ] Verify both the metadata half (`securitySchemes`) and runtime challenge half are present before live ChatGPT OAuth testing.
+
+Exit:
+
+- [ ] a deterministic auth-required tool flow can return an MCP error result carrying `_meta["mcp/www_authenticate"]` with `error` + `error_description`, while existing HTTP auth enforcement remains intact.
+
+## J. Discovery metadata wording — pre-E2E polish
+
+The current `server/discover.instructions` still describes the relay as a local server and references internal implementation history. ChatGPT imports discovery/tool metadata during setup, so publish neutral product-facing wording before `Scan Tools`.
+
+Tasks:
+
+- [ ] Replace `Local relay-agent MCP server` wording with neutral coding-agent wording that is true for both loopback+tunnel and trusted-edge deployments.
+- [ ] Remove references to internal Plan numbers or migration history from client-visible discovery instructions.
+- [ ] Keep the description concise and capability-oriented: sandboxed coding terminal, configured HTTP access, web search, and workspace policy.
+- [ ] Do not claim Docker support while Docker remains deferred for v1.
+- [ ] Run `server/discover` black-box validation after the wording change.
+
+Exit:
+
+- [ ] discovery metadata is accurate, deployment-neutral, and suitable for the first real ChatGPT `Scan Tools` run.
+
+### Pre-E2E handoff gate
+
+Do **not** start the live ChatGPT acceptance in section G until H and I are complete and J has been applied.
+
+Before handoff to live ChatGPT testing:
+
+- [ ] strict format/check/Clippy/audit gates remain green.
+- [ ] Phase 4 auth/security black-box remains green.
+- [ ] Phase 7 runtime descriptor snapshot gate is regenerated and green.
+- [ ] Phase 8 zero-bypass gate remains green.
+- [ ] real `tools/list` contains reviewed `securitySchemes` and no duplicate custom `security` field.
+- [ ] deterministic OAuth error path proves `_meta["mcp/www_authenticate"]` without executing an unauthorized tool.
+- [ ] `server/discover.instructions` contains no `Local`/internal-plan wording.
+
+Once those checks pass, the only remaining Plan 029b release gate is the real ChatGPT/OAuth acceptance already listed in section G.
