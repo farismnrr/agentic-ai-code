@@ -1,6 +1,6 @@
 # .agents
 
-Authoritative agent guidance for this repository lives here. Root `AGENTS.md`, `EXTERNAL MCP CLIENT.md`, and `GEMINI.md` are entrypoints into this folder; keep repo-specific guidance centralized here instead of copying it into per-agent files.
+Authoritative guidance for **any coding agent** working in this repository lives here. Root [`AGENTS.md`](../AGENTS.md) is the only repository agent entrypoint; keep repo-specific guidance centralized here instead of creating client/vendor-specific instruction files.
 
 ## Read this first
 
@@ -24,7 +24,6 @@ Before changing anything, read the files relevant to the task:
 | [`plans/`](plans/) | Multi-step implementation plans and their status | Before continuing planned work |
 | [`memories/`](memories/) | Durable decisions, constraints, incidents, and traps | At task start and task closeout |
 | [`contracts/`](contracts/) | Frozen client-visible contracts used by acceptance gates | Before changing a published contract |
-| [`hooks/`](hooks/) | external MCP client Code reminder hooks | Only when investigating agent closeout automation |
 
 ### knowledge/
 
@@ -40,20 +39,24 @@ Before changing anything, read the files relevant to the task:
 
 ## Agent closeout is mandatory
 
-**Every agent must perform the closeout review in [`knowledge/self-improvement.md`](knowledge/self-improvement.md) before declaring a task finished.** This is the mechanism that keeps plans, memories, and knowledge from drifting away from the repository.
+**Every agent must perform the closeout review in [`knowledge/self-improvement.md`](knowledge/self-improvement.md) before declaring a task finished.** The closeout keeps plans, memories, and knowledge aligned with the repository.
 
-Do not rely on an automatic hook as proof that `.agents/` is current:
+The repository deliberately has **no client/vendor-specific lifecycle hook**. Instead:
 
-- **external MCP client Code:** `.external-mcp/settings.json` wires a `Stop` reminder to `.agents/hooks/check-agents-sync.sh`. It is a best-effort backstop, not the source of truth.
-- **Gemini/Antigravity:** `GEMINI.md` imports this index and the core knowledge files, but there is no equivalent repository Stop hook.
-- **Other agents:** `AGENTS.md` points here; closeout is instruction-driven unless the client supplies its own automation.
+- shared instructions live in `AGENTS.md` + `.agents/`;
+- structural integrity is enforced by [`../scripts/check-agent-docs.sh`](../scripts/check-agent-docs.sh) in CI;
+- semantic closeout remains the responsibility of the agent doing the work, because a static check cannot decide whether a new implementation detail is durable knowledge.
 
-The current hook's exact behavior and limitations are documented in [`knowledge/self-improvement.md`](knowledge/self-improvement.md). If the hook and this documentation disagree, treat the script as current behavior and fix the documentation or hook deliberately; never claim cross-agent automation that does not exist.
+Run the integrity gate before finish:
+
+```sh
+bash scripts/check-agent-docs.sh
+```
 
 ## Conventions for this folder
 
 - `.agents/` is the source of truth for shared agent guidance.
-- `.external-mcp/skills/*` are external MCP client-discovery symlinks; do not duplicate the underlying skill content there.
+- Do **not** add repository-owned client/vendor agent directories, settings, discovery links, or alternate instruction entrypoints. `AGENTS.md` + `.agents/` must stay portable across coding agents.
 - `skills-lock.json` remains at repo root because the `skills` CLI expects it there.
 - Plans and memories are Markdown, one topic per file.
 - New memory files must be added to [`memories/README.md`](memories/README.md) in the same change.
