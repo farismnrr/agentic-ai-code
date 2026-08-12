@@ -7,4 +7,3 @@ dist
 .env.*
 !.env.example
 .agents
-.external-mcp

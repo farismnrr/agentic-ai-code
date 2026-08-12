@@ -3,6 +3,7 @@ import type { RelayExecResult } from '~/composables/useRelayAgent'
 
 useSeoMeta({ title: 'Local Terminal' })
 
+const toast = useToast()
 const {
   port,
   isConnected,
@@ -16,39 +17,16 @@ const commandInput = ref('')
 const execPending = ref(false)
 const history = ref<Array<{ id: string, command: string, result: RelayExecResult }>>([])
 
-const detectedOs = ref<'linux' | 'macos-arm64' | 'macos-x64' | 'windows' | 'unknown'>('linux')
-
-// The relay-agent CLI runs on the user's own machine as its own process —
-// it cannot read this app's runtime config, so its `--origin` default is
-// only ever a local-dev convenience (see packages/relay-agent/src/server.ts).
-// Whatever origin this page is actually being viewed from (dev, staging,
-// the real Singapore-hosted production domain) must be passed explicitly,
-// so show it here rather than let the user guess or copy a stale example.
-// `useRequestURL()` (not `window.location`) works during SSR too, so this
-// is correct on first paint, not just after hydration.
+// The relay runs as a separate local process, so it cannot read this app's
+// runtime config. Pass the origin this page is actually served from so the
+// relay's local Origin policy can validate browser requests correctly.
 const siteOrigin = useRequestURL().origin
+const relayBinaryName = 'relay-agent-x86_64-unknown-linux-gnu'
+const relayDownloadUrl = `https://github.com/farismnrr/ai-code/releases/latest/download/${relayBinaryName}`
 
 onMounted(() => {
   if (!isConnected.value) {
     void checkConnection()
-  }
-
-  if (import.meta.client) {
-    const ua = navigator.userAgent.toLowerCase()
-    const platform = navigator.platform.toLowerCase()
-
-    if (platform.includes('win')) {
-      detectedOs.value = 'windows'
-    } else if (platform.includes('mac') || ua.includes('macintosh')) {
-      // Basic arm64 check for Apple Silicon vs Intel
-      if (navigator.maxTouchPoints > 0 || ua.includes('arm64')) {
-        detectedOs.value = 'macos-arm64'
-      } else {
-        detectedOs.value = 'macos-x64'
-      }
-    } else if (platform.includes('linux')) {
-      detectedOs.value = 'linux'
-    }
   }
 })
 
@@ -69,32 +47,21 @@ async function handleExec() {
     execPending.value = false
   }
 }
-
-const downloadLinks = {
-  'linux': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-linux-x64',
-  'macos-arm64': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-macos-arm64',
-  'macos-x64': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-macos-x64',
-  'windows': 'https://github.com/farismnrr/ai-code/releases/latest/download/relay-agent-win-x64.exe'
-}
 </script>
 
 <template>
   <div class="space-y-6 py-4">
     <div>
       <h2 class="text-base font-semibold text-highlighted">
-        Local CLI Relay Agent
+        Local MCP Relay
       </h2>
       <p class="text-sm text-muted">
-        Connect directly to a relay agent CLI running on your local machine.
-        Terminal data never leaves your computer over the internet. Once
-        paired, the AI can also use this automatically in Agent-mode
-        conversations — there's no separate toggle for it in the chat Tools
-        picker, but every command still requires your approval there before
-        it runs.
+        Connect directly to the Rust relay running on your Linux machine. The
+        local relay exposes MCP on loopback and executes commands inside its
+        configured Bubblewrap filesystem boundary.
       </p>
     </div>
 
-    <!-- Connection / Pairing Status Card -->
     <UCard>
       <template #header>
         <div class="flex items-center justify-between">
@@ -103,7 +70,7 @@ const downloadLinks = {
               name="i-lucide-laptop"
               class="size-5 text-highlighted"
             />
-            <span class="font-medium text-highlighted">Local Agent Status</span>
+            <span class="font-medium text-highlighted">Local relay status</span>
           </div>
           <UBadge
             :label="isConnected ? 'Connected' : 'Disconnected'"
@@ -118,12 +85,12 @@ const downloadLinks = {
         class="space-y-4"
       >
         <div class="flex items-center justify-between text-sm">
-          <span class="text-muted">Target Host</span>
+          <span class="text-muted">Target host</span>
           <code class="font-mono text-highlighted">http://127.0.0.1:{{ port }}</code>
         </div>
         <div class="flex gap-2">
           <UButton
-            label="Refresh Connection"
+            label="Refresh connection"
             icon="i-lucide-refresh-cw"
             :loading="isConnecting"
             color="primary"
@@ -137,87 +104,75 @@ const downloadLinks = {
         v-else
         class="space-y-4"
       >
-        <!-- Standalone Binary Download Section -->
-        <div class="rounded-lg border border-white/10 bg-elevated/50 p-4 space-y-3">
+        <div class="rounded-lg border border-default bg-elevated/50 p-4 space-y-3">
           <h3 class="flex items-center gap-2 text-sm font-medium text-highlighted">
             <UIcon
               name="i-lucide-download"
               class="size-4"
             />
-            1. Download Standalone Executable (No Node.js / npm required)
+            1. Install the Linux relay
           </h3>
           <p class="text-xs text-muted">
-            Download and run the standalone binary for your platform, or run via <code class="rounded bg-black/40 px-1 py-0.5 font-mono text-highlighted">npx @ai-code/relay-agent start</code>:
+            The current relay release target is Linux x86_64 only. Bubblewrap
+            (<code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">bwrap</code>)
+            must be installed, and the relay refuses to run as root.
           </p>
 
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              label="Linux (x64)"
-              icon="i-lucide-download"
-              :color="detectedOs === 'linux' ? 'primary' : 'neutral'"
-              :variant="detectedOs === 'linux' ? 'solid' : 'outline'"
-              size="xs"
-              :to="downloadLinks.linux"
-              target="_blank"
-            />
-            <UButton
-              label="macOS (Apple Silicon arm64)"
-              icon="i-lucide-download"
-              :color="detectedOs === 'macos-arm64' ? 'primary' : 'neutral'"
-              :variant="detectedOs === 'macos-arm64' ? 'solid' : 'outline'"
-              size="xs"
-              :to="downloadLinks['macos-arm64']"
-              target="_blank"
-            />
-            <UButton
-              label="macOS (Intel x64)"
-              icon="i-lucide-download"
-              :color="detectedOs === 'macos-x64' ? 'primary' : 'neutral'"
-              :variant="detectedOs === 'macos-x64' ? 'solid' : 'outline'"
-              size="xs"
-              :to="downloadLinks['macos-x64']"
-              target="_blank"
-            />
-            <UButton
-              label="Windows (x64)"
-              icon="i-lucide-download"
-              :color="detectedOs === 'windows' ? 'primary' : 'neutral'"
-              :variant="detectedOs === 'windows' ? 'solid' : 'outline'"
-              size="xs"
-              :to="downloadLinks.windows"
-              target="_blank"
-            />
-          </div>
-
-          <p class="text-xs text-muted italic">
-            Note: On macOS or Windows, if Gatekeeper/SmartScreen blocks unsigned binaries on first run, right-click the binary and select Open, or run <code class="rounded bg-black/40 px-1 font-mono">xattr -d com.apple.quarantine ./relay-agent-macos-*</code>.
-          </p>
+          <UButton
+            label="Download Linux x86_64 relay"
+            icon="i-lucide-download"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            :to="relayDownloadUrl"
+            target="_blank"
+          />
         </div>
 
-        <div class="space-y-2">
+        <div class="space-y-3">
           <h3 class="flex items-center gap-2 text-sm font-medium text-highlighted">
             <UIcon
-              name="i-lucide-key"
+              name="i-lucide-terminal"
               class="size-4"
             />
-            2. Run Agent
+            2. Run the relay
           </h3>
+
           <p class="text-xs text-muted">
-            Run the binary in your terminal, passing this page's own origin so the agent accepts requests from it (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">./relay-agent-linux-x64 --origin {{ siteOrigin }}</code>). This agent has no directory restriction — it can run commands anywhere on this machine your user account can access, not just one project folder (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir ./some/path</code> only to change its default starting directory).
+            Pick the project directory the relay is allowed to access. The
+            <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--execution-root</code>
+            is the containment boundary; commands cannot freely access the rest
+            of your machine. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir</code>
+            sets the default working directory inside that boundary.
+          </p>
+
+          <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>chmod +x ./{{ relayBinaryName }}
+./{{ relayBinaryName }} \
+  --mode local \
+  --dir /path/to/project \
+  --execution-root /path/to/project \
+  --origin {{ siteOrigin }}</code></pre>
+
+          <p class="text-xs text-muted">
+            The default port is <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">47821</code>.
+            Add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code>
+            only when using a different local port. Stop a foreground relay with
+            <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code>.
           </p>
 
           <p class="text-xs text-muted">
-            <span class="font-medium text-highlighted">Start:</span> just run the binary as shown above (add <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--port N</code> if not using the default port).
-            <span class="font-medium text-highlighted">Stop:</span> <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code> in that terminal.
+            <span class="font-medium text-highlighted">Background example:</span>
           </p>
-
-          <p class="text-xs text-muted">
-            <span class="font-medium text-highlighted">Run in the background</span> instead of tying up a terminal: <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">nohup ./relay-agent-linux-x64 --origin {{ siteOrigin }} &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code>.
-          </p>
+          <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>nohup ./{{ relayBinaryName }} \
+  --mode local \
+  --dir /path/to/project \
+  --execution-root /path/to/project \
+  --origin {{ siteOrigin }} \
+  &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code></pre>
 
           <div class="flex gap-2 mt-4">
             <UButton
-              label="Check Connection"
+              label="Check connection"
               icon="i-lucide-refresh-cw"
               :loading="isConnecting"
               @click="checkConnection"
@@ -227,17 +182,16 @@ const downloadLinks = {
       </div>
     </UCard>
 
-    <!-- Terminal Runner Interface -->
     <UCard
       v-if="isConnected"
       class="space-y-4"
     >
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="font-medium text-highlighted">Local Terminal</span>
+          <span class="font-medium text-highlighted">Local terminal</span>
           <UButton
             v-if="history.length"
-            label="Clear Output"
+            label="Clear output"
             color="neutral"
             variant="ghost"
             size="xs"
@@ -246,13 +200,12 @@ const downloadLinks = {
         </div>
       </template>
 
-      <!-- Terminal Output Window -->
-      <div class="min-h-48 max-h-96 overflow-y-auto rounded-lg border border-white/10 bg-black/90 p-4 font-mono text-xs text-green-400 space-y-3">
+      <div class="min-h-48 max-h-96 overflow-y-auto rounded-lg border border-default bg-elevated p-4 font-mono text-xs space-y-3">
         <div
           v-if="!history.length"
-          class="italic text-gray-500"
+          class="italic text-dimmed"
         >
-          Terminal ready. Type a command below to execute on this machine.
+          Terminal ready. Commands execute inside the relay's configured execution root.
         </div>
 
         <div
@@ -260,29 +213,28 @@ const downloadLinks = {
           :key="item.id"
           class="space-y-1"
         >
-          <div class="flex items-center gap-2 text-white">
-            <span class="text-primary-400">$</span>
+          <div class="flex items-center gap-2 text-highlighted">
+            <span class="text-primary">$</span>
             <span class="font-semibold">{{ item.command }}</span>
           </div>
 
           <pre
             v-if="item.result.stdout"
-            class="whitespace-pre-wrap text-gray-300"
+            class="whitespace-pre-wrap text-muted"
           >{{ item.result.stdout }}</pre>
           <pre
             v-if="item.result.stderr"
-            class="whitespace-pre-wrap text-red-400"
+            class="whitespace-pre-wrap text-error"
           >{{ item.result.stderr }}</pre>
           <div
             v-if="item.result.error"
-            class="text-red-400"
+            class="text-error"
           >
             Error: {{ item.result.error }}
           </div>
         </div>
       </div>
 
-      <!-- Command Input -->
       <div class="flex gap-2">
         <UInput
           v-model="commandInput"

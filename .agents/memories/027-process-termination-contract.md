@@ -1,18 +1,26 @@
 # Process Termination Contract (027)
 
-This document describes the cross-platform process termination contract for our Rust terminal-tool.
+This document describes the process-termination contract established for the Rust `terminal-tool` during Plan 027.
 
-## Linux and macOS (Unix) Implementation
-On Linux and macOS, process termination is handled by signaling the entire process group.
+## Unix implementation
+
+On supported Unix execution paths, process termination is handled by signaling the entire process group.
+
 - A new process group is created when spawning the command using `cmd.process_group(0)`.
-- When a timeout occurs, we send a `SIGKILL` to the process group using `libc::kill(-(pid as i32), libc::SIGKILL)`.
-- This ensures that both the parent process and any child processes it spawned are terminated.
+- When a timeout occurs, the implementation sends `SIGKILL` to the process group using `libc::kill(-(pid as i32), libc::SIGKILL)`.
+- This is intended to terminate both the direct child and descendants that remain in that process group.
 
-## Windows Support Status
-- **Windows is NOT in the supported release matrix.** (As verified in `.github/workflows/ci.yml`, the build matrix only includes `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, and `aarch64-apple-darwin`).
-- The current implementation is Linux/macOS only and Windows is explicitly unsupported.
+## Windows/non-Unix status
 
-## Platform Guards
-The codebase uses conditional compilation (`cfg` attributes) to apply the appropriate process termination logic:
-- `#[cfg(unix)]` guards are used to enable the process group creation (`cmd.process_group(0)`) and the process group kill logic (`libc::kill`).
-- `#[cfg(not(unix))]` guards are used as a fallback (currently setting `cmd.kill_on_drop(true)`), but full robust termination on non-Unix platforms (like Windows Job Objects or TerminateProcess) is not implemented since they are outside our supported release matrix.
+Full Windows process-tree termination semantics such as Job Objects are not implemented by this contract. The non-Unix fallback is not equivalent to the Unix process-group guarantee.
+
+Do not infer current platform/release support from an old CI matrix: the repository intentionally has no CI workflow now. Check current package/source and release guidance before promising a platform. In particular, the production `relay-agent` release contract is Linux + Bubblewrap even though this memory concerns the sibling `terminal-tool` process behavior.
+
+## Platform guards
+
+The codebase uses conditional compilation (`cfg` attributes) around platform-specific process behavior:
+
+- `#[cfg(unix)]` enables process-group creation and group-kill logic.
+- non-Unix paths use the implementation's available fallback behavior but do not provide the same robust descendant-termination guarantee documented above.
+
+If platform behavior changes, verify the actual source and update this memory instead of reviving a historical CI matrix as the source of truth.

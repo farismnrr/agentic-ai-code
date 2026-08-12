@@ -1,6 +1,6 @@
 {
   "name": "@ai-code/terminal-tool",
-  "version": "0.0.5-beta",
+  "version": "0.0.7-beta",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

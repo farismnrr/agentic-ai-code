@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
   const { messages } = await readBody(event)
 
   const result = streamText({
-    model: gateway('anthropic/external-mcp-sonnet-5'),
+    model: gateway('openai/legacy-model-id'),
     instructions: 'You are a helpful assistant.',
     messages: await convertToModelMessages(messages)
   })
