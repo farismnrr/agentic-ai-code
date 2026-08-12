@@ -600,16 +600,16 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [ ] Extract authorized chat-turn data loading/repository functions.
-- [ ] Extract history query + trigger-specific message mutation into a cohesive turn-input stage.
-- [ ] Extract workspace-context resolution and system-prompt policy.
-- [ ] Extract paired-device/local-terminal availability and approval policy from the HTTP route.
-- [ ] Extract assistant persistence/continuation/token-cache behavior.
-- [ ] Extract AI SDK agent streaming adapter.
-- [ ] Extract LangGraph chat streaming adapter.
-- [ ] Keep one application use case deciding mode and coordinating common lifecycle.
-- [ ] Ensure MCP resource close happens exactly once on all appropriate completion paths.
-- [ ] Preserve abort/cancellation wiring from request close through provider stream.
+- [x] Extract authorized chat-turn data loading/repository functions.
+- [x] Extract history query + trigger-specific message mutation into a cohesive turn-input stage.
+- [x] Extract workspace-context resolution and system-prompt policy.
+- [x] Extract paired-device/local-terminal availability and approval policy from the HTTP route.
+- [x] Extract assistant persistence/continuation/token-cache behavior.
+- [x] Extract AI SDK agent streaming adapter.
+- [x] Extract LangGraph chat streaming adapter.
+- [x] Keep one application use case deciding mode and coordinating common lifecycle.
+- [x] Ensure MCP resource close happens exactly once on all appropriate completion paths.
+- [x] Preserve abort/cancellation wiring from request close through provider stream.
 
 ### Critical preserved invariants
 
