@@ -10,7 +10,7 @@
     "postinstall": "pnpm build:tools && nuxt prepare && bash scripts/install-git-hooks.sh",
     "lint": "eslint . && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
     "lint:fix": "eslint . --fix && cargo fmt --all",
-    "typecheck": "nuxt prepare --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit && RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked",
+    "typecheck": "nuxt build --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit && RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked",
     "verify:commit": "bash scripts/verify-commit.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
