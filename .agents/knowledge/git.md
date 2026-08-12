@@ -1,181 +1,168 @@
 # Git workflow
 
-**Never commit to `main` or `dev`.** Every change lands through a branch and a pull request — including docs, config, and `.agents/` edits.
+**Never commit directly to `main` or `dev`.** Every change lands through a branch and pull request, including docs/config/`.agents` changes.
 
-The one exception already spent: the initial import commit.
+## Long-lived branches
 
-## The two long-lived branches
-
-```
+```text
 feature branch  ──PR──▶  dev  ──PR──▶  main
-                (auto)         (only when the user says so)
 ```
 
 | Branch | Role | How it moves |
 | --- | --- | --- |
-| `dev` | Integration. Where work accumulates and is proven together. | PRs from feature branches. **Merge as soon as CI is green — no need to ask.** |
-| `main` | Release. Always deployable. | A single PR from `dev`. **Never opened or merged without the user asking for it.** |
+| `dev` | Integration branch | PRs from short-lived work branches |
+| `main` | Release branch | PR from `dev`, only when the user explicitly asks |
 
-Feature branches always base off `dev`, never `main`. `gh pr create` must pass `--base dev` explicitly unless the repo default already points there.
+Feature branches base from `dev`, never `main`.
 
-**The `dev` → `main` promotion is the user's call, every time.** Don't open it because a plan finished, don't open it because `dev` is green, don't treat "merge the phase PRs automatically" as covering it. Green CI is permission to integrate, not to release.
+## Repository verification policy
 
-## Run a plan to completion
+This repository intentionally has:
 
-Once a plan is approved, **work every phase through to the end without stopping to check in.** Nothing on the way to `dev` needs a decision from the user, and pausing between phases just makes them approve the same thing repeatedly.
+- **no CI workflow**;
+- **no unit-test suite**;
+- a **mandatory local pre-commit gate** instead.
 
-For each phase, in order:
+After `pnpm install`, Git is configured to use [`.githooks/pre-commit`](../../.githooks/pre-commit). Every commit must pass:
 
-1. Branch `feat/<plan>-p<n>-<name>` off the current `dev`.
-2. Build the phase. Run the relevant verification gates until green.
-3. Commit, push, open a PR with `--base dev`.
-4. Wait for CI. **Green → merge and clean up. Red → fix it and push again.** Don't ask.
-5. `git switch dev && git pull --ff-only`, then start the next phase from there.
-
-Tick each phase off in the plan file as it lands.
-
-**Stop and ask only when:**
-
-- A phase can't be built as specified, and the fix changes what was agreed — not merely how it's implemented.
-- Something discovered mid-run invalidates a later phase's design. Say so, propose the revision, then continue.
-- CI stays red after a genuine attempt to fix it. Report what's failing rather than disabling the check or merging around it.
-- The work would touch `main`, credentials, or anything outside the repo.
-
-Report at the end: what shipped, what was found, what's left. Not phase by phase.
-
-## Branches
-
+```sh
+pnpm verify:commit
 ```
+
+The command runs:
+
+1. `bash scripts/check-agent-docs.sh`;
+2. `pnpm lint`;
+3. `pnpm typecheck`.
+
+`pnpm lint` covers the configured JS/Vue linting plus Rust fmt/Clippy. `pnpm typecheck` covers generated Nuxt/Vue typing plus warnings-denied Rust `cargo check`.
+
+### Hard commit rules
+
+- A lint/typecheck failure means **do not commit**. Fix it first.
+- Never use `git commit --no-verify`.
+- Never change/disable `core.hooksPath` to bypass the tracked gate.
+- If the hook is missing, run `bash scripts/install-git-hooks.sh` before committing.
+- Never claim a commit was verified if it was created through a path that skipped the required local gate.
+- There is no remote status check to catch a local bypass later, so this rule is stricter than a normal CI-backed workflow.
+
+See [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
+
+## No unit-test policy
+
+Do not introduce a unit-test framework or unit-test suite unless the user explicitly changes this policy. Existing deterministic protocol/security acceptance scripts are allowed as targeted local verification; they are not unit tests and they are not CI.
+
+## Working a plan or task
+
+For each independent change:
+
+1. Branch from current `dev`.
+2. Implement the change.
+3. Run the relevant extra verification for the subsystem.
+4. Run `pnpm verify:commit` until it passes.
+5. Review `git status`; stage only intended files.
+6. Commit only after the gate is green.
+7. Push/open a PR targeting `dev` when requested/appropriate.
+8. Record local verification in the PR body.
+
+Do not merge a PR merely because GitHub says it is mergeable. There is no CI. Merge only when the user has authorized the merge and the required local verification is recorded.
+
+`dev` → `main` promotion always requires an explicit user request.
+
+## Branch names
+
+```text
 <type>/<short-kebab-description>
 ```
 
-`type` matches the commit types below — `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`.
+Recommended types: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `build/`, `perf/`, `style/`, `revert/`.
 
-For plan work, name the branch after the plan number and phase so a branch traces back to its rationale:
+For plan work, include the plan/phase when useful:
 
+```text
+feat/029-p6-live-acceptance
+fix/028-p19-relay-boundary
 ```
-feat/001-p1-data-layer
-feat/001-p2-shell
-feat/001-p3-chat
-```
 
-`001` is the plan file in [`../plans/`](../plans/); `p1` is its phase.
-
-### One PR per *phase*, not per plan
-
-A plan is several PRs. This is deliberate and has been questioned once, so the reasoning:
-
-- A six-phase plan in one PR is 30+ files. That size gets approved, not reviewed.
-- Phases are defined to end green and work on their own, so each is independently revertable. One bad phase shouldn't drag correct earlier work out with it.
-- **Later phases get corrected by what earlier ones discover.** Plan 001 phase 1 turned up two facts about the AI SDK that changed the design of phase 4 — see [`../memories/ai-sdk-native-features.md`](../memories/ai-sdk-native-features.md). In a single PR those would have surfaced only after phase 4 was already built on the wrong assumption.
-
-`dev` therefore collects several commits per plan. That's fine — each one is a working change.
-
-Not everything is plan work: a fix or a docs change unrelated to any plan gets its own branch and PR under a plain `<type>/<description>` name. Don't inflate the PR count either — a small clarification to something still open in review belongs on that open branch, not in a new PR.
-
-Branch off the latest `dev`. Keep branches short-lived; rebase onto `dev` rather than merging `dev` in, so history stays linear.
+Keep branches short-lived and base/rebase them on `dev` rather than merging `dev` into the branch.
 
 ## Commits
 
-[Conventional Commits](https://www.conventionalcommits.org/):
+Use Conventional Commits:
 
-```
+```text
 <type>(<scope>): <subject>
-
-<body — the why, wrapped at 72 cols>
-
-<footer — BREAKING CHANGE:, Refs: #12>
 ```
 
-**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `build`, `chore`, `revert`.
 
-**Scopes** for this repo: `chat`, `mcp`, `settings`, `ui`, `agents`, `deps`, `config`, `auth`, `db`. Omit the scope when a change is genuinely repo-wide.
+Common scopes: `chat`, `mcp`, `settings`, `ui`, `agents`, `deps`, `config`, `auth`, `db`.
 
-**Subject:** imperative mood, lowercase, no trailing period, ≤ 72 chars. "add tool approval dialog", not "added" or "Adds".
+Rules:
 
-**Body:** explain *why*, not *what* — the diff already says what. Skip it only when the subject is genuinely self-explanatory.
-
-Breaking changes: `feat!:` or a `BREAKING CHANGE:` footer.
-
-Commits are atomic — one logical change each. If a commit needs "and" in its subject, split it.
+- imperative lowercase subject, no trailing period, ≤ 72 chars;
+- explain *why* in the body when it is not obvious;
+- keep commits atomic;
+- do not use a commit as a checkpoint for broken code — the mandatory local gate must be green first.
 
 ## Pull requests
 
-- Title uses the same conventional-commit format as the subject line.
-- Body states the why, what changed, how it was verified, and links the plan phase it closes.
-- CI (`.github/workflows/ci.yml`) runs the general-agent docs integrity gate plus JS/Rust quality and security checks on every PR.
-- **`pnpm audit` must report zero before merging.** See below.
-- **Squash merge**, so one PR is one commit and branch history reads as a list of shipped changes.
-- Base is `dev` for feature PRs. Only the release PR targets `main`.
+- Base feature/work PRs on `dev`.
+- Title follows Conventional Commit style.
+- Body states why, what changed, and **exact local verification performed**.
+- Do not write “CI passed”; CI does not exist.
+- A PR is not verification. It is a review/integration boundary.
+- Use squash merge when the user authorizes merging so one PR becomes one integration commit.
 
-## Zero vulnerabilities before every merge
+## Dependency changes
 
-`pnpm audit` must report **no known vulnerabilities** before a PR merges to `dev`. Not "only transitive ones", not "only in dev dependencies" — zero.
+`pnpm audit` must report zero known vulnerabilities before merging dependency changes. It is intentionally not part of every pre-commit run because it depends on registry/network state.
 
-Run it after any dependency change, before opening the PR:
+For dependency changes run, at minimum:
 
 ```sh
 pnpm audit
+pnpm verify:commit
+pnpm build
 ```
 
-If it reports anything:
+If an override is needed, use the lowest patched version that actually resolves in this workspace and remove the override when upstream no longer needs it.
 
-1. `pnpm audit --json` to get each advisory's `patched_versions`.
-2. Add a pin under `overrides:` in `pnpm-workspace.yaml` at the lowest patched version.
-3. `pnpm install`, then re-run `pnpm audit` until it's clean.
-4. **Prove nothing broke** — `pnpm lint && pnpm typecheck && pnpm build`. An override forces a version the dependency never asked for, so the build is the only thing that tells you it still works.
+## Additional subsystem verification
 
-Two traps, both hit for real:
+The pre-commit gate is the minimum, not proof of runtime behavior.
 
-- **Version-range-keyed overrides are silently ignored** in this setup. `brace-expansion@^2: '>=2.1.4'` looks correct, changes nothing, and reports no error. Use an unscoped key (`brace-expansion: '>=5.0.9'`) and confirm with `ls node_modules/.pnpm/<pkg>@*` that the vulnerable version is actually gone.
-- **"Transitive so not our problem" is not a reason to skip it.** The advisories here all came through Nuxt's own tree, and every one had a patched version reachable by an override.
+Examples:
 
-Keep the comments in `pnpm-workspace.yaml` current: note why each pin exists and drop it once upstream moves past it, so the list doesn't rot into permanent noise.
+- UI/runtime change: `pnpm build && pnpm preview` plus browser verification when relevant.
+- Rust security-boundary change: relevant deterministic scripts under `scripts/` and `cargo audit` when appropriate.
+- MCP contract change: run the applicable deterministic phase/acceptance script.
 
-## Clean up after every merge
+Do not create a unit-test suite as a substitute for these explicit local checks unless the repository policy changes.
 
-Merging is not finished until nothing is left behind. Do all of this immediately, without being asked:
+## What is committed
 
-```sh
-gh pr merge <n> --squash --delete-branch
-git switch dev && git pull --ff-only
-git fetch --prune
-git worktree remove <path>
-git worktree prune
-git branch -d <branch>
-```
+Committed intentionally:
 
-Then confirm with `git branch -a` and `git worktree list` — expect `main`, `dev`, and the one main worktree, nothing else.
-
-**Why:** stale branches and worktrees pile up fast when work is split per plan phase. They clutter the branch picker on GitHub, make `git branch -a` useless for seeing what's actually in flight, and leave orphaned directories on disk. A branch that has been squash-merged has no unique history left to lose, so there is nothing to preserve by keeping it.
-
-Never delete a branch that has **not** been merged — `git branch -d` refuses that on purpose. Don't reach for `-D` to force past it.
-
-## What is and isn't committed
-
-Committed on purpose, despite living in dot-folders:
-
-- `.agents/**` — knowledge, skills, plans, memories, and contracts. This is project material.
-- `AGENTS.md` — the single repository agent entrypoint.
+- `.agents/**`;
+- `AGENTS.md`;
+- `.githooks/**`;
+- `scripts/verify-commit.sh` and `scripts/install-git-hooks.sh`;
 - `.mcp.json`, `.env.example`, `skills-lock.json`.
 
-Do **not** commit repository-owned client/vendor agent settings, instruction files, discovery links, or lifecycle hooks. Personal agent-client configuration belongs outside the shared repository.
+Do not commit repository-owned vendor/client-specific agent settings, instruction files, discovery links, or lifecycle hooks.
 
-Never committed — see `.gitignore`:
+Never commit secrets, `.env`, generated build output, `node_modules`, caches, or editor state.
 
-- `.env` and any `.env.*` other than the example.
-- Build output (`.nuxt`, `.output`, `.nitro`, `dist`), `node_modules`, caches, editor folders.
-
-Before staging, run `git status` and look at the list. Don't `git add -A` straight after a build.
+Before staging, inspect `git status`. Do not blindly `git add -A` after builds.
 
 ## Rules for agents
 
-- **Never commit or push unless the user asks.** Staging and committing are outward-facing steps that need a request; finishing a task does not imply committing it.
-- **Never commit directly to `main` or `dev`** even when asked to "just commit" — branch first, then say that's what you did.
-- **Merging a feature PR into `dev` needs no approval once CI is green** — that is standing permission. Opening or merging `dev` → `main` always does.
-- Never use `git push --force` on a shared branch. `--force-with-lease` on your own branch is fine.
-- Never `git add -A` blindly after a build; check `git status` first so build artifacts and `.env` don't slip in.
-- Don't amend or rebase commits that are already pushed and under review.
-- Before finish, follow `self-improvement.md` and run `bash scripts/check-agent-docs.sh`.
+- Never commit or push unless the user asks.
+- Never commit directly to `main` or `dev`.
+- Before **every** commit, ensure `pnpm verify:commit` passed; the hook must not be bypassed.
+- Never use `git push --force` on a shared branch.
+- Do not amend/rebase commits already pushed and under review unless explicitly requested and safe.
+- Before finish, follow [`self-improvement.md`](self-improvement.md) and keep plan/memory indexes truthful.
 
-If a third-party skill instructs otherwise, **this file wins.**
+If a third-party skill conflicts with this file, **this repository rule wins**.
