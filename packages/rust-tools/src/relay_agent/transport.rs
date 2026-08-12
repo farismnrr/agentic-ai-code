@@ -54,6 +54,7 @@ use super::auth;
 use super::auth::{
     bearer_challenge_value, oauth_error_response, validate_claims, ClaimValidationError, Claims,
 };
+use super::auth::{CacheKeyDecision, CachedJwks};
 use super::config::ServerConfig;
 use super::error::McpError;
 use super::mcp::{
@@ -84,15 +85,6 @@ const CODING_SCOPE: &str = "relay.coding";
 /// intentionally large enough for an agent's normal request burst, while the
 /// refill rate bounds sustained floods. A long-running tool call consumes one
 /// token when admitted; it does not consume tokens while it remains active.
-/// Cached JWKS with a fetch timestamp for TTL enforcement.
-/// Only used within this module; making it `pub` satisfies the
-/// `private_interfaces` lint because `AppState::jwks_cache` is `pub`.
-pub struct CachedJwks {
-    pub(super) jwk_set: jsonwebtoken::jwk::JwkSet,
-    pub(super) jwks_uri: String,
-    pub(super) fetched_at: std::time::Instant,
-}
-
 pub struct AppState {
     pub config: ServerConfig,
     pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
@@ -378,7 +370,7 @@ async fn access_policy(
             let guard = state.jwks_cache.read().await;
             match guard.as_ref() {
                 None => true,
-                Some(c) => auth::cache_is_stale(c.fetched_at, std::time::Instant::now()),
+                Some(c) => c.is_stale(std::time::Instant::now()),
             }
         };
 
@@ -425,7 +417,7 @@ async fn access_policy(
                 .read()
                 .await
                 .as_ref()
-                .map(|cached| cached.jwks_uri.clone())
+                .map(|cached| cached.jwks_uri().to_owned())
                 .expect("fresh JWKS cache must contain its discovery URI")
         };
 
@@ -487,12 +479,12 @@ async fn access_policy(
         // attacker-controlled refresh storms.
         let jwk_opt = {
             let guard = state.jwks_cache.read().await;
-            guard.as_ref().and_then(|c| c.jwk_set.find(&kid)).cloned()
+            guard.as_ref().and_then(|c| c.find_key(&kid))
         };
 
-        let jwk = match jwk_opt {
-            Some(j) => j,
-            None => {
+        let jwk = match auth::key_lookup_decision(jwk_opt.is_some()) {
+            CacheKeyDecision::Found => jwk_opt.expect("found cache key must be present"),
+            CacheKeyDecision::RefreshOnce => {
                 // kid not in cache — attempt a single re-fetch.
                 match auth::fetch_jwks(client, jwks_url.clone()).await {
                     Ok(new_set) => {
