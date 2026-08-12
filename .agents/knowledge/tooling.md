@@ -60,15 +60,17 @@ export default withNuxt()
 
 Config names are discoverable through the generated Nuxt ESLint configuration/inspector; verify against the installed version instead of copying names from an old plan.
 
-## Type-checking caveat
+## Type-checking
 
-Do not treat a green `pnpm typecheck` as the only compile proof for Vue/Nuxt changes. This repository has recorded cases where Nuxt typecheck returned success while the generated Vue project still contained errors.
-
-For changes where type correctness matters, use the stronger generated-project gate after building:
+The root `pnpm typecheck` script is intentionally stronger than a bare `nuxt typecheck` wrapper. It builds Nuxt against `.env.example` so the complete generated `.nuxt/tsconfig.*` project exists, then runs Vue TypeScript directly:
 
 ```sh
-pnpm build
-pnpm exec vue-tsc -p .nuxt/tsconfig.json --noEmit
+pnpm typecheck
+# equivalent to:
+nuxt build --dotenv .env.example
+vue-tsc -p .nuxt/tsconfig.json --noEmit
 ```
 
-See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+This is the CI type gate. Do not simplify it back to plain `nuxt typecheck`: this repository previously observed that command exit successfully while real generated-project type errors remained.
+
+For final Nuxt/Vue verification, `pnpm build` remains useful in addition to lint/typecheck when the change affects runtime bundling or SSR behavior. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
