@@ -1,36 +1,59 @@
-# Skills and MCP
+# Skills, MCP, and agent resources
 
-## Skills
+Use this page as the discoverability index for agent-facing skills and external context sources. The file layout is the source of truth; update this index when skills are added, removed, or moved.
 
-Installed in [`../skills/`](../skills/); `.claude/skills/*` are symlinks into it so Claude Code discovers them automatically. Consult them before writing code.
+## Shared skills under `.agents/skills/`
 
-- **`nuxt`** — project structure, routing, data fetching, SSR-safe state, middleware, plugins, server routes, runtime config, layers. Source: `onmax/nuxt-skills`.
-- **`nuxt-ui`** — the 125+ Nuxt UI components, theming, forms, layouts. Its `references/` subdirectory holds targeted guides; load only the ones relevant to the task. Source: official `nuxt/ui` repo.
+Current entries:
 
-`skills-lock.json` at the repo root records their source and version. Update with `npx skills update`.
+- **`nuxt`** — Nuxt project structure, routing, data fetching, SSR-safe state, middleware, plugins, server routes, runtime config, and layers. Source tracked by `skills-lock.json`.
+- **`nuxt-ui`** — Nuxt UI components, theming, forms, layouts, props/slots/events, and targeted references. Source tracked by `skills-lock.json`.
+- **`ui-animation`** — UI motion/animation guidance for application interactions.
+- **`curl-tool`** — symlink to the package's current [`packages/curl-tool/SKILL.md`](../../packages/curl-tool/SKILL.md).
+- **`searxng-search-tool`** — symlink to the package's current [`packages/searxng-search-tool/SKILL.md`](../../packages/searxng-search-tool/SKILL.md).
+
+`skills-lock.json` remains at repository root because the `skills` CLI expects it there. For third-party locked skills, update through the skills tooling rather than editing vendored content blindly.
+
+### Package-level skills not mirrored under `.agents/skills/`
+
+These are still authoritative and must be consulted directly when relevant:
+
+- [`packages/terminal-tool/SKILL.md`](../../packages/terminal-tool/SKILL.md) — TypeScript terminal tool factory + current Rust CLI backend.
+- [`packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) — current Rust MCP relay, local/remote modes, Bubblewrap boundary, and verification.
+
+Do not assume every package skill is auto-discovered by every agent client. This index exists so missing discovery symlinks do not make a skill invisible.
+
+## Claude skill discovery
+
+`.claude/skills/*` contains Claude Code discovery symlinks into selected `.agents/skills/*` entries. The real shared skill content stays under `.agents/` or the package skill it links to.
+
+Do not copy skill bodies into `.claude/skills/`; duplicated guidance will drift.
 
 ## Nuxt UI MCP server
 
-`.mcp.json` registers the Nuxt UI MCP server (`https://ui.nuxt.com/mcp`), project-scoped. Use it for anything the skill doesn't cover — exact props, slots, and events:
+`.mcp.json` registers the project-scoped Nuxt UI MCP server. Use it when the installed Nuxt UI skill does not provide enough exact API detail:
 
-- `search-components` / `search-composables` — find by name or description
-- `get-component` — full docs with examples; `get-component-metadata` — props/slots/events only
-- `get-example` / `list-examples` — real-world usage
-- `search-icons` — returns valid `i-{prefix}-{name}` icon names
-- `search-documentation` / `get-documentation-page` — the docs site itself
-- `list-templates` / `get-template` / `get-migration-guide`
+- component/composable search;
+- component metadata, props, slots, and events;
+- examples and templates;
+- valid icon lookup;
+- documentation/migration pages.
 
-Rule of thumb: the skill tells you **which** component to use and **how** to build well; the MCP tells you **what the API is**.
+Rule of thumb: the skill provides working patterns; MCP provides current exact API surface.
+
+## Repository MCP / relay work
+
+Do not confuse the Nuxt UI documentation MCP above with this application's own MCP/relay surfaces. For product MCP work, read:
+
+- [`project.md`](project.md) for architecture orientation;
+- [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) for current relay behavior;
+- [`../plans/029-chatgpt-native-mcp-integration.md`](../plans/029-chatgpt-native-mcp-integration.md) and [`../plans/029b-chatgpt-mcp-production-hardening.md`](../plans/029b-chatgpt-mcp-production-hardening.md) for current ChatGPT integration status;
+- [`../contracts/`](../contracts/) before changing client-visible frozen descriptors.
 
 ## Agentation — visual feedback
 
-Click an element in the running app, leave a note, and get selectors an agent can grep for — instead of describing "the blue button in the sidebar".
+`agentation-vue` provides the development-only visual annotation toolbar; the project MCP configuration also includes the Agentation MCP server when configured.
 
-- **Toolbar**: `agentation-vue`, mounted by [`app/plugins/agentation.client.ts`](../../app/plugins/agentation.client.ts). Dev-only and client-only.
-- **MCP server**: `agentation` in `.mcp.json` (`npx -y agentation-mcp server`, stdio). Official package; lets the agent receive annotations directly.
+The Vue package is an unofficial community port, not the official React package. Its previously reviewed version was scanned for unexpected network/eval behavior before adoption. **That review is version-specific. Re-run the security/provenance check when upgrading the package instead of treating an old scan as a permanent guarantee.**
 
-**Provenance, because it matters here:** the official `agentation` package is **React-only** and does not endorse any Vue port. `agentation-vue` is an unofficial community port by a different maintainer (`Blaked84`), v0.3.0, ~2.9k weekly downloads against the official package's ~950k.
-
-It was scanned before adoption — across all 107 dist files: no `fetch`/XHR/WebSocket/`sendBeacon`, no `eval`/`new Function`, no external URLs. It touches `localStorage` for settings and the clipboard for output, which is exactly what it claims. **Re-run that scan on any upgrade** — the guarantee is version-specific, not permanent.
-
-The toolbar is mounted from the plugin into its own root rather than placed as a tag in `app.vue`. A tag there compiles to a `resolveComponent` call that survives into the production bundle as dead code. Verified: zero references to agentation across all 661 files of `.output/`.
+Use Agentation for selector-level visual feedback when it helps, but do not treat visual annotations as a replacement for runtime/browser verification.
