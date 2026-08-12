@@ -230,20 +230,20 @@ Protect remote MCP edge from floods without throttling ordinary coding bursts/bu
 
 ## Tasks
 
-- [ ] Keep existing request concurrency and execution semaphore limits.
-- [ ] Add or explicitly delegate coarse request-rate/admission control at trusted edge or relay.
-- [ ] Prefer generous burst/token-bucket semantics suitable for agent bursts.
-- [ ] Do not treat a multi-minute build as repeated traffic merely because it stays active.
-- [ ] If trusted edge already provides rate limiting, document and verify it rather than duplicate Rust logic.
-- [ ] Return clear overload/rate-limit response without exposing internal capacity.
-- [ ] Prevent unauthenticated floods from consuming execution capacity.
+- [x] Keep existing request concurrency and execution semaphore limits.
+- [x] Add or explicitly delegate coarse request-rate/admission control at trusted edge or relay.
+- [x] Prefer generous burst/token-bucket semantics suitable for agent bursts.
+- [x] Do not treat a multi-minute build as repeated traffic merely because it stays active.
+- [x] If trusted edge already provides rate limiting, document and verify it rather than duplicate Rust logic.
+- [x] Return clear overload/rate-limit response without exposing internal capacity.
+- [x] Prevent unauthenticated floods from consuming execution capacity.
 
 ## Acceptance
 
-- [ ] ordinary ChatGPT coding burst succeeds.
-- [ ] normal long build unaffected.
-- [ ] sustained request flood is throttled/rejected.
-- [ ] execution concurrency stays bounded.
+- [x] ordinary ChatGPT coding burst succeeds.
+- [x] normal long build unaffected.
+- [x] sustained request flood is throttled/rejected.
+- [x] execution concurrency stays bounded.
 
 ---
 
