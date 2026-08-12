@@ -1,42 +1,51 @@
 # 027 Rust CLI Release & Supply Chain
 
-## CI Pipeline
+Plan 027 established the native-tool release/supply-chain baseline. The workflow layout and supported target matrix changed later during the relay-agent security hardening, so this memory records both the durable decision and the **current** repository reality.
 
-The CI pipeline for the Rust CLI tools (`terminal-tool`, `curl-tool`, `searxng-search-tool`) has been expanded into two primary phases in `.github/workflows/rust-ci.yml`:
+## Durable decisions
 
-1.  **Test and Quality Gates (`test` job):**
-    *   **Formatting and Linting:** Enforces `cargo fmt` and `cargo clippy -- -D warnings`.
-    *   **Security Audit:** Integrates `cargo audit` to automatically enforce a dependency security audit strategy on every PR and push.
-    *   **Testing:** Executes the strict differential parity test suite (`cargo test --workspace`) ensuring no regressions against the baseline.
-    *   **Toolchain Pinning:** Rust toolchain is explicitly pinned to `1.95.0` (with MSRV `1.88.0`) to avoid sudden compilation issues from newer compiler versions.
+- Native CLI artifacts are built from reviewed Rust source with a pinned repository toolchain.
+- Rust quality/security gates are blocking: formatting, warnings-denied check/Clippy, and `cargo audit` must not be bypassed just to publish.
+- Released native artifacts carry SHA-256 checksums.
+- A permanent JavaScript executable fallback is not part of rollback. Roll back to a known-good Rust artifact/commit instead.
+- The package MSRV and the repository-pinned compiler are different concepts: `Cargo.toml` declares MSRV 1.88.0 while repository CI/development pins Rust 1.95.0.
 
-2.  **Cross-Compilation and Release (`build-release` job):**
-    *   Executes only on pushes to `main` and `dev` (conditional to successful tests).
-    *   Targets a matrix including `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, and `aarch64-apple-darwin`.
-    *   Utilizes `cross` for seamless cross-compilation where native runners are unsuitable.
-    *   Generates release-profile artifacts (`cargo build --release`).
+## Current CI/release source of truth
 
-## Checksum Generation & Provenance
+The old Plan 027 workflow name `.github/workflows/rust-ci.yml` was later consolidated/superseded. **Current CI and native release behavior lives in `.github/workflows/ci.yml`.** Read that workflow before changing or documenting exact job names, triggers, or targets.
 
-During the release phase, the pipeline packages compiled binaries and generates standard `sha256sum` hashes for every individual platform binary. The checksum format relies on standard `sha256sum` (or `shasum -a 256` on macOS runners) and exports a `.sha256` file next to each executable artifact.
+Current relay/native release policy is intentionally narrower than the original Plan 027 cross-platform matrix:
 
-*   Artifacts are uploaded securely using `actions/upload-artifact@v4`.
-*   This establishes a provenance trail back to the originating GitHub Actions run.
-*   While detailed Sigstore provenance (SLSA) is not explicitly required at this stage, the deterministic build environment and sha256 checksums form a solid baseline.
+- release target currently packaged by CI: `x86_64-unknown-linux-gnu`;
+- `relay-agent` is Linux-only because the production sandbox boundary requires Bubblewrap (`bwrap`);
+- macOS/Windows relay targets were removed rather than shipping an insecure no-sandbox fallback;
+- do not infer relay platform support from whether a simpler sibling CLI can compile on another OS.
 
-## Clean-Checkout & Rollback Verification
+The original Plan 027 matrix references to macOS/aarch64 are historical migration evidence, not the current release promise.
 
-The artifacts and integration are intended to guarantee a reliable rollback and execution model:
+## Verification baseline
 
-*   **Clean-Checkout Installation:** A clean checkout simply runs the target Rust binaries. Because the integration does not rely on local developer paths or `.mjs` files anymore, the binaries are explicitly the sole source of truth.
-*   **Fallback / Rollback Procedure:**
-    1.  A permanent JavaScript fallback is **not allowed** by the plan.
-    2.  If a CLI regression is discovered in production, the rollback procedure involves reverting the specific release commit that introduced the bug, or picking a previously validated GitHub Actions artifact (from the `release-artifacts` payload) and running it directly.
-    3.  Because the `rust-ci.yml` matrix explicitly pins the toolchain, a developer can check out a previous commit and reliably reproduce the exact binary that was rolled back.
+Current repository CI enforces commands equivalent to:
 
-## Verification Checklist
+```sh
+cd packages/rust-tools
+cargo fmt --all -- --check
+RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo audit
+```
 
-- [x] Matrix build works across architectures.
-- [x] Checksum (`.sha256`) is bundled with every released binary.
-- [x] Toolchain (`1.95.0`) provides deterministic reproduction.
-- [x] `cargo audit` actively denies compromised dependencies in the supply chain.
+The workflow also carries the current deterministic security/release gates for `relay-agent`; verify exact scripts and dependencies in `.github/workflows/ci.yml` because later Plan 028/029 work intentionally strengthened the Plan 027 baseline.
+
+## Checksum and provenance posture
+
+Release packaging produces SHA-256 checksum material for the intended native artifacts and ties artifacts to the reviewed GitHub Actions run/commit. Do not claim Sigstore/SLSA signing unless the current workflow actually implements it; checksums and CI traceability are the established baseline.
+
+## Rollback
+
+1. Do not restore a permanent JavaScript CLI fallback.
+2. Revert the offending native integration/release commit or deploy a previously validated Rust artifact.
+3. Re-run the current CI/security gates against the rollback candidate.
+4. Treat release target/platform changes as security-boundary changes when `relay-agent` containment is involved.
+
+See [`027-zero-js-cli-cutover.md`](027-zero-js-cli-cutover.md), [`028-relay-agent-phase19-security-decisions.md`](028-relay-agent-phase19-security-decisions.md), [`../../packages/rust-tools/README.md`](../../packages/rust-tools/README.md), and [`../plans/028-relay-agent-rust-rewrite.md`](../plans/028-relay-agent-rust-rewrite.md).
