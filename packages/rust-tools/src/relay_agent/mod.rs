@@ -9,3 +9,4 @@ pub mod mcp;
 pub mod pidfile;
 pub mod security;
 pub mod transport;
+pub mod transport_validation;
