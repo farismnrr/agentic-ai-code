@@ -783,6 +783,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [x] Micro-step 10E: pure owner/scope claim policy now lives in `auth.rs`; cache refresh and JWT signature/issuer/audience/expiry validation remain in `transport.rs`.
 - [x] Micro-step 10F: JWKS cache TTL/URI/key lookup and missing-key single-refresh decision operations now live in `auth.rs`; lock ownership and refresh orchestration remain in `transport.rs`.
 - [x] Micro-step 10G: JWT signature/algorithm/issuer/audience/expiry/nbf validation now lives in `auth.rs`; HTTP/cache/lookup orchestration remains in `transport.rs`.
+- [x] Micro-step 10J: initial/stale and unknown-`kid` JWKS cache writes/refresh operations now use focused async helpers in `auth.rs`; transport retains auth gate/order and error mapping.
 - [x] Extract trusted-proxy HTTPS decision with explicit security ownership (micro-step 10C: pure, tested policy helper; transport retains the same gate position and inputs).
 - [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
 - [x] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs` (Phase 10H complete; all call sites use `transport_validation.rs`).
