@@ -47,7 +47,14 @@ After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git
 pnpm verify:commit
 ```
 
-That gate runs agent-doc integrity, all configured lint checks, and all configured type checks. Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path just to avoid a failing gate.
+That gate runs:
+
+1. [`../scripts/check-repo-policy.sh`](../scripts/check-repo-policy.sh) — rejects tracked CI workflows and conventional unit-test suites;
+2. agent-doc/index integrity;
+3. all configured lint checks;
+4. all configured type/compile checks.
+
+Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path just to avoid a failing gate.
 
 See [`memories/no-ci-local-commit-gates.md`](memories/no-ci-local-commit-gates.md) for the durable policy and reasoning.
 
