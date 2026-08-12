@@ -1,10 +1,11 @@
 /**
  * Vertex AI Express Mode has no ListModels/discovery endpoint reachable with
  * an API key (confirmed directly against the real API — ListPublisherModels
- * rejects API-key auth, OAuth2-only) — see .agents/plans/023, so unlike the
- * OpenAI/Anthropic-compatible providers this can't be fetched live. These
- * IDs were curl-verified one by one against the real
- * aiplatform.googleapis.com Express Mode endpoint, not taken from docs alone.
+ * rejects API-key auth, OAuth2-only). This was established during historical
+ * Plan 023, now compacted in .agents/plans/030-previous-plans-summary.md, so
+ * unlike OpenAI/Anthropic-compatible providers this list can't be fetched
+ * live with the same credential. IDs were curl-verified individually against
+ * the real aiplatform.googleapis.com Express Mode endpoint.
  */
 export const VERTEX_AI_CHAT_MODELS = [
   { label: 'gemini-3.5-flash-lite', value: 'gemini-3.5-flash-lite' },

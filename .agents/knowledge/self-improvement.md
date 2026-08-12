@@ -1,49 +1,57 @@
 # Self-improvement — keep `.agents/` current
 
-`.agents/` is the project's durable agent memory. **Reviewing it before finish is part of every task, regardless of which coding agent/client performs the work.**
+`.agents/` is the project's durable agent context. **Reviewing it before finish is part of every task, regardless of coding agent/client.**
 
 ## Before declaring a task finished
 
-1. Review the task's diff/findings for anything another agent would need to know later.
-2. Update an existing memory/knowledge file instead of creating a duplicate when possible.
-3. Add any new memory to [`../memories/README.md`](../memories/README.md).
-4. Update [`../plans/README.md`](../plans/README.md) when a plan starts, completes, becomes blocked, or changes status.
+1. Review the task's diff/findings for anything another agent would need later.
+2. If a durable decision, trap, or constraint changed, update the **single canonical** [`../memories/README.md`](../memories/README.md) in place.
+3. If the task belongs to a numbered plan, update that plan file's status/checklist honestly.
+4. If new multi-step work needs a durable handoff and no plan exists, create the next unused numbered plan file. After the historical compaction, numbering starts at **031** and continues upward without reuse.
 5. Remove or amend guidance that became false because of the task.
-6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing a memory just to satisfy the process.
+6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing memory text just to satisfy process.
 7. Run `pnpm verify:commit` and do not finish with a failing local gate.
 
-A task is not documentation-complete when its implementation and `.agents/` tell different stories.
+A task is not documentation-complete when implementation and `.agents/` tell different stories.
 
-## When to write
+## Memory rule
 
-| Trigger | Goes to |
-| --- | --- |
-| A decision someone could reasonably reverse without knowing why | `memories/<topic>.md` |
-| A trap, dead end, incident, or fix that looks right but is wrong | `memories/<topic>.md` |
-| The user establishes a durable repo-specific working constraint | the relevant `knowledge/` file or a memory if it is decision context |
-| A stable command, convention, or operating rule changes | matching file in `knowledge/` |
-| Repository architecture changes enough that the project map is misleading | `knowledge/project.md` |
-| Tool/skill/MCP discovery changes | `knowledge/resources.md` |
-| Multi-step work needs a durable handoff | `plans/<effort>.md` and `plans/README.md` |
+There is exactly one durable memory file: [`../memories/README.md`](../memories/README.md).
+
+Update it when:
+
+- a decision could reasonably be reversed without knowing why;
+- a trap/dead end/incident is likely to recur;
+- the user establishes a durable repo-specific working constraint;
+- an architecture/security invariant needs reasoning context that is not obvious from code.
+
+Do **not** create new `memories/<topic>.md` files. Prefer concise sections/bullets in the canonical file, amend existing text when a decision changes, and delete stale material.
+
+## Plan rule
+
+[`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) is a one-time archive of every plan that existed through 029b. It must **not** become a rolling bucket for future work.
+
+For new work:
+
+- next plan is `031-...md`, then `032-...md`, etc.;
+- one multi-step effort per file;
+- never reuse a number;
+- keep status inside the plan file;
+- completed post-030 plans remain separate files;
+- do not add a `plans/README.md` index;
+- do not compact Plan 031+ into Plan 030 unless the user explicitly requests another compaction.
+
+The pre-030 plans were explicitly closed for a planning refresh. Historical unchecked items are not active tasks; re-audit current source/external facts and create a fresh plan if work needs to resume.
 
 ## What not to write
 
 - A second copy of facts already obvious from code/config when a link to the source is enough.
-- A chronological changelog or narration of the session.
+- A chronological session transcript.
 - Temporary debugging state, credentials, tokens, private URLs, or copied sensitive output.
-- Speculation presented as a durable fact.
-- A "completed" status that has not met the plan's own acceptance definition.
+- Speculation presented as durable fact.
+- A completed status that has not met the **current** plan's own acceptance definition.
 
-Durable docs may summarize implementation facts when they are needed to orient future agents, but point to the authoritative code/config rather than pretending Markdown is the runtime source of truth.
-
-## How to write
-
-- One topic per file; use kebab-case for new files.
-- Start with the decision/constraint, then capture the reasoning and the tempting wrong alternative.
-- Prefer amending an existing file over adding a near-duplicate.
-- Keep indexes complete in the same change.
-- Delete or clearly supersede stale memories. Stale memory is worse than missing memory.
-- Preserve historical plan evidence, but mark historical snapshots as such when their checklists no longer describe current status.
+Durable docs may summarize implementation facts when needed to orient future agents, but point to authoritative code/config rather than pretending Markdown is runtime source of truth.
 
 ## General enforcement
 
@@ -51,17 +59,13 @@ The repository intentionally avoids agent-client-specific hooks/settings. There 
 
 The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
 
-- [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance and complete plan/memory indexes;
-- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs that integrity check plus `pnpm lint` and `pnpm typecheck`;
+- [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
+- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + `pnpm lint` + `pnpm typecheck`;
 - [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
 - [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
 
 A failed gate means fix the issue before committing. `git commit --no-verify` and disabling the tracked hook are not acceptable shortcuts.
 
-The integrity script deliberately does **not** try to infer whether source code "deserves" a memory update. That decision is semantic and belongs to the closeout review above. The local hook proves only that configured structural/lint/type gates passed on that machine; the working agent is still responsible for capturing durable knowledge when the task creates it.
-
-If a future agent client offers its own local automation, keep it personal/untracked. Do not fork repository guidance or add a second repository-owned agent lifecycle path.
-
 ## Principle
 
-The self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful → pass the local commit gate without bypassing it**.
+The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → pass the local commit gate without bypassing it**.

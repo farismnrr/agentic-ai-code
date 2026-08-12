@@ -1,5 +1,0 @@
-When checking a background command (`pnpm build`, `pnpm dev`, migrations, anything long-running), never pipe or check its output through `tail` — read the output file whole (or poll it whole) so the full log is visible and nothing is missed while it's still writing.
-
-**Why:** `pnpm build` output is buffered by the tool chain and can appear to sit at 0 lines for many minutes, then dump the entire log at once when the process actually finishes or is signaled. Judging "stuck" from `tail` showing nothing, or from low CPU% in a point-in-time `ps` snapshot, is not reliable — a real run of `feat/005-p4-chat-persistence`'s `pnpm build` finished in about a minute (confirmed by `.output/server/index.mjs`'s mtime) but the log/notification didn't surface until ~25 minutes later, and reading with `tail` gave no signal either way in between.
-
-**How to apply:** for any background task, read the full output file (not `tail -n`), and don't declare something stuck based on `ps` CPU% alone — check for the actual completion marker in the tool's own output (e.g. Nuxt prints `✨ Build complete!`) or the expected output artifact's timestamp before killing a process that looks idle.
