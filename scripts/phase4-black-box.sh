@@ -217,6 +217,9 @@ def run():
             status, response_headers, body = request(local_url, headers=headers(), body=valid_discover)
             assert_status(status, 200, "local server/discover")
             assert body["result"]["supportedVersions"] == [PROTOCOL]
+            instructions = body["result"]["instructions"]
+            assert "Local" not in instructions
+            assert "Plan 0" not in instructions
             assert response_headers.get("x-correlation-id")
 
             status, _, body = request(local_url, headers=headers(origin=None), body=valid_discover)

@@ -565,15 +565,15 @@ The current `server/discover.instructions` still describes the relay as a local 
 
 Tasks:
 
-- [ ] Replace `Local relay-agent MCP server` wording with neutral coding-agent wording that is true for both loopback+tunnel and trusted-edge deployments.
-- [ ] Remove references to internal Plan numbers or migration history from client-visible discovery instructions.
-- [ ] Keep the description concise and capability-oriented: sandboxed coding terminal, configured HTTP access, web search, and workspace policy.
-- [ ] Do not claim Docker support while Docker remains deferred for v1.
-- [ ] Run `server/discover` black-box validation after the wording change.
+- [x] Replace `Local relay-agent MCP server` wording with neutral coding-agent wording that is true for both loopback+tunnel and trusted-edge deployments.
+- [x] Remove references to internal Plan numbers or migration history from client-visible discovery instructions.
+- [x] Keep the description concise and capability-oriented: sandboxed coding terminal, configured HTTP access, web search, and workspace policy.
+- [x] Do not claim Docker support while Docker remains deferred for v1.
+- [x] Run `server/discover` black-box validation after the wording change.
 
 Exit:
 
-- [ ] discovery metadata is accurate, deployment-neutral, and suitable for the first real ChatGPT `Scan Tools` run.
+- [x] discovery metadata is accurate, deployment-neutral, and suitable for the first real ChatGPT `Scan Tools` run.
 
 ### Pre-E2E handoff gate
 
@@ -709,12 +709,12 @@ Extend `scripts/phase4-black-box.sh` so the final behavior is explicit:
 
 **Target:** `packages/rust-tools/src/relay_agent/mcp.rs` and existing black-box script.
 
-- [ ] replace the current `Local relay-agent MCP server...Plan 027...` text.
-- [ ] use deployment-neutral product wording only.
-- [ ] mention the actual v1 capabilities: sandboxed coding terminal, HTTP requests, web search, and configured workspace policy.
-- [ ] do not mention internal Plan 027/028/029 history.
-- [ ] do not claim Docker support.
-- [ ] add/extend `server/discover` black-box assertion so the returned instruction text contains neither `Local` nor `Plan 0`/internal plan wording.
+- [x] replace the current `Local relay-agent MCP server...Plan 027...` text.
+- [x] use deployment-neutral product wording only.
+- [x] mention the actual v1 capabilities: sandboxed coding terminal, HTTP requests, web search, and configured workspace policy.
+- [x] do not mention internal Plan 027/028/029 history.
+- [x] do not claim Docker support.
+- [x] add/extend `server/discover` black-box assertion so the returned instruction text contains neither `Local` nor `Plan 0`/internal plan wording.
 
 Suggested intent, not mandatory exact copy:
 

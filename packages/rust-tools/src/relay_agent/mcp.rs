@@ -207,7 +207,7 @@ impl DiscoverResult {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
             capabilities: json!({ "tools": { "listChanged": false } }),
-            instructions: "Local relay-agent MCP server: exposes terminal_exec, http_fetch, and web_search tools backed by the Plan 027 Rust CLI binaries.",
+            instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
             ttl_ms: 0,
             cache_scope: "private",
         }
