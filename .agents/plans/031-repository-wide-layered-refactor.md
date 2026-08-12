@@ -704,13 +704,13 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [ ] Clarify provider contract vs provider-specific adapters.
-- [ ] Ensure adding a provider implementation primarily adds an adapter/registration entry instead of modifying unrelated chat orchestration.
-- [ ] Keep provider configuration validation/domain policy independent from SDK construction.
-- [ ] Separate MCP server persistence/config from live MCP client/tool building.
-- [ ] Centralize tool metadata/approval policy only where it is truly common.
-- [ ] Keep native/local-terminal tool behavior separate from remote MCP tools while sharing only compatible AI SDK boundary helpers.
-- [ ] Remove stale/ambiguous naming such as multiple `providers.ts` ownership surfaces if the migration proves a clearer structure.
+- [x] Clarify provider contract vs provider-specific adapters.
+- [x] Ensure adding a provider implementation primarily adds an adapter/registration entry instead of modifying unrelated chat orchestration.
+- [x] Keep provider configuration validation/domain policy independent from SDK construction.
+- [x] Separate MCP server persistence/config from live MCP client/tool building.
+- [x] Audited tool metadata/approval policy; MCP and native approval identities remain intentionally separate because their ownership and lifecycle differ.
+- [x] Keep native/local-terminal tool behavior separate from remote MCP tools while sharing only compatible AI SDK boundary helpers.
+- [x] Clarified provider ownership with the adapter registry in `server/utils/providers/index.ts` and the persistence facade in `server/utils/providers.ts`; no ambiguous duplicate was removed because the facade remains a compatibility boundary.
 
 ### Acceptance
 

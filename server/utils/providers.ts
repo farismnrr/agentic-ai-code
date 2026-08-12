@@ -1,4 +1,3 @@
-import { type ModelProviderType } from '../database/schema'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 import { deleteUserProvider, findUserProvider, insertUserProvider, listUserProviders, updateUserProvider, type ProviderInput, type ProviderUpdate } from '../infrastructure/database/providers'
 import { encryptSecret } from './crypto'
