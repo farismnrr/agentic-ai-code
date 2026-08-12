@@ -1,27 +1,35 @@
 # 027 CLI Rust Refactor Performance Benchmark
 
-**Date:** 2026-08-10
+**Date:** 2026-08-10  
 **Related Plan:** [027-cli-rust-refactor.md](../plans/027-cli-rust-refactor.md)
 
-## Methodology
+## Status
 
-A custom Python script (`benchmark_runner.py`) was used to execute each CLI implementation and record its end-to-end execution time, Peak Resident Set Size (RSS), and on-disk binary size.
+This file preserves **historical migration evidence** from the JS → Rust CLI cutover. The original one-off Python benchmark runner and JavaScript oracle CLIs were removed after the zero-JS cutover, so these exact comparative measurements are **not a current runnable benchmark suite** and must not be described as such.
 
-### Hardware/Environment
-- Environment: Local Linux development environment (Ubuntu 22.04)
+If a new performance claim is needed, create a current benchmark against the current Rust binaries and record fresh environment/toolchain details rather than reconstructing or reintroducing deleted JavaScript CLI launchers.
+
+## Historical methodology
+
+A custom Python runner executed each then-current CLI implementation and recorded end-to-end execution time, Peak Resident Set Size (RSS), and on-disk binary/source size.
+
+### Hardware/environment
+
+- Environment: local Linux development environment (Ubuntu 22.04)
 - CPU: AMD Ryzen 9 5900X (or equivalent)
-- Toolchain: Rust 1.95.0 (via `cargo build --release`), Node.js (v22.0.0)
+- Toolchain: Rust 1.95.0 (`cargo build --release`) and Node.js 22
 
-### Methodology Details
-- **Warm-start/Cold-start:** Each command was executed for 2 warmup iterations to negate page cache variations, followed by 10 benchmark iterations.
-- **Latency Measurement:** Python's `time.perf_counter()` was used to measure end-to-end process execution. This intentionally captures total process lifecycle (startup, execution, shutdown), reflecting the CLI usage context.
-- **Peak RSS Measurement:** Python's `resource.getrusage(resource.RUSAGE_CHILDREN)` was used after isolating each execution in a sub-process wrapper to accurately capture the max RSS for the specific execution.
-- **Fixtures:** 
-  - `terminal-tool`: `--no-guard echo hello` (measures minimal subprocess execution)
-  - `curl-tool`: `http://0.0.0.0` (measures startup/parsing and immediate network-layer exit)
-  - `searxng-search-tool`: `--help` (measures minimal startup and output parsing)
+### Methodology details
 
-## Results
+- **Warmup/sample count:** 2 warmup iterations followed by 10 measured iterations.
+- **Latency:** Python `time.perf_counter()` measured total process lifecycle (startup, execution, shutdown).
+- **Peak RSS:** Python `resource.getrusage(resource.RUSAGE_CHILDREN)` after isolating each execution in a subprocess wrapper.
+- **Historical fixtures:**
+  - `terminal-tool`: `--no-guard echo hello`
+  - `curl-tool`: `http://0.0.0.0`
+  - `searxng-search-tool`: `--help`
+
+## Recorded results
 
 | Tool | Latency (Avg) | Peak RSS (Avg) | Binary Size |
 |---|---|---|---|
@@ -32,9 +40,8 @@ A custom Python script (`benchmark_runner.py`) was used to execute each CLI impl
 | `searxng-tool` (Rust) | 2.03 ms | 14.07 MB | 2.13 MB |
 | `searxng-tool` (Node) | 248.81 ms | 152.78 MB | 0.72 KB (source) |
 
-## Findings & Conclusions
-1. **CLI invocation latency:** Rust reduces cold process invocation latency by ~240ms vs Node.js (measured as wall-clock process startup). This massively reduces overhead in any agentic loops relying on these tools.
-2. **Memory Footprint:** Peak RSS usage dropped from ~155MB to ~14MB, yielding >10x memory reduction.
-3. **No Unsupported Claims:** The benchmark measures only the CLI layer wrapper overhead; network transit latency for `curl` or `searxng` queries will remain unchanged, but the per-invocation lifecycle cost has been effectively eliminated.
+## Historical conclusion
 
-**Status:** The benchmark gate is satisfied and all evidence is reproducible via `benchmark_runner.py`.
+The recorded migration run showed materially lower process-startup latency and memory use for the Rust CLI layer. The measurement covered CLI process lifecycle overhead only; it did not claim network transit improvements for curl/SearXNG operations.
+
+Treat these numbers as evidence supporting the completed Plan 027 migration decision, **not as a continuously reproducible current benchmark or a guarantee of present-day performance**.
