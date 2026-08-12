@@ -9,7 +9,7 @@ The user wants an LLM-callable terminal tool — this is a coding assistant, and
 
 The ask: chat mode gets the terminal tool **read-only** (safe, always-on, like curl/searxng); agent mode gets it **full access**, but only when the user explicitly turns it on, mirroring the existing per-conversation MCP tool toggle + approval flow. Confirmed with the user: agent-mode full access still runs inside its conversation's workspace directory, never outside it.
 
-Researched and adopted from how other coding assistants (Claude Code, OpenHands, Aider) built this, and from a real disclosed vulnerability class in Claude Code's own Bash tool (CWE-78 command injection via shell-interpolated strings):
+The design follows established coding-assistant patterns and the disclosed CWE-78 class of bugs caused by shell-interpolated command strings:
 
 - **Never invoke a shell.** Accept `command` + `args[]` as separate fields, execute via `execa(command, args, { shell: false, ... })` (the LLM-facing schema literally cannot contain shell metacharacters that matter, because nothing parses them).
 - Use `execa` over raw `child_process` — no shell by default, real `timeout` with process-tree kill, structured results, cross-platform argv handling.

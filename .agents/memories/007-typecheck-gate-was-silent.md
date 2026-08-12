@@ -1,33 +1,29 @@
-# `nuxt typecheck` doesn't reliably surface real type errors — known, not yet fixed
+# Historical incident: bare `nuxt typecheck` silently passed real type errors
 
-During plan 007, `nuxt typecheck` was observed exiting `0` with no output
-on code that had real type errors present (confirmed once by comparing
-against a direct `vue-tsc --noEmit -p .nuxt/tsconfig.json` run, which did
-report them). This is a genuine gap in the CI gate, but **two fix attempts
-in this PR both made CI worse, not better**, so the script was reverted to
-plain `"typecheck": "nuxt typecheck"` (the pre-plan-007 baseline) rather
-than ship something unproven:
+During Plan 007, bare `nuxt typecheck` was observed exiting `0` with no output while a direct generated-project Vue typecheck reported real errors. This was a genuine verification gap and is the reason the repository must not use a plain `"typecheck": "nuxt typecheck"` script as its correctness gate.
 
-1. `vue-tsc --noEmit -p .nuxt/tsconfig.json` directly — fails outright on a
-   clean checkout: `nuxt prepare` (what `postinstall` runs) only writes
-   `.nuxt/tsconfig.server.json`, not the full `tsconfig.app.json` /
-   `tsconfig.shared.json` / `tsconfig.node.json` / `tsconfig.json` set the
-   root `tsconfig.json`'s project references need — `TS5058: The specified
-   path does not exist`.
-2. `nuxt build --dotenv .env.example && vue-tsc ...` — generates the full
-   tsconfig set (confirmed locally), but failed in CI with
-   `TSCONFIG_ERROR: Tsconfig not found .nuxt/tsconfig.app.json` from a
-   `rolldown@1.1.5` stack frame, while `pnpm-lock.yaml` pins
-   `rolldown@1.2.1` everywhere and the same build succeeded locally every
-   time. `rolldown` is resolved outside the deterministic lockfile graph
-   (likely via `vite`'s optional-bundler resolution), so **the exact
-   version a clean `pnpm install` picks up is not reproducible between this
-   machine and GitHub Actions** — not something to chase further inside a
-   feature PR.
+## Earlier failed fixes
 
-**Why this matters:** `pnpm typecheck` gates every PR per
-`.agents/knowledge/project.md`, and it is currently back to a state that
-may silently pass real type errors — this is a known, open gap, not a
-resolved one. Before trusting it again (or attempting another fix), verify
-on a genuinely clean checkout in CI itself, not just locally — local
-success here did not predict CI's behavior twice in a row.
+Two earlier attempts were not reliable in the repository state/toolchain that existed at the time:
+
+1. `vue-tsc --noEmit -p .nuxt/tsconfig.json` immediately after an older `nuxt prepare` output did not have the generated project shape needed by that older setup.
+2. `nuxt build --dotenv .env.example && vue-tsc ...` proved to be the wrong coupling for the type gate. On a clean GitHub Actions checkout with Nuxt 4.5.1/Vite 8, the build path could enter Vite transformation while `.nuxt/tsconfig.app.json` was unavailable, producing dozens of `TSCONFIG_ERROR` failures before `vue-tsc` even ran.
+
+Those failures are historical context, not a reason to accept the silent gate forever.
+
+## Current invariant
+
+With the current Nuxt toolchain, the repository uses Nuxt's dedicated type-generation command followed by a direct Vue TypeScript check:
+
+```sh
+nuxt prepare --dotenv .env.example
+vue-tsc -p .nuxt/tsconfig.json --noEmit
+```
+
+The root `pnpm typecheck` script owns this sequence and then performs the warnings-denied Rust workspace check. The mandatory local pre-commit gate calls `pnpm typecheck`; the repository intentionally has no CI workflow now.
+
+`nuxt prepare` is used here specifically to generate Nuxt's type project without coupling type verification to production bundling. `pnpm build` remains a separate runtime/bundling verification command when needed.
+
+**Do not simplify this back to bare `nuxt typecheck`.** If a future Nuxt/Vue toolchain changes the generated project shape, fix or replace the explicit generation + `vue-tsc` sequence with an equally strong check. Do not silently fall back to the wrapper that previously missed real errors.
+
+See also [`013-nuxt-ui-slot-typecheck-gate.md`](013-nuxt-ui-slot-typecheck-gate.md) and [`no-ci-local-commit-gates.md`](no-ci-local-commit-gates.md).

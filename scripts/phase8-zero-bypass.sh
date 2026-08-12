@@ -15,8 +15,16 @@ test -f scripts/phase7-chatgpt-contract.sh
 ! rg -q 'offline_access' packages/rust-tools/src/relay_agent
 ! rg -q 'session_id|EventSource|/sse|/message' packages/rust-tools/src/relay_agent
 ! find packages/relay-agent -type f \( -name '*.mjs' -o -name '*.cjs' -o -name '*.js' -o -name '*.pkg' \) -print -quit | grep -q .
-! rg -n 'continue-on-error:|\|\| *true|; *true' .github/workflows scripts
 ! rg -n '#\[allow\((dead_code|unused|warnings|clippy)' packages/rust-tools/src
-! rg -n 'cargo test|npm test|pnpm test|yarn test' .github/workflows/ci.yml
+
+# Repository policy: no GitHub Actions/CI workflow is tracked. Local commit
+# gates own lint/type enforcement instead.
+if [ -d .github/workflows ] && find .github/workflows -type f -print -quit | grep -q .; then
+  echo 'phase8: CI workflow found, but repository policy is no CI' >&2
+  exit 1
+fi
+
+# Local verification scripts must fail closed rather than masking failures.
+! rg -n '\|\| *true|; *true' scripts
 
 echo 'phase8 zero-bypass conformance: pass'

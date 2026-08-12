@@ -19,11 +19,11 @@ send `[summary] + [recent messages]` to the model instead of the full
 history. Full history stays in the DB/UI untouched — only what's sent to
 the LLM is trimmed.
 
-This mirrors the "auto-compact" pattern used by coding-agent tools (e.g.
-Claude Code's own `/compact`): summarize once a threshold is crossed, keep
-a pointer so it isn't redone from scratch every turn, and never split a
-tool-call/tool-result pair (each `UIMessage` here already carries its tool
-parts inline, so cutting on whole-message boundaries is always safe).
+This mirrors the auto-compact pattern used by coding-agent tools: summarize
+once a threshold is crossed, keep a pointer so it isn't redone from scratch
+every turn, and never split a tool-call/tool-result pair (each `UIMessage`
+here already carries its tool parts inline, so cutting on whole-message
+boundaries is always safe).
 
 ## Approach
 
@@ -422,7 +422,7 @@ that phases 1-3 also touched:
    Tools picker — no such UI exists today (`ChatToolPicker.vue` only
    manages `enabledToolIds`, never touches `approvals`).
 
-3. **Context-window usage indicator** (like Claude Code/opencode) — the
+3. **Context-window usage indicator** (a common coding-agent pattern) — the
    data mostly exists already: `conversations.lastMeasuredTokens` (real
    usage from the last turn, added in Phase 2 above) and
    `models.contextWindow`/`maxOutputTokens`. Gap found via Explore:

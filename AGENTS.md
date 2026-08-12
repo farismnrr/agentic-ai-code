@@ -1,5 +1,17 @@
 # AGENTS.md
 
-All agent guidance for this repo lives in **[`.agents/`](.agents/)**. Start at [`.agents/README.md`](.agents/README.md) — it indexes the knowledge, skills, plans, and memories.
+All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start at [`.agents/README.md`](.agents/README.md), then read the knowledge, skill, plan, and memory files relevant to the task.
 
-Keep this file a pointer. New guidance belongs in `.agents/`, not here.
+This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
+
+This repository intentionally has **no CI** and **no unit-test suite**. Quality enforcement is local and mandatory. Before every commit, all required lint/type gates must pass:
+
+```sh
+pnpm verify:commit
+```
+
+A tracked pre-commit hook runs that command automatically after `pnpm install`. Never bypass it with `git commit --no-verify`, and never commit while lint or typecheck is failing.
+
+Before declaring work complete, also follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md).
+
+Keep this file a pointer. New durable guidance belongs in `.agents/`, not here.

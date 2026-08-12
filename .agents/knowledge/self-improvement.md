@@ -1,46 +1,67 @@
 # Self-improvement — keep `.agents/` current
 
-`.agents/` is the project's memory. Anything you learn that stays in the conversation is lost at the end of the session; anything you write here survives. **Updating `.agents/` is part of finishing a task, not an optional extra.**
+`.agents/` is the project's durable agent memory. **Reviewing it before finish is part of every task, regardless of which coding agent/client performs the work.**
+
+## Before declaring a task finished
+
+1. Review the task's diff/findings for anything another agent would need to know later.
+2. Update an existing memory/knowledge file instead of creating a duplicate when possible.
+3. Add any new memory to [`../memories/README.md`](../memories/README.md).
+4. Update [`../plans/README.md`](../plans/README.md) when a plan starts, completes, becomes blocked, or changes status.
+5. Remove or amend guidance that became false because of the task.
+6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing a memory just to satisfy the process.
+7. Run `pnpm verify:commit` and do not finish with a failing local gate.
+
+A task is not documentation-complete when its implementation and `.agents/` tell different stories.
 
 ## When to write
 
-Write something down when any of these happen:
-
 | Trigger | Goes to |
 | --- | --- |
-| You made a decision someone could reasonably reverse without knowing why | `memories/<topic>.md` |
-| You hit a trap, dead end, or a "fix" that looks right but is wrong | `memories/<topic>.md` |
-| The user corrected you, or stated a preference for how work should be done | `memories/<topic>.md` |
-| A new command, convention, or rule for building this project | the matching file in `knowledge/` |
-| A new dependency, module, or tool changed how the project is set up | `knowledge/project.md` + `knowledge/tooling.md` |
-| Multi-step work that won't finish this session | `plans/<effort>.md` |
+| A decision someone could reasonably reverse without knowing why | `memories/<topic>.md` |
+| A trap, dead end, incident, or fix that looks right but is wrong | `memories/<topic>.md` |
+| The user establishes a durable repo-specific working constraint | the relevant `knowledge/` file or a memory if it is decision context |
+| A stable command, convention, or operating rule changes | matching file in `knowledge/` |
+| Repository architecture changes enough that the project map is misleading | `knowledge/project.md` |
+| Tool/skill/MCP discovery changes | `knowledge/resources.md` |
+| Multi-step work needs a durable handoff | `plans/<effort>.md` and `plans/README.md` |
 
-## What NOT to write
+## What not to write
 
-- Anything already derivable from the code, config, or `package.json`. If reading the repo answers it, don't duplicate it — duplicates drift and then mislead.
-- Narration of what you did. Record the **why** and the **constraint**, not the changelog.
-- One-off details that only mattered inside a single conversation.
+- A second copy of facts already obvious from code/config when a link to the source is enough.
+- A chronological changelog or narration of the session.
+- Temporary debugging state, credentials, tokens, private URLs, or copied sensitive output.
+- Speculation presented as a durable fact.
+- A "completed" status that has not met the plan's own acceptance definition.
+
+Durable docs may summarize implementation facts when they are needed to orient future agents, but point to the authoritative code/config rather than pretending Markdown is the runtime source of truth.
 
 ## How to write
 
-- One file per fact, kebab-case, first line a one-sentence summary.
-- State the reasoning, and name the wrong-looking-right alternative if there is one — that's the part that actually prevents a repeat.
-- Add the file to the index in `memories/README.md`.
-- **Prefer updating an existing file over adding a near-duplicate.** Check the index first.
-- **Delete memories that stop being true.** A stale memory is worse than no memory.
+- One topic per file; use kebab-case for new files.
+- Start with the decision/constraint, then capture the reasoning and the tempting wrong alternative.
+- Prefer amending an existing file over adding a near-duplicate.
+- Keep indexes complete in the same change.
+- Delete or clearly supersede stale memories. Stale memory is worse than missing memory.
+- Preserve historical plan evidence, but mark historical snapshots as such when their checklists no longer describe current status.
 
-## The reminder hook
+## General enforcement
 
-`.claude/settings.json` registers a `Stop` hook running [`../hooks/check-agents-sync.sh`](../hooks/check-agents-sync.sh). If watched source paths (`app/`, `server/`, `nuxt.config.ts`, `package.json`, …) changed but nothing under `.agents/` did, it interrupts once with a prompt to persist what you learned.
+The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-It fires **at most once per session** — it cannot loop, and it will not nag.
+The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
 
-To acknowledge that nothing is worth saving:
+- [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance and complete plan/memory indexes;
+- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs that integrity check plus `pnpm lint` and `pnpm typecheck`;
+- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
+- [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
 
-```sh
-touch .agents/.last-sync
-```
+A failed gate means fix the issue before committing. `git commit --no-verify` and disabling the tracked hook are not acceptable shortcuts.
 
-Editing any file under `.agents/` clears it naturally. Session state lives in `.agents/.sync-state/` (gitignored) — safe to delete anytime.
+The integrity script deliberately does **not** try to infer whether source code "deserves" a memory update. That decision is semantic and belongs to the closeout review above. The local hook proves only that configured structural/lint/type gates passed on that machine; the working agent is still responsible for capturing durable knowledge when the task creates it.
 
-The hook is a backstop for forgetting, not the reason to do this. Write things down as you learn them.
+If a future agent client offers its own local automation, keep it personal/untracked. Do not fork repository guidance or add a second repository-owned agent lifecycle path.
+
+## Principle
+
+The self-improvement loop is: **read existing durable context → do the work → capture new durable context → keep indexes/statuses truthful → pass the local commit gate without bypassing it**.

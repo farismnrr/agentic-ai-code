@@ -2,6 +2,8 @@
 
 Plan 029 should stay anchored to the current MCP `2026-07-28` transport and the relay's existing Resource Server model instead of reviving the old SSE story.
 
+> **Current repository policy (2026-08-12):** the repository intentionally has no CI workflow and no unit-test suite. CI/workflow references below are preserved only where they describe Plan 029's historical audit/execution evidence. Current commits use the mandatory local gate in [`no-ci-local-commit-gates.md`](no-ci-local-commit-gates.md).
+
 ## Durable decisions
 
 - ChatGPT write-capable E2E should target a Business workspace with developer mode enabled and a custom MCP app, but only if the live tenant actually exposes full MCP write/modify actions.
@@ -23,11 +25,7 @@ Plan 029 should stay anchored to the current MCP `2026-07-28` transport and the 
 
 ## Phase 0 audit evidence
 
-Audit date: 2026-08-12. The current branch was checked against the relay source,
-CI workflow, release workflow, and the Plan 028 sandbox implementation. The
-following matrix is the Phase 0 freeze record: every later implementation task
-is represented by a concrete `PARTIAL` or `MISSING` gap, while existing Plan
-028 capabilities are not scheduled for reimplementation.
+Audit date: 2026-08-12. The Plan 029 branch was checked against the relay source, the **then-current** CI/release workflow, and the Plan 028 sandbox implementation. The following matrix is the Phase 0 freeze record: every later implementation task is represented by a concrete `PARTIAL` or `MISSING` gap, while existing Plan 028 capabilities are not scheduled for reimplementation.
 
 | Gap | Status | Evidence and mapped implementation work |
 | --- | --- | --- |
@@ -38,18 +36,13 @@ is represented by a concrete `PARTIAL` or `MISSING` gap, while existing Plan
 | P5 operations | MISSING | The relay has bounded execution output/timeouts, but Plan 029 still lacks the documented structured correlation, privacy-safe outcome/latency logging, redaction, retention, and diagnostic taxonomy. |
 | P6 live coding E2E | MISSING | No repository evidence records a Business/Enterprise/Edu developer-mode app, successful Scan Tools, OAuth refresh, `relay.coding` grant, or the inspect-edit-build and negative boundary scenarios. This must be validated in the live product, not replaced with unit tests. |
 | P7 published-app lifecycle | MISSING | No canonical tool-catalog hash/snapshot or ChatGPT refresh/action-review procedure is recorded. The stable public tool names are present, but publication-change safety is not yet implemented/documented. |
-| P8 release/conformance gates | PARTIAL | `.github/workflows/ci.yml` already runs locked Rust formatting/check/clippy/audit and makes release depend on JS/Rust jobs. Deterministic connector checks, explicit warning/bypass review, and the remaining Plan 029 conformance assertions are not yet present. |
+| P8 historical release/conformance gate | PARTIAL at Phase 0 | At the time of the Phase 0 audit, `.github/workflows/ci.yml` ran locked Rust formatting/check/clippy/audit and release dependencies. Later work added deterministic connector checks and zero-bypass assertions. That workflow is now intentionally removed; current enforcement is local via `pnpm verify:commit` plus targeted acceptance/security scripts. |
 
-The matrix also records two Phase 0 freeze decisions. Plan 029 schedules no
-Rust or JavaScript unit-test work and adds no command denylist or other
-restriction merely because the coding terminal can edit/run code. Existing
-Plan 028 filesystem, process, privilege, container, timeout, and output
-boundaries remain authoritative; ordinary shells, interpreters, Git, package
-managers, compilers, and in-workspace file mutation remain in scope.
+The matrix also records two Phase 0 freeze decisions. Plan 029 schedules no Rust or JavaScript unit-test work and adds no command denylist or other restriction merely because the coding terminal can edit/run code. Existing Plan 028 filesystem, process, privilege, container, timeout, and output boundaries remain authoritative; ordinary shells, interpreters, Git, package managers, compilers, and in-workspace file mutation remain in scope.
 
 ## Phase 9 production-readiness evidence
 
-Audit date: 2026-08-12. The repository gates passed:
+Audit date: 2026-08-12. The repository gates recorded at that closeout passed:
 
 - `scripts/phase6-chatgpt-e2e.sh` (static acceptance; live probe unavailable)
 - `scripts/phase7-chatgpt-contract.sh`
@@ -59,10 +52,7 @@ Audit date: 2026-08-12. The repository gates passed:
 - `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
 - `cargo audit`
 
-The catalog snapshot hash remains
-`6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`.
-No deployed relay URL, ChatGPT workspace, OAuth tenant, or callback
-credentials were available. Therefore Scan Tools, OAuth registration/PKCE/
-refresh/OIDC, live coding E2E, and live negative-boundary evidence are
-explicitly unverified; this is an accepted release limitation and does not
-constitute fabricated evidence.
+These are historical Plan 029 evidence, not a statement that CI still exists. Current commits must instead satisfy the local no-CI policy and mandatory pre-commit gate.
+
+The catalog snapshot hash remains `6fd916285e1c8f1f0f7195ff7ef8bd696590ca1f0ad0ebb1b0c49d562a190ea6`.
+No deployed relay URL, ChatGPT workspace, OAuth tenant, or callback credentials were available. Therefore Scan Tools, OAuth registration/PKCE/refresh/OIDC, live coding E2E, and live negative-boundary evidence are explicitly unverified; this is an accepted release limitation and does not constitute fabricated evidence.

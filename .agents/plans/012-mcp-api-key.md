@@ -4,7 +4,7 @@
 
 Two things are currently missing:
 
-1. **Inbound.** There's no way for an external MCP client (Claude Desktop, another agent, etc.) to drive this app. No API keys exist at all today — auth is 100% session-cookie (`nuxt-auth-utils`).
+1. **Inbound.** There's no way for an external MCP client (desktop MCP client, another agent, etc.) to drive this app. No API keys exist at all today — auth is 100% session-cookie (`nuxt-auth-utils`).
 2. **Outbound.** `mcp_servers` (schema.ts:145) already stores third-party server configs (name/transport/url/command) with full CRUD (`server/api/mcp-servers/*`), and the chat UI has `enabledToolIds`/`approvals` columns on `conversations` ready for tool use — but nothing actually connects to a stored MCP server or calls its tools. `chat.post.ts` only proxies to the router's `/chat/completions`, no tools included. It's a settings form that saves rows nobody reads.
 
 Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint inside this Nuxt app (idiomatic — Nitro already serves everything else here), not a separate stdio process.
@@ -56,7 +56,7 @@ Confirmed with the user: build both. Inbound MCP server runs as an HTTP endpoint
 ## Verification
 
 - `pnpm build`, `vue-tsc -p .nuxt/tsconfig.json --noEmit`, `pnpm lint`, `pnpm audit` clean on every phase (see `.agents/memories/007-typecheck-gate-was-silent.md` for why `pnpm typecheck` alone isn't enough).
-- Live test: create an API key, call `POST /api/mcp` (or use an actual MCP client, e.g. `mcp-inspector` or Claude Desktop config) to list tools, call `update_settings` and `create_workspace`, confirm both show up through the normal browser session afterward.
+- Live test: create an API key, call `POST /api/mcp` (or use an actual MCP client such as `mcp-inspector`) to list tools, call `update_settings` and `create_workspace`, confirm both show up through the normal browser session afterward.
 - Live test: a revoked key is rejected immediately.
 - Live test: enable a real MCP server on a conversation, send a message that requires a tool call, confirm the approval flow fires and the tool result reaches the model.
 - `/security-review` before opening each phase's PR — this plan adds a new unauthenticated-by-cookie surface (the MCP endpoint) and a credential-issuing flow, both classic targets.

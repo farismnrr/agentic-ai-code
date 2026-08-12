@@ -189,7 +189,7 @@ async function removeKey(id: string, name: string) {
           >
             <UInput
               v-model="state.name"
-              placeholder="Claude Desktop"
+              placeholder="Desktop MCP client"
               class="w-full"
             />
           </UFormField>
