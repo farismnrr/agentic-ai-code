@@ -17,6 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Agent docs integrity
+        run: bash scripts/check-agent-docs.sh
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
 
