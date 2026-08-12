@@ -423,15 +423,8 @@ async fn access_policy(
         };
 
         if cache_needs_refresh {
-            match auth::fetch_jwks(client.clone(), jwks_url.clone()).await {
-                Ok(new_set) => {
-                    let mut w = state.jwks_cache.write().await;
-                    *w = Some(CachedJwks {
-                        jwk_set: new_set,
-                        jwks_uri: jwks_url.clone(),
-                        fetched_at: std::time::Instant::now(),
-                    });
-                }
+            match auth::refresh_cache(&state.jwks_cache, client.clone(), jwks_url.clone()).await {
+                Ok(()) => {}
                 Err(msg) => {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -487,31 +480,24 @@ async fn access_policy(
             CacheKeyDecision::Found => jwk_opt.expect("found cache key must be present"),
             CacheKeyDecision::RefreshOnce => {
                 // kid not in cache — attempt a single re-fetch.
-                match auth::fetch_jwks(client, jwks_url.clone()).await {
-                    Ok(new_set) => {
-                        let found = new_set.find(&kid).cloned();
-                        let mut w = state.jwks_cache.write().await;
-                        *w = Some(CachedJwks {
-                            jwk_set: new_set,
-                            jwks_uri: jwks_url.clone(),
-                            fetched_at: std::time::Instant::now(),
-                        });
-                        match found {
-                            Some(j) => j,
-                            None => {
-                                return oauth_error_response(
-                                    StatusCode::UNAUTHORIZED,
-                                    None,
-                                    &state.config,
-                                    Some("invalid_token"),
-                                    None,
-                                    &McpError::InvalidRequest(
-                                        "Unknown signing key (kid not in JWKS)".into(),
-                                    ),
-                                );
-                            }
+                match auth::refresh_cache_for_kid(&state.jwks_cache, client, jwks_url.clone(), &kid)
+                    .await
+                {
+                    Ok(found) => match found {
+                        Some(j) => j,
+                        None => {
+                            return oauth_error_response(
+                                StatusCode::UNAUTHORIZED,
+                                None,
+                                &state.config,
+                                Some("invalid_token"),
+                                None,
+                                &McpError::InvalidRequest(
+                                    "Unknown signing key (kid not in JWKS)".into(),
+                                ),
+                            );
                         }
-                    }
+                    },
                     Err(_) => {
                         return oauth_error_response(
                             StatusCode::UNAUTHORIZED,

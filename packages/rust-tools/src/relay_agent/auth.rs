@@ -164,6 +164,38 @@ pub async fn fetch_jwks(
         .map_err(|e| format!("JWKS parse failed: {e}"))
 }
 
+pub async fn refresh_cache(
+    cache: &tokio::sync::RwLock<Option<CachedJwks>>,
+    client: Result<reqwest::Client, String>,
+    jwks_url: String,
+) -> Result<(), String> {
+    let new_set = fetch_jwks(client, jwks_url.clone()).await?;
+    let mut guard = cache.write().await;
+    *guard = Some(CachedJwks {
+        jwk_set: new_set,
+        jwks_uri: jwks_url,
+        fetched_at: std::time::Instant::now(),
+    });
+    Ok(())
+}
+
+pub async fn refresh_cache_for_kid(
+    cache: &tokio::sync::RwLock<Option<CachedJwks>>,
+    client: Result<reqwest::Client, String>,
+    jwks_url: String,
+    kid: &str,
+) -> Result<Option<jsonwebtoken::jwk::Jwk>, String> {
+    let new_set = fetch_jwks(client, jwks_url.clone()).await?;
+    let found = new_set.find(kid).cloned();
+    let mut guard = cache.write().await;
+    *guard = Some(CachedJwks {
+        jwk_set: new_set,
+        jwks_uri: jwks_url,
+        fetched_at: std::time::Instant::now(),
+    });
+    Ok(found)
+}
+
 /// Validate the `jwks_uri` returned by OIDC discovery.
 ///
 /// This is intentionally a pure policy seam: fetching, caching, and token
