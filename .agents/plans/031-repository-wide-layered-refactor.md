@@ -736,11 +736,11 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [ ] Review `server/database/schema.ts` only after application/persistence ownership is clear.
-- [ ] If table groups now have obvious ownership, split schema definitions by cohesive domain with one compatibility barrel/export surface.
-- [ ] Keep Drizzle migration schema semantics identical; structural source-file split alone must not generate schema changes.
-- [ ] Keep database initialization/connection centralized.
-- [ ] Do not create one repository class per table; persistence APIs follow use cases/aggregates, not table count.
+- [x] Review `server/database/schema.ts` only after application/persistence ownership is clear; the current application/infrastructure boundaries are sufficient for this review.
+- [x] Evaluate splitting table groups by cohesive domain; leave the schema as one authoritative module because its tightly interdependent foreign keys (including circular references) make a split add indirection without clearer ownership or navigation benefit.
+- [x] Keep Drizzle migration schema semantics identical; `drizzle-kit check` reports no migration changes.
+- [x] Keep database initialization/connection centralized.
+- [x] Do not create one repository class per table; persistence APIs follow use cases/aggregates, not table count.
 
 ### Decision gate
 
