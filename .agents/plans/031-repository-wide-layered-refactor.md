@@ -652,13 +652,13 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [ ] Keep `useConversationChat()` as the public composition root expected by chat pages.
-- [ ] Extract chat error normalization as pure reusable logic.
-- [ ] Extract local client-tool execution controller from AI SDK construction.
-- [ ] Extract durable attempted-tool-call storage behind a tiny storage adapter/policy.
-- [ ] Extract message mirror/debounce/flush coordination.
-- [ ] Keep transport request preparation in one focused adapter/factory.
-- [ ] Keep status/seed lifecycle logic visible enough that future changes cannot casually reintroduce chat-instance recreation.
+- [x] Keep `useConversationChat()` as the public composition root expected by chat pages.
+- [x] Extract chat error normalization as pure reusable logic.
+- [x] Extract local client-tool execution controller from AI SDK construction.
+- [x] Extract durable attempted-tool-call storage behind a tiny storage adapter/policy.
+- [x] Extract message mirror/debounce/flush coordination.
+- [x] Keep transport request preparation in one focused adapter/factory.
+- [x] Keep status/seed lifecycle logic visible enough that future changes cannot casually reintroduce chat-instance recreation.
 
 ### Critical preserved invariants
 
