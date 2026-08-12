@@ -1,28 +1,74 @@
 # Tooling
 
-## Environment
+## Environment and runtime config
 
-Copy `.env.example` → `.env` (gitignored) on a fresh clone.
+Copy [`.env.example`](../../.env.example) → `.env` (gitignored) on a fresh clone. **`.env.example` is the environment-key inventory/source of truth**; keep it aligned with `nuxt.config.ts`/runtime consumers when configuration changes instead of maintaining a second exhaustive key list here.
 
-- `NUXT_PORT` — dev port. Defaults to **3333** via `devServer.port` in `nuxt.config.ts`; 3000/3001/3004/3100 are occupied on this machine.
-- `NUXT_PUBLIC_SITE_URL` — maps to `runtimeConfig.public.siteUrl`, readable in client and server code via `useRuntimeConfig().public.siteUrl`.
+Current configuration groups include:
 
-Runtime config binding is by convention: `NUXT_FOO_BAR` → `runtimeConfig.fooBar`, `NUXT_PUBLIC_FOO` → `runtimeConfig.public.foo`. A key **must** exist in `nuxt.config.ts` for the env var to be picked up — env vars alone do nothing. Never read `process.env` in app code; use `useRuntimeConfig()`.
+- dev server/public site URL;
+- router/model-provider credentials;
+- workspace root;
+- PostgreSQL (host and compose override);
+- session sealing;
+- SMTP and optional OAuth providers;
+- OpenTelemetry/Jaeger/Loki.
+
+Not every key is required for every workflow. Fill the values needed by the subsystem you are running; never commit secrets or real credentials to Markdown, plans, memories, fixtures, or examples.
+
+### Stable conventions
+
+- `NUXT_PORT` — dev port. Defaults to **3333** via `devServer.port` in `nuxt.config.ts`; the original dev machine reserved several common ports.
+- `NUXT_HOST` — leave unset for the safe localhost-only default. When intentionally exposing dev to another device, bind to a specific trusted interface rather than `0.0.0.0`.
+- `NUXT_PUBLIC_SITE_URL` — public runtime config; browser-visible by definition.
+- `NUXT_WORKSPACES_ROOT` — operator-owned workspace filesystem boundary for the Nuxt application. Do not silently fall back to unrestricted filesystem browsing.
+
+Nuxt runtime config binding is by convention: `NUXT_FOO_BAR` → `runtimeConfig.fooBar`, `NUXT_PUBLIC_FOO` → `runtimeConfig.public.foo`. A key must be represented by the runtime/config path that consumes it; adding an arbitrary environment variable does not automatically create application behavior. Prefer `useRuntimeConfig()`/Nuxt config surfaces in application code instead of ad-hoc `process.env` reads.
+
+The Rust `relay-agent` has its own CLI/environment contract under [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md). Do not assume Nuxt runtime config and relay process config are interchangeable.
+
+## Package manager and native toolchain
+
+- Use **pnpm**; the exact pnpm version is pinned in root `package.json`.
+- The native workspace is under `packages/rust-tools/`.
+- Repository development/CI pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
+- `pnpm build:tools` builds the native binaries used by the local tool/relay packages.
+
+See [`project.md`](project.md) and [`../../packages/rust-tools/README.md`](../../packages/rust-tools/README.md) for current verification/release boundaries.
 
 ## Linting
 
-`@nuxt/eslint` in flat-config mode. `eslint.config.mjs` extends the generated `.nuxt/eslint.config.mjs`; **rules are configured in `nuxt.config.ts` under `eslint.config`, not in `eslint.config.mjs`**. Enabled:
+`@nuxt/eslint` runs in flat-config mode. `eslint.config.mjs` extends the generated `.nuxt/eslint.config.mjs`; project-level Nuxt ESLint options are configured from `nuxt.config.ts`, while targeted overrides can use the chainable `withNuxt()` API in `eslint.config.mjs`.
 
-- **stylistic** — formatting as lint rules. No Prettier for JS/TS/Vue; don't add one, the two will fight. House style: no trailing commas, 1TBS braces, plus enforced `nuxt.config.ts` key ordering.
-- **typescript: strict** — the typescript-eslint strict preset. Type-aware rules are deliberately off: Nuxt 4's root `tsconfig.json` is references-only (`files: []`), so there's no single project for the type checker to resolve. `pnpm typecheck` (vue-tsc) covers types instead.
-- **formatters** — `eslint-plugin-format` handles CSS, JSON, and Markdown, which stylistic doesn't reach.
-- **checker: true** — lint errors surface in the dev server output and browser overlay, via `vite-plugin-eslint2`.
+Current conventions:
 
-Add rule overrides with the chainable API in `eslint.config.mjs`:
+- **Stylistic linting** owns JS/TS/Vue formatting. Do not add Prettier for those files unless the project deliberately changes formatting ownership.
+- **typescript-eslint strict rules** are enabled without type-aware linting. Nuxt 4's root `tsconfig.json` is references-oriented, so there is no single root program for type-aware ESLint to consume cleanly.
+- **Formatters** cover formats such as CSS/JSON/Markdown through the Nuxt ESLint setup.
+- **Checker integration** surfaces lint errors during development.
+
+Example targeted override:
 
 ```js
 export default withNuxt()
-  .override('nuxt/vue/rules', { rules: { 'vue/multi-word-component-names': 'off' } })
+  .override('nuxt/vue/rules', {
+    rules: {
+      'vue/multi-word-component-names': 'off'
+    }
+  })
 ```
 
-Config names are discoverable in the ESLint config inspector (Nuxt DevTools → ESLint).
+Config names are discoverable through the generated Nuxt ESLint configuration/inspector; verify against the installed version instead of copying names from an old plan.
+
+## Type-checking caveat
+
+Do not treat a green `pnpm typecheck` as the only compile proof for Vue/Nuxt changes. This repository has recorded cases where Nuxt typecheck returned success while the generated Vue project still contained errors.
+
+For changes where type correctness matters, use the stronger generated-project gate after building:
+
+```sh
+pnpm build
+pnpm exec vue-tsc -p .nuxt/tsconfig.json --noEmit
+```
+
+See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
