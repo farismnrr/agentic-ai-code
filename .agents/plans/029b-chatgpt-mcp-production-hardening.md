@@ -262,17 +262,17 @@ Freeze what ChatGPT actually sees, not a manually abbreviated parallel contract.
 
 ## Tasks
 
-- [ ] Generate/capture canonical snapshot from actual serialized `tools/list` descriptors.
-- [ ] Snapshot name, title, description, complete input schema, annotations, and any on-wire security/scope metadata.
-- [ ] Remove the manually abbreviated representation as the authoritative source.
-- [ ] Hash canonicalized real descriptors.
-- [ ] CI fails on descriptor changes until deliberately reviewed/updated.
-- [ ] Scope/risk/write-semantics changes require explicit review.
-- [ ] Reuse Plan 029 publication/Refresh guidance instead of duplicating it.
+- [x] Generate/capture canonical snapshot from actual serialized `tools/list` descriptors.
+- [x] Snapshot name, title, description, complete input schema, annotations, and any on-wire security/scope metadata.
+- [x] Remove the manually abbreviated representation as the authoritative source.
+- [x] Hash canonicalized real descriptors.
+- [x] CI fails on descriptor changes until deliberately reviewed/updated.
+- [x] Scope/risk/write-semantics changes require explicit review.
+- [x] Reuse Plan 029 publication/Refresh guidance instead of duplicating it.
 
 ## Exit criteria
 
-- [ ] actual descriptor/schema changes are detected by the contract gate.
+- [x] actual descriptor/schema changes are detected by the contract gate.
 
 ---
 

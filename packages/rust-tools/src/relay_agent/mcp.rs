@@ -226,6 +226,7 @@ pub struct Tool {
     pub input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ToolAnnotations>,
+    pub security: ToolSecurity,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -235,6 +236,15 @@ pub struct ToolAnnotations {
     pub destructive_hint: bool,
     pub idempotent_hint: bool,
     pub open_world_hint: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSecurity {
+    pub read_only: bool,
+    pub destructive: bool,
+    pub idempotent: bool,
+    pub open_world: bool,
 }
 
 /// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
@@ -274,6 +284,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: false,
                 open_world_hint: true,
             }),
+            security: ToolSecurity { read_only: false, destructive: true, idempotent: false, open_world: true },
         },
         Tool {
             name: "http_fetch",
@@ -311,6 +322,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: false,
                 open_world_hint: true,
             }),
+            security: ToolSecurity { read_only: false, destructive: true, idempotent: false, open_world: true },
         },
         Tool {
             name: "web_search",
@@ -331,6 +343,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 idempotent_hint: true,
                 open_world_hint: true,
             }),
+            security: ToolSecurity { read_only: true, destructive: false, idempotent: true, open_world: true },
         },
     ]
 }
@@ -465,5 +478,16 @@ mod tests {
             value["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
             "relay-agent"
         );
+    }
+
+    #[test]
+    fn published_catalog_matches_serialized_runtime_descriptors() {
+        let published: Value = serde_json::from_str(include_str!(
+            "../../../../.agents/contracts/029-tool-catalog-v1.json"
+        ))
+        .expect("published tool catalog must be valid JSON");
+        let actual = serde_json::to_value(tool_catalog()).expect("tool catalog must serialize");
+        assert_eq!(published["protocolVersion"], PROTOCOL_VERSION);
+        assert_eq!(published["tools"], actual);
     }
 }
