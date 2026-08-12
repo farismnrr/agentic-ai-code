@@ -74,17 +74,17 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 ## Type-checking
 
-`pnpm typecheck` is the repository-wide type/compile gate. It intentionally uses the strongest locally proven Nuxt path rather than the historically silent bare `nuxt typecheck` wrapper:
+`pnpm typecheck` is the repository-wide type/compile gate. It intentionally avoids the historically silent bare `nuxt typecheck` wrapper and runs:
 
 ```sh
-nuxt build --dotenv .env.example
+nuxt prepare --dotenv .env.example
 vue-tsc -p .nuxt/tsconfig.json --noEmit
 RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 ```
 
-The production build generates the complete `.nuxt` type project before the explicit Vue check. This is intentionally heavier than `nuxt prepare`: this repository previously observed incomplete generated-project state from prepare-only verification and silent success from bare `nuxt typecheck`.
+The dedicated Nuxt prepare step generates the type project without coupling type verification to production bundling. Keep `pnpm build` as a separate runtime/bundling verification command when the change needs it.
 
-Do not weaken this gate for commit speed. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md), [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md), and [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
+Do not simplify the type gate back to plain `nuxt typecheck`: this repository previously observed that wrapper exit successfully while real generated-project errors remained. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md), [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md), and [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-gates.md).
 
 ## Dependency/security verification
 
