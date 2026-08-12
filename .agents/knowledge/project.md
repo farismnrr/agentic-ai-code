@@ -76,7 +76,7 @@ The tracked pre-commit hook runs the same command automatically after `pnpm inst
 3. `pnpm lint`;
 4. `pnpm typecheck`.
 
-`pnpm lint` covers ESLint plus Rust formatting and Clippy. `pnpm typecheck` performs a Nuxt production build, explicit generated-project Vue type verification, and warnings-denied Rust `cargo check`. A failing lint/type gate blocks the commit until fixed.
+`pnpm lint` covers ESLint plus Rust formatting and Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue type verification, and performs warnings-denied Rust `cargo check`. A failing lint/type gate blocks the commit until fixed.
 
 There is no remote CI safety net. PR descriptions must record the local verification performed; GitHub reporting a branch as mergeable is not proof of quality.
 
@@ -84,9 +84,9 @@ See [`../memories/no-ci-local-commit-gates.md`](../memories/no-ci-local-commit-g
 
 ### Web application
 
-`pnpm typecheck` runs `nuxt build --dotenv .env.example` to generate and compile the complete Nuxt project, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck` or `nuxt prepare`; this repository previously observed incomplete/silent type gates on those paths.
+`pnpm typecheck` runs `nuxt prepare --dotenv .env.example`, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
 
-Because the mandatory typecheck already performs a production build, a separate `pnpm build` is only needed when rerunning/inspecting bundling output independently. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
+Production bundling remains a separate runtime verification concern. Run `pnpm build` when the change needs bundling/SSR output verified in addition to the mandatory commit gate. See [`../memories/007-typecheck-gate-was-silent.md`](../memories/007-typecheck-gate-was-silent.md) and [`../memories/013-nuxt-ui-slot-typecheck-gate.md`](../memories/013-nuxt-ui-slot-typecheck-gate.md).
 
 ### Run the built app for local verification
 
