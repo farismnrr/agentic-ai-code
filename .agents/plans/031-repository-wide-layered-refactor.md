@@ -787,6 +787,7 @@ If splitting the schema adds indirection without improving ownership/navigation,
 - [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
 - [x] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs` (Phase 10H complete; all call sites use `transport_validation.rs`).
 - [ ] Extract MCP route handler dispatch once dependencies are explicit.
+- [x] Micro-step 10I: MCP method dispatch is centralized in `dispatcher.rs`; transport retains validation, handler internals, execution, and error mapping.
 - [ ] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
 
 ### Security ordering that must remain true

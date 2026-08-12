@@ -705,16 +705,16 @@ async fn handle_mcp(
         ));
     }
 
-    match request.method.as_str() {
-        "server/discover" => handle_discover(&request),
-        "tools/list" => handle_tools_list(&request),
-        "tools/call" => {
+    match super::dispatcher::dispatch(&request) {
+        super::dispatcher::Dispatch::Discover => handle_discover(&request),
+        super::dispatcher::Dispatch::ToolsList => handle_tools_list(&request),
+        super::dispatcher::Dispatch::ToolsCall => {
             handle_tools_call(&request, _state, auth_ctx, correlation_id.as_str()).await
         }
-        other => Err(err_response(
+        super::dispatcher::Dispatch::Unknown(other) => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
-            &McpError::MethodNotFound(other.to_string()),
+            &McpError::MethodNotFound(other),
         )),
     }
     .map_or_else(json_error_response, |body| body.into_response())
