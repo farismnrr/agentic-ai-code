@@ -40,8 +40,8 @@ pub enum RelayError {
 /// This is distinct from [`RelayError`]: `RelayError` represents a failure
 /// inside this process (config, I/O, lifecycle); `McpError` represents a
 /// well-formed protocol-level rejection that must be serialized back to the
-/// caller as a JSON-RPC error object per the frozen contract in
-/// `.agents/plans/028-phase0-contract-audit.md`.
+/// caller as a JSON-RPC error object per the frozen historical relay contract,
+/// now summarized in `.agents/plans/030-previous-plans-summary.md`.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum McpError {
     #[error("Parse error")]

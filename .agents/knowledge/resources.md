@@ -25,13 +25,7 @@ Do not assume every agent client auto-discovers repository skills. `AGENTS.md` a
 
 ## Nuxt UI MCP server
 
-`.mcp.json` registers the project-scoped Nuxt UI MCP server. Use it when the installed Nuxt UI skill does not provide enough exact API detail:
-
-- component/composable search;
-- component metadata, props, slots, and events;
-- examples and templates;
-- valid icon lookup;
-- documentation/migration pages.
+`.mcp.json` registers the project-scoped Nuxt UI MCP server. Use it when the installed Nuxt UI skill does not provide enough exact API detail for component/composable search, metadata, examples, icons, or migration pages.
 
 Rule of thumb: the skill provides working patterns; MCP provides current exact API surface.
 
@@ -41,8 +35,12 @@ Do not confuse the Nuxt UI documentation MCP above with this application's own M
 
 - [`project.md`](project.md) for architecture orientation;
 - [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) for current relay behavior;
-- [`../plans/029-external-mcp-native-mcp-integration.md`](../plans/029-external-mcp-native-mcp-integration.md) and [`../plans/029b-external-mcp-mcp-production-hardening.md`](../plans/029b-external-mcp-mcp-production-hardening.md) for current external MCP client integration status;
+- the canonical [`../memories/README.md`](../memories/README.md#relay-agent-and-mcp-security-invariants) for durable security/protocol decisions;
+- [`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) only when historical Plan 028/029/029b context is useful;
+- any current `031+` plan file if a new MCP effort has been opened;
 - [`../contracts/`](../contracts/) before changing client-visible frozen descriptors.
+
+Plan 030 is history, not current external MCP client integration status. External external MCP client/OAuth behavior must be re-verified when a future task depends on it.
 
 ## Agentation — visual feedback
 

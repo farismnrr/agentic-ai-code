@@ -2,7 +2,7 @@
 
 `relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/src/relay_agent/`](../rust-tools/src/relay_agent/) with the binary entrypoint at [`../rust-tools/src/bin/relay-agent.rs`](../rust-tools/src/bin/relay-agent.rs).
 
-This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted "no directory jail" behavior are historical and must not be reintroduced.
+This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted no-jail behavior are historical and must not be reintroduced.
 
 ## Current contract
 
@@ -10,15 +10,15 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Platform:** Linux only for the relay binary; sandboxed execution requires Bubblewrap (`bwrap`).
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
-- **Filesystem boundary:** execution is confined to an explicit `execution_root` (defaults to the resolved `--dir`) and enforced through the relay policy plus Bubblewrap.
+- **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap.
 - **Tools:** sandboxed terminal execution, HTTP fetch, and SearXNG-backed web search.
 - **Docker:** intentionally unsupported/deferred until an isolated Docker backend/broker exists; never expose the host Docker socket to make it work.
 
-The security boundary is server-side authorization plus the Plan 028 sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
+The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
 
 ## Build
 
-From the repository root:
+From repository root:
 
 ```bash
 pnpm build:tools
@@ -78,15 +78,9 @@ relay-agent \
   --oauth-owner-subject '<stable-subject>'
 ```
 
-Do not weaken remote mode by:
+Do not weaken remote mode by falling back to local/no-auth behavior, trusting forwarded headers from arbitrary peers, accepting insecure production issuer URLs, moving permissions into tool arguments, or exposing the host Docker socket/privileged container controls.
 
-- falling back to local/no-auth behavior;
-- trusting forwarded headers from arbitrary peers;
-- accepting insecure issuer URLs in production;
-- moving OAuth scopes/permissions into user-controlled tool arguments;
-- exposing the host Docker socket or privileged container controls.
-
-Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure the allowed peer/CIDR as required by the current relay config rather than treating all forwarded headers as trusted.
+Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure the allowed peer/CIDR required by current relay config rather than treating all forwarded headers as trusted.
 
 ## Verification
 
@@ -96,7 +90,7 @@ This repository intentionally has **no CI workflow and no unit-test suite**. The
 pnpm verify:commit
 ```
 
-For security-sensitive relay/MCP changes, also run the applicable local security/acceptance checks, typically including:
+For security-sensitive relay/MCP changes, also run applicable local checks, typically including:
 
 ```bash
 cargo audit
@@ -105,16 +99,16 @@ bash scripts/phase7-external-mcp-contract.sh
 bash scripts/phase8-zero-bypass.sh
 ```
 
-The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through the root `pnpm lint` / `pnpm typecheck` scripts. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
+The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
 
-Live external MCP client/OAuth acceptance remains a separate operator gate; repository/static checks must not be described as proof that live OAuth/external MCP client acceptance passed.
+Live external external MCP client/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
 
 ## Durable design context
 
-Read these before changing the relay security model:
+Before changing the relay security model, read:
 
-- [Plan 028](../../.agents/plans/028-relay-agent-rust-rewrite.md) — Rust rewrite and sandbox boundary.
-- [Plan 029](../../.agents/plans/029-external-mcp-native-mcp-integration.md) — external MCP client MCP integration delta.
-- [Plan 029b](../../.agents/plans/029b-external-mcp-mcp-production-hardening.md) — remaining live acceptance/deferred Docker work.
-- [Plan 028 security decisions](../../.agents/memories/028-relay-agent-phase19-security-decisions.md).
-- [Docker capability blocker](../../.agents/memories/029b-docker-capability-blocker.md).
+- the canonical [relay/MCP memory](../../.agents/memories/README.md#relay-agent-and-mcp-security-invariants) for current durable invariants;
+- [Plan 030 historical summary](../../.agents/plans/030-previous-plans-summary.md) for compacted Plan 026/027/028/029/029b history;
+- current Rust source/config and deterministic contract/security scripts.
+
+All plans through 029b were explicitly closed for a planning refresh. If new relay/external MCP client work is needed, re-audit current behavior and create a new incrementing plan starting at 031 rather than reopening an old file.
