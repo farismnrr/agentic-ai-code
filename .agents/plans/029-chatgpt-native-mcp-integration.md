@@ -54,7 +54,7 @@ Confidence for this deadline comes from:
 
 Plan 029 is complete when the existing Rust Relay Agent works as a secure custom MCP coding app in ChatGPT.
 
-Claude/other MCP clients MAY be used as secondary interoperability checks, but are **not Plan 029 release gates**.
+Other MCP clients MAY be used as secondary interoperability checks, but are **not Plan 029 release gates**.
 
 The MCP/tool contract must remain vendor-neutral so future clients can reuse the same server without a fork.
 
