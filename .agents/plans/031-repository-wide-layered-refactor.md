@@ -541,13 +541,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [ ] Establish thin route pattern: authenticate → parse/validate → call use case → return result.
-- [ ] Move multi-step ownership/business rules into application/domain functions.
-- [ ] Move Drizzle feature queries into feature-specific infrastructure/persistence functions when reused or when they currently pollute orchestration.
-- [ ] Keep DTO projection explicit at the boundary where secrets/internal columns are removed.
-- [ ] Separate provider upstream discovery from provider persistence.
-- [ ] Keep encryption as infrastructure/security capability, not model/provider domain state.
-- [ ] Use narrow feature-specific persistence APIs rather than a generic repository base class.
+- [x] Establish thin route pattern: authenticate → parse/validate → call use case → return result.
+- [x] Move multi-step ownership/business rules into application/domain functions.
+- [x] Move Drizzle feature queries into feature-specific infrastructure/persistence functions when reused or when they currently pollute orchestration.
+- [x] Keep DTO projection explicit at the boundary where secrets/internal columns are removed.
+- [x] Separate provider upstream discovery from provider persistence.
+- [x] Keep encryption as infrastructure/security capability, not model/provider domain state.
+- [x] Use narrow feature-specific persistence APIs rather than a generic repository base class.
 
 ### Acceptance
 
