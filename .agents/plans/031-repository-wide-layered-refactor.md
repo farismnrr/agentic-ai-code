@@ -770,9 +770,13 @@ If splitting the schema adds indirection without improving ownership/navigation,
 
 ### Work
 
+> Micro-step 10A complete: pure OIDC-discovered `jwks_uri` validation is
+> centralized in `auth.rs`; fetch, cache, token validation, and request flow
+> remain in `transport.rs`.
+
 - [ ] Keep router construction and HTTP middleware composition in transport ownership.
-- [ ] Extract correlation/audit helpers into an observability-focused module.
-- [ ] Extract request-admission token bucket into a focused admission module.
+- [x] Extract correlation/audit helpers into an observability-focused module.
+- [x] Extract request-admission token bucket into a focused admission module.
 - [ ] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
 - [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
 - [ ] Extract trusted-proxy HTTPS decision with explicit security ownership.
