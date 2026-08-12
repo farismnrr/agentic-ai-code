@@ -1,33 +1,27 @@
-# `nuxt typecheck` doesn't reliably surface real type errors — known, not yet fixed
+# Historical incident: bare `nuxt typecheck` silently passed real type errors
 
-During plan 007, `nuxt typecheck` was observed exiting `0` with no output
-on code that had real type errors present (confirmed once by comparing
-against a direct `vue-tsc --noEmit -p .nuxt/tsconfig.json` run, which did
-report them). This is a genuine gap in the CI gate, but **two fix attempts
-in this PR both made CI worse, not better**, so the script was reverted to
-plain `"typecheck": "nuxt typecheck"` (the pre-plan-007 baseline) rather
-than ship something unproven:
+During Plan 007, bare `nuxt typecheck` was observed exiting `0` with no output while a direct generated-project Vue typecheck reported real errors. This was a genuine CI gap and is the reason the repository must not use a plain `"typecheck": "nuxt typecheck"` script as its correctness gate.
 
-1. `vue-tsc --noEmit -p .nuxt/tsconfig.json` directly — fails outright on a
-   clean checkout: `nuxt prepare` (what `postinstall` runs) only writes
-   `.nuxt/tsconfig.server.json`, not the full `tsconfig.app.json` /
-   `tsconfig.shared.json` / `tsconfig.node.json` / `tsconfig.json` set the
-   root `tsconfig.json`'s project references need — `TS5058: The specified
-   path does not exist`.
-2. `nuxt build --dotenv .env.example && vue-tsc ...` — generates the full
-   tsconfig set (confirmed locally), but failed in CI with
-   `TSCONFIG_ERROR: Tsconfig not found .nuxt/tsconfig.app.json` from a
-   `rolldown@1.1.5` stack frame, while `pnpm-lock.yaml` pins
-   `rolldown@1.2.1` everywhere and the same build succeeded locally every
-   time. `rolldown` is resolved outside the deterministic lockfile graph
-   (likely via `vite`'s optional-bundler resolution), so **the exact
-   version a clean `pnpm install` picks up is not reproducible between this
-   machine and GitHub Actions** — not something to chase further inside a
-   feature PR.
+## Earlier failed fixes
 
-**Why this matters:** `pnpm typecheck` gates every PR per
-`.agents/knowledge/project.md`, and it is currently back to a state that
-may silently pass real type errors — this is a known, open gap, not a
-resolved one. Before trusting it again (or attempting another fix), verify
-on a genuinely clean checkout in CI itself, not just locally — local
-success here did not predict CI's behavior twice in a row.
+Two earlier attempts were not kept because they were not reliable on a clean CI checkout at that time:
+
+1. `vue-tsc --noEmit -p .nuxt/tsconfig.json` immediately after `nuxt prepare` failed because the full generated Nuxt project references were not present.
+2. `nuxt build --dotenv .env.example && vue-tsc ...` later hit a then-current CI-only Rolldown/config-generation failure even though the same command worked locally, so the feature PR reverted rather than weakening CI around an unexplained environment mismatch.
+
+Those failures are historical context, not a reason to accept the silent gate forever.
+
+## Current invariant
+
+The root `pnpm typecheck` script now deliberately generates the full Nuxt project through a build and then checks that generated project directly:
+
+```sh
+nuxt build --dotenv .env.example
+vue-tsc -p .nuxt/tsconfig.json --noEmit
+```
+
+`.github/workflows/ci.yml` calls `pnpm run typecheck`, so this generated-project check is the repository type gate.
+
+**Do not simplify it back to bare `nuxt typecheck`.** If a future Nuxt/Rolldown upgrade makes the stronger gate fail on a clean checkout, fix the generation/toolchain issue or replace it with an equally explicit generated-project typecheck. Do not silently fall back to the wrapper that previously missed real errors.
+
+See also [`013-nuxt-ui-slot-typecheck-gate.md`](013-nuxt-ui-slot-typecheck-gate.md), which records a concrete class of UI errors this stronger gate is meant to catch.
