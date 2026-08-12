@@ -4,10 +4,14 @@ All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start a
 
 This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
 
-Before declaring work complete, follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md) and run:
+This repository intentionally has **no CI** and **no unit-test suite**. Quality enforcement is local and mandatory. Before every commit, all required lint/type gates must pass:
 
 ```sh
-bash scripts/check-agent-docs.sh
+pnpm verify:commit
 ```
+
+A tracked pre-commit hook runs that command automatically after `pnpm install`. Never bypass it with `git commit --no-verify`, and never commit while lint or typecheck is failing.
+
+Before declaring work complete, also follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md).
 
 Keep this file a pointer. New durable guidance belongs in `.agents/`, not here.
