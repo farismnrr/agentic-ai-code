@@ -9,7 +9,7 @@ This is a **Nuxt 4 application plus a Rust native-tool workspace**. Use Nuxt-nat
 Before changing anything, read the files relevant to the task:
 
 1. [`knowledge/project.md`](knowledge/project.md) — current stack, layout, and verification commands.
-2. [`knowledge/git.md`](knowledge/git.md) — branch/PR rules; never commit directly to `main` or `dev`.
+2. [`knowledge/git.md`](knowledge/git.md) — branch/PR/commit rules; never commit directly to `main` or `dev`.
 3. [`knowledge/nuxt-way.md`](knowledge/nuxt-way.md) — required approach for Nuxt/Vue work.
 4. [`knowledge/conventions.md`](knowledge/conventions.md) — project conventions.
 5. [`plans/README.md`](plans/README.md) — check whether the task belongs to an existing plan.
@@ -33,25 +33,29 @@ Before changing anything, read the files relevant to the task:
 | [`self-improvement.md`](knowledge/self-improvement.md) | Mandatory agent closeout and durable-memory rules |
 | [`project.md`](knowledge/project.md) | Current stack, repository layout, commands, runtime surfaces |
 | [`conventions.md`](knowledge/conventions.md) | Coding and UI conventions |
-| [`git.md`](knowledge/git.md) | Branching, commits, PRs, and release boundaries |
-| [`tooling.md`](knowledge/tooling.md) | Environment/runtime config and lint tooling |
+| [`git.md`](knowledge/git.md) | Branching, commits, PRs, and local commit gates |
+| [`tooling.md`](knowledge/tooling.md) | Environment/runtime config, lint/typecheck, and local hook tooling |
 | [`resources.md`](knowledge/resources.md) | Installed skills, MCP resources, and Agentation |
+
+## Local quality policy
+
+The repository intentionally has **no CI workflow** and **no unit-test suite**. That makes the local commit gate non-optional.
+
+After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git-hooks.sh) configures Git to use [`.githooks/pre-commit`](../.githooks/pre-commit). Every commit must pass:
+
+```sh
+pnpm verify:commit
+```
+
+That gate runs agent-doc integrity, all configured lint checks, and all configured type checks. Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path just to avoid a failing gate.
+
+See [`memories/no-ci-local-commit-gates.md`](memories/no-ci-local-commit-gates.md) for the durable policy and reasoning.
 
 ## Agent closeout is mandatory
 
 **Every agent must perform the closeout review in [`knowledge/self-improvement.md`](knowledge/self-improvement.md) before declaring a task finished.** The closeout keeps plans, memories, and knowledge aligned with the repository.
 
-The repository deliberately has **no client/vendor-specific lifecycle hook**. Instead:
-
-- shared instructions live in `AGENTS.md` + `.agents/`;
-- structural integrity is enforced by [`../scripts/check-agent-docs.sh`](../scripts/check-agent-docs.sh) in CI;
-- semantic closeout remains the responsibility of the agent doing the work, because a static check cannot decide whether a new implementation detail is durable knowledge.
-
-Run the integrity gate before finish:
-
-```sh
-bash scripts/check-agent-docs.sh
-```
+The repository deliberately has **no client/vendor-specific lifecycle hook**. Shared instructions live in `AGENTS.md` + `.agents/`; the tracked Git pre-commit hook is repository quality enforcement, not an agent-client lifecycle integration.
 
 ## Conventions for this folder
 
