@@ -1095,21 +1095,21 @@ After all fixes and verification, perform a fresh review **from the final source
 
 ### Required review lenses
 
-- [ ] DRY — no duplicated ownership/SSRF/provider/collection policy;
-- [ ] SOLID — responsibilities and dependency inversion are real;
-- [ ] KISS — no needless abstraction/framework ceremony;
-- [ ] Layered Architecture — imports and runtime composition follow intended direction;
-- [ ] reusable components/logic — feature reuse without generic mega-abstractions;
-- [ ] folder structure — path matches responsibility;
-- [ ] tenant isolation — every user-owned reference is server-authorized;
-- [ ] secret handling — storage, DTOs, logs, redirects;
-- [ ] SSRF — initial + redirect destinations and credential containment;
-- [ ] Rust relay security — auth/admission/transport/sandbox ordering;
-- [ ] deterministic verification quality — scripts actually exercise claimed path;
-- [ ] dependency manifest/lock consistency;
-- [ ] no CI/no unit-test policy;
-- [ ] dead facades/re-exports/stale comments;
-- [ ] source/docs/plan/memory truthfulness.
+- [x] DRY — no duplicated ownership/SSRF/provider/collection policy;
+- [x] SOLID — responsibilities and dependency inversion are real;
+- [x] KISS — no needless abstraction/framework ceremony;
+- [x] Layered Architecture — imports and runtime composition follow intended direction;
+- [x] reusable components/logic — feature reuse without generic mega-abstractions;
+- [x] folder structure — path matches responsibility;
+- [x] tenant isolation — every user-owned reference is server-authorized;
+- [x] secret handling — storage, DTOs, logs, redirects;
+- [x] SSRF — initial + redirect destinations and credential containment;
+- [x] Rust relay security — auth/admission/transport/sandbox ordering;
+- [x] deterministic verification quality — scripts actually exercise claimed path;
+- [x] dependency manifest/lock consistency;
+- [x] no CI/no unit-test policy;
+- [x] dead facades/re-exports/stale comments;
+- [x] source/docs/plan/memory truthfulness.
 
 ### Required output
 
