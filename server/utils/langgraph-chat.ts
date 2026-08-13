@@ -5,7 +5,7 @@ import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
-import type { getLanggraphModel } from './providers/langgraph-model'
+import type { getLanggraphModel } from '../infrastructure/ai/providers/langgraph-model'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
 

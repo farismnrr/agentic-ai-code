@@ -1,8 +1,7 @@
 import { streamText, convertToModelMessages, type LanguageModel } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import { conversations as conversationsTable, messages as messagesTable } from '../database/schema'
+import { conversations as conversationsTable, messages as messagesTable } from '../../database/schema'
 import { eq } from 'drizzle-orm'
-import { logger } from './logger'
 
 // Token estimation heuristic: approximate tokens based on stringified length
 const estimateTokens = (obj: unknown): number => {

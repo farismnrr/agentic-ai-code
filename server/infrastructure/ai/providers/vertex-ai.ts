@@ -1,5 +1,5 @@
 import { createVertex } from '@ai-sdk/google-vertex'
-import { decryptSecret } from '../crypto'
+import { decryptSecret } from '../../../utils/crypto'
 
 /**
  * Real Vertex AI (aiplatform.googleapis.com), not the Gemini Developer API

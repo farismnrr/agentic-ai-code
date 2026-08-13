@@ -257,10 +257,10 @@ Source inspection and server-only typechecking remain useful evidence, but they 
 
 **Risk: high / security + architecture**
 
-- [ ] Enforce ownership on `lastActiveWorkspaceId` writes using the authoritative workspace rule.
-- [ ] Refactor `executeChatTurn()` dependencies into narrow application-facing capabilities.
-- [ ] Move remaining concrete provider/AI SDK/LangGraph/MCP/persistence implementation ownership to infrastructure/composition boundaries.
-- [ ] Preserve all reviewed chat lifecycle semantics.
+- [x] Enforce ownership on `lastActiveWorkspaceId` writes using the authoritative workspace rule.
+- [x] Refactor `executeChatTurn()` dependencies into narrow application-facing capabilities.
+- [x] Move remaining concrete provider/AI SDK/LangGraph/MCP/persistence implementation ownership to infrastructure/composition boundaries.
+- [x] Preserve all reviewed chat lifecycle semantics.
 
 ## Phase 11 — Make architecture enforcement match the architecture
 

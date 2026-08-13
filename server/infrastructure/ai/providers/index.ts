@@ -1,10 +1,10 @@
 import { getOpenAiCompatibleModel, listOpenAiCompatibleModels } from './openai-compatible'
 import { getAnthropicCompatibleModel, listAnthropicCompatibleModels } from './anthropic-compatible'
 import { getVertexAiModel } from './vertex-ai'
-import type { modelProviders, ModelProviderType } from '../../database/schema'
+import type { modelProviders, ModelProviderType } from '../../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
-import type { ConcreteLanguageModel } from '../../infrastructure/ai/ai-sdk-stream'
+import type { ConcreteLanguageModel } from '../ai-sdk-stream'
 
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
 

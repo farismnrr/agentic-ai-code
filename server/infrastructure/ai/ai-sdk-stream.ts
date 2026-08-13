@@ -4,7 +4,8 @@ import type { UIMessage } from '#shared/types/chat'
 
 /** A concrete language-model instance, as opposed to the `LanguageModel`
  * union's global-registry-id string form — every provider adapter under
- * `server/utils/providers/**` returns one of these, never a bare id. */
+ * `server/infrastructure/ai/providers/**` returns one of these, never a
+ * bare id. */
 export type ConcreteLanguageModel = Exclude<LanguageModel, string>
 
 /**

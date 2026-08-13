@@ -1,6 +1,6 @@
 import { createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
-import type { getLanggraphModel } from '../../utils/providers/langgraph-model'
+import type { getLanggraphModel } from './providers/langgraph-model'
 
 /**
  * LangGraph stream construction is an infrastructure integration concern

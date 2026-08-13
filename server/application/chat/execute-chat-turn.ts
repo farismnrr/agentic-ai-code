@@ -1,12 +1,7 @@
 import type { ToolApprovalConfiguration, ToolSet } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import { getChatModel, resolveModelConfig } from '../../utils/providers/index'
-import { getLanggraphModel } from '../../utils/providers/langgraph-model'
-import { resolveMessagesForModel } from '../../utils/context-compaction'
-import { buildMcpTools } from '../../utils/mcp-tools'
-import { convertTurnMessages, prepareAiSdkModel, streamAiSdkAgent } from '../../infrastructure/ai/ai-sdk-stream'
-import { streamLangGraphChat } from '../../infrastructure/ai/langgraph-stream'
+import type { ChatTurnDependencies } from '../../infrastructure/ai/chat-turn-dependencies'
 import { loadAuthorizedChatContext } from './ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './workspace-context'
 import { buildTurnMessages } from './history'
@@ -25,6 +20,15 @@ export interface ExecuteChatTurnInput {
    * with plain input and no H3 event object (Plan 031A finding H).
    */
   abortSignal: AbortSignal
+  /**
+   * Concrete provider/AI SDK/LangGraph/MCP/context-compaction integrations,
+   * supplied by the composition edge (`server/api/chat.post.ts` via
+   * `createChatTurnDependencies()`) rather than imported directly here
+   * (Plan 031A finding S) — this file depends only on the narrow
+   * `ChatTurnDependencies` contract, never on `server/infrastructure/**`
+   * modules themselves.
+   */
+  deps: ChatTurnDependencies
 }
 
 /**
@@ -36,29 +40,32 @@ export interface ExecuteChatTurnInput {
  * this function.
  *
  * Depends only on narrow capability functions (ownership/workspace/history/
- * persistence/tool-policy from this same application layer, plus the
- * existing `server/utils/**` and `server/infrastructure/**` integration
- * boundaries) — no Drizzle schema, no H3 event, and no direct AI SDK/
- * LangGraph stream construction happens in this file itself.
+ * persistence/tool-policy from this same application layer) plus the
+ * explicit `ChatTurnDependencies` contract for provider/AI SDK/LangGraph/
+ * MCP/context-compaction integrations (Plan 031A finding S) — no Drizzle
+ * schema, no H3 event, and no direct `server/infrastructure/**` import
+ * happens in this file itself; the composition edge
+ * (`server/api/chat.post.ts`) supplies the concrete `deps` object via
+ * `createChatTurnDependencies()`.
  */
-export async function executeChatTurn({ userId, conversationId, trigger, message, abortSignal }: ExecuteChatTurnInput) {
+export async function executeChatTurn({ userId, conversationId, trigger, message, abortSignal, deps }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId)
 
   // Bound the query with the compaction cutoff (once one exists) instead of
   // fetching every message in the conversation on every single turn — see
-  // server/utils/context-compaction.ts for where this cached timestamp is
+  // server/infrastructure/ai/context-compaction.ts for where this cached timestamp is
   // written (alongside contextSummaryUpToMessageId, only on an actual
   // compaction event, not the per-turn hot path).
   const messages = await buildTurnMessages(conv, trigger, message)
 
-  const resolvedConfig = resolveModelConfig(modelInfo)
+  const resolvedConfig = deps.resolveModelConfig(modelInfo)
 
-  const resolvedMessages = await resolveMessagesForModel({
+  const resolvedMessages = await deps.resolveMessagesForModel({
     messages,
     conv,
     contextWindow: resolvedConfig.contextWindow,
     maxOutputTokens: resolvedConfig.maxOutputTokens,
-    getSummarizerModel: () => getChatModel(provider, modelInfo.modelId)
+    getSummarizerModel: () => deps.getChatModel(provider, modelInfo.modelId)
   })
 
   const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId)
@@ -80,7 +87,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
   // record for why this goes through the SDK's own tool-approval mechanism
   // instead of a hand-rolled one (.agents/memories/ai-sdk-native-features.md).
   // Plain map, not `ToolApprovalConfiguration<ToolSet, never>` — see
-  // server/utils/mcp-tools.ts's comment on why key-by-key assignment
+  // server/infrastructure/mcp/mcp-tools.ts's comment on why key-by-key assignment
   // (`toolApproval['local_terminal'] = ...`, for tools mcp-tools.ts doesn't
   // know about) doesn't typecheck against that union. This is cast to
   // `ToolApprovalConfiguration` only at the `streamAiSdkAgent` call site,
@@ -93,7 +100,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
-    const mcp = await buildMcpTools(userId, conv.enabledToolIds, conv.approvals)
+    const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals)
     tools = mcp.tools
     toolApproval = mcp.toolApproval
     close = mcp.close
@@ -144,8 +151,8 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     // `terminal` tool it used to always wire in was removed; `local_terminal`
     // is agent-mode-only.
     const systemPrompt = buildWorkspaceSystemPrompt()
-    const langgraphModel = getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
-    return streamLangGraphChat({
+    const langgraphModel = deps.getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
+    return deps.streamLangGraphChat({
       messages: resolvedMessages,
       model: langgraphModel,
       system: systemPrompt,
@@ -155,12 +162,12 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     })
   }
 
-  const baseModel = prepareAiSdkModel(getChatModel(provider, modelInfo.modelId), resolvedConfig.thinkingEnabled)
+  const baseModel = deps.prepareAiSdkModel(deps.getChatModel(provider, modelInfo.modelId), resolvedConfig.thinkingEnabled)
 
-  return streamAiSdkAgent({
+  return deps.streamAiSdkAgent({
     model: baseModel,
     system: buildWorkspaceSystemPrompt(),
-    messages: await convertTurnMessages(resolvedMessages, tools),
+    messages: await deps.convertTurnMessages(resolvedMessages, tools),
     originalMessages: messages,
     tools,
     toolApproval: toolApproval as ToolApprovalConfiguration<ToolSet, never> | undefined,

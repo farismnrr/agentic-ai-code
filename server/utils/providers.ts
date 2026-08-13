@@ -2,7 +2,7 @@ import { providerRequiresBaseUrl } from '#shared/utils/providers'
 import { deleteUserProvider, findUserProvider, insertUserProvider, listUserProviders, updateUserProvider, type ProviderInput, type ProviderUpdate } from '../infrastructure/database/providers'
 import { encryptSecret } from './crypto'
 import { badRequest, badGateway } from './http-errors'
-import { listProviderModels } from './providers/index'
+import { listProviderModels } from '../infrastructure/ai/providers/index'
 
 export type CreateProviderBody = Omit<ProviderInput, 'customHeaders'> & { customHeaders?: Record<string, string> }
 export type UpdateProviderBody = ProviderUpdate

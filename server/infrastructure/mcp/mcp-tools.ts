@@ -1,6 +1,6 @@
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { loadEnabledMcpServers } from '../infrastructure/mcp/server-config'
+import { loadEnabledMcpServers } from './server-config'
 
 // Plain map (not `ToolApprovalConfiguration<ToolSet, never>`, despite this
 // being exactly what `toolApproval` ends up passed as into `streamText`):

@@ -1,9 +1,9 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { ChatVertexAI } from '@langchain/google-vertexai'
-import { decryptHeaders, decryptSecret } from '../crypto'
-import { createSsrfSafeFetch } from '../ssrf-guard'
-import type { modelProviders } from '../../database/schema'
+import { decryptHeaders, decryptSecret } from '../../../utils/crypto'
+import { createSsrfSafeFetch } from '../../../utils/ssrf-guard'
+import type { modelProviders } from '../../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
@@ -40,7 +40,7 @@ export function getLanggraphModel(provider: ModelProviderRow, modelId: string, m
   }
   if (provider.type === 'vertex_ai') {
     // Express Mode: apiKey alone, no project/location/service-account —
-    // see server/utils/providers/vertex-ai.ts for why this isn't
+    // see server/infrastructure/ai/providers/vertex-ai.ts for why this isn't
     // @langchain/google-genai (that's the Gemini Developer API, a
     // different Google product with incompatible API keys).
     return new ChatVertexAI({
