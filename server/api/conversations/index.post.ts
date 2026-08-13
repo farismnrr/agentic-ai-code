@@ -1,4 +1,5 @@
 import { conversations } from '../../database/schema'
+import { resolveOwnedModelContext, resolveOwnedWorkspace } from '../../application/chat/ownership'
 import * as v from 'valibot'
 
 const createSchema = v.object({
@@ -16,6 +17,14 @@ export default defineEventHandler(async (event) => {
   const result = v.safeParse(createSchema, await readBody(event))
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
+
+  // Same-tenant enforcement (Plan 031A findings A/B): a conversation must
+  // not be creatable against another user's model/provider or workspace
+  // merely because the caller can guess/supply a valid UUID. UI-side model
+  // and workspace pickers already only show the user's own rows, but that
+  // is not authorization — this is the one authoritative server-side check.
+  await resolveOwnedModelContext(session.user.id, body.modelId)
+  await resolveOwnedWorkspace(session.user.id, body.workspaceId)
 
   const [conversation] = await db
     .insert(conversations)

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { userSettings, users } from '../database/schema'
+import { resolveOwnedModelContext } from '../application/chat/ownership'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
   const db = useDb()
@@ -64,6 +65,14 @@ export async function getSettings(userId: string, name: string = 'User', email: 
 }
 
 export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string, email?: string }) {
+  // Same-tenant enforcement (Plan 031A finding A): a `defaultModelId` must
+  // resolve to a model (and backing provider) owned by this same user, not
+  // merely any existing model ID. `null` clears the default and needs no
+  // ownership check.
+  if (updates.defaultModelId) {
+    await resolveOwnedModelContext(userId, updates.defaultModelId)
+  }
+
   const db = useDb()
   const [updatedSettings] = await db
     .update(userSettings)

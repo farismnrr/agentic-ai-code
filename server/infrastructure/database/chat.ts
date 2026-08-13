@@ -1,18 +1,21 @@
 import { and, asc, eq, gt } from 'drizzle-orm'
-import { conversations, messages as messagesTable, modelProviders, models } from '../../database/schema'
+import { conversations, messages as messagesTable } from '../../database/schema'
 import type { UIMessage } from '#shared/types/chat'
-import { badRequest, internal, notFound } from '../../utils/http-errors'
+import { internal } from '../../utils/http-errors'
 
-export async function loadAuthorizedChatContext(userId: string, conversationId: string) {
-  if (!conversationId) throw badRequest('Missing conversationId')
+/**
+ * Narrow ownership-scoped lookup: the conversation row itself, no model or
+ * provider resolution. Callers that also need model/provider ownership
+ * reassertion should compose this with
+ * `server/application/chat/ownership.ts#resolveOwnedModelContext` rather
+ * than resolving the model/provider by ID here — that keeps this module a
+ * plain persistence lookup instead of pulling application-layer
+ * authorization logic into infrastructure.
+ */
+export async function findUserConversation(userId: string, conversationId: string) {
   const db = useDb()
   const [conversation] = await db.select().from(conversations).where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId))).limit(1)
-  if (!conversation) throw notFound('Conversation not found')
-  const [model] = await db.select().from(models).where(eq(models.id, conversation.modelId)).limit(1)
-  if (!model) throw notFound('Model not found')
-  const [provider] = await db.select().from(modelProviders).where(eq(modelProviders.id, model.providerId)).limit(1)
-  if (!provider) throw notFound('Model provider not found')
-  return { conversation, model, provider }
+  return conversation
 }
 
 export async function loadChatHistory(conversation: typeof conversations.$inferSelect, trigger: string | undefined, message: UIMessage | undefined) {

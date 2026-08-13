@@ -3,7 +3,8 @@ import { getChatModel, resolveModelConfig } from '../utils/providers/index'
 import { getLanggraphModel } from '../utils/providers/langgraph-model'
 import { resolveMessagesForModel } from '../utils/context-compaction'
 import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import { loadAuthorizedChatContext, loadChatHistory } from '../infrastructure/database/chat'
+import { loadChatHistory } from '../infrastructure/database/chat'
+import { loadAuthorizedChatContext } from '../application/chat/ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from '../application/chat/workspace-context'
 import { createAssistantPersister } from '../application/chat/persistence'
 import { createLocalTerminalPolicy } from '../application/chat/local-terminal-policy'
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     getSummarizerModel: () => getChatModel(provider, modelInfo.modelId)
   })
 
-  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(conv.workspaceId)
+  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(session.user.id, conv.workspaceId)
 
   // The server itself no longer has any file/shell access to offer the
   // model — that tool (`native.terminal`, workspace-sandboxed, server-side)
