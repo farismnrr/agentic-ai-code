@@ -45,11 +45,21 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
-Architecture boundaries reinforced by Plan 031: server application modules
-compose use cases without H3 event objects; Rust relay transport owns HTTP
-composition/security ordering while focused auth, validation, admission, and
-observability modules own their policies; native Rust remains the executable
-tool source of truth and sibling TypeScript packages remain integration APIs.
+Architecture boundaries reinforced by Plan 031 and closed by Plan 031A:
+`server/api/**` is a thin transport layer (auth/parse/dependency composition/
+response adaptation only); `server/application/**` coordinates use cases
+(such as `server/application/chat/execute-chat-turn.ts`'s H3-independent
+`executeChatTurn()`) through narrow capability functions and must not import
+Drizzle schema/`drizzle-orm` or `@ai-sdk/*`/`@langchain/*` directly —
+`scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces
+this deterministically; `server/infrastructure/**` owns Drizzle persistence
+and AI SDK/LangGraph stream construction, not business/trigger decisions.
+Frontend components are grouped by feature (`app/components/{chat,workspace,
+settings,shell}/`); genuinely cross-feature primitives stay at the component
+root. Rust relay transport owns HTTP composition/security ordering while
+focused auth, validation, admission, and observability modules own their
+policies; native Rust remains the executable tool source of truth and
+sibling TypeScript packages remain integration APIs.
 
 ### Agent/project guidance
 
