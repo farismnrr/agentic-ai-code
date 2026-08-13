@@ -978,12 +978,11 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 - [x] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling (`pnpm check:architecture`).
 - [x] Audit/remove unused imports/files/helpers/facades; no proven dead code was found.
 - [x] Review remaining large files for cohesion; retain cohesive files and avoid line-count-only splits.
-- [ ] Review all reusable components/composables for stable naming/props/contracts.
 - [x] Review reusable components/composables for stable naming/props/contracts; no unsafe contract change was identified.
 - [x] Re-run duplication search for canonical rules/constants; no accidental fork was found.
 - [x] Update `.agents/knowledge/` only with durable repository-wide architecture conventions.
 - [x] Append only durable invariants to `.agents/memories/README.md`; no sibling memory file was created.
-- [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done.
+- [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done (blocked pending documented full-environment gates).
 
 ### Final acceptance
 
