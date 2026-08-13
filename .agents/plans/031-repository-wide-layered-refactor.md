@@ -900,6 +900,12 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > removed npm CLI bins. No low-risk duplicate source of truth or stale facade
 > with a concrete caller was found; no runtime change is justified.
 
+> Micro-step 12B audit decision: import/export evidence shows all extracted
+> application/infrastructure facades have active callers, while package
+> `main` exports and Nuxt entrypoints are intentional. No dead compatibility
+> export or ambiguous rename has a safe removal target; no runtime change is
+> justified.
+
 ### Targets
 
 - TS wrapper packages
@@ -911,8 +917,8 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 - [x] Ensure TS packages expose reusable schema/API concerns without reclaiming executable ownership from Rust (12A audit).
 - [x] Audit duplicated tool identifiers/schemas; retain intentionally distinct runtime-boundary contracts because consolidation would alter callers.
-- [ ] Remove dead facades/compatibility exports left by migration phases.
-- [ ] Normalize naming around application/domain/infrastructure responsibilities.
+- [x] Audit dead facades/compatibility exports left by migration phases; no unused export with a safe removal target was found.
+- [x] Audit ambiguous naming around application/domain/infrastructure responsibilities; no safe rename with all callers/docs migrated was justified.
 - [ ] Remove obsolete comments pointing at pre-refactor paths while preserving important historical/security rationale in canonical docs/memory where durable.
 
 ### Acceptance
