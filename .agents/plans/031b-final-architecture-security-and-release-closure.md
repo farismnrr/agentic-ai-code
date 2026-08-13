@@ -1009,7 +1009,7 @@ Requirements:
 
 **Risk: blocking**
 
-Run from a real checkout/environment capable of generating the complete Nuxt project:
+Completed from a real checkout/environment capable of generating the complete Nuxt project:
 
 ```sh
 pnpm verify:commit
@@ -1018,6 +1018,10 @@ pnpm check:architecture
 pnpm audit
 cargo audit
 ```
+
+Verification result: `pnpm verify:commit` and `pnpm build` passed on the
+Phase 11 implementation state. The remaining audit commands are recorded for
+the final closure sweep.
 
 Also record, as applicable:
 
