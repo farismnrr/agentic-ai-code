@@ -17,9 +17,9 @@ const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024; // 64 KB limit
 
 /// A resolved, tool-specific invocation: the sibling binary name, the CLI
 /// arguments to pass it, and the caller-requested timeout. Building this is
-/// the only part of tool dispatch that varies per tool; everything after it
-/// (bwrap containment, spawn, output capture, timeout/kill, cleanup) is one
-/// shared process-safety path in [`run_sandboxed`] so no tool can bypass it.
+/// the only part of tool dispatch that varies per tool; `dispatch_tool_call`
+/// owns the shared process-safety path after this point (bwrap containment,
+/// spawn, output capture, timeout/kill, and cleanup), so no tool can bypass it.
 struct ToolInvocation {
     bin_name: &'static str,
     args: Vec<String>,

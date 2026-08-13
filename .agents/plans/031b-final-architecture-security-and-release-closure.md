@@ -960,19 +960,19 @@ Where full DB/runtime execution is unavailable, retain deterministic/source veri
 
 ### Frontend
 
-- [ ] confirm feature component folders remain coherent;
-- [ ] confirm root components are genuinely shared/landing primitives;
-- [ ] confirm no new duplicate collection/state logic;
-- [ ] confirm sidebar responsibilities did not re-expand;
-- [ ] do not split components solely by line count.
+- [x] confirm feature component folders remain coherent;
+- [x] confirm root components are genuinely shared/landing primitives;
+- [x] confirm no new duplicate collection/state logic;
+- [x] confirm sidebar responsibilities did not re-expand;
+- [x] do not split components solely by line count.
 
 ### Rust execution
 
-- [ ] fix the stale `run_sandboxed` comment/reference;
-- [ ] confirm all tool invocation builders feed the same Bubblewrap/process path;
-- [ ] confirm no direct process-spawn bypass exists;
-- [ ] confirm bwrap requirement, execution root, env clearing, safe PATH, output bounds, timeout and process-group cleanup remain intact;
-- [ ] do not introduce Rust unit tests.
+- [x] fix the stale `run_sandboxed` comment/reference;
+- [x] confirm all tool invocation builders feed the same Bubblewrap/process path;
+- [x] confirm no direct process-spawn bypass exists;
+- [x] confirm bwrap requirement, execution root, env clearing, safe PATH, output bounds, timeout and process-group cleanup remain intact;
+- [x] do not introduce Rust unit tests.
 
 ### Exit criteria
 
