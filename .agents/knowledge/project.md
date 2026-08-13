@@ -28,8 +28,10 @@ Do not infer current architecture from historical plans alone. Current source/co
 ### Web application
 
 - `app/` — Vue pages, layouts, components, composables, plugins, and client UI.
-- `server/api/` — Nitro HTTP API routes.
-- `server/utils/` — shared server/domain integration logic used by routes and model/tool orchestration.
+- `server/api/` — Nitro HTTP API routes / transport adapters.
+- `server/application/` — application use cases/policies introduced by Plan 031; Plan 031B is the active final closure effort for strict dependency inversion and broader route coverage.
+- `server/infrastructure/` — database, AI/provider, MCP, and other concrete integration adapters introduced/moved during Plan 031/031A.
+- `server/utils/` — legacy/mixed server helpers still present in current source; do **not** assume every file here is a pure utility. Plan 031B explicitly audits and relocates files whose real owner is application or infrastructure.
 - `server/plugins/` — server initialization such as telemetry.
 - `server/database/` — Drizzle schema and migrations.
 - `shared/` — types/utilities shared across client/server boundaries.
@@ -45,21 +47,27 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
-Architecture boundaries reinforced by Plan 031 and closed by Plan 031A:
-`server/api/**` is a thin transport layer (auth/parse/dependency composition/
-response adaptation only); `server/application/**` coordinates use cases
-(such as `server/application/chat/execute-chat-turn.ts`'s H3-independent
-`executeChatTurn()`) through narrow capability functions and must not import
-Drizzle schema/`drizzle-orm` or `@ai-sdk/*`/`@langchain/*` directly —
-`scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces
-this deterministically; `server/infrastructure/**` owns Drizzle persistence
-and AI SDK/LangGraph stream construction, not business/trigger decisions.
-Frontend components are grouped by feature (`app/components/{chat,workspace,
-settings,shell}/`); genuinely cross-feature primitives stay at the component
-root. Rust relay transport owns HTTP composition/security ordering while
-focused auth, validation, admission, and observability modules own their
-policies; native Rust remains the executable tool source of truth and
-sibling TypeScript packages remain integration APIs.
+### Current architecture status
+
+Plan 031 and Plan 031A materially moved the server toward this target:
+
+```text
+server/api (transport/composition)
+  -> server/application (use cases/policies and application-owned contracts)
+      <- server/infrastructure (DB / AI SDK / providers / LangGraph / MCP / filesystem/network adapters)
+```
+
+However, at the Plan 031B baseline this direction is **not yet fully closed in source**. The chat route is thin, but application code still has some direct/type-level infrastructure dependencies, several API routes still own direct persistence/business responsibilities, and `server/utils/**` still contains mixed ownership. Do not describe the architecture as fully closed until [`../plans/031b-final-architecture-security-and-release-closure.md`](../plans/031b-final-architecture-security-and-release-closure.md) reaches its Definition of Done.
+
+The intended final rules are:
+
+- `server/api/**` handles auth, HTTP parsing/validation, dependency composition, and response adaptation rather than business/persistence ownership;
+- `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
+- `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
+- `scripts/check-architecture.sh` (run from `pnpm verify:commit`) must enforce the boundaries that actually ship; Plan 031B owns closing current false-green loopholes;
+- frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
+- Rust relay transport owns HTTP composition/security ordering while focused auth, validation, admission, and observability modules own their policies;
+- native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
 
 ### Agent/project guidance
 
@@ -68,7 +76,7 @@ sibling TypeScript packages remain integration APIs.
 - `.agents/skills/` — shared framework/tool skill discovery.
 - `.agents/memories/README.md` — single canonical durable memory.
 - `.agents/plans/030-previous-plans-summary.md` — compacted pre-reset plan history.
-- `.agents/plans/031-...md` onward — future plans, one file per effort, incrementing and retained separately.
+- `.agents/plans/031-...md` onward — future plans, one file per effort, incrementing and retained separately; explicit lowercase-letter follow-ups remain in the same plan family.
 - `.agents/contracts/` — frozen client-visible contract evidence.
 - `.githooks/pre-commit` — mandatory local commit gate.
 
@@ -78,7 +86,7 @@ The repository intentionally has **no CI workflow** and **no unit-test suite**.
 
 ### Mandatory before every commit
 
-Every commit must pass:
+Every normal local commit must pass:
 
 ```sh
 pnpm verify:commit
@@ -86,7 +94,7 @@ pnpm verify:commit
 
 The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-`pnpm verify:commit` runs repository policy checks, agent-doc integrity, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`.
+`pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`.
 
 There is no remote CI safety net. PR descriptions must record local verification performed; GitHub mergeability is not proof of quality.
 
