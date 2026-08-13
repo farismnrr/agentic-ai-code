@@ -1,7 +1,6 @@
-import type { ToolApprovalConfiguration, ToolSet } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import type { ChatTurnDependencies } from '../../infrastructure/ai/chat-turn-dependencies'
+import type { ChatTurnDependencies } from './contracts'
 import { loadAuthorizedChatContext } from './ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './workspace-context'
 import { buildTurnMessages } from './history'
@@ -86,17 +85,10 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
   // and .agents/memories/012-mcp-inbound-sse-transport.md's sibling decision
   // record for why this goes through the SDK's own tool-approval mechanism
   // instead of a hand-rolled one (.agents/memories/ai-sdk-native-features.md).
-  // Plain map, not `ToolApprovalConfiguration<ToolSet, never>` — see
-  // server/infrastructure/mcp/mcp-tools.ts's comment on why key-by-key assignment
-  // (`toolApproval['local_terminal'] = ...`, for tools mcp-tools.ts doesn't
-  // know about) doesn't typecheck against that union. This is cast to
-  // `ToolApprovalConfiguration` only at the `streamAiSdkAgent` call site,
-  // once nothing further mutates it.
-  type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
-    | ((input: never) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
-
-  let tools: ToolSet = {}
-  let toolApproval: Record<string, ToolApprovalValue> | undefined
+  // Plain application-level maps; the infrastructure adapter translates these
+  // into SDK-specific tool and approval structures.
+  let tools: Record<string, unknown> = {}
+  let toolApproval: Record<string, unknown> | undefined
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
@@ -170,7 +162,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     messages: await deps.convertTurnMessages(resolvedMessages, tools),
     originalMessages: messages,
     tools,
-    toolApproval: toolApproval as ToolApprovalConfiguration<ToolSet, never> | undefined,
+    toolApproval,
     maxOutputTokens: resolvedConfig.maxOutputTokens,
     abortSignal,
     providerOptions: resolvedConfig.thinkingEnabled ? { [provider.type]: { reasoningEffort: conv.reasoningEffort ?? 'medium' } } : undefined,

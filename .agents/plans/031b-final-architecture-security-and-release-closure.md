@@ -741,13 +741,13 @@ Finding AA and AB are closed only if code and deterministic acceptance agree.
 
 ### Steps
 
-- [ ] Define the minimal application-owned contracts needed by chat orchestration.
-- [ ] Move `ChatTurnDependencies` ownership out of infrastructure.
-- [ ] Remove `typeof concreteImplementation`-derived signatures from application contracts.
-- [ ] Replace concrete SDK object exposure with application-level inputs/results where application does not need SDK internals.
-- [ ] Decide the smallest cohesive data/persistence capability shape for history, ownership, persistence, workspace, and device access.
-- [ ] Keep contracts feature-local; do not build a global ports framework.
-- [ ] Main agent reviews the contract before infrastructure/API migration begins.
+- [x] Define the minimal application-owned contracts needed by chat orchestration.
+- [x] Move `ChatTurnDependencies` ownership out of infrastructure.
+- [x] Remove `typeof concreteImplementation`-derived signatures from application contracts.
+- [x] Replace concrete SDK object exposure with application-level inputs/results where application does not need SDK internals.
+- [x] Decide the smallest cohesive data/persistence capability shape for history, ownership, persistence, workspace, and device access.
+- [x] Keep contracts feature-local; do not build a global ports framework.
+- [x] Main agent reviews the contract before infrastructure/API migration begins.
 
 ### Contract review questions
 
