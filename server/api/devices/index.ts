@@ -1,3 +1,4 @@
+import { badRequest, unprocessable } from '#server/core/errors/http'
 import * as v from 'valibot'
 
 const registerDeviceSchema = v.object({

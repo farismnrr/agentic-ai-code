@@ -5,7 +5,7 @@ export async function createLocalTerminalPolicy({ userId, approvals, toolId, loc
   try {
     paired = await localTerminal.hasPairedDevice(userId)
   } catch (err) {
-    logger.error('[chat] failed to check paired relay-agent devices', err)
+    console.error('[chat] failed to check paired relay-agent devices', err)
   }
 
   const approval = async (_input: { command: string, args?: string[] }) => {

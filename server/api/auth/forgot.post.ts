@@ -1,4 +1,4 @@
-import { generateToken } from '../../utils/token'
+import { unprocessable, tooManyRequests } from '#server/core/errors/http'
 import { forgotPasswordSchema as forgotSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   // Rate limit
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({ key: `forgot:${ip}`, maxAttempts: 5 })
+  const { limited, retryAfter } = event.context.application.network.rateLimit({ key: `forgot:${ip}`, maxAttempts: 5 })
   if (limited) {
     throw tooManyRequests(retryAfter)
   }
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Generate and send password reset email
-  const { token, hash: tokenHash } = generateToken()
+  const { token, hash: tokenHash } = event.context.application.security.generateToken()
   const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
 
   await event.context.application.auth.addVerificationToken({
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     expiresAt
   })
 
-  const { sendEmail, getTemplate } = useMailer()
+  const { sendEmail, getTemplate } = event.context.application.mail
   const config = useRuntimeConfig()
   const resetUrl = `${config.public.siteUrl}/reset-password?token=${token}`
 
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!emailSent) {
-    logger.warn('[email] delivery failed', undefined, { to: user.email, purpose: 'forgot' })
+    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { to: user.email, purpose: 'forgot' })
   }
 
   return { ok: true }

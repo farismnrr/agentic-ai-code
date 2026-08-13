@@ -1,3 +1,4 @@
+import { notFound } from '#server/core/errors/http'
 import { eq, and, asc } from 'drizzle-orm'
 import { createParser } from 'eventsource-parser'
 import { conversations, messages as messagesTable } from '../../database/schema'

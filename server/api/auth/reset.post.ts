@@ -1,4 +1,4 @@
-import { hashToken } from '../../utils/token'
+import { badRequest, gone, unprocessable, tooManyRequests } from '#server/core/errors/http'
 import { resetPasswordSchema as resetSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
@@ -9,12 +9,12 @@ export default defineEventHandler(async (event) => {
 
   // Rate limit
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({ key: `reset:${ip}`, maxAttempts: 10 })
+  const { limited, retryAfter } = event.context.application.network.rateLimit({ key: `reset:${ip}`, maxAttempts: 10 })
   if (limited) {
     throw tooManyRequests(retryAfter)
   }
 
-  const hashedToken = hashToken(body.token)
+  const hashedToken = event.context.application.security.hashToken(body.token)
   const tokenRecord = await event.context.application.auth.consumePasswordReset(hashedToken, await hashPassword(body.password))
 
   if (!tokenRecord) {

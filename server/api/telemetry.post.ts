@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { getLogger } from '../utils/otel'
 
 const logEventSchema = v.object({
   level: v.string(),
@@ -15,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readValidatedBody(event, data => v.parse(telemetrySchema, data))
 
-  const logger = getLogger('ai-code-frontend')
+  event.context.application.observability.getLogger('ai-code-frontend')
 
   for (const log of body) {
     let severityNumber: number
@@ -39,7 +38,7 @@ export default defineEventHandler(async (event) => {
         break // INFO
     }
 
-    logger.emit({
+    event.context.application.observability.logger.emit({
       severityNumber,
       severityText: log.level.toUpperCase(),
       body: log.message,

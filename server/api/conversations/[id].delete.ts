@@ -1,3 +1,5 @@
+import { badRequest, notFound } from '#server/core/errors/http'
+
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')

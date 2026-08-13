@@ -1,3 +1,4 @@
+import { badRequest } from '#server/core/errors/http'
 import * as v from 'valibot'
 
 const updateSchema = v.object({

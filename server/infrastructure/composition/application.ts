@@ -1,3 +1,12 @@
+import { useDb } from '../database/connection'
+import { getLogger } from '../observability/otel'
+import { resolveWorkspacePath } from '../filesystem/browse'
+import { generateToken, hashToken } from '../security/token'
+import { isUniqueViolation } from '../database/errors'
+import { logger } from '../observability/logger'
+import { useMailer } from '../mail/mailer'
+import { rateLimit } from '../network/rate-limit'
+import { badRequest, badGateway } from '#server/core/errors/http'
 import * as account from '../database/account-data'
 import * as messages from '../database/messages'
 import * as settings from '../database/settings'
@@ -11,7 +20,7 @@ import { createProviderManagementUseCases, type ProviderManagementPort } from '.
 import { createWorkspaceUseCases, type WorkspacePort } from '../../application/workspaces'
 import { createModelUseCases, type ModelPort } from '../../application/models'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
-import { badGateway, badRequest } from '../../utils/http-errors'
+
 import { encryptSecret } from '../security/crypto'
 import { insertUserProvider, listUserProviders, updateUserProvider, deleteUserProvider, findUserProvider, type ProviderInput, type ProviderUpdate } from '../database/providers'
 import { listProviderModels } from '../ai/providers/index'
@@ -36,6 +45,13 @@ const conversationPort: ConversationPort = {
 export function createApplicationAdapters() {
   return {
     chat: createChatTurnDependencies,
+
+    network: { rateLimit },
+    mail: useMailer(),
+    observability: { logger, getLogger },
+    database: { isUniqueViolation, db: useDb() },
+    security: { generateToken, hashToken },
+    filesystem: { resolveWorkspacePath },
     auth: { ...auth, verifyApiKey: apiKey.verifyApiKey } satisfies AuthUseCases,
     account: {
       listSidebarData: account.listSidebarData,

@@ -28,7 +28,7 @@ export default defineNitroErrorHandler((error, event) => {
   const status = isProblem ? error.statusCode : isTrusted ? error.statusCode : 500
 
   const extensionFields = (extData: Record<string, unknown>) => {
-    const { problem, type, title, status, detail, ...rest } = extData
+    const { type, title, status, detail, ...rest } = extData
     return rest
   }
 

@@ -1,3 +1,4 @@
+import { internal } from '#server/core/errors/http'
 import { eq, desc, and } from 'drizzle-orm'
 import { workspaces } from '../../database/schema'
 import fs from 'node:fs/promises'

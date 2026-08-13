@@ -1,3 +1,4 @@
+import { notFound, internal } from '#server/core/errors/http'
 import { eq } from 'drizzle-orm'
 import { userSettings, users } from '../../database/schema'
 

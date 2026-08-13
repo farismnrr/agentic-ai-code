@@ -13,7 +13,7 @@ export function createAssistantPersister({ conversationId, modelId, providerType
       await closeOnce()
       const toolParts = parts.filter(part => String(part.type).startsWith('tool-'))
       if (toolParts.length > 0) {
-        logger.info('[chat persist] assistant message with tool calls', {
+        console.info('[chat persist] assistant message with tool calls', {
           conversationId,
           modelId,
           providerType,
@@ -33,7 +33,7 @@ export function createAssistantPersister({ conversationId, modelId, providerType
       const inserted = await persistence.insertAssistant(conversationId, parts, totalTokens)
       if (totalTokens != null && inserted) await persistence.cacheTokens(conversationId, inserted.id, totalTokens)
     } catch (err) {
-      logger.error('[chat onEnd] failed to persist assistant message', err)
+      console.error('[chat onEnd] failed to persist assistant message', err)
     }
   }
   return { persist, cleanup: closeOnce }
