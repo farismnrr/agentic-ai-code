@@ -986,16 +986,16 @@ No known cohesion/foldering regression remains, and no cosmetic refactor was int
 
 Run and record every applicable deterministic script. At minimum inspect/run:
 
-- [ ] `scripts/check-repo-policy.sh`;
-- [ ] `scripts/check-agent-docs.sh`;
-- [ ] `scripts/check-architecture.sh`;
-- [ ] architecture negative/positive acceptance added by 031B;
-- [ ] provider SSRF/redirect acceptance added/repaired by 031B;
-- [ ] `scripts/phase4-black-box.sh`;
-- [ ] `scripts/phase6-chatgpt-e2e.sh` applicable deterministic/static portion;
-- [ ] `scripts/phase7-chatgpt-contract.sh`;
-- [ ] `scripts/phase8-zero-bypass.sh`;
-- [ ] any other existing Rust/native security acceptance script affected by touched code.
+- [x] `scripts/check-repo-policy.sh`;
+- [x] `scripts/check-agent-docs.sh`;
+- [x] `scripts/check-architecture.sh`;
+- [x] architecture negative/positive acceptance added by 031B;
+- [x] provider SSRF/redirect acceptance added/repaired by 031B;
+- [x] `scripts/phase4-black-box.sh`;
+- [x] `scripts/phase6-chatgpt-e2e.sh` applicable deterministic/static portion;
+- [x] `scripts/phase7-chatgpt-contract.sh`;
+- [x] `scripts/phase8-zero-bypass.sh`;
+- [x] any other existing Rust/native security acceptance script affected by touched code.
 
 Requirements:
 
