@@ -1,5 +1,6 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
-import { LokiLogExporter } from '../utils/otel'
+import { LokiLogExporter } from '../infrastructure/observability/otel'
+import { logger } from '../infrastructure/observability/logger'
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
