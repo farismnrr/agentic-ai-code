@@ -1,7 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { verifyApiKey } from '../../utils/api-key'
+import { verifyApiKey } from '../../infrastructure/auth/api-key'
 import { getSettings, updateSettings, listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace, listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, listConversationMessages, sendMessage } from '../../application/features'
 
 // We store active transports keyed by their SDK-generated session ID
@@ -11,7 +11,9 @@ import { getSettings, updateSettings, listWorkspaces, createWorkspace, updateWor
 const transports = new Map<string, SSEServerTransport>()
 
 export default defineEventHandler(async (event) => {
-  const userId = await verifyApiKey(event)
+  const authHeader = getHeader(event, 'Authorization')
+  if (!authHeader?.startsWith('Bearer ')) throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
+  const userId = await verifyApiKey(authHeader.slice(7))
   const method = event.method
 
   if (method === 'GET') {

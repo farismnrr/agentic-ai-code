@@ -1,7 +1,7 @@
 import { eq, desc, and } from 'drizzle-orm'
-import { workspaces } from '../database/schema'
+import { workspaces } from '../../database/schema'
 import fs from 'node:fs/promises'
-import { resolveWorkspacePath } from './fs-browse'
+import { resolveWorkspacePath } from '../../utils/fs-browse'
 
 export async function listWorkspaces(userId: string) {
   const db = useDb()

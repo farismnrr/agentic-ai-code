@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { ChatVertexAI } from '@langchain/google-vertexai'
-import { decryptHeaders, decryptSecret } from '../../../utils/crypto'
+import { decryptHeaders, decryptSecret } from '../../../infrastructure/security/crypto'
 import { createSsrfSafeFetch } from '../../../utils/ssrf-guard'
 import type { modelProviders } from '../../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'

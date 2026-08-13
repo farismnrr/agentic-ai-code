@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
-import { decryptHeaders, decryptSecret } from '../../../utils/crypto'
+import { decryptHeaders, decryptSecret } from '../../../infrastructure/security/crypto'
 import { createSsrfSafeFetch } from '../../../utils/ssrf-guard'
 
 export function getAnthropicCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {

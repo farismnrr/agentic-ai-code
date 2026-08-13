@@ -1,8 +1,8 @@
 import { eq, and } from 'drizzle-orm'
-import { mcpServers } from '../database/schema'
-import { isUniqueViolation } from './is-unique-violation'
+import { mcpServers } from '../../database/schema'
+import { isUniqueViolation } from '../../utils/is-unique-violation'
 
-import type { McpTool } from '../../shared/types/chat'
+import type { McpTool } from '../../../shared/types/chat'
 
 export async function listMcpServers(userId: string) {
   const db = useDb()

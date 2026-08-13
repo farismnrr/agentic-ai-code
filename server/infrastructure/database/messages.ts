@@ -1,6 +1,6 @@
 import { eq, and, asc } from 'drizzle-orm'
 import { createParser } from 'eventsource-parser'
-import { conversations, messages as messagesTable } from '../database/schema'
+import { conversations, messages as messagesTable } from '../../database/schema'
 import type { UIMessage } from '#shared/types/chat'
 
 async function requireOwnedConversation(userId: string, conversationId: string) {

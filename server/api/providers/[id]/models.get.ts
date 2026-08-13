@@ -1,3 +1,5 @@
+import { listProviderModelIds } from '../../../application/provider-management'
+
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')

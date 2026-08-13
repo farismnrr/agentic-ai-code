@@ -139,7 +139,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
 
   if (conv.mode === 'chat') {
     // Chat mode has no shell/file-access tool of its own (curl + search
-    // only, see server/utils/langgraph-tools.ts) — the workspace-sandboxed
+    // only, see server/infrastructure/ai/langgraph-tools.ts) — the workspace-sandboxed
     // `terminal` tool it used to always wire in was removed; `local_terminal`
     // is agent-mode-only.
     const systemPrompt = buildWorkspaceSystemPrompt()

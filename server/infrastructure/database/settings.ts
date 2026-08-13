@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
-import { userSettings, users } from '../database/schema'
-import { resolveOwnedModelContext } from '../application/chat/ownership'
+import { userSettings, users } from '../../database/schema'
+import { resolveOwnedModelContext } from '../../application/chat/ownership'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
   const db = useDb()

@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { decryptHeaders, decryptSecret } from '../../../utils/crypto'
+import { decryptHeaders, decryptSecret } from '../../../infrastructure/security/crypto'
 import { createSsrfSafeFetch } from '../../../utils/ssrf-guard'
 
 export function getOpenAiCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {

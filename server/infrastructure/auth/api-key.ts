@@ -1,7 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import type { H3Event } from 'h3'
-import { apiKeys } from '../database/schema'
+import { apiKeys } from '../../database/schema'
 
 export function generateApiKey() {
   // e.g., aic_live_a1b2c3d4...
@@ -15,13 +14,7 @@ export function hashApiKey(rawKey: string) {
   return createHash('sha256').update(rawKey).digest('hex')
 }
 
-export async function verifyApiKey(event: H3Event) {
-  const authHeader = getHeader(event, 'Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
-  }
-
-  const rawKey = authHeader.substring(7)
+export async function verifyApiKey(rawKey: string) {
   const keyHash = hashApiKey(rawKey)
 
   const db = useDb()

@@ -1,3 +1,5 @@
+import { listConversationMessages } from '../../infrastructure/database/messages'
+
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')

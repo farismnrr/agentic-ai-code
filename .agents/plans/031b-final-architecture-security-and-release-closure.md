@@ -858,13 +858,13 @@ The repository's claimed API → application → infrastructure direction is tru
 
 ### Steps
 
-- [ ] Classify every material `server/utils/**` file.
-- [ ] Move persistence-backed utilities to infrastructure/application owners.
-- [ ] Move provider SDK/network integration to infrastructure.
-- [ ] Move cryptography and SSRF policy to a clearly named infrastructure/security/network location if that improves ownership after Phase 1.
-- [ ] Keep genuinely small pure server helpers in `server/utils/**`.
-- [ ] Delete obsolete facades/re-exports created only to preserve old paths once all callers are migrated.
-- [ ] Search for duplicate ownership/security helpers after moves.
+- [x] Classify every material `server/utils/**` file.
+- [x] Move persistence-backed utilities to infrastructure/application owners.
+- [x] Move provider SDK/network integration to infrastructure.
+- [x] Move cryptography and SSRF policy to a clearly named infrastructure/security/network location if that improves ownership after Phase 1.
+- [x] Keep genuinely small pure server helpers in `server/utils/**`.
+- [x] Delete obsolete facades/re-exports created only to preserve old paths once all callers are migrated.
+- [x] Search for duplicate ownership/security helpers after moves.
 
 ### Exit criteria
 

@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 import { modelProviders, type ModelProviderType } from '../../database/schema'
 import { badRequest, internal, notFound } from '../../utils/http-errors'
-import { encryptSecret, isEncryptedSecret } from '../../utils/crypto'
+import { encryptSecret, isEncryptedSecret } from '../security/crypto'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
 // `customHeaders` values are encrypted ciphertext by the time they reach this
-// module (see `server/utils/providers.ts`) — this layer only stores/merges
+// module (see `server/application/provider-management.ts`) — this layer only stores/merges
 // them, it never sees or logs plaintext secret header values.
 export type ProviderInput = { type: ModelProviderType, name: string, baseUrl?: string, apiKey: string, customHeaders?: Record<string, string> }
 // `customHeaders` here is a diff: a string value replaces/adds that header

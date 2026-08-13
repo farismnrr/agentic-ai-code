@@ -179,7 +179,7 @@ export const modelProviders = aiCode.table('model_providers', {
   baseUrl: text('base_url'),
   apiKeyEncrypted: text('api_key_encrypted').notNull(),
   // Values are ciphertext (`encryptSecret`/`decryptSecret` in
-  // `server/utils/crypto.ts`), same as `apiKeyEncrypted` — custom gateway
+  // `server/infrastructure/security/crypto.ts`), same as `apiKeyEncrypted` — custom gateway
   // headers routinely carry credentials (`Authorization`, `X-Api-Key`).
   // Keys (header names) stay plaintext; only values are secret.
   customHeaders: jsonb('custom_headers').$type<Record<string, string>>().notNull().default({}),

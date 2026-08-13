@@ -1,4 +1,4 @@
-import { verifyApiKey } from '../utils/api-key'
+import { verifyApiKey } from '../infrastructure/auth/api-key'
 import { users } from '../database/schema'
 import { eq } from 'drizzle-orm'
 
@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'Authorization')
   if (authHeader && authHeader.startsWith('Bearer aic_live_')) {
     try {
-      const userId = await verifyApiKey(event)
+      const userId = await verifyApiKey(authHeader)
       const db = useDb()
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
       if (user) {
