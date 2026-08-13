@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { createModel } from '../../application/features'
+import { createModel } from '../../infrastructure/composition'
 
 const bodySchema = v.object({
   providerId: v.string(),

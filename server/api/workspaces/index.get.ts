@@ -1,4 +1,4 @@
-import { listWorkspaces } from '../../application/features'
+import { listWorkspaces } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

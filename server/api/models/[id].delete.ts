@@ -1,4 +1,4 @@
-import { deleteModel } from '../../application/features'
+import { deleteModel } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

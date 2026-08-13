@@ -1,4 +1,4 @@
-import { deleteWorkspace } from '../../application/features'
+import { deleteWorkspace } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

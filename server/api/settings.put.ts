@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { updateSettings } from '../application/features'
+import { updateSettings } from '../infrastructure/composition'
 
 const settingsSchema = v.object({
   language: v.optional(v.string()),

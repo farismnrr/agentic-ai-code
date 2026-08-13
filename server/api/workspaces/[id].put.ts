@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { updateWorkspace } from '../../application/features'
+import { updateWorkspace } from '../../infrastructure/composition'
 
 const updateSchema = v.object({
   name: v.string(),

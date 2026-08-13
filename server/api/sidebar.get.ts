@@ -1,4 +1,4 @@
-import { listSidebarData } from '../application/account-data'
+import { listSidebarData } from '../infrastructure/composition'
 
 /**
  * Single round trip for everything the sidebar needs: workspaces and

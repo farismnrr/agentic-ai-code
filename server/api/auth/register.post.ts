@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { addVerificationToken, createUser, userExists } from '../../application/auth'
+import { addVerificationToken, createUser, userExists } from '../../infrastructure/composition'
 import { registerSchema } from '../../../shared/schemas/auth'
 import { generateToken } from '../../utils/token'
 
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Fetch the created user to seed the session.
-  const created = await (await import('../../application/auth')).findLoginUser(body.email)
+  const created = await (await import('../../infrastructure/composition')).findLoginUser(body.email)
 
   if (!created) throw internal('Account creation failed')
 

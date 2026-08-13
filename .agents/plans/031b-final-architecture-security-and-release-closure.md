@@ -880,16 +880,16 @@ The repository's claimed API → application → infrastructure direction is tru
 
 ### Steps
 
-- [ ] Simplify `check-architecture.sh` around the final actual rules.
-- [ ] Remove temporary exceptions that existed only for pre-031B violations.
-- [ ] Block all application → infrastructure imports, including type-only imports.
-- [ ] Block application DB/schema/Drizzle/H3/Nitro/AI/provider/MCP implementation imports.
-- [ ] Block migrated API routes from direct DB/schema access.
-- [ ] Keep Rust MCP transport-independence check.
-- [ ] Add shared/domain checks only where folders/contracts really exist.
-- [ ] Add deterministic negative/positive fixture acceptance without modifying tracked production source.
-- [ ] Keep `pnpm check:architecture` inside `pnpm verify:commit`.
-- [ ] Do not add a new architecture-lint dependency unless grep/shell enforcement demonstrably cannot express the final rule safely.
+- [x] Simplify `check-architecture.sh` around the final actual rules.
+- [x] Remove temporary exceptions that existed only for pre-031B violations.
+- [x] Block all application → infrastructure imports, including type-only imports.
+- [x] Block application DB/schema/Drizzle/H3/Nitro/AI/provider/MCP implementation imports.
+- [x] Block migrated API routes from direct DB/schema access.
+- [x] Keep Rust MCP transport-independence check.
+- [x] Add shared/domain checks only where folders/contracts really exist.
+- [x] Add deterministic negative/positive fixture acceptance without modifying tracked production source.
+- [x] Keep `pnpm check:architecture` inside `pnpm verify:commit`.
+- [x] Do not add a new architecture-lint dependency unless grep/shell enforcement demonstrably cannot express the final rule safely.
 
 ### Exit criteria
 

@@ -1,4 +1,4 @@
-import { listApiKeys } from '../../application/account-data'
+import { listApiKeys } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const { user } = await requireUserSession(event)

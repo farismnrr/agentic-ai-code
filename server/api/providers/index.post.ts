@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
-import { createModelProvider } from '../../application/features'
+import { createModelProvider } from '../../infrastructure/composition'
 
 const bodySchema = v.pipe(
   v.object({

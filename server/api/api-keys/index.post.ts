@@ -1,6 +1,5 @@
 import * as v from 'valibot'
-import { createApiKey } from '../../application/account-data'
-import { generateApiKey } from '../../infrastructure/auth/api-key'
+import { createApiKey, generateApiKey } from '../../infrastructure/composition'
 
 const createSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(255))

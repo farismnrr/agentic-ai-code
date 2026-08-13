@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { findLoginUser } from '../../application/auth'
+import { findLoginUser } from '../../infrastructure/composition'
 import { loginSchema } from '../../../shared/schemas/auth'
 
 /**

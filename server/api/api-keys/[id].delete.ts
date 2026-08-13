@@ -1,4 +1,4 @@
-import { deleteApiKey } from '../../application/account-data'
+import { deleteApiKey } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const idSchema = v.object({

@@ -1,4 +1,4 @@
-import { consumeEmailVerification } from '../../application/auth'
+import { consumeEmailVerification } from '../../infrastructure/composition'
 import { hashToken } from '../../utils/token'
 import { verifySchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'

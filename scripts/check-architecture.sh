@@ -1,76 +1,84 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Small deterministic ownership checks; keep this source-level and dependency-free.
-if rg -n '^[[:space:]]*(use|pub[[:space:]]+use).*\b(axum|transport::|super::transport)' packages/rust-tools/src/relay_agent/mcp.rs; then
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+application_root="${ARCHITECTURE_APPLICATION_ROOT:-$repo_root/server/application}"
+api_root="${ARCHITECTURE_API_ROOT:-$repo_root/server/api}"
+
+fail_matches() {
+  local message="$1"
+  local root="$2"
+  local pattern="$3"
+  local matches
+  matches="$(rg -n "$pattern" "$root" 2>/dev/null || true)"
+  if [[ -n "$matches" ]]; then
+    printf 'architecture: %s\n%s\n' "$message" "$matches" >&2
+    return 1
+  fi
+}
+
+# The protocol core must not acquire HTTP/transport dependencies.
+if rg -n '^[[:space:]]*(use|pub[[:space:]]+use).*(axum|transport::|super::transport)' \
+  "$repo_root/packages/rust-tools/src/relay_agent/mcp.rs"; then
   echo 'architecture: mcp.rs must remain transport-independent' >&2
   exit 1
 fi
 
-if rg -n 'H3Event|H3Event<|EventHandlerRequest' server/application server/infrastructure; then
-  echo 'architecture: application/infrastructure modules must not depend on H3 event objects' >&2
-  exit 1
-fi
+# Application code depends on application/shared contracts only. Keep this
+# import-level check deliberately broad: it catches value, type-only, aliased,
+# re-export, and dynamic imports without a dependency or AST parser.
+fail_matches 'server/application must not import infrastructure implementations' \
+  "$application_root" \
+  "(from|import\\()[[:space:]]*['\"][^'\"]*(server/)?infrastructure/|from[[:space:]]+['\"][.]{1,2}/infrastructure/"
+fail_matches 'server/application must not import Drizzle, schema, or database runtime' \
+  "$application_root" \
+  "(from|import\\()[[:space:]]*['\"][^'\"]*(database/schema|drizzle-orm)|\\buseDb\\b"
+fail_matches 'server/application must not import H3/Nitro event types or runtime' \
+  "$application_root" \
+  "(from|import\\()[[:space:]]*['\"][^'\"]*(^|/)(h3|nitropack|nitro)('|\")|\\b(H3Event|EventHandlerRequest)\\b"
+fail_matches 'server/application must not import AI/provider/MCP implementations' \
+  "$application_root" \
+  "(from|import\\()[[:space:]]*['\"](ai|@ai-sdk/|@langchain/|@modelcontextprotocol/"
 
-# Plan 031A finding G/H: server/application coordinates narrow capabilities
-# and must not directly own Drizzle persistence or provider/AI SDK
-# construction — those belong to server/infrastructure and server/utils.
-if rg -n "from '.*database/schema'|from 'drizzle-orm'" server/application; then
-  echo 'architecture: server/application must not import Drizzle schema/drizzle-orm directly; use a server/infrastructure adapter' >&2
-  exit 1
-fi
+# Migrated API routes compose application use cases; they do not reach the
+# persistence implementation or schema directly.
+fail_matches 'migrated server/api routes must not access DB/schema implementations' \
+  "$api_root" \
+  "(from|import\\()[[:space:]]*['\"][^'\"]*(server/database|database/schema|infrastructure/database|drizzle-orm)|\\buseDb\\b"
 
-if rg -n "from '@ai-sdk/|from '@langchain/" server/application; then
-  echo 'architecture: server/application must not construct provider/AI SDK clients directly; use a server/infrastructure adapter' >&2
-  exit 1
-fi
-
-# Plan 031A finding T: the checks above only caught @ai-sdk/@langchain
-# *package* imports. server/application must also not import the `ai`
-# package itself (or any provider SDK package) as a value — only
-# `import type { ... } from 'ai'` is allowed, since the concrete tool/model
-# construction surface belongs to server/infrastructure/ai/**
-# (server/infrastructure/ai/chat-turn-dependencies.ts and
-# server/infrastructure/ai/local-terminal-tool.ts are the narrow contract
-# and adapter application is allowed to depend on).
-ai_pkg_violations=$(rg -n "from '(ai|@ai-sdk/[^']*|@langchain/[^']*)'" server/application | grep -vE ':[0-9]+:import type ' || true)
-if [ -n "$ai_pkg_violations" ]; then
-  echo "architecture: server/application must not import the 'ai'/@ai-sdk/@langchain packages as values (type-only imports are fine):" >&2
-  echo "$ai_pkg_violations" >&2
-  exit 1
-fi
-
-# Plan 031A finding T: server/application must not reach concrete
-# server/infrastructure/ai/** or server/infrastructure/mcp/** modules as
-# values either (these are exactly the modules Phase 10 collapsed behind the
-# narrow ChatTurnDependencies contract). Only `import type` from those paths
-# is allowed. server/infrastructure/ai/local-terminal-tool.ts is a plain
-# tool-schema builder with no provider/model/stream construction and is the
-# one explicit adapter application is allowed to call as a value, matching
-# the existing server/infrastructure/database/** adapter pattern.
-infra_ai_mcp_violations=$(rg -n "^import .*from '.*infrastructure/(ai|mcp)/" server/application | grep -vE ':[0-9]+:import type ' | grep -v 'infrastructure/ai/local-terminal-tool' || true)
-if [ -n "$infra_ai_mcp_violations" ]; then
-  echo "architecture: server/application must not import server/infrastructure/ai/** or server/infrastructure/mcp/** as values (type-only imports, or the local-terminal-tool adapter, are fine):" >&2
-  echo "$infra_ai_mcp_violations" >&2
-  exit 1
-fi
-
-# Plan 031A finding T: application must not reach the same forbidden surface
-# indirectly through a server/utils/** re-export shim. Find every
-# server/utils/** module that itself imports the `ai` package, @ai-sdk/,
-# @langchain/, or concrete server/infrastructure/ai|mcp modules as a value,
-# then fail if server/application imports any of those specific shim files.
-shim_files=$(rg -l "from '(ai|@ai-sdk/[^']*|@langchain/[^']*)'|^import .*from '.*infrastructure/(ai|mcp)/" server/utils 2>/dev/null || true)
-if [ -n "$shim_files" ]; then
-  for shim in $shim_files; do
-    shim_name=$(basename "$shim" .ts)
-    shim_hits=$(rg -n "from '(\.\./\.\./)?utils/${shim_name}'" server/application 2>/dev/null || true)
-    if [ -n "$shim_hits" ]; then
-      echo "architecture: server/application must not reach '${shim}' (a server/utils/** shim over forbidden AI/provider infrastructure) indirectly:" >&2
-      echo "$shim_hits" >&2
-      exit 1
+run_fixture_checks() {
+  local fixture_dir
+  fixture_dir="$(mktemp -d)"
+  trap 'rm -rf "$fixture_dir"' RETURN
+  mkdir -p "$fixture_dir/application" "$fixture_dir/api"
+  printf "import type { Contract } from './contract'\n" > "$fixture_dir/application/positive.ts"
+  for fixture in type-only facade; do
+    rm -f "$fixture_dir/application/type-only.ts" "$fixture_dir/application/facade.ts"
+    if [[ "$fixture" == type-only ]]; then
+      printf "import type { Db } from '../infrastructure/database/db'\n" > "$fixture_dir/application/type-only.ts"
+    else
+      printf "export { value } from '../infrastructure/database/db'\n" > "$fixture_dir/application/facade.ts"
+    fi
+    if ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
+      "$0" --skip-fixtures >/dev/null 2>&1; then
+      echo "architecture: negative application fixture '$fixture' was not rejected" >&2
+      return 1
     fi
   done
+  rm -f "$fixture_dir/application/type-only.ts" "$fixture_dir/application/facade.ts"
+  printf "import { schema } from '../database/schema'\n" > "$fixture_dir/api/direct-db.ts"
+  if ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
+    "$0" --skip-fixtures >/dev/null 2>&1; then
+    echo 'architecture: negative API database fixture was not rejected' >&2
+    return 1
+  fi
+  rm -f "$fixture_dir/api/direct-db.ts"
+  ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
+    "$0" --skip-fixtures >/dev/null
+}
+
+if [[ "${1:-}" != "--skip-fixtures" && -z "${ARCHITECTURE_SKIP_FIXTURES:-}" ]]; then
+  run_fixture_checks
 fi
 
 echo 'architecture: ownership checks passed'

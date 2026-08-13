@@ -1,5 +1,5 @@
 import { executeChatTurn } from '../application/chat/execute-chat-turn'
-import { createChatTurnDependencies } from '../infrastructure/ai/chat-turn-dependencies'
+import { createChatTurnDependencies } from '../infrastructure/composition'
 
 /**
  * Thin transport adapter (Plan 031A finding H): authenticate, parse the

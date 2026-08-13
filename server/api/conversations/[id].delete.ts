@@ -1,4 +1,4 @@
-import { deleteConversation } from '../../application/account-data'
+import { deleteConversation } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

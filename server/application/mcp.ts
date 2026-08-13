@@ -1,4 +1,2 @@
-export async function testMcpServer(userId: string, id: string) {
-  const { testMcpServer: run } = await import('../infrastructure/mcp/test-server')
-  return run(userId, id)
-}
+export interface McpCapabilities { testMcpServer: (userId: string, id: string) => Promise<unknown> }
+export const createMcp = <T extends McpCapabilities>(capabilities: T) => capabilities

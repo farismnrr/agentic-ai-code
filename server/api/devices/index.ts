@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { listUserDevices, registerUserDevice } from '#server/application/account-data'
+import { listUserDevices, registerUserDevice } from '#server/infrastructure/composition'
 
 const registerDeviceSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1, 'Device name is required')),

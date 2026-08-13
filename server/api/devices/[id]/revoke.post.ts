@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { revokeDevice } from '#server/application/account-data'
+import { revokeDevice } from '#server/infrastructure/composition'
 
 const paramsSchema = v.object({
   id: v.pipe(v.string(), v.uuid('Invalid device ID format'))

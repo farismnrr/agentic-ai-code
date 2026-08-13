@@ -1,4 +1,4 @@
-import { listConversationSummaries } from '../../application/account-data'
+import { listConversationSummaries } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

@@ -1,4 +1,4 @@
-import { addVerificationToken, findUserByEmail } from '../../application/auth'
+import { addVerificationToken, findUserByEmail } from '../../infrastructure/composition'
 import { generateToken } from '../../utils/token'
 import { forgotPasswordSchema as forgotSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'

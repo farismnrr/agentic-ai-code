@@ -1,4 +1,4 @@
-import { testMcpServer } from '../../../application/mcp'
+import { testMcpServer } from '../../../infrastructure/composition'
 
 /**
  * "Test connection" — connects to a stored server, lists its tools, and

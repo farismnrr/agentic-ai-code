@@ -1,4 +1,4 @@
-import { getSettings } from '../application/features'
+import { getSettings } from '../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

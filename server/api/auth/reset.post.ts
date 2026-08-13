@@ -1,4 +1,4 @@
-import { consumePasswordReset } from '../../application/auth'
+import { consumePasswordReset } from '../../infrastructure/composition'
 import { hashToken } from '../../utils/token'
 import { resetPasswordSchema as resetSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'

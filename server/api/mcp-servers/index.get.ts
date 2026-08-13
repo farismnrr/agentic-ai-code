@@ -1,4 +1,4 @@
-import { listMcpServers } from '../../application/features'
+import { listMcpServers } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

@@ -1,4 +1,4 @@
-import { updateConversation } from '../../application/account-data'
+import { updateConversation } from '../../infrastructure/composition'
 import { resolveOwnedModelContext } from '../../application/chat/ownership'
 import * as v from 'valibot'
 

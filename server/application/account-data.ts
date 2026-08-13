@@ -1,3 +1,2 @@
-import { createApiKey, createConversation, deleteApiKey, deleteConversation, listApiKeys, listConversationSummaries, listSidebarData, listUserDevices, registerUserDevice, revokeDevice, setActiveWorkspace, updateConversation } from '../infrastructure/database/account-data'
-
-export { listConversationSummaries, listSidebarData, setActiveWorkspace, listUserDevices, registerUserDevice, listApiKeys, createApiKey, deleteApiKey, createConversation, updateConversation, deleteConversation, revokeDevice }
+export interface AccountDataCapabilities { [operation: string]: (...args: unknown[]) => unknown }
+export const createAccountData = <T extends AccountDataCapabilities>(capabilities: T) => capabilities

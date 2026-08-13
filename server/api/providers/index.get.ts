@@ -1,4 +1,4 @@
-import { listModelProviders } from '../../application/features'
+import { listModelProviders } from '../../infrastructure/composition'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

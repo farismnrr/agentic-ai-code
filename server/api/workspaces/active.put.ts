@@ -1,5 +1,4 @@
-import { setActiveWorkspace } from '../../application/account-data'
-import { findUserWorkspace } from '../../infrastructure/database/workspaces'
+import { findUserWorkspace, setActiveWorkspace } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const schema = v.object({
