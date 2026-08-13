@@ -1,5 +1,6 @@
+import { logger } from "../../infrastructure/observability/logger"
 import type * as v from 'valibot'
-import { logger } from '#server/infrastructure/observability/logger'
+
 
 interface ProblemInit {
   status: number

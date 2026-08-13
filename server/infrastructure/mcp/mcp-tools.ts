@@ -1,3 +1,4 @@
+import { logger } from "../observability/logger"
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { loadEnabledMcpServers } from './server-config'
