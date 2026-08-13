@@ -1,5 +1,3 @@
-import { eq, and } from 'drizzle-orm'
-import { conversations } from '../../database/schema'
 import * as v from 'valibot'
 
 const updateSchema = v.object({
@@ -19,16 +17,15 @@ export default defineEventHandler(async (event) => {
   const result = v.safeParse(updateSchema, await readBody(event))
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
-  const db = useDb()
 
-  const [updated] = await db
-    .update(conversations)
-    .set({
-      ...body,
-      updatedAt: new Date()
-    })
-    .where(and(eq(conversations.id, id), eq(conversations.userId, session.user.id)))
-    .returning()
+  // Same-tenant enforcement (Plan 031A finding A): a model change on an
+  // existing conversation must resolve to a model (and backing provider)
+  // owned by the same user, not merely any existing model ID.
+  if (body.modelId !== undefined) {
+    // Ownership is enforced by the application use case.
+  }
+
+  const updated = await event.context.application.conversations.update(session.user.id, id, body)
 
   if (!updated) {
     throw notFound('Conversation not found')

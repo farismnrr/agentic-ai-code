@@ -21,5 +21,5 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw unprocessable(parsed.issues)
   }
-  return updateModel(session.user.id, id, parsed.output)
+  return event.context.application.models.update(session.user.id, id, parsed.output)
 })

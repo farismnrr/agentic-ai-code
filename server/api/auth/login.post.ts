@@ -1,6 +1,4 @@
 import * as v from 'valibot'
-import { eq } from 'drizzle-orm'
-import { users } from '../../database/schema'
 import { loginSchema } from '../../../shared/schemas/auth'
 
 /**
@@ -31,19 +29,7 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
-
-  const [user] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      passwordHash: users.passwordHash,
-      emailVerifiedAt: users.emailVerifiedAt
-    })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  const user = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, passwordHash?: string | null, emailVerifiedAt?: Date | null } | undefined
 
   // No account OR account has no password (OAuth-only) — same generic message.
   if (!user || !user.passwordHash) {

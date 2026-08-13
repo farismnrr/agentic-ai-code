@@ -66,17 +66,22 @@ def rsa_jwk(public_der):
 
 class JwksHandler(BaseHTTPRequestHandler):
     jwks = b""
+    discovery = b""
 
     def do_GET(self):
-        if self.path != "/.well-known/jwks.json":
+        if self.path == "/.well-known/jwks.json":
+            payload = self.jwks
+        elif self.path == "/.well-known/openid-configuration":
+            payload = self.discovery
+        else:
             self.send_response(404)
             self.end_headers()
             return
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(self.jwks)))
+        self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(self.jwks)
+        self.wfile.write(payload)
 
     def log_message(self, *_args):
         pass
@@ -191,10 +196,13 @@ def stop_relay(process):
         process.wait(timeout=5)
 
 
-def make_token(key_path, issuer, scope, subject="owner", expires_in=600):
+def make_token(key_path, issuer, scope, subject="owner", expires_in=600, include_typ=True, kid="fixture-key", audience=AUDIENCE):
     now = int(time.time())
-    header = b64(json.dumps({"alg": "RS256", "kid": "fixture-key", "typ": "JWT"}, separators=(",", ":")).encode())
-    payload = b64(json.dumps({"iss": issuer, "aud": AUDIENCE, "sub": subject,
+    header_fields = {"alg": "RS256", "kid": kid}
+    if include_typ:
+        header_fields["typ"] = "JWT"
+    header = b64(json.dumps(header_fields, separators=(",", ":")).encode())
+    payload = b64(json.dumps({"iss": issuer, "aud": audience, "sub": subject,
                               "scope": scope, "iat": now - 120, "exp": now + expires_in}, separators=(",", ":")).encode())
     signing_input = f"{header}.{payload}".encode()
     with tempfile.NamedTemporaryFile() as input_file, tempfile.NamedTemporaryFile() as signature_file:
@@ -220,12 +228,32 @@ def run():
         idp_thread = threading.Thread(target=idp.serve_forever, daemon=True)
         idp_thread.start()
         issuer = f"http://127.0.0.1:{idp.server_port}"
+        JwksHandler.discovery = json.dumps({
+            "issuer": issuer,
+            "jwks_uri": f"{issuer}/.well-known/jwks.json",
+        }).encode()
         local = remote_untrusted = remote = None
         try:
             local_port = free_port()
             local = start_relay(temp_dir, local_port)
             local_url = f"http://127.0.0.1:{local_port}/mcp"
             valid_discover = mcp("server/discover")
+            initialize_request = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                   "params": {"protocolVersion": "2025-03-26", "capabilities": {},
+                                              "clientInfo": {"name": "ChatGPT", "version": "test"}}}
+            status, _, body = request(local_url, headers=headers(method="initialize"), body=initialize_request)
+            assert_status(status, 200, "legacy initialize")
+            assert body["result"]["protocolVersion"] == "2025-03-26"
+
+            legacy_tools_list_request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
+            legacy_headers = {"Content-Type": "application/json", "Origin": ORIGIN,
+                              "MCP-Protocol-Version": "2025-03-26", "Mcp-Method": "tools/list"}
+            status, _, body = request(local_url, headers=legacy_headers, body=legacy_tools_list_request)
+            assert_status(status, 200, "legacy tools/list without modern headers")
+            legacy_tools = body["result"]["tools"]
+            assert isinstance(legacy_tools, list) and legacy_tools
+            assert any(tool["name"] == "terminal_exec" for tool in legacy_tools)
+
             status, response_headers, body = request(local_url, headers=headers(), body=valid_discover)
             assert_status(status, 200, "local server/discover")
             assert body["result"]["supportedVersions"] == [PROTOCOL]
@@ -275,6 +303,51 @@ def run():
                 assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
 
             dispatch_marker = os.path.join(temp_dir, "rejected-dispatch-marker")
+
+            forbidden_call = mcp("tools/call", {
+                "name": "terminal_exec",
+                "arguments": {"command": "sudo"},
+                "_meta": call_meta,
+            })
+            status, _, body = request(
+                local_url,
+                headers=headers(method="tools/call", name="terminal_exec"),
+                body=forbidden_call,
+            )
+            assert_status(status, 200, "forbidden executable tools/call")
+            result = body["result"]
+            assert result["resultType"] == "complete" and result["isError"] is True
+            assert "privilege escalation" in json.dumps(result["content"])
+
+            path_binary_call = mcp("tools/call", {
+                "name": "terminal_exec",
+                "arguments": {"command": "bin/tool"},
+                "_meta": call_meta,
+            })
+            status, _, body = request(
+                local_url,
+                headers=headers(method="tools/call", name="terminal_exec"),
+                body=path_binary_call,
+            )
+            assert_status(status, 200, "path-qualified executable tools/call")
+            result = body["result"]
+            assert result["resultType"] == "complete" and result["isError"] is True
+            assert "path traversal" in json.dumps(result["content"])
+
+            cwd_escape_call = mcp("tools/call", {
+                "name": "terminal_exec",
+                "arguments": {"command": "true", "cwd": "../"},
+                "_meta": call_meta,
+            })
+            status, _, body = request(
+                local_url,
+                headers=headers(method="tools/call", name="terminal_exec"),
+                body=cwd_escape_call,
+            )
+            assert_status(status, 200, "cwd traversal tools/call")
+            result = body["result"]
+            assert result["resultType"] == "complete" and result["isError"] is True
+            assert "path traversal" in json.dumps(result["content"]) or "does not exist" in json.dumps(result["content"])
 
             untrusted_port = free_port()
             remote_untrusted = start_relay(temp_dir, untrusted_port, issuer=issuer)
@@ -342,6 +415,30 @@ def run():
             assert body["error"]["code"] == -32600
             assert not os.path.exists(dispatch_marker), "malformed bearer reached tool execution"
 
+            for malformed, label in (("a.b.c", "malformed base64 bearer"),
+                                     (f"{b64(b'{not-json}')}.e30.signature", "malformed header bearer")):
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {malformed}"), body=valid_discover)
+                assert_status(status, 401, label)
+                assert body["error"]["code"] == -32600
+
+            for include_typ, label in ((True, "valid bearer with typ"), (False, "valid bearer without typ")):
+                token = make_token(key_path, issuer, "relay.coding", include_typ=include_typ)
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {token}"), body=valid_discover)
+                assert_status(status, 200, label)
+
+            bad_signature = make_token(key_path, issuer, "relay.coding")[:-1] + ("A" if make_token(key_path, issuer, "relay.coding")[-1] != "A" else "B")
+            status, _, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {bad_signature}"), body=valid_discover)
+            assert_status(status, 401, "bad signature bearer")
+
+            for token, label in ((make_token(key_path, issuer + "/wrong", "relay.coding"), "wrong issuer"),
+                                 (make_token(key_path, issuer, "relay.coding", audience="https://wrong.example/mcp"), "wrong audience")):
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {token}"), body=valid_discover)
+                assert_status(status, 401, label)
+
             expired = make_token(key_path, issuer, "relay.coding", expires_in=-120)
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {expired}"), body=valid_discover)
@@ -392,6 +489,11 @@ def run():
             assert_status(status, 400, "invalid tool arguments before dispatch")
             assert body["error"]["code"] == -32602
             assert not os.path.exists(dispatch_marker), "invalid tool arguments reached execution"
+
+            status, _, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="http"), body=valid_discover)
+            assert_status(status, 403, "trusted proxy rejects non-https forwarded scheme")
+            assert "requires HTTPS" in body["error"]["message"]
 
             wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
             status, challenge_headers, body = request(remote_url,

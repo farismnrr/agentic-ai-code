@@ -1,6 +1,4 @@
 import * as v from 'valibot'
-import { eq } from 'drizzle-orm'
-import { users, verificationTokens, workspaces } from '../../database/schema'
 import { registerSchema } from '../../../shared/schemas/auth'
 import { generateToken } from '../../utils/token'
 
@@ -27,12 +25,9 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
-
   // Check for existing account. Return the same message regardless so the
   // response reveals nothing about which addresses are registered.
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, body.email)).limit(1)
-  if (existing.length > 0) {
+  if (await event.context.application.auth.userExists(body.email)) {
     // Same wording as success — caller can't tell the difference.
     setResponseStatus(event, 201)
     return { ok: true }
@@ -41,31 +36,14 @@ export default defineEventHandler(async (event) => {
   const hash = await hashPassword(body.password)
 
   try {
-    await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(users).values({
-        email: body.email,
-        name: body.name,
-        passwordHash: hash
-      }).returning({ id: users.id })
-
-      await tx.insert(workspaces).values({
-        userId: inserted!.id,
-        name: 'Personal',
-        path: '',
-        pathConfirmed: false
-      })
-    })
+    await event.context.application.auth.createUser({ email: body.email, name: body.name, passwordHash: hash })
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('Email already registered')
     throw err
   }
 
   // Fetch the created user to seed the session.
-  const [created] = await db
-    .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null } | undefined
 
   if (!created) throw internal('Account creation failed')
 
@@ -82,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const { token, hash: tokenHash } = generateToken()
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-  await db.insert(verificationTokens).values({
+  await event.context.application.auth.addVerificationToken({
     tokenHash,
     userId: created.id,
     type: 'email_verify',

@@ -1,4 +1,3 @@
-import { conversations } from '../../database/schema'
 import * as v from 'valibot'
 
 const createSchema = v.object({
@@ -11,23 +10,24 @@ const createSchema = v.object({
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const db = useDb()
 
   const result = v.safeParse(createSchema, await readBody(event))
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
 
-  const [conversation] = await db
-    .insert(conversations)
-    .values({
-      userId: session.user.id,
-      workspaceId: body.workspaceId,
-      title: body.title,
-      modelId: body.modelId,
-      mode: body.mode,
-      reasoningEffort: body.reasoningEffort
-    })
-    .returning()
+  // Same-tenant enforcement (Plan 031A findings A/B): a conversation must
+  // not be creatable against another user's model/provider or workspace
+  // merely because the caller can guess/supply a valid UUID. UI-side model
+  // and workspace pickers already only show the user's own rows, but that
+  // is not authorization — this is the one authoritative server-side check.
+  const conversation = await event.context.application.conversations.create({
+    userId: session.user.id,
+    workspaceId: body.workspaceId,
+    title: body.title,
+    modelId: body.modelId,
+    mode: body.mode,
+    reasoningEffort: body.reasoningEffort
+  })
 
   if (!conversation) {
     throw internal('Failed to create conversation')

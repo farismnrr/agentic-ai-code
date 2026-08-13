@@ -1,12 +1,10 @@
 <script setup lang="ts">
+import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
+
 useSeoMeta({ title: 'New chat' })
 
-const { create, update, titleFrom } = useConversations()
 const { loaded, activeWorkspaceId, workspaces, setActive } = useWorkspaces()
 const settings = useSettings()
-const { set: setPendingPrompt } = usePendingPrompt()
-const router = useRouter()
-const toast = useToast()
 const { models, load: loadModels } = useModels()
 
 if (models.value.length === 0) {
@@ -28,7 +26,7 @@ watchEffect(() => {
 
 const input = ref('')
 
-const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
+const { editorRef, syncText, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
 const workspaceId = ref<string | undefined>(activeWorkspaceId.value || undefined)
 watch(() => activeWorkspaceId.value, (newId) => {
@@ -48,20 +46,11 @@ const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
 // capability. Collected here, then applied once the conversation exists.
 const enabledToolIds = ref<string[]>([])
 
-const modeItems = [
-  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
-  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
-]
-
-const effortItems = [
-  { label: 'Low Effort', value: 'low' },
-  { label: 'Medium Effort', value: 'medium' },
-  { label: 'High Effort', value: 'high' },
-  { label: 'Max Effort', value: 'max' }
-]
+const modeItems = chatModeItems
+const effortItems = reasoningEffortItems
 
 const supportsReasoning = computed(() => {
-  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
+  return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
 })
 
 const suggestions = [
@@ -79,34 +68,7 @@ const workspaceItems = computed(() =>
   workspaces.value.map(w => ({ label: w.name, value: w.id }))
 )
 
-async function start(text: string) {
-  const trimmed = text.trim()
-  if (!trimmed) return
-
-  try {
-    const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, workspaceId: workspaceId.value })
-    // The create endpoint doesn't accept enabledToolIds (only PATCH does) —
-    // apply the picker's selection as a follow-up update, same mechanism
-    // [id].vue uses for every later change.
-    if (enabledToolIds.value.length > 0) {
-      await update(conversation.id, { enabledToolIds: enabledToolIds.value })
-    }
-    clearEditor()
-    if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) {
-      setActive(workspaceId.value)
-    }
-    // The chat instance doesn't exist until the next page mounts, so hand the
-    // prompt over rather than trying to send it here.
-    setPendingPrompt(conversation.id, trimmed)
-    void router.push(`/chat/${conversation.id}`)
-  } catch (err) {
-    toast.add({
-      title: 'Failed to start conversation',
-      description: (err as Error).message,
-      color: 'error'
-    })
-  }
-}
+const { start } = useNewChatController(input, workspaceId, modelId, mode, reasoningEffort, enabledToolIds)
 </script>
 
 <template>
@@ -179,30 +141,16 @@ async function start(text: string) {
               variant="ghost"
               size="sm"
             />
-            <USelect
-              v-model="modelId"
-              :items="modelItems"
-              icon="i-lucide-box"
-              variant="ghost"
-              size="sm"
-            />
-            <USelect
-              v-model="mode"
-              :items="modeItems"
-              :icon="modeItems.find(m => m.value === mode)?.icon"
-              variant="ghost"
-              size="sm"
-            />
-            <USelect
-              v-if="supportsReasoning"
-              v-model="reasoningEffort"
-              :items="effortItems"
-              variant="ghost"
-              size="sm"
-            />
-            <ChatToolPicker
-              v-if="mode === 'agent'"
-              v-model="enabledToolIds"
+            <ChatConfigControls
+              v-model:model-id="modelId"
+              v-model:mode="mode"
+              v-model:reasoning-effort="reasoningEffort"
+              v-model:enabled-tool-ids="enabledToolIds"
+              :model-items="modelItems"
+              :mode-items="modeItems"
+              :effort-items="effortItems"
+              :supports-reasoning="supportsReasoning"
+              :show-tools="mode === 'agent'"
             />
           </template>
         </UChatPrompt>

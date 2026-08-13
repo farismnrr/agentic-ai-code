@@ -4,7 +4,11 @@ const bodySchema = v.object({
   name: v.optional(v.string()),
   baseUrl: v.optional(v.string()),
   apiKey: v.optional(v.string()),
-  customHeaders: v.optional(v.record(v.string(), v.string())),
+  // A string value sets/replaces that header; `null` deletes it; a key not
+  // present in the object leaves the stored header untouched (so the client
+  // can submit only the headers it's actually changing — it never has the
+  // secret values of unchanged headers to resend).
+  customHeaders: v.optional(v.record(v.string(), v.nullable(v.string()))),
   enabled: v.optional(v.boolean())
 })
 
@@ -19,5 +23,5 @@ export default defineEventHandler(async (event) => {
     throw unprocessable(parsed.issues)
   }
 
-  return updateModelProvider(session.user.id, id, parsed.output)
+  return event.context.application.providers.update(session.user.id, id, parsed.output)
 })

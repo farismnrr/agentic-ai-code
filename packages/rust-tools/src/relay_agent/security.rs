@@ -16,6 +16,7 @@
 //! headers are all rejections, never a permissive default.
 
 use axum::http::HeaderMap;
+use std::net::IpAddr;
 
 use super::config::ServerConfig;
 use super::error::McpError;
@@ -159,4 +160,20 @@ pub fn enforce_local_access_policy(
     validate_origin(headers, config)?;
     validate_host(headers, config)?;
     Ok(())
+}
+
+/// Decide whether forwarded HTTPS may be trusted for the remote listener.
+/// Direct requests do not count as HTTPS: this relay is plaintext and only an
+/// explicitly trusted proxy may assert the forwarded scheme.
+pub fn trusted_proxy_https(
+    peer: Option<IpAddr>,
+    forwarded_proto: Option<&str>,
+    trusted_proxy: bool,
+    trusted_proxy_cidr: Option<&str>,
+) -> bool {
+    let trusted_peer = peer.zip(trusted_proxy_cidr).is_some_and(|(ip, cidr)| {
+        cidr.parse::<ipnet::IpNet>()
+            .is_ok_and(|net| net.contains(&ip))
+    });
+    trusted_proxy && trusted_peer && forwarded_proto == Some("https")
 }
