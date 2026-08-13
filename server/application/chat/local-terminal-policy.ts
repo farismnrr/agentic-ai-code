@@ -1,8 +1,5 @@
-import { tool as aiTool, type Tool } from 'ai'
-import { terminalToolSchema } from '@ai-code/terminal-tool'
 import { hasActivePairedDevice } from '../../infrastructure/database/devices'
-
-const LOCAL_TERMINAL_DESCRIPTION = 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Not scoped to any single project folder — pass an explicit `cwd` (absolute path) whenever the target directory matters, since it otherwise runs in the agent\'s own default directory, which may not be the folder the user means. Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.'
+import { buildLocalTerminalTool } from '../../infrastructure/ai/local-terminal-tool'
 
 export async function createLocalTerminalPolicy({ userId, approvals, toolId }: { userId: string, approvals?: Record<string, 'always' | 'never'>, toolId: string }) {
   let paired = false
@@ -17,10 +14,11 @@ export async function createLocalTerminalPolicy({ userId, approvals, toolId }: {
     return decision === 'always' ? 'approved' : decision === 'never' ? 'denied' : 'user-approval'
   }
 
-  const tool: Tool = aiTool({
-    description: LOCAL_TERMINAL_DESCRIPTION,
-    inputSchema: terminalToolSchema
-  })
+  // Tool construction (the `ai`/`@ai-code/terminal-tool` SDK surface) lives in
+  // server/infrastructure/ai/local-terminal-tool.ts — the application layer
+  // orchestrates pairing/approval policy only and never imports provider/AI
+  // SDK packages directly (Plan 031A Phase 11).
+  const tool = buildLocalTerminalTool()
 
   return { paired, tool, approval }
 }

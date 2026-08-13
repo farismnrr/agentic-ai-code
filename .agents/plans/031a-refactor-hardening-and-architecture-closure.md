@@ -266,10 +266,10 @@ Source inspection and server-only typechecking remain useful evidence, but they 
 
 **Risk: medium**
 
-- [ ] Expand architecture checks for the finalized boundaries from Phase 10.
-- [ ] Demonstrate representative negative probes fail.
-- [ ] Keep `pnpm check:architecture` inside `pnpm verify:commit`.
-- [ ] Avoid a new architecture-lint dependency.
+- [x] Expand architecture checks for the finalized boundaries from Phase 10.
+- [x] Demonstrate representative negative probes fail.
+- [x] Keep `pnpm check:architecture` inside `pnpm verify:commit`.
+- [x] Avoid a new architecture-lint dependency.
 
 ## Phase 12 — Repair relay/contract deterministic acceptance
 
