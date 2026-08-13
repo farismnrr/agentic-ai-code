@@ -6,7 +6,7 @@ license: MIT
 
 # @ai-code/searxng-search-tool
 
-`@ai-code/searxng-search-tool` provides the TypeScript LangChain search tool used by the application. The standalone executable is now the native Rust `searxng-search-tool` binary in [`../rust-tools/`](../rust-tools/), not an npm `bin`.
+`@ai-code/searxng-search-tool` provides the TypeScript LangChain search tool used by the application. The standalone executable is now the native Rust unified `ai-tools` binary in [`../rust-tools/`](../rust-tools/), not an npm `bin`.
 
 ## TypeScript usage
 
@@ -32,14 +32,14 @@ pnpm build:tools
 Run a search with the current Rust CLI:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin searxng-search-tool -- \
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng \
   'how to build a web scraper'
 ```
 
 Specify another SearXNG endpoint with `--base-url`:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin searxng-search-tool -- \
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng \
   'Nuxt documentation' \
   --base-url https://searx.example.com
 ```
@@ -49,7 +49,7 @@ The CLI default remains `http://127.0.0.1:8888`. It requests `/search?q=...&form
 Use the binary help as the authoritative CLI reference:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin searxng-search-tool -- --help
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng --help
 ```
 
 Do **not** document or rely on `npx @ai-code/searxng-search-tool ...`; the package no longer exposes an npm CLI bin mapping.
