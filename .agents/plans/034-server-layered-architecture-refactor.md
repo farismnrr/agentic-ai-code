@@ -30,15 +30,23 @@ Move all infrastructure implementations out of `utils/` to prevent implicit coup
 - `utils/models.ts` -> Move to either `core/` or `application/` depending on its contents.
 
 ### Phase 3: Enforce Dependency Inversion in the Presentation Layer (`api/` & `routes/`)
-- Review all API endpoints and routes.
-- Ensure they *only* interact with the system via the composition root (`event.context.application`).
-- Any direct imports of `infrastructure/` (formerly auto-imported from `utils/`) by the presentation layer must be refactored into use-cases within the `application/` layer.
+
+1. [x] **Composition Root Injection:** Ensure `server/infrastructure/composition/application.ts` instantiates use-cases and explicitly injects the refactored infrastructure modules (e.g., `mailer`, `logger`, `rateLimit`, `isUniqueViolation`) if those use cases need them, or exposes them directly on `event.context.application` so API routes don't import them directly.
+2. [x] **Refactor API Routes:** Update endpoints in `server/api/` and `server/routes/` that previously imported `#server/infrastructure/...` (formerly `utils/`) to consume these capabilities *only* through `event.context.application`.
+3. [x] **No Direct Infrastructure Imports:** Ensure the presentation layer (API routes) contains *zero* direct imports from `server/infrastructure/` or `server/database/`.
 
 ### Phase 4: Validation & Cleanup
-- Ensure Drizzle schemas and migrations remain contained in `server/database/` (as tooling configuration) but are only accessed via repositories in `infrastructure/database/`.
-- Run `pnpm typecheck` to fix any broken explicit imports.
-- Run `pnpm lint` and `pnpm verify:commit` to ensure architectural boundaries pass.
-- Delete the `server/utils/` directory entirely if it becomes empty to prevent future violations.
+
+1. [x] **Typecheck Verification:** Run `pnpm typecheck` and fix any missing imports, mismatched types, or dangling references caused by the file moves.
+2. [x] **Architecture Verification:** Run `scripts/check-architecture.sh` to confirm the presentation and application layers are properly isolated from infrastructure implementations.
+3. [x] **Commit Gate:** Run `pnpm lint` and `pnpm verify:commit` locally to ensure no repository rules are violated.
+4. [x] **Cleanup:** Delete the `server/utils/` directory entirely if it becomes empty to prevent future violations.
+
+## Completion
+
+- [x] **All phases executed and validated.**
+- [x] **`pnpm verify:commit` passes.**
+- [x] **Plan marked CLOSED and recorded in `memories/README.md`.**
 
 ## Target Folder Structure (Post-Refactor)
 

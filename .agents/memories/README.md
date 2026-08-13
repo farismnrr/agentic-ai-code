@@ -99,6 +99,7 @@ Durable final rules:
 - The next independent numeric plan remains **034**.
 - **Plan 032 — `032-packages-layered-architecture-refactor.md` is CLOSED after remediation commit `8130756`.** The monolithic `rust-tools` crate was dissolved into a proper Cargo Workspace with separate `core`, `application`, `infrastructure`, `interfaces`, and `cli` crates to enforce Layered Architecture, SOLID, DRY, and KISS principles.
 - **Plan 033 — `033-unified-binary-refactor.md` is CLOSED.** The separate Rust CLI tools (`curl-tool`, `relay-agent`, `searxng-search-tool`, `terminal-tool`) were consolidated into a single unified `ai-tools` binary using `clap` subcommands. The Nuxt application's Langchain tools and execution boundary were updated to call the unified binary.
+- **Plan 034 — `034-server-layered-architecture-refactor.md` is CLOSED.** The Nuxt server directory was refactored to enforce Layered Architecture, DRY, KISS, and SOLID. Core logic moved to `server/core`, infrastructure adapters moved out of `server/utils` to `server/infrastructure`, and presentation routes in `server/api` and `server/routes` were decoupled from infrastructure by injecting dependencies via `event.context.application`. Strict architectural boundaries now pass `pnpm verify:commit`.
 
 ## Maintenance rule
 
