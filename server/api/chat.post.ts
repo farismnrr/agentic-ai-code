@@ -1,5 +1,4 @@
 import { executeChatTurn } from '../application/chat/execute-chat-turn'
-import { createChatTurnDependencies } from '../infrastructure/composition'
 
 /**
  * Thin transport adapter (Plan 031A finding H): authenticate, parse the
@@ -23,6 +22,6 @@ export default defineEventHandler(async (event) => {
     trigger,
     message,
     abortSignal: abortController.signal,
-    deps: createChatTurnDependencies()
+    deps: event.context.application.chat()
   })
 })

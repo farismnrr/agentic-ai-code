@@ -112,18 +112,10 @@ pub fn parse_structurally_plausible_jwt(token: &str) -> Option<jsonwebtoken::Hea
     if header.kid.is_none()
         || !matches!(
             header.alg,
-            jsonwebtoken::Algorithm::HS256
-                | jsonwebtoken::Algorithm::HS384
-                | jsonwebtoken::Algorithm::HS512
-                | jsonwebtoken::Algorithm::RS256
-                | jsonwebtoken::Algorithm::RS384
-                | jsonwebtoken::Algorithm::RS512
-                | jsonwebtoken::Algorithm::ES256
-                | jsonwebtoken::Algorithm::ES384
-                | jsonwebtoken::Algorithm::PS256
-                | jsonwebtoken::Algorithm::PS384
-                | jsonwebtoken::Algorithm::PS512
-                | jsonwebtoken::Algorithm::EdDSA
+            // Discovery/JWKS is only supported for the asymmetric algorithms
+            // accepted by the full verifier. Reject every other algorithm
+            // before any network I/O (including symmetric algorithms).
+            jsonwebtoken::Algorithm::RS256 | jsonwebtoken::Algorithm::ES256
         )
     {
         return None;

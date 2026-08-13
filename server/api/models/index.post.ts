@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { createModel } from '../../infrastructure/composition'
 
 const bodySchema = v.object({
   providerId: v.string(),
@@ -22,5 +21,5 @@ export default defineEventHandler(async (event) => {
     throw unprocessable(parsed.issues)
   }
   const { providerId, ...modelData } = parsed.output
-  return createModel(session.user.id, providerId, modelData)
+  return event.context.application.models.create(session.user.id, providerId, modelData)
 })

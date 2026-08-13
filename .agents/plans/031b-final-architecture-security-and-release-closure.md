@@ -1,6 +1,6 @@
 # Plan 031B — Final Architecture, Security, and Release Closure
 
-**Status: CLOSED — Phase 14 complete; final evidence recorded 2026-08-13**
+**Status: IN PROGRESS — reopened for post-closure architecture findings**
 **Created: 2026-08-13**  
 **Plan family: Plan 031 — Repository-wide Layered Refactor**  
 **Predecessor: Plan 031A — Refactor Hardening and Architecture Closure**  
@@ -1045,40 +1045,40 @@ Using a clean build/preview where possible, verify:
 
 ### Authenticated application flows
 
-- [x] login/session remains functional;
-- [x] sidebar/workspace data loads under authenticated SSR/client navigation;
-- [x] create/rename/delete workspace;
-- [x] active workspace switching;
-- [x] create/rename/delete conversation;
-- [x] settings load/save;
-- [x] provider create/edit/delete/model discovery;
-- [x] custom header add/replace/delete without secret round-trip;
-- [x] model create/select/default model.
+- [ ] login/session remains functional;
+- [ ] sidebar/workspace data loads under authenticated SSR/client navigation;
+- [ ] create/rename/delete workspace;
+- [ ] active workspace switching;
+- [ ] create/rename/delete conversation;
+- [ ] settings load/save;
+- [ ] provider create/edit/delete/model discovery;
+- [ ] custom header add/replace/delete without secret round-trip;
+- [ ] model create/select/default model.
 
 ### Chat flows
 
-- [x] send;
-- [x] regenerate;
-- [x] stop/abort;
-- [x] continuation/resume if supported by current UI flow;
-- [x] chat mode;
-- [x] agent mode;
-- [x] approval allow;
-- [x] approval deny;
-- [x] remembered approval behavior;
-- [x] MCP tool call;
-- [x] MCP cleanup/close path;
-- [x] local terminal paired path if environment supports it;
-- [x] local terminal offline/error path;
-- [x] reasoning/provider variants that are actually configured.
+- [ ] send;
+- [ ] regenerate;
+- [ ] stop/abort;
+- [ ] continuation/resume if supported by current UI flow;
+- [ ] chat mode;
+- [ ] agent mode;
+- [ ] approval allow;
+- [ ] approval deny;
+- [ ] remembered approval behavior;
+- [ ] MCP tool call;
+- [ ] MCP cleanup/close path;
+- [ ] local terminal paired path if environment supports it;
+- [ ] local terminal offline/error path;
+- [ ] reasoning/provider variants that are actually configured.
 
 ### Provider network/security flow
 
-- [x] normal public provider target works;
-- [x] initial private target rejected;
-- [x] public-to-private redirect rejected;
-- [x] cross-origin redirect does not receive credentials;
-- [x] allowed same-origin redirect works if product behavior supports it.
+- [ ] normal public provider target works;
+- [ ] initial private target rejected;
+- [ ] public-to-private redirect rejected;
+- [ ] cross-origin redirect does not receive credentials;
+- [ ] allowed same-origin redirect works if product behavior supports it.
 
 Verification note: authenticated browser automation and live provider credentials
 were unavailable; deterministic and SSR runtime checks passed.
@@ -1086,6 +1086,25 @@ were unavailable; deterministic and SSR runtime checks passed.
 Do not invent external-provider results if credentials/environment are unavailable. Mark unavailable cases explicitly.
 
 ---
+
+
+## Post-closure remediation — source review findings
+
+The closure review identified P1 findings around API composition imports,
+infrastructure-owned settings policy, identity capability facades, and
+architecture-checker false-green coverage. The remediation moved request
+composition into a Nitro application context, added application-owned use-case
+surfaces, removed the broad composition root and identity builders, made the
+settings adapter persistence-only, tightened API bypass fixtures, restricted
+JWT pre-validation to RS256/ES256, and marked unavailable runtime flows
+explicitly unproven.
+
+Fresh worker audit result: source-level architecture remediation passed; only
+authenticated/browser and external-provider flows remain unavailable and are
+explicitly unchecked/unproven.
+
+
+Closure remediation note: authenticated browser automation and live provider credentials were unavailable in this bounded remediation phase; affected flows remain unproven.
 
 ## Phase 13 — Final source/dependency/folder re-review
 

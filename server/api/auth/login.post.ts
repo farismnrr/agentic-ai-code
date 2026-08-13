@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { findLoginUser } from '../../infrastructure/composition'
 import { loginSchema } from '../../../shared/schemas/auth'
 
 /**
@@ -30,7 +29,7 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const user = await findLoginUser(body.email)
+  const user = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, passwordHash?: string | null, emailVerifiedAt?: Date | null } | undefined
 
   // No account OR account has no password (OAuth-only) — same generic message.
   if (!user || !user.passwordHash) {

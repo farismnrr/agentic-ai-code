@@ -1,5 +1,3 @@
-import { testMcpServer } from '../../../infrastructure/composition'
-
 /**
  * "Test connection" — connects to a stored server, lists its tools, and
  * persists status/tools on success (or 'error' on failure) so the settings
@@ -13,7 +11,7 @@ export default defineEventHandler(async (event) => {
   if (!id) throw badRequest('Missing server ID')
 
   try {
-    const result = await testMcpServer(session.user.id, id)
+    const result = await event.context.application.mcp.testMcpServer(session.user.id, id)
     if (!result) throw notFound('Server not found')
     return result
   } catch (err: unknown) {

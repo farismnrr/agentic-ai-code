@@ -1,13 +1,11 @@
-import { listConversationSummaries } from '../../infrastructure/composition'
-
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const query = getQuery(event)
-  const userConversations = await listConversationSummaries(session.user.id, typeof query.workspaceId === 'string' ? query.workspaceId : undefined)
+  const userConversations = await event.context.application.conversations.list(session.user.id, typeof query.workspaceId === 'string' ? query.workspaceId : undefined)
 
   // For the list, we don't fetch all messages, just the metadata.
   // Wait, in `useConversations.ts` they expect `messages: []` to be present if missing.
-  return userConversations.map(c => ({
+  return userConversations.map((c: typeof userConversations[number]) => ({
     id: c.id,
     title: c.title,
     modelId: c.modelId,

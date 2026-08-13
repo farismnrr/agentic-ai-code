@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { addVerificationToken, createUser, userExists } from '../../infrastructure/composition'
 import { registerSchema } from '../../../shared/schemas/auth'
 import { generateToken } from '../../utils/token'
 
@@ -28,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
   // Check for existing account. Return the same message regardless so the
   // response reveals nothing about which addresses are registered.
-  if (await userExists(body.email)) {
+  if (await event.context.application.auth.userExists(body.email)) {
     // Same wording as success — caller can't tell the difference.
     setResponseStatus(event, 201)
     return { ok: true }
@@ -37,14 +36,14 @@ export default defineEventHandler(async (event) => {
   const hash = await hashPassword(body.password)
 
   try {
-    await createUser({ email: body.email, name: body.name, passwordHash: hash })
+    await event.context.application.auth.createUser({ email: body.email, name: body.name, passwordHash: hash })
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('Email already registered')
     throw err
   }
 
   // Fetch the created user to seed the session.
-  const created = await (await import('../../infrastructure/composition')).findLoginUser(body.email)
+  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null } | undefined
 
   if (!created) throw internal('Account creation failed')
 
@@ -61,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const { token, hash: tokenHash } = generateToken()
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-  await addVerificationToken({
+  await event.context.application.auth.addVerificationToken({
     tokenHash,
     userId: created.id,
     type: 'email_verify',

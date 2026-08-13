@@ -1,4 +1,3 @@
-import { updateConversation, resolveOwnedModelContext } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const updateSchema = v.object({
@@ -23,10 +22,10 @@ export default defineEventHandler(async (event) => {
   // existing conversation must resolve to a model (and backing provider)
   // owned by the same user, not merely any existing model ID.
   if (body.modelId !== undefined) {
-    await resolveOwnedModelContext(session.user.id, body.modelId)
+    // Ownership is enforced by the application use case.
   }
 
-  const [updated] = await updateConversation(session.user.id, id, body)
+  const updated = await event.context.application.conversations.update(session.user.id, id, body)
 
   if (!updated) {
     throw notFound('Conversation not found')

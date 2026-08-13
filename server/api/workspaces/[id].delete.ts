@@ -1,9 +1,7 @@
-import { deleteWorkspace } from '../../infrastructure/composition'
-
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
   if (!id) throw badRequest('Missing workspace id')
 
-  return deleteWorkspace(session.user.id, id)
+  return event.context.application.workspaces.remove(session.user.id, id)
 })

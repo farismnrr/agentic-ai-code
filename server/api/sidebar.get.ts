@@ -1,5 +1,3 @@
-import { listSidebarData } from '../infrastructure/composition'
-
 /**
  * Single round trip for everything the sidebar needs: workspaces and
  * lightweight conversation metadata (no message bodies — those come from
@@ -16,7 +14,7 @@ import { listSidebarData } from '../infrastructure/composition'
  */
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const [ws, convs] = await listSidebarData(session.user.id)
+  const [ws, convs] = await event.context.application.account.listSidebarData(session.user.id) as [{ id: string, name: string, path: string, pathConfirmed: boolean, createdAt: Date, updatedAt: Date }[], { id: string, title: string, workspaceId: string, modelId: string, reasoningEffort: string | null, enabledToolIds: string[] | null, approvals: unknown, mode: string, createdAt: Date, updatedAt: Date }[]]
 
   return {
     workspaces: ws.map(w => ({

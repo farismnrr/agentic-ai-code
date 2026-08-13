@@ -1,7 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { verifyApiKey, getSettings, updateSettings, listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace, listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, listConversationMessages, sendMessage } from '../../infrastructure/composition'
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers
@@ -12,7 +11,7 @@ const transports = new Map<string, SSEServerTransport>()
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'Authorization')
   if (!authHeader?.startsWith('Bearer ')) throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
-  const userId = await verifyApiKey(authHeader.slice(7))
+  const userId = await event.context.application.auth.verifyApiKey(authHeader.slice(7))
   const method = event.method
 
   if (method === 'GET') {
@@ -44,40 +43,40 @@ export default defineEventHandler(async (event) => {
 
       try {
         if (name === 'get_settings') {
-          const res = await getSettings(userId)
+          const res = await event.context.application.settings.read(userId)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'update_settings') {
-          const res = await updateSettings(userId, args)
+          const res = await event.context.application.settings.write(userId, args)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'list_workspaces') {
-          const res = await listWorkspaces(userId)
+          const res = await event.context.application.workspaces.list(userId)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'create_workspace') {
-          const res = await createWorkspace(userId, args.name as string, args.path as string)
+          const res = await event.context.application.workspaces.create(userId, args.name as string, args.path as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'update_workspace') {
-          const res = await updateWorkspace(userId, args.id as string, args.name as string, args.path as string)
+          const res = await event.context.application.workspaces.update(userId, args.id as string, args.name as string, args.path as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'delete_workspace') {
-          const res = await deleteWorkspace(userId, args.id as string)
+          const res = await event.context.application.workspaces.remove(userId, args.id as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'list_mcp_servers') {
-          const res = await listMcpServers(userId)
+          const res = await event.context.application.mcp.listServers(userId)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'create_mcp_server') {
-          const res = await createMcpServer(userId, args as { name: string, description?: string, transport: 'http' | 'stdio' | 'sse', url?: string, command?: string })
+          const res = await event.context.application.mcp.createServer(userId, args as { name: string, description?: string, transport: 'http' | 'stdio' | 'sse', url?: string, command?: string })
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'update_mcp_server') {
-          const res = await updateMcpServer(userId, args.id as string, args)
+          const res = await event.context.application.mcp.updateServer(userId, args.id as string, args)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'delete_mcp_server') {
-          const res = await deleteMcpServer(userId, args.id as string)
+          const res = await event.context.application.mcp.deleteServer(userId, args.id as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'send_message') {
-          const res = await sendMessage(userId, args.conversationId as string, args.text as string)
+          const res = await event.context.application.mcp.sendMessage(userId, args.conversationId as string, args.text as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'list_messages') {
-          const res = await listConversationMessages(userId, args.conversationId as string)
+          const res = await event.context.application.mcp.listMessages(userId, args.conversationId as string)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         }
 

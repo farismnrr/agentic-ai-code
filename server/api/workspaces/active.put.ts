@@ -1,4 +1,3 @@
-import { findUserWorkspace, setActiveWorkspace } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const schema = v.object({
@@ -9,11 +8,7 @@ export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const body = await readValidatedBody(event, body => v.parse(schema, body))
 
-  if (body.id !== null) {
-    await findUserWorkspace(session.user.id, body.id)
-  }
-
-  await setActiveWorkspace(session.user.id, body.id)
+  await event.context.application.workspaces.setActive(session.user.id, body.id)
 
   return { success: true }
 })

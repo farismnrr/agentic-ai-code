@@ -1,4 +1,3 @@
-import { consumePasswordReset } from '../../infrastructure/composition'
 import { hashToken } from '../../utils/token'
 import { resetPasswordSchema as resetSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
@@ -16,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const hashedToken = hashToken(body.token)
-  const tokenRecord = await consumePasswordReset(hashedToken, await hashPassword(body.password))
+  const tokenRecord = await event.context.application.auth.consumePasswordReset(hashedToken, await hashPassword(body.password))
 
   if (!tokenRecord) {
     throw badRequest('Invalid password reset link.')

@@ -1,8 +1,6 @@
-import { deleteModelProvider } from '../../infrastructure/composition'
-
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const id = getRouterParam(event, 'id')
   if (!id) throw badRequest('Missing provider ID')
-  return deleteModelProvider(session.user.id, id)
+  return event.context.application.providers.remove(session.user.id, id)
 })

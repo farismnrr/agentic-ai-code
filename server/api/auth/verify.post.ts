@@ -1,4 +1,3 @@
-import { consumeEmailVerification } from '../../infrastructure/composition'
 import { hashToken } from '../../utils/token'
 import { verifySchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
@@ -16,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const hashedToken = hashToken(body.token)
-  const consumed = await consumeEmailVerification(hashedToken)
+  const consumed = await event.context.application.auth.consumeEmailVerification(hashedToken)
   const tokenRecord = consumed?.record
 
   if (!tokenRecord) {

@@ -1,4 +1,3 @@
-import { deleteApiKey } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const idSchema = v.object({
@@ -10,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const params = v.parse(idSchema, { id })
 
-  const [deleted] = await deleteApiKey(user.id, params.id)
+  const [deleted] = await event.context.application.account.deleteApiKey(user.id, params.id)
 
   if (!deleted) {
     throw createError({

@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { listUserDevices, registerUserDevice } from '#server/infrastructure/composition'
 
 const registerDeviceSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1, 'Device name is required')),
@@ -12,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const method = event.method
 
   if (method === 'GET') {
-    return listUserDevices(userId)
+    return event.context.application.account.listUserDevices(userId)
   }
 
   if (method === 'POST') {
@@ -20,7 +19,7 @@ export default defineEventHandler(async (event) => {
     if (!result.success) throw unprocessable(result.issues)
     const { name, fingerprint } = result.output
 
-    return registerUserDevice({ userId, name, fingerprint })
+    return event.context.application.account.registerUserDevice({ userId, name, fingerprint })
   }
 
   throw badRequest(`Unsupported method: ${method}`)

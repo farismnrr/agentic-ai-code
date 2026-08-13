@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { updateMcpServer } from '../../infrastructure/composition'
 
 const updateSchema = v.object({
   name: v.optional(v.string()),
@@ -18,5 +17,5 @@ export default defineEventHandler(async (event) => {
   if (!id) throw badRequest('Missing server ID')
 
   const body = await readValidatedBody(event, body => v.parse(updateSchema, body))
-  return updateMcpServer(session.user.id, id, body)
+  return event.context.application.mcp.updateServer(session.user.id, id, body)
 })

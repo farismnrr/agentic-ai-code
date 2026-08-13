@@ -42,9 +42,19 @@ fail_matches 'server/application must not import AI/provider/MCP implementations
 
 # Migrated API routes compose application use cases; they do not reach the
 # persistence implementation or schema directly.
-fail_matches 'migrated server/api routes must not access DB/schema implementations' \
-  "$api_root" \
-  "(from|import\\()[[:space:]]*['\"][^'\"]*(server/database|database/schema|infrastructure/database|drizzle-orm)|\\buseDb\\b"
+api_database_matches="$(rg -n --glob '*.ts' '(from|import\()[[:space:]]*[\"'"'"'][^\"'"'"']*(server/database|database/schema|infrastructure/database|drizzle-orm)|\buseDb\b' "$api_root" --glob '!_composition.ts' 2>/dev/null || true)"
+if [[ -n "$api_database_matches" ]]; then
+  printf 'architecture: migrated server/api routes must not access DB/schema implementations\n%s\n' "$api_database_matches" >&2
+  exit 1
+fi
+
+# Transport handlers depend on application use cases only. Infrastructure and
+# composition are confined to the server plugin composition edge.
+api_infrastructure_matches="$(rg -n --glob '*.ts' 'server/infrastructure|\.\./infrastructure|\.\./\.\./infrastructure' "$api_root" 2>/dev/null || true)"
+if [[ -n "$api_infrastructure_matches" ]]; then
+  printf 'architecture: API routes must not import infrastructure or composition\n%s\n' "$api_infrastructure_matches" >&2
+  exit 1
+fi
 
 run_fixture_checks() {
   local fixture_dir
@@ -73,6 +83,16 @@ run_fixture_checks() {
     return 1
   fi
   rm -f "$fixture_dir/api/direct-db.ts"
+  printf "import { adapter } from '../infrastructure/adapter'\n" > "$fixture_dir/api/direct-infrastructure.ts"
+  if ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
+    "$0" --skip-fixtures >/dev/null 2>&1; then
+    echo 'architecture: negative API infrastructure fixture was not rejected' >&2
+    return 1
+  fi
+  rm -f "$fixture_dir/api/direct-infrastructure.ts"
+  printf "import { useCase } from '../application/use-case'\n" > "$fixture_dir/api/application-route.ts"
+  ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
+    "$0" --skip-fixtures >/dev/null
   ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" \
     "$0" --skip-fixtures >/dev/null
 }

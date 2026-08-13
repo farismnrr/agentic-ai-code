@@ -1,12 +1,12 @@
-import { listModelProviders, listModels } from '../../infrastructure/composition'
 import { PROVIDER_TYPE_OPTIONS } from '#shared/utils/providers'
+import type { ChatModel, ModelProvider } from '#shared/types/chat'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
 
   const [providers, models] = await Promise.all([
-    listModelProviders(session.user.id),
-    listModels(session.user.id)
+    event.context.application.providers.list(session.user.id) as Promise<ModelProvider[]>,
+    event.context.application.models.list(session.user.id) as Promise<ChatModel[]>
   ])
 
   return {

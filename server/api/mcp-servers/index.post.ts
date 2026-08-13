@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { createMcpServer } from '../../infrastructure/composition'
 
 const createSchema = v.object({
   name: v.string(),
@@ -12,5 +11,5 @@ const createSchema = v.object({
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
   const body = await readValidatedBody(event, body => v.parse(createSchema, body))
-  return createMcpServer(session.user.id, body)
+  return event.context.application.mcp.createServer(session.user.id, body)
 })

@@ -1,4 +1,3 @@
-import { createConversation, resolveOwnedModelContext, resolveOwnedWorkspace } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const createSchema = v.object({
@@ -21,10 +20,7 @@ export default defineEventHandler(async (event) => {
   // merely because the caller can guess/supply a valid UUID. UI-side model
   // and workspace pickers already only show the user's own rows, but that
   // is not authorization — this is the one authoritative server-side check.
-  await resolveOwnedModelContext(session.user.id, body.modelId)
-  await resolveOwnedWorkspace(session.user.id, body.workspaceId)
-
-  const [conversation] = await createConversation({
+  const conversation = await event.context.application.conversations.create({
     userId: session.user.id,
     workspaceId: body.workspaceId,
     title: body.title,

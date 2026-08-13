@@ -1,6 +1,4 @@
-import { getSettings } from '../infrastructure/composition'
-
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  return getSettings(session.user.id, session.user.name, session.user.email)
+  return event.context.application.settings.read(session.user.id, { name: session.user.name, email: session.user.email })
 })

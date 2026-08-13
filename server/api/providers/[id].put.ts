@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { updateModelProvider } from '../../infrastructure/composition'
 
 const bodySchema = v.object({
   name: v.optional(v.string()),
@@ -24,5 +23,5 @@ export default defineEventHandler(async (event) => {
     throw unprocessable(parsed.issues)
   }
 
-  return updateModelProvider(session.user.id, id, parsed.output)
+  return event.context.application.providers.update(session.user.id, id, parsed.output)
 })

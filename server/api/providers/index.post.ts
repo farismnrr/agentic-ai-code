@@ -1,6 +1,5 @@
 import * as v from 'valibot'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
-import { createModelProvider } from '../../infrastructure/composition'
 
 const bodySchema = v.pipe(
   v.object({
@@ -31,5 +30,5 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw unprocessable(parsed.issues)
   }
-  return createModelProvider(session.user.id, parsed.output)
+  return event.context.application.providers.create(session.user.id, parsed.output)
 })
