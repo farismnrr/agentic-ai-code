@@ -1,6 +1,6 @@
 # Relay Agent
 
-`relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/src/relay_agent/`](../rust-tools/src/relay_agent/) with the binary entrypoint at [`../rust-tools/src/bin/relay-agent.rs`](../rust-tools/src/bin/relay-agent.rs).
+`relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/cli/src/commands/relay.rs`](../rust-tools/cli/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/cli/src/main.rs`](../rust-tools/cli/src/main.rs).
 
 This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted no-jail behavior are historical and must not be reintroduced.
 
@@ -27,7 +27,7 @@ pnpm build:tools
 Or directly:
 
 ```bash
-cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked --bin relay-agent
+cargo build --manifest-path packages/rust-tools/cli/Cargo.toml --release --locked --bin ai-tools
 ```
 
 The repository pins Rust 1.95.0. Current local verification/release policy is documented in [`../rust-tools/README.md`](../rust-tools/README.md).
@@ -37,7 +37,7 @@ The repository pins Rust 1.95.0. Current local verification/release policy is do
 Local mode is the default and binds to loopback. Supply the project directory and browser/Nuxt origin explicitly:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin relay-agent -- \
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- relay \
   --mode local \
   --dir /home/user/project \
   --execution-root /home/user/project \
@@ -58,7 +58,7 @@ Default port: `47821`.
 Stop a port-scoped relay instance with:
 
 ```bash
-relay-agent stop --port 47821
+ai-tools relay stop --port 47821
 ```
 
 ## Remote mode
@@ -68,7 +68,7 @@ Remote mode is an OAuth Resource Server and must fail closed. At minimum it requ
 Representative invocation:
 
 ```bash
-relay-agent \
+ai-tools relay \
   --mode remote \
   --dir /home/relay/workspace \
   --execution-root /home/relay/workspace \

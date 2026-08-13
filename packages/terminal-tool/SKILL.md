@@ -6,7 +6,7 @@ license: MIT
 
 # @ai-code/terminal-tool
 
-`@ai-code/terminal-tool` provides the TypeScript LangChain/AI SDK tool factory used by the application. The standalone command-line executable is no longer a JavaScript/npm `bin`; it is the native Rust `terminal-tool` binary in [`../rust-tools/`](../rust-tools/).
+`@ai-code/terminal-tool` provides the TypeScript LangChain/AI SDK tool factory used by the application. The standalone command-line executable is no longer a JavaScript/npm `bin`; it is the native Rust unified `ai-tools` binary in [`../rust-tools/`](../rust-tools/).
 
 ## TypeScript usage
 
@@ -36,7 +36,7 @@ pnpm build:tools
 For development, invoke the current Rust CLI directly:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin terminal-tool -- \
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- terminal \
   --cwd /path/to/workspace \
   --allow-command ls \
   ls -la
@@ -54,7 +54,7 @@ The CLI accepts:
 Use the binary help as the authoritative CLI reference:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/Cargo.toml --bin terminal-tool -- --help
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- terminal --help
 ```
 
 Do **not** document or rely on `npx @ai-code/terminal-tool ...`; the package no longer exposes an npm CLI bin mapping.

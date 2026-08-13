@@ -21,7 +21,7 @@ const history = ref<Array<{ id: string, command: string, result: RelayExecResult
 // runtime config. Pass the origin this page is actually served from so the
 // relay's local Origin policy can validate browser requests correctly.
 const siteOrigin = useRequestURL().origin
-const relayBinaryName = 'relay-agent-x86_64-unknown-linux-gnu'
+const relayBinaryName = 'ai-tools-x86_64-unknown-linux-gnu'
 const relayDownloadUrl = `https://github.com/farismnrr/ai-code/releases/latest/download/${relayBinaryName}`
 
 onMounted(() => {
@@ -147,7 +147,7 @@ async function handleExec() {
           </p>
 
           <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>chmod +x ./{{ relayBinaryName }}
-./{{ relayBinaryName }} \
+./{{ relayBinaryName }} relay \
   --mode local \
   --dir /path/to/project \
   --execution-root /path/to/project \
@@ -163,7 +163,7 @@ async function handleExec() {
           <p class="text-xs text-muted">
             <span class="font-medium text-highlighted">Background example:</span>
           </p>
-          <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>nohup ./{{ relayBinaryName }} \
+          <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>nohup ./{{ relayBinaryName }} relay \
   --mode local \
   --dir /path/to/project \
   --execution-root /path/to/project \
