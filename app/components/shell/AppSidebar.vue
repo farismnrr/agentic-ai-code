@@ -3,11 +3,10 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const props = defineProps<{ refreshAppData: () => unknown, sidebarPending: boolean, sidebarError: Error | null }>()
 const { sorted, remove, update } = useConversations()
-const { workspaces, activeWorkspaceId, create: createWorkspace, remove: removeWorkspace, update: updateWorkspace, setActive } = useWorkspaces()
+const { workspaces, activeWorkspaceId, remove: removeWorkspace, setActive } = useWorkspaces()
 const { user, logout } = useAuth()
 const router = useRouter()
 const route = useRoute()
-const toast = useToast()
 
 const workspaceGroups = computed(() => workspaces.value.map(workspace => ({
   workspace,
@@ -49,43 +48,8 @@ function rowItems(id: string, title: string): DropdownMenuItem[][] {
 }
 
 const workspaceCreating = ref(false)
-const workspaceCreatingPending = ref(false)
-async function handleCreate(result: { name: string, path: string }) {
-  workspaceCreatingPending.value = true
-  try {
-    const workspace = await createWorkspace(result.name, result.path)
-    setActive(workspace.id)
-    workspaceCreating.value = false
-  } catch (err) {
-    toast.add({ title: 'Failed to create workspace', description: (err as Error).message, color: 'error' })
-  } finally {
-    workspaceCreatingPending.value = false
-  }
-}
-
 const workspaceConfirming = ref<typeof workspaces.value[0] | null>(null)
-const workspaceConfirmingPending = ref(false)
-async function handleConfirm(result: { name: string, path: string }) {
-  if (!workspaceConfirming.value) return
-  workspaceConfirmingPending.value = true
-  try {
-    await updateWorkspace(workspaceConfirming.value.id, { name: result.name, path: result.path })
-    workspaceConfirming.value = null
-  } catch (err) {
-    toast.add({ title: 'Failed to confirm workspace', description: (err as Error).message, color: 'error' })
-  } finally {
-    workspaceConfirmingPending.value = false
-  }
-}
-
 const workspaceRenaming = ref<{ id: string, name: string } | null>(null)
-function confirmWorkspaceRename() {
-  const pending = workspaceRenaming.value
-  if (!pending) return
-  const name = pending.name.trim()
-  if (name) updateWorkspace(pending.id, { name })
-  workspaceRenaming.value = null
-}
 const workspaceDetailsPath = ref<string | null>(null)
 function workspaceActionItems(workspace: typeof workspaces.value[0]): DropdownMenuItem[][] {
   return [[
@@ -297,64 +261,10 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
       </div>
     </template>
   </UModal>
-  <WorkspaceFolderPicker
-    v-model="workspaceCreating"
-    :pending="workspaceCreatingPending"
-    @select="handleCreate"
+  <ShellAppSidebarWorkspaceDialogs
+    v-model:creating="workspaceCreating"
+    v-model:confirming-workspace="workspaceConfirming"
+    v-model:renaming-workspace="workspaceRenaming"
+    v-model:details-path="workspaceDetailsPath"
   />
-  <WorkspaceFolderPicker
-    :model-value="!!workspaceConfirming"
-    :initial-name="workspaceConfirming?.name"
-    :initial-path="workspaceConfirming?.path"
-    :is-update="true"
-    :pending="workspaceConfirmingPending"
-    @update:model-value="(value) => { if (!value) workspaceConfirming = null }"
-    @select="handleConfirm"
-  />
-  <UModal
-    :open="workspaceRenaming !== null"
-    title="Rename workspace"
-    @update:open="workspaceRenaming = null"
-  >
-    <template #body>
-      <UInput
-        v-if="workspaceRenaming"
-        v-model="workspaceRenaming.name"
-        autofocus
-        class="w-full"
-        @keydown.enter="confirmWorkspaceRename"
-      />
-    </template><template #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton
-          label="Cancel"
-          color="neutral"
-          variant="ghost"
-          @click="workspaceRenaming = null"
-        /><UButton
-          label="Rename"
-          @click="confirmWorkspaceRename"
-        />
-      </div>
-    </template>
-  </UModal>
-  <UModal
-    :open="workspaceDetailsPath !== null"
-    title="Workspace Details"
-    @update:open="workspaceDetailsPath = null"
-  >
-    <template #body>
-      <p class="text-sm font-mono break-all text-default bg-elevated p-2 rounded border border-muted">
-        {{ workspaceDetailsPath }}
-      </p>
-    </template><template #footer>
-      <div class="flex w-full justify-end">
-        <UButton
-          label="Close"
-          color="neutral"
-          @click="workspaceDetailsPath = null"
-        />
-      </div>
-    </template>
-  </UModal>
 </template>
