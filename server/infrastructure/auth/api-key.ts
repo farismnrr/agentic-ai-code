@@ -1,3 +1,4 @@
+import { logger } from "../observability/logger"
 import { randomBytes, createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { apiKeys } from '../../database/schema'

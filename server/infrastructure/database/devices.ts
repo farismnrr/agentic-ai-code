@@ -1,3 +1,4 @@
+import { useDb } from "./connection"
 import { and, eq, isNull } from 'drizzle-orm'
 import { userDevices } from '../../database/schema'
 

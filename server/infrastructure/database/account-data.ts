@@ -1,3 +1,4 @@
+import { useDb } from "./connection"
 import { and, desc, eq } from 'drizzle-orm'
 import { apiKeys, conversations, users, workspaces, userDevices } from '../../database/schema'
 
