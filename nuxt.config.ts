@@ -96,7 +96,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   nitro: {
-    errorHandler: '~~/server/error',
+    errorHandler: '~~/server/core/errors/index',
     externals: {
       traceInclude: ['@opentelemetry'],
       external: [

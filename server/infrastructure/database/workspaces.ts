@@ -2,7 +2,7 @@ import { internal } from '#server/core/errors/http'
 import { eq, desc, and } from 'drizzle-orm'
 import { workspaces } from '../../database/schema'
 import fs from 'node:fs/promises'
-import { resolveWorkspacePath } from '../../utils/fs-browse'
+import { resolveWorkspacePath } from '../filesystem/browse'
 
 export async function listWorkspaces(userId: string) {
   const db = useDb()
