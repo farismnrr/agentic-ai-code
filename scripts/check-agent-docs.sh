@@ -12,8 +12,11 @@ fail() {
 }
 
 # AGENTS.md + .agents/ are the only repository-owned agent guidance surfaces.
+# Checked against git tracking, not raw filesystem existence: local tooling
+# (for example an untracked .claude/ runtime directory used by a Claude Code
+# session) may legitimately exist on disk without being repository-owned.
 for path in CLAUDE.md GEMINI.md .claude .gemini; do
-  if [ -e "$path" ]; then
+  if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
     fail "vendor-specific agent path must not be tracked: $path"
   fi
 done

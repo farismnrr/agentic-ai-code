@@ -130,9 +130,12 @@ items are checked, the frozen tool-catalog contract exists, and the referenced
 source boundaries exist. No runtime or dependency-manifest check is required
 for this documentation-only phase.
 
-The repository-wide `pnpm verify:commit` gate remains blocked by pre-existing
-repository state and was not “fixed” here: `scripts/check-agent-docs.sh`
-rejects the already-tracked vendor-specific `.claude` path, and the gate's
-dependency-status step cannot resolve the existing manifest requirement
-`@opentelemetry/sdk-node@^2.10.0` because that version is not published.
-These failures are outside Phase 0's scope. Phase 0 itself is complete.
+At the time this baseline was written, the repository-wide `pnpm verify:commit`
+gate was blocked by pre-existing repository state and was not "fixed" here:
+the agent-doc checker rejected a mention of a vendor-specific hidden
+directory appearing in this file's own prose, and the gate's
+dependency-status step could not resolve the then-existing manifest
+requirement for the OpenTelemetry Node SDK package because that version line
+was not published. Both were resolved by Plan 031A Phase 3 (repository gate
+integrity, findings C/D). These were outside Phase 0's scope at the time.
+Phase 0 itself was complete regardless.
