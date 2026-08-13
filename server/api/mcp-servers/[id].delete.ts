@@ -1,4 +1,4 @@
-import { deleteMcpServer } from '../../utils/mcp-servers'
+import { deleteMcpServer } from '../../application/features'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)

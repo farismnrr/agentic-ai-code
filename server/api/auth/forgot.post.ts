@@ -1,5 +1,4 @@
-import { eq } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
+import { addVerificationToken, findUserByEmail } from '../../application/auth'
 import { generateToken } from '../../utils/token'
 import { forgotPasswordSchema as forgotSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
@@ -16,12 +15,7 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
-  const [user] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  const user = await findUserByEmail(body.email)
 
   // We ALWAYS return success to prevent user enumeration
   if (!user) {
@@ -32,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const { token, hash: tokenHash } = generateToken()
   const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
 
-  await db.insert(verificationTokens).values({
+  await addVerificationToken({
     tokenHash,
     userId: user.id,
     type: 'password_reset',

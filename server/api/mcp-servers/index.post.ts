@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { createMcpServer } from '../../utils/mcp-servers'
+import { createMcpServer } from '../../application/features'
 
 const createSchema = v.object({
   name: v.string(),

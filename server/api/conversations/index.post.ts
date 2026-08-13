@@ -1,4 +1,4 @@
-import { conversations } from '../../database/schema'
+import { createConversation } from '../../application/account-data'
 import { resolveOwnedModelContext, resolveOwnedWorkspace } from '../../application/chat/ownership'
 import * as v from 'valibot'
 
@@ -12,7 +12,6 @@ const createSchema = v.object({
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const db = useDb()
 
   const result = v.safeParse(createSchema, await readBody(event))
   if (!result.success) throw unprocessable(result.issues)
@@ -26,17 +25,14 @@ export default defineEventHandler(async (event) => {
   await resolveOwnedModelContext(session.user.id, body.modelId)
   await resolveOwnedWorkspace(session.user.id, body.workspaceId)
 
-  const [conversation] = await db
-    .insert(conversations)
-    .values({
-      userId: session.user.id,
-      workspaceId: body.workspaceId,
-      title: body.title,
-      modelId: body.modelId,
-      mode: body.mode,
-      reasoningEffort: body.reasoningEffort
-    })
-    .returning()
+  const [conversation] = await createConversation({
+    userId: session.user.id,
+    workspaceId: body.workspaceId,
+    title: body.title,
+    modelId: body.modelId,
+    mode: body.mode,
+    reasoningEffort: body.reasoningEffort
+  })
 
   if (!conversation) {
     throw internal('Failed to create conversation')

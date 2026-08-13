@@ -1,5 +1,4 @@
-import { eq, and } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
+import { consumeEmailVerification } from '../../application/auth'
 import { hashToken } from '../../utils/token'
 import { verifySchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
@@ -16,19 +15,9 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
   const hashedToken = hashToken(body.token)
-
-  const [tokenRecord] = await db
-    .select()
-    .from(verificationTokens)
-    .where(
-      and(
-        eq(verificationTokens.tokenHash, hashedToken),
-        eq(verificationTokens.type, 'email_verify')
-      )
-    )
-    .limit(1)
+  const consumed = await consumeEmailVerification(hashedToken)
+  const tokenRecord = consumed?.record
 
   if (!tokenRecord) {
     throw badRequest('Invalid verification link.')
@@ -38,19 +27,7 @@ export default defineEventHandler(async (event) => {
     throw gone('This verification link has expired or already been used.')
   }
 
-  // Mark token consumed and update user as verified
-  const now = new Date()
-  await db.transaction(async (tx) => {
-    await tx
-      .update(verificationTokens)
-      .set({ consumedAt: now })
-      .where(eq(verificationTokens.tokenHash, hashedToken))
-
-    await tx
-      .update(users)
-      .set({ emailVerifiedAt: now, updatedAt: now })
-      .where(eq(users.id, tokenRecord.userId))
-  })
+  const now = consumed!.now
 
   // Update session if they are currently logged in as that user
   const session = await getUserSession(event)

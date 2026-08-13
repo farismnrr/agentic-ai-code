@@ -1,5 +1,4 @@
-import { listModelProviders } from '../../utils/providers'
-import { listModels } from '../../utils/models'
+import { listModelProviders, listModels } from '../../application/features'
 import { PROVIDER_TYPE_OPTIONS } from '#shared/utils/providers'
 
 export default defineEventHandler(async (event) => {

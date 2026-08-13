@@ -2,10 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { verifyApiKey } from '../../utils/api-key'
-import { getSettings, updateSettings } from '../../utils/settings'
-import { listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace } from '../../utils/workspaces'
-import { listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../../utils/mcp-servers'
-import { listConversationMessages, sendMessage } from '../../utils/messages'
+import { getSettings, updateSettings, listWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace, listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, listConversationMessages, sendMessage } from '../../application/features'
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers

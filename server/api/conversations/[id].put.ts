@@ -1,5 +1,4 @@
-import { eq, and } from 'drizzle-orm'
-import { conversations } from '../../database/schema'
+import { updateConversation } from '../../application/account-data'
 import { resolveOwnedModelContext } from '../../application/chat/ownership'
 import * as v from 'valibot'
 
@@ -20,7 +19,6 @@ export default defineEventHandler(async (event) => {
   const result = v.safeParse(updateSchema, await readBody(event))
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
-  const db = useDb()
 
   // Same-tenant enforcement (Plan 031A finding A): a model change on an
   // existing conversation must resolve to a model (and backing provider)
@@ -29,14 +27,7 @@ export default defineEventHandler(async (event) => {
     await resolveOwnedModelContext(session.user.id, body.modelId)
   }
 
-  const [updated] = await db
-    .update(conversations)
-    .set({
-      ...body,
-      updatedAt: new Date()
-    })
-    .where(and(eq(conversations.id, id), eq(conversations.userId, session.user.id)))
-    .returning()
+  const [updated] = await updateConversation(session.user.id, id, body)
 
   if (!updated) {
     throw notFound('Conversation not found')

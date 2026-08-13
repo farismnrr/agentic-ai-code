@@ -1,4 +1,5 @@
 import * as v from 'valibot'
+import { updateModel } from '../../application/features'
 
 const bodySchema = v.object({
   modelId: v.optional(v.string()),

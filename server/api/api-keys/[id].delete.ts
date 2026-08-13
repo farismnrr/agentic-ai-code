@@ -1,5 +1,4 @@
-import { and, eq } from 'drizzle-orm'
-import { apiKeys } from '../../database/schema'
+import { deleteApiKey } from '../../application/account-data'
 import * as v from 'valibot'
 
 const idSchema = v.object({
@@ -11,16 +10,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const params = v.parse(idSchema, { id })
 
-  const db = useDb()
-  const [deleted] = await db
-    .delete(apiKeys)
-    .where(
-      and(
-        eq(apiKeys.id, params.id),
-        eq(apiKeys.userId, user.id)
-      )
-    )
-    .returning({ id: apiKeys.id })
+  const [deleted] = await deleteApiKey(user.id, params.id)
 
   if (!deleted) {
     throw createError({

@@ -808,27 +808,31 @@ No source file under `server/application/chat/**` imports `server/infrastructure
 
 ### Steps
 
-- [ ] Inventory all `server/api/**` direct DB/schema/useDb imports.
-- [ ] Inventory all API routes that import mixed `server/utils/**` business/persistence modules.
-- [ ] Group routes by feature rather than HTTP verb.
-- [ ] Introduce cohesive application feature modules only where needed.
-- [ ] Move persistence into existing/new infrastructure database modules.
-- [ ] Move provider/network/filesystem integration to infrastructure owners.
-- [ ] Keep validation/auth/session/H3 adaptation in API routes.
-- [ ] Centralize tenant ownership in application/use-case rules rather than per-route duplicates.
+- [x] Inventory all `server/api/**` direct DB/schema/useDb imports.
+- [x] Inventory all API routes that import mixed `server/utils/**` business/persistence modules.
+- [x] Group routes by feature rather than HTTP verb.
+- [x] Introduce cohesive application feature modules only where needed.
+- [x] Move persistence into existing/new infrastructure database modules.
+- [x] Move provider/network/filesystem integration to infrastructure owners.
+- [x] Keep validation/auth/session/H3 adaptation in API routes.
+- [x] Centralize tenant ownership in application/use-case rules rather than per-route duplicates.
 
 ### Mandatory features to audit
 
-- [ ] conversations;
-- [ ] models;
-- [ ] providers;
-- [ ] workspaces;
-- [ ] active workspace;
-- [ ] settings/default model;
-- [ ] sidebar aggregate data;
-- [ ] MCP configuration;
-- [ ] paired/local-terminal device lookups;
-- [ ] chat.
+- [x] conversations;
+- [x] models;
+- [x] providers;
+- [x] workspaces;
+- [x] active workspace;
+- [x] settings/default model;
+- [x] sidebar aggregate data;
+- [x] MCP configuration;
+- [x] paired/local-terminal device lookups;
+- [x] chat.
+
+Verification note: worker capacity was temporarily exhausted during Phase 3
+orchestration; completed worker threads were reclaimed and Phase 3 then passed
+an independent worker audit before Phase 4 continued.
 
 ### KISS exit test
 

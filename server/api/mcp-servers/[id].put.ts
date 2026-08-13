@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { updateMcpServer } from '../../utils/mcp-servers'
+import { updateMcpServer } from '../../application/features'
 
 const updateSchema = v.object({
   name: v.optional(v.string()),

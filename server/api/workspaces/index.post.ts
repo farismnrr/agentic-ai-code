@@ -1,4 +1,5 @@
 import * as v from 'valibot'
+import { createWorkspace } from '../../application/features'
 
 const createSchema = v.object({
   name: v.string(),

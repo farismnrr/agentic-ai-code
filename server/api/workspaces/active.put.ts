@@ -1,5 +1,4 @@
-import { eq } from 'drizzle-orm'
-import { users } from '../../database/schema'
+import { setActiveWorkspace } from '../../application/account-data'
 import * as v from 'valibot'
 
 const schema = v.object({
@@ -14,11 +13,7 @@ export default defineEventHandler(async (event) => {
     await findUserWorkspace(session.user.id, body.id)
   }
 
-  const db = useDb()
-  await db
-    .update(users)
-    .set({ lastActiveWorkspaceId: body.id })
-    .where(eq(users.id, session.user.id))
+  await setActiveWorkspace(session.user.id, body.id)
 
   return { success: true }
 })

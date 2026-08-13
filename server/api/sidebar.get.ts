@@ -1,5 +1,4 @@
-import { eq, desc } from 'drizzle-orm'
-import { workspaces, conversations } from '../database/schema'
+import { listSidebarData } from '../application/account-data'
 
 /**
  * Single round trip for everything the sidebar needs: workspaces and
@@ -17,20 +16,7 @@ import { workspaces, conversations } from '../database/schema'
  */
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const db = useDb()
-
-  const [ws, convs] = await Promise.all([
-    db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.userId, session.user.id))
-      .orderBy(desc(workspaces.updatedAt)),
-    db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.userId, session.user.id))
-      .orderBy(desc(conversations.updatedAt))
-  ])
+  const [ws, convs] = await listSidebarData(session.user.id)
 
   return {
     workspaces: ws.map(w => ({

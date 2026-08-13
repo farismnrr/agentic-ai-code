@@ -1,6 +1,5 @@
-import { eq } from 'drizzle-orm'
 import * as v from 'valibot'
-import { userDevices } from '#server/database/schema'
+import { listUserDevices, registerUserDevice } from '#server/application/account-data'
 
 const registerDeviceSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1, 'Device name is required')),
@@ -12,11 +11,8 @@ export default defineEventHandler(async (event) => {
   const userId = session.user.id
   const method = event.method
 
-  const db = useDb()
-
   if (method === 'GET') {
-    const devices = await db.select().from(userDevices).where(eq(userDevices.userId, userId))
-    return devices
+    return listUserDevices(userId)
   }
 
   if (method === 'POST') {
@@ -24,15 +20,7 @@ export default defineEventHandler(async (event) => {
     if (!result.success) throw unprocessable(result.issues)
     const { name, fingerprint } = result.output
 
-    const [device] = await db.insert(userDevices).values({
-      userId,
-      name,
-      fingerprint,
-      pairedAt: new Date(),
-      lastSeenAt: new Date()
-    }).returning()
-
-    return device
+    return registerUserDevice({ userId, name, fingerprint })
   }
 
   throw badRequest(`Unsupported method: ${method}`)
