@@ -28,7 +28,7 @@ watch(activeWorkspaceId, (newId, oldId) => {
 
 <template>
   <UDashboardGroup>
-    <AppSidebar
+    <ShellAppSidebar
       :refresh-app-data="refreshAppData"
       :sidebar-pending="sidebarPending"
       :sidebar-error="sidebarError"
