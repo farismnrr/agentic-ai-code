@@ -1,11 +1,6 @@
 import { useChat } from '@ai-sdk/vue'
-import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
+import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
-import { friendlyChatErrorMessage } from '../utils/chat-errors'
-import { createAttemptLedger } from './chat/attempt-ledger'
-import { createLocalToolController } from './chat/local-tool-controller'
-import { createConversationTransport } from './chat/chat-transport'
-import { createMessageMirror } from './chat/message-mirror'
 
 /**
  * Wires one conversation to the AI SDK.
@@ -16,6 +11,8 @@ import { createMessageMirror } from './chat/message-mirror'
  *
  *   new DefaultChatTransport({ api: '/api/chat' })
  */
+const GENERIC_PROVIDER_ERROR = 'The model provider returned an error. Try again, or switch models.'
+
 // AI SDK errors from a failed provider call carry a JSON blob as the
 // message (e.g. `[503]: {"error":{"message":"Upstream request failed..."}}`)
 // rather than something fit for a toast — pull the human-readable part out
@@ -24,6 +21,21 @@ import { createMessageMirror } from './chat/message-mirror'
 // server/utils/logger.ts's errorAttributes) can only stringify as the
 // literal text "[object Object]" — that's not a message, so treat it (and
 // any other non-informative raw message) the same as no message at all.
+function friendlyChatErrorMessage(error: Error): string {
+  const match = error.message.match(/\{.*\}/s)
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0])
+      const nested = parsed?.error?.message
+      if (typeof nested === 'string' && nested.length > 0) return nested
+    } catch {
+      // Not JSON after all — fall through to the raw message below.
+    }
+  }
+  if (!error.message || error.message === '[object Object]') return GENERIC_PROVIDER_ERROR
+  return error.message
+}
+
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages, loadOne } = useConversations()
   const toast = useToast()
@@ -70,7 +82,8 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // transition, just in different turns). A denied response needs no
   // handling here — the SDK resolves `output-denied` on its own without
   // ever invoking a client tool.
-  const ledger = createAttemptLedger()
+  const chatRef: { current?: ReturnType<typeof useChat<UIMessage>> } = {}
+  const executedLocalTerminalCalls = new Set<string>()
 
   // `executedLocalTerminalCalls` alone only guards within one page
   // session — the `{ immediate: true }` watcher below is what makes
@@ -88,9 +101,62 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // for some unrelated reason (acceptable; the model still sees the error
   // via `addToolOutput` below in that case, it just won't self-heal on
   // reload — a real duplicate command run is the worse failure mode here).
+  const EXECUTED_CALLS_STORAGE_KEY = 'relay_agent_executed_tool_calls'
+  const MAX_TRACKED_CALLS = 200
+  function hasAttemptedBefore(toolCallId: string): boolean {
+    if (!import.meta.client) return false
+    try {
+      const ids = JSON.parse(localStorage.getItem(EXECUTED_CALLS_STORAGE_KEY) ?? '[]') as string[]
+      return ids.includes(toolCallId)
+    } catch {
+      return false
+    }
+  }
+  function markAttempted(toolCallId: string) {
+    if (!import.meta.client) return
+    try {
+      const ids = JSON.parse(localStorage.getItem(EXECUTED_CALLS_STORAGE_KEY) ?? '[]') as string[]
+      ids.push(toolCallId)
+      localStorage.setItem(EXECUTED_CALLS_STORAGE_KEY, JSON.stringify(ids.slice(-MAX_TRACKED_CALLS)))
+    } catch {
+      // Storage full/unavailable — worst case this guard is skipped, not fatal.
+    }
+  }
+
+  async function runApprovedLocalTerminalCall(part: { toolCallId: string, input: unknown }) {
+    if (!chatRef.current || executedLocalTerminalCalls.has(part.toolCallId) || hasAttemptedBefore(part.toolCallId)) return
+    executedLocalTerminalCalls.add(part.toolCallId)
+    markAttempted(part.toolCallId)
+
+    const { command, args, cwd } = part.input as { command: string, args?: string[], cwd?: string }
+    try {
+      const result = await relayAgent.exec(command, args ?? [], cwd)
+      await chatRef.current.addToolOutput({
+        tool: 'local_terminal',
+        toolCallId: part.toolCallId,
+        output: result
+      })
+    } catch (err: unknown) {
+      // Local agent unreachable/unpaired, or the CLI itself rejected the
+      // call — report it as a tool error, not an unhandled rejection, so
+      // the model sees why and can tell the user to pair a device instead
+      // of the turn just hanging.
+      await chatRef.current.addToolOutput({
+        tool: 'local_terminal',
+        toolCallId: part.toolCallId,
+        state: 'output-error',
+        errorText: (err as Error).message || 'Local relay agent is not connected'
+      })
+    }
+  }
 
   const chat = useChat(() => ({
-    transport: createConversationTransport(),
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
+        body: { id, trigger, messageId, message: messages[messages.length - 1] }
+      })
+    }),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
     // Without this, `addToolApprovalResponse` only marks the pending part as
@@ -114,8 +180,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       })
     }
   }))
-
-  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger })
+  chatRef.current = chat
 
   // The one place `local_terminal` actually gets executed — see the note
   // above `runApprovedLocalTerminalCall`. Fires on every message mutation
@@ -141,8 +206,14 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK
   // owns the messages during a turn; the store is the durable copy.
-  const mirror = createMessageMirror({ conversation, messages: chat.messages, setMessages })
-  const flushMessages = mirror.flush
+  let debounceTimer: ReturnType<typeof setTimeout>
+
+  const flushMessages = () => {
+    clearTimeout(debounceTimer)
+    if (conversation.value) {
+      setMessages(conversation.value.id, chat.messages.value as UIMessage[])
+    }
+  }
 
   // Not `{ deep: true }`: `chat.messages` is a `shallowRef` and the SDK
   // itself calls `triggerRef()` on every push/pop/replace
@@ -155,7 +226,8 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // conversation size, paid per token, un-throttleable by debouncing the
   // callback body alone.
   watch(chat.messages, () => {
-    mirror.schedule()
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(flushMessages, 300)
   })
 
   watch(() => chat.status.value, (status) => {

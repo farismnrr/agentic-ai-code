@@ -1,6 +1,8 @@
-import { PROVIDER_TYPE_OPTIONS } from '#shared/utils/providers'
-
 export default defineEventHandler(async (event) => {
   await requireUserSession(event)
-  return PROVIDER_TYPE_OPTIONS
+  return [
+    { label: 'OpenAI Compatible', value: 'openai_compatible' },
+    { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
+    { label: 'Vertex AI', value: 'vertex_ai' }
+  ]
 })

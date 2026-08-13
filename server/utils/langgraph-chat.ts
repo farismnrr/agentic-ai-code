@@ -98,15 +98,11 @@ export function runLanggraphChat({
   uiMessages,
   baseModel,
   systemPrompt,
-  abortSignal,
-  cleanup,
   onEnd
 }: {
   uiMessages: UIMessage[]
   baseModel: LanggraphModel
   systemPrompt: string | undefined
-  abortSignal?: AbortSignal
-  cleanup: () => Promise<void>
   onEnd: (parts: UIMessage['parts'], totalTokens?: number) => Promise<void>
 }) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
@@ -220,8 +216,6 @@ export function runLanggraphChat({
         // execa's own 30s timeout; this bounds the model-call side.
         const timeoutController = new AbortController()
         timeoutId = setTimeout(() => timeoutController.abort(new Error('Model call timed out after 180s')), 180_000)
-        const abortParent = () => timeoutController.abort()
-        abortSignal?.addEventListener('abort', abortParent, { once: true })
         const stream = agent.streamEvents(
           { messages: inputMessages },
           { version: 'v2', recursionLimit: 25, signal: timeoutController.signal }
@@ -282,7 +276,6 @@ export function runLanggraphChat({
         }
 
         clearTimeout(timeoutId)
-        abortSignal?.removeEventListener('abort', abortParent)
 
         if (currentText) {
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
@@ -318,8 +311,6 @@ export function runLanggraphChat({
             logger.error('[langgraph onEnd] failed', err)
           }
         }
-      } finally {
-        await cleanup()
       }
     }
   })

@@ -1,5 +1,6 @@
 import * as v from 'valibot'
-import { providerRequiresBaseUrl } from '#shared/utils/providers'
+
+const PROVIDER_TYPES_REQUIRING_BASE_URL = ['openai_compatible', 'anthropic_compatible']
 
 const bodySchema = v.pipe(
   v.object({
@@ -16,7 +17,7 @@ const bodySchema = v.pipe(
   v.forward(
     v.partialCheck(
       [['type'], ['baseUrl']],
-      input => !providerRequiresBaseUrl(input.type) || !!input.baseUrl,
+      input => !PROVIDER_TYPES_REQUIRING_BASE_URL.includes(input.type) || !!input.baseUrl,
       'Base URL is required for this provider type'
     ),
     ['baseUrl']

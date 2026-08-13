@@ -1,43 +1,45 @@
 import { getOpenAiCompatibleModel, listOpenAiCompatibleModels } from './openai-compatible'
 import { getAnthropicCompatibleModel, listAnthropicCompatibleModels } from './anthropic-compatible'
 import { getVertexAiModel } from './vertex-ai'
-import type { modelProviders, ModelProviderType } from '../../database/schema'
+import type { modelProviders } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
 
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
 
-type ProviderAdapter = {
-  createModel: (modelId: string, provider: ModelProviderRow) => ReturnType<typeof getOpenAiCompatibleModel>
-  listModels: (provider: ModelProviderRow) => Promise<{ label: string, value: string }[]>
-}
-
-function requireBaseUrl(provider: ModelProviderRow) {
-  if (!provider.baseUrl) throw new Error(`${provider.type === 'openai_compatible' ? 'OpenAI' : 'Anthropic'} Compatible providers require a base URL`)
-  return provider.baseUrl
-}
-
-const providerAdapters: Record<ModelProviderType, ProviderAdapter> = {
-  openai_compatible: {
-    createModel: (modelId, provider) => getOpenAiCompatibleModel(modelId, requireBaseUrl(provider), provider.apiKeyEncrypted, provider.customHeaders),
-    listModels: provider => listOpenAiCompatibleModels(requireBaseUrl(provider), provider.apiKeyEncrypted, provider.customHeaders)
-  },
-  anthropic_compatible: {
-    createModel: (modelId, provider) => getAnthropicCompatibleModel(modelId, requireBaseUrl(provider), provider.apiKeyEncrypted, provider.customHeaders),
-    listModels: provider => listAnthropicCompatibleModels(requireBaseUrl(provider), provider.apiKeyEncrypted, provider.customHeaders)
-  },
-  vertex_ai: {
-    createModel: (modelId, provider) => getVertexAiModel(modelId, provider.apiKeyEncrypted),
-    listModels: async () => { throw new Error('Vertex AI Express Mode has no model-listing endpoint') }
-  }
-}
-
 export function getChatModel(provider: ModelProviderRow, modelId: string) {
-  return providerAdapters[provider.type].createModel(modelId, provider)
+  if (provider.type === 'openai_compatible') {
+    if (!provider.baseUrl) throw new Error('OpenAI Compatible providers require a base URL')
+    return getOpenAiCompatibleModel(modelId, provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'anthropic_compatible') {
+    if (!provider.baseUrl) throw new Error('Anthropic Compatible providers require a base URL')
+    return getAnthropicCompatibleModel(modelId, provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'vertex_ai') {
+    return getVertexAiModel(modelId, provider.apiKeyEncrypted)
+  }
+  throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }
 
 export function listProviderModels(provider: ModelProviderRow) {
-  return providerAdapters[provider.type].listModels(provider)
+  if (provider.type === 'openai_compatible') {
+    if (!provider.baseUrl) throw new Error('OpenAI Compatible providers require a base URL')
+    return listOpenAiCompatibleModels(provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'anthropic_compatible') {
+    if (!provider.baseUrl) throw new Error('Anthropic Compatible providers require a base URL')
+    return listAnthropicCompatibleModels(provider.baseUrl, provider.apiKeyEncrypted, provider.customHeaders)
+  }
+  if (provider.type === 'vertex_ai') {
+    // Vertex AI Express Mode has no ListModels/discovery endpoint (confirmed
+    // against Google's own Express Mode REST reference) — providers.ts's
+    // listProviderModelIds() short-circuits before ever calling this for a
+    // vertex_ai row, so this only fires if listProviderModels() is ever
+    // called directly, bypassing that guard.
+    throw new Error('Vertex AI Express Mode has no model-listing endpoint')
+  }
+  throw new Error(`Unknown provider type: ${(provider as ModelProviderRow).type}`)
 }
 
 export function resolveModelConfig(model: ChatModel) {
