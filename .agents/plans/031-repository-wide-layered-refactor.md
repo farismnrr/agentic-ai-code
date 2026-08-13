@@ -834,6 +834,8 @@ root.
 
 **Risk: very high / security-critical**
 
+> Micro-step 11A-terminal-policy complete: terminal cwd containment and executable privilege/path policy are isolated in `terminal_policy.rs`; execution translation and subprocess lifecycle remain in `execution.rs`.
+
 ### Primary target
 
 - `packages/rust-tools/src/relay_agent/execution.rs`

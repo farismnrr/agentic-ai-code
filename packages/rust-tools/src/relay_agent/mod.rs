@@ -9,5 +9,6 @@ pub mod observability;
 pub mod mcp;
 pub mod pidfile;
 pub mod security;
+pub mod terminal_policy;
 pub mod transport;
 pub mod transport_validation;
