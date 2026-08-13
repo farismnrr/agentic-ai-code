@@ -947,10 +947,16 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 **Risk: medium**
 
+> Micro-step 13A complete: added the dependency-free `check:architecture`
+> source check for the two finalized import-direction boundaries (protocol
+> purity and application/infrastructure independence from H3 event objects).
+> The check is intentionally narrow and deterministic; no broad lint rules or
+> speculative framework dependency was introduced.
+
 ### Work
 
-- [ ] Add finalized import-direction restrictions to ESLint where useful.
-- [ ] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling.
+- [x] Audit finalized import-direction restrictions; the narrow source check is more suitable than noisy ESLint rules for these Rust/TS boundaries.
+- [x] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling (`pnpm check:architecture`).
 - [ ] Remove unused imports/files/helpers/facades discovered after all callers migrated.
 - [ ] Review every remaining large file for cohesion; do not split cohesive files for line-count aesthetics.
 - [ ] Review all reusable components/composables for stable naming/props/contracts.
