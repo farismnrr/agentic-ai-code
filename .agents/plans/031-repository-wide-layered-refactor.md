@@ -1,6 +1,6 @@
 # Plan 031 — Repository-wide Layered Refactor
 
-**Status: PHASE 0 COMPLETE / IMPLEMENTATION IN PROGRESS**
+**Status: PLANNED / NOT STARTED**  
 **Created: 2026-08-12**  
 **Baseline branch: `dev`**  
 **Baseline commit: `46b926ffd103b2ec50055eb11b6a824b13642b1e`**
@@ -344,12 +344,12 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Inventory current feature boundaries/import graph for app, server, shared, packages, and Rust relay.
-- [x] Record public contracts that must not change: API response shapes, shared chat/provider/workspace types, MCP tool catalog, MCP protocol/version behavior, native CLI behavior, security ordering.
-- [x] Build a duplication ledger grouped into **knowledge duplication**, **behavior duplication**, and **presentation-only duplication**.
-- [x] Mark current hotspots by responsibilities/reasons-to-change, not only file size.
-- [x] Define the first set of dependency-direction rules that can later be enforced by ESLint/module layout.
-- [x] Confirm no pending product feature is being silently folded into the refactor.
+- [ ] Inventory current feature boundaries/import graph for app, server, shared, packages, and Rust relay.
+- [ ] Record public contracts that must not change: API response shapes, shared chat/provider/workspace types, MCP tool catalog, MCP protocol/version behavior, native CLI behavior, security ordering.
+- [ ] Build a duplication ledger grouped into **knowledge duplication**, **behavior duplication**, and **presentation-only duplication**.
+- [ ] Mark current hotspots by responsibilities/reasons-to-change, not only file size.
+- [ ] Define the first set of dependency-direction rules that can later be enforced by ESLint/module layout.
+- [ ] Confirm no pending product feature is being silently folded into the refactor.
 
 ### Acceptance
 
@@ -378,11 +378,11 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Centralize chat mode options and reasoning-effort options that currently have duplicated source-of-truth.
-- [x] Centralize model capability/config mapping used by both new-chat and existing-chat controls.
-- [x] Move pure error/format/value transformations out of large presentation/composable files when they have independent reuse.
-- [x] Audit duplicated provider-type/base-URL requirements and establish one authoritative server policy while keeping request-schema validation user-friendly.
-- [x] Reconcile duplicated types currently declared inside composables with shared contracts only when both client and server truly need them.
+- [ ] Centralize chat mode options and reasoning-effort options that currently have duplicated source-of-truth.
+- [ ] Centralize model capability/config mapping used by both new-chat and existing-chat controls.
+- [ ] Move pure error/format/value transformations out of large presentation/composable files when they have independent reuse.
+- [ ] Audit duplicated provider-type/base-URL requirements and establish one authoritative server policy while keeping request-schema validation user-friendly.
+- [ ] Reconcile duplicated types currently declared inside composables with shared contracts only when both client and server truly need them.
 
 ### Guardrails
 
@@ -415,13 +415,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Keep `default.vue` as a thin dashboard composition root.
-- [x] Extract workspace/sidebar rendering into cohesive feature components.
-- [x] Extract conversation row actions/dialog state from layout markup.
-- [x] Extract workspace create/confirm/rename/details interaction into workspace-focused presentation/controller units.
-- [x] Extract dashboard search UI/group mapping from unrelated workspace mutation logic.
-- [x] Keep account menu/logout as a small shell concern or focused component depending on resulting cohesion.
-- [x] Introduce one shell/sidebar controller composable only if it meaningfully coordinates shared state; avoid a giant replacement composable.
+- [ ] Keep `default.vue` as a thin dashboard composition root.
+- [ ] Extract workspace/sidebar rendering into cohesive feature components.
+- [ ] Extract conversation row actions/dialog state from layout markup.
+- [ ] Extract workspace create/confirm/rename/details interaction into workspace-focused presentation/controller units.
+- [ ] Extract dashboard search UI/group mapping from unrelated workspace mutation logic.
+- [ ] Keep account menu/logout as a small shell concern or focused component depending on resulting cohesion.
+- [ ] Introduce one shell/sidebar controller composable only if it meaningfully coordinates shared state; avoid a giant replacement composable.
 
 ### Critical preserved invariants
 
@@ -459,13 +459,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Extract reusable chat configuration controls for model/mode/reasoning/tool selection without hiding persistence ownership.
-- [x] Reuse the same option/config mapping between new-chat and existing-chat pages.
-- [x] Extract message action UI (copy/edit/regenerate/feedback) into focused components where contracts are stable.
-- [x] Extract edit-message modal/dialog behavior if it materially simplifies the page.
-- [x] Isolate new-conversation creation/handoff orchestration in a focused composable.
-- [x] Isolate existing-conversation page state/config mutation logic from template concerns.
-- [x] Keep `useChatEditor` as the shared editor behavior boundary; improve it rather than duplicating editor keyboard/mention logic.
+- [ ] Extract reusable chat configuration controls for model/mode/reasoning/tool selection without hiding persistence ownership.
+- [ ] Reuse the same option/config mapping between new-chat and existing-chat pages.
+- [ ] Extract message action UI (copy/edit/regenerate/feedback) into focused components where contracts are stable.
+- [ ] Extract edit-message modal/dialog behavior if it materially simplifies the page.
+- [ ] Isolate new-conversation creation/handoff orchestration in a focused composable.
+- [ ] Isolate existing-conversation page state/config mutation logic from template concerns.
+- [ ] Keep `useChatEditor` as the shared editor behavior boundary; improve it rather than duplicating editor keyboard/mention logic.
 
 ### Acceptance
 
@@ -497,12 +497,12 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Separate state mutation helpers from remote API concerns where doing so improves reuse/readability.
-- [x] Normalize repeated collection replacement/upsert/remove logic with small pure helpers only when semantics match.
-- [x] Preserve per-entity differences in optimistic update/rollback; do not force one generic CRUD composable.
-- [x] Audit narrow API adapter/fetcher factories; no extraction was justified without weakening explicit SSR request-fetch context.
-- [x] Keep public Nuxt composable entrypoints stable during migration.
-- [x] Audit loaded/pending/error semantics; no common lifecycle exists across these composables beyond the existing workspace contract.
+- [ ] Separate state mutation helpers from remote API concerns where doing so improves reuse/readability.
+- [ ] Normalize repeated collection replacement/upsert/remove logic with small pure helpers only when semantics match.
+- [ ] Preserve per-entity differences in optimistic update/rollback; do not force one generic CRUD composable.
+- [ ] Introduce narrow API adapter/fetcher factories only where multiple application composables benefit and SSR request-fetch requirements remain explicit.
+- [ ] Keep public Nuxt composable entrypoints stable during migration.
+- [ ] Standardize loaded/pending/error semantics where the underlying lifecycle is actually the same.
 
 ### Critical preserved invariants
 
@@ -541,13 +541,13 @@ A refactor phase is not complete merely because it compiles. The relevant runtim
 
 ### Work
 
-- [x] Establish thin route pattern: authenticate → parse/validate → call use case → return result.
-- [x] Move multi-step ownership/business rules into application/domain functions.
-- [x] Move Drizzle feature queries into feature-specific infrastructure/persistence functions when reused or when they currently pollute orchestration.
-- [x] Keep DTO projection explicit at the boundary where secrets/internal columns are removed.
-- [x] Separate provider upstream discovery from provider persistence.
-- [x] Keep encryption as infrastructure/security capability, not model/provider domain state.
-- [x] Use narrow feature-specific persistence APIs rather than a generic repository base class.
+- [ ] Establish thin route pattern: authenticate → parse/validate → call use case → return result.
+- [ ] Move multi-step ownership/business rules into application/domain functions.
+- [ ] Move Drizzle feature queries into feature-specific infrastructure/persistence functions when reused or when they currently pollute orchestration.
+- [ ] Keep DTO projection explicit at the boundary where secrets/internal columns are removed.
+- [ ] Separate provider upstream discovery from provider persistence.
+- [ ] Keep encryption as infrastructure/security capability, not model/provider domain state.
+- [ ] Use narrow feature-specific persistence APIs rather than a generic repository base class.
 
 ### Acceptance
 
@@ -600,16 +600,16 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [x] Extract authorized chat-turn data loading/repository functions.
-- [x] Extract history query + trigger-specific message mutation into a cohesive turn-input stage.
-- [x] Extract workspace-context resolution and system-prompt policy.
-- [x] Extract paired-device/local-terminal availability and approval policy from the HTTP route.
-- [x] Extract assistant persistence/continuation/token-cache behavior.
-- [x] Extract AI SDK agent streaming adapter.
-- [x] Extract LangGraph chat streaming adapter.
-- [x] Keep one application use case deciding mode and coordinating common lifecycle.
-- [x] Ensure MCP resource close happens exactly once on all appropriate completion paths.
-- [x] Preserve abort/cancellation wiring from request close through provider stream.
+- [ ] Extract authorized chat-turn data loading/repository functions.
+- [ ] Extract history query + trigger-specific message mutation into a cohesive turn-input stage.
+- [ ] Extract workspace-context resolution and system-prompt policy.
+- [ ] Extract paired-device/local-terminal availability and approval policy from the HTTP route.
+- [ ] Extract assistant persistence/continuation/token-cache behavior.
+- [ ] Extract AI SDK agent streaming adapter.
+- [ ] Extract LangGraph chat streaming adapter.
+- [ ] Keep one application use case deciding mode and coordinating common lifecycle.
+- [ ] Ensure MCP resource close happens exactly once on all appropriate completion paths.
+- [ ] Preserve abort/cancellation wiring from request close through provider stream.
 
 ### Critical preserved invariants
 
@@ -652,13 +652,13 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [x] Keep `useConversationChat()` as the public composition root expected by chat pages.
-- [x] Extract chat error normalization as pure reusable logic.
-- [x] Extract local client-tool execution controller from AI SDK construction.
-- [x] Extract durable attempted-tool-call storage behind a tiny storage adapter/policy.
-- [x] Extract message mirror/debounce/flush coordination.
-- [x] Keep transport request preparation in one focused adapter/factory.
-- [x] Keep status/seed lifecycle logic visible enough that future changes cannot casually reintroduce chat-instance recreation.
+- [ ] Keep `useConversationChat()` as the public composition root expected by chat pages.
+- [ ] Extract chat error normalization as pure reusable logic.
+- [ ] Extract local client-tool execution controller from AI SDK construction.
+- [ ] Extract durable attempted-tool-call storage behind a tiny storage adapter/policy.
+- [ ] Extract message mirror/debounce/flush coordination.
+- [ ] Keep transport request preparation in one focused adapter/factory.
+- [ ] Keep status/seed lifecycle logic visible enough that future changes cannot casually reintroduce chat-instance recreation.
 
 ### Critical preserved invariants
 
@@ -704,13 +704,13 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [x] Clarify provider contract vs provider-specific adapters.
-- [x] Ensure adding a provider implementation primarily adds an adapter/registration entry instead of modifying unrelated chat orchestration.
-- [x] Keep provider configuration validation/domain policy independent from SDK construction.
-- [x] Separate MCP server persistence/config from live MCP client/tool building.
-- [x] Audited tool metadata/approval policy; MCP and native approval identities remain intentionally separate because their ownership and lifecycle differ.
-- [x] Keep native/local-terminal tool behavior separate from remote MCP tools while sharing only compatible AI SDK boundary helpers.
-- [x] Clarified provider ownership with the adapter registry in `server/utils/providers/index.ts` and the persistence facade in `server/utils/providers.ts`; no ambiguous duplicate was removed because the facade remains a compatibility boundary.
+- [ ] Clarify provider contract vs provider-specific adapters.
+- [ ] Ensure adding a provider implementation primarily adds an adapter/registration entry instead of modifying unrelated chat orchestration.
+- [ ] Keep provider configuration validation/domain policy independent from SDK construction.
+- [ ] Separate MCP server persistence/config from live MCP client/tool building.
+- [ ] Centralize tool metadata/approval policy only where it is truly common.
+- [ ] Keep native/local-terminal tool behavior separate from remote MCP tools while sharing only compatible AI SDK boundary helpers.
+- [ ] Remove stale/ambiguous naming such as multiple `providers.ts` ownership surfaces if the migration proves a clearer structure.
 
 ### Acceptance
 
@@ -736,11 +736,11 @@ Application orchestration should coordinate focused capabilities such as:
 
 ### Work
 
-- [x] Review `server/database/schema.ts` only after application/persistence ownership is clear; the current application/infrastructure boundaries are sufficient for this review.
-- [x] Evaluate splitting table groups by cohesive domain; leave the schema as one authoritative module because its tightly interdependent foreign keys (including circular references) make a split add indirection without clearer ownership or navigation benefit.
-- [x] Keep Drizzle migration schema semantics identical; `drizzle-kit check` reports no migration changes.
-- [x] Keep database initialization/connection centralized.
-- [x] Do not create one repository class per table; persistence APIs follow use cases/aggregates, not table count.
+- [ ] Review `server/database/schema.ts` only after application/persistence ownership is clear.
+- [ ] If table groups now have obvious ownership, split schema definitions by cohesive domain with one compatibility barrel/export surface.
+- [ ] Keep Drizzle migration schema semantics identical; structural source-file split alone must not generate schema changes.
+- [ ] Keep database initialization/connection centralized.
+- [ ] Do not create one repository class per table; persistence APIs follow use cases/aggregates, not table count.
 
 ### Decision gate
 
@@ -764,43 +764,21 @@ If splitting the schema adds indirection without improving ownership/navigation,
 
 **Risk: very high / security-critical**
 
-**Status: complete** — boundary review and Rust verification passed; bearer-auth
-HTTP orchestration intentionally remains in `transport.rs` as the composition
-root.
-
 ### Primary target
 
 - `packages/rust-tools/src/relay_agent/transport.rs`
 
 ### Work
 
-> Micro-step 10A complete: pure OIDC-discovered `jwks_uri` validation is
-> centralized in `auth.rs`; fetch, cache, token validation, and request flow
-> remain in `transport.rs`.
-
-> Boundary decision: keep bearer-auth orchestration in `transport.rs` as the
-> HTTP/security composition root. It owns request middleware, trusted transport
-> gates, ordering, `Next` continuation, and HTTP response/challenge mapping;
-> `auth.rs` owns the focused policy, fetch, cache, refresh, and token helpers.
-> Moving orchestration again would add indirection without clearer ownership
-> and would risk the established security ordering. No runtime change is
-> required for this boundary.
-
-- [x] Keep router construction and HTTP middleware composition in transport ownership.
-- [x] Extract correlation/audit helpers into an observability-focused module.
-- [x] Extract request-admission token bucket into a focused admission module.
-- [x] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
-- [x] Extract JWKS fetch/cache/refresh/token-validation flow into focused auth helpers; keep HTTP bearer orchestration in transport by the boundary decision above.
-- [x] Micro-step 10D: OIDC discovery/JWKS HTTP helpers now live in `auth.rs`; cache ownership and JWT validation remain in `transport.rs`.
-- [x] Micro-step 10E: pure owner/scope claim policy now lives in `auth.rs`; cache refresh and JWT signature/issuer/audience/expiry validation remain in `transport.rs`.
-- [x] Micro-step 10F: JWKS cache TTL/URI/key lookup and missing-key single-refresh decision operations now live in `auth.rs`; lock ownership and refresh orchestration remain in `transport.rs`.
-- [x] Micro-step 10G: JWT signature/algorithm/issuer/audience/expiry/nbf validation now lives in `auth.rs`; HTTP/cache/lookup orchestration remains in `transport.rs`.
-- [x] Micro-step 10J: initial/stale and unknown-`kid` JWKS cache writes/refresh operations now use focused async helpers in `auth.rs`; transport retains auth gate/order and error mapping.
-- [x] Micro-step 10K: cache snapshot/URI reads and cached-`kid` lookup now use lock-owning async helpers in `auth.rs`; transport retains auth gate/order and refresh/error mapping.
-- [x] Extract trusted-proxy HTTPS decision with explicit security ownership (micro-step 10C: pure, tested policy helper; transport retains the same gate position and inputs).
-- [x] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs` (Phase 10H complete; all call sites use `transport_validation.rs`).
-- [x] Extract MCP route handler dispatch once dependencies are explicit (Phase 10I complete; all method selection uses `dispatcher.rs`).
-- [x] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
+- [ ] Keep router construction and HTTP middleware composition in transport ownership.
+- [ ] Extract correlation/audit helpers into an observability-focused module.
+- [ ] Extract request-admission token bucket into a focused admission module.
+- [ ] Extract OAuth challenge/protected-resource metadata helpers into auth/metadata ownership.
+- [ ] Extract JWKS fetch/cache/refresh/token-validation flow into a focused auth module.
+- [ ] Extract trusted-proxy HTTPS decision with explicit security ownership.
+- [ ] Extract MCP HTTP header/body validation from router composition while keeping HTTP-specific validation outside pure `mcp.rs`.
+- [ ] Extract MCP route handler dispatch once dependencies are explicit.
+- [ ] Keep `mcp.rs` protocol-pure and avoid dragging Axum/auth state into it.
 
 ### Security ordering that must remain true
 
@@ -834,32 +812,17 @@ root.
 
 **Risk: very high / security-critical**
 
-**Status: complete** — ownership audit confirms the remaining execution path is
-cohesive and behavior-sensitive; no unsafe generic extraction is justified.
-
-> Micro-step 11A-terminal-policy complete: terminal cwd containment and executable privilege/path policy are isolated in `terminal_policy.rs`; execution translation and subprocess lifecycle remain in `execution.rs`.
-
-> Boundary decision 11B: HTTP/SSRF and redirect policy remains owned by the
-> authoritative native `curl-tool` path. `execution.rs` has no duplicate HTTP
-> security policy to extract; retaining this boundary is the KISS/DRY layered
-> choice and requires no runtime change.
-
-> Micro-step 11C reviewed: no extraction justified. Sibling-binary resolution
-> and subprocess mechanics occur in one shared post-dispatch safety path; a
-> terminal-only extraction would create a partial/generic abstraction and risk
-> process-group, timeout, and output-limit semantics.
-
 ### Primary target
 
 - `packages/rust-tools/src/relay_agent/execution.rs`
 
 ### Work
 
-- [x] Separate terminal policy ownership via `terminal_policy.rs`; HTTP/SSRF remains authoritative in native `curl-tool`, and existing search/translation logic remains cohesive in `execution.rs` (no duplicate or unsafe split).
-- [x] Review common sibling-binary resolution and subprocess mechanics; retain the single shared post-dispatch path because a terminal-only extraction would be partial and a generic abstraction is prohibited.
-- [x] Retain output limit, timeout, termination/process-group handling in the single authoritative execution path; semantics are already centralized and unchanged.
-- [x] Keep tool-specific security policy next to its owner: terminal policy in `terminal_policy.rs`, HTTP/SSRF in native `curl-tool`, and search semantics in their existing native path.
-- [x] Avoid a generic “execute arbitrary tool” abstraction that can bypass per-tool policy.
+- [ ] Separate per-tool argument validation/translation for terminal, HTTP, and search.
+- [ ] Extract common sibling-binary resolution and subprocess execution mechanics.
+- [ ] Centralize output limit, timeout, termination/process-group handling where semantics are identical.
+- [ ] Keep tool-specific security policy next to the tool that owns it: terminal privilege/path rules, HTTP restrictions, search semantics.
+- [ ] Avoid a generic “execute arbitrary tool” abstraction that can bypass per-tool policy.
 
 ### Critical preserved invariants
 
@@ -892,26 +855,6 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 **Risk: medium**
 
-> Micro-step 12A audit decision: TS packages remain schema/API/tool-factory
-> facades only; native Rust binaries remain the executable source of truth.
-> Tool names differ intentionally by runtime boundary (MCP native IDs versus
-> application LangChain/AI SDK names), so consolidating them would change
-> contracts. Existing package skills already document the Rust ownership and
-> removed npm CLI bins. No low-risk duplicate source of truth or stale facade
-> with a concrete caller was found; no runtime change is justified.
-
-> Micro-step 12B audit decision: import/export evidence shows all extracted
-> application/infrastructure facades have active callers, while package
-> `main` exports and Nuxt entrypoints are intentional. No dead compatibility
-> export or ambiguous rename has a safe removal target; no runtime change is
-> justified.
-
-> Micro-step 12C audit decision: `rg` review found no obsolete operational
-> comments pointing at superseded paths. Remaining historical/path references
-> document active security rationale, compatibility behavior, or canonical
-> history (Rust ownership, local-terminal boundary, SDK shape, and prior-plan
-> decisions), so they are intentionally preserved.
-
 ### Targets
 
 - TS wrapper packages
@@ -921,11 +864,11 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 ### Work
 
-- [x] Ensure TS packages expose reusable schema/API concerns without reclaiming executable ownership from Rust (12A audit).
-- [x] Audit duplicated tool identifiers/schemas; retain intentionally distinct runtime-boundary contracts because consolidation would alter callers.
-- [x] Audit dead facades/compatibility exports left by migration phases; no unused export with a safe removal target was found.
-- [x] Audit ambiguous naming around application/domain/infrastructure responsibilities; no safe rename with all callers/docs migrated was justified.
-- [x] Audit obsolete comments pointing at pre-refactor paths; no stale operational comment was found. Historical/security rationale remains in its canonical source.
+- [ ] Ensure TS packages expose reusable schema/API concerns without reclaiming executable ownership from Rust.
+- [ ] Consolidate duplicated tool identifiers/schemas only when runtime boundaries permit sharing safely.
+- [ ] Remove dead facades/compatibility exports left by migration phases.
+- [ ] Normalize naming around application/domain/infrastructure responsibilities.
+- [ ] Remove obsolete comments pointing at pre-refactor paths while preserving important historical/security rationale in canonical docs/memory where durable.
 
 ### Acceptance
 
@@ -947,42 +890,17 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 **Risk: medium**
 
-> Micro-step 13A complete: added the dependency-free `check:architecture`
-> source check for the two finalized import-direction boundaries (protocol
-> purity and application/infrastructure independence from H3 event objects).
-> The check is intentionally narrow and deterministic; no broad lint rules or
-> speculative framework dependency was introduced.
-
-> Micro-step 13B audit decision: repository-wide ESLint and reference review
-> found no proven unused import/file/helper/facade to remove. The largest
-> remaining files are cohesive protocol, transport, execution, configuration,
-> chat-compaction, and presentation surfaces; no line-count-only split is
-> justified.
-
-> Micro-step 13C audit decision: reusable chat configuration, provider base-URL
-> policy, native tool IDs, collection helpers, and error handling have one
-> active canonical owner each. Remaining repeated values are API/schema or
-> runtime-boundary projections with distinct callers, so no accidental fork
-> was safely removable.
-
-> Micro-step 13D complete: durable architecture conventions were added only to
-> `knowledge/project.md` and the canonical `memories/README.md`. No sibling
-> memory file or transient phase note was created. Full Plan 031 completion
-> remains gated by the documented pre-existing `.external-mcp` path, unavailable
-> `@opentelemetry/sdk-node@^2.10.0`, generated Nuxt tsconfig, and environment
-> verification gates.
-
 ### Work
 
-- [x] Audit finalized import-direction restrictions; the narrow source check is more suitable than noisy ESLint rules for these Rust/TS boundaries.
-- [x] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling (`pnpm check:architecture`).
-- [x] Audit/remove unused imports/files/helpers/facades; no proven dead code was found.
-- [x] Review remaining large files for cohesion; retain cohesive files and avoid line-count-only splits.
-- [x] Review reusable components/composables for stable naming/props/contracts; no unsafe contract change was identified.
-- [x] Re-run duplication search for canonical rules/constants; no accidental fork was found.
-- [x] Update `.agents/knowledge/` only with durable repository-wide architecture conventions.
-- [x] Append only durable invariants to `.agents/memories/README.md`; no sibling memory file was created.
-- [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done (blocked pending documented full-environment gates).
+- [ ] Add finalized import-direction restrictions to ESLint where useful.
+- [ ] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling.
+- [ ] Remove unused imports/files/helpers/facades discovered after all callers migrated.
+- [ ] Review every remaining large file for cohesion; do not split cohesive files for line-count aesthetics.
+- [ ] Review all reusable components/composables for stable naming/props/contracts.
+- [ ] Re-run duplication search for canonical rules/constants and remove accidental forks.
+- [ ] Update `.agents/knowledge/` only where new architectural conventions are durable and repository-wide.
+- [ ] Append only durable lessons/invariants to `.agents/memories/README.md`; do not create sibling memory files.
+- [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done.
 
 ### Final acceptance
 

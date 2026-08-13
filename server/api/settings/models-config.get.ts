@@ -1,6 +1,5 @@
 import { listModelProviders } from '../../utils/providers'
 import { listModels } from '../../utils/models'
-import { PROVIDER_TYPE_OPTIONS } from '#shared/utils/providers'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
@@ -13,7 +12,11 @@ export default defineEventHandler(async (event) => {
   return {
     providers,
     models,
-    providerTypes: PROVIDER_TYPE_OPTIONS,
+    providerTypes: [
+      { label: 'OpenAI Compatible', value: 'openai_compatible' },
+      { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
+      { label: 'Vertex AI', value: 'vertex_ai' }
+    ],
     iconOptions: [
       { label: 'Sparkles', value: 'i-lucide-sparkles', icon: 'i-lucide-sparkles' },
       { label: 'Bot', value: 'i-lucide-bot', icon: 'i-lucide-bot' },

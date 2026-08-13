@@ -1,6 +1,7 @@
+import { eq, and, inArray } from 'drizzle-orm'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { loadEnabledMcpServers } from '../infrastructure/mcp/server-config'
+import { mcpServers } from '../database/schema'
 
 // Plain map (not `ToolApprovalConfiguration<ToolSet, never>`, despite this
 // being exactly what `toolApproval` ends up passed as into `streamText`):
@@ -42,7 +43,11 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
-  const servers = await loadEnabledMcpServers(userId, serverIds)
+  const db = useDb()
+  const servers = await db
+    .select()
+    .from(mcpServers)
+    .where(and(eq(mcpServers.userId, userId), eq(mcpServers.enabled, true), inArray(mcpServers.id, serverIds)))
 
   for (const server of servers) {
     let client: Client

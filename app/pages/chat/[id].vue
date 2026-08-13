@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
+import { getTextFromMessage } from '@nuxt/ui/utils/ai'
 
 const route = useRoute()
 const toast = useToast()
@@ -77,7 +77,12 @@ const input = ref('')
 
 const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
-const { modelId, mode, reasoningEffort, enabledToolIds } = useConversationConfiguration(conversation, models)
+const enabledToolIds = computed({
+  get: () => conversation.value?.enabledToolIds ?? [],
+  set: (value: string[]) => {
+    if (conversation.value) update(conversation.value.id, { enabledToolIds: value })
+  }
+})
 
 async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }) {
   if (remember && toolId && conversation.value) {
@@ -98,12 +103,44 @@ const modelItems = computed(() =>
   models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
 
-const modeItems = chatModeItems
+// Matches app/pages/chat/index.vue's modeItems — same labels/icons for the
+// same setting, just editable after creation here instead of only at
+// creation time.
+const modeItems = [
+  { label: 'Chat Mode', value: 'chat', icon: 'i-lucide-message-square' },
+  { label: 'Agent Mode', value: 'agent', icon: 'i-lucide-bot' }
+]
 
-const effortItems = reasoningEffortItems
+const modelId = computed({
+  get: () => conversation.value?.modelId ?? models.value[0]?.id,
+  set: (value: string) => {
+    if (conversation.value) update(conversation.value.id, { modelId: value })
+  }
+})
+
+const mode = computed({
+  get: () => conversation.value?.mode ?? 'chat',
+  set: (value: 'chat' | 'agent') => {
+    if (conversation.value) update(conversation.value.id, { mode: value })
+  }
+})
+
+const reasoningEffort = computed({
+  get: () => conversation.value?.reasoningEffort ?? 'medium',
+  set: (value: 'low' | 'medium' | 'high' | 'max') => {
+    if (conversation.value) update(conversation.value.id, { reasoningEffort: value })
+  }
+})
+
+const effortItems = [
+  { label: 'Low Effort', value: 'low' },
+  { label: 'Medium Effort', value: 'medium' },
+  { label: 'High Effort', value: 'high' },
+  { label: 'Max Effort', value: 'max' }
+]
 
 const supportsReasoning = computed(() => {
-  return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
+  return models.value.find(m => m.id === modelId.value)?.thinkingEnabled ?? false
 })
 
 function submit() {
@@ -122,6 +159,11 @@ function send(text: string) {
   }
 }
 
+async function copy(text: string) {
+  await navigator.clipboard.writeText(text)
+  toast.add({ title: 'Copied', icon: 'i-lucide-check', color: 'success' })
+}
+
 /**
  * Edit a prompt and send it again. Truncating at the edited message rather
  * than appending is what makes it an edit — everything after it was an answer
@@ -135,6 +177,13 @@ function editAndResend(messageId: string, text: string) {
 }
 
 const editing = ref<{ id: string, text: string } | null>(null)
+
+function confirmEdit() {
+  const pending = editing.value
+  if (!pending?.text.trim()) return
+  editing.value = null
+  editAndResend(pending.id, pending.text.trim())
+}
 
 /** Feedback has nowhere to go without a backend, so it only acknowledges. */
 const feedback = ref<Record<string, 'up' | 'down'>>({})
@@ -242,13 +291,51 @@ defineShortcuts({
           </template>
 
           <template #actions="{ message }">
-            <ChatMessageActions
-              :message="message"
-              :feedback="feedback[message.id]"
-              @edit="editing = $event"
-              @regenerate="regenerate()"
-              @rate="rate(message.id, $event)"
+            <UButton
+              icon="i-lucide-copy"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Copy message"
+              @click="copy(getTextFromMessage(message))"
             />
+
+            <UButton
+              v-if="message.role === 'user'"
+              icon="i-lucide-pencil"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Edit and resend"
+              @click="editing = { id: message.id, text: getTextFromMessage(message) }"
+            />
+
+            <template v-if="message.role === 'assistant'">
+              <UButton
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                aria-label="Regenerate"
+                @click="regenerate()"
+              />
+              <UButton
+                icon="i-lucide-thumbs-up"
+                :color="feedback[message.id] === 'up' ? 'primary' : 'neutral'"
+                variant="ghost"
+                size="xs"
+                aria-label="Good response"
+                @click="rate(message.id, 'up')"
+              />
+              <UButton
+                icon="i-lucide-thumbs-down"
+                :color="feedback[message.id] === 'down' ? 'error' : 'neutral'"
+                variant="ghost"
+                size="xs"
+                aria-label="Bad response"
+                @click="rate(message.id, 'down')"
+              />
+            </template>
           </template>
         </UChatMessages>
 
@@ -266,10 +353,38 @@ defineShortcuts({
              #header/#body/#footer is treated as default-slot content and
              makes Vue drop the named slots. It's a teleported modal, so its
              position in the tree has no visual effect. -->
-        <ChatEditMessageModal
-          v-model="editing"
-          @send="editAndResend($event.id, $event.text)"
-        />
+        <UModal
+          :open="editing !== null"
+          title="Edit message"
+          description="Everything after this message will be replaced."
+          @update:open="editing = null"
+        >
+          <template #body>
+            <UTextarea
+              v-if="editing"
+              v-model="editing.text"
+              :rows="4"
+              autoresize
+              autofocus
+              class="w-full"
+            />
+          </template>
+
+          <template #footer>
+            <div class="flex w-full justify-end gap-2">
+              <UButton
+                label="Cancel"
+                color="neutral"
+                variant="ghost"
+                @click="editing = null"
+              />
+              <UButton
+                label="Send"
+                @click="confirmEdit"
+              />
+            </div>
+          </template>
+        </UModal>
 
         <ChatToolApproval
           :messages="messages"
@@ -317,18 +432,32 @@ defineShortcuts({
           />
 
           <template #footer>
-            <ChatConfigControls
-              v-model:model-id="modelId"
-              v-model:mode="mode"
-              v-model:reasoning-effort="reasoningEffort"
-              v-model:enabled-tool-ids="enabledToolIds"
-              :model-items="modelItems"
-              :mode-items="modeItems"
-              :effort-items="effortItems"
-              :supports-reasoning="supportsReasoning"
-              :show-tools="mode === 'agent'"
+            <USelect
+              v-model="mode"
+              :items="modeItems"
+              :icon="modeItems.find(m => m.value === mode)?.icon"
+              variant="ghost"
+              size="sm"
+            />
+            <USelect
+              v-model="modelId"
+              :items="modelItems"
+              icon="i-lucide-box"
+              variant="ghost"
+              size="sm"
+            />
+            <USelect
+              v-if="supportsReasoning"
+              v-model="reasoningEffort"
+              :items="effortItems"
+              variant="ghost"
+              size="sm"
+            />
+            <ChatToolPicker
+              v-if="mode === 'agent'"
+              v-model="enabledToolIds"
               :approvals="conversation?.approvals"
-              @update-approvals="updateApprovals"
+              @update:approvals="updateApprovals"
             />
             <ChatContextUsage
               :conversation="conversation"

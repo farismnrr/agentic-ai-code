@@ -59,7 +59,6 @@ Current source/config and `.agents/knowledge/` remain authoritative for implemen
 
 - The standalone executable CLI layer for `terminal-tool`, `curl-tool`, and `searxng-search-tool` is **Rust-owned**. There is no supported permanent JavaScript CLI fallback and no npm `bin` mapping that should be restored.
 - The Nuxt/TypeScript package APIs remain valid application integration surfaces. The Rust migration replaced executable CLIs, not the entire web/runtime stack.
-- Plan 031 confirmed the durable layering boundary: TS/server code composes application and integration concerns, while Rust owns executable tools and relay protocol/security execution; focused policy modules may be reused, but HTTP/composition roots retain lifecycle and response ordering.
 - Repository development uses the pinned Rust toolchain (currently Rust 1.95.0); package MSRV is a separate compatibility floor.
 - The migration was done under strict behavioral parity: arguments, stdout/stderr shape, exit codes, timeouts, and failure behavior matter. A rewrite is not acceptable merely because the happy path works.
 - Terminal execution must manage child/process-group lifetime so timeout/termination does not leave descendants behind. Process cleanup is part of the contract, not optional polish.
