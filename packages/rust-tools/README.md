@@ -1,13 +1,13 @@
 # Rust Tools
 
-This workspace contains the native implementations of:
+This workspace contains the native implementation of the unified `ai-tools` binary, which provides:
 
-- `terminal-tool`
-- `curl-tool`
-- `searxng-search-tool`
-- `relay-agent`
+- `terminal`
+- `curl`
+- `searxng`
+- `relay`
 
-The three tool CLIs were migrated from JavaScript during historical Plan 027. `relay-agent` was subsequently rewritten as a native Rust MCP server during historical Plan 028. There is no supported JavaScript CLI fallback path.
+The separate tool CLIs were migrated from JavaScript during historical Plan 027 and unified into a single binary during Plan 033. There is no supported JavaScript CLI fallback path.
 
 ## Toolchain
 
@@ -19,14 +19,14 @@ Use the pinned toolchain for repository development/verification. The MSRV is a 
 
 ## Architecture
 
-The sibling CLIs are small native executors:
+The unified native executor (`ai-tools`) exposes the following subcommands:
 
-- `terminal-tool` — process execution with explicit guard/allow controls and timeout/process-group handling.
-- `curl-tool` — HTTP client with SSRF protections unless the explicit guard bypass is requested.
-- `searxng-search-tool` — SearXNG query client.
-- `relay-agent` — MCP `2026-07-28` server exposing controlled coding capabilities through the relay security boundary.
+- `terminal` — process execution with explicit guard/allow controls and timeout/process-group handling.
+- `curl` — HTTP client with SSRF protections unless the explicit guard bypass is requested.
+- `searxng` — SearXNG query client.
+- `relay` — MCP `2026-07-28` server exposing controlled coding capabilities through the relay security boundary.
 
-`relay-agent` resolves trusted sibling binaries relative to its own executable rather than trusting arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
+The `relay` subcommand executes other subcommands relative to its own executable rather than trusting arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
 
 ## Relay security/platform contract
 
@@ -88,6 +88,6 @@ When publishing native artifacts manually:
 
 ## CLI notes
 
-Package-level TypeScript tool factories under sibling `packages/*-tool/` are still application APIs, but standalone executable CLIs are Rust binaries in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
+Package-level TypeScript tool factories under sibling `packages/*/` are still application APIs, but the standalone executable CLI is the single Rust binary (`ai-tools`) in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
 
 Use each binary's `--help` as the command-line source of truth.
