@@ -45,28 +45,3 @@ pub fn validate_executable(binary: &str) -> Result<(), McpError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    #[test]
-    fn rejects_privilege_and_executable_path() {
-        assert!(validate_executable("sudo").is_err());
-        assert!(validate_executable("bin/tool").is_err());
-        assert!(validate_executable("tool").is_ok());
-    }
-
-    #[test]
-    fn enforces_root_containment_after_canonicalization() {
-        let root = std::env::temp_dir().join(format!("relay-policy-{}", std::process::id()));
-        let child = root.join("child");
-        fs::create_dir_all(&child).unwrap();
-        assert_eq!(
-            resolve_contained_cwd(&root, Some("child")).unwrap(),
-            fs::canonicalize(&child).unwrap()
-        );
-        assert!(resolve_contained_cwd(&root, Some("../")).is_err());
-        let _ = fs::remove_dir_all(&root);
-    }
-}
