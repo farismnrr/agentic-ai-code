@@ -1,12 +1,7 @@
-export interface ModelProvider {
-  id: string
-  type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
-  name: string
-  baseUrl: string | null
-  customHeaders: Record<string, string>
-  enabled: boolean
-  hasApiKey: boolean
-}
+import type { ModelProvider } from '#shared/types/chat'
+import { removeById, replaceById } from '../utils/collection'
+
+export type { ModelProvider }
 
 export interface ModelProviderTypeOption {
   label: string
@@ -37,14 +32,13 @@ export function useModelProviders() {
       method: 'PUT',
       body: data
     })
-    const index = providers.value.findIndex(p => p.id === id)
-    if (index !== -1) providers.value[index] = updatedProvider
+    if (providers.value.some(provider => provider.id === id)) providers.value = replaceById(providers.value, id, updatedProvider)
     return updatedProvider
   }
 
   async function remove(id: string) {
     await $fetch(`/api/providers/${id}`, { method: 'DELETE' })
-    providers.value = providers.value.filter(p => p.id !== id)
+    providers.value = removeById(providers.value, id)
   }
 
   function listModels(providerId: string) {

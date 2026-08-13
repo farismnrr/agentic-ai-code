@@ -15,6 +15,203 @@ const MAX_EXEC_ARG_BYTES: usize = 64 * 1024; // 64 KB limit
 const MAX_HTTP_HEADERS: usize = 100;
 const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024; // 64 KB limit
 
+/// A resolved, tool-specific invocation: the sibling binary name, the CLI
+/// arguments to pass it, and the caller-requested timeout. Building this is
+/// the only part of tool dispatch that varies per tool; `dispatch_tool_call`
+/// owns the shared process-safety path after this point (bwrap containment,
+/// spawn, output capture, timeout/kill, and cleanup), so no tool can bypass it.
+struct ToolInvocation {
+    bin_name: &'static str,
+    args: Vec<String>,
+    timeout_ms: u64,
+}
+
+/// Build the sandboxed `terminal-tool` invocation for `terminal_exec`:
+/// validates timeout bounds, resolves/contains `cwd` under the execution
+/// root, validates the leading executable, and bounds argument count/size.
+fn build_terminal_exec_invocation(
+    arguments: &Value,
+    config: &crate::relay_agent::config::ServerConfig,
+) -> Result<ToolInvocation, McpError> {
+    let command = arguments
+        .get("command")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let to = arguments
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30000);
+    if to > MAX_TIMEOUT_MS {
+        return Err(McpError::InvalidRequest(format!(
+            "timeout_ms exceeds maximum of {} ms",
+            MAX_TIMEOUT_MS
+        )));
+    }
+    let mut args = vec!["--timeout".to_string(), to.to_string()];
+
+    let execution_root = config
+        .resolved_execution_root()
+        .map_err(|e| McpError::Internal(e.to_string()))?;
+
+    let canonical_cwd = crate::relay_agent::terminal_policy::resolve_contained_cwd(
+        &execution_root,
+        arguments.get("cwd").and_then(|v| v.as_str()),
+    )?;
+
+    args.push("--cwd".to_string());
+    args.push(canonical_cwd.to_string_lossy().into_owned());
+
+    let parts = shell_words::split(command).unwrap_or_default();
+    let binary = if !parts.is_empty() {
+        parts[0].clone()
+    } else {
+        String::new()
+    };
+
+    if !binary.is_empty() {
+        crate::relay_agent::terminal_policy::validate_executable(&binary)?;
+
+        // NOTE: Shell/interpreter flags like `bash -c` are intentionally NOT
+        // blocked here. bwrap is the containment boundary — it provides
+        // filesystem isolation, PID namespace, and process group kill-on-timeout.
+        // Blocking `bash -c` only breaks legitimate coding workflows (e.g.
+        // `bash -c 'npm install && npm run build'`) without adding meaningful
+        // security when the sandbox is already active. If bwrap is not available
+        // the server refuses to start (see relay-agent.rs startup check).
+
+        args.push("--allow-command".to_string());
+        args.push(binary);
+    }
+
+    args.push(command.to_string());
+    if let Some(arr) = arguments.get("args").and_then(|v| v.as_array()) {
+        if arr.len() > MAX_EXEC_ARGS {
+            return Err(McpError::InvalidRequest(format!(
+                "argument count exceeds maximum of {}",
+                MAX_EXEC_ARGS
+            )));
+        }
+        let mut total_arg_bytes = 0;
+        for arg in arr {
+            if let Some(s) = arg.as_str() {
+                if s == "--no-guard" || s == "--allow-command" || s.starts_with("--allow-command=")
+                {
+                    return Err(McpError::InvalidRequest(format!(
+                        "argument {} is forbidden",
+                        s
+                    )));
+                }
+                total_arg_bytes += s.len();
+                if total_arg_bytes > MAX_EXEC_ARG_BYTES {
+                    return Err(McpError::InvalidRequest(format!(
+                        "total argument bytes exceed maximum of {}",
+                        MAX_EXEC_ARG_BYTES
+                    )));
+                }
+                args.push(s.to_string());
+            }
+        }
+    }
+
+    Ok(ToolInvocation {
+        bin_name: "terminal-tool",
+        args,
+        timeout_ms: to,
+    })
+}
+
+/// Build the sandboxed `curl-tool` invocation for `http_fetch`: validates
+/// the HTTP method and timeout bounds, and bounds header count/size.
+fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvocation, McpError> {
+    let url = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
+    let method = arguments
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GET");
+
+    let method_upper = method.to_uppercase();
+    match method_upper.as_str() {
+        "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS" => {}
+        _ => {
+            return Err(McpError::InvalidRequest(format!(
+                "HTTP method {} is not allowed",
+                method
+            )));
+        }
+    }
+
+    let to = arguments
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30000);
+    if to > MAX_TIMEOUT_MS {
+        return Err(McpError::InvalidRequest(format!(
+            "timeout_ms exceeds maximum of {} ms",
+            MAX_TIMEOUT_MS
+        )));
+    }
+
+    let mut args = vec![
+        "-X".to_string(),
+        method.to_string(),
+        "--timeout".to_string(),
+        to.to_string(),
+    ];
+
+    if let Some(data) = arguments.get("data").and_then(|v| v.as_str()) {
+        args.push("-d".to_string());
+        args.push(data.to_string());
+    }
+    if let Some(headers) = arguments.get("headers").and_then(|v| v.as_object()) {
+        if headers.len() > MAX_HTTP_HEADERS {
+            return Err(McpError::InvalidRequest(format!(
+                "header count exceeds maximum of {}",
+                MAX_HTTP_HEADERS
+            )));
+        }
+        let mut total_header_bytes = 0;
+        for (k, v) in headers {
+            if let Some(vs) = v.as_str() {
+                total_header_bytes += k.len() + vs.len();
+                if total_header_bytes > MAX_HTTP_HEADER_BYTES {
+                    return Err(McpError::InvalidRequest(format!(
+                        "total header bytes exceed maximum of {}",
+                        MAX_HTTP_HEADER_BYTES
+                    )));
+                }
+                args.push("-H".to_string());
+                args.push(format!("{k}: {vs}"));
+            }
+        }
+    }
+    args.push(url.to_string());
+
+    Ok(ToolInvocation {
+        bin_name: "curl-tool",
+        args,
+        timeout_ms: to,
+    })
+}
+
+/// Build the sandboxed `searxng-search-tool` invocation for `web_search`.
+fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
+    let query = arguments
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let base_url = "http://127.0.0.1:8888";
+    let args = vec![
+        "--base-url".to_string(),
+        base_url.to_string(),
+        query.to_string(),
+    ];
+    ToolInvocation {
+        bin_name: "searxng-search-tool",
+        args,
+        timeout_ms: 30000,
+    }
+}
+
 pub async fn dispatch_tool_call(
     tool: &Tool,
     arguments: &Value,
@@ -26,206 +223,14 @@ pub async fn dispatch_tool_call(
         .parent()
         .ok_or_else(|| McpError::Internal("current exe has no parent directory".to_string()))?;
 
-    let (bin_name, proc_args, to_ms) = match tool.name {
-        "terminal_exec" => {
-            let command = arguments
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let to = arguments
-                .get("timeout_ms")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(30000);
-            if to > MAX_TIMEOUT_MS {
-                return Err(McpError::InvalidRequest(format!(
-                    "timeout_ms exceeds maximum of {} ms",
-                    MAX_TIMEOUT_MS
-                )));
-            }
-            let mut args = vec!["--timeout".to_string(), to.to_string()];
-
-            let execution_root = config
-                .resolved_execution_root()
-                .map_err(|e| McpError::Internal(e.to_string()))?;
-
-            let target_cwd = if let Some(cwd_str) = arguments.get("cwd").and_then(|v| v.as_str()) {
-                let p = std::path::Path::new(cwd_str);
-                if p.is_absolute() {
-                    p.to_path_buf()
-                } else {
-                    execution_root.join(p)
-                }
-            } else {
-                execution_root.clone()
-            };
-
-            let canonical_cwd = std::fs::canonicalize(&target_cwd).map_err(|_| {
-                McpError::InvalidRequest("cwd path does not exist or is inaccessible".to_string())
-            })?;
-
-            if !canonical_cwd.starts_with(&execution_root) {
-                return Err(McpError::InvalidRequest(
-                    "path traversal outside execution root is forbidden".to_string(),
-                ));
-            }
-
-            args.push("--cwd".to_string());
-            args.push(canonical_cwd.to_string_lossy().into_owned());
-
-            let parts = shell_words::split(command).unwrap_or_default();
-            let binary = if !parts.is_empty() {
-                parts[0].clone()
-            } else {
-                String::new()
-            };
-
-            if !binary.is_empty() {
-                let binary_name = std::path::Path::new(&binary)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-
-                // Privilege escalation: these commands bypass the non-root execution
-                // invariant even inside bwrap (they can call setuid/kernel interfaces).
-                // This check remains even though bwrap provides filesystem containment.
-                let forbidden = ["sudo", "su", "doas", "pkexec", "runas", "docker"];
-                if forbidden.contains(&binary_name) {
-                    return Err(McpError::InvalidRequest(format!(
-                        "execution of '{}' is forbidden: privilege escalation is not allowed",
-                        binary_name
-                    )));
-                }
-
-                // NOTE: Shell/interpreter flags like `bash -c` are intentionally NOT
-                // blocked here. bwrap is the containment boundary — it provides
-                // filesystem isolation, PID namespace, and process group kill-on-timeout.
-                // Blocking `bash -c` only breaks legitimate coding workflows (e.g.
-                // `bash -c 'npm install && npm run build'`) without adding meaningful
-                // security when the sandbox is already active. If bwrap is not available
-                // the server refuses to start (see relay-agent.rs startup check).
-
-                if binary.contains('/') || binary.contains('\\') || binary == ".." {
-                    return Err(McpError::InvalidRequest(
-                        "path traversal or absolute paths in executable name are forbidden"
-                            .to_string(),
-                    ));
-                }
-
-                args.push("--allow-command".to_string());
-                args.push(binary);
-            }
-
-            args.push(command.to_string());
-            if let Some(arr) = arguments.get("args").and_then(|v| v.as_array()) {
-                if arr.len() > MAX_EXEC_ARGS {
-                    return Err(McpError::InvalidRequest(format!(
-                        "argument count exceeds maximum of {}",
-                        MAX_EXEC_ARGS
-                    )));
-                }
-                let mut total_arg_bytes = 0;
-                for arg in arr {
-                    if let Some(s) = arg.as_str() {
-                        if s == "--no-guard"
-                            || s == "--allow-command"
-                            || s.starts_with("--allow-command=")
-                        {
-                            return Err(McpError::InvalidRequest(format!(
-                                "argument {} is forbidden",
-                                s
-                            )));
-                        }
-                        total_arg_bytes += s.len();
-                        if total_arg_bytes > MAX_EXEC_ARG_BYTES {
-                            return Err(McpError::InvalidRequest(format!(
-                                "total argument bytes exceed maximum of {}",
-                                MAX_EXEC_ARG_BYTES
-                            )));
-                        }
-                        args.push(s.to_string());
-                    }
-                }
-            }
-            ("terminal-tool", args, to)
-        }
-        "http_fetch" => {
-            let url = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
-            let method = arguments
-                .get("method")
-                .and_then(|v| v.as_str())
-                .unwrap_or("GET");
-
-            let method_upper = method.to_uppercase();
-            match method_upper.as_str() {
-                "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS" => {}
-                _ => {
-                    return Err(McpError::InvalidRequest(format!(
-                        "HTTP method {} is not allowed",
-                        method
-                    )));
-                }
-            }
-
-            let to = arguments
-                .get("timeout_ms")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(30000);
-            if to > MAX_TIMEOUT_MS {
-                return Err(McpError::InvalidRequest(format!(
-                    "timeout_ms exceeds maximum of {} ms",
-                    MAX_TIMEOUT_MS
-                )));
-            }
-
-            let mut args = vec![
-                "-X".to_string(),
-                method.to_string(),
-                "--timeout".to_string(),
-                to.to_string(),
-            ];
-
-            if let Some(data) = arguments.get("data").and_then(|v| v.as_str()) {
-                args.push("-d".to_string());
-                args.push(data.to_string());
-            }
-            if let Some(headers) = arguments.get("headers").and_then(|v| v.as_object()) {
-                if headers.len() > MAX_HTTP_HEADERS {
-                    return Err(McpError::InvalidRequest(format!(
-                        "header count exceeds maximum of {}",
-                        MAX_HTTP_HEADERS
-                    )));
-                }
-                let mut total_header_bytes = 0;
-                for (k, v) in headers {
-                    if let Some(vs) = v.as_str() {
-                        total_header_bytes += k.len() + vs.len();
-                        if total_header_bytes > MAX_HTTP_HEADER_BYTES {
-                            return Err(McpError::InvalidRequest(format!(
-                                "total header bytes exceed maximum of {}",
-                                MAX_HTTP_HEADER_BYTES
-                            )));
-                        }
-                        args.push("-H".to_string());
-                        args.push(format!("{k}: {vs}"));
-                    }
-                }
-            }
-            args.push(url.to_string());
-            ("curl-tool", args, to)
-        }
-        "web_search" => {
-            let query = arguments
-                .get("query")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let base_url = "http://127.0.0.1:8888";
-            let args = vec![
-                "--base-url".to_string(),
-                base_url.to_string(),
-                query.to_string(),
-            ];
-            ("searxng-search-tool", args, 30000)
-        }
+    let ToolInvocation {
+        bin_name,
+        args: proc_args,
+        timeout_ms: to_ms,
+    } = match tool.name {
+        "terminal_exec" => build_terminal_exec_invocation(arguments, config)?,
+        "http_fetch" => build_http_fetch_invocation(arguments)?,
+        "web_search" => build_web_search_invocation(arguments),
         _ => return Ok(ToolCallResult::not_implemented(tool.name)),
     };
 

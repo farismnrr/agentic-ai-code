@@ -65,7 +65,7 @@ const defaultModelId = computed({
         <p class="text-sm text-muted mb-4">
           Configure your model providers (e.g. 9Router, GCP Agent Platform).
         </p>
-        <ProviderList />
+        <SettingsProviderList />
       </div>
 
       <div>
@@ -75,7 +75,7 @@ const defaultModelId = computed({
         <p class="text-sm text-muted mb-4">
           Add and configure specific models from your providers.
         </p>
-        <ModelList :icon-options="data?.iconOptions || []" />
+        <SettingsModelList :icon-options="data?.iconOptions || []" />
       </div>
 
       <div>

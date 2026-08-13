@@ -12,6 +12,7 @@
     "lint:fix": "eslint . --fix && cargo fmt --all",
     "typecheck": "nuxt prepare --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit && RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked",
     "verify:commit": "bash scripts/verify-commit.sh",
+    "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
@@ -41,7 +42,7 @@
     "@opentelemetry/instrumentation-http": "^0.221.0",
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-logs": "^0.221.0",
-    "@opentelemetry/sdk-node": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "ai": "^7.0.56",

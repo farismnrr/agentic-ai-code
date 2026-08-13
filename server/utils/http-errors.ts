@@ -11,7 +11,7 @@ interface ProblemInit {
 
 // Every thrown API error funnels through here, so this is the one place
 // that needs instrumenting to get 4xx/5xx responses into Loki (via
-// `logger`, see server/utils/logger.ts) — before this, only
+// `logger`, see server/infrastructure/observability/logger.ts) — before this, only
 // frontend-forwarded logs (server/api/telemetry.post.ts) ever reached the
 // logs pipeline; a server-side 502 like a dead upstream provider was
 // visible in `docker compose logs` but invisible in Loki.

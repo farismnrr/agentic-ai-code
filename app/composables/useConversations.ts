@@ -1,4 +1,5 @@
 import type { Conversation, UIMessage } from '#shared/types/chat'
+import { removeById, replaceById } from '../utils/collection'
 
 /**
  * In-memory conversation store.
@@ -38,7 +39,7 @@ export function useConversations() {
       // record, not a partial patch.
       const exists = conversations.value.some(c => c.id === id)
       conversations.value = exists
-        ? conversations.value.map(c => (c.id === id ? { ...c, ...data } : c))
+        ? replaceById(conversations.value, id, { ...conversations.value.find(c => c.id === id)!, ...data })
         : [data, ...conversations.value]
       return data
     } catch {
@@ -65,9 +66,8 @@ export function useConversations() {
   }
 
   function updateLocally(id: string, patch: Partial<Conversation>) {
-    conversations.value = conversations.value.map(c =>
-      c.id === id ? { ...c, ...patch, updatedAt: patch.updatedAt || Date.now() } : c
-    )
+    const current = conversations.value.find(c => c.id === id)
+    if (current) conversations.value = replaceById(conversations.value, id, { ...current, ...patch, updatedAt: patch.updatedAt || Date.now() })
   }
 
   async function update(id: string, patch: Partial<Conversation>) {
@@ -92,7 +92,7 @@ export function useConversations() {
     }
   }
   async function remove(id: string) {
-    conversations.value = conversations.value.filter(c => c.id !== id)
+    conversations.value = removeById(conversations.value, id)
     await $fetch(`/api/conversations/${id}`, { method: 'DELETE' })
   }
 

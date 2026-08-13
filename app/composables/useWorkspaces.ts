@@ -1,4 +1,5 @@
 import type { Workspace } from '#shared/types/chat'
+import { removeById, replaceById } from '../utils/collection'
 
 export function useWorkspaces() {
   const workspaces = useState<Workspace[]>('workspaces', () => [])
@@ -85,9 +86,8 @@ export function useWorkspaces() {
   }
 
   function updateLocally(id: string, patch: Partial<Workspace>) {
-    workspaces.value = workspaces.value.map(w =>
-      w.id === id ? { ...w, ...patch, updatedAt: patch.updatedAt || Date.now() } : w
-    )
+    const current = workspaces.value.find(w => w.id === id)
+    if (current) workspaces.value = replaceById(workspaces.value, id, { ...current, ...patch, updatedAt: patch.updatedAt || Date.now() })
   }
 
   async function update(id: string, updates: Partial<Workspace>) {
@@ -101,7 +101,7 @@ export function useWorkspaces() {
 
   async function remove(id: string) {
     const original = [...workspaces.value]
-    workspaces.value = workspaces.value.filter(w => w.id !== id)
+    workspaces.value = removeById(workspaces.value, id)
 
     // Switch active if we just deleted it
     if (activeWorkspaceId.value === id) {

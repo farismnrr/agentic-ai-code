@@ -29,3 +29,6 @@ logs
 !.env.example
 
 target/
+
+# Local Claude Code session runtime (not repository-owned agent guidance)
+.claude/

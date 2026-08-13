@@ -32,7 +32,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       method: 'POST',
       body: { name: event.data.name }
     })
-    rawKeyResult.value = result.rawKey
+    rawKeyResult.value = result.rawKey ?? null
     toast.add({ title: `Added ${event.data.name}`, icon: 'i-lucide-check', color: 'success' })
     addOpen.value = false
     state.name = ''

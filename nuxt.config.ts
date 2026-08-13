@@ -119,7 +119,9 @@ export default defineNuxtConfig({
   // upstream issue, not ours: https://github.com/nuxt/nuxt/issues/33987.
   hooks: {
     close: () => {
-      process.exit(0)
+      if (process.argv.includes('build')) {
+        process.exit(0)
+      }
     }
   },
 
