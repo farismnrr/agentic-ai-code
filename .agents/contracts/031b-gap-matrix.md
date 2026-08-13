@@ -2,9 +2,9 @@
 
 **Date: 2026-08-13**
 **Baseline branch: `refactor/031b-final-architecture-security-and-release-closure`**
-**Baseline commit: `8a2193fae0e068237ae0d80dd997d73c1ae2f63d`**
+**Baseline commit: `a19639beb5bc947ae68344c818da36985ffc740d`**
 
-This is a static, source-read-only audit. No builds were run. All line numbers verified with `grep -n` / direct file reads at the baseline commit above.
+This is a static, source-read-only audit. No builds were run. All line numbers were rechecked with `grep -n` / direct file reads against the current baseline above.
 
 ---
 
@@ -171,3 +171,12 @@ Evidence: `.agents/knowledge/project.md` L60: *"at the Plan 031B baseline this d
 - **SUPERSEDED:** none
 
 No finding was found to be already fixed by source changes beyond docs (AL/AM). AA–AI all require Plan 031B implementation work exactly as scoped.
+
+## 4. Phase 0 verification state
+
+- Branch/head confirmation: `refactor/031b-final-architecture-security-and-release-closure` at `a19639beb5bc947ae68344c818da36985ffc740d`.
+- Source inventory and ownership matrix: recorded above for API, application, infrastructure, utilities, provider adapters, and relay auth/execution surfaces.
+- Finding disposition: AA–AI confirmed; AJ–AK explicitly deferred as later re-audits; AL–AM already resolved; no findings superseded.
+- Frozen contract presence: `.agents/contracts/029-tool-catalog-v1.json` and its SHA-256 companion are tracked.
+- Documentation checks run for this phase: `git diff --check`, `bash scripts/check-agent-docs.sh`.
+- `pnpm verify:commit` passed completely after `nuxt prepare`, including architecture checks, lint, Vue/Rust type checks, and warnings-denied Rust compilation; Phase 0 does not claim runtime/build verification.

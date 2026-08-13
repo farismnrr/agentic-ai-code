@@ -1,6 +1,6 @@
 # Plan 031B — Final Architecture, Security, and Release Closure
 
-**Status: PLANNED / NOT STARTED**  
+**Status: IN PROGRESS — Phase 0 complete; implementation phases not started**
 **Created: 2026-08-13**  
 **Plan family: Plan 031 — Repository-wide Layered Refactor**  
 **Predecessor: Plan 031A — Refactor Hardening and Architecture Closure**  
@@ -681,19 +681,22 @@ Required outcome after implementation:
 
 ### Steps
 
-- [ ] Confirm implementation starts from the exact intended parent branch/head after this plan is committed.
-- [ ] Create a dedicated 031B implementation branch from that head; do not touch `dev` directly.
-- [ ] Read current `AGENTS.md`, `.agents/knowledge/`, canonical memory, Plan 031, Plan 031A, and Plan 031B.
-- [ ] Re-run a source inventory of `server/api/**`, `server/application/**`, `server/infrastructure/**`, `server/utils/**`, provider adapters, and relay auth files.
-- [ ] Build a written dependency/ownership matrix before moving files.
-- [ ] Mark each third-review finding AA–AM as confirmed, superseded, or already resolved by a newer commit, with source evidence.
-- [ ] Record current verification state; do not inherit old green results as evidence for the new branch.
+- [x] Confirm implementation starts from the exact intended parent branch/head after this plan is committed.
+- [x] Create a dedicated 031B implementation branch from that head; do not touch `dev` directly.
+- [x] Read current `AGENTS.md`, `.agents/knowledge/`, canonical memory, Plan 031, Plan 031A, and Plan 031B.
+- [x] Re-run a source inventory of `server/api/**`, `server/application/**`, `server/infrastructure/**`, `server/utils/**`, provider adapters, and relay auth files.
+- [x] Build a written dependency/ownership matrix before moving files.
+- [x] Mark each third-review finding AA–AM as confirmed, superseded, or already resolved by a newer commit, with source evidence.
+- [x] Record current verification state; do not inherit old green results as evidence for the new branch.
 
 ### Exit criteria
 
 - every file to be moved/refactored has one intended owner;
 - no worker is assigned overlapping authority without main-agent coordination;
 - no checkbox in later phases is pre-checked from assumption.
+
+The completed source inventory and finding disposition are recorded in
+[`.agents/contracts/031b-gap-matrix.md`](../contracts/031b-gap-matrix.md).
 
 ---
 
