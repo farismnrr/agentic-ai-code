@@ -49,13 +49,21 @@ export function isDisallowedAddress(address: string) {
  * and to an internal address later (DNS rebinding) is still caught.
  */
 export async function assertSafeUrl(url: URL, context: string) {
+  return assertSafeUrlWithLookup(url, context, lookup)
+}
+
+async function assertSafeUrlWithLookup(
+  url: URL,
+  context: string,
+  resolve: typeof lookup
+) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error(`${context} has an unsupported URL scheme "${url.protocol}"`)
   }
 
   let addresses: string[]
   try {
-    addresses = (await lookup(url.hostname, { all: true })).map(a => a.address)
+    addresses = (await resolve(url.hostname, { all: true })).map(a => a.address)
   } catch {
     throw new Error(`${context} has a URL that could not be resolved`)
   }
@@ -66,10 +74,6 @@ export async function assertSafeUrl(url: URL, context: string) {
 }
 
 const MAX_REDIRECT_HOPS = 5
-
-// Headers that carry credentials for the *original* request and must not be
-// silently forwarded to a different origin or downgraded scheme on redirect.
-const SENSITIVE_REQUEST_HEADERS = ['authorization', 'cookie', 'proxy-authorization']
 
 function isRedirectResponse(response: Response) {
   return [301, 302, 303, 307, 308].includes(response.status) && response.headers.has('location')
@@ -98,18 +102,31 @@ function isRedirectResponse(response: Response) {
  * given hop is not fully closed. `curl-tool`'s guard accepts the same
  * residual risk; see `.agents/memories/README.md`.
  */
-export function createSsrfSafeFetch(context: string): typeof fetch {
+type SsrfFetchOptions = {
+  fetch?: typeof fetch
+  resolve?: typeof lookup
+}
+
+/**
+ * Provider redirects are trusted only when they stay on the exact original
+ * origin (scheme, host, and port). Cross-origin and HTTPS-to-HTTP redirects
+ * are rejected before a follow-up request is made, because provider headers
+ * are arbitrary and cannot be safely protected by a secret-header denylist.
+ */
+export function createSsrfSafeFetch(context: string, options: SsrfFetchOptions = {}): typeof fetch {
+  const fetchImpl = options.fetch ?? fetch
+  const resolve = options.resolve ?? lookup
   return async (input, init) => {
     let url = new URL(input instanceof Request ? input.url : input.toString())
-    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    let method = init?.method ?? (input instanceof Request ? input.method : 'GET')
     const headers = new Headers(input instanceof Request ? input.headers : init?.headers)
-    const body = init?.body ?? (input instanceof Request ? input.body : undefined)
+    let body = init?.body ?? (input instanceof Request ? input.body : undefined)
     const originalOrigin = url.origin
     const originalProtocol = url.protocol
 
     for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
-      await assertSafeUrl(url, context)
-      const response = await fetch(url, { ...init, method, headers, body, redirect: 'manual' })
+      await assertSafeUrlWithLookup(url, context, resolve)
+      const response = await fetchImpl(url, { ...init, method, headers, body, redirect: 'manual' })
       if (!isRedirectResponse(response)) return response
       if (hop === MAX_REDIRECT_HOPS) {
         throw new Error(`${context} exceeded the maximum number of redirects (${MAX_REDIRECT_HOPS})`)
@@ -119,7 +136,17 @@ export function createSsrfSafeFetch(context: string): typeof fetch {
       const isCrossOrigin = nextUrl.origin !== originalOrigin
       const isSchemeDowngrade = originalProtocol === 'https:' && nextUrl.protocol === 'http:'
       if (isCrossOrigin || isSchemeDowngrade) {
-        for (const name of SENSITIVE_REQUEST_HEADERS) headers.delete(name)
+        throw new Error(`${context} rejected an untrusted cross-origin or downgraded redirect`)
+      }
+
+      // Match standard redirect behavior. A streamed body cannot be replayed
+      // safely, so reject only redirects that require replaying it.
+      const changesToGet = response.status === 303 || ((response.status === 301 || response.status === 302) && method !== 'GET' && method !== 'HEAD')
+      if (changesToGet) {
+        method = 'GET'
+        body = undefined
+      } else if ((response.status === 307 || response.status === 308) && body instanceof ReadableStream) {
+        throw new Error(`${context} cannot replay a streamed request body across a redirect`)
       }
       url = nextUrl
     }
