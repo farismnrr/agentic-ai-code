@@ -8,7 +8,7 @@
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
-use super::error::RelayError;
+use crate::error::RelayError;
 
 pub const DEFAULT_PORT: u16 = 47_821;
 

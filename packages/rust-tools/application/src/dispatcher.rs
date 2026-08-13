@@ -1,4 +1,4 @@
-use super::mcp;
+use relay_interfaces::mcp;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Dispatch {

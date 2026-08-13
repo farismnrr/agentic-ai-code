@@ -1,4 +1,4 @@
-use super::error::McpError;
+use crate::error::McpError;
 use std::path::{Path, PathBuf};
 
 pub fn resolve_contained_cwd(

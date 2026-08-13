@@ -5,7 +5,7 @@
 //! (`src/bin/relay-agent.rs` binds the validated loopback address) — this module
 //! only builds the `Router`, it does not bind sockets.
 //!
-//! `/mcp` is additionally gated by [`super::security::enforce_local_access_policy`]
+//! `/mcp` is additionally gated by [`crate::security::enforce_local_access_policy`]
 //! *before* any MCP/JSON-RPC parsing happens. The [`CorsLayer`] below is a
 //! browser-side convenience only — it does not stop a non-browser HTTP
 //! client from reaching this server, so it must never be relied on as the
@@ -49,21 +49,21 @@ use std::time::Instant;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use super::admission::RequestAdmission;
-use super::auth;
-use super::auth::{
+use crate::auth;
+use crate::auth::{
     bearer_challenge_value, oauth_error_response, validate_claims, validate_token_signature,
     ClaimValidationError, Claims, TokenValidationError,
 };
-use super::auth::{CacheKeyDecision, CachedJwks};
-use super::config::ServerConfig;
-use super::error::McpError;
-use super::mcp::{
+use crate::auth::{CacheKeyDecision, CachedJwks};
+use crate::observability::{audit, CorrelationId};
+use crate::security::enforce_local_access_policy;
+use relay_application::admission::RequestAdmission;
+use relay_core::config::ServerConfig;
+use relay_core::error::McpError;
+use relay_interfaces::mcp::{
     self, parse_request, tool_catalog, DiscoverResult, ErrorResponse, Id, Response, ToolCallResult,
     ToolsCallParams,
 };
-use super::observability::{audit, CorrelationId};
-use super::security::enforce_local_access_policy;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP
 /// HTTP request body max.
@@ -263,7 +263,7 @@ async fn access_policy(
 
     let mut auth_ctx = AuthContext::default();
 
-    if let super::config::SecurityMode::Remote = state.config.mode {
+    if let relay_core::config::SecurityMode::Remote = state.config.mode {
         // This listener is plaintext by design. The only supported HTTPS
         // termination point is an explicitly trusted local edge/tunnel. Do
         // not treat the request URI scheme as proof of TLS: a direct peer can
@@ -278,7 +278,7 @@ async fn access_policy(
             .headers()
             .get("x-forwarded-proto")
             .and_then(|value| value.to_str().ok());
-        let is_https = super::security::trusted_proxy_https(
+        let is_https = crate::security::trusted_proxy_https(
             peer,
             forwarded_proto,
             state.config.trusted_proxy,
@@ -603,7 +603,9 @@ async fn handle_mcp(
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    if let Err(err) = super::transport_validation::validate_content_type(Some(content_type)) {
+    if let Err(err) =
+        relay_interfaces::transport_validation::validate_content_type(Some(content_type))
+    {
         let response = err_response(StatusCode::BAD_REQUEST, None, &err).into_response();
         audit(
             correlation_id.as_str(),
@@ -670,13 +672,16 @@ async fn handle_mcp(
     // headers on the follow-up tools/list request. Keep this compatibility
     // exception narrow; a tools/list request that presents any modern header
     // or metadata remains subject to the strict 2026 validation below.
-    let legacy_tools_list = super::transport_validation::is_legacy_tools_list(&headers, &request);
+    let legacy_tools_list =
+        relay_interfaces::transport_validation::is_legacy_tools_list(&headers, &request);
     if legacy_tools_list {
         return handle_tools_list(&request)
             .map_or_else(json_error_response, |body| body.into_response());
     }
 
-    if let Err(err) = super::transport_validation::validate_routing_headers(&headers, &request) {
+    if let Err(err) =
+        relay_interfaces::transport_validation::validate_routing_headers(&headers, &request)
+    {
         return json_error_response(err_response(
             StatusCode::BAD_REQUEST,
             Some(request.id.clone()),
@@ -684,13 +689,13 @@ async fn handle_mcp(
         ));
     }
 
-    match super::dispatcher::dispatch(&request) {
-        super::dispatcher::Dispatch::Discover => handle_discover(&request),
-        super::dispatcher::Dispatch::ToolsList => handle_tools_list(&request),
-        super::dispatcher::Dispatch::ToolsCall => {
+    match relay_application::dispatcher::dispatch(&request) {
+        relay_application::dispatcher::Dispatch::Discover => handle_discover(&request),
+        relay_application::dispatcher::Dispatch::ToolsList => handle_tools_list(&request),
+        relay_application::dispatcher::Dispatch::ToolsCall => {
             handle_tools_call(&request, _state, auth_ctx, correlation_id.as_str()).await
         }
-        super::dispatcher::Dispatch::Unknown(other) => Err(err_response(
+        relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
             &McpError::MethodNotFound(other),
@@ -775,7 +780,7 @@ async fn handle_tools_call(
     };
     if let Some((error, scope)) = auth_challenge {
         let challenge = bearer_challenge_value(&state.config, Some(error), scope);
-        let result = ToolCallResult::error(vec![super::mcp::ToolResultContent {
+        let result = ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
             kind: "text",
             text: "Authentication is required to use this tool".to_string(),
         }])
@@ -819,7 +824,7 @@ async fn handle_tools_call(
         ));
     }
 
-    if let super::config::SecurityMode::Remote = state.config.mode {
+    if let relay_core::config::SecurityMode::Remote = state.config.mode {
         let claims = auth_ctx
             .claims
             .as_ref()
@@ -855,10 +860,10 @@ async fn handle_tools_call(
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope.
     let result =
-        crate::relay_agent::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
+        relay_application::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
             .await
             .unwrap_or_else(|e| {
-                ToolCallResult::error(vec![super::mcp::ToolResultContent {
+                ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
                     kind: "text",
                     text: format!("execution failed: {}", e.message()),
                 }])
