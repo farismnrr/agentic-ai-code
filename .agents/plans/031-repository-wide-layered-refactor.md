@@ -906,6 +906,12 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > export or ambiguous rename has a safe removal target; no runtime change is
 > justified.
 
+> Micro-step 12C audit decision: `rg` review found no obsolete operational
+> comments pointing at superseded paths. Remaining historical/path references
+> document active security rationale, compatibility behavior, or canonical
+> history (Rust ownership, local-terminal boundary, SDK shape, and prior-plan
+> decisions), so they are intentionally preserved.
+
 ### Targets
 
 - TS wrapper packages
@@ -919,7 +925,7 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 - [x] Audit duplicated tool identifiers/schemas; retain intentionally distinct runtime-boundary contracts because consolidation would alter callers.
 - [x] Audit dead facades/compatibility exports left by migration phases; no unused export with a safe removal target was found.
 - [x] Audit ambiguous naming around application/domain/infrastructure responsibilities; no safe rename with all callers/docs migrated was justified.
-- [ ] Remove obsolete comments pointing at pre-refactor paths while preserving important historical/security rationale in canonical docs/memory where durable.
+- [x] Audit obsolete comments pointing at pre-refactor paths; no stale operational comment was found. Historical/security rationale remains in its canonical source.
 
 ### Acceptance
 
