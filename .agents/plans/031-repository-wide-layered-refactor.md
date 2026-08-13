@@ -834,7 +834,20 @@ root.
 
 **Risk: very high / security-critical**
 
+**Status: complete** — ownership audit confirms the remaining execution path is
+cohesive and behavior-sensitive; no unsafe generic extraction is justified.
+
 > Micro-step 11A-terminal-policy complete: terminal cwd containment and executable privilege/path policy are isolated in `terminal_policy.rs`; execution translation and subprocess lifecycle remain in `execution.rs`.
+
+> Boundary decision 11B: HTTP/SSRF and redirect policy remains owned by the
+> authoritative native `curl-tool` path. `execution.rs` has no duplicate HTTP
+> security policy to extract; retaining this boundary is the KISS/DRY layered
+> choice and requires no runtime change.
+
+> Micro-step 11C reviewed: no extraction justified. Sibling-binary resolution
+> and subprocess mechanics occur in one shared post-dispatch safety path; a
+> terminal-only extraction would create a partial/generic abstraction and risk
+> process-group, timeout, and output-limit semantics.
 
 ### Primary target
 
@@ -842,11 +855,11 @@ root.
 
 ### Work
 
-- [ ] Separate per-tool argument validation/translation for terminal, HTTP, and search.
-- [ ] Extract common sibling-binary resolution and subprocess execution mechanics.
-- [ ] Centralize output limit, timeout, termination/process-group handling where semantics are identical.
-- [ ] Keep tool-specific security policy next to the tool that owns it: terminal privilege/path rules, HTTP restrictions, search semantics.
-- [ ] Avoid a generic “execute arbitrary tool” abstraction that can bypass per-tool policy.
+- [x] Separate terminal policy ownership via `terminal_policy.rs`; HTTP/SSRF remains authoritative in native `curl-tool`, and existing search/translation logic remains cohesive in `execution.rs` (no duplicate or unsafe split).
+- [x] Review common sibling-binary resolution and subprocess mechanics; retain the single shared post-dispatch path because a terminal-only extraction would be partial and a generic abstraction is prohibited.
+- [x] Retain output limit, timeout, termination/process-group handling in the single authoritative execution path; semantics are already centralized and unchanged.
+- [x] Keep tool-specific security policy next to its owner: terminal policy in `terminal_policy.rs`, HTTP/SSRF in native `curl-tool`, and search semantics in their existing native path.
+- [x] Avoid a generic “execute arbitrary tool” abstraction that can bypass per-tool policy.
 
 ### Critical preserved invariants
 
