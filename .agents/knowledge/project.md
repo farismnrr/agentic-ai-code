@@ -45,6 +45,12 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
+Architecture boundaries reinforced by Plan 031: server application modules
+compose use cases without H3 event objects; Rust relay transport owns HTTP
+composition/security ordering while focused auth, validation, admission, and
+observability modules own their policies; native Rust remains the executable
+tool source of truth and sibling TypeScript packages remain integration APIs.
+
 ### Agent/project guidance
 
 - `AGENTS.md` — single repository agent entrypoint.

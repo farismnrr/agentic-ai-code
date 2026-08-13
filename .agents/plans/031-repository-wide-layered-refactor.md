@@ -965,6 +965,13 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > runtime-boundary projections with distinct callers, so no accidental fork
 > was safely removable.
 
+> Micro-step 13D complete: durable architecture conventions were added only to
+> `knowledge/project.md` and the canonical `memories/README.md`. No sibling
+> memory file or transient phase note was created. Full Plan 031 completion
+> remains gated by the documented pre-existing `.claude` path, unavailable
+> `@opentelemetry/sdk-node@^2.10.0`, generated Nuxt tsconfig, and environment
+> verification gates.
+
 ### Work
 
 - [x] Audit finalized import-direction restrictions; the narrow source check is more suitable than noisy ESLint rules for these Rust/TS boundaries.
@@ -974,8 +981,8 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 - [ ] Review all reusable components/composables for stable naming/props/contracts.
 - [x] Review reusable components/composables for stable naming/props/contracts; no unsafe contract change was identified.
 - [x] Re-run duplication search for canonical rules/constants; no accidental fork was found.
-- [ ] Update `.agents/knowledge/` only where new architectural conventions are durable and repository-wide.
-- [ ] Append only durable lessons/invariants to `.agents/memories/README.md`; do not create sibling memory files.
+- [x] Update `.agents/knowledge/` only with durable repository-wide architecture conventions.
+- [x] Append only durable invariants to `.agents/memories/README.md`; no sibling memory file was created.
 - [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done.
 
 ### Final acceptance
