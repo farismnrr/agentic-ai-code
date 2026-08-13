@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { modelProviders, type ModelProviderType } from '../../database/schema'
 import { badRequest, internal, notFound } from '../../utils/http-errors'
+import { encryptSecret, isEncryptedSecret } from '../../utils/crypto'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
 // `customHeaders` values are encrypted ciphertext by the time they reach this
@@ -27,7 +28,34 @@ export async function listUserProviders(userId: string) {
 export async function findUserProvider(userId: string, id: string) {
   const [provider] = await useDb().select().from(modelProviders).where(and(eq(modelProviders.id, id), eq(modelProviders.userId, userId))).limit(1)
   if (!provider) throw notFound('Provider not found')
-  return provider
+  return upgradeLegacyPlaintextHeaders(provider)
+}
+
+/**
+ * Lazy upgrade for Plan 031A Finding R: rows written before `customHeaders`
+ * values were encrypted may still hold legacy plaintext values. Every time
+ * such a row is loaded for actual use (chat-turn ownership resolution,
+ * update-flow lookups, provider discovery) this opportunistically
+ * re-encrypts those values and persists them, so the row is upgraded in
+ * place without a blind SQL backfill (which can't decrypt/re-encrypt
+ * arbitrary plaintext at the DB layer).
+ *
+ * Idempotent by construction: a value already shaped like ciphertext
+ * (`isEncryptedSecret`) is left untouched, so re-running this on an
+ * already-upgraded or concurrently-upgraded row is a no-op — no
+ * double-encryption risk.
+ */
+async function upgradeLegacyPlaintextHeaders(provider: typeof modelProviders.$inferSelect) {
+  const entries = Object.entries(provider.customHeaders)
+  if (entries.length === 0 || entries.every(([, value]) => isEncryptedSecret(value))) {
+    return provider
+  }
+  const upgraded = Object.fromEntries(entries.map(([key, value]) => [key, isEncryptedSecret(value) ? value : encryptSecret(value)]))
+  const [updated] = await useDb().update(modelProviders)
+    .set({ customHeaders: upgraded, updatedAt: new Date() })
+    .where(and(eq(modelProviders.id, provider.id), eq(modelProviders.userId, provider.userId)))
+    .returning()
+  return updated ?? { ...provider, customHeaders: upgraded }
 }
 
 export async function insertUserProvider(userId: string, input: ProviderInput, apiKeyEncrypted: string) {

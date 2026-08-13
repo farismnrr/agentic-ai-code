@@ -248,10 +248,10 @@ Source inspection and server-only typechecking remain useful evidence, but they 
 
 **Risk: critical / security + data compatibility**
 
-- [ ] Fix redirect-aware provider SSRF enforcement and mapped-address classification.
-- [ ] Add deterministic redirect/private-target acceptance coverage.
-- [ ] Implement safe legacy `customHeaders` migration/lazy-upgrade behavior.
-- [ ] Verify new writes remain encrypted/redacted and legacy rows remain usable.
+- [x] Fix redirect-aware provider SSRF enforcement and mapped-address classification.
+- [x] Add deterministic redirect/private-target acceptance coverage.
+- [x] Implement safe legacy `customHeaders` migration/lazy-upgrade behavior.
+- [x] Verify new writes remain encrypted/redacted and legacy rows remain usable.
 
 ## Phase 10 — Finish tenant and application boundaries
 

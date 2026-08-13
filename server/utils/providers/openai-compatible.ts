@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { decryptHeaders, decryptSecret } from '../crypto'
-import { assertSafeUrl, createSsrfSafeFetch } from '../ssrf-guard'
+import { createSsrfSafeFetch } from '../ssrf-guard'
 
 export function getOpenAiCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {
   const provider = createOpenAICompatible({
@@ -25,8 +25,7 @@ export async function listOpenAiCompatibleModels(baseUrl: string, encryptedApiKe
   const apiKey = decryptSecret(encryptedApiKey)
   const customHeaders = decryptHeaders(encryptedCustomHeaders)
   const url = new URL(`${baseUrl.replace(/\/$/, '')}/models`)
-  await assertSafeUrl(url, 'OpenAI-compatible provider base URL')
-  const response = await fetch(url, {
+  const response = await createSsrfSafeFetch('OpenAI-compatible provider base URL')(url, {
     headers: { Authorization: `Bearer ${apiKey}`, ...customHeaders }
   })
   if (!response.ok) {

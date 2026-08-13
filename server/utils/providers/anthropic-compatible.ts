@@ -1,6 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { decryptHeaders, decryptSecret } from '../crypto'
-import { assertSafeUrl, createSsrfSafeFetch } from '../ssrf-guard'
+import { createSsrfSafeFetch } from '../ssrf-guard'
 
 export function getAnthropicCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {
   const provider = createAnthropic({
@@ -22,8 +22,7 @@ export async function listAnthropicCompatibleModels(baseUrl: string, encryptedAp
   const apiKey = decryptSecret(encryptedApiKey)
   const customHeaders = decryptHeaders(encryptedCustomHeaders)
   const url = new URL(`${baseUrl.replace(/\/$/, '')}/models`)
-  await assertSafeUrl(url, 'Anthropic-compatible provider base URL')
-  const response = await fetch(url, {
+  const response = await createSsrfSafeFetch('Anthropic-compatible provider base URL')(url, {
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...customHeaders }
   })
   if (!response.ok) {
