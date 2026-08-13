@@ -1,10 +1,21 @@
-import { eq } from 'drizzle-orm'
-import { workspaces } from '../../database/schema'
+import { findUserWorkspace } from '../../utils/workspaces'
 
-export async function resolveChatWorkspaceContext(workspaceId: string | null) {
+/**
+ * Resolves workspace path/name for the chat-turn system prompt only after
+ * requiring the *session user's own* authorized workspace context — never
+ * a naked workspace ID lookup (Plan 031A finding B). A workspace that is
+ * missing or belongs to another user degrades the same way (no workspace
+ * context in the prompt) instead of leaking another tenant's workspace
+ * name/path.
+ */
+export async function resolveChatWorkspaceContext(userId: string, workspaceId: string | null) {
   if (!workspaceId) return { path: undefined, name: undefined }
-  const [workspace] = await useDb().select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1)
-  if (!workspace) return { path: undefined, name: undefined }
+  let workspace
+  try {
+    workspace = await findUserWorkspace(userId, workspaceId)
+  } catch {
+    return { path: undefined, name: undefined }
+  }
   try {
     return { path: await resolveWorkspacePath(workspace.path), name: workspace.name }
   } catch (err) {

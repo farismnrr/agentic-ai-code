@@ -18,6 +18,18 @@ export async function listUserModels(userId: string) {
   return useDb().select().from(models).where(eq(models.userId, userId))
 }
 
+/**
+ * Narrow ownership-resolution lookup: returns the model only when it both
+ * exists and is owned by `userId`. Never distinguishes "doesn't exist" from
+ * "belongs to someone else" — both surface as the same 404 so cross-tenant
+ * probing can't be used to enumerate other users' model IDs.
+ */
+export async function findUserModel(userId: string, id: string) {
+  const [model] = await useDb().select().from(models).where(and(eq(models.id, id), eq(models.userId, userId))).limit(1)
+  if (!model) throw notFound('Model not found')
+  return model
+}
+
 export async function insertUserModel(userId: string, providerId: string, body: ModelFields & { modelId: string, label: string }) {
   const db = useDb()
   const [provider] = await db.select().from(modelProviders).where(and(eq(modelProviders.id, providerId), eq(modelProviders.userId, userId)))

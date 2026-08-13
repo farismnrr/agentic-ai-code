@@ -21,6 +21,26 @@ export async function listWorkspaces(userId: string) {
   }))
 }
 
+/**
+ * Narrow ownership-resolution lookup: returns the workspace only when it
+ * both exists and is owned by `userId`. Never distinguishes "doesn't exist"
+ * from "belongs to someone else" — both surface as the same 404 so
+ * cross-tenant probing can't be used to enumerate other users' workspace
+ * IDs.
+ */
+export async function findUserWorkspace(userId: string, id: string) {
+  const db = useDb()
+  const [workspace] = await db
+    .select()
+    .from(workspaces)
+    .where(and(eq(workspaces.id, id), eq(workspaces.userId, userId)))
+    .limit(1)
+  if (!workspace) {
+    throw createError({ statusCode: 404, statusMessage: 'Workspace not found' })
+  }
+  return workspace
+}
+
 export async function createWorkspace(userId: string, name: string, path: string) {
   const resolvedPath = await resolveWorkspacePath(path)
   try {

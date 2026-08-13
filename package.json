@@ -42,7 +42,7 @@
     "@opentelemetry/instrumentation-http": "^0.221.0",
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-logs": "^0.221.0",
-    "@opentelemetry/sdk-node": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "ai": "^7.0.56",

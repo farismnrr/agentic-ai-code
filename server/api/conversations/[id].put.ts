@@ -1,5 +1,6 @@
 import { eq, and } from 'drizzle-orm'
 import { conversations } from '../../database/schema'
+import { resolveOwnedModelContext } from '../../application/chat/ownership'
 import * as v from 'valibot'
 
 const updateSchema = v.object({
@@ -20,6 +21,13 @@ export default defineEventHandler(async (event) => {
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
   const db = useDb()
+
+  // Same-tenant enforcement (Plan 031A finding A): a model change on an
+  // existing conversation must resolve to a model (and backing provider)
+  // owned by the same user, not merely any existing model ID.
+  if (body.modelId !== undefined) {
+    await resolveOwnedModelContext(session.user.id, body.modelId)
+  }
 
   const [updated] = await db
     .update(conversations)
