@@ -1,8 +1,5 @@
-import { findUserModel } from '../../infrastructure/database/models'
-import { findUserProvider } from '../../infrastructure/database/providers'
-import { findUserWorkspace } from '../../utils/workspaces'
-import { findUserConversation } from '../../infrastructure/database/chat'
 import { badRequest, notFound } from '../../utils/http-errors'
+import type { ChatOwnershipPort } from './contracts'
 
 /**
  * The one authoritative same-tenant rule for "does this model belong to
@@ -21,9 +18,10 @@ import { badRequest, notFound } from '../../utils/http-errors'
  * all surface as the same non-enumerating 404 from the underlying narrow
  * lookups.
  */
-export async function resolveOwnedModelContext(userId: string, modelId: string) {
-  const model = await findUserModel(userId, modelId)
-  const provider = await findUserProvider(userId, model.providerId)
+export async function resolveOwnedModelContext(userId: string, modelId: string, ownership?: ChatOwnershipPort) {
+  if (!ownership) throw new Error('Chat ownership port is required')
+  const model = await ownership.findModel(userId, modelId)
+  const provider = await ownership.findProvider(userId, model.providerId)
   return { model, provider }
 }
 
@@ -36,8 +34,9 @@ export async function resolveOwnedModelContext(userId: string, modelId: string) 
  * only prove the workspace exists, not that it belongs to the same tenant —
  * this is the server-side check Plan 031A Finding B requires.
  */
-export async function resolveOwnedWorkspace(userId: string, workspaceId: string) {
-  return findUserWorkspace(userId, workspaceId)
+export async function resolveOwnedWorkspace(userId: string, workspaceId: string, ownership?: ChatOwnershipPort) {
+  if (!ownership) throw new Error('Chat ownership port is required')
+  return ownership.findWorkspace(userId, workspaceId)
 }
 
 /**
@@ -49,10 +48,10 @@ export async function resolveOwnedWorkspace(userId: string, workspaceId: string)
  * all belong to `userId` — including for rows written before this fix that
  * might otherwise reference a model/provider not owned by the same user.
  */
-export async function loadAuthorizedChatContext(userId: string, conversationId: string) {
+export async function loadAuthorizedChatContext(userId: string, conversationId: string, ownership: ChatOwnershipPort) {
   if (!conversationId) throw badRequest('Missing conversationId')
-  const conversation = await findUserConversation(userId, conversationId)
+  const conversation = await ownership.findConversation(userId, conversationId)
   if (!conversation) throw notFound('Conversation not found')
-  const { model, provider } = await resolveOwnedModelContext(userId, conversation.modelId)
+  const { model, provider } = await resolveOwnedModelContext(userId, conversation.modelId, ownership)
   return { conversation, model, provider }
 }

@@ -5,6 +5,13 @@ import { buildMcpTools } from '../mcp/mcp-tools'
 import { convertTurnMessages, prepareAiSdkModel, streamAiSdkAgent } from './ai-sdk-stream'
 import { streamLangGraphChat } from './langgraph-stream'
 import type { ChatTurnDependencies } from '../../application/chat/contracts'
+import { findUserConversation, loadHistoryMessages, insertUserMessage, findLastMessage, updateAssistantMessage, insertAssistantMessage, cacheLastMeasuredTokens } from '../database/chat'
+import { findUserModel } from '../database/models'
+import { findUserProvider } from '../database/providers'
+import { findUserWorkspace } from '../../utils/workspaces'
+import { resolveWorkspacePath } from '../../utils/fs-browse'
+import { hasActivePairedDevice } from '../database/devices'
+import { buildLocalTerminalTool } from './local-terminal-tool'
 
 /**
  * The narrow, explicit dependency contract `executeChatTurn` orchestrates
@@ -21,6 +28,11 @@ import type { ChatTurnDependencies } from '../../application/chat/contracts'
  */
 export function createChatTurnDependencies(): ChatTurnDependencies {
   return {
+    ownership: { findConversation: async (userId, id) => findUserConversation(userId, id) as never, findModel: async (userId, id) => findUserModel(userId, id) as never, findProvider: async (userId, id) => findUserProvider(userId, id) as never, findWorkspace: async (userId, id) => findUserWorkspace(userId, id) as never },
+    history: { load: async conversation => loadHistoryMessages(conversation as never), insertUser: insertUserMessage },
+    persistence: { findLast: async id => findLastMessage(id), updateAssistant: updateAssistantMessage, insertAssistant: insertAssistantMessage, cacheTokens: cacheLastMeasuredTokens },
+    localTerminal: { hasPairedDevice: hasActivePairedDevice, buildTool: buildLocalTerminalTool },
+    resolveWorkspacePath,
     resolveModelConfig: model => resolveModelConfig(model as Parameters<typeof resolveModelConfig>[0]),
     getChatModel: (provider, modelId) => getChatModel(provider as Parameters<typeof getChatModel>[0], modelId),
     getLanggraphModel: (provider, modelId, maxOutputTokens) => getLanggraphModel(provider as Parameters<typeof getLanggraphModel>[0], modelId, maxOutputTokens),

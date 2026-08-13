@@ -1,4 +1,4 @@
-import { findUserWorkspace } from '../../utils/workspaces'
+import type { ChatOwnershipPort } from './contracts'
 
 /**
  * Resolves workspace path/name for the chat-turn system prompt only after
@@ -8,16 +8,16 @@ import { findUserWorkspace } from '../../utils/workspaces'
  * context in the prompt) instead of leaking another tenant's workspace
  * name/path.
  */
-export async function resolveChatWorkspaceContext(userId: string, workspaceId: string | null) {
+export async function resolveChatWorkspaceContext(userId: string, workspaceId: string | null, ownership: ChatOwnershipPort, resolvePath: (path: string) => Promise<string>) {
   if (!workspaceId) return { path: undefined, name: undefined }
   let workspace
   try {
-    workspace = await findUserWorkspace(userId, workspaceId)
+    workspace = await ownership.findWorkspace(userId, workspaceId)
   } catch {
     return { path: undefined, name: undefined }
   }
   try {
-    return { path: await resolveWorkspacePath(workspace.path), name: workspace.name }
+    return { path: await resolvePath(workspace.path), name: workspace.name }
   } catch (err) {
     logger.error('[chat] failed to resolve workspace path for terminal tool', err)
     return { path: undefined, name: undefined }

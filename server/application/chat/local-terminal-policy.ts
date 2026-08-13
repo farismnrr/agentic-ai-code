@@ -1,10 +1,9 @@
-import { hasActivePairedDevice } from '../../infrastructure/database/devices'
-import { buildLocalTerminalTool } from '../../infrastructure/ai/local-terminal-tool'
+import type { LocalTerminalPort } from './contracts'
 
-export async function createLocalTerminalPolicy({ userId, approvals, toolId }: { userId: string, approvals?: Record<string, 'always' | 'never'>, toolId: string }) {
+export async function createLocalTerminalPolicy({ userId, approvals, toolId, localTerminal }: { userId: string, approvals?: Record<string, 'always' | 'never'>, toolId: string, localTerminal: LocalTerminalPort }) {
   let paired = false
   try {
-    paired = await hasActivePairedDevice(userId)
+    paired = await localTerminal.hasPairedDevice(userId)
   } catch (err) {
     logger.error('[chat] failed to check paired relay-agent devices', err)
   }
@@ -18,7 +17,7 @@ export async function createLocalTerminalPolicy({ userId, approvals, toolId }: {
   // server/infrastructure/ai/local-terminal-tool.ts — the application layer
   // orchestrates pairing/approval policy only and never imports provider/AI
   // SDK packages directly (Plan 031A Phase 11).
-  const tool = buildLocalTerminalTool()
+  const tool = localTerminal.buildTool()
 
   return { paired, tool, approval }
 }

@@ -1,7 +1,7 @@
-import { cacheLastMeasuredTokens, findLastMessage, insertAssistantMessage, updateAssistantMessage } from '../../infrastructure/database/chat'
 import type { UIMessage } from '#shared/types/chat'
+import type { ChatPersistencePort } from './contracts'
 
-export function createAssistantPersister({ conversationId, modelId, providerType, close }: { conversationId: string, modelId: string, providerType: string, close: () => Promise<void> }) {
+export function createAssistantPersister({ conversationId, modelId, providerType, close, persistence }: { conversationId: string, modelId: string, providerType: string, close: () => Promise<void>, persistence: ChatPersistencePort }) {
   let closed = false
   const closeOnce = async () => {
     if (closed) return
@@ -23,15 +23,15 @@ export function createAssistantPersister({ conversationId, modelId, providerType
         })
       }
       if (isContinuation) {
-        const last = await findLastMessage(conversationId)
+        const last = await persistence.findLast(conversationId)
         if (last?.role === 'assistant') {
-          await updateAssistantMessage(last.id, parts, totalTokens)
-          if (totalTokens != null) await cacheLastMeasuredTokens(conversationId, last.id, totalTokens)
+          await persistence.updateAssistant(last.id, parts, totalTokens)
+          if (totalTokens != null) await persistence.cacheTokens(conversationId, last.id, totalTokens)
           return
         }
       }
-      const inserted = await insertAssistantMessage(conversationId, parts, totalTokens)
-      if (totalTokens != null && inserted) await cacheLastMeasuredTokens(conversationId, inserted.id, totalTokens)
+      const inserted = await persistence.insertAssistant(conversationId, parts, totalTokens)
+      if (totalTokens != null && inserted) await persistence.cacheTokens(conversationId, inserted.id, totalTokens)
     } catch (err) {
       logger.error('[chat onEnd] failed to persist assistant message', err)
     }

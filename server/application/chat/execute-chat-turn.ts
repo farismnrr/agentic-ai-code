@@ -48,14 +48,14 @@ export interface ExecuteChatTurnInput {
  * `createChatTurnDependencies()`.
  */
 export async function executeChatTurn({ userId, conversationId, trigger, message, abortSignal, deps }: ExecuteChatTurnInput) {
-  const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId)
+  const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
 
   // Bound the query with the compaction cutoff (once one exists) instead of
   // fetching every message in the conversation on every single turn — see
   // server/infrastructure/ai/context-compaction.ts for where this cached timestamp is
   // written (alongside contextSummaryUpToMessageId, only on an actual
   // compaction event, not the per-turn hot path).
-  const messages = await buildTurnMessages(conv, trigger, message)
+  const messages = await buildTurnMessages(conv, trigger, message, deps.history)
 
   const resolvedConfig = deps.resolveModelConfig(modelInfo)
 
@@ -67,7 +67,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     getSummarizerModel: () => deps.getChatModel(provider, modelInfo.modelId)
   })
 
-  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId)
+  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId, deps.ownership, deps.resolveWorkspacePath)
 
   // The server itself no longer has any file/shell access to offer the
   // model — that tool (`native.terminal`, workspace-sandboxed, server-side)
@@ -115,7 +115,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     // exist yet, taking down the *entire* chat request (including MCP tools
     // that had nothing to do with this). A hiccup here should degrade to
     // "no local terminal this turn", not break agent mode outright.
-    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID })
+    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, localTerminal: deps.localTerminal })
     if (localTerminalPolicy.paired) {
       // No `execute` here — this makes it a client-executed tool in the AI
       // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
@@ -134,7 +134,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     }
   }
 
-  const assistantLifecycle = createAssistantPersister({ conversationId: conv.id, modelId: modelInfo.modelId, providerType: provider.type, close })
+  const assistantLifecycle = createAssistantPersister({ conversationId: conv.id, modelId: modelInfo.modelId, providerType: provider.type, close, persistence: deps.persistence })
   const persistAssistantMessage = assistantLifecycle.persist
 
   if (conv.mode === 'chat') {

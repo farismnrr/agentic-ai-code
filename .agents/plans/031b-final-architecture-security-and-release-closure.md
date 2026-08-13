@@ -772,29 +772,29 @@ For every contract method ask:
 
 ### Steps
 
-- [ ] `execute-chat-turn.ts` imports only application/shared contracts and sibling application policies.
-- [ ] `history.ts` no longer imports database infrastructure directly.
-- [ ] `persistence.ts` no longer imports database infrastructure directly.
-- [ ] `ownership.ts` no longer imports concrete model/provider/chat repositories directly.
-- [ ] `workspace-context.ts` no longer reaches a mixed DB/filesystem utility directly.
-- [ ] `local-terminal-policy.ts` no longer imports an infrastructure AI tool builder directly.
-- [ ] Concrete database/AI/MCP/filesystem/device adapters implement the application contracts.
-- [ ] `chat.post.ts` remains auth + HTTP parsing + abort wiring + composition + response only.
+- [x] `execute-chat-turn.ts` imports only application/shared contracts and sibling application policies.
+- [x] `history.ts` no longer imports database infrastructure directly.
+- [x] `persistence.ts` no longer imports database infrastructure directly.
+- [x] `ownership.ts` no longer imports concrete model/provider/chat repositories directly.
+- [x] `workspace-context.ts` no longer reaches a mixed DB/filesystem utility directly.
+- [x] `local-terminal-policy.ts` no longer imports an infrastructure AI tool builder directly.
+- [x] Concrete database/AI/MCP/filesystem/device adapters implement the application contracts.
+- [x] `chat.post.ts` remains auth + HTTP parsing + abort wiring + composition + response only.
 
 ### Preserve these chat invariants
 
-- [ ] submit-message inserts one user message with authoritative generated ID;
-- [ ] regenerate removes only the appropriate trailing assistant context;
-- [ ] resume/continuation behavior remains unchanged;
-- [ ] context compaction cutoff/token accounting remains correct;
-- [ ] workspace prompt is tenant-scoped;
-- [ ] chat vs agent mode selection remains application-owned;
-- [ ] local terminal remains client-executed and only available according to paired-device/approval policy;
-- [ ] MCP close runs exactly once across success/error/abort paths;
-- [ ] assistant persistence remains resilient and logged on failure;
-- [ ] stop/abort propagates correctly;
-- [ ] reasoning/provider options remain correct;
-- [ ] tool approval allow/deny/user-approval semantics remain unchanged.
+- [x] submit-message inserts one user message with authoritative generated ID;
+- [x] regenerate removes only the appropriate trailing assistant context;
+- [x] resume/continuation behavior remains unchanged;
+- [x] context compaction cutoff/token accounting remains correct;
+- [x] workspace prompt is tenant-scoped;
+- [x] chat vs agent mode selection remains application-owned;
+- [x] local terminal remains client-executed and only available according to paired-device/approval policy;
+- [x] MCP close runs exactly once across success/error/abort paths;
+- [x] assistant persistence remains resilient and logged on failure;
+- [x] stop/abort propagates correctly;
+- [x] reasoning/provider options remain correct;
+- [x] tool approval allow/deny/user-approval semantics remain unchanged.
 
 ### Exit criteria
 
