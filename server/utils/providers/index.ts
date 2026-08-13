@@ -4,11 +4,12 @@ import { getVertexAiModel } from './vertex-ai'
 import type { modelProviders, ModelProviderType } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { ChatModel } from '#shared/types/chat'
+import type { ConcreteLanguageModel } from '../../infrastructure/ai/ai-sdk-stream'
 
 type ModelProviderRow = InferSelectModel<typeof modelProviders>
 
 type ProviderAdapter = {
-  createModel: (modelId: string, provider: ModelProviderRow) => ReturnType<typeof getOpenAiCompatibleModel>
+  createModel: (modelId: string, provider: ModelProviderRow) => ConcreteLanguageModel
   listModels: (provider: ModelProviderRow) => Promise<{ label: string, value: string }[]>
 }
 

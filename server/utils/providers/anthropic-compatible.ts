@@ -23,5 +23,5 @@ export async function listAnthropicCompatibleModels(baseUrl: string, encryptedAp
     throw new Error(`Model list request failed: ${response.status} ${response.statusText}`)
   }
   const body = await response.json() as { data?: { id: string }[] }
-  return (body.data ?? []).map(m => m.id).sort()
+  return (body.data ?? []).map(m => m.id).sort().map(id => ({ label: id, value: id }))
 }
