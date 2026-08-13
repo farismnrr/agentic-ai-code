@@ -1,18 +1,11 @@
-use clap::Parser;
 use std::env;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-#[derive(Parser, Debug)]
-#[command(name = "terminal-tool")]
-#[command(
-    version,
-    about = "Run an executable command within the workspace directory",
-    long_about = None
-)]
-struct Args {
+#[derive(clap::Args, Debug)]
+pub struct Args {
     /// Working directory
     #[arg(long = "cwd")]
     cwd: Option<String>,
@@ -160,13 +153,10 @@ async fn run_terminal(
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let args = Args::parse();
-
+pub async fn run(args: Args) {
     if args.positionals.is_empty() {
         eprintln!(
-            "Usage: terminal-tool <command> [args...] [--cwd <path>] [--no-guard] [--timeout <ms>]"
+            "Usage: ai-tools terminal <command> [args...] [--cwd <path>] [--no-guard] [--timeout <ms>]"
         );
         std::process::exit(1);
     }

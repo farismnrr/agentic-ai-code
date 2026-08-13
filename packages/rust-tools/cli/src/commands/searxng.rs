@@ -1,11 +1,8 @@
-use clap::Parser;
 use reqwest::Url;
 use serde::Deserialize;
 
-#[derive(Parser, Debug)]
-#[command(name = "searxng-search-tool")]
-#[command(version, about = "Search the web using SearxNG", long_about = None)]
-struct Args {
+#[derive(clap::Args, Debug)]
+pub struct Args {
     /// The search query
     query: Option<String>,
 
@@ -84,14 +81,11 @@ async fn run_search(query: &str, base_url: &str) -> String {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let args = Args::parse();
-
+pub async fn run(args: Args) {
     let query = match args.query {
         Some(q) if !q.trim().is_empty() => q,
         _ => {
-            eprintln!("Usage: searxng-search-tool <query> [--base-url <url>]");
+            eprintln!("Usage: ai-tools searxng <query> [--base-url <url>]");
             std::process::exit(1);
         }
     };

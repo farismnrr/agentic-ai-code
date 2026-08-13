@@ -114,8 +114,11 @@ fn build_terminal_exec_invocation(
     }
 
     Ok(ToolInvocation {
-        bin_name: "terminal-tool",
-        args,
+        bin_name: "ai-tools",
+        args: vec!["terminal".to_string()]
+            .into_iter()
+            .chain(args)
+            .collect(),
         timeout_ms: to,
     })
 }
@@ -187,8 +190,8 @@ fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvocation, McpE
     args.push(url.to_string());
 
     Ok(ToolInvocation {
-        bin_name: "curl-tool",
-        args,
+        bin_name: "ai-tools",
+        args: vec!["curl".to_string()].into_iter().chain(args).collect(),
         timeout_ms: to,
     })
 }
@@ -206,8 +209,11 @@ fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         query.to_string(),
     ];
     ToolInvocation {
-        bin_name: "searxng-search-tool",
-        args,
+        bin_name: "ai-tools",
+        args: vec!["searxng".to_string()]
+            .into_iter()
+            .chain(args)
+            .collect(),
         timeout_ms: 30000,
     }
 }
@@ -374,7 +380,7 @@ pub async fn dispatch_tool_call(
                     let mut stdout_str = String::from_utf8_lossy(&stdout_bytes).into_owned();
                     let mut stderr_str = String::from_utf8_lossy(&stderr_bytes).into_owned();
                     let is_error = !status.success()
-                        || (bin_name == "terminal-tool" && !stdout_str.starts_with("Exit: 0\n"));
+                        || (tool.name == "terminal_exec" && !stdout_str.starts_with("Exit: 0\n"));
 
                     if stdout_str.len() > MAX_OUTPUT_BYTES {
                         stdout_str.truncate(MAX_OUTPUT_BYTES);

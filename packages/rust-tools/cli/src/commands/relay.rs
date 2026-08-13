@@ -1,5 +1,4 @@
-use clap::Parser;
-use relay_core::config::{Cli, Command, ServerConfig};
+use relay_core::config::{Command, ServerConfig};
 use relay_infrastructure::pidfile::Pidfile;
 use relay_infrastructure::transport::create_router;
 use std::net::SocketAddr;
@@ -13,8 +12,7 @@ compile_error!(
      Build with a *-unknown-linux-gnu target only."
 );
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(unix)]
     if unsafe { libc::geteuid() } == 0 {
         return Err(
@@ -22,8 +20,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into(),
         );
     }
-
-    let cli = Cli::parse();
 
     if let Some(Command::Stop { port }) = cli.command {
         match Pidfile::stop(port) {

@@ -12,9 +12,16 @@ export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, co
         await assertSafeUrl(parsedUrl, `curl tool fetch`)
 
         const __dirname = path.dirname(fileURLToPath(import.meta.url))
-        const rustBin = path.join(__dirname, '../../../target/release/curl-tool')
+        const rustBin = path.join(__dirname, '../../../target/release/ai-tools')
 
-        const args = [url, '--request', method]
+        const args = [
+          'curl',
+          url,
+          '--request', method,
+          '--timeout', '30000',
+          '--no-guard'
+        ]
+
         if (headers) {
           for (const [k, v] of Object.entries(headers)) {
             args.push('--header', `${k}: ${v}`)

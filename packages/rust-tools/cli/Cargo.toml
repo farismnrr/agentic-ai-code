@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "ai-tools"
+path = "src/main.rs"
+
 [dependencies]
 relay-core.workspace = true
 relay-application.workspace = true

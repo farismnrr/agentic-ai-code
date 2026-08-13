@@ -15,7 +15,7 @@ pub const DEFAULT_PORT: u16 = 47_821;
 /// Top-level CLI, matching the legacy `relay-agent [--port] [--dir] [--origin]`
 /// and `relay-agent stop --port <port>` invocations.
 #[derive(Parser, Debug)]
-#[command(name = "relay-agent", author, version, about, long_about = None)]
+#[command(name = "ai-tools relay-agent", author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
