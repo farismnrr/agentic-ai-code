@@ -1,6 +1,6 @@
-use super::error::McpError;
-use super::mcp::{self, decode_header_value, extract_meta};
+use crate::mcp::{self, decode_header_value, extract_meta};
 use axum::http::HeaderMap;
+use relay_core::error::McpError;
 
 pub fn validate_content_type(value: Option<&str>) -> Result<(), McpError> {
     let content_type = value.unwrap_or_default();

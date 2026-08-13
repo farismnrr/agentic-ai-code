@@ -1,5 +1,5 @@
-use crate::relay_agent::error::McpError;
-use crate::relay_agent::mcp::{Tool, ToolCallResult, ToolResultContent};
+use relay_core::error::McpError;
+use relay_interfaces::mcp::{Tool, ToolCallResult, ToolResultContent};
 use serde_json::Value;
 use std::env;
 use std::process::Stdio;
@@ -31,7 +31,7 @@ struct ToolInvocation {
 /// root, validates the leading executable, and bounds argument count/size.
 fn build_terminal_exec_invocation(
     arguments: &Value,
-    config: &crate::relay_agent::config::ServerConfig,
+    config: &relay_core::config::ServerConfig,
 ) -> Result<ToolInvocation, McpError> {
     let command = arguments
         .get("command")
@@ -53,7 +53,7 @@ fn build_terminal_exec_invocation(
         .resolved_execution_root()
         .map_err(|e| McpError::Internal(e.to_string()))?;
 
-    let canonical_cwd = crate::relay_agent::terminal_policy::resolve_contained_cwd(
+    let canonical_cwd = relay_core::terminal_policy::resolve_contained_cwd(
         &execution_root,
         arguments.get("cwd").and_then(|v| v.as_str()),
     )?;
@@ -69,7 +69,7 @@ fn build_terminal_exec_invocation(
     };
 
     if !binary.is_empty() {
-        crate::relay_agent::terminal_policy::validate_executable(&binary)?;
+        relay_core::terminal_policy::validate_executable(&binary)?;
 
         // NOTE: Shell/interpreter flags like `bash -c` are intentionally NOT
         // blocked here. bwrap is the containment boundary — it provides
@@ -215,7 +215,7 @@ fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
 pub async fn dispatch_tool_call(
     tool: &Tool,
     arguments: &Value,
-    config: &crate::relay_agent::config::ServerConfig,
+    config: &relay_core::config::ServerConfig,
 ) -> Result<ToolCallResult, McpError> {
     let current_exe = env::current_exe()
         .map_err(|e| McpError::Internal(format!("failed to get current exe path: {e}")))?;

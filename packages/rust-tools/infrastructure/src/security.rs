@@ -18,8 +18,8 @@
 use axum::http::HeaderMap;
 use std::net::IpAddr;
 
-use super::config::ServerConfig;
-use super::error::McpError;
+use relay_core::config::ServerConfig;
+use relay_core::error::McpError;
 
 /// Validate the `Origin` header against the configured allowed origin.
 ///

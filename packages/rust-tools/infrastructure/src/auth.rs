@@ -1,11 +1,11 @@
-use super::config::ServerConfig;
-use super::error::McpError;
-use super::mcp::{ErrorResponse, Id};
 use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
+use relay_core::config::ServerConfig;
+use relay_core::error::McpError;
+use relay_interfaces::mcp::{ErrorResponse, Id};
 use serde_json::json;
 
 pub const CODING_SCOPE: &str = "relay.coding";

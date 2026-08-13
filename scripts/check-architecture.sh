@@ -19,7 +19,7 @@ fail_matches() {
 
 # The protocol core must not acquire HTTP/transport dependencies.
 if rg -n '^[[:space:]]*(use|pub[[:space:]]+use).*(axum|transport::|super::transport)' \
-  "$repo_root/packages/rust-tools/src/relay_agent/mcp.rs"; then
+  "$repo_root/packages/rust-tools/interfaces/src/mcp.rs"; then
   echo 'architecture: mcp.rs must remain transport-independent' >&2
   exit 1
 fi

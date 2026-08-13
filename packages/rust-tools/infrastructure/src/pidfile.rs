@@ -1,4 +1,4 @@
-use crate::relay_agent::error::McpError;
+use relay_core::error::McpError;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
