@@ -9,11 +9,12 @@ export const createSearxngSearchTool = ({ baseUrl }: { baseUrl: string }) => {
     async ({ query }) => {
       try {
         const __dirname = path.dirname(fileURLToPath(import.meta.url))
-        const rustBin = path.join(__dirname, '../../../target/release/searxng-search-tool')
+        const rustBin = path.join(__dirname, '../../../target/release/ai-tools')
 
-        const args = [query, '--base-url', baseUrl]
-
-        const res = await execa(rustBin, args, { reject: false })
+        const cliArgs = ['searxng', query, '--base-url', baseUrl]
+        const res = await execa(rustBin, cliArgs, {
+          reject: false
+        })
         if (res.failed) {
           return `Error: ${res.stderr || res.message}`
         }

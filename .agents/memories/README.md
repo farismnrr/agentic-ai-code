@@ -96,8 +96,10 @@ Durable final rules:
 - **Plan 031B — `031b-final-architecture-security-and-release-closure.md` is CLOSED after remediation commit `bd22cc6` and final documentation closure commit `44207e5`.** Remediation commit `bd22cc6` restores application ownership boundaries: API routes consume application use cases through Nitro request context, concrete adapters are composed in the infrastructure/plugin edge, application modules own their contracts and do not import infrastructure implementations, and architecture checks cover direct, type-only, facade, and API bypasses. Provider credential containment, repository-wide layering, utility ownership cleanup, JWT compatibility, and deterministic acceptance remain implemented.
 - Phase 12 authenticated/browser and live-provider flows remain explicitly unproven because the required automation/credentials were unavailable; do not mark those checklist items complete or infer them from static/build checks.
 - Do not create Plan 031C merely to move an unfinished 031B blocker elsewhere. Add same-scope findings to 031B unless the user explicitly changes scope.
-- The next independent numeric plan remains **033**.
+- The next independent numeric plan remains **034**.
 - **Plan 032 — `032-packages-layered-architecture-refactor.md` is CLOSED after remediation commit `8130756`.** The monolithic `rust-tools` crate was dissolved into a proper Cargo Workspace with separate `core`, `application`, `infrastructure`, `interfaces`, and `cli` crates to enforce Layered Architecture, SOLID, DRY, and KISS principles.
+- **Plan 033 — `033-unified-binary-refactor.md` is CLOSED.** The separate Rust CLI tools (`curl-tool`, `relay-agent`, `searxng-search-tool`, `terminal-tool`) were consolidated into a single unified `ai-tools` binary using `clap` subcommands. The Nuxt application's Langchain tools and execution boundary were updated to call the unified binary.
+
 ## Maintenance rule
 
 Keep this file concise and current. Prefer durable invariants over audit chronology. Remove stale guidance when decisions change; Git history preserves forensic detail.

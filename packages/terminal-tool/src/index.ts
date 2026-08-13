@@ -35,9 +35,10 @@ export const runTerminalCommand = async ({
     await assertSafeCommand(finalCommand, finalArgs)
 
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const rustBin = path.join(__dirname, '../../../target/release/terminal-tool')
+    const rustBin = path.join(__dirname, '../../../target/release/ai-tools')
 
     const cliArgs = [
+      'terminal',
       '--cwd', cwd,
       '--no-guard',
       '--',

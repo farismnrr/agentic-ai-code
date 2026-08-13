@@ -1,13 +1,10 @@
-use clap::Parser;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use std::str::FromStr;
 use url::Url;
 
-#[derive(Parser, Debug)]
-#[command(name = "curl-tool")]
-#[command(version, about = "Fetch a URL and return its response", long_about = None)]
-struct Args {
+#[derive(clap::Args, Debug)]
+pub struct Args {
     /// Target URL
     url: Option<String>,
 
@@ -119,13 +116,11 @@ async fn run_curl(
         }
 
         if let Some(host) = parsed_url.host_str() {
-            // Check if it's already an IP string
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
                 if !is_safe_ip(&ip) {
                     return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
                 }
             }
-            // If it's a domain name, reqwest will use our custom DNS resolver, which enforces the SSRF policy safely without TOCTOU.
         }
     }
 
@@ -158,7 +153,6 @@ async fn run_curl(
                             .error("redirect to private IP literal blocked by SSRF guard");
                     }
                 }
-                // If it's a domain name, reqwest uses our custom SafeResolver for the redirect too!
             }
             attempt.follow()
         });
@@ -210,7 +204,6 @@ async fn run_curl(
         Ok(r) => r,
         Err(e) => {
             if e.is_redirect() || e.is_builder() || e.is_request() {
-                // If the error stems from our custom policies
                 return format!("Error: SSRF Error: SSRF guard blocked request/redirect: {e}");
             }
             return format!("Error: Fetch Error: {e}");
@@ -232,14 +225,11 @@ async fn run_curl(
     format!("Status: {status}\nBody: {truncated_text}")
 }
 
-#[tokio::main]
-async fn main() {
-    let args = Args::parse();
-
+pub async fn run(args: Args) {
     let url = match args.url {
         Some(u) if !u.trim().is_empty() => u,
         _ => {
-            eprintln!("Usage: curl-tool <url> [--request <method>] [--header <header>...] [--data <body>] [--no-guard]");
+            eprintln!("Usage: ai-tools curl <url> [--request <method>] [--header <header>...] [--data <body>] [--no-guard]");
             std::process::exit(1);
         }
     };
