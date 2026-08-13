@@ -29,7 +29,7 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 - `app/` — Vue pages, layouts, components, composables, plugins, and client UI.
 - `server/api/` — Nitro HTTP API routes / transport adapters.
-- `server/application/` — application use cases/policies introduced by Plan 031; Plan 031B is the active final closure effort for strict dependency inversion and broader route coverage.
+- `server/application/` — application use cases/policies introduced by Plan 031 and completed by Plan 031B's strict dependency-inversion and route-ownership closure.
 - `server/infrastructure/` — database, AI/provider, MCP, and other concrete integration adapters introduced/moved during Plan 031/031A.
 - `server/utils/` — legacy/mixed server helpers still present in current source; do **not** assume every file here is a pure utility. Plan 031B explicitly audits and relocates files whose real owner is application or infrastructure.
 - `server/plugins/` — server initialization such as telemetry.
@@ -47,9 +47,9 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
-### Current architecture status
+### Current shipped architecture
 
-Plan 031 and Plan 031A materially moved the server toward this target:
+Plan 031B completed the repository-wide closure pass. The shipped server follows:
 
 ```text
 server/api (transport/composition)
@@ -57,9 +57,7 @@ server/api (transport/composition)
       <- server/infrastructure (DB / AI SDK / providers / LangGraph / MCP / filesystem/network adapters)
 ```
 
-However, at the Plan 031B baseline this direction is **not yet fully closed in source**. The chat route is thin, but application code still has some direct/type-level infrastructure dependencies, several API routes still own direct persistence/business responsibilities, and `server/utils/**` still contains mixed ownership. Do not describe the architecture as fully closed until [`../plans/031b-final-architecture-security-and-release-closure.md`](../plans/031b-final-architecture-security-and-release-closure.md) reaches its Definition of Done.
-
-The intended final rules are:
+The final rules are:
 
 - `server/api/**` handles auth, HTTP parsing/validation, dependency composition, and response adaptation rather than business/persistence ownership;
 - `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
@@ -68,6 +66,8 @@ The intended final rules are:
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
 - Rust relay transport owns HTTP composition/security ordering while focused auth, validation, admission, and observability modules own their policies;
 - native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
+
+Plan 031B also closed provider credential containment across redirects, application-owned chat contracts, repository-wide API ownership migration, mixed utility ownership, strict architecture negative probes, and JWT pre-validation compatibility. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
 
 ### Agent/project guidance
 

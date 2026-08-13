@@ -11,8 +11,7 @@
 - Do not replace the Vue gate with bare `nuxt typecheck`; the wrapper previously missed generated-project errors.
 - Production bundling is separate: run `pnpm build` when release/runtime output must be proven. Dependency/security-sensitive changes also require the relevant `pnpm audit`, `cargo audit`, and deterministic scripts.
 - GitHub mergeability is not verification. Record only commands actually executed successfully.
-- `scripts/check-architecture.sh` is mandatory through `pnpm verify:commit`, but the Plan 031B baseline still has false-green loopholes around application → infrastructure/type-only/database dependencies. Plan 031B owns the final boundary and checker closure.
-- In the sandbox used during Plan 031A, `nuxt prepare` emitted only `.nuxt/tsconfig.server.json`, not the full client tsconfig project. Server-only typechecking is useful partial evidence but **not** proof of the canonical gate or `pnpm build`; final closure requires an environment where both complete.
+- `scripts/check-architecture.sh` is mandatory through `pnpm verify:commit` and now rejects representative direct, type-only, transitive-facade, and API-bypass violations.
 
 ## Nuxt/application invariants
 
@@ -36,8 +35,6 @@ server/api (transport/composition)
   -> server/application (use cases/policies + application-owned contracts)
       <- server/infrastructure (DB / AI / providers / LangGraph / MCP / filesystem/network)
 ```
-
-At the Plan 031B baseline this is **not yet fully true in source**. The chat route is thin, but application still has some direct/type-level infrastructure dependencies, several API routes still own direct persistence/business responsibilities, and `server/utils/**` still contains mixed ownership.
 
 Durable final rules:
 
@@ -64,7 +61,7 @@ Durable final rules:
 - Editing unrelated provider fields must preserve unchanged secret headers without round-tripping plaintext.
 - Legacy plaintext custom headers have an idempotent upgrade path introduced during 031A; preserve it unless a reviewed replacement is introduced.
 - Provider outbound URLs are user-controlled security boundaries. Private/loopback/link-local/metadata targets and redirect targets must be blocked according to the reviewed SSRF policy.
-- Plan 031B additionally owns **credential containment across redirects**: authenticated provider requests must not leak `Authorization`, `x-api-key`, arbitrary custom headers, or future unknown credentials to an untrusted cross-origin redirect.
+- Authenticated provider requests reject cross-origin redirects, so `Authorization`, `x-api-key`, arbitrary custom headers, and future unknown credentials cannot be forwarded to an untrusted origin. Same-origin redirects remain bounded, scheme-safe, and revalidated by the authoritative SSRF policy.
 - DNS address validation is not connection IP pinning. Do not claim complete DNS-rebinding protection unless the connection architecture actually changes.
 
 ## Rust/native-tool invariants
@@ -76,7 +73,7 @@ Durable final rules:
 - Local relay mode is loopback-oriented. Remote mode is an OAuth Resource Server, not an Authorization Server.
 - Remote auth preserves admission-before-expensive-work, trusted-proxy HTTPS policy, asymmetric JWKS verification, issuer/audience/time/signature checks, owner binding, and `relay.coding` scope.
 - Current MCP target remains stateless Streamable HTTP `POST /mcp` for `2026-07-28`; client-visible tool catalog/security metadata is frozen contract material and must move deliberately.
-- Plan 031A repaired the old Phase 4 discovery fixture and moved the Phase 7 catalog hash into `.agents/contracts/`. The third review found a new compatibility issue: cheap JWT prevalidation currently requires optional `typ: JWT`; Plan 031B owns removing that requirement without reintroducing expensive malformed-token work.
+- Plan 031A repaired the old Phase 4 discovery fixture and moved the Phase 7 catalog hash into `.agents/contracts/`. Plan 031B removed the optional `typ: JWT` requirement while retaining cheap malformed-token rejection and full verification ordering.
 - Docker remains unsupported/deferred without an isolated worker/broker boundary. Never expose host Docker socket/root/privileged namespaces just to claim support.
 
 ## Historical wrong turns worth remembering
@@ -92,8 +89,8 @@ Durable final rules:
 - Plans `001` through `029b` are historical and summarized by Plan 030.
 - Independent plans use numeric IDs; explicit lowercase-letter follow-ups remain in the same plan family and do not consume the next numeric ID.
 - Plan 031 was administratively closed after its implementation pass; unresolved strict-audit work moved to Plan 031A.
-- On **2026-08-13**, Plan 031A was administratively closed after its hardening pass when a third strict review found a larger systemic final-closure scope. Closing 031A does **not** mean the branch is merge-ready or all findings are fixed.
-- **Plan 031B — `031b-final-architecture-security-and-release-closure.md` is the only active Plan 031-family execution plan.** It owns final provider credential containment, real dependency inversion, repository-wide server layering, utility ownership cleanup, architecture guardrails, JWT compatibility, deterministic acceptance truth, and release verification.
+- On **2026-08-13**, Plan 031A was administratively closed after its hardening pass; its remaining strict-review findings were explicitly handed to Plan 031B and are now fixed and verified there. Plan 031A remains closed and must not be reopened.
+- **Plan 031B — `031b-final-architecture-security-and-release-closure.md` is closed.** It delivered provider credential containment, real dependency inversion, repository-wide server layering, utility ownership cleanup, architecture guardrails, JWT compatibility, deterministic acceptance truth, and release verification.
 - Do not create Plan 031C merely to move an unfinished 031B blocker elsewhere. Add same-scope findings to 031B unless the user explicitly changes scope.
 - The next independent numeric plan remains **032**.
 

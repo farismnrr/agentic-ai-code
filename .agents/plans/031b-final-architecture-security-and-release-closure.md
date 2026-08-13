@@ -1,6 +1,6 @@
 # Plan 031B — Final Architecture, Security, and Release Closure
 
-**Status: IN PROGRESS — Phase 0 complete; implementation phases not started**
+**Status: CLOSED — Phase 14 complete; final evidence recorded 2026-08-13**
 **Created: 2026-08-13**  
 **Plan family: Plan 031 — Repository-wide Layered Refactor**  
 **Predecessor: Plan 031A — Refactor Hardening and Architecture Closure**  
@@ -664,7 +664,7 @@ At the third-review baseline, repository guidance contains statements that no lo
 Required outcome after implementation:
 
 - Plan 031A becomes a truthful historical predecessor with an explicit handoff to Plan 031B;
-- Plan 031B becomes the only active plan in the 031 family;
+- Plan 031B became the only active plan in the 031 family during implementation;
 - `.agents/memories/README.md` records durable current decisions, not stale audit chronology;
 - `.agents/knowledge/project.md` describes the architecture that actually ships after 031B;
 - architecture-checker description matches its real checks;
@@ -1123,13 +1123,19 @@ Do not create Plan 031C simply to move a newly discovered unfinished 031B blocke
 
 Only after Phase 13 returns no unresolved P0/P1 issue:
 
-- [ ] update `.agents/knowledge/project.md` to the architecture that actually ships;
-- [ ] update `.agents/memories/README.md` to remove stale fixed findings and record durable 031B decisions;
-- [ ] ensure Plan 031A has a truthful administrative handoff to Plan 031B;
-- [ ] update Plan 031B checkboxes based on actual evidence;
-- [ ] record final verification commands/results and final commit SHA;
-- [ ] mark Plan 031B closed only after all mandatory evidence is present;
-- [ ] keep next independent numeric plan number at `032`.
+- [x] update `.agents/knowledge/project.md` to the architecture that actually ships;
+- [x] update `.agents/memories/README.md` to remove stale fixed findings and record durable 031B decisions;
+- [x] ensure Plan 031A has a truthful administrative handoff to Plan 031B;
+- [x] update Plan 031B checkboxes based on actual evidence;
+- [x] record final verification commands/results and final implementation commit SHA;
+- [x] mark Plan 031B closed only after all mandatory evidence is present;
+- [x] keep next independent numeric plan number at `032`.
+
+### Final closure evidence — 2026-08-13
+
+Final implementation commit before Phase 14 documentation: `e6b49f4588a130ceb951541095a249b4655b087e` (`fix(security): close tenant ownership regressions`). The current checkout additionally contains uncommitted Phase 14 documentation edits; those edits are not represented by this SHA.
+
+Re-run results from the current checkout on 2026-08-13: `pnpm verify:commit` — passed; `pnpm build` — passed (Nuxt emitted non-fatal Rollup/plugin timing warnings); `pnpm check:architecture` — passed; `pnpm audit` — passed, no known vulnerabilities; `cargo audit` — passed, no vulnerabilities reported; `cargo fmt --all -- --check` — passed; `RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked` — passed; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — passed. Deterministic acceptance scripts recorded in Phases 10–12 passed; authenticated browser automation and live provider credentials were unavailable and remain explicitly unproven. The Phase 13 source review found no unresolved P0/P1 issue. The next independent numeric plan is `032`.
 
 ---
 
