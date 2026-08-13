@@ -1,5 +1,4 @@
-import { updateConversation } from '../../infrastructure/composition'
-import { resolveOwnedModelContext } from '../../application/chat/ownership'
+import { updateConversation, resolveOwnedModelContext } from '../../infrastructure/composition'
 import * as v from 'valibot'
 
 const updateSchema = v.object({

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { userSettings, users } from '../../database/schema'
-import { resolveOwnedModelContext } from '../../application/chat/ownership'
+import { findUserModel } from './models'
+import { findUserProvider } from './providers'
 
 export async function getSettings(userId: string, name: string = 'User', email: string = '') {
   const db = useDb()
@@ -70,7 +71,8 @@ export async function updateSettings(userId: string, updates: { language?: strin
   // merely any existing model ID. `null` clears the default and needs no
   // ownership check.
   if (updates.defaultModelId) {
-    await resolveOwnedModelContext(userId, updates.defaultModelId)
+    const model = await findUserModel(userId, updates.defaultModelId)
+    await findUserProvider(userId, model.providerId)
   }
 
   const db = useDb()

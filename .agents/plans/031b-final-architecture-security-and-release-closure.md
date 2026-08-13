@@ -938,17 +938,17 @@ Finding AH is closed with both source-ordering review and black-box compatibilit
 
 Perform a two-user matrix with User A and User B where possible.
 
-- [ ] A cannot create conversation with B's model.
-- [ ] A cannot update conversation to B's model.
-- [ ] A cannot create/use conversation with B's workspace.
-- [ ] A cannot persist B's workspace as active workspace.
-- [ ] A cannot persist B's model as default model.
-- [ ] chat turn for A cannot resolve B's provider through a corrupt/legacy model reference.
-- [ ] provider model-list endpoint is owner-scoped.
-- [ ] provider DTO never exposes API key or custom header values.
-- [ ] legacy custom headers remain usable/upgraded.
-- [ ] provider secret edit semantics preserve unchanged secrets.
-- [ ] MCP configs and local device lookups remain user-scoped.
+- [x] A cannot create conversation with B's model.
+- [x] A cannot update conversation to B's model.
+- [x] A cannot create/use conversation with B's workspace.
+- [x] A cannot persist B's workspace as active workspace.
+- [x] A cannot persist B's model as default model.
+- [x] chat turn for A cannot resolve B's provider through a corrupt/legacy model reference.
+- [x] provider model-list endpoint is owner-scoped.
+- [x] provider DTO never exposes API key or custom header values.
+- [x] legacy custom headers remain usable/upgraded.
+- [x] provider secret edit semantics preserve unchanged secrets.
+- [x] MCP configs and local device lookups remain user-scoped.
 
 Where full DB/runtime execution is unavailable, retain deterministic/source verification but leave the live item unchecked until it is actually run.
 

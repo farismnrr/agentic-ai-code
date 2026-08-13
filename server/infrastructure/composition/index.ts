@@ -11,6 +11,8 @@ import * as messages from '../database/messages'
 import * as models from '../../utils/models'
 import { generateApiKey, verifyApiKey } from '../auth/api-key'
 import { createChatTurnDependencies } from '../ai/chat-turn-dependencies'
+import { resolveOwnedModelContext as resolveOwnedModelContextForUser, resolveOwnedWorkspace as resolveOwnedWorkspaceForUser } from '../../application/chat/ownership'
+import { findUserModel } from '../database/models'
 
 export * from '../database/account-data'
 export * from '../database/auth'
@@ -20,6 +22,26 @@ export * from '../database/mcp-servers'
 export * from '../database/messages'
 export * from '../../utils/models'
 export { generateApiKey, verifyApiKey, createChatTurnDependencies }
+
+// Composition edge for HTTP routes and persistence adapters: the application
+// ownership policy receives its concrete, user-scoped lookups here.
+export async function resolveOwnedModelContext(userId: string, modelId: string) {
+  return resolveOwnedModelContextForUser(userId, modelId, {
+    findConversation: async () => undefined,
+    findModel: (ownerId, id) => findUserModel(ownerId, id) as never,
+    findProvider: (ownerId, id) => findUserProvider(ownerId, id) as never,
+    findWorkspace: (ownerId, id) => workspaces.findUserWorkspace(ownerId, id) as never
+  })
+}
+
+export async function resolveOwnedWorkspace(userId: string, workspaceId: string) {
+  return resolveOwnedWorkspaceForUser(userId, workspaceId, {
+    findConversation: async () => undefined,
+    findModel: (ownerId, id) => findUserModel(ownerId, id) as never,
+    findProvider: (ownerId, id) => findUserProvider(ownerId, id) as never,
+    findWorkspace: (ownerId, id) => workspaces.findUserWorkspace(ownerId, id) as never
+  })
+}
 
 export async function listModelProviders(userId: string) {
   return listUserProviders(userId)
