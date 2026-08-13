@@ -1,343 +1,180 @@
 # Plan 031A — Refactor Hardening and Architecture Closure
 
-**Status: REOPENED — SECOND-AUDIT BLOCKERS REMAIN**  
+**Status: CLOSED — HARDENING PASS COMPLETE; THIRD-REVIEW CLOSURE MOVED TO PLAN 031B**  
 **Created: 2026-08-13**  
+**Closed administratively: 2026-08-13**  
 **Parent plan: Plan 031 — Repository-wide Layered Refactor**  
 **Implementation branch: `refactor/031-repository-wide-layered-refactor`**  
 **Original 031A audit baseline: `b241175e131e544ba7cf922f8d5865557e3f66e3`**  
-**Second deep-review baseline: `dcd2fb4` branch head reviewed on 2026-08-13**
-
-## Status correction
-
-Plan 031A was previously described as having all P0/P1/P2 implementation findings resolved, with only release verification outstanding. A second source-level deep review found several remaining security, compatibility, tenant-boundary, architecture, and deterministic-acceptance gaps.
-
-That previous completion claim is therefore withdrawn.
-
-Plan 031A remains the owner of these gaps. Do **not** create Plan 031B merely to move unfinished 031A acceptance criteria elsewhere. Plan 031A may be closed only after the findings and verification requirements below are actually satisfied.
-
-Plan 031 itself remains closed as the parent refactor pass. Closing Plan 031 is an administrative scope boundary, not proof that 031A is complete.
+**Second deep-review baseline: `dcd2fb4`**  
+**Third deep-review baseline / handoff source: `b43f1fe9cc08c2ba6df69f6407f1f37e71bb0e85`**  
+**Successor plan: [`031b-final-architecture-security-and-release-closure.md`](031b-final-architecture-security-and-release-closure.md)**
 
 ---
 
-## Mission
+## Closure handoff — 2026-08-13
 
-Finish the Plan 031 refactor hardening truthfully and strictly, with emphasis on:
+Plan 031A is closed **administratively**, not because every historical acceptance criterion was proven complete.
 
-- tenant isolation;
-- SSRF and secret handling;
-- real Layered Architecture dependency direction;
-- DRY, SOLID, KISS, reusable logic, and cohesive folder ownership;
-- deterministic architecture/security enforcement;
-- Rust relay security ordering and contract verification;
-- backward-compatible data handling;
-- honest release verification.
+The user explicitly decided to stop expanding Plan 031A after a third strict source-level review found another meaningful set of architecture/security/verification gaps. Those gaps are large and systemic enough to justify a dedicated final closure plan rather than another sequence of appended 031A phases.
 
-A folder move, green grep, successful compile, or fail-closed error alone is not sufficient evidence of completion.
+This supersedes the earlier 031A instruction that said not to create Plan 031B merely to move unfinished work. Plan 031B is being created by explicit user decision because the remaining work is now a distinct final architecture/security/release-closure pass, not as a cosmetic attempt to hide unfinished acceptance criteria.
 
----
+**Do not reopen Plan 031A.** All active work in this plan family now belongs to Plan 031B.
 
-## Non-negotiable constraints
+Closing 031A does **not** mean:
 
-1. No CI.
-2. No unit-test suite or Rust `#[cfg(test)]` modules.
-3. Never bypass git hooks; `pnpm verify:commit` remains the canonical commit gate.
-4. No generic `Repository<T>`, `CrudService<T>`, DI framework, service locator, speculative plugin architecture, or cosmetic abstraction.
-5. Application code must depend on narrow capabilities/contracts, not concrete Drizzle/provider/AI SDK/LangGraph implementations.
-6. Security fixes must fail closed without creating cross-tenant enumeration or new network reachability.
-7. Native terminal/curl/search execution remains Rust-owned and continues through the single reviewed sandbox/process-safety path.
-8. No opportunistic dependency upgrades.
-9. Do not claim a command, runtime flow, browser smoke, or security matrix passed unless it was actually executed successfully.
+- the branch is merge-ready;
+- all Plan 031/031A architectural acceptance is proven;
+- all P0/P1 findings are resolved;
+- `pnpm verify:commit` or `pnpm build` completed successfully in the previous sandbox;
+- the live browser/two-user/provider runtime matrix was completed;
+- the Plan 031 family achieved the requested final 10/10 standard.
+
+Those claims may be made only if Plan 031B reaches its own Definition of Done with real evidence.
 
 ---
 
-# First-pass 031A result retained
+# What Plan 031A materially accomplished
 
-The first 031A implementation materially improved the repository and those improvements must be preserved while fixing the remaining gaps:
+The following improvements were implemented during Plan 031A and must be preserved by Plan 031B:
 
-- conversation/model/provider/default-model ownership checks were centralized and strengthened;
-- `server/api/chat.post.ts` became a thin transport adapter;
-- an H3-independent `executeChatTurn()` application entrypoint was introduced;
+## Tenant isolation
+
+- conversation create validates model/provider ownership;
+- conversation model updates validate ownership;
+- chat context reasserts conversation → model → provider same-user ownership;
+- workspace association and prompt resolution became user-scoped;
+- default model writes validate model ownership;
+- `lastActiveWorkspaceId` was later updated to validate owned workspace before persistence;
+- provider model discovery is scoped through the user's provider.
+
+## Provider secret handling
+
+- provider DTOs no longer return decrypted custom-header values;
+- new custom header values are encrypted at rest;
+- provider edit semantics preserve unchanged secret values without round-tripping plaintext;
+- legacy plaintext custom headers gained a lazy upgrade path;
+- API keys remain encrypted using the existing provider secret mechanism.
+
+## Provider SSRF work
+
+- provider SDK/discovery paths were moved onto `createSsrfSafeFetch()`;
+- redirect following became manual/bounded rather than delegated blindly to native fetch;
+- redirect targets are rechecked through the address policy;
+- private, loopback, link-local, metadata, and mapped address classification was expanded.
+
+The third review later found that credential containment across public cross-origin redirects and the deterministic redirect acceptance proof still need closure. Those are Plan 031B findings.
+
+## Server refactor
+
+- `server/api/chat.post.ts` became a materially thinner transport/composition adapter;
+- `executeChatTurn()` became the main chat-turn orchestration entrypoint;
 - submit/regenerate/resume semantics were moved out of database infrastructure;
-- frontend components were grouped under `chat/`, `workspace/`, `settings/`, and `shell/`;
-- `AppSidebar` was reduced and workspace-dialog responsibilities were extracted;
-- Plan 031 Rust `#[cfg(test)]` modules were removed;
-- `@opentelemetry/sdk-node` manifest/lock mismatch was corrected;
-- architecture checking was added to `pnpm verify:commit`;
-- Rust execution gained clearer tool-specific invocation preparation while retaining one process-safety path;
-- `pnpm audit` and `cargo audit` were reported clean during the first implementation pass;
-- `scripts/phase8-zero-bypass.sh` passed during that pass.
+- concrete provider/AI/LangGraph/MCP construction was moved further toward infrastructure;
+- an explicit chat dependency object was introduced.
 
-These are historical implementation results, not proof that the current branch satisfies the final Definition of Done.
+The third review later found that application-facing contracts are still owned/typed from infrastructure and several application files still import concrete infrastructure. Plan 031B owns the final dependency-inversion pass.
 
----
+## Architecture guardrails
 
-# Second deep-review findings
+- `scripts/check-architecture.sh` was introduced and later expanded;
+- `pnpm verify:commit` invokes the architecture checker;
+- the checker protects several real boundaries including Rust MCP transport independence, H3 event-object leakage, and selected direct DB/SDK imports.
 
-## P0 — Merge blockers
+The third review found that the checker still contains loopholes/exceptions matching current violations and can produce a false green for strict dependency inversion. Plan 031B owns the final guardrail redesign after the source boundary is fixed.
 
-### Q. Provider SSRF protection does not validate redirect hops
+## Frontend structure
 
-`createSsrfSafeFetch()` validates only the initial URL and then delegates to native/runtime `fetch`, which may follow redirects internally. A public URL that redirects to loopback, RFC1918, link-local, or cloud-metadata space can therefore escape the intended policy.
+- feature-specific components were grouped under `chat/`, `workspace/`, `settings/`, and `shell/`;
+- `default.vue` was materially reduced to shell/data-loading composition;
+- sidebar workspace dialog responsibilities were extracted;
+- reusable collection/state helpers were introduced without a generic CRUD framework.
 
-The address classifier also needs explicit review of IPv4-mapped IPv6 forms so private IPv4 ranges cannot bypass classification through mapped addresses.
+The third review considered this area materially improved. Plan 031B should verify cohesion and avoid unnecessary micro-component churn.
 
-Required outcome:
+## Rust and deterministic acceptance
 
-- enforce a bounded redirect policy at the actual outbound connection boundary;
-- validate every redirect target before connecting;
-- reject loopback, RFC1918, link-local, metadata, unspecified, and equivalent IPv6 / IPv4-mapped forms;
-- preserve normal public HTTP(S) provider behavior;
-- do not silently downgrade HTTPS or forward sensitive headers across an unsafe redirect boundary;
-- document any remaining DNS-rebinding limitation precisely and do not overclaim protection.
+- prohibited Rust `#[cfg(test)]` modules from the Plan 031 pass were removed;
+- tool-specific Rust invocation preparation became clearer while retaining one authoritative Bubblewrap/process lifecycle;
+- malformed bearer rejection was moved ahead of expensive auth work;
+- the Phase 4 mock IdP was updated to serve discovery + JWKS;
+- the Phase 7 tool-catalog hash moved to `.agents/contracts/`;
+- relevant deterministic security/contract scripts were reported passing in the previous implementation environment.
 
-Acceptance:
+The third review found that the cheap JWT precheck became too strict by requiring `typ: JWT`, and one Rust execution comment names a helper that does not exist. Plan 031B owns those corrections.
 
-- a public URL redirecting to `127.0.0.1`, `10.0.0.0/8`, `169.254.169.254`, or equivalent IPv6/mapped forms is rejected before the private target is contacted;
-- safe public redirects still work within a bounded hop count;
-- provider discovery and actual chat SDK paths use the same authoritative rule where technically possible.
+## Dependency/gate cleanup
 
-### R. Existing plaintext provider `customHeaders` have no migration/upgrade path
-
-The earlier provider schema stored `customHeaders` as JSONB plaintext. The 031A implementation now treats stored header values as encrypted secrets, but the reviewed migration history contains no explicit backfill or compatibility path for existing plaintext rows.
-
-Required outcome:
-
-- define a deterministic way to distinguish legacy plaintext values from encrypted values;
-- migrate/backfill safely, or implement an explicit one-time lazy upgrade with no secret exposure;
-- keep new writes encrypted/redacted;
-- never return decrypted secret header values through ordinary provider DTOs;
-- never log plaintext/decrypted values;
-- make repeated execution idempotent.
-
-Acceptance:
-
-- providers created before secret-header encryption continue to work after upgrade;
-- malformed/corrupt encrypted values fail safely;
-- no migration path can double-encrypt already encrypted values.
+- the `@opentelemetry/sdk-node` manifest/lock mismatch was corrected to the compatible `0.221.x` line;
+- repository policy remained no-CI and no-unit-test-suite;
+- architecture checking became part of the normal commit gate.
 
 ---
 
-## P1 — Architecture, authorization, and verification blockers
+# Verification status at 031A closure
 
-### S. Application/infrastructure dependency direction is still incomplete
+The final 031A documentation recorded the following as successfully executed at/around commit `c632bc0` in the previous implementation sandbox:
 
-`server/api/chat.post.ts` is now thin, but `server/application/chat/execute-chat-turn.ts` still knows concrete integration details through imports/types/helpers tied to AI SDK/provider/LangGraph/MCP/context-compaction implementations. Some dependencies are hidden transitively behind `server/utils/**`, so current folder names overstate the achieved dependency inversion.
+- `pnpm lint`;
+- architecture checker;
+- Rust `cargo check` / Clippy with warnings denied;
+- `pnpm audit` clean;
+- `cargo audit` clean at that time;
+- Phase 4 black-box acceptance;
+- Phase 6 static/deterministic portion where applicable;
+- Phase 7 contract acceptance;
+- Phase 8 zero-bypass acceptance;
+- Phase 9 SSRF script as it existed at that time.
 
-Required outcome:
+However:
 
-- keep orchestration and turn semantics in application;
-- move concrete AI SDK, provider factory, LangGraph, persistence, MCP client, and implementation-specific context-compaction details behind narrow capabilities/adapters;
-- application may own plain input/output/value contracts needed for orchestration, but not concrete infrastructure constructors;
-- no DI framework: use an explicit small dependency object/factory at the composition edge;
-- avoid needless one-function files or abstraction for abstraction's sake.
+- `pnpm verify:commit` did not complete in that sandbox because Nuxt generated only the server tsconfig, not the complete client generated project required by the canonical Vue typecheck;
+- `pnpm build` likewise did not complete there;
+- browser/runtime verification was not completed;
+- the live authenticated two-user isolation matrix was not completed;
+- the third review later found that the Phase 9 redirect script did not actually exercise the redirect branch it claimed to prove.
 
-Target direction:
-
-```text
-server/api (transport/composition)
-  -> server/application (use cases/policies)
-      -> narrow contracts/capabilities
-          <- server/infrastructure (DB / AI SDK / providers / LangGraph / MCP)
-```
-
-Acceptance:
-
-- `executeChatTurn()` is H3-independent and concrete-infrastructure-independent;
-- application source does not import concrete infrastructure modules or SDK implementation packages directly or through deliberately disguised facades;
-- infrastructure does not decide submit/regenerate/resume business semantics;
-- stream cleanup, abort, persistence, approval, local-tool, MCP-close-once, reasoning, and token-accounting behavior are preserved.
-
-### T. Architecture gate currently gives false confidence
-
-The current checker catches only a subset of forbidden import strings. It does not fully represent the actual architecture invariant and can miss concrete dependencies through package `ai`, `server/utils/**`, auto-imported DB access, or direct application-to-infrastructure imports.
-
-Required outcome:
-
-- strengthen `scripts/check-architecture.sh` and/or targeted ESLint restricted imports only after the final boundaries from Finding S are established;
-- catch representative direct and indirect forbidden dependency forms used by this repository;
-- protect the actual shipped architecture, not a speculative ideal;
-- keep the checker deterministic and dependency-free;
-- ensure `pnpm verify:commit` continues to invoke it.
-
-Acceptance:
-
-- representative forbidden imports/dependencies demonstrably fail the architecture gate;
-- valid narrow contracts do not trigger false positives;
-- removing the violation restores the gate.
-
-### U. `lastActiveWorkspaceId` write path does not enforce workspace ownership
-
-`PUT /api/workspaces/active` validates the UUID but writes it to the current user without first proving that the referenced workspace belongs to that same user.
-
-Required outcome:
-
-- reuse the authoritative workspace-ownership rule already introduced by 031A;
-- allow `null` when the product contract permits clearing the active workspace;
-- reject foreign/missing workspace IDs using the same non-enumerating semantics used elsewhere.
-
-Acceptance:
-
-- an authenticated user cannot persist another user's workspace ID as `lastActiveWorkspaceId`;
-- no duplicate ownership rule is introduced.
-
-### V. Malformed Bearer tokens should be rejected before expensive OIDC/JWKS work
-
-The remote relay auth path can attempt discovery/JWKS refresh before cheap JWT header/syntax rejection when cache state requires refresh. Admission limiting reduces blast radius and current behavior remains fail closed, but junk tokens should not trigger unnecessary outbound authentication work.
-
-Required outcome:
-
-- perform cheap structural/JWT-header rejection before discovery/JWKS/signature work where this does not weaken valid token handling;
-- preserve issuer/audience/signature/owner/scope validation and trusted-proxy ordering;
-- maintain non-bypass behavior.
-
-Acceptance:
-
-- malformed non-JWT bearer input returns the intended authorization error without unnecessary IdP discovery/JWKS work;
-- valid tokens still follow full validation.
-
-### W. `phase4-black-box.sh` mock IdP is stale relative to current OIDC discovery flow
-
-The deterministic black-box fixture serves JWKS but does not fully emulate the discovery endpoint now required by the relay. This makes the malformed-token case ambiguous and prevents the script from being authoritative evidence for the current auth flow.
-
-Required outcome:
-
-- update the deterministic fixture to serve the required OIDC discovery metadata and JWKS endpoint;
-- keep the test local/deterministic and within the repository's no-unit-test policy;
-- verify malformed token, bad signature, wrong issuer/audience/owner/scope, valid token, and relevant fail-closed paths as applicable.
-
-Acceptance:
-
-- `scripts/phase4-black-box.sh` passes completely against the reviewed relay behavior.
-
-### X. `phase7-chatgpt-contract.sh` is stale after memory compaction
-
-The script still reads a historical memory file that was intentionally removed when durable memory was compacted into `.agents/memories/README.md`.
-
-Required outcome:
-
-- move/freeze any machine-consumed contract hash or immutable fixture into an appropriate `.agents/contracts/` or other stable contract location;
-- stop using mutable historical prose/memory as machine-readable contract storage;
-- repair the script without weakening the intended contract check.
-
-Acceptance:
-
-- `scripts/phase7-chatgpt-contract.sh` passes deterministically;
-- the expected contract value has one stable authoritative source.
+Historical green commands must therefore not be treated as final Plan 031B evidence.
 
 ---
 
-## P2 — Truthfulness and polish
+# Third deep-review findings transferred to Plan 031B
 
-### Y. Rust execution comments must match the actual implementation
+Plan 031B is the authoritative owner of all active findings below.
 
-The current execution decomposition is broadly acceptable and should remain KISS-oriented. Clean up any comments or plan text that name a helper/function that does not actually exist or otherwise overstate the decomposition.
+## P0
 
-Do not extract another wrapper merely to make a comment true. Prefer correcting the comment when the current single authoritative process path is already clearer.
+1. Provider cross-origin redirects can still forward credentials not covered by the small sensitive-header denylist, including Anthropic `x-api-key` and arbitrary secret `customHeaders`.
+2. The current deterministic provider redirect test starts from an already-disallowed loopback URL, so it can pass without exercising an actual redirect hop.
 
-### Z. Release verification is still incomplete
+## P1
 
-The first 031A pass did not prove the full client Vue typecheck, `pnpm build`, preview/runtime behavior, browser flows, authenticated two-user isolation matrix, or full chat smoke in an environment capable of running them.
+3. Application contracts are still defined in infrastructure and derived from concrete implementation types.
+4. `server/application/**` still imports concrete database/AI infrastructure in multiple files.
+5. Repository-wide server layering is incomplete outside the thin chat route; several API routes and mixed utilities still own direct persistence/business responsibilities.
+6. `server/utils/**` still hides mixed database/provider/filesystem/network ownership and can obscure transitive layer violations.
+7. The architecture checker still allows type-only application → infrastructure imports, database adapters, and explicit exceptions that contradict the strict final dependency direction.
+8. Rust cheap JWT prevalidation requires optional `typ: JWT`, risking rejection of otherwise valid tokens.
+9. Final tenant/secret invariants must be revalidated after the architecture migration so refactoring does not reintroduce BOLA or secret leaks.
+10. Full canonical commit/build/runtime verification is still outstanding.
 
-Source inspection and server-only typechecking remain useful evidence, but they are not substitutes for final release verification.
+## P2
 
----
+11. Rust execution comments must match the actual inline shared process-safety path rather than naming a nonexistent `run_sandboxed` helper.
+12. Project guidance/canonical memory contain stale statements about 031A closure and earlier findings.
+13. Frontend/foldering should receive a final audit but should not be churned without a real cohesion/duplication issue.
 
-# Remaining execution phases
-
-## Phase 9 — Close provider network and secret-storage blockers
-
-**Risk: critical / security + data compatibility**
-
-- [x] Fix redirect-aware provider SSRF enforcement and mapped-address classification.
-- [x] Add deterministic redirect/private-target acceptance coverage.
-- [x] Implement safe legacy `customHeaders` migration/lazy-upgrade behavior.
-- [x] Verify new writes remain encrypted/redacted and legacy rows remain usable.
-
-## Phase 10 — Finish tenant and application boundaries
-
-**Risk: high / security + architecture**
-
-- [x] Enforce ownership on `lastActiveWorkspaceId` writes using the authoritative workspace rule.
-- [x] Refactor `executeChatTurn()` dependencies into narrow application-facing capabilities.
-- [x] Move remaining concrete provider/AI SDK/LangGraph/MCP/persistence implementation ownership to infrastructure/composition boundaries.
-- [x] Preserve all reviewed chat lifecycle semantics.
-
-## Phase 11 — Make architecture enforcement match the architecture
-
-**Risk: medium**
-
-- [x] Expand architecture checks for the finalized boundaries from Phase 10.
-- [x] Demonstrate representative negative probes fail.
-- [x] Keep `pnpm check:architecture` inside `pnpm verify:commit`.
-- [x] Avoid a new architecture-lint dependency.
-
-## Phase 12 — Repair relay/contract deterministic acceptance
-
-**Risk: high / security-sensitive**
-
-- [x] Cheap-reject malformed bearer syntax/header before expensive IdP work where safe.
-- [x] Repair the Phase 4 mock OIDC discovery/JWKS fixture.
-- [x] Repair the Phase 7 contract script and move machine-readable expected state out of historical memory prose.
-- [x] Run all applicable Rust/MCP/native-tool deterministic scripts to completion.
-
-## Phase 13 — Final integrated verification and closure
-
-**Risk: high because completion is repository-wide**
-
-Run at minimum in a real checkout/environment capable of producing full Nuxt artifacts:
-
-```sh
-pnpm verify:commit
-pnpm build
-pnpm check:architecture
-pnpm audit
-cargo audit
-```
-
-Also run all applicable deterministic MCP/relay/native-tool scripts and browser/runtime smoke for touched flows.
-
-Required live/runtime matrix includes at least:
-
-- two-user model/provider/workspace/default-model/active-workspace isolation;
-- provider public target success and private/metadata/redirect rejection;
-- legacy and newly-written provider custom headers;
-- chat send/regenerate/stop/abort;
-- approval allow/deny/remember;
-- MCP tool call and close/cleanup behavior;
-- local-terminal offline/error path;
-- reasoning/provider variants that are configured in the test environment;
-- sidebar/workspace/conversation/settings flows.
-
-Do not mark a matrix item passed if the necessary provider/database/browser environment was unavailable.
-
-### Phase 13 status (2026-08-13, this sandbox)
-
-Findings Q–X (Phases 9–12) are implemented, and the following passed in this checkout at commit `c632bc0`: `pnpm lint`, `bash scripts/check-architecture.sh`, `cargo check`/`cargo clippy -D warnings`, `pnpm audit` (clean), `cargo audit` (clean, 261 crates), and `scripts/phase4-black-box.sh`, `phase6-chatgpt-e2e.sh` (static portion; live E2E probe unavailable), `phase7-chatgpt-contract.sh`, `phase8-zero-bypass.sh`, `phase9-ssrf-redirect-guard.sh`.
-
-`pnpm verify:commit` and `pnpm build` did **not** complete in this sandbox: `nuxt prepare` only emits `.nuxt/tsconfig.server.json` here, not the client `.nuxt/tsconfig.json` / `.nuxt/tsconfig.app.json` vue-tsc and the Vite build need. This was confirmed pre-existing and environment-specific (reproduced identically on an unmodified baseline via `git stash` during Phase 9/10 work, and again here on `dev`-touching files unrelated to this branch). It is not a regression introduced by Phases 9–12, but it also means Definition-of-Done items 11 and 12 are **not yet proven**, and the full browser/runtime smoke and live two-user isolation matrix required by this phase have not been run at all (no such environment available here).
-
-**Plan 031A is not closed.** It remains open pending: (a) a full `pnpm verify:commit` + `pnpm build` pass in an environment where `nuxt prepare` emits complete client tsconfig output, and (b) the live browser/runtime/two-user isolation matrix above. Do not reopen Phases 9–12 to chase this — it is an environment gap, not an implementation gap.
+For exact implementation sequence, security policy, worker lanes, acceptance scripts, architecture target, runtime matrix, and final Definition of Done, use Plan 031B only.
 
 ---
 
-## Final Definition of Done
+# Historical definition of done
 
-Plan 031A is complete only when all of the following are true:
+Plan 031A's earlier detailed checklists and second-audit acceptance remain available in Git history for forensic context. They are no longer the active execution checklist.
 
-1. Findings Q–X are resolved, not merely documented.
-2. No P0 or P1 finding from either the first or second deep review remains open.
-3. Provider SSRF enforcement covers actual redirect behavior and reviewed address forms at the real connection boundary.
-4. Existing plaintext custom-header rows have a safe, idempotent upgrade path.
-5. Every persisted user-owned model/provider/workspace reference, including active workspace, is authorized server-side.
-6. `server/application/**` depends on narrow contracts/capabilities rather than concrete DB/AI/provider/LangGraph/MCP implementations.
-7. The architecture checker deterministically enforces the boundaries that actually ship.
-8. `server/api/chat.post.ts` remains a thin transport/composition adapter and `executeChatTurn()` remains H3-independent.
-9. Rust auth/admission/trusted-proxy/JWKS/owner/scope and process-sandbox invariants remain fail closed.
-10. `scripts/phase4-black-box.sh`, `scripts/phase7-chatgpt-contract.sh`, `scripts/phase8-zero-bypass.sh`, and other applicable deterministic security/contract scripts pass.
-11. `pnpm verify:commit` passes completely without substitute typecheck commands.
-12. `pnpm build` succeeds; preview/runtime/browser smoke required by touched surfaces is executed and recorded.
-13. `pnpm audit` and `cargo audit` are clean at final verification, or any finding has an explicit reviewed disposition.
-14. Plan text, source, comments, and verification evidence agree exactly about what shipped and what was run.
-15. No unnecessary architecture framework, generic service layer, micro-component explosion, or duplicate security rule was introduced to achieve closure.
+The active completion rule is now:
 
-Until all of the above are satisfied, **Plan 031A remains open and the branch is not merge-ready for `dev`.**
+> **The Plan 031 refactor family is not merge-ready until Plan 031B is complete.**
+
+Plan 031B must not be closed merely because Plan 031A's previously checked boxes remain in history. It must independently verify final source, architecture, security, deterministic acceptance, build/type gate, and runtime behavior against its own Definition of Done.
