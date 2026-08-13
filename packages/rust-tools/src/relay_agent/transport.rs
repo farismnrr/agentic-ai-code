@@ -360,16 +360,19 @@ async fn access_policy(
         // tokens: only tokens that could not possibly be a JWT are rejected
         // here, and they get the identical invalid_token/401 response that
         // a missing bearer token receives.
-        if !auth::is_structurally_plausible_jwt(token) {
-            return oauth_error_response(
-                StatusCode::UNAUTHORIZED,
-                None,
-                &state.config,
-                Some("invalid_token"),
-                None,
-                &McpError::InvalidRequest("Missing or invalid authorization".into()),
-            );
-        }
+        let header = match auth::parse_structurally_plausible_jwt(token) {
+            Some(header) => header,
+            None => {
+                return oauth_error_response(
+                    StatusCode::UNAUTHORIZED,
+                    None,
+                    &state.config,
+                    Some("invalid_token"),
+                    None,
+                    &McpError::InvalidRequest("Missing or invalid authorization".into()),
+                );
+            }
+        };
 
         // P1-2: OAuth metadata and JWKS fetch helpers with timeout. Drops the lock before the HTTP
         // request so a slow IdP cannot hold the write lock and block all auth.
@@ -445,21 +448,6 @@ async fn access_policy(
                 }
             }
         }
-
-        // Decode token header to extract kid before acquiring the read lock.
-        let header = match jsonwebtoken::decode_header(token) {
-            Ok(h) => h,
-            Err(_) => {
-                return oauth_error_response(
-                    StatusCode::UNAUTHORIZED,
-                    None,
-                    &state.config,
-                    Some("invalid_token"),
-                    None,
-                    &McpError::InvalidRequest("Invalid token header".into()),
-                );
-            }
-        };
 
         let kid = match header.kid {
             Some(k) => k,

@@ -84,17 +84,17 @@ pub fn validate_token_signature(
 /// be a JWT, so malformed input fails closed without triggering outbound
 /// authentication work. Well-formed JWTs (even semantically invalid ones,
 /// e.g. expired or wrong-issuer) must continue to the full validation path.
-pub fn is_structurally_plausible_jwt(token: &str) -> bool {
+pub fn parse_structurally_plausible_jwt(token: &str) -> Option<jsonwebtoken::Header> {
     use base64::Engine;
 
     let segments: Vec<&str> = token.split('.').collect();
     if segments.len() != 3 || segments.iter().any(|segment| segment.is_empty()) {
-        return false;
+        return None;
     }
 
     let Ok(header_bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(segments[0])
     else {
-        return false;
+        return None;
     };
     // The payload and signature segments must also be valid base64url, even
     // though we do not need their decoded contents here.
@@ -105,25 +105,34 @@ pub fn is_structurally_plausible_jwt(token: &str) -> bool {
             .decode(segments[2])
             .is_err()
     {
-        return false;
+        return None;
     }
 
-    let Ok(header_json) = serde_json::from_slice::<serde_json::Value>(&header_bytes) else {
-        return false;
-    };
+    let header = serde_json::from_slice::<jsonwebtoken::Header>(&header_bytes).ok()?;
+    if header.kid.is_none()
+        || !matches!(
+            header.alg,
+            jsonwebtoken::Algorithm::HS256
+                | jsonwebtoken::Algorithm::HS384
+                | jsonwebtoken::Algorithm::HS512
+                | jsonwebtoken::Algorithm::RS256
+                | jsonwebtoken::Algorithm::RS384
+                | jsonwebtoken::Algorithm::RS512
+                | jsonwebtoken::Algorithm::ES256
+                | jsonwebtoken::Algorithm::ES384
+                | jsonwebtoken::Algorithm::PS256
+                | jsonwebtoken::Algorithm::PS384
+                | jsonwebtoken::Algorithm::PS512
+                | jsonwebtoken::Algorithm::EdDSA
+        )
+    {
+        return None;
+    }
+    Some(header)
+}
 
-    let typ_is_jwt = header_json
-        .get("typ")
-        .and_then(serde_json::Value::as_str)
-        .map(|typ| typ.eq_ignore_ascii_case("JWT"))
-        .unwrap_or(false);
-    let alg_is_nonempty_string = header_json
-        .get("alg")
-        .and_then(serde_json::Value::as_str)
-        .map(|alg| !alg.is_empty())
-        .unwrap_or(false);
-
-    typ_is_jwt && alg_is_nonempty_string
+pub fn is_structurally_plausible_jwt(token: &str) -> bool {
+    parse_structurally_plausible_jwt(token).is_some()
 }
 
 pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;

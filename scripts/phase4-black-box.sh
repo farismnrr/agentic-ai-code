@@ -196,10 +196,13 @@ def stop_relay(process):
         process.wait(timeout=5)
 
 
-def make_token(key_path, issuer, scope, subject="owner", expires_in=600):
+def make_token(key_path, issuer, scope, subject="owner", expires_in=600, include_typ=True, kid="fixture-key", audience=AUDIENCE):
     now = int(time.time())
-    header = b64(json.dumps({"alg": "RS256", "kid": "fixture-key", "typ": "JWT"}, separators=(",", ":")).encode())
-    payload = b64(json.dumps({"iss": issuer, "aud": AUDIENCE, "sub": subject,
+    header_fields = {"alg": "RS256", "kid": kid}
+    if include_typ:
+        header_fields["typ"] = "JWT"
+    header = b64(json.dumps(header_fields, separators=(",", ":")).encode())
+    payload = b64(json.dumps({"iss": issuer, "aud": audience, "sub": subject,
                               "scope": scope, "iat": now - 120, "exp": now + expires_in}, separators=(",", ":")).encode())
     signing_input = f"{header}.{payload}".encode()
     with tempfile.NamedTemporaryFile() as input_file, tempfile.NamedTemporaryFile() as signature_file:
@@ -411,6 +414,30 @@ def run():
             assert_status(status, 401, "malformed bearer tools/call")
             assert body["error"]["code"] == -32600
             assert not os.path.exists(dispatch_marker), "malformed bearer reached tool execution"
+
+            for malformed, label in (("a.b.c", "malformed base64 bearer"),
+                                     (f"{b64(b'{not-json}')}.e30.signature", "malformed header bearer")):
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {malformed}"), body=valid_discover)
+                assert_status(status, 401, label)
+                assert body["error"]["code"] == -32600
+
+            for include_typ, label in ((True, "valid bearer with typ"), (False, "valid bearer without typ")):
+                token = make_token(key_path, issuer, "relay.coding", include_typ=include_typ)
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {token}"), body=valid_discover)
+                assert_status(status, 200, label)
+
+            bad_signature = make_token(key_path, issuer, "relay.coding")[:-1] + ("A" if make_token(key_path, issuer, "relay.coding")[-1] != "A" else "B")
+            status, _, body = request(remote_url,
+                headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {bad_signature}"), body=valid_discover)
+            assert_status(status, 401, "bad signature bearer")
+
+            for token, label in ((make_token(key_path, issuer + "/wrong", "relay.coding"), "wrong issuer"),
+                                 (make_token(key_path, issuer, "relay.coding", audience="https://wrong.example/mcp"), "wrong audience")):
+                status, _, body = request(remote_url,
+                    headers=headers(method="server/discover", forwarded="https", auth=f"Bearer {token}"), body=valid_discover)
+                assert_status(status, 401, label)
 
             expired = make_token(key_path, issuer, "relay.coding", expires_in=-120)
             status, challenge_headers, body = request(remote_url,

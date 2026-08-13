@@ -903,26 +903,26 @@ The architecture checker fails on representative forbidden direct, type-only, an
 
 ### Steps
 
-- [ ] Remove mandatory `typ: JWT` behavior.
-- [ ] Reuse decoded JWT header across the auth path instead of parsing twice where possible.
-- [ ] Keep cheap malformed-token rejection before discovery/JWKS work.
-- [ ] Preserve supported algorithm checks.
-- [ ] Preserve required `kid` semantics.
-- [ ] Preserve JWKS cache TTL and single refresh-on-unknown-kid behavior.
-- [ ] Preserve issuer/audience/time/signature validation.
-- [ ] Preserve owner subject and scope enforcement.
-- [ ] Preserve admission-before-expensive-auth ordering.
-- [ ] Preserve trusted-proxy HTTPS policy.
+- [x] Remove mandatory `typ: JWT` behavior.
+- [x] Reuse decoded JWT header across the auth path instead of parsing twice where possible.
+- [x] Keep cheap malformed-token rejection before discovery/JWKS work.
+- [x] Preserve supported algorithm checks.
+- [x] Preserve required `kid` semantics.
+- [x] Preserve JWKS cache TTL and single refresh-on-unknown-kid behavior.
+- [x] Preserve issuer/audience/time/signature validation.
+- [x] Preserve owner subject and scope enforcement.
+- [x] Preserve admission-before-expensive-auth ordering.
+- [x] Preserve trusted-proxy HTTPS policy.
 
 ### Phase 4 black-box updates
 
-- [ ] valid token with `typ` passes;
-- [ ] valid token without `typ` passes;
-- [ ] malformed bearer returns intended 401;
-- [ ] malformed header/payload/signature cases fail closed;
-- [ ] wrong issuer/audience/owner/scope fail;
-- [ ] unknown kid behavior remains bounded;
-- [ ] fixture discovery/JWKS endpoints remain deterministic.
+- [x] valid token with `typ` passes;
+- [x] valid token without `typ` passes;
+- [x] malformed bearer returns intended 401;
+- [x] malformed header/payload/signature cases fail closed;
+- [x] wrong issuer/audience/owner/scope fail;
+- [x] unknown kid behavior remains bounded;
+- [x] fixture discovery/JWKS endpoints remain deterministic.
 
 ### Exit criteria
 
