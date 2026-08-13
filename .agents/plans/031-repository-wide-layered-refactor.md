@@ -953,12 +953,18 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > The check is intentionally narrow and deterministic; no broad lint rules or
 > speculative framework dependency was introduced.
 
+> Micro-step 13B audit decision: repository-wide ESLint and reference review
+> found no proven unused import/file/helper/facade to remove. The largest
+> remaining files are cohesive protocol, transport, execution, configuration,
+> chat-compaction, and presentation surfaces; no line-count-only split is
+> justified.
+
 ### Work
 
 - [x] Audit finalized import-direction restrictions; the narrow source check is more suitable than noisy ESLint rules for these Rust/TS boundaries.
 - [x] Add only minimal deterministic architecture policy checks that cannot be expressed clearly by existing lint/tooling (`pnpm check:architecture`).
-- [ ] Remove unused imports/files/helpers/facades discovered after all callers migrated.
-- [ ] Review every remaining large file for cohesion; do not split cohesive files for line-count aesthetics.
+- [x] Audit/remove unused imports/files/helpers/facades; no proven dead code was found.
+- [x] Review remaining large files for cohesion; retain cohesive files and avoid line-count-only splits.
 - [ ] Review all reusable components/composables for stable naming/props/contracts.
 - [ ] Re-run duplication search for canonical rules/constants and remove accidental forks.
 - [ ] Update `.agents/knowledge/` only where new architectural conventions are durable and repository-wide.
