@@ -1,7 +1,8 @@
 # Plan 031 — Repository-wide Layered Refactor
 
-**Status: PHASE 0 COMPLETE / IMPLEMENTATION IN PROGRESS**
+**Status: CLOSED — IMPLEMENTATION PASS COMPLETE; AUDIT FOLLOW-UP MOVED TO PLAN 031A**  
 **Created: 2026-08-12**  
+**Closed: 2026-08-13**  
 **Baseline branch: `dev`**  
 **Baseline commit: `46b926ffd103b2ec50055eb11b6a824b13642b1e`**
 
@@ -12,6 +13,23 @@ Refactor the repository structure and implementation without redesigning product
 This is a structural refactor, not a framework rewrite. Existing user-visible behavior, security boundaries, persistence contracts, MCP contracts, and native-tool ownership are preserved unless a separate product/security change is explicitly approved.
 
 The intended outcome is not “more abstractions.” It is **fewer duplicated rules, smaller reasons-to-change, clearer dependency direction, simpler composition roots, and reusable units with stable contracts**.
+
+## Closure handoff — 2026-08-13
+
+The implementation pass for this broad plan is now administratively closed by explicit user decision so the plan does not keep expanding indefinitely. A strict post-implementation review found unresolved security, architecture, verification, and foldering gaps. Those findings are **not treated as completed by closing this file**.
+
+All unresolved review findings now belong to [`031a-refactor-hardening-and-architecture-closure.md`](031a-refactor-hardening-and-architecture-closure.md), including:
+
+- cross-tenant model/provider/workspace/default-model authorization;
+- compatible-provider SSRF and custom-header secret policy;
+- Rust `#[cfg(test)]` modules conflicting with the repository's no-unit-test policy;
+- dependency manifest/lock inconsistency blocking trustworthy local verification;
+- crossed `server/application` / `server/infrastructure` ownership and the missing authoritative `executeChatTurn()` application use case;
+- architecture checks not yet enforced by the canonical commit gate;
+- candidate MCP behavior that must be separated from refactor-only claims;
+- remaining `AppSidebar`/feature-folder ownership cleanup and Rust execution acceptance truthfulness.
+
+From this point forward, unchecked or imperfect Plan 031 acceptance criteria are historical context only. **Do not reopen them inside Plan 031; continue the work in Plan 031A.**
 
 ---
 
@@ -965,12 +983,11 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > runtime-boundary projections with distinct callers, so no accidental fork
 > was safely removable.
 
-> Micro-step 13D complete: durable architecture conventions were added only to
-> `knowledge/project.md` and the canonical `memories/README.md`. No sibling
-> memory file or transient phase note was created. Full Plan 031 completion
-> remains gated by the documented pre-existing `.claude` path, unavailable
-> `@opentelemetry/sdk-node@^2.10.0`, generated Nuxt tsconfig, and environment
-> verification gates.
+> Micro-step 13D recorded durable architecture conventions only in
+> `knowledge/project.md` and the canonical `memories/README.md`. The later
+> strict post-refactor audit found that the full final acceptance/gate claims
+> were not all proven or satisfied. Those unresolved items are now owned by
+> Plan 031A rather than keeping this broad parent plan open indefinitely.
 
 ### Work
 
@@ -982,9 +999,11 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 - [x] Re-run duplication search for canonical rules/constants; no accidental fork was found.
 - [x] Update `.agents/knowledge/` only with durable repository-wide architecture conventions.
 - [x] Append only durable invariants to `.agents/memories/README.md`; no sibling memory file was created.
-- [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done (blocked pending documented full-environment gates).
+- [x] Close Plan 031 as the completed implementation pass and transfer unresolved strict-audit/gate findings to Plan 031A without claiming they are fixed.
 
 ### Final acceptance
+
+The bullets below are the historical target acceptance criteria for Plan 031. The closure review established that some were only partially met; those gaps are explicitly carried by Plan 031A.
 
 - presentation/transport layers primarily compose;
 - business/application rules have one authoritative owner;
@@ -1157,18 +1176,18 @@ When DRY and KISS appear to conflict, prioritize **one source of truth for impor
 
 ---
 
-## Definition of done
+## Historical definition of done and closure override
 
-Plan 031 is complete only when:
+The original strict definition of done required all of the following:
 
-1. accepted phases are implemented and merged through normal feature PRs;
-2. DRY/SOLID/KISS/layering rules are reflected in actual imports and ownership, not only docs;
-3. reusable components/logic replace real duplicated concepts without introducing mega-abstractions;
-4. current high-risk composition roots are decomposed around independent reasons-to-change;
-5. architecture guardrails prevent obvious dependency regressions;
-6. all required local lint/typecheck/build/runtime/security checks for the touched surfaces have actually passed and are recorded;
-7. no behavioral/security contract regression is known;
-8. canonical repository knowledge/memory reflects only durable final architecture;
-9. this file is updated to **COMPLETED** with truthful final outcomes and any deliberately deferred items explicitly named.
+1. accepted phases implemented and merged through normal feature PRs;
+2. DRY/SOLID/KISS/layering rules reflected in actual imports and ownership, not only docs;
+3. reusable components/logic replacing real duplicated concepts without mega-abstractions;
+4. high-risk composition roots decomposed around independent reasons-to-change;
+5. architecture guardrails preventing obvious dependency regressions;
+6. all required local lint/typecheck/build/runtime/security checks actually passed and recorded;
+7. no known behavioral/security contract regression;
+8. canonical repository knowledge/memory reflecting only durable final architecture;
+9. this file updated with truthful outcomes and deliberately deferred items explicitly named.
 
-Until then, **Status remains PLANNED / IN PROGRESS as appropriate; unchecked work is active only inside this Plan 031.**
+The strict post-implementation audit found that not every criterion above was fully satisfied or proven. By explicit user decision, **Plan 031 is nevertheless closed as the finished implementation pass**, and every unresolved criterion/finding has been transferred to Plan 031A. This closure must never be cited as evidence that Plan 031A findings were already fixed or that final local verification passed.
