@@ -59,7 +59,7 @@ Current source/config and `.agents/knowledge/` remain authoritative for implemen
 
 - The standalone executable CLI layer for `terminal-tool`, `curl-tool`, and `searxng-search-tool` is **Rust-owned**. There is no supported permanent JavaScript CLI fallback and no npm `bin` mapping that should be restored.
 - The Nuxt/TypeScript package APIs remain valid application integration surfaces. The Rust migration replaced executable CLIs, not the entire web/runtime stack.
-- Plan 031 confirmed the durable layering boundary: TS/server code composes application and integration concerns, while Rust owns executable tools and relay protocol/security execution; focused policy modules may be reused, but HTTP/composition roots retain lifecycle and response ordering.
+- Plan 031 introduced and documented the intended layering boundary: TS/server code composes application and integration concerns, while Rust owns executable tools and relay protocol/security execution; Plan 031A owns the follow-up work required where source still contradicts that intended boundary.
 - Repository development uses the pinned Rust toolchain (currently Rust 1.95.0); package MSRV is a separate compatibility floor.
 - The migration was done under strict behavioral parity: arguments, stdout/stderr shape, exit codes, timeouts, and failure behavior matter. A rewrite is not acceptable merely because the happy path works.
 - Terminal execution must manage child/process-group lifetime so timeout/termination does not leave descendants behind. Process cleanup is part of the contract, not optional polish.
@@ -107,7 +107,10 @@ Consequences:
 - Plans `001` through `029b` are historical and are summarized in [`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md).
 - A historically unchecked item is **not active work** after this reset. If it matters again, inspect current source and current external behavior, then create a fresh numbered plan.
 - Historical live ChatGPT/OAuth acceptance was not proven; Docker was historically deferred. Those facts remain useful context, but neither is an automatically open plan after the reset.
-- Future plans start at **031**, remain as separate incrementing files, and are **not** automatically compacted into Plan 030.
+- Independent future plans start at **031** and use separate incrementing numeric files. A closed plan may have an explicit lowercase-letter follow-up (for example `031a-...md`) when the user wants unresolved audit/hardening work to remain in that parent plan family. Lettered follow-ups remain separate files and do not change the next independent numeric sequence.
+- On **2026-08-13**, Plan 031 was administratively closed after its implementation pass. The strict post-refactor audit findings were transferred to [`../plans/031a-refactor-hardening-and-architecture-closure.md`](../plans/031a-refactor-hardening-and-architecture-closure.md). Closing 031 does not assert those findings were fixed.
+- Plan **031A** is the active follow-up for the unresolved Plan 031 audit findings. The next independent numeric plan is **032**.
+- Future plan files remain separate and are **not** automatically compacted into Plan 030.
 
 ## Maintenance rule
 
