@@ -40,3 +40,16 @@ export function decryptSecret(encryptedData: string): string {
   decrypted += decipher.final('utf8')
   return decrypted
 }
+
+/**
+ * Custom provider headers frequently carry credentials (`Authorization`,
+ * `X-Api-Key`, gateway tokens), so their values are stored encrypted with
+ * the same mechanism as API keys — this decrypts them back to plaintext at
+ * the point of use (building an outbound request), never for client
+ * projection.
+ */
+export function decryptHeaders(encryptedHeaders: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(encryptedHeaders).map(([key, value]) => [key, decryptSecret(value)])
+  )
+}

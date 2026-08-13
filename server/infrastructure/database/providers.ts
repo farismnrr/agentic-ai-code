@@ -3,11 +3,20 @@ import { modelProviders, type ModelProviderType } from '../../database/schema'
 import { badRequest, internal, notFound } from '../../utils/http-errors'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
+// `customHeaders` values are encrypted ciphertext by the time they reach this
+// module (see `server/utils/providers.ts`) — this layer only stores/merges
+// them, it never sees or logs plaintext secret header values.
 export type ProviderInput = { type: ModelProviderType, name: string, baseUrl?: string, apiKey: string, customHeaders?: Record<string, string> }
-export type ProviderUpdate = { name?: string, baseUrl?: string, apiKey?: string, customHeaders?: Record<string, string>, enabled?: boolean }
+// `customHeaders` here is a diff: a string value replaces/adds that header
+// (already encrypted), `null` deletes it, and a key simply absent from the
+// object leaves the stored header untouched.
+export type ProviderUpdate = { name?: string, baseUrl?: string, apiKey?: string, customHeaders?: Record<string, string | null>, enabled?: boolean }
 
+// Client-visible projection never includes header values — only names, so
+// the UI can show "this header is set" without ever round-tripping the
+// secret (mirrors `hasApiKey` for the API key).
 export function projectProvider(provider: typeof modelProviders.$inferSelect) {
-  return { id: provider.id, type: provider.type, name: provider.name, baseUrl: provider.baseUrl, customHeaders: provider.customHeaders, enabled: provider.enabled, hasApiKey: !!provider.apiKeyEncrypted }
+  return { id: provider.id, type: provider.type, name: provider.name, baseUrl: provider.baseUrl, customHeaderKeys: Object.keys(provider.customHeaders), enabled: provider.enabled, hasApiKey: !!provider.apiKeyEncrypted }
 }
 
 export async function listUserProviders(userId: string) {
@@ -34,7 +43,16 @@ export async function updateUserProvider(userId: string, id: string, updates: Pr
   const updateData: Record<string, unknown> = { updatedAt: new Date() }
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.baseUrl !== undefined) updateData.baseUrl = updates.baseUrl
-  if (updates.customHeaders !== undefined) updateData.customHeaders = updates.customHeaders
+  if (updates.customHeaders !== undefined) {
+    const merged: Record<string, string> = {}
+    for (const [key, value] of Object.entries(existing.customHeaders)) {
+      if (updates.customHeaders[key] !== null) merged[key] = value
+    }
+    for (const [key, value] of Object.entries(updates.customHeaders)) {
+      if (value !== null) merged[key] = value
+    }
+    updateData.customHeaders = merged
+  }
   if (updates.enabled !== undefined) updateData.enabled = updates.enabled
   if (apiKeyEncrypted) updateData.apiKeyEncrypted = apiKeyEncrypted
   const [updated] = await useDb().update(modelProviders).set(updateData).where(and(eq(modelProviders.id, id), eq(modelProviders.userId, userId))).returning()

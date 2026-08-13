@@ -1,7 +1,8 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { ChatVertexAI } from '@langchain/google-vertexai'
-import { decryptSecret } from '../crypto'
+import { decryptHeaders, decryptSecret } from '../crypto'
+import { createSsrfSafeFetch } from '../ssrf-guard'
 import type { modelProviders } from '../../database/schema'
 import type { InferSelectModel } from 'drizzle-orm'
 
@@ -17,7 +18,10 @@ export function getLanggraphModel(provider: ModelProviderRow, modelId: string, m
       configuration: {
         baseURL: provider.baseUrl,
         apiKey,
-        defaultHeaders: provider.customHeaders
+        defaultHeaders: decryptHeaders(provider.customHeaders),
+        // Same SSRF policy already used for outbound MCP connections — see
+        // `createSsrfSafeFetch` for the exact guarantees/residual risk.
+        fetch: createSsrfSafeFetch('OpenAI-compatible provider base URL')
       }
     })
   }
@@ -29,7 +33,8 @@ export function getLanggraphModel(provider: ModelProviderRow, modelId: string, m
       anthropicApiKey: apiKey,
       anthropicApiUrl: provider.baseUrl,
       clientOptions: {
-        defaultHeaders: provider.customHeaders
+        defaultHeaders: decryptHeaders(provider.customHeaders),
+        fetch: createSsrfSafeFetch('Anthropic-compatible provider base URL')
       }
     })
   }

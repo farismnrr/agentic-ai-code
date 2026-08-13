@@ -47,3 +47,26 @@ export async function assertSafeUrl(url: URL, context: string) {
     throw new Error(`${context} resolves to a disallowed address`)
   }
 }
+
+/**
+ * A `fetch`-compatible function that re-validates the request URL against
+ * `assertSafeUrl` immediately before every call. Intended for handing to SDK
+ * `fetch`/`clientOptions.fetch` hooks (AI SDK provider factories, the OpenAI
+ * and Anthropic Node SDKs via LangChain) so the same SSRF policy already
+ * used for outbound MCP connections also covers provider discovery and chat
+ * requests, not just our own hand-written `fetch()` calls.
+ *
+ * Residual risk: this validates the request URL, not every redirect hop the
+ * underlying SDK/runtime `fetch` may follow internally, and the resolved
+ * address isn't pinned through to the actual TCP connection — so DNS
+ * rebinding between this check and the real connect is not fully closed.
+ * `curl-tool`'s guard accepts the same residual risk for its initial
+ * request; see `.agents/memories/README.md`.
+ */
+export function createSsrfSafeFetch(context: string): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input.toString())
+    await assertSafeUrl(url, context)
+    return fetch(input, init)
+  }
+}

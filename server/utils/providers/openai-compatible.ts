@@ -1,12 +1,16 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { decryptSecret } from '../crypto'
+import { decryptHeaders, decryptSecret } from '../crypto'
+import { assertSafeUrl, createSsrfSafeFetch } from '../ssrf-guard'
 
-export function getOpenAiCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, customHeaders: Record<string, string>) {
+export function getOpenAiCompatibleModel(modelId: string, baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {
   const provider = createOpenAICompatible({
     name: 'openai-compatible',
     baseURL: baseUrl,
     apiKey: decryptSecret(encryptedApiKey),
-    headers: customHeaders
+    headers: decryptHeaders(encryptedCustomHeaders),
+    // Same SSRF policy already used for outbound MCP connections — see
+    // `createSsrfSafeFetch` for the exact guarantees/residual risk.
+    fetch: createSsrfSafeFetch('OpenAI-compatible provider base URL')
   })
   return provider.chatModel(modelId)
 }
@@ -17,9 +21,12 @@ export function getOpenAiCompatibleModel(modelId: string, baseUrl: string, encry
  * model list so "which models can I pick" always matches what the
  * provider actually has configured.
  */
-export async function listOpenAiCompatibleModels(baseUrl: string, encryptedApiKey: string, customHeaders: Record<string, string>) {
+export async function listOpenAiCompatibleModels(baseUrl: string, encryptedApiKey: string, encryptedCustomHeaders: Record<string, string>) {
   const apiKey = decryptSecret(encryptedApiKey)
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+  const customHeaders = decryptHeaders(encryptedCustomHeaders)
+  const url = new URL(`${baseUrl.replace(/\/$/, '')}/models`)
+  await assertSafeUrl(url, 'OpenAI-compatible provider base URL')
+  const response = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}`, ...customHeaders }
   })
   if (!response.ok) {

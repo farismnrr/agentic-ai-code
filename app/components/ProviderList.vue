@@ -5,11 +5,15 @@ import { providerRequiresBaseUrl } from '#shared/utils/providers'
 const { providers, types, create, update, remove } = useModelProviders()
 const toast = useToast()
 
-type EditingProvider = Omit<Partial<ModelProvider>, 'baseUrl' | 'customHeaders'> & { apiKey?: string, baseUrl?: string }
+type EditingProvider = Omit<Partial<ModelProvider>, 'baseUrl' | 'customHeaderKeys'> & { apiKey?: string, baseUrl?: string }
 
 const isOpen = ref(false)
 const editingProvider = ref<EditingProvider>({})
-const headerRows = ref<{ key: string, value: string }[]>([])
+// Header values are secrets and the server never sends them back — a row
+// carrying `existing: true` and a blank value means "keep this header's
+// current value unchanged"; typing a value replaces it.
+const headerRows = ref<{ key: string, value: string, existing: boolean }[]>([])
+const originalHeaderKeys = ref<string[]>([])
 
 function typeLabel(type: ModelProvider['type']) {
   return types.value.find(t => t.value === type)?.label ?? type
@@ -17,35 +21,50 @@ function typeLabel(type: ModelProvider['type']) {
 
 const requiresBaseUrl = computed(() => providerRequiresBaseUrl(editingProvider.value.type ?? 'openai_compatible'))
 
-function headersToRows(headers: Record<string, string> | undefined) {
-  return Object.entries(headers ?? {}).map(([key, value]) => ({ key, value }))
-}
-
 function edit(provider: ModelProvider) {
   editingProvider.value = { ...provider, baseUrl: provider.baseUrl ?? undefined }
-  headerRows.value = headersToRows(provider.customHeaders)
+  originalHeaderKeys.value = provider.customHeaderKeys
+  headerRows.value = provider.customHeaderKeys.map(key => ({ key, value: '', existing: true }))
   isOpen.value = true
 }
 
 function createNew() {
   editingProvider.value = { type: types.value[0]?.value ?? 'openai_compatible', enabled: true }
+  originalHeaderKeys.value = []
   headerRows.value = []
   isOpen.value = true
 }
 
 function addHeaderRow() {
-  headerRows.value.push({ key: '', value: '' })
+  headerRows.value.push({ key: '', value: '', existing: false })
 }
 
 function removeHeaderRow(index: number) {
   headerRows.value.splice(index, 1)
 }
 
+/** Builds the customHeaders diff described in the PUT schema: a set value
+ * replaces/adds that header, `null` deletes it, and omitted keys are left
+ * untouched server-side (used because unchanged secret values are never
+ * available to resend). */
+function buildHeaderDiff() {
+  const diff: Record<string, string | null> = {}
+  const remainingKeys = new Set(headerRows.value.map(row => row.key.trim()).filter(Boolean))
+  for (const key of originalHeaderKeys.value) {
+    if (!remainingKeys.has(key)) diff[key] = null
+  }
+  for (const row of headerRows.value) {
+    const key = row.key.trim()
+    if (!key) continue
+    if (row.value.trim() !== '') diff[key] = row.value
+    // else: an existing header left blank keeps its current value untouched.
+  }
+  return diff
+}
+
 async function save() {
   try {
-    const customHeaders = Object.fromEntries(
-      headerRows.value.filter(row => row.key.trim()).map(row => [row.key.trim(), row.value])
-    )
+    const customHeaders = buildHeaderDiff()
     const payload = { ...editingProvider.value, customHeaders }
 
     if (editingProvider.value.id) {
@@ -167,7 +186,8 @@ async function removeProvider(id: string) {
                 />
                 <UInput
                   v-model="row.value"
-                  placeholder="Value"
+                  type="password"
+                  :placeholder="row.existing ? 'Unchanged — enter to replace' : 'Value'"
                   class="w-1/2"
                 />
                 <UButton
