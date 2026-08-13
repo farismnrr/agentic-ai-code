@@ -310,6 +310,14 @@ Required live/runtime matrix includes at least:
 
 Do not mark a matrix item passed if the necessary provider/database/browser environment was unavailable.
 
+### Phase 13 status (2026-08-13, this sandbox)
+
+Findings Q–X (Phases 9–12) are implemented, and the following passed in this checkout at commit `c632bc0`: `pnpm lint`, `bash scripts/check-architecture.sh`, `cargo check`/`cargo clippy -D warnings`, `pnpm audit` (clean), `cargo audit` (clean, 261 crates), and `scripts/phase4-black-box.sh`, `phase6-chatgpt-e2e.sh` (static portion; live E2E probe unavailable), `phase7-chatgpt-contract.sh`, `phase8-zero-bypass.sh`, `phase9-ssrf-redirect-guard.sh`.
+
+`pnpm verify:commit` and `pnpm build` did **not** complete in this sandbox: `nuxt prepare` only emits `.nuxt/tsconfig.server.json` here, not the client `.nuxt/tsconfig.json` / `.nuxt/tsconfig.app.json` vue-tsc and the Vite build need. This was confirmed pre-existing and environment-specific (reproduced identically on an unmodified baseline via `git stash` during Phase 9/10 work, and again here on `dev`-touching files unrelated to this branch). It is not a regression introduced by Phases 9–12, but it also means Definition-of-Done items 11 and 12 are **not yet proven**, and the full browser/runtime smoke and live two-user isolation matrix required by this phase have not been run at all (no such environment available here).
+
+**Plan 031A is not closed.** It remains open pending: (a) a full `pnpm verify:commit` + `pnpm build` pass in an environment where `nuxt prepare` emits complete client tsconfig output, and (b) the live browser/runtime/two-user isolation matrix above. Do not reopen Phases 9–12 to chase this — it is an environment gap, not an implementation gap.
+
 ---
 
 ## Final Definition of Done
