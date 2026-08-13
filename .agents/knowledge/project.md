@@ -29,7 +29,7 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 - `app/` — Vue pages, layouts, components, composables, plugins, and client UI.
 - `server/api/` — Nitro HTTP API routes / transport adapters.
-- `server/application/` — application use cases/policies introduced by Plan 031 and completed by Plan 031B's strict dependency-inversion and route-ownership closure.
+- `server/application/` — application use cases/policies and application-owned contracts. These modules do not import concrete infrastructure, DB/Drizzle, H3/Nitro, or provider/AI/MCP implementation types.
 - `server/infrastructure/` — database, AI/provider, MCP, and other concrete integration adapters introduced/moved during Plan 031/031A.
 - `server/utils/` — legacy/mixed server helpers still present in current source; do **not** assume every file here is a pure utility. Plan 031B explicitly audits and relocates files whose real owner is application or infrastructure.
 - `server/plugins/` — server initialization such as telemetry.
@@ -49,7 +49,7 @@ The TypeScript package APIs remain valid application integration surfaces. Histo
 
 ### Current shipped architecture
 
-Plan 031B completed the repository-wide closure pass. The shipped server follows:
+The post-closure remediation is implemented at `bd22cc6`. The shipped server follows:
 
 ```text
 server/api (transport/composition)
@@ -59,15 +59,15 @@ server/api (transport/composition)
 
 The final rules are:
 
-- `server/api/**` handles auth, HTTP parsing/validation, dependency composition, and response adaptation rather than business/persistence ownership;
+- `server/api/**` handles auth, HTTP parsing/validation, use-case invocation, and response adaptation rather than business/persistence ownership. Concrete adapters are composed at the Nitro application-context/plugin boundary, not imported by routes;
 - `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
 - `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
-- `scripts/check-architecture.sh` (run from `pnpm verify:commit`) must enforce the boundaries that actually ship; Plan 031B owns closing current false-green loopholes;
+- `scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
 - Rust relay transport owns HTTP composition/security ordering while focused auth, validation, admission, and observability modules own their policies;
 - native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
 
-Plan 031B also closed provider credential containment across redirects, application-owned chat contracts, repository-wide API ownership migration, mixed utility ownership, strict architecture negative probes, and JWT pre-validation compatibility. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
+The remediation also restored application ownership boundaries across API composition, identity/settings/conversation/model/workspace use cases, and infrastructure adapters. Provider credential containment, repository-wide API ownership, mixed utility cleanup, strict architecture probes, and JWT pre-validation compatibility remain implemented. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
 
 ### Agent/project guidance
 

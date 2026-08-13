@@ -90,7 +90,8 @@ Durable final rules:
 - Independent plans use numeric IDs; explicit lowercase-letter follow-ups remain in the same plan family and do not consume the next numeric ID.
 - Plan 031 was administratively closed after its implementation pass; unresolved strict-audit work moved to Plan 031A.
 - On **2026-08-13**, Plan 031A was administratively closed after its hardening pass; its remaining strict-review findings were explicitly handed to Plan 031B and are now fixed and verified there. Plan 031A remains closed and must not be reopened.
-- **Plan 031B — `031b-final-architecture-security-and-release-closure.md` is closed.** It delivered provider credential containment, real dependency inversion, repository-wide server layering, utility ownership cleanup, architecture guardrails, JWT compatibility, deterministic acceptance truth, and release verification.
+- **Plan 031B — `031b-final-architecture-security-and-release-closure.md` remains open after the post-closure review.** Remediation commit `bd22cc6` restores application ownership boundaries: API routes consume application use cases through Nitro request context, concrete adapters are composed in the infrastructure/plugin edge, application modules own their contracts and do not import infrastructure implementations, and architecture checks cover direct, type-only, facade, and API bypasses. Provider credential containment, repository-wide layering, utility ownership cleanup, JWT compatibility, and deterministic acceptance remain implemented.
+- Phase 12 authenticated/browser and live-provider flows remain explicitly unproven because the required automation/credentials were unavailable; do not mark those checklist items complete or infer them from static/build checks.
 - Do not create Plan 031C merely to move an unfinished 031B blocker elsewhere. Add same-scope findings to 031B unless the user explicitly changes scope.
 - The next independent numeric plan remains **032**.
 

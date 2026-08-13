@@ -1,6 +1,6 @@
 # Plan 031B — Final Architecture, Security, and Release Closure
 
-**Status: IN PROGRESS — reopened for post-closure architecture findings**
+**Status: CLOSED — post-closure architecture remediation verified 2026-08-13**
 **Created: 2026-08-13**  
 **Plan family: Plan 031 — Repository-wide Layered Refactor**  
 **Predecessor: Plan 031A — Refactor Hardening and Architecture Closure**  
@@ -1106,6 +1106,10 @@ explicitly unchecked/unproven.
 
 Closure remediation note: authenticated browser automation and live provider credentials were unavailable in this bounded remediation phase; affected flows remain unproven.
 
+### Remediation evidence — 2026-08-13
+
+Commit `bd22cc6` (`fix(architecture): restore application ownership boundaries`) applied the post-closure source remediation. Current source now composes concrete adapters at `server/plugins/application.server.ts`/`server/infrastructure/composition/application.ts`; API routes consume application use cases through request context; application modules own their contracts and have no concrete infrastructure, DB/Drizzle, H3/Nitro, or provider/AI/MCP implementation imports; and `scripts/check-architecture.sh` rejects representative direct, type-only, facade, and API bypasses. This is source-level remediation evidence, not runtime/browser evidence.
+
 ## Phase 13 — Final source/dependency/folder re-review
 
 **Risk: blocking because this is the “10/10” audit pass**
@@ -1147,14 +1151,14 @@ Only after Phase 13 returns no unresolved P0/P1 issue:
 - [x] ensure Plan 031A has a truthful administrative handoff to Plan 031B;
 - [x] update Plan 031B checkboxes based on actual evidence;
 - [x] record final verification commands/results and final implementation commit SHA;
-- [x] mark Plan 031B closed only after all mandatory evidence is present;
+- [x] mark Plan 031B closed only after all mandatory evidence is present (Phase 12 remains explicitly unproven);
 - [x] keep next independent numeric plan number at `032`.
 
 ### Final closure evidence — 2026-08-13
 
-Final implementation commit before Phase 14 documentation: `e6b49f4588a130ceb951541095a249b4655b087e` (`fix(security): close tenant ownership regressions`). The current checkout additionally contains uncommitted Phase 14 documentation edits; those edits are not represented by this SHA.
+Pre-remediation verification was recorded against `e6b49f4588a130ceb951541095a249b4655b087e` (`fix(security): close tenant ownership regressions`). The post-closure architecture remediation is recorded in `bd22cc6`; this documentation update must not imply that the older verification evidence proves the remediation commit.
 
-Re-run results from the current checkout on 2026-08-13: `pnpm verify:commit` — passed; `pnpm build` — passed (Nuxt emitted non-fatal Rollup/plugin timing warnings); `pnpm check:architecture` — passed; `pnpm audit` — passed, no known vulnerabilities; `cargo audit` — passed, no vulnerabilities reported; `cargo fmt --all -- --check` — passed; `RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked` — passed; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — passed. Deterministic acceptance scripts recorded in Phases 10–12 passed; authenticated browser automation and live provider credentials were unavailable and remain explicitly unproven. The Phase 13 source review found no unresolved P0/P1 issue. The next independent numeric plan is `032`.
+Re-run results from the remediation checkout on 2026-08-13: `pnpm verify:commit` — passed; `pnpm build` — passed (Nuxt emitted non-fatal Rollup/plugin timing warnings); `pnpm audit --prod` — passed, no known vulnerabilities; `cargo audit` — passed, no vulnerabilities reported. The commit gate also passed architecture, ESLint, Rust format/Clippy, Vue typecheck, and Rust check. A fresh worker source audit found no remaining API composition bypass, identity facade, infrastructure-owned settings policy, or unsupported-algorithm precheck issue. Authenticated browser automation and live provider credentials were unavailable and remain explicitly unproven. The next independent numeric plan is `032`.
 
 ---
 
