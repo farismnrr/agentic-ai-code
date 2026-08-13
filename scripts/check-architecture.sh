@@ -12,4 +12,17 @@ if rg -n 'H3Event|H3Event<|EventHandlerRequest' server/application server/infras
   exit 1
 fi
 
+# Plan 031A finding G/H: server/application coordinates narrow capabilities
+# and must not directly own Drizzle persistence or provider/AI SDK
+# construction — those belong to server/infrastructure and server/utils.
+if rg -n "from '.*database/schema'|from 'drizzle-orm'" server/application; then
+  echo 'architecture: server/application must not import Drizzle schema/drizzle-orm directly; use a server/infrastructure adapter' >&2
+  exit 1
+fi
+
+if rg -n "from '@ai-sdk/|from '@langchain/" server/application; then
+  echo 'architecture: server/application must not construct provider/AI SDK clients directly; use a server/infrastructure adapter' >&2
+  exit 1
+fi
+
 echo 'architecture: ownership checks passed'
