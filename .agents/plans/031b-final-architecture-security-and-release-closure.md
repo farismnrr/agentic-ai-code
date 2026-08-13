@@ -706,28 +706,28 @@ The completed source inventory and finding disposition are recorded in
 
 ### Steps
 
-- [ ] Define and document the provider redirect trust rule before editing code.
-- [ ] Reject cross-origin provider redirects by default.
-- [ ] Reject HTTPS → HTTP downgrade redirects.
-- [ ] Revalidate every same-origin redirect target with the authoritative SSRF URL/address policy before connecting.
-- [ ] Preserve the bounded redirect count.
-- [ ] Implement deliberate 301/302/303/307/308 method/body semantics or explicitly reject unsupported replay cases.
-- [ ] Ensure the policy is used by OpenAI-compatible discovery + chat SDK paths.
-- [ ] Ensure the policy is used by Anthropic-compatible discovery + chat SDK paths.
-- [ ] Ensure LangGraph/OpenAI/Anthropic client hooks use the same policy.
-- [ ] Confirm Vertex path is unaffected unless it actually uses user-controlled base URLs.
-- [ ] Do not leak `Authorization`, `x-api-key`, arbitrary custom headers, cookies, or future unknown secret headers to another origin.
+- [x] Define and document the provider redirect trust rule before editing code.
+- [x] Reject cross-origin provider redirects by default.
+- [x] Reject HTTPS → HTTP downgrade redirects.
+- [x] Revalidate every same-origin redirect target with the authoritative SSRF URL/address policy before connecting.
+- [x] Preserve the bounded redirect count.
+- [x] Implement deliberate 301/302/303/307/308 method/body semantics or explicitly reject unsupported replay cases.
+- [x] Ensure the policy is used by OpenAI-compatible discovery + chat SDK paths.
+- [x] Ensure the policy is used by Anthropic-compatible discovery + chat SDK paths.
+- [x] Ensure LangGraph/OpenAI/Anthropic client hooks use the same policy.
+- [x] Confirm Vertex path is unaffected unless it actually uses user-controlled base URLs.
+- [x] Do not leak `Authorization`, `x-api-key`, arbitrary custom headers, cookies, or future unknown secret headers to another origin.
 
 ### Acceptance script work
 
-- [ ] Replace the false redirect proof in `phase9-ssrf-redirect-guard.sh` with a deterministic resolver/fetch fixture that actually enters the redirect branch.
-- [ ] Assert private redirect target is rejected before follow-up fetch.
-- [ ] Assert cross-origin public redirect is rejected.
-- [ ] Assert same-origin allowed redirect succeeds.
-- [ ] Assert redirect loop/hop exhaustion fails.
-- [ ] Assert mapped IPv4/IPv6 blocked ranges.
-- [ ] Assert HTTPS downgrade fails.
-- [ ] Assert secret headers are never presented to an untrusted redirected request fixture.
+- [x] Replace the false redirect proof in `phase9-ssrf-redirect-guard.sh` with a deterministic resolver/fetch fixture that actually enters the redirect branch.
+- [x] Assert private redirect target is rejected before follow-up fetch.
+- [x] Assert cross-origin public redirect is rejected.
+- [x] Assert same-origin allowed redirect succeeds.
+- [x] Assert redirect loop/hop exhaustion fails.
+- [x] Assert mapped IPv4/IPv6 blocked ranges.
+- [x] Assert HTTPS downgrade fails.
+- [x] Assert secret headers are never presented to an untrusted redirected request fixture.
 
 ### Exit criteria
 
