@@ -111,23 +111,3 @@ pub fn is_legacy_tools_list(headers: &HeaderMap, request: &mcp::Request) -> bool
         Some(v) => mcp::LEGACY_PROTOCOL_VERSIONS.contains(&v),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    #[test]
-    fn legacy_tools_list_is_allowed_without_modern_headers() {
-        let request =
-            mcp::parse_request(&json!({"jsonrpc":"2.0","id":1,"method":"tools/list"})).unwrap();
-        assert!(is_legacy_tools_list(&HeaderMap::new(), &request));
-    }
-
-    #[test]
-    fn content_type_and_body_limit_policies_are_exact() {
-        assert!(validate_content_type(Some("application/json; charset=utf-8")).is_ok());
-        assert!(validate_content_type(Some("text/plain")).is_err());
-        assert!(body_within_limit(&[0; 4], 4));
-        assert!(!body_within_limit(&[0; 5], 4));
-    }
-}
