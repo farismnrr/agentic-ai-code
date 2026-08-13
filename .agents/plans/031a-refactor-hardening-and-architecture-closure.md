@@ -275,10 +275,10 @@ Source inspection and server-only typechecking remain useful evidence, but they 
 
 **Risk: high / security-sensitive**
 
-- [ ] Cheap-reject malformed bearer syntax/header before expensive IdP work where safe.
-- [ ] Repair the Phase 4 mock OIDC discovery/JWKS fixture.
-- [ ] Repair the Phase 7 contract script and move machine-readable expected state out of historical memory prose.
-- [ ] Run all applicable Rust/MCP/native-tool deterministic scripts to completion.
+- [x] Cheap-reject malformed bearer syntax/header before expensive IdP work where safe.
+- [x] Repair the Phase 4 mock OIDC discovery/JWKS fixture.
+- [x] Repair the Phase 7 contract script and move machine-readable expected state out of historical memory prose.
+- [x] Run all applicable Rust/MCP/native-tool deterministic scripts to completion.
 
 ## Phase 13 — Final integrated verification and closure
 

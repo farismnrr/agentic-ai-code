@@ -3,9 +3,11 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 catalog="$root/.agents/contracts/029-tool-catalog-v1.json"
+catalog_hash_file="$root/.agents/contracts/029-tool-catalog-v1.sha256"
 manifest="$root/packages/rust-tools/Cargo.toml"
 
 test -f "$catalog"
+test -f "$catalog_hash_file"
 command -v jq >/dev/null
 command -v sha256sum >/dev/null
 command -v bwrap >/dev/null
@@ -102,7 +104,7 @@ frozen_tools="$(jq -S -c . "$catalog")"
 test "$runtime_tools" = "$frozen_tools"
 
 hash="$(printf '%s' "$frozen_tools" | sha256sum | awk '{print $1}')"
-recorded="$(sed -n 's/^catalogSha256: `\([^`]*\)`.*/\1/p' "$root/.agents/memories/029-phase7-published-app-lifecycle.md")"
+recorded="$(tr -d '[:space:]' < "$catalog_hash_file")"
 test "$hash" = "$recorded"
 
 echo "phase7 contract acceptance: pass ($hash)"

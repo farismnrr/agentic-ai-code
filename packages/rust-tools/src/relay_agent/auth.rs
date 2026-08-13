@@ -78,6 +78,54 @@ pub fn validate_token_signature(
         .map(|data| data.claims)
         .map_err(|_| TokenValidationError::InvalidToken)
 }
+/// Cheap, purely structural/syntactic pre-check for a bearer token, run before
+/// any discovery/JWKS network I/O. This intentionally does NOT parse claims
+/// such as `exp`/`iss`/`aud` — it only rejects tokens that could not possibly
+/// be a JWT, so malformed input fails closed without triggering outbound
+/// authentication work. Well-formed JWTs (even semantically invalid ones,
+/// e.g. expired or wrong-issuer) must continue to the full validation path.
+pub fn is_structurally_plausible_jwt(token: &str) -> bool {
+    use base64::Engine;
+
+    let segments: Vec<&str> = token.split('.').collect();
+    if segments.len() != 3 || segments.iter().any(|segment| segment.is_empty()) {
+        return false;
+    }
+
+    let Ok(header_bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(segments[0])
+    else {
+        return false;
+    };
+    // The payload and signature segments must also be valid base64url, even
+    // though we do not need their decoded contents here.
+    if base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(segments[1])
+        .is_err()
+        || base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(segments[2])
+            .is_err()
+    {
+        return false;
+    }
+
+    let Ok(header_json) = serde_json::from_slice::<serde_json::Value>(&header_bytes) else {
+        return false;
+    };
+
+    let typ_is_jwt = header_json
+        .get("typ")
+        .and_then(serde_json::Value::as_str)
+        .map(|typ| typ.eq_ignore_ascii_case("JWT"))
+        .unwrap_or(false);
+    let alg_is_nonempty_string = header_json
+        .get("alg")
+        .and_then(serde_json::Value::as_str)
+        .map(|alg| !alg.is_empty())
+        .unwrap_or(false);
+
+    typ_is_jwt && alg_is_nonempty_string
+}
+
 pub const JWKS_FETCH_TIMEOUT_SECS: u64 = 10;
 
 pub struct CachedJwks {

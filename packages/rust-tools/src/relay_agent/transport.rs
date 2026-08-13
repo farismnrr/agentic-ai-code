@@ -355,6 +355,22 @@ async fn access_policy(
 
         let token = &auth_header[7..];
 
+        // Cheap structural/JWT-header rejection before any discovery/JWKS
+        // network I/O. This must not weaken validation for well-formed
+        // tokens: only tokens that could not possibly be a JWT are rejected
+        // here, and they get the identical invalid_token/401 response that
+        // a missing bearer token receives.
+        if !auth::is_structurally_plausible_jwt(token) {
+            return oauth_error_response(
+                StatusCode::UNAUTHORIZED,
+                None,
+                &state.config,
+                Some("invalid_token"),
+                None,
+                &McpError::InvalidRequest("Missing or invalid authorization".into()),
+            );
+        }
+
         // P1-2: OAuth metadata and JWKS fetch helpers with timeout. Drops the lock before the HTTP
         // request so a slow IdP cannot hold the write lock and block all auth.
         let client = auth::http_client();

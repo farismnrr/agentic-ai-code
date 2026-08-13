@@ -66,17 +66,22 @@ def rsa_jwk(public_der):
 
 class JwksHandler(BaseHTTPRequestHandler):
     jwks = b""
+    discovery = b""
 
     def do_GET(self):
-        if self.path != "/.well-known/jwks.json":
+        if self.path == "/.well-known/jwks.json":
+            payload = self.jwks
+        elif self.path == "/.well-known/openid-configuration":
+            payload = self.discovery
+        else:
             self.send_response(404)
             self.end_headers()
             return
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(self.jwks)))
+        self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(self.jwks)
+        self.wfile.write(payload)
 
     def log_message(self, *_args):
         pass
@@ -220,6 +225,10 @@ def run():
         idp_thread = threading.Thread(target=idp.serve_forever, daemon=True)
         idp_thread.start()
         issuer = f"http://127.0.0.1:{idp.server_port}"
+        JwksHandler.discovery = json.dumps({
+            "issuer": issuer,
+            "jwks_uri": f"{issuer}/.well-known/jwks.json",
+        }).encode()
         local = remote_untrusted = remote = None
         try:
             local_port = free_port()
