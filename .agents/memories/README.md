@@ -8,10 +8,12 @@
 - Every normal local commit must pass the tracked pre-commit gate. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm verify:commit`. Never use `--no-verify` or disable/replace the hook path.
 - `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. A failure means do not claim the commit is verified.
 - `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` runs `nuxt prepare --dotenv .env.example`, direct `vue-tsc -p .nuxt/tsconfig.json --noEmit`, then warnings-denied Rust `cargo check`.
+- Type-aware typescript-eslint linting is intentionally not enabled as a second type system. Type correctness belongs to the explicit generated Nuxt/Vue typecheck gate.
 - Do not replace the Vue gate with bare `nuxt typecheck`; the wrapper previously missed generated-project errors.
 - Production bundling is separate: run `pnpm build` when release/runtime output must be proven. Dependency/security-sensitive changes also require the relevant `pnpm audit`, `cargo audit`, and deterministic scripts.
 - GitHub mergeability is not verification. Record only commands actually executed successfully.
 - `scripts/check-architecture.sh` is mandatory through `pnpm verify:commit` and now rejects representative direct, type-only, transitive-facade, and API-bypass violations.
+- Browser/Playwright automation may use the shared development database. Never assume browser-test data is isolated unless the environment explicitly provides isolation.
 
 ## Nuxt/application invariants
 
