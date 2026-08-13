@@ -48,26 +48,10 @@ pub async fn dispatch_tool_call(
                 .resolved_execution_root()
                 .map_err(|e| McpError::Internal(e.to_string()))?;
 
-            let target_cwd = if let Some(cwd_str) = arguments.get("cwd").and_then(|v| v.as_str()) {
-                let p = std::path::Path::new(cwd_str);
-                if p.is_absolute() {
-                    p.to_path_buf()
-                } else {
-                    execution_root.join(p)
-                }
-            } else {
-                execution_root.clone()
-            };
-
-            let canonical_cwd = std::fs::canonicalize(&target_cwd).map_err(|_| {
-                McpError::InvalidRequest("cwd path does not exist or is inaccessible".to_string())
-            })?;
-
-            if !canonical_cwd.starts_with(&execution_root) {
-                return Err(McpError::InvalidRequest(
-                    "path traversal outside execution root is forbidden".to_string(),
-                ));
-            }
+            let canonical_cwd = crate::relay_agent::terminal_policy::resolve_contained_cwd(
+                &execution_root,
+                arguments.get("cwd").and_then(|v| v.as_str()),
+            )?;
 
             args.push("--cwd".to_string());
             args.push(canonical_cwd.to_string_lossy().into_owned());
@@ -80,21 +64,7 @@ pub async fn dispatch_tool_call(
             };
 
             if !binary.is_empty() {
-                let binary_name = std::path::Path::new(&binary)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-
-                // Privilege escalation: these commands bypass the non-root execution
-                // invariant even inside bwrap (they can call setuid/kernel interfaces).
-                // This check remains even though bwrap provides filesystem containment.
-                let forbidden = ["sudo", "su", "doas", "pkexec", "runas", "docker"];
-                if forbidden.contains(&binary_name) {
-                    return Err(McpError::InvalidRequest(format!(
-                        "execution of '{}' is forbidden: privilege escalation is not allowed",
-                        binary_name
-                    )));
-                }
+                crate::relay_agent::terminal_policy::validate_executable(&binary)?;
 
                 // NOTE: Shell/interpreter flags like `bash -c` are intentionally NOT
                 // blocked here. bwrap is the containment boundary — it provides
@@ -103,13 +73,6 @@ pub async fn dispatch_tool_call(
                 // `bash -c 'npm install && npm run build'`) without adding meaningful
                 // security when the sandbox is already active. If bwrap is not available
                 // the server refuses to start (see relay-agent.rs startup check).
-
-                if binary.contains('/') || binary.contains('\\') || binary == ".." {
-                    return Err(McpError::InvalidRequest(
-                        "path traversal or absolute paths in executable name are forbidden"
-                            .to_string(),
-                    ));
-                }
 
                 args.push("--allow-command".to_string());
                 args.push(binary);
