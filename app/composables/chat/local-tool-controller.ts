@@ -1,4 +1,10 @@
-type ChatToolOutput = { addToolOutput: (value: { tool: string, toolCallId: string, output?: unknown, state?: 'output-error', errorText?: string }) => Promise<void> }
+type ChatToolOutput = {
+  addToolOutput: (value: {
+    tool: string
+    toolCallId: string
+    options?: { headers?: Record<string, string> }
+  } & ({ state: 'output-error', errorText: string } | { state?: 'output-available', output: unknown })) => void | PromiseLike<void>
+}
 
 export function createLocalToolController({ chat, relayAgent, ledger }: { chat: ChatToolOutput, relayAgent: { exec: (command: string, args: string[], cwd?: string) => Promise<unknown> }, ledger: ReturnType<typeof import('./attempt-ledger')['createAttemptLedger']> }) {
   const executed = new Set<string>()

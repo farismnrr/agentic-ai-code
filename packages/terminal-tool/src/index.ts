@@ -1,6 +1,4 @@
-// @ts-expect-error - Ignore module resolution errors in CI
 import { tool as langchainTool } from '@langchain/core/tools'
-// @ts-expect-error - Ignore module resolution errors in CI
 import { tool as aiTool } from 'ai'
 import { z } from 'zod'
 import { execa } from 'execa'
