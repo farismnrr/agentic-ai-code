@@ -959,6 +959,12 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 > chat-compaction, and presentation surfaces; no line-count-only split is
 > justified.
 
+> Micro-step 13C audit decision: reusable chat configuration, provider base-URL
+> policy, native tool IDs, collection helpers, and error handling have one
+> active canonical owner each. Remaining repeated values are API/schema or
+> runtime-boundary projections with distinct callers, so no accidental fork
+> was safely removable.
+
 ### Work
 
 - [x] Audit finalized import-direction restrictions; the narrow source check is more suitable than noisy ESLint rules for these Rust/TS boundaries.
@@ -966,7 +972,8 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 - [x] Audit/remove unused imports/files/helpers/facades; no proven dead code was found.
 - [x] Review remaining large files for cohesion; retain cohesive files and avoid line-count-only splits.
 - [ ] Review all reusable components/composables for stable naming/props/contracts.
-- [ ] Re-run duplication search for canonical rules/constants and remove accidental forks.
+- [x] Review reusable components/composables for stable naming/props/contracts; no unsafe contract change was identified.
+- [x] Re-run duplication search for canonical rules/constants; no accidental fork was found.
 - [ ] Update `.agents/knowledge/` only where new architectural conventions are durable and repository-wide.
 - [ ] Append only durable lessons/invariants to `.agents/memories/README.md`; do not create sibling memory files.
 - [ ] Mark this Plan 031 complete only after all accepted phases/gates are actually done.
