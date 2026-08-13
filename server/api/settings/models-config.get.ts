@@ -1,22 +1,18 @@
-import { listModelProviders } from '../../utils/providers'
-import { listModels } from '../../utils/models'
+import { PROVIDER_TYPE_OPTIONS } from '#shared/utils/providers'
+import type { ChatModel, ModelProvider } from '#shared/types/chat'
 
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
 
   const [providers, models] = await Promise.all([
-    listModelProviders(session.user.id),
-    listModels(session.user.id)
+    event.context.application.providers.list(session.user.id) as Promise<ModelProvider[]>,
+    event.context.application.models.list(session.user.id) as Promise<ChatModel[]>
   ])
 
   return {
     providers,
     models,
-    providerTypes: [
-      { label: 'OpenAI Compatible', value: 'openai_compatible' },
-      { label: 'Anthropic Compatible', value: 'anthropic_compatible' },
-      { label: 'Vertex AI', value: 'vertex_ai' }
-    ],
+    providerTypes: PROVIDER_TYPE_OPTIONS,
     iconOptions: [
       { label: 'Sparkles', value: 'i-lucide-sparkles', icon: 'i-lucide-sparkles' },
       { label: 'Bot', value: 'i-lucide-bot', icon: 'i-lucide-bot' },

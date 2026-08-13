@@ -1,5 +1,3 @@
-import { eq, and } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
 import { hashToken } from '../../utils/token'
 import { resetPasswordSchema as resetSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
@@ -16,19 +14,8 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
   const hashedToken = hashToken(body.token)
-
-  const [tokenRecord] = await db
-    .select()
-    .from(verificationTokens)
-    .where(
-      and(
-        eq(verificationTokens.tokenHash, hashedToken),
-        eq(verificationTokens.type, 'password_reset')
-      )
-    )
-    .limit(1)
+  const tokenRecord = await event.context.application.auth.consumePasswordReset(hashedToken, await hashPassword(body.password))
 
   if (!tokenRecord) {
     throw badRequest('Invalid password reset link.')
@@ -37,21 +24,6 @@ export default defineEventHandler(async (event) => {
   if (tokenRecord.consumedAt || tokenRecord.expiresAt < new Date()) {
     throw gone('This password reset link has expired or already been used.')
   }
-
-  const newHash = await hashPassword(body.password)
-
-  // Mark token consumed and update user's password
-  await db.transaction(async (tx) => {
-    await tx
-      .update(verificationTokens)
-      .set({ consumedAt: new Date() })
-      .where(eq(verificationTokens.tokenHash, hashedToken))
-
-    await tx
-      .update(users)
-      .set({ passwordHash: newHash, updatedAt: new Date() })
-      .where(eq(users.id, tokenRecord.userId))
-  })
 
   // Optionally, clear their session here to force re-login on all devices
   // But we use cookie sessions without DB tracking, so we can't easily invalidate other devices.

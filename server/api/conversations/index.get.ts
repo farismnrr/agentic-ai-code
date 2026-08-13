@@ -1,26 +1,11 @@
-import { eq, and, desc } from 'drizzle-orm'
-import { conversations } from '../../database/schema'
-
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const db = useDb()
-
   const query = getQuery(event)
-
-  const conditions = [eq(conversations.userId, session.user.id)]
-  if (query.workspaceId && typeof query.workspaceId === 'string') {
-    conditions.push(eq(conversations.workspaceId, query.workspaceId))
-  }
-
-  const userConversations = await db
-    .select()
-    .from(conversations)
-    .where(and(...conditions))
-    .orderBy(desc(conversations.updatedAt))
+  const userConversations = await event.context.application.conversations.list(session.user.id, typeof query.workspaceId === 'string' ? query.workspaceId : undefined)
 
   // For the list, we don't fetch all messages, just the metadata.
   // Wait, in `useConversations.ts` they expect `messages: []` to be present if missing.
-  return userConversations.map(c => ({
+  return userConversations.map((c: typeof userConversations[number]) => ({
     id: c.id,
     title: c.title,
     modelId: c.modelId,

@@ -1,5 +1,4 @@
 import * as v from 'valibot'
-import { updateSettings } from '../utils/settings'
 
 const settingsSchema = v.object({
   language: v.optional(v.string()),
@@ -24,5 +23,5 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw unprocessable(parsed.issues)
   }
-  return updateSettings(session.user.id, parsed.output)
+  return event.context.application.settings.write(session.user.id, parsed.output)
 })

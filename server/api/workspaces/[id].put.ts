@@ -14,5 +14,5 @@ export default defineEventHandler(async (event) => {
   if (!result.success) throw unprocessable(result.issues)
   const body = result.output
 
-  return updateWorkspace(session.user.id, id, body.name, body.path)
+  return event.context.application.workspaces.update(session.user.id, id, body.name, body.path)
 })

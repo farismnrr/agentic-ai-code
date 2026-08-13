@@ -12,7 +12,9 @@ export interface ModelProvider {
   type: 'openai_compatible' | 'anthropic_compatible' | 'vertex_ai'
   name: string
   baseUrl: string | null
-  customHeaders: Record<string, string>
+  // Header values are secrets and never round-trip to the client — only
+  // the header names, so the UI can show which custom headers are set.
+  customHeaderKeys: string[]
   enabled: boolean
   hasApiKey: boolean
 }

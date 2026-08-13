@@ -28,8 +28,10 @@ Do not infer current architecture from historical plans alone. Current source/co
 ### Web application
 
 - `app/` — Vue pages, layouts, components, composables, plugins, and client UI.
-- `server/api/` — Nitro HTTP API routes.
-- `server/utils/` — shared server/domain integration logic used by routes and model/tool orchestration.
+- `server/api/` — Nitro HTTP API routes / transport adapters.
+- `server/application/` — application use cases/policies and application-owned contracts. These modules do not import concrete infrastructure, DB/Drizzle, H3/Nitro, or provider/AI/MCP implementation types.
+- `server/infrastructure/` — database, AI/provider, MCP, and other concrete integration adapters introduced/moved during Plan 031/031A.
+- `server/utils/` — legacy/mixed server helpers still present in current source; do **not** assume every file here is a pure utility. Plan 031B explicitly audits and relocates files whose real owner is application or infrastructure.
 - `server/plugins/` — server initialization such as telemetry.
 - `server/database/` — Drizzle schema and migrations.
 - `shared/` — types/utilities shared across client/server boundaries.
@@ -45,6 +47,28 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
+### Current shipped architecture
+
+The post-closure remediation is implemented at `bd22cc6`. The shipped server follows:
+
+```text
+server/api (transport/composition)
+  -> server/application (use cases/policies and application-owned contracts)
+      <- server/infrastructure (DB / AI SDK / providers / LangGraph / MCP / filesystem/network adapters)
+```
+
+The final rules are:
+
+- `server/api/**` handles auth, HTTP parsing/validation, use-case invocation, and response adaptation rather than business/persistence ownership. Concrete adapters are composed at the Nitro application-context/plugin boundary, not imported by routes;
+- `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
+- `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
+- `scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
+- frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
+- Rust relay transport owns HTTP composition/security ordering while focused auth, validation, admission, and observability modules own their policies;
+- native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
+
+The remediation also restored application ownership boundaries across API composition, identity/settings/conversation/model/workspace use cases, and infrastructure adapters. Provider credential containment, repository-wide API ownership, mixed utility cleanup, strict architecture probes, and JWT pre-validation compatibility remain implemented. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
+
 ### Agent/project guidance
 
 - `AGENTS.md` — single repository agent entrypoint.
@@ -52,7 +76,7 @@ The TypeScript package APIs remain valid application integration surfaces. Histo
 - `.agents/skills/` — shared framework/tool skill discovery.
 - `.agents/memories/README.md` — single canonical durable memory.
 - `.agents/plans/030-previous-plans-summary.md` — compacted pre-reset plan history.
-- `.agents/plans/031-...md` onward — future plans, one file per effort, incrementing and retained separately.
+- `.agents/plans/031-...md` onward — future plans, one file per effort, incrementing and retained separately; explicit lowercase-letter follow-ups remain in the same plan family.
 - `.agents/contracts/` — frozen client-visible contract evidence.
 - `.githooks/pre-commit` — mandatory local commit gate.
 
@@ -62,7 +86,7 @@ The repository intentionally has **no CI workflow** and **no unit-test suite**.
 
 ### Mandatory before every commit
 
-Every commit must pass:
+Every normal local commit must pass:
 
 ```sh
 pnpm verify:commit
@@ -70,7 +94,7 @@ pnpm verify:commit
 
 The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-`pnpm verify:commit` runs repository policy checks, agent-doc integrity, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`.
+`pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`.
 
 There is no remote CI safety net. PR descriptions must record local verification performed; GitHub mergeability is not proof of quality.
 

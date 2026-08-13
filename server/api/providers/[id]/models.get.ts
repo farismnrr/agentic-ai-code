@@ -3,6 +3,6 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw badRequest('Missing provider ID')
 
-  const modelIds = await listProviderModelIds(session.user.id, id)
-  return modelIds.map(modelId => ({ label: modelId, value: modelId }))
+  const modelIds = await event.context.application.providers.discoverModels(session.user.id, id)
+  return modelIds.map((modelId: string) => ({ label: modelId, value: modelId }))
 })

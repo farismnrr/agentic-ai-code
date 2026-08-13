@@ -1,6 +1,5 @@
 import * as v from 'valibot'
-
-const PROVIDER_TYPES_REQUIRING_BASE_URL = ['openai_compatible', 'anthropic_compatible']
+import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
 const bodySchema = v.pipe(
   v.object({
@@ -17,7 +16,7 @@ const bodySchema = v.pipe(
   v.forward(
     v.partialCheck(
       [['type'], ['baseUrl']],
-      input => !PROVIDER_TYPES_REQUIRING_BASE_URL.includes(input.type) || !!input.baseUrl,
+      input => !providerRequiresBaseUrl(input.type) || !!input.baseUrl,
       'Base URL is required for this provider type'
     ),
     ['baseUrl']
@@ -31,5 +30,5 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw unprocessable(parsed.issues)
   }
-  return createModelProvider(session.user.id, parsed.output)
+  return event.context.application.providers.create(session.user.id, parsed.output)
 })
