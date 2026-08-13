@@ -53,7 +53,7 @@ Durable final rules:
 - LangGraph/LangChain output is bridged into AI SDK UI-stream semantics; preserve valid dynamic-tool states and user-visible stream behavior.
 - Chat submit/regenerate/resume semantics belong to application, not database infrastructure.
 - Preserve abort/stop behavior, assistant persistence, token/context compaction, reasoning/provider options, approval allow/deny/user-approval semantics, MCP close-once cleanup, and local-terminal behavior during architecture moves.
-- Local terminal is client-executed through the paired relay-agent path; do not restore a server-side shell execution path.
+- Local terminal is client-executed through the paired local relay path (via `ai-tools relay`); do not restore a server-side shell execution path.
 
 ## Provider/tenant security invariants
 
@@ -70,7 +70,7 @@ Durable final rules:
 
 - Executable terminal/curl/search CLIs are Rust-owned; TypeScript sibling packages remain integration APIs, not executable fallbacks.
 - The rust backend in `packages/rust-tools` must remain a Cargo Workspace with independent crates enforcing a Layered Architecture (`core`, `application`, `infrastructure`, `interfaces`, `cli`).
-- `relay-agent` production execution boundary is Linux + Bubblewrap + non-root runtime + explicit execution root.
+- The `ai-tools relay` production execution boundary is Linux + Bubblewrap + non-root runtime + explicit execution root.
 - Filesystem containment is OS-namespace based; do not replace Bubblewrap with fragile shell/path parsing.
 - Preserve one authoritative process-safety path: sibling binary resolution, bwrap mounts, execution root, env clearing, safe PATH, output bounds, timeout grace/kill, and process-group cleanup.
 - Local relay mode is loopback-oriented. Remote mode is an OAuth Resource Server, not an Authorization Server.
