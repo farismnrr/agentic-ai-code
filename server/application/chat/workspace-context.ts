@@ -19,7 +19,7 @@ export async function resolveChatWorkspaceContext(userId: string, workspaceId: s
   try {
     return { path: await resolvePath(workspace.path), name: workspace.name }
   } catch (err) {
-    logger.error('[chat] failed to resolve workspace path for terminal tool', err)
+    console.error('[chat] failed to resolve workspace path for terminal tool', err)
     return { path: undefined, name: undefined }
   }
 }

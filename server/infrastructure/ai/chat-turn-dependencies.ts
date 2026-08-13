@@ -9,7 +9,7 @@ import { findUserConversation, loadHistoryMessages, insertUserMessage, findLastM
 import { findUserModel } from '../database/models'
 import { findUserProvider } from '../database/providers'
 import { findUserWorkspace } from '../../infrastructure/database/workspaces'
-import { resolveWorkspacePath } from '../../utils/fs-browse'
+import { resolveWorkspacePath } from '../filesystem/browse'
 import { hasActivePairedDevice } from '../database/devices'
 import { buildLocalTerminalTool } from './local-terminal-tool'
 

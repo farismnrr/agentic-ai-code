@@ -1,3 +1,4 @@
+import { badRequest, forbidden, conflict, internal } from '#server/core/errors/http'
 import { eq, and } from 'drizzle-orm'
 import { users, oauthAccounts } from '../../database/schema'
 
@@ -7,7 +8,7 @@ export default defineOAuthGoogleEventHandler({
     scope: ['email', 'profile']
   },
   async onSuccess(event, { user: googleUser }) {
-    const db = useDb()
+    const db = event.context.application.database.db
     const provider = 'google'
     const providerAccountId = String(googleUser.sub)
     const email = googleUser.email
@@ -71,7 +72,7 @@ export default defineOAuthGoogleEventHandler({
           userId: existingUser.id
         })
       } catch (err) {
-        if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+        if (event.context.application.database.isUniqueViolation(err)) throw conflict('OAuth account already linked')
         throw err
       }
 
@@ -115,7 +116,7 @@ export default defineOAuthGoogleEventHandler({
         emailVerifiedAt: users.emailVerifiedAt
       })
     } catch (err) {
-      if (isUniqueViolation(err)) throw conflict('Email already registered')
+      if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
       throw err
     }
 
@@ -128,7 +129,7 @@ export default defineOAuthGoogleEventHandler({
         userId: createdUser.id
       })
     } catch (err) {
-      if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+      if (event.context.application.database.isUniqueViolation(err)) throw conflict('OAuth account already linked')
       throw err
     }
 
@@ -144,7 +145,7 @@ export default defineOAuthGoogleEventHandler({
     return sendRedirect(event, '/chat')
   },
   onError(event, error) {
-    logger.error('Google OAuth error', error)
+    event.context.application.observability.logger.error('Google OAuth error', error)
     return sendRedirect(event, '/login?error=Google login failed')
   }
 })

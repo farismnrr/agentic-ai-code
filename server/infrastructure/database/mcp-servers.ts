@@ -1,3 +1,4 @@
+import { notFound, conflict, internal } from '#server/core/errors/http'
 import { eq, and } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
 import { isUniqueViolation } from '../../utils/is-unique-violation'

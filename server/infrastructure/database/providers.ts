@@ -1,6 +1,7 @@
+import { badRequest, notFound, internal } from '#server/core/errors/http'
 import { and, eq } from 'drizzle-orm'
 import { modelProviders, type ModelProviderType } from '../../database/schema'
-import { badRequest, internal, notFound } from '../../utils/http-errors'
+
 import { encryptSecret, isEncryptedSecret } from '../security/crypto'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 

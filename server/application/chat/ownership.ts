@@ -1,4 +1,5 @@
-import { badRequest, notFound } from '../../utils/http-errors'
+import { badRequest, notFound } from '#server/core/errors/http'
+
 import type { ChatOwnershipPort } from './contracts'
 
 /**

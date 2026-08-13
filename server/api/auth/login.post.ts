@@ -1,3 +1,4 @@
+import { unauthorized, unprocessable, tooManyRequests } from '#server/core/errors/http'
 import * as v from 'valibot'
 import { loginSchema } from '../../../shared/schemas/auth'
 
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const body = result.output
 
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({
+  const { limited, retryAfter } = event.context.application.network.rateLimit({
     key: `login:${ip}:${body.email}`,
     maxAttempts: 10
   })

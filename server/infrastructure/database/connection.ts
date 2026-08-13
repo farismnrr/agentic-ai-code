@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import * as schema from '../database/schema'
+import * as schema from '../../database/schema'
 
 /**
  * Singleton postgres.js connection.

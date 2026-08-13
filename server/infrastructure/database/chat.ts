@@ -1,7 +1,7 @@
+import { internal } from '#server/core/errors/http'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { conversations, messages as messagesTable } from '../../database/schema'
 import type { UIMessage } from '#shared/types/chat'
-import { internal } from '../../utils/http-errors'
 
 /**
  * Narrow ownership-scoped lookup: the conversation row itself, no model or

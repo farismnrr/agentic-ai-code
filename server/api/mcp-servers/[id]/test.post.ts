@@ -1,3 +1,4 @@
+import { badRequest, notFound } from '#server/core/errors/http'
 /**
  * "Test connection" — connects to a stored server, lists its tools, and
  * persists status/tools on success (or 'error' on failure) so the settings

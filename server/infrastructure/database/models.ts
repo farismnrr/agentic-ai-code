@@ -1,6 +1,6 @@
+import { forbidden, notFound, internal } from '#server/core/errors/http'
 import { and, eq } from 'drizzle-orm'
 import { models, modelProviders } from '../../database/schema'
-import { forbidden, internal, notFound } from '../../utils/http-errors'
 
 export interface ModelFields {
   modelId?: string

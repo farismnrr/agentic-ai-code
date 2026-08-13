@@ -1,5 +1,5 @@
 import type * as v from 'valibot'
-import { logger } from './logger'
+import { logger } from '#server/infrastructure/observability/logger'
 
 interface ProblemInit {
   status: number
@@ -15,7 +15,7 @@ interface ProblemInit {
 // frontend-forwarded logs (server/api/telemetry.post.ts) ever reached the
 // logs pipeline; a server-side 502 like a dead upstream provider was
 // visible in `docker compose logs` but invisible in Loki.
-function problem(init: ProblemInit) {
+export function problem(init: ProblemInit) {
   const message = `${init.status} ${init.title}${init.detail ? `: ${init.detail}` : ''}`
   const attributes = { status: init.status, type: init.type ?? 'about:blank', ...init.extra }
   if (init.status >= 500) {

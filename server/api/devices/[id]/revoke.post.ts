@@ -1,3 +1,4 @@
+import { notFound, unprocessable } from '#server/core/errors/http'
 import * as v from 'valibot'
 
 const paramsSchema = v.object({

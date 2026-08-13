@@ -1,3 +1,4 @@
+import { badRequest, conflict, internal } from '#server/core/errors/http'
 import { eq, and } from 'drizzle-orm'
 import { users, oauthAccounts } from '../../database/schema'
 
@@ -8,7 +9,7 @@ export default defineOAuthGitHubEventHandler({
     emailRequired: true
   },
   async onSuccess(event, { user: githubUser }) {
-    const db = useDb()
+    const db = event.context.application.database.db
     const provider = 'github'
     const providerAccountId = String(githubUser.id)
     const email = githubUser.email
@@ -65,7 +66,7 @@ export default defineOAuthGitHubEventHandler({
           userId: existingUser.id
         })
       } catch (err) {
-        if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+        if (event.context.application.database.isUniqueViolation(err)) throw conflict('OAuth account already linked')
         throw err
       }
 
@@ -104,7 +105,7 @@ export default defineOAuthGitHubEventHandler({
         emailVerifiedAt: users.emailVerifiedAt
       })
     } catch (err) {
-      if (isUniqueViolation(err)) throw conflict('Email already registered')
+      if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
       throw err
     }
 
@@ -117,7 +118,7 @@ export default defineOAuthGitHubEventHandler({
         userId: createdUser.id
       })
     } catch (err) {
-      if (isUniqueViolation(err)) throw conflict('OAuth account already linked')
+      if (event.context.application.database.isUniqueViolation(err)) throw conflict('OAuth account already linked')
       throw err
     }
 
@@ -133,7 +134,7 @@ export default defineOAuthGitHubEventHandler({
     return sendRedirect(event, '/chat')
   },
   onError(event, error) {
-    logger.error('GitHub OAuth error', error)
+    event.context.application.observability.logger.error('GitHub OAuth error', error)
     return sendRedirect(event, '/login?error=GitHub login failed')
   }
 })

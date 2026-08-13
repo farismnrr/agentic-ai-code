@@ -1,6 +1,6 @@
+import { conflict, unprocessable, tooManyRequests, internal } from '#server/core/errors/http'
 import * as v from 'valibot'
 import { registerSchema } from '../../../shared/schemas/auth'
-import { generateToken } from '../../utils/token'
 
 /**
  * POST /api/auth/register
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   // Rate limit by IP to slow down bulk account creation.
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({ key: `register:${ip}`, maxAttempts: 5 })
+  const { limited, retryAfter } = event.context.application.network.rateLimit({ key: `register:${ip}`, maxAttempts: 5 })
   if (limited) {
     throw tooManyRequests(retryAfter)
   }
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
   try {
     await event.context.application.auth.createUser({ email: body.email, name: body.name, passwordHash: hash })
   } catch (err) {
-    if (isUniqueViolation(err)) throw conflict('Email already registered')
+    if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
     throw err
   }
 
@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
   })
 
   // Generate and send verification email
-  const { token, hash: tokenHash } = generateToken()
+  const { token, hash: tokenHash } = event.context.application.security.generateToken()
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
   await event.context.application.auth.addVerificationToken({
@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
     expiresAt
   })
 
-  const { sendEmail, getTemplate } = useMailer()
+  const { sendEmail, getTemplate } = event.context.application.mail
   const config = useRuntimeConfig()
   // The frontend handles the ?token= extraction
   const verifyUrl = `${config.public.siteUrl}/verify-email?token=${token}`
@@ -83,7 +83,7 @@ export default defineEventHandler(async (event) => {
     )
   })
   if (!emailSent) {
-    logger.warn('[email] delivery failed', undefined, { to: created.email, purpose: 'register' })
+    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { to: created.email, purpose: 'register' })
   }
 
   setResponseStatus(event, 201)
