@@ -892,6 +892,14 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 **Risk: medium**
 
+> Micro-step 12A audit decision: TS packages remain schema/API/tool-factory
+> facades only; native Rust binaries remain the executable source of truth.
+> Tool names differ intentionally by runtime boundary (MCP native IDs versus
+> application LangChain/AI SDK names), so consolidating them would change
+> contracts. Existing package skills already document the Rust ownership and
+> removed npm CLI bins. No low-risk duplicate source of truth or stale facade
+> with a concrete caller was found; no runtime change is justified.
+
 ### Targets
 
 - TS wrapper packages
@@ -901,8 +909,8 @@ cohesive and behavior-sensitive; no unsafe generic extraction is justified.
 
 ### Work
 
-- [ ] Ensure TS packages expose reusable schema/API concerns without reclaiming executable ownership from Rust.
-- [ ] Consolidate duplicated tool identifiers/schemas only when runtime boundaries permit sharing safely.
+- [x] Ensure TS packages expose reusable schema/API concerns without reclaiming executable ownership from Rust (12A audit).
+- [x] Audit duplicated tool identifiers/schemas; retain intentionally distinct runtime-boundary contracts because consolidation would alter callers.
 - [ ] Remove dead facades/compatibility exports left by migration phases.
 - [ ] Normalize naming around application/domain/infrastructure responsibilities.
 - [ ] Remove obsolete comments pointing at pre-refactor paths while preserving important historical/security rationale in canonical docs/memory where durable.
