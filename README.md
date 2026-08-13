@@ -9,8 +9,8 @@ The authoritative agent-facing project notes live in [`.agents/`](.agents/README
 - **Web:** Nuxt 4, Vue, Nuxt UI 4, Tailwind CSS 4
 - **AI:** AI SDK 7, LangChain, Anthropic/OpenAI-compatible/Vertex providers
 - **Data/Auth:** PostgreSQL, Drizzle ORM, `nuxt-auth-utils`
-- **MCP:** Model Context Protocol SDK plus the native `relay-agent`
-- **Native tools:** Rust binaries for terminal execution, HTTP requests, SearXNG search, and the relay agent
+- **MCP:** Model Context Protocol SDK plus the native `ai-tools relay`
+- **Native tools:** A single unified Rust binary (`ai-tools`) for terminal execution, HTTP requests, SearXNG search, and the relay agent
 - **Package manager:** pnpm
 
 See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
@@ -26,7 +26,7 @@ packages/
   curl-tool/            AI SDK-facing HTTP tool package
   searxng-search-tool/  AI SDK-facing search tool package
   relay-agent/          Relay package surface
-  rust-tools/           Native implementations for all four binaries
+  rust-tools/           Native unified binary implementation (ai-tools)
 scripts/                Local policy/quality/hook helpers plus deterministic acceptance scripts
 .githooks/              Mandatory tracked local Git hooks
 .agents/                Agent knowledge, skills, plans, canonical memory, and contracts
@@ -42,7 +42,7 @@ Requirements:
 - pnpm 11 (exact version pinned by `packageManager`)
 - Rust 1.95.0 for native tool builds
 - PostgreSQL for application persistence
-- Linux + Bubblewrap for the production `relay-agent` sandbox boundary
+- Linux + Bubblewrap for the production `ai-tools relay` sandbox boundary
 
 Install dependencies and prepare generated Nuxt/native artifacts:
 
