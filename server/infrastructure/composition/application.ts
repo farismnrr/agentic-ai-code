@@ -4,6 +4,7 @@ import { resolveWorkspacePath } from '../filesystem/browse'
 import { generateToken, hashToken } from '../security/token'
 import { isUniqueViolation } from '../database/errors'
 import { logger } from '../observability/logger'
+import { createRequestTelemetryContext } from '../observability/request-context'
 import { useMailer } from '../mail/mailer'
 import { rateLimit } from '../network/rate-limit'
 import { badRequest, badGateway } from '#server/core/errors/http'
@@ -42,13 +43,13 @@ const conversationPort: ConversationPort = {
   assertWorkspaceOwnership: async (userId, workspaceId) => { await resolveOwnedWorkspace(userId, workspaceId, { findConversation: async () => undefined, findModel: (u, id) => findUserModel(u, id) as never, findProvider: (u, id) => findUserProvider(u, id) as never, findWorkspace: async (u, id) => (await import('../database/workspaces')).findUserWorkspace(u, id) as never }) }
 }
 
-export function createApplicationAdapters() {
+export function createApplicationAdapters(requestId: string) {
   return {
     chat: createChatTurnDependencies,
 
     network: { rateLimit },
     mail: useMailer(),
-    observability: { logger, getLogger },
+    observability: { logger, getLogger, request: createRequestTelemetryContext(requestId) },
     database: { isUniqueViolation, db: useDb() },
     security: { generateToken, hashToken },
     filesystem: { resolveWorkspacePath },
