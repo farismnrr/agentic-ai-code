@@ -1,5 +1,7 @@
 import { consola } from 'consola'
+import { trace } from '@opentelemetry/api'
 import { getLogger } from './otel'
+import { sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
 
 /**
  * Single logging entry point for server code — replaces raw `console.*`
@@ -11,23 +13,49 @@ import { getLogger } from './otel'
  * existing OTel → Loki bridge so it shows up there too. `getLogger()`
  * no-ops when NUXT_OTEL_ENABLED isn't 'true', so this is safe to call
  * unconditionally in every environment.
+ *
+ * Plan 035 Phase 3: `emit()` below is the single chokepoint every one of
+ * these calls funnels through, so it is also the single place that (a)
+ * sanitizes attributes against the allowlist in `sanitize.ts`, (b) attaches
+ * request/trace/span correlation when an active span exists, and (c)
+ * degrades safely — a logging failure must never break the business
+ * request it was describing.
  */
 
 type LogAttributes = Record<string, unknown>
 
 function errorAttributes(err: unknown): LogAttributes {
-  if (err instanceof Error) return { error: err.message, stack: err.stack }
+  if (err instanceof Error) {
+    const attrs: LogAttributes = {
+      'error.type': err.name || err.constructor?.name || 'Error',
+      'error.message': err.message
+    }
+    if (shouldIncludeStack() && err.stack) attrs.stack = err.stack
+    return attrs
+  }
   if (err === undefined) return {}
-  return { error: String(err) }
+  return { 'error.type': 'UnknownError', 'error.message': String(err) }
 }
 
 function emit(severityNumber: number, severityText: string, message: string, attributes: LogAttributes) {
-  getLogger('ai-code-server').emit({
-    severityNumber,
-    severityText,
-    body: message,
-    attributes: { 'service.name': 'ai-code-server', ...attributes }
-  })
+  try {
+    const spanContext = trace.getActiveSpan()?.spanContext()
+    const correlated: LogAttributes = { 'service.name': 'ai-code-server', ...attributes }
+    if (spanContext?.traceId) correlated.trace_id = spanContext.traceId
+    if (spanContext?.spanId) correlated.span_id = spanContext.spanId
+
+    getLogger('ai-code-server').emit({
+      severityNumber,
+      severityText,
+      body: sanitizeMessage(message),
+      attributes: sanitizeAttributes(correlated)
+    })
+  } catch {
+    // Logging/export must never break the request it is describing —
+    // swallow any failure here (bad attribute shapes, exporter throwing
+    // synchronously, etc). Network-level export failures are additionally
+    // caught inside LokiLogExporter.export itself.
+  }
 }
 
 export const logger = {
