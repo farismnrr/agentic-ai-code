@@ -1,0 +1,6 @@
+event: endpoint
+data: /api/mcp?sessionId=04107304-c1ff-4312-ba66-7ad7980503b8
+
+event: message
+data: {"result":{"content":[{"type":"text","text":"Tool execution failed"}],"isError":true},"jsonrpc":"2.0","id":1}
+
