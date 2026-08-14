@@ -1,8 +1,12 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: PLANNED / NOT STARTED**
+**Status: IN PROGRESS — Phase 0 complete.**
 
-**Baseline:** `dev` at `0134918100ddd2408c625ef6f96453edc11bd579`.
+**Baseline:** `dev` at `0134918100ddd2408c625ef6f96453edc11bd579`. Implementation baseline (post-sync): `origin/dev` at `0d3b1cc701e71c61775376c4dcdb8cd74619ab73`. Implementation branch: `feat/035-p0-observability-contract`.
+
+**Execution notes:**
+- Phase 0 (`.agents/contracts/035-observability-telemetry-contract.md`) complete at commit `e1479a3`. A pre-existing, unrelated lint failure on baseline `dev` (23 `@stylistic/quotes` errors) was fixed at commit `1b5875a` to unblock `pnpm verify:commit`.
+- Infra note: `docker ps` on this host shows `sensio-loki` (Loki) and `sensio-tempo` (Tempo) running, but no container named `jaeger`/`loki` matching `docker-compose.yml`'s expected service DNS names. This may block the mandatory real Jaeger/Loki evidence capture required to close Plan 035 (Phase 11/12) — to be re-verified when that phase is reached.
 
 ## Objective
 
