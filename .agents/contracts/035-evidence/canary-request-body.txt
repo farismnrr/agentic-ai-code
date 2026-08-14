@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+x-request-id: e50ee9a0-75d6-4911-ac7a-4e7760c7cfea
+content-type: application/json
+Date: Fri, 14 Aug 2026 06:03:37 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 16
+
+{"success":true}

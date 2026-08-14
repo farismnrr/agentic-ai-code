@@ -1,4 +1,5 @@
 import { logger } from '../observability/logger'
+import { useDb } from '../database/connection'
 import { and, eq } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
 import type { McpTool } from '#shared/types/chat'

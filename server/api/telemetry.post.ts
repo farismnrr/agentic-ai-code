@@ -1,5 +1,6 @@
 import * as v from 'valibot'
 import { isTelemetryEventName } from '#shared/utils/telemetry'
+import { tooManyRequests } from '#server/core/errors/http'
 
 // Plan 035 Phase 5 — full hardening of frontend telemetry ingestion. Limits
 // below are copied byte-for-byte from `app/composables/useTelemetry.ts`
@@ -98,11 +99,7 @@ export default defineEventHandler(async (event) => {
     windowMs: RATE_LIMIT_WINDOW_MS
   })
   if (limited.limited) {
-    throw createError({
-      statusCode: 429,
-      statusMessage: 'Too Many Requests',
-      data: { retryAfter: limited.retryAfter }
-    })
+    throw tooManyRequests(limited.retryAfter)
   }
 
   const rawBody = await readRawBody(event, 'utf8')
@@ -117,7 +114,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid telemetry payload' })
   }
 
-  const body: LogEvent[] = v.parse(telemetrySchema, parsed)
+  let body: LogEvent[]
+  try {
+    body = v.parse(telemetrySchema, parsed)
+  } catch {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid telemetry payload' })
+  }
 
   // Reject-the-whole-batch on an unknown/missing event name rather than
   // silently dropping the record — a Phase 4-conformant client always sets

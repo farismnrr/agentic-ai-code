@@ -1,5 +1,6 @@
 import { logger } from '../infrastructure/observability/logger'
 import { verifyApiKey } from '../infrastructure/auth/api-key'
+import { useDb } from '../infrastructure/database/connection'
 import { users } from '../database/schema'
 import { eq } from 'drizzle-orm'
 
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     // (Plan 035 Phase 6 item 2), not a span, at the point the decision is made.
     const telemetry = event.context.application?.observability?.request
     try {
-      const userId = await verifyApiKey(authHeader)
+      const userId = await verifyApiKey(authHeader.slice('Bearer '.length))
       const db = useDb()
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
       if (user) {
