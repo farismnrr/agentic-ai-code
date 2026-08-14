@@ -27,17 +27,36 @@ export default defineNitroErrorHandler((error, event) => {
   const isTrusted = trustedTitle !== undefined
 
   const status = isProblem ? error.statusCode : isTrusted ? error.statusCode : 500
+  const isServerError = status >= 500
+  // Set early in server/plugins/application.server.ts, before any handler
+  // runs, so it survives every error path (thrown, raw exception, or
+  // trusted framework error) — read back here so 5xx bodies can carry it
+  // per Plan 035 Phase 2 requirement #7.
+  const requestId = getResponseHeader(event, 'x-request-id') as string | undefined
 
   const extensionFields = (extData: Record<string, unknown>) => {
     const { type, title, status, detail, ...rest } = extData
     return rest
   }
 
+  // `problem()` already strips `detail`/`extra` for `status >= 500` before
+  // this handler ever sees it — `data.detail` is guaranteed undefined and
+  // `extensionFields(data)` empty for a `isProblem && isServerError` body.
+  // Defense in depth: re-strip them here too, so this handler cannot leak
+  // caller-supplied free text even if `problem()`'s own sanitization were
+  // ever bypassed, and attach `requestId` to every 5xx body.
   const body = isProblem
-    ? { type: data.type, title: data.title, status, detail: data.detail, instance: event.path, ...extensionFields(data) }
+    ? {
+        type: data.type,
+        title: data.title,
+        status,
+        detail: isServerError ? undefined : data.detail,
+        instance: event.path,
+        ...(isServerError ? { requestId } : extensionFields(data))
+      }
     : isTrusted
       ? { type: 'about:blank', title: trustedTitle, status, instance: event.path }
-      : { type: 'about:blank', title: 'Internal Server Error', status: 500, instance: event.path }
+      : { type: 'about:blank', title: 'Internal Server Error', status: 500, instance: event.path, requestId }
 
   // Full detail (message asli, stack, error object) HANYA ke server log — tidak pernah ke client.
   if (!isProblem && !isTrusted) logger.error('[unhandled]', error)

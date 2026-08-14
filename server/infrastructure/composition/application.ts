@@ -110,7 +110,7 @@ const providerPort: ProviderManagementPort<ProviderCreate, ProviderUpdate, Await
     try {
       return await listProviderModels(provider)
     } catch (error) {
-      throw badGateway(`Could not reach ${provider.name}: ${(error as Error).message}`)
+      throw badGateway(error, `Could not reach provider "${provider.name}"`)
     }
   }
 }
