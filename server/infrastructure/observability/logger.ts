@@ -1,7 +1,7 @@
 import { consola } from 'consola'
 import { trace } from '@opentelemetry/api'
 import { getLogger } from './otel'
-import { sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
+import { redactSecrets, sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
 
 /**
  * Single logging entry point for server code — replaces raw `console.*`
@@ -59,19 +59,36 @@ function emit(severityNumber: number, severityText: string, message: string, att
   }
 }
 
+// consola prints straight to stdout (dev console / `docker compose logs`),
+// a separate output path from the sanitized `emit()` -> Loki bridge above —
+// so it needs its own pass through `redactSecrets` on `message`/`err.message`
+// before printing. Never pass the raw `err` object to consola: doing so
+// prints its message/stack unredacted, defeating Plan 035's value-level
+// secret redaction for this output path even though Loki stays clean.
+function consolaSafe(err: unknown): unknown {
+  if (err instanceof Error) {
+    const safe = new Error(redactSecrets(err.message))
+    safe.name = err.name
+    if (err.stack) safe.stack = redactSecrets(err.stack)
+    return safe
+  }
+  if (err === undefined) return undefined
+  return redactSecrets(String(err))
+}
+
 export const logger = {
   error(message: string, err?: unknown, attributes: LogAttributes = {}) {
-    if (err === undefined) consola.error(message)
-    else consola.error(message, err)
+    if (err === undefined) consola.error(redactSecrets(message))
+    else consola.error(redactSecrets(message), consolaSafe(err))
     emit(17, 'ERROR', message, { ...errorAttributes(err), ...attributes })
   },
   warn(message: string, err?: unknown, attributes: LogAttributes = {}) {
-    if (err === undefined) consola.warn(message)
-    else consola.warn(message, err)
+    if (err === undefined) consola.warn(redactSecrets(message))
+    else consola.warn(redactSecrets(message), consolaSafe(err))
     emit(13, 'WARN', message, { ...errorAttributes(err), ...attributes })
   },
   info(message: string, attributes: LogAttributes = {}) {
-    consola.info(message)
+    consola.info(redactSecrets(message))
     emit(9, 'INFO', message, attributes)
   },
   // Forwards to Loki only, no consola print — for wrapping output Node/a
