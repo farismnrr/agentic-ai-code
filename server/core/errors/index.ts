@@ -1,4 +1,4 @@
-import { logger } from '../../infrastructure/observability/logger'
+import type { ProblemLogPayload } from './http'
 // Generic titles for statuses that can legitimately arrive from trusted
 // framework/library code (h3's own 404, nuxt-auth-utils' 401) without going
 // through our RFC 9457 factory. The text is ours, not the error's own
@@ -35,7 +35,7 @@ export default defineNitroErrorHandler((error, event) => {
   const requestId = getResponseHeader(event, 'x-request-id') as string | undefined
 
   const extensionFields = (extData: Record<string, unknown>) => {
-    const { type, title, status, detail, ...rest } = extData
+    const { type, title, status, detail, problem, logPayload, ...rest } = extData
     return rest
   }
 
@@ -59,7 +59,18 @@ export default defineNitroErrorHandler((error, event) => {
       : { type: 'about:blank', title: 'Internal Server Error', status: 500, instance: event.path, requestId }
 
   // Full detail (message asli, stack, error object) HANYA ke server log — tidak pernah ke client.
-  if (!isProblem && !isTrusted) logger.error('[unhandled]', error)
+  // `event.context.application.observability.logger` is the same logger
+  // instance server/api/** already reaches via event.context.application.*
+  // (composed once per request in server/plugins/application.server.ts, well
+  // before this handler can run) — so this file never imports
+  // server/infrastructure directly, preserving the server/core layering rule.
+  const requestLogger = event.context.application?.observability?.logger
+  if (!isProblem && !isTrusted) {
+    requestLogger?.error('[unhandled]', error)
+  } else if (isProblem) {
+    const logPayload = data.logPayload as ProblemLogPayload | undefined
+    if (logPayload) requestLogger?.[logPayload.level](logPayload.message, logPayload.cause, logPayload.attributes)
+  }
 
   setResponseHeader(event, 'Content-Type', 'application/problem+json')
   if (isProblem && data.retryAfter) {
