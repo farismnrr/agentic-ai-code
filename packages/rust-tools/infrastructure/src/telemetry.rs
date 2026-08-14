@@ -44,6 +44,7 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{BatchConfigBuilder, BatchSpanProcessor, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use std::time::Duration;
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -58,6 +59,16 @@ const HDR_ENDPOINT: &str = "NUXT_OTEL_JAEGER_ENDPOINT";
 const DEFAULT_ENDPOINT: &str = "http://localhost:4317";
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+
+// Keep the relay's reviewed first-party lifecycle events while dropping
+// protocol/client-library internals. In particular, h2/hyper/tonic/reqwest
+// emit code locations, registry paths, and transport frames that are neither
+// useful diagnostics nor safe production span data.
+fn first_party_filter() -> EnvFilter {
+    EnvFilter::new(
+        "info,h2=off,hyper=off,tonic=off,reqwest=off,opentelemetry=off,opentelemetry_sdk=off,tracing_opentelemetry=off",
+    )
+}
 
 /// Handle returned by [`init_telemetry`]. Dropping it does nothing special;
 /// callers must explicitly call [`shutdown_telemetry`] with a bounded timeout
@@ -91,6 +102,7 @@ pub fn init_telemetry() -> Option<TelemetryGuard> {
         // `tracing` calls are never silently dropped; this does not change
         // any execution behavior (Phase 8 invariant), only observability.
         let _ = tracing_subscriber::fmt()
+            .with_env_filter(first_party_filter())
             .with_writer(std::io::stderr)
             .with_target(false)
             .try_init();
@@ -150,7 +162,11 @@ pub fn init_telemetry() -> Option<TelemetryGuard> {
     let tracer = provider.tracer("ai-code-relay");
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    if let Err(err) = tracing_subscriber::registry().with(otel_layer).try_init() {
+    if let Err(err) = tracing_subscriber::registry()
+        .with(first_party_filter())
+        .with(otel_layer)
+        .try_init()
+    {
         eprintln!(
             "telemetry: failed to install tracing subscriber: {}",
             crate::observability::redact_secrets(&err.to_string())

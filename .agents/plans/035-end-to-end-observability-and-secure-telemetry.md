@@ -18,7 +18,7 @@
 - [x] Phase 0 — reopen this plan without deleting round histories; freeze P1-A–D and E1–E4, security rules, propagation rules, and trace/boundary distinctions.
 - [x] Phase 1 — centralized safe exception representation and real Jaeger redaction proof.
 - [x] Phase 2 — all LangGraph/tool/client error confidentiality.
-- [ ] Phase 3 — Rust trace filtering/data hygiene.
+- [x] Phase 3 — Rust trace filtering/data hygiene.
 - [ ] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
 - [ ] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
 - [ ] Phase 6 — real browser chat happy-path evidence.
