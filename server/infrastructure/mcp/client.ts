@@ -1,9 +1,9 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
-import { assertSafeUrl } from './ssrf-guard'
+import { assertSafeUrl } from '../security/ssrf-guard'
 import type { InferSelectModel } from 'drizzle-orm'
-import type { mcpServers } from '../database/schema'
+import type { mcpServers } from '../../database/schema'
 
 type McpServerConfig = InferSelectModel<typeof mcpServers>
 
