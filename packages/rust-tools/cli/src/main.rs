@@ -24,9 +24,14 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let telemetry_guard = relay_infrastructure::telemetry::init_telemetry();
+    tracing::info_span!("ai_tools.startup").in_scope(|| {
+        tracing::info!("ai-tools starting");
+    });
+
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Curl(args) => {
             commands::curl::run(args).await;
             Ok(())
@@ -40,5 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::terminal::run(args).await;
             Ok(())
         }
-    }
+    };
+
+    relay_infrastructure::telemetry::shutdown_telemetry_default(telemetry_guard).await;
+
+    result
 }
