@@ -33,11 +33,9 @@ export function buildTraceparent(traceId: string, spanId: string): string {
 
 const TELEMETRY_ENDPOINT_PATH = '/api/telemetry'
 
-type RequestLike = string | URL | Request
-
-function toUrlString(input: RequestLike): string {
+function toUrlString(input: unknown): string {
   if (typeof Request !== 'undefined' && input instanceof Request) return input.url
-  return input.toString()
+  return String(input)
 }
 
 /**
@@ -46,7 +44,7 @@ function toUrlString(input: RequestLike): string {
  * keeps `traceparent` from ever attaching to a third-party fetch (provider
  * APIs, remote MCP servers, OAuth, etc.), per the plan's trust-boundary rule.
  */
-export function isSameOriginApiRequest(input: RequestLike): boolean {
+export function isSameOriginApiRequest(input: unknown): boolean {
   if (typeof window === 'undefined') return false
   let url: URL
   try {
@@ -58,7 +56,7 @@ export function isSameOriginApiRequest(input: RequestLike): boolean {
 }
 
 /** True when the request targets `/api/telemetry` itself — never self-instrumented. */
-export function isTelemetryEndpoint(input: RequestLike): boolean {
+export function isTelemetryEndpoint(input: unknown): boolean {
   if (typeof window === 'undefined') return false
   let url: URL
   try {
