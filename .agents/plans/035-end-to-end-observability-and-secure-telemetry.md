@@ -16,7 +16,7 @@
 
 **Remediation round 3 checklist (Phase 0–12):**
 - [x] Phase 0 — reopen this plan without deleting round histories; freeze P1-A–D and E1–E4, security rules, propagation rules, and trace/boundary distinctions.
-- [ ] Phase 1 — centralized safe exception representation and real Jaeger redaction proof.
+- [x] Phase 1 — centralized safe exception representation and real Jaeger redaction proof.
 - [ ] Phase 2 — all LangGraph/tool/client error confidentiality.
 - [ ] Phase 3 — Rust trace filtering/data hygiene.
 - [ ] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.

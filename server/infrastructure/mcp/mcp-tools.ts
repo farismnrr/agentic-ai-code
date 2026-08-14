@@ -1,6 +1,7 @@
 import { SpanStatusCode } from '@opentelemetry/api'
 import { logger } from '../observability/logger'
 import { getTracer } from '../observability/otel'
+import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { loadEnabledMcpServers } from './server-config'
@@ -21,7 +22,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
       span.end()
       return result
     } catch (err) {
-      span.recordException(err instanceof Error ? err : String(err))
+      recordSanitizedException(span, err)
       span.setStatus({ code: SpanStatusCode.ERROR })
       span.end()
       throw err

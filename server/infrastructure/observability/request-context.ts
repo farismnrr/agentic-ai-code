@@ -2,6 +2,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { RequestTelemetryContext, Outcome } from '../../application/observability/contracts'
 import { getTracer } from './otel'
 import { logger } from './logger'
+import { recordSanitizedException } from './exception'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -23,7 +24,7 @@ export function createRequestTelemetryContext(requestId: string): RequestTelemet
       const tracer = getTracer(TRACER_NAME)
       return tracer.startActiveSpan(operation, { attributes: { 'request.id': requestId, ...safeAttributes } }, (span) => {
         const onError = (err: unknown) => {
-          span.recordException(err instanceof Error ? err : String(err))
+          recordSanitizedException(span, err)
           span.setStatus({ code: SpanStatusCode.ERROR })
           span.end()
         }
