@@ -48,7 +48,8 @@ function emit(severityNumber: number, severityText: string, message: string, att
       severityNumber,
       severityText,
       body: sanitizeMessage(message),
-      attributes: sanitizeAttributes(correlated)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      attributes: sanitizeAttributes(correlated) as any
     })
   } catch {
     // Logging/export must never break the request it is describing —
