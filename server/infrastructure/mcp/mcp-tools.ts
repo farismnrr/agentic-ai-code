@@ -15,7 +15,7 @@ const TRACER_NAME = 'ai-code-server'
 // shape directly against the tracer, matching Plan 035 Phase 6 item 5.
 async function withMcpSpan<T>(operation: string, attributes: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
   const tracer = getTracer(TRACER_NAME)
-  return tracer.startActiveSpan(operation, { attributes }, async (span) => {
+  return tracer.startActiveSpan(operation, { attributes: attributes as Record<string, string | number | boolean> }, async (span) => {
     try {
       const result = await fn()
       span.end()
@@ -26,7 +26,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
       span.end()
       throw err
     }
-  })
+  }) as Promise<T>
 }
 
 // Plain map (not `ToolApprovalConfiguration<ToolSet, never>`, despite this

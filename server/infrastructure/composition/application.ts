@@ -68,9 +68,9 @@ export function createApplicationAdapters(requestId: string) {
     mcp: {
       testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, async () => (await import('../mcp/test-server')).testMcpServer(userId, id)),
       listServers: mcp.listMcpServers,
-      createServer: (userId: string, input: unknown) => request.withSpan('mcp_server.create', {}, () => mcp.createMcpServer(userId, input as never)),
-      updateServer: (userId: string, id: string, input: unknown) => request.withSpan('mcp_server.update', {}, () => mcp.updateMcpServer(userId, id, input as never)),
-      deleteServer: (userId: string, id: string) => request.withSpan('mcp_server.delete', {}, () => mcp.deleteMcpServer(userId, id)),
+      createServer: async (userId: string, input: unknown) => request.withSpan('mcp_server.create', {}, () => mcp.createMcpServer(userId, input as never)),
+      updateServer: async (userId: string, id: string, input: unknown) => request.withSpan('mcp_server.update', {}, () => mcp.updateMcpServer(userId, id, input as never)),
+      deleteServer: async (userId: string, id: string) => request.withSpan('mcp_server.delete', {}, () => mcp.deleteMcpServer(userId, id)),
       listMessages: messages.listConversationMessages,
       sendMessage: messages.sendMessage
     } satisfies McpUseCases,
