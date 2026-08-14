@@ -108,7 +108,10 @@ pub fn init_telemetry() -> Option<TelemetryGuard> {
     {
         Ok(exporter) => exporter,
         Err(err) => {
-            eprintln!("telemetry: failed to build OTLP exporter, disabling: {err}");
+            eprintln!(
+                "telemetry: failed to build OTLP exporter, disabling: {}",
+                crate::observability::redact_secrets(&err.to_string())
+            );
             return None;
         }
     };
@@ -148,7 +151,10 @@ pub fn init_telemetry() -> Option<TelemetryGuard> {
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
     if let Err(err) = tracing_subscriber::registry().with(otel_layer).try_init() {
-        eprintln!("telemetry: failed to install tracing subscriber: {err}");
+        eprintln!(
+            "telemetry: failed to install tracing subscriber: {}",
+            crate::observability::redact_secrets(&err.to_string())
+        );
     }
 
     Some(TelemetryGuard { provider })
@@ -165,8 +171,14 @@ pub async fn shutdown_telemetry(guard: Option<TelemetryGuard>, timeout: Duration
     let shutdown = tokio::task::spawn_blocking(move || guard.provider.shutdown());
     match tokio::time::timeout(timeout, shutdown).await {
         Ok(Ok(Ok(()))) => {}
-        Ok(Ok(Err(err))) => eprintln!("telemetry: shutdown error: {err}"),
-        Ok(Err(err)) => eprintln!("telemetry: shutdown task join error: {err}"),
+        Ok(Ok(Err(err))) => eprintln!(
+            "telemetry: shutdown error: {}",
+            crate::observability::redact_secrets(&err.to_string())
+        ),
+        Ok(Err(err)) => eprintln!(
+            "telemetry: shutdown task join error: {}",
+            crate::observability::redact_secrets(&err.to_string())
+        ),
         Err(_) => eprintln!("telemetry: shutdown timed out after {timeout:?}, continuing"),
     }
 }
