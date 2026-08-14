@@ -1,5 +1,5 @@
 import { trace, SpanStatusCode } from '@opentelemetry/api'
-import type { RequestTelemetryContext } from '../../application/observability/contracts'
+import type { RequestTelemetryContext, Outcome } from '../../application/observability/contracts'
 import { getTracer } from './otel'
 import { logger } from './logger'
 
@@ -49,7 +49,7 @@ export function createRequestTelemetryContext(requestId: string): RequestTelemet
         }
       })
     },
-    event(name: string, outcome: string, safeAttributes: Record<string, unknown> = {}) {
+    event(name: string, outcome: Outcome, safeAttributes: Record<string, unknown> = {}) {
       logger.info(name, { 'request.id': requestId, 'operation': name, outcome, ...safeAttributes })
     },
     error(name: string, errorCode: string, cause: unknown, safeAttributes: Record<string, unknown> = {}) {
