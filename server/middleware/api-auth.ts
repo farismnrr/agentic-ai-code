@@ -1,4 +1,4 @@
-import { logger } from "../infrastructure/observability/logger"
+import { logger } from '../infrastructure/observability/logger'
 import { verifyApiKey } from '../infrastructure/auth/api-key'
 import { users } from '../database/schema'
 import { eq } from 'drizzle-orm'

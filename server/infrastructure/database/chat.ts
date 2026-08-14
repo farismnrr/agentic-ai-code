@@ -1,4 +1,4 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { internal } from '#server/core/errors/http'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { conversations, messages as messagesTable } from '../../database/schema'

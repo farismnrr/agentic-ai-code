@@ -1,4 +1,4 @@
-import { logger } from "../observability/logger"
+import { logger } from '../observability/logger'
 import { streamText, convertToModelMessages, type LanguageModel } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import { conversations as conversationsTable, messages as messagesTable } from '../../database/schema'
