@@ -1,7 +1,33 @@
+import { SpanStatusCode } from '@opentelemetry/api'
 import { logger } from '../observability/logger'
+import { getTracer } from '../observability/otel'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { loadEnabledMcpServers } from './server-config'
+import { createMcpClient } from './client'
+
+const TRACER_NAME = 'ai-code-server'
+
+// Infrastructure-layer outbound MCP boundary span helper. `server/infrastructure/**`
+// is allowed to touch OTel directly (unlike application/core); a full
+// `RequestTelemetryContext` isn't threaded this deep into the chat
+// dependency chain today, so this uses the same start/end/record-exception
+// shape directly against the tracer, matching Plan 035 Phase 6 item 5.
+async function withMcpSpan<T>(operation: string, attributes: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+  const tracer = getTracer(TRACER_NAME)
+  return tracer.startActiveSpan(operation, { attributes }, async (span) => {
+    try {
+      const result = await fn()
+      span.end()
+      return result
+    } catch (err) {
+      span.recordException(err instanceof Error ? err : String(err))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      span.end()
+      throw err
+    }
+  })
+}
 
 // Plain map (not `ToolApprovalConfiguration<ToolSet, never>`, despite this
 // being exactly what `toolApproval` ends up passed as into `streamText`):
@@ -57,7 +83,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
 
     let listed
     try {
-      listed = await client.listTools()
+      listed = await withMcpSpan('mcp.tools_list', {}, () => client.listTools())
     } catch (err) {
       logger.error(`[mcp-tools] failed to list tools for "${server.name}"`, err)
       continue
@@ -72,7 +98,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema as Record<string, unknown>),
         execute: async (input: unknown) => {
-          const result = await client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> })
+          const result = await withMcpSpan('mcp.tools_call', { 'tool.name': mcpTool.name }, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
           return result.content
         }
       })

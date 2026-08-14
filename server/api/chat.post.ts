@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
     trigger,
     message,
     abortSignal: abortController.signal,
-    deps: event.context.application.chat()
+    deps: event.context.application.chat(),
+    telemetry: event.context.application.observability.request
   })
 })

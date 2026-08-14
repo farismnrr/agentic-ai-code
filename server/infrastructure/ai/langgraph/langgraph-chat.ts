@@ -7,6 +7,7 @@ import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from '../infrastructure/ai/providers/langgraph-model'
+import type { RequestTelemetryContext } from '../../../application/observability/contracts'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
@@ -101,7 +102,8 @@ export function runLanggraphChat({
   systemPrompt,
   abortSignal,
   cleanup,
-  onEnd
+  onEnd,
+  telemetry
 }: {
   uiMessages: UIMessage[]
   baseModel: LanggraphModel
@@ -109,6 +111,7 @@ export function runLanggraphChat({
   abortSignal?: AbortSignal
   cleanup: () => Promise<void>
   onEnd: (parts: UIMessage['parts'], totalTokens?: number) => Promise<void>
+  telemetry?: RequestTelemetryContext
 }) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
 
@@ -302,6 +305,8 @@ export function runLanggraphChat({
           parts.push({ type: 'text', text: currentText })
         }
         const errorText = (e as Error).message
+        if (abortSignal?.aborted) telemetry?.event('chat.stream.chunk_error', 'cancelled')
+        else telemetry?.error('chat.stream.chunk_error', 'chat_stream_error', e)
         for (const part of parts) {
           if (part.type === 'dynamic-tool' && part.state === 'input-available') {
             part.state = 'output-error'

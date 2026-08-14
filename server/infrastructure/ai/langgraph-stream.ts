@@ -1,6 +1,7 @@
 import { createUIMessageStreamResponse } from 'ai'
 import type { UIMessage } from '#shared/types/chat'
 import type { getLanggraphModel } from './providers/langgraph-model'
+import type { RequestTelemetryContext } from '../../application/observability/contracts'
 
 /**
  * LangGraph stream construction is an infrastructure integration concern
@@ -14,7 +15,8 @@ export function streamLangGraphChat({
   system,
   abortSignal,
   cleanup,
-  persistAssistantMessage
+  persistAssistantMessage,
+  telemetry
 }: {
   messages: UIMessage[]
   model: ReturnType<typeof getLanggraphModel>
@@ -22,6 +24,7 @@ export function streamLangGraphChat({
   abortSignal: AbortSignal
   cleanup: () => Promise<void>
   persistAssistantMessage: (parts: UIMessage['parts'], isContinuation: boolean, totalTokens?: number) => Promise<void>
+  telemetry?: RequestTelemetryContext
 }) {
   const stream = runLanggraphChat({
     uiMessages: messages,
@@ -31,7 +34,8 @@ export function streamLangGraphChat({
     cleanup,
     onEnd: async (parts, totalTokens) => {
       await persistAssistantMessage(parts, false, totalTokens)
-    }
+    },
+    telemetry
   })
   return createUIMessageStreamResponse({ stream })
 }
