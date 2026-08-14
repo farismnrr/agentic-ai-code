@@ -43,7 +43,7 @@ found=0
 if [ -d "$EVIDENCE_DIR" ]; then
   while IFS= read -r -d '' f; do
     case "$(basename "$f")" in
-      *canary-secret-test-results.md|*-request-body.*|*canary-input*)
+      *canary-secret-test-results.md|*-request-body.*|*canary-input*|*value-level-secret-redaction-results.md)
         continue
         ;;
     esac
