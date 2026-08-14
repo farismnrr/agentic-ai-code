@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm'
+import { useDb } from '../database/connection'
 import { mcpServers } from '../../database/schema'
 
 export async function loadEnabledMcpServers(userId: string, serverIds: string[]) {
