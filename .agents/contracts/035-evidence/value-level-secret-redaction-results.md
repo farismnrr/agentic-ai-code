@@ -4,8 +4,7 @@ Plan 035 remediation round 2. Canary marker used everywhere below:
 `canary-secret-fake-token-DO-NOT-LEAK-12345`.
 
 Verified by running `node scripts/verify-value-level-secret-redaction.mjs`
-(TypeScript, via `sanitizeAttributes`) and `cargo test --lib
-observability::redact_tests` (Rust, via `redact_secrets`/`safe_log_field`).
+(TypeScript, via `sanitizeAttributes`) and `cargo run --example redact_check` (Rust, calling the real compiled `redact_secrets`/`safe_log_field` directly — not a unit test, per repository no-unit-test-suite policy).
 Both are deterministic — no server required.
 
 ## TypeScript (`server/infrastructure/observability/sanitize.ts`, `redactSecrets`)
@@ -30,7 +29,7 @@ including `errorAttributes()`'s `error.message`/`stack` fields gated by
 | DB URL userinfo | `postgres://user:canary-secret-fake-token-DO-NOT-LEAK-12345@localhost/db` | `postgres://[REDACTED]@localhost/db` | PASS |
 | `x-api-key` assignment | `x-api-key=canary-secret-fake-token-DO-NOT-LEAK-12345` | `x-api-key=[REDACTED]` | PASS |
 
-Exercised via `cargo test --lib observability::redact_tests` (3 tests, all
+Exercised via `scripts/verify-value-level-secret-redaction.mjs`'s Rust cases (`cargo run --example redact_check`, 3 cases, all
 pass). `redact_secrets` is applied inside `safe_log_field` (used by every
 `transport.rs` `tracing::error!`/`audit()` call site that logs free-form
 diagnostic text, including the Phase 9 OIDC-discovery/JWKS-fetch error

@@ -54,14 +54,32 @@ try {
   fs.rmSync(tmpFile, { force: true })
 }
 
+// Black-box, not a unit test: builds and runs a tiny example binary that
+// calls the real compiled redact_secrets()/safe_log_field() functions and
+// prints their output, so this stays a deterministic acceptance script per
+// repository policy (no #[cfg(test)] / unit-test suite).
 let rustResult = 'PASS'
-try {
-  execFileSync('cargo', ['test', '--lib', 'observability::redact_tests'], {
-    cwd: join(root, 'packages/rust-tools/infrastructure'),
-    stdio: 'inherit'
-  })
-} catch {
-  rustResult = 'FAIL'
+const rustCases = [
+  ['safe_log_field', `Authorization: Bearer ${CANARY}`, 'Bearer [REDACTED]'],
+  ['redact_secrets', `postgres://user:${CANARY}@localhost/db`, 'postgres://[REDACTED]@localhost/db'],
+  ['redact_secrets', `x-api-key=${CANARY}`, '[REDACTED]']
+]
+for (const [mode, input, expectSubstring] of rustCases) {
+  try {
+    const out = execFileSync(
+      'cargo',
+      ['run', '--quiet', '--example', 'redact_check', '--', mode, input],
+      { cwd: join(root, 'packages/rust-tools/infrastructure'), encoding: 'utf8' }
+    ).trim()
+    const leaked = out.includes(CANARY)
+    const masked = out.includes(expectSubstring)
+    const verdict = !leaked && masked ? 'PASS' : 'FAIL'
+    if (verdict === 'FAIL') rustResult = 'FAIL'
+    console.log(JSON.stringify({ mode, input, out, verdict }))
+  } catch (err) {
+    rustResult = 'FAIL'
+    console.error(err.stdout ?? err.message)
+  }
 }
 
 console.log(`\nTypeScript redaction canary: ${tsResult}`)

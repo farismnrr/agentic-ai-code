@@ -287,32 +287,3 @@ pub fn audit(
         "status":status.as_u16(),"latency_ms":latency_ms,"subject":privacy_id(subject)})
     );
 }
-
-#[cfg(test)]
-mod redact_tests {
-    use super::*;
-
-    #[test]
-    fn redacts_bearer_token() {
-        let out =
-            safe_log_field("Authorization: Bearer canary-secret-fake-token-DO-NOT-LEAK-12345");
-        assert!(!out.contains("canary-secret-fake-token-DO-NOT-LEAK-12345"));
-        assert!(out.contains("Bearer [REDACTED]"));
-    }
-
-    #[test]
-    fn redacts_db_url_userinfo() {
-        let out = redact_secrets(
-            "postgres://user:canary-secret-fake-token-DO-NOT-LEAK-12345@localhost/db",
-        );
-        assert!(!out.contains("canary-secret-fake-token-DO-NOT-LEAK-12345"));
-        assert!(out.contains("postgres://[REDACTED]@localhost/db"));
-    }
-
-    #[test]
-    fn redacts_api_key_assignment() {
-        let out = redact_secrets("x-api-key=canary-secret-fake-token-DO-NOT-LEAK-12345");
-        assert!(!out.contains("canary-secret-fake-token-DO-NOT-LEAK-12345"));
-        assert!(out.contains("[REDACTED]"));
-    }
-}
