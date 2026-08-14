@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: CLOSED.** Implementation branch `feat/035-p0-observability-contract`, final commit `2aabaad75f98aba8cb5572eef9b5828ed1b9cd15`. Not merged to `dev`; no PR opened, per execution instructions.
+**Status: OPEN / REMEDIATION IN PROGRESS.** Implementation branch `feat/035-p0-observability-contract`. Reopened at commit `2f67f4dd85a8c5e9130b81a9157d49a93a1b8909` (2026-08-14) after fresh review found three confirmed P1 gaps: (1) `server/core/errors/http.ts` imports `server/infrastructure/observability/logger` directly, violating the Plan 031-034 dependency direction; (2) `server/api/mcp/index.ts:97` returns raw caught-error text (`Error: ${err.message}`) inside a 200 JSON-RPC MCP tool-result, bypassing the 5xx sanitizer entirely; (3) chat traffic uses AI SDK's `DefaultChatTransport` (`app/composables/chat/chat-transport.ts`), which does not go through the `globalThis.$fetch` override that Phase 4/7's trace-context plugin patches — so the single most user-visible request path currently gets no `traceparent`/trace-correlated telemetry at all. Not merged to `dev`; no PR opened, per execution instructions. Remediation is tracked below under "Remediation round 2".
 
 **Baseline:** `dev` at `0134918100ddd2408c625ef6f96453edc11bd579`. Implementation baseline (post-sync): `origin/dev` at `0d3b1cc701e71c61775376c4dcdb8cd74619ab73`. Implementation branch: `feat/035-p0-observability-contract`.
 
