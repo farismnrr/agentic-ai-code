@@ -259,3 +259,75 @@ These are proposed concrete numbers consistent with Plan 035's "bounded" require
 2. Full line-by-line re-audit of `transport.rs` past line 429 (JWKS fetch/parse/signature validation) and of `auth.rs` for the same raw-upstream-message-in-500-body pattern.
 3. Re-verify `server/routes/auth/{google,github}.get.ts` `onError` handlers do not log/return token/code values (not fully read in this pass).
 4. Decide final Rust telemetry attribute size cap (128 vs 256) in Phase 8.
+
+---
+
+## Operator lookup flow (Phase 10)
+
+Verified against the actual Phase 1-9 implementation (not aspirational) on 2026-08-14. This is the exact sequence an operator follows today to reconstruct a request journey from a single client-visible request ID.
+
+### 0. What the client has
+
+A client only ever sees a `requestId` — never a `trace_id` — via one of two channels:
+- the `x-request-id` response header, set unconditionally on every response (success or error) by `server/plugins/application.server.ts` before any handler runs, and by the Rust relay's `RequestId::insert_response_header` (`packages/rust-tools/infrastructure/src/observability.rs`);
+- the `requestId` field in a generic Nuxt 5xx body (`server/core/errors/index.ts`, `server/core/errors/http.ts`) for a status-≥500 response.
+
+Confirmed: neither `http.ts`'s `problem()` nor the global error handler in `server/core/errors/index.ts` ever places `trace_id`/`traceId` in a client-visible body — the only extension field on a 5xx body is `requestId`. No regression found here.
+
+### 1. Operator queries Loki for that `request.id`
+
+Server-side log lines are shipped to Loki by `LokiLogExporter` (`server/infrastructure/observability/otel.ts`). Stream labels are **only** `{job, level}` (`job` = `resource.attributes['service.name']`, e.g. `ai-code-server`; `level` = mapped OTel severity, e.g. `info`/`warning`/`error`/`critical`/`debug`) — confirmed no phase added a new label. Everything else, including `request.id` and `trace_id`, lives in the JSON log line body under `attributes`:
+
+```json
+{"message": "...", "attributes": {"request.id": "<id>", "trace_id": "<32-hex>", ...}, "trace_id": "<32-hex>", "span_id": "<16-hex>"}
+```
+
+(`trace_id`/`span_id` appear twice by construction: once nested in `attributes` — attached by `logger.ts`'s `emit()` from the active span and passed through the `sanitizeAttributes` allowlist in `sanitize.ts`, which includes `trace_id`/`span_id`/`request.id` — and once again at the top level of the exporter's `linePayload`, attached independently from `log.spanContext` in `otel.ts`. Both are populated from the same active span, so they agree; this is redundancy, not a conflict.)
+
+Real LogQL query shape, using Loki's `json` parser to pull the nested, dotted attribute key out explicitly (a bare `| json` does not auto-flatten `attributes."request.id"` into a filterable field name):
+
+```
+{job="ai-code-server"} | json | request_id="attributes.\"request.id\""
+```
+
+or, since the exporter also duplicates `trace_id` at the top level of the line, an operator can equivalently query directly on the top-level field once the batch is known to be recent:
+
+```
+{job="ai-code-server"} | json | trace_id="<32-hex-trace-id-once-known>"
+```
+
+but the *first* lookup by `request.id` (the only identity the client has) must go through the nested `attributes."request.id"` path above.
+
+### 2. The matched record exposes the private `trace_id`
+
+The matched Loki line's `attributes.trace_id` (or top-level `trace_id`) field is the private W3C trace ID for that request — never shown to the client, only to the operator via Loki.
+
+### 3. Operator opens that `trace_id` in Jaeger
+
+Server-side spans are exported via the OTel SDK when `NUXT_OTEL_ENABLED=true`. Opening the `trace_id` in Jaeger shows the Nuxt request/application/infrastructure span tree for that request (Phase 6/7 instrumentation).
+
+**Honest limitation, confirmed by re-reading the code (not assumed):** Rust relay spans do **not** currently join this same trace for any real end-user call path. `extract_traceparent`/W3C propagation is wired in `packages/rust-tools/infrastructure/src/transport.rs`'s `handle_mcp`, so the Rust relay is *capable* of joining an inbound trace — but the only caller of the local relay agent today is the **browser**, directly (`app/composables/useRelayAgent.ts`, calling `http://127.0.0.1:<port>/mcp` client-side), not a Nuxt-server-initiated call. There is no `server/infrastructure/**`/`server/application/**` code path that calls the Rust relay and forwards a `traceparent` header from an active Nuxt server span (this matches the Phase 0 audit's open item 1). Consequently, in the system as it exists today, a Jaeger trace opened from a Nuxt `trace_id` will show only the Nuxt-side span tree — it will not contain Rust relay spans, because no Nuxt-server call path to the relay currently exists to join them. Rust relay traces, when `NUXT_OTEL_ENABLED=true` on the Rust process, are separate root traces under the `ai-code-relay` service name in Jaeger, correlated only by wall-clock proximity, not by shared `trace_id`, to any given Nuxt request.
+
+Additionally confirmed: Rust structured logs (the `audit()` stderr JSON emitted by `packages/rust-tools/infrastructure/src/observability.rs`) do **not** reach Loki today. Only Rust *traces* are exported via OTLP-gRPC when enabled (`packages/rust-tools/infrastructure/src/telemetry.rs`); the module's own doc comment states a full `tracing-subscriber` fmt-to-OTel logs bridge is deliberately deferred, and no code changes that since. stderr JSON (with `request_id`, but no `trace_id` field) remains the sole Rust log path — an operator must read Rust logs via `docker compose logs`/stderr capture, not Loki.
+
+### 4. Operator returns to Loki filtered by that `trace_id`
+
+Back in Loki, filtering by the confirmed `trace_id`:
+
+```
+{job="ai-code-server"} | json | trace_id="<32-hex>"
+```
+
+surfaces every sanitized Nuxt-side structured log line correlated to that request's journey (application/infrastructure boundary events, warnings, errors) in timestamp order. This step does not currently surface any Rust-side log lines, for the reasons above.
+
+### Summary of what is and is not real today
+
+| Step | Real / implemented | Notes |
+|---|---|---|
+| Client gets `requestId` (header or 5xx body) | Yes | Never `trace_id` |
+| Loki lookup by `request.id` in structured body | Yes | Not a label; nested in `attributes` |
+| Loki record exposes `trace_id` | Yes | |
+| Jaeger shows Nuxt span tree for that `trace_id` | Yes | |
+| Jaeger shows Rust relay spans under the same `trace_id` | **No** | No Nuxt-server → Rust relay call path exists today; browser calls the relay directly |
+| Loki shows correlated Rust log lines | **No** | Rust logs are stderr-JSON only; no OTel logs bridge exists yet |
+| Loki labels stay low-cardinality (`{job, level}`) everywhere | Yes | Confirmed, no phase added a new label |
