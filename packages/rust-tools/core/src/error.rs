@@ -93,12 +93,15 @@ impl McpError {
         }
     }
 
-    /// Human-readable JSON-RPC `message` field. Never includes secrets,
-    /// stack traces, or raw process/environment internals (security
-    /// invariant #12 in the plan) — callers should keep any detail passed
-    /// into these variants free of that data.
+    /// Human-readable JSON-RPC `message` field. Internal diagnostics are
+    /// intentionally discarded at this public boundary; callers may retain
+    /// the variant's detail for private tracing, but it must never cross the
+    /// protocol response.
     pub fn message(&self) -> String {
-        self.to_string()
+        match self {
+            McpError::Internal(_) => "Internal error".to_string(),
+            _ => self.to_string(),
+        }
     }
 
     /// The JSON-RPC error object's optional `data` field. Only

@@ -34,13 +34,11 @@ export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, co
         args.push('--no-guard')
 
         const res = await execa(rustBin, args, { reject: false })
-        if (res.failed) {
-          return `Error: ${res.stderr || res.message}`
-        }
+        if (res.failed || res.stdout.startsWith('Error:')) return 'Tool execution failed'
 
         return res.stdout
-      } catch (e: unknown) {
-        return `Error: ${(e as Error).message}`
+      } catch {
+        return 'Tool execution failed'
       }
     },
     {

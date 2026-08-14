@@ -2,6 +2,7 @@ import { badRequest, notFound } from '#server/core/errors/http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { publicMcpToolFailure } from '../../application/observability/public-tool-error'
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers
@@ -101,8 +102,7 @@ export default defineEventHandler(async (event) => {
         // content array, with the raw diagnostic (which may contain
         // filesystem paths, DB errors, provider text, or other internal
         // detail) sent only to the request-scoped private telemetry sink.
-        telemetry.error('mcp.tool.call', 'mcp_tool_call_failed', err, { 'mcp.tool.name': name })
-        return { content: [{ type: 'text', text: 'Tool execution failed' }], isError: true }
+        return publicMcpToolFailure(telemetry, name, err)
       }
     }))
 

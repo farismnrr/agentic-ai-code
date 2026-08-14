@@ -399,37 +399,17 @@ pub async fn dispatch_tool_call(
                         stderr_str.push_str("\n...[truncated due to size limit]");
                     }
 
-                    let mut contents = vec![];
-                    if !stdout_str.is_empty() {
-                        contents.push(ToolResultContent {
+                    if is_error {
+                        tracing::error!(event = "relay.tool.dispatch", outcome = "tool_failed");
+                        Ok(ToolCallResult::error(vec![ToolResultContent {
+                            kind: "text",
+                            text: "Tool execution failed".to_string(),
+                        }]))
+                    } else {
+                        Ok(ToolCallResult::complete(vec![ToolResultContent {
                             kind: "text",
                             text: stdout_str,
-                        });
-                    }
-                    if !stderr_str.is_empty() {
-                        contents.push(ToolResultContent {
-                            kind: "text",
-                            text: stderr_str,
-                        });
-                    }
-                    if contents.is_empty() && is_error {
-                        contents.push(ToolResultContent {
-                            kind: "text",
-                            text: format!("Process exited with status: {}", status),
-                        });
-                    }
-
-                    if contents.is_empty() {
-                        contents.push(ToolResultContent {
-                            kind: "text",
-                            text: "".to_string(),
-                        });
-                    }
-
-                    if is_error {
-                        Ok(ToolCallResult::error(contents))
-                    } else {
-                        Ok(ToolCallResult::complete(contents))
+                        }]))
                     }
                 }
                 Ok(Err(_e)) => {

@@ -311,8 +311,9 @@ export function runLanggraphChat({
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           parts.push({ type: 'text', text: currentText })
         }
-        const errorText = (e as Error).message
-        if (abortSignal?.aborted) telemetry?.event('chat.stream.chunk_error', 'cancelled')
+        const cancelled = abortSignal?.aborted === true
+        const errorText = cancelled ? 'Request cancelled' : 'Tool execution failed'
+        if (cancelled) telemetry?.event('chat.stream.chunk_error', 'cancelled')
         else telemetry?.error('chat.stream.chunk_error', 'chat_stream_error', e)
         for (const part of parts) {
           if (part.type === 'dynamic-tool' && part.state === 'input-available') {
