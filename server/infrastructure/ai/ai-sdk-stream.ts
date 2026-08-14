@@ -2,6 +2,7 @@ import { logger } from '../observability/logger'
 import { createUIMessageStreamResponse, convertToModelMessages, extractReasoningMiddleware, stepCountIs, streamText, toUIMessageStream, wrapLanguageModel, type LanguageModel, type ToolApprovalConfiguration, type ToolSet } from 'ai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
 import type { UIMessage } from '#shared/types/chat'
+import type { RequestTelemetryContext } from '../../application/observability/contracts'
 
 /** A concrete language-model instance, as opposed to the `LanguageModel`
  * union's global-registry-id string form — every provider adapter under
@@ -36,7 +37,8 @@ export async function streamAiSdkAgent({
   abortSignal,
   providerOptions,
   cleanup,
-  persistAssistantMessage
+  persistAssistantMessage,
+  telemetry
 }: {
   model: LanguageModel
   system?: string
@@ -49,6 +51,7 @@ export async function streamAiSdkAgent({
   providerOptions?: ProviderOptions
   cleanup: () => Promise<void>
   persistAssistantMessage: (parts: UIMessage['parts'], isContinuation: boolean, totalTokens?: number) => Promise<void>
+  telemetry?: RequestTelemetryContext
 }) {
   const result = streamText({
     model,
@@ -63,6 +66,9 @@ export async function streamAiSdkAgent({
     providerOptions,
     onError: ({ error }) => {
       logger.error('[chat stream]', error)
+      const outcome = abortSignal.aborted ? 'cancelled' : 'error'
+      if (outcome === 'cancelled') telemetry?.event('chat.stream.chunk_error', 'cancelled')
+      else telemetry?.error('chat.stream.chunk_error', 'chat_stream_error', error)
     }
   })
 

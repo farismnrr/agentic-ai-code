@@ -10,9 +10,20 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 const transports = new Map<string, SSEServerTransport>()
 
 export default defineEventHandler(async (event) => {
+  const telemetry = event.context.application.observability.request
   const authHeader = getHeader(event, 'Authorization')
-  if (!authHeader?.startsWith('Bearer ')) throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
-  const userId = await event.context.application.auth.verifyApiKey(authHeader.slice(7))
+  if (!authHeader?.startsWith('Bearer ')) {
+    telemetry.event('auth.login', 'denied', { 'auth.present': false })
+    throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
+  }
+  let userId: string
+  try {
+    userId = await event.context.application.auth.verifyApiKey(authHeader.slice(7))
+    telemetry.event('auth.login', 'ok', { 'auth.present': true })
+  } catch (err) {
+    telemetry.event('auth.login', 'denied', { 'auth.present': true })
+    throw err
+  }
   const method = event.method
 
   if (method === 'GET') {
@@ -38,7 +49,7 @@ export default defineEventHandler(async (event) => {
       }
     })
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async request => telemetry.withSpan('mcp.inbound.dispatch', { 'mcp.method': 'tools/call' }, async () => {
       const name = request.params.name
       const args = request.params.arguments || {}
 
@@ -85,7 +96,7 @@ export default defineEventHandler(async (event) => {
       } catch (err: unknown) {
         return { content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
       }
-    })
+    }))
 
     await server.connect(transport)
     transports.set(transport.sessionId, transport)

@@ -1,6 +1,7 @@
 import type { UIMessage } from '#shared/types/chat'
 import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import type { ChatTurnDependencies } from './contracts'
+import type { RequestTelemetryContext } from '../observability/contracts'
 import { loadAuthorizedChatContext } from './ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './workspace-context'
 import { buildTurnMessages } from './history'
@@ -28,6 +29,8 @@ export interface ExecuteChatTurnInput {
    * modules themselves.
    */
   deps: ChatTurnDependencies
+  /** Request-scoped telemetry context (Plan 035 Phase 6). Optional so this use case stays callable without a live request (tests/tools). */
+  telemetry?: RequestTelemetryContext
 }
 
 /**
@@ -47,7 +50,13 @@ export interface ExecuteChatTurnInput {
  * (`server/api/chat.post.ts`) supplies the concrete `deps` object via
  * `createChatTurnDependencies()`.
  */
-export async function executeChatTurn({ userId, conversationId, trigger, message, abortSignal, deps }: ExecuteChatTurnInput) {
+export async function executeChatTurn(input: ExecuteChatTurnInput) {
+  const { telemetry } = input
+  if (!telemetry) return executeChatTurnInner(input)
+  return telemetry.withSpan('chat.execute', {}, () => executeChatTurnInner(input))
+}
+
+async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
 
   // Bound the query with the compaction cutoff (once one exists) instead of
@@ -96,6 +105,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     tools = mcp.tools
     toolApproval = mcp.toolApproval
     close = mcp.close
+    if (conv.enabledToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
 
     // Not gated by `conv.enabledToolIds` (no picker toggle for this one —
     // the Settings → Local Terminal page is already where a user manages
@@ -131,11 +141,19 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
       tools['local_terminal'] = localTerminalPolicy.tool
       toolApproval = toolApproval ?? {}
       toolApproval['local_terminal'] = localTerminalPolicy.approval
+      telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
     }
   }
 
-  const assistantLifecycle = createAssistantPersister({ conversationId: conv.id, modelId: modelInfo.modelId, providerType: provider.type, close, persistence: deps.persistence })
+  const assistantLifecycle = createAssistantPersister({ conversationId: conv.id, modelId: modelInfo.modelId, providerType: provider.type, close, persistence: deps.persistence, telemetry })
   const persistAssistantMessage = assistantLifecycle.persist
+
+  telemetry?.event('chat.stream.start', 'ok', { 'provider.type': provider.type })
+  if (abortSignal.aborted) {
+    telemetry?.event('chat.stream.abort', 'cancelled', { 'provider.type': provider.type })
+  } else {
+    abortSignal.addEventListener('abort', () => telemetry?.event('chat.stream.abort', 'cancelled', { 'provider.type': provider.type }), { once: true })
+  }
 
   if (conv.mode === 'chat') {
     // Chat mode has no shell/file-access tool of its own (curl + search
@@ -150,7 +168,8 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
       system: systemPrompt,
       abortSignal,
       cleanup: assistantLifecycle.cleanup,
-      persistAssistantMessage
+      persistAssistantMessage,
+      telemetry
     })
   }
 
@@ -167,6 +186,7 @@ export async function executeChatTurn({ userId, conversationId, trigger, message
     abortSignal,
     providerOptions: resolvedConfig.thinkingEnabled ? { [provider.type]: { reasoningEffort: conv.reasoningEffort ?? 'medium' } } : undefined,
     cleanup: assistantLifecycle.cleanup,
-    persistAssistantMessage
+    persistAssistantMessage,
+    telemetry
   })
 }

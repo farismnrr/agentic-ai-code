@@ -1,5 +1,6 @@
+import { SpanStatusCode } from '@opentelemetry/api'
 import { useDb } from '../database/connection'
-import { getLogger } from '../observability/otel'
+import { getLogger, getTracer } from '../observability/otel'
 import { resolveWorkspacePath } from '../filesystem/browse'
 import { generateToken, hashToken } from '../security/token'
 import { isUniqueViolation } from '../database/errors'
@@ -43,12 +44,13 @@ const conversationPort: ConversationPort = {
 }
 
 export function createApplicationAdapters(requestId: string) {
+  const request = createRequestTelemetryContext(requestId)
   return {
     chat: createChatTurnDependencies,
 
     network: { rateLimit },
     mail: useMailer(),
-    observability: { logger, getLogger, request: createRequestTelemetryContext(requestId) },
+    observability: { logger, getLogger, request },
     database: { isUniqueViolation, db: useDb() },
     security: { generateToken, hashToken },
     filesystem: { resolveWorkspacePath },
@@ -64,19 +66,19 @@ export function createApplicationAdapters(requestId: string) {
       deleteApiKey: account.deleteApiKey
     } satisfies AccountDataUseCases,
     mcp: {
-      testMcpServer: async (userId, id) => (await import('../mcp/test-server')).testMcpServer(userId, id),
+      testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, async () => (await import('../mcp/test-server')).testMcpServer(userId, id)),
       listServers: mcp.listMcpServers,
-      createServer: mcp.createMcpServer,
-      updateServer: mcp.updateMcpServer,
-      deleteServer: mcp.deleteMcpServer,
+      createServer: (userId: string, input: unknown) => request.withSpan('mcp_server.create', {}, () => mcp.createMcpServer(userId, input as never)),
+      updateServer: (userId: string, id: string, input: unknown) => request.withSpan('mcp_server.update', {}, () => mcp.updateMcpServer(userId, id, input as never)),
+      deleteServer: (userId: string, id: string) => request.withSpan('mcp_server.delete', {}, () => mcp.deleteMcpServer(userId, id)),
       listMessages: messages.listConversationMessages,
       sendMessage: messages.sendMessage
     } satisfies McpUseCases,
-    conversations: createConversationUseCases(conversationPort),
-    settings: createSettingsUseCases({ read: settings.getSettings, write: settings.updateSettings }, conversationPort.assertModelOwnership),
-    providers: createProviderManagementUseCases(providerPort),
-    workspaces: createWorkspaceUseCases(workspacePort),
-    models: createModelUseCases(modelPort)
+    conversations: createConversationUseCases(conversationPort, request),
+    settings: createSettingsUseCases({ read: settings.getSettings, write: settings.updateSettings }, conversationPort.assertModelOwnership, request),
+    providers: createProviderManagementUseCases(providerPort, request),
+    workspaces: createWorkspaceUseCases(workspacePort, request),
+    models: createModelUseCases(modelPort, request)
   }
 }
 
@@ -107,10 +109,18 @@ const providerPort: ProviderManagementPort<ProviderCreate, ProviderUpdate, Await
   discoverModels: async (userId, id) => {
     const provider = await findUserProvider(userId, id)
     if (providerRequiresBaseUrl(provider.type) && !provider.baseUrl) throw badRequest(`${provider.name} has no base URL set`)
-    try {
-      return await listProviderModels(provider)
-    } catch (error) {
-      throw badGateway(error, `Could not reach provider "${provider.name}"`)
-    }
+    const tracer = getTracer('ai-code-server')
+    return tracer.startActiveSpan('provider.reachability_check', { attributes: { 'provider.type': provider.type } }, async (span) => {
+      try {
+        const result = await listProviderModels(provider)
+        span.end()
+        return result
+      } catch (error) {
+        span.recordException(error instanceof Error ? error : String(error))
+        span.setStatus({ code: SpanStatusCode.ERROR })
+        span.end()
+        throw badGateway(error, `Could not reach provider "${provider.name}"`)
+      }
+    })
   }
 }

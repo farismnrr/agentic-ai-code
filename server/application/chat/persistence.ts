@@ -1,7 +1,8 @@
 import type { UIMessage } from '#shared/types/chat'
 import type { ChatPersistencePort } from './contracts'
+import type { RequestTelemetryContext } from '../observability/contracts'
 
-export function createAssistantPersister({ conversationId, modelId, providerType, close, persistence }: { conversationId: string, modelId: string, providerType: string, close: () => Promise<void>, persistence: ChatPersistencePort }) {
+export function createAssistantPersister({ conversationId, modelId, providerType, close, persistence, telemetry }: { conversationId: string, modelId: string, providerType: string, close: () => Promise<void>, persistence: ChatPersistencePort, telemetry?: RequestTelemetryContext }) {
   let closed = false
   const closeOnce = async () => {
     if (closed) return
@@ -27,13 +28,16 @@ export function createAssistantPersister({ conversationId, modelId, providerType
         if (last?.role === 'assistant') {
           await persistence.updateAssistant(last.id, parts, totalTokens)
           if (totalTokens != null) await persistence.cacheTokens(conversationId, last.id, totalTokens)
+          telemetry?.event('chat.stream.persist', 'ok', { 'provider.type': providerType })
           return
         }
       }
       const inserted = await persistence.insertAssistant(conversationId, parts, totalTokens)
       if (totalTokens != null && inserted) await persistence.cacheTokens(conversationId, inserted.id, totalTokens)
+      telemetry?.event('chat.stream.persist', 'ok', { 'provider.type': providerType })
     } catch (err) {
       console.error('[chat onEnd] failed to persist assistant message', err)
+      telemetry?.error('chat.stream.persist', 'chat_persist_failed', err, { 'provider.type': providerType })
     }
   }
   return { persist, cleanup: closeOnce }
