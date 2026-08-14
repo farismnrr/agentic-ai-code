@@ -59,6 +59,7 @@ const HDR_ENDPOINT: &str = "NUXT_OTEL_JAEGER_ENDPOINT";
 const DEFAULT_ENDPOINT: &str = "http://localhost:4317";
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+const AI_TOOLS_TRACEPARENT_ENV: &str = "AI_TOOLS_TRACEPARENT";
 
 // Keep the relay's reviewed first-party lifecycle events while dropping
 // protocol/client-library internals. In particular, h2/hyper/tonic/reqwest
@@ -160,7 +161,9 @@ pub fn init_telemetry() -> Option<TelemetryGuard> {
     global::set_tracer_provider(provider.clone());
 
     let tracer = provider.tracer("ai-code-relay");
-    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+    let otel_layer = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_location(false);
 
     if let Err(err) = tracing_subscriber::registry()
         .with(first_party_filter())
@@ -226,4 +229,43 @@ impl<'a> Extractor for HeaderExtractor<'a> {
 pub fn extract_traceparent(headers: &axum::http::HeaderMap) -> Context {
     let propagator = TraceContextPropagator::new();
     propagator.extract(&HeaderExtractor(headers))
+}
+
+/// Extract only the dedicated parent channel used by the Node ai-tools
+/// adapters. Invalid values are ignored and never participate in auth.
+pub fn extract_ai_tools_traceparent() -> Context {
+    let value = std::env::var(AI_TOOLS_TRACEPARENT_ENV).ok();
+    let Some(value) = value else {
+        return Context::new();
+    };
+    if !is_valid_ai_tools_traceparent(&value) {
+        return Context::new();
+    }
+    TraceContextPropagator::new().extract(&MapExtractor(value.as_str()))
+}
+
+fn is_valid_ai_tools_traceparent(value: &str) -> bool {
+    if !value.is_ascii() || value.len() != 55 || !value.starts_with("00-") {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    if bytes[35] != b'-' || bytes[52] != b'-' {
+        return false;
+    }
+    let is_hex = |part: &[u8]| part.iter().all(u8::is_ascii_hexdigit);
+    is_hex(&bytes[3..35])
+        && is_hex(&bytes[36..52])
+        && is_hex(&bytes[53..55])
+        && bytes[3..35].iter().any(|byte| *byte != b'0')
+        && bytes[36..52].iter().any(|byte| *byte != b'0')
+}
+
+struct MapExtractor<'a>(&'a str);
+impl Extractor for MapExtractor<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        (key == "traceparent").then_some(self.0)
+    }
+    fn keys(&self) -> Vec<&str> {
+        vec!["traceparent"]
+    }
 }
