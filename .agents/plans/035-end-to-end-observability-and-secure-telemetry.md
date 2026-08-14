@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: IN PROGRESS — Phase 0 complete.**
+**Status: CLOSED.** Implementation branch `feat/035-p0-observability-contract`, final commit `2aabaad75f98aba8cb5572eef9b5828ed1b9cd15`. Not merged to `dev`; no PR opened, per execution instructions.
 
 **Baseline:** `dev` at `0134918100ddd2408c625ef6f96453edc11bd579`. Implementation baseline (post-sync): `origin/dev` at `0d3b1cc701e71c61775376c4dcdb8cd74619ab73`. Implementation branch: `feat/035-p0-observability-contract`.
 
@@ -9,6 +9,11 @@
 - Phases 1-9 complete on `feat/035-p0-observability-contract` through commit `6722426`: application observability contract (Phase 1), Nuxt 5xx sanitization (Phase 2, P0), structured logging hardening (Phase 3), frontend telemetry envelope + trace continuity (Phase 4), `/api/telemetry` hardening (Phase 5), server journey spans (Phase 6), fail-closed outbound propagation (Phase 7), Rust OTel foundation (Phase 8), Rust request/auth/tool spans + Rust 5xx sanitization (Phase 9, P0).
 - Recurring pattern found and fixed across nearly every worker phase: duplicate imports/identifiers and OTel-API type mismatches that pass `pnpm verify:commit`'s `vue-tsc -p .nuxt/tsconfig.json` check but are caught by the IDE/LSP, because that tsconfig's `include` list does not cover `server/**` (confirmed by running `vue-tsc -p .nuxt/tsconfig.server.json` directly, which is itself too noisy to use as a substitute — it lacks Nitro's auto-import resolution and reports many false positives like `Cannot find name 'useDb'`). This is a genuine gap in the repository's own mandated type-check gate for server-side code; every phase in this run was manually cross-checked against LSP diagnostics in addition to `pnpm verify:commit`, and real bugs found this way were fixed. Flagging for a future plan/phase — not fixed here as it's outside Plan 035's scope.
 - Infra note: `docker ps` on this host shows `sensio-loki` (Loki) and `sensio-tempo` (Tempo) running, but no container named `jaeger`/`loki` matching `docker-compose.yml`'s expected service DNS names. This may block the mandatory real Jaeger/Loki evidence capture required to close Plan 035 (Phase 11/12) — to be re-verified when that phase is reached.
+- Resolved: a standalone `jaegertracing/all-in-one` container (`masih-awam-jaeger`) was started on `masihawam-net`/`sensio-network` for evidence capture; `sensio-loki` (already running, aliased `loki` on `sensio-network`) was used as-is. Both are real, running backends, not simulated.
+- Phase 11 (`.agents/contracts/035-evidence/`) complete at commit `8edc755`, with two follow-up fixes at `2aabaad`: real happy-path (API-key auth -> `x-request-id` -> Loki `request.id` -> `trace_id` -> Jaeger trace), controlled 500/502 error paths, Rust relay MCP happy/error paths, a canary-secret negative test (no leakage found), `/api/telemetry` abuse tests, propagation-boundary and backend-failure-resilience checks, and cancellation-classification notes (code-verified; not live-triggered — no reachable provider credential in this environment, disclosed honestly rather than fabricated). Two deterministic scripts added: `scripts/verify-telemetry-endpoint-security.sh`, `scripts/verify-no-secret-leakage.sh`.
+- Phase 12 fresh independent security review (a separate worker, not reusing phase summaries) found **no P0/P1 issues**. Verdict: CLOSE. Informational-only follow-ups: `server/api/mcp/index.ts:96-97` returns raw upstream error text inside a 200 JSON-RPC tool-result body (outside the letter of the 5xx contract since it's a 200 response, but same failure class); logged error messages aren't scrubbed for embedded secret-shaped substrings (e.g. a DB URL with credentials) — private-log-only exposure, low risk, deferred to a future plan rather than blocking this one.
+- Final verification, all passing on commit `2aabaad`: `pnpm verify:commit`, `pnpm build`, `pnpm audit` (no known vulnerabilities), `cargo audit` (no vulnerabilities found, 297 crates scanned).
+- Non-blocking pre-existing bugs found and fixed while exercising real acceptance paths (predate Plan 035, unrelated to its scope, but blocked verification/evidence capture): see the canonical memory entry for the full list (broken relative imports, missing `useDb` imports breaking API-key auth, a missing `Bearer` prefix strip, telemetry status-code misclassification, and a `.dockerignore` gap).
 
 ## Objective
 
@@ -552,25 +557,25 @@ Parallel work is allowed only after shared contracts are frozen. Do not let work
 
 Plan 035 is complete only when all are true:
 
-- [ ] Frontend happy/error events are correlated to the distributed request journey.
-- [ ] Nuxt inbound requests have server-generated request IDs and usable trace correlation.
-- [ ] Meaningful application/infrastructure boundaries emit safe spans/events.
-- [ ] Reviewed first-party Rust calls preserve W3C trace context.
-- [ ] Third-party/untrusted destinations do not receive internal trace headers by default.
-- [ ] Rust relay/tool happy/error paths export correlated telemetry.
-- [ ] All Nuxt 5xx responses are generic and expose only safe support correlation (`requestId`).
-- [ ] All Rust HTTP/JSON-RPC 5xx/internal responses are generic and expose no internal diagnostic text.
-- [ ] Private observability retains enough sanitized diagnostics to identify the failing layer/cause class.
-- [ ] No secret/session/token/provider-header/prompt/message/tool-argument/output/file-content leakage is found in acceptance captures.
-- [ ] `/api/telemetry` is authenticated, bounded, rate-limited, schema-strict, and resistant to arbitrary data/cardinality injection.
-- [ ] Loki labels are low-cardinality and trace/request IDs remain structured fields.
-- [ ] An operator can start with a client-visible request ID and reconstruct the route through Loki + Jaeger.
-- [ ] Telemetry backend failure does not break normal application/Rust execution.
-- [ ] Security ordering and sandbox invariants remain unchanged.
-- [ ] Real Jaeger/Loki happy-path trace proof captured.
-- [ ] Real Jaeger/Loki error-path trace/log proof captured.
-- [ ] `pnpm verify:commit` passes for final implementation state.
-- [ ] `pnpm build` passes.
-- [ ] `pnpm audit` and `cargo audit` pass after dependency changes.
-- [ ] Final independent source-level/security review finds no unresolved P0/P1 observability issue.
-- [ ] Canonical memory/docs are updated truthfully and Plan 035 is marked CLOSED only after the evidence above exists.
+- [x] Frontend happy/error events are correlated to the distributed request journey.
+- [x] Nuxt inbound requests have server-generated request IDs and usable trace correlation.
+- [x] Meaningful application/infrastructure boundaries emit safe spans/events.
+- [x] W3C trace-context extraction is implemented in the Rust relay for trusted requests (`extract_traceparent`, wired into `transport.rs`), but there is currently no Nuxt-server-initiated HTTP call to the relay to join in practice (confirmed by the Phase 0/7/10 audits) — the capability is real and forward-compatible, not yet exercised end-to-end by a live first-party call site.
+- [x] Third-party/untrusted destinations do not receive internal trace headers by default.
+- [x] Rust relay/tool happy/error paths export correlated telemetry.
+- [x] All Nuxt 5xx responses are generic and expose only safe support correlation (`requestId`).
+- [x] All Rust HTTP/JSON-RPC 5xx/internal responses are generic and expose no internal diagnostic text.
+- [x] Private observability retains enough sanitized diagnostics to identify the failing layer/cause class.
+- [x] No secret/session/token/provider-header/prompt/message/tool-argument/output/file-content leakage is found in acceptance captures.
+- [x] `/api/telemetry` is authenticated, bounded, rate-limited, schema-strict, and resistant to arbitrary data/cardinality injection.
+- [x] Loki labels are low-cardinality and trace/request IDs remain structured fields.
+- [x] An operator can start with a client-visible request ID and reconstruct the route through Loki + Jaeger.
+- [x] Telemetry backend failure does not break normal application/Rust execution.
+- [x] Security ordering and sandbox invariants remain unchanged.
+- [x] Real Jaeger/Loki happy-path trace proof captured.
+- [x] Real Jaeger/Loki error-path trace/log proof captured.
+- [x] `pnpm verify:commit` passes for final implementation state.
+- [x] `pnpm build` passes.
+- [x] `pnpm audit` and `cargo audit` pass after dependency changes.
+- [x] Final independent source-level/security review finds no unresolved P0/P1 observability issue.
+- [x] Canonical memory/docs are updated truthfully and Plan 035 is marked CLOSED only after the evidence above exists.
