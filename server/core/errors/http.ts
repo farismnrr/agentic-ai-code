@@ -1,5 +1,20 @@
-import { logger } from '../../infrastructure/observability/logger'
 import type * as v from 'valibot'
+
+// Private diagnostic payload for a thrown problem — carried on the error's
+// `data` (server-side only) so the Nitro error handler (server/core/errors/
+// index.ts), which already runs inside an event with the request-scoped
+// observability capability at `event.context.application.observability`,
+// can perform the actual `logger.error`/`logger.warn` write. `server/core`
+// must never import `server/infrastructure` directly (Plan 035 P1 layering
+// fix) — this keeps error *semantics* here while the logging *capability*
+// stays injected at the Nitro composition edge, same pattern already used
+// throughout server/api/**.
+export interface ProblemLogPayload {
+  level: 'warn' | 'error'
+  message: string
+  cause?: unknown
+  attributes: Record<string, unknown>
+}
 
 interface ProblemInit {
   status: number
@@ -47,10 +62,11 @@ export function problem(init: ProblemInit) {
   const logDetail = isServerError ? causeText(init.cause) : init.detail
   const message = `${init.status} ${init.title}${logDetail ? `: ${logDetail}` : ''}`
   const logAttributes = { status: init.status, type: init.type ?? 'about:blank', ...init.extra }
-  if (isServerError) {
-    logger.error(message, init.cause, logAttributes)
-  } else {
-    logger.warn(message, undefined, logAttributes)
+  const logPayload: ProblemLogPayload = {
+    level: isServerError ? 'error' : 'warn',
+    message,
+    cause: isServerError ? init.cause : undefined,
+    attributes: logAttributes
   }
 
   return createError({
@@ -62,7 +78,10 @@ export function problem(init: ProblemInit) {
       title: init.title,
       status: init.status,
       detail: isServerError ? undefined : init.detail,
-      ...(isServerError ? undefined : init.extra)
+      ...(isServerError ? undefined : init.extra),
+      // Private — never spread into the client-visible response body. Only
+      // read by the Nitro error handler to perform the actual logger write.
+      logPayload
     }
   })
 }
