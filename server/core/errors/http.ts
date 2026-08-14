@@ -4,9 +4,30 @@ import type * as v from 'valibot'
 interface ProblemInit {
   status: number
   title: string
+  /**
+   * Client-visible free text. Only ever serialized to the response body when
+   * `status < 500` — 4xx responses may legitimately carry user-actionable
+   * detail. For `status >= 500` this field is intentionally ignored on the
+   * client body (see `cause` below); passing it anyway is harmless but has
+   * no effect on what the caller receives.
+   */
   detail?: string
+  /**
+   * Private diagnostic — an `Error`, upstream/provider text, DB/filesystem
+   * detail, or any other free-form failure context. Logged via `logger`
+   * (server-side / Loki only) and NEVER placed in the client-visible body,
+   * regardless of status code. This is the only channel `internal()`/
+   * `badGateway()` should use for dynamic failure context.
+   */
+  cause?: unknown
   type?: string // default 'about:blank' per RFC 9457 §4.2
-  extra?: Record<string, unknown> // extension members, mis. { errors: [...] } atau retryAfter
+  extra?: Record<string, unknown> // extension members, mis. { errors: [...] } atau retryAfter — client-visible only for status < 500
+}
+
+function causeText(cause: unknown): string | undefined {
+  if (cause instanceof Error) return cause.message
+  if (cause === undefined) return undefined
+  return String(cause)
 }
 
 // Every thrown API error funnels through here, so this is the one place
@@ -15,13 +36,21 @@ interface ProblemInit {
 // frontend-forwarded logs (server/api/telemetry.post.ts) ever reached the
 // logs pipeline; a server-side 502 like a dead upstream provider was
 // visible in `docker compose logs` but invisible in Loki.
+//
+// Plan 035 Phase 2: for `status >= 500` the client-visible body is ALWAYS a
+// generic, static title/detail — `cause` (raw error message, stack, upstream/
+// provider text, DB/filesystem text) and `extra` never reach the client for
+// 5xx. They are still logged in full, server-side only, via `logger`, so the
+// same failure remains fully diagnosable in Loki/console.
 export function problem(init: ProblemInit) {
-  const message = `${init.status} ${init.title}${init.detail ? `: ${init.detail}` : ''}`
-  const attributes = { status: init.status, type: init.type ?? 'about:blank', ...init.extra }
-  if (init.status >= 500) {
-    logger.error(message, undefined, attributes)
+  const isServerError = init.status >= 500
+  const logDetail = isServerError ? causeText(init.cause) : init.detail
+  const message = `${init.status} ${init.title}${logDetail ? `: ${logDetail}` : ''}`
+  const logAttributes = { status: init.status, type: init.type ?? 'about:blank', ...init.extra }
+  if (isServerError) {
+    logger.error(message, init.cause, logAttributes)
   } else {
-    logger.warn(message, undefined, attributes)
+    logger.warn(message, undefined, logAttributes)
   }
 
   return createError({
@@ -32,8 +61,8 @@ export function problem(init: ProblemInit) {
       type: init.type ?? 'about:blank',
       title: init.title,
       status: init.status,
-      detail: init.detail,
-      ...init.extra
+      detail: isServerError ? undefined : init.detail,
+      ...(isServerError ? undefined : init.extra)
     }
   })
 }
@@ -44,7 +73,17 @@ export const forbidden = (detail?: string) => problem({ status: 403, title: 'For
 export const notFound = (detail?: string) => problem({ status: 404, title: 'Not Found', detail })
 export const conflict = (detail?: string) => problem({ status: 409, title: 'Conflict', detail })
 export const gone = (detail?: string) => problem({ status: 410, title: 'Gone', detail })
-export const badGateway = (detail?: string) => problem({ status: 502, title: 'Bad Gateway', detail })
+
+// `context` is a private, developer-authored label (e.g. a provider name) —
+// it is appended to the logged cause only, never to the client body. Use it
+// to disambiguate which upstream failed without leaking that identity (or
+// the upstream's own error text) to the client.
+export const badGateway = (cause?: unknown, context?: string) =>
+  problem({
+    status: 502,
+    title: 'Bad Gateway',
+    cause: context ? new Error(`${context}: ${causeText(cause) ?? 'unknown error'}`) : cause
+  })
 
 export function unprocessable(issues: v.BaseIssue<unknown>[]) {
   const errors = issues.map(issue => ({
@@ -58,8 +97,4 @@ export function tooManyRequests(retryAfterSeconds?: number) {
   return problem({ status: 429, title: 'Too Many Requests', extra: { retryAfter: retryAfterSeconds ?? 60 } })
 }
 
-export const internal = (cause?: unknown) => {
-  const detail = cause instanceof Error ? cause.message : cause ? String(cause) : undefined
-  const extra = cause instanceof Error && cause.stack ? { stack: cause.stack } : undefined
-  return problem({ status: 500, title: 'Internal Server Error', detail, extra })
-}
+export const internal = (cause?: unknown) => problem({ status: 500, title: 'Internal Server Error', cause })
