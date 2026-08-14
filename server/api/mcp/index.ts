@@ -94,7 +94,15 @@ export default defineEventHandler(async (event) => {
 
         throw new Error(`Unknown tool: ${name}`)
       } catch (err: unknown) {
-        return { content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
+        // Plan 035 P1/P2: this is a successful (HTTP 200) JSON-RPC MCP
+        // tool-result body, so the 5xx sanitization in server/core/errors/
+        // http.ts never runs for it. Mirror the same public/private split
+        // here by hand — a stable, generic message on the client-visible
+        // content array, with the raw diagnostic (which may contain
+        // filesystem paths, DB errors, provider text, or other internal
+        // detail) sent only to the request-scoped private telemetry sink.
+        telemetry.error('mcp.tool.call', 'mcp_tool_call_failed', err, { 'mcp.tool.name': name })
+        return { content: [{ type: 'text', text: 'Tool execution failed' }], isError: true }
       }
     }))
 
