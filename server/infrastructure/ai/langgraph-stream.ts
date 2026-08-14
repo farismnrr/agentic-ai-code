@@ -1,4 +1,5 @@
 import { createUIMessageStreamResponse } from 'ai'
+import { runLanggraphChat } from './langgraph/langgraph-chat'
 import type { UIMessage } from '#shared/types/chat'
 import type { getLanggraphModel } from './providers/langgraph-model'
 import type { RequestTelemetryContext } from '../../application/observability/contracts'
