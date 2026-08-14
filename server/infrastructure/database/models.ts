@@ -1,4 +1,4 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { forbidden, notFound, internal } from '#server/core/errors/http'
 import { and, eq } from 'drizzle-orm'
 import { models, modelProviders } from '../../database/schema'

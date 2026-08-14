@@ -1,4 +1,4 @@
-import { logger } from "../../observability/logger"
+import { logger } from '../../observability/logger'
 import { createAgent } from 'langchain'
 
 import { buildLanggraphTools } from './langgraph-tools'

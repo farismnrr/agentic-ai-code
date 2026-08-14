@@ -1,4 +1,4 @@
-import { logger } from "../../infrastructure/observability/logger"
+import { logger } from '../../infrastructure/observability/logger'
 // Generic titles for statuses that can legitimately arrive from trusted
 // framework/library code (h3's own 404, nuxt-auth-utils' 401) without going
 // through our RFC 9457 factory. The text is ours, not the error's own

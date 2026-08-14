@@ -1,4 +1,4 @@
-import { logger } from "../observability/logger"
+import { logger } from '../observability/logger'
 import { logger } from '#server/infrastructure/observability/logger'
 import nodemailer from 'nodemailer'
 

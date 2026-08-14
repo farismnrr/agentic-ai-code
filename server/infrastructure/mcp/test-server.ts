@@ -1,4 +1,4 @@
-import { logger } from "../observability/logger"
+import { logger } from '../observability/logger'
 import { and, eq } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
 import type { McpTool } from '#shared/types/chat'
