@@ -1,6 +1,33 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: CLOSED (remediation round 2).** Implementation branch `feat/035-p0-observability-contract`, final commit `6b820e9607ccdfe6928dd909d00c91f8b32c7643`. Not merged to `dev`; no PR opened, per execution instructions.
+**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phase 0 only).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
+
+**Remediation round 3 reason:** the user's confirmed review blockers are: **P1-A** raw exceptions leak secrets/internal detail into Jaeger; **P1-B** LangGraph/tool failure paths stream raw internal errors; **P1-C** Rust telemetry exports dependency noise/filesystem paths; **P1-D** the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace. The evidence gaps are: **E1** the browser happy path is not real; **E2** the Rust internal proof is a 400, not a genuine 5xx; **E3** requestId → Loki → trace is not guaranteed; **E4** closure docs overstate claims. This is a documentation/contract reset only; no later phase is complete until these blockers and evidence gaps are independently re-proven.
+
+**Round 3 Phase 0 inventory (must remain visible until each later phase is independently re-proven):**
+- **P1-A — raw exceptions leak secrets/internal detail into Jaeger.**
+- **P1-B — LangGraph/tool failure paths stream raw internal errors.**
+- **P1-C — Rust telemetry exports dependency noise/filesystem paths.**
+- **P1-D — the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace.**
+- **E1 — browser happy path is not real.**
+- **E2 — Rust internal proof is 400, not genuine 5xx.**
+- **E3 — requestId → Loki → trace is not guaranteed.**
+- **E4 — closure docs overstate claims.**
+
+**Remediation round 3 checklist (Phase 0–12):**
+- [x] Phase 0 — reopen this plan without deleting round histories; freeze P1-A–D and E1–E4, security rules, propagation rules, and trace/boundary distinctions.
+- [ ] Phase 1 — centralized safe exception representation and real Jaeger redaction proof.
+- [ ] Phase 2 — all LangGraph/tool/client error confidentiality.
+- [ ] Phase 3 — Rust trace filtering/data hygiene.
+- [ ] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
+- [ ] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
+- [ ] Phase 6 — real browser chat happy-path evidence.
+- [ ] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.
+- [ ] Phase 8 — comprehensive runtime canary leakage falsification.
+- [ ] Phase 9 — fresh source-level security/architecture falsification.
+- [ ] Phase 10 — full release verification including build/audits/scripts/LSP.
+- [ ] Phase 11 — fresh independent worker closure review.
+- [ ] Phase 12 — truthful final documentation and closure.
 
 **Remediation round 2 summary:** Reopened at commit `2f67f4dd85a8c5e9130b81a9157d49a93a1b8909` (2026-08-14) after the user's own fresh review found three confirmed P1 gaps missed by round 1's independent review: (1) `server/core/errors/http.ts` imported `server/infrastructure/observability/logger` directly, violating the Plan 031-034 dependency direction; (2) `server/api/mcp/index.ts:97` returned raw caught-error text inside a 200 JSON-RPC MCP tool-result, bypassing the 5xx sanitizer entirely; (3) chat traffic used AI SDK's `DefaultChatTransport`, which never went through the `globalThis.$fetch` override Phase 4/7 patched — the single most user-visible request path got no trace correlation at all. All three fixed and re-proven live. Full remediation lane list:
 
@@ -566,6 +593,8 @@ Parallel work is allowed only after shared contracts are frozen. Do not let work
 ---
 
 ## Definition of Done
+
+**Historical round-2 record only — not current round-3 status.** The following checked items document the prior closure claim and must be revalidated against P1-A–D and E1–E4 before they can support a new closure:
 
 Plan 035 is complete only when all are true:
 
