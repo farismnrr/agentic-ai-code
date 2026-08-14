@@ -1,4 +1,5 @@
 import { SpanStatusCode } from '@opentelemetry/api'
+import { recordSanitizedException } from '../observability/exception'
 import { useDb } from '../database/connection'
 import { getLogger, getTracer } from '../observability/otel'
 import { resolveWorkspacePath } from '../filesystem/browse'
@@ -116,7 +117,7 @@ const providerPort: ProviderManagementPort<ProviderCreate, ProviderUpdate, Await
         span.end()
         return result
       } catch (error) {
-        span.recordException(error instanceof Error ? error : String(error))
+        recordSanitizedException(span, error)
         span.setStatus({ code: SpanStatusCode.ERROR })
         span.end()
         throw badGateway(error, `Could not reach provider "${provider.name}"`)
