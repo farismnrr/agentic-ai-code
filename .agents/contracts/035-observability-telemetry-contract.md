@@ -1,5 +1,36 @@
 # Plan 035 Phase 0 — Observability & Telemetry Contract (Frozen)
 
+## Remediation round 3 freeze
+
+This round reopens the plan's contract only. The round-1 and round-2 implementation/evidence histories remain historical records; no later round-3 phase is accepted by this document.
+
+### Shared distributed trace versus boundary identity
+
+- A **shared distributed trace** means one W3C trace ID with an actual parent/child context handoff across a real trusted request hop. Matching timestamps, request IDs, user IDs, route names, or operator correlation does not prove a shared trace.
+- A **request ID** is a support/correlation handle. It may be returned to the client and recorded in logs, but it is not a trace ID and must not be used as proof that two processes joined one trace.
+- A **span** identifies an operation inside a trace; a local CLIENT span records an external call's timing/result without authorizing propagation to that destination.
+
+### Security and propagation boundaries
+
+- **Same-origin browser → Nuxt** is an application boundary: trace context may continue there, with no `baggage`.
+- **Nuxt → explicitly reviewed first-party Rust relay** is a propagation boundary only when a real server-initiated hop exists and the destination/origin is allowlisted. The current paired browser-to-local-relay path is not such a hop; it is a separate client-to-relay boundary unless an explicit context handoff is implemented and evidenced.
+- **Nuxt → first-party `ai-tools` subprocess** is a distinct local process boundary, not relay HTTP. It must receive an explicit context handoff from the actual subprocess invocation if it is to join the same distributed trace; Jaeger proximity or shared request IDs alone do not establish that join.
+- **Relay HTTP and the `ai-tools` subprocess are not interchangeable:** an HTTP `traceparent` allowlist does not prove propagation into a spawned process, and subprocess propagation must not expose arbitrary command text, arguments, environment, cwd, workspace paths, or tool input/output.
+- **Arbitrary commands** remain user/tool execution data and are never trace/log/span attributes; observability must not broaden command admission, sandbox, filesystem, or network permissions.
+- **Nuxt → provider, arbitrary MCP, OAuth, SMTP, or other third-party destination** is an isolation boundary: local timing spans are allowed, W3C trace headers, baggage, auth metadata, and internal identifiers are not.
+- **Collector/exporter backends** are operator infrastructure and sinks, not user-data propagation destinations. Their existence does not authorize forwarding trace context to user-configured destinations.
+
+### Frozen security/propagation rules
+
+1. No public HTTP/JSON-RPC response exposes internal causes, stacks, provider/database/filesystem/auth/JWKS detail, or implementation messages on failure.
+2. No secret, credential, token, raw body, prompt/message, tool input/output, command, filesystem path, arbitrary URL/query, direct PII, or raw user/tenant identifier enters telemetry, logs, traces, labels, console, or stderr.
+3. All emitted attributes pass the runtime allowlist sanitizer; unknown keys, control characters, oversized values, and unsafe error objects cannot bypass it through a parallel exporter or console path.
+4. Loki labels remain static and low-cardinality; request/trace/span IDs remain structured fields.
+5. Browser trace headers are same-origin only. Outbound server propagation is fail-closed, explicit, and origin-checked; no `baggage` is registered.
+6. Redirects and retries cannot carry trace or credential headers across a changed origin.
+7. Observability must not weaken authentication, authorization, admission ordering, SSRF protection, CORS, sandboxing, or cancellation semantics.
+8. Third-party providers and arbitrary MCP endpoints never receive internal trace context; first-party `ai-tools` subprocess propagation is explicit, bounded, and separate from relay HTTP propagation.
+
 **Status:** Frozen for Plan 035 Phase 1+. Documentation-only; no runtime behavior changed by this file.
 **Baseline commit:** `0d3b1cc701e71c61775376c4dcdb8cd74619ab73` (branch `feat/035-p0-observability-contract`, based on `dev`).
 
