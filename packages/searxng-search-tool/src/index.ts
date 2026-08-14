@@ -15,13 +15,11 @@ export const createSearxngSearchTool = ({ baseUrl }: { baseUrl: string }) => {
         const res = await execa(rustBin, cliArgs, {
           reject: false
         })
-        if (res.failed) {
-          return `Error: ${res.stderr || res.message}`
-        }
+        if (res.failed || res.stdout.startsWith('Error:') || res.stdout.startsWith('Search failed')) return 'Tool execution failed'
 
         return res.stdout
-      } catch (e: unknown) {
-        return `Error: ${(e as Error).message}`
+      } catch {
+        return 'Tool execution failed'
       }
     },
     {

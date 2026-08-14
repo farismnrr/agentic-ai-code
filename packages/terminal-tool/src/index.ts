@@ -50,13 +50,11 @@ export const runTerminalCommand = async ({
       reject: false
     })
 
-    if (result.failed) {
-      return `Error: ${result.stderr || result.message}`
-    }
+    if (result.failed || result.stdout.startsWith('Error:')) return 'Tool execution failed'
 
     return result.stdout
-  } catch (e: unknown) {
-    return `Error: ${(e as Error).message}`
+  } catch {
+    return 'Tool execution failed'
   }
 }
 

@@ -76,6 +76,10 @@ export async function streamAiSdkAgent({
     stream: result.stream,
     tools,
     originalMessages,
+    // AI SDK serializes this value into the user-visible stream. Never let
+    // provider/tool Error.message become normal UI output; diagnostics are
+    // already recorded privately by streamText's onError above.
+    onError: () => abortSignal.aborted ? 'Request cancelled' : 'Tool execution failed',
     onEnd: async ({ responseMessage, isContinuation }) => {
       await cleanup()
       let totalTokens: number | undefined
