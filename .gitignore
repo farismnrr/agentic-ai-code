@@ -32,3 +32,9 @@ target/
 
 # Local Claude Code session runtime (not repository-owned agent guidance)
 .claude/
+
+# Local SQLite databases
+*.db
+
+# Local scratch/debug scripts
+scratch_*
