@@ -55,8 +55,9 @@ use crate::auth::{
     ClaimValidationError, Claims, TokenValidationError,
 };
 use crate::auth::{CacheKeyDecision, CachedJwks};
-use crate::observability::{audit, CorrelationId};
+use crate::observability::{audit, safe_log_field, CorrelationId, RequestId};
 use crate::security::enforce_local_access_policy;
+use crate::telemetry::extract_traceparent;
 use relay_application::admission::RequestAdmission;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -64,6 +65,8 @@ use relay_interfaces::mcp::{
     self, parse_request, tool_catalog, DiscoverResult, ErrorResponse, Id, Response, ToolCallResult,
     ToolsCallParams,
 };
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP
 /// HTTP request body max.
@@ -189,11 +192,18 @@ async fn handle_health() -> StatusCode {
     StatusCode::OK
 }
 
+/// Establishes the per-request identity. `RequestId` is always
+/// server-generated and is the sole authoritative correlation value returned
+/// to the client (Plan 035 Phase 9); a client-supplied `x-correlation-id`, if
+/// present and well-formed, is retained only as untrusted optional metadata
+/// for private telemetry and is never echoed back on the response.
 async fn correlation_middleware(mut req: Request, next: Next) -> AxumResponse {
-    let id = CorrelationId::from_request(&req);
-    req.extensions_mut().insert(id.clone());
+    let client_hint = CorrelationId::from_request(&req);
+    let request_id = RequestId::generate();
+    req.extensions_mut().insert(client_hint);
+    req.extensions_mut().insert(request_id.clone());
     let mut response = next.run(req).await;
-    id.insert_response_header(&mut response);
+    request_id.insert_response_header(&mut response);
     response
 }
 
@@ -245,6 +255,7 @@ async fn access_policy(
     // the expensive/authenticated path without changing the separate HTTP
     // concurrency and execution semaphore limits.
     if !state.request_admission.try_acquire(Instant::now()) {
+        tracing::warn!(event = "relay.admission", outcome = "denied");
         let mut headers = HeaderMap::new();
         headers.insert(
             axum::http::header::RETRY_AFTER,
@@ -285,6 +296,10 @@ async fn access_policy(
             state.config.trusted_proxy_cidr.as_deref(),
         );
 
+        tracing::debug!(
+            event = "relay.access.trusted_proxy",
+            outcome = if is_https { "https" } else { "not_https" }
+        );
         if !is_https {
             return (
                 StatusCode::FORBIDDEN,
@@ -299,11 +314,16 @@ async fn access_policy(
         let oauth_issuer = match &state.config.oauth_issuer {
             Some(i) => i.clone(),
             None => {
+                tracing::error!(
+                    event = "relay.auth.validate",
+                    outcome = "config_missing",
+                    reason = "oauth_issuer_missing"
+                );
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse::new(
                         None,
-                        &McpError::Internal("oauth_issuer is required for Remote mode".into()),
+                        &McpError::Internal("OAuth configuration is unavailable".into()),
                     )),
                 )
                     .into_response();
@@ -313,11 +333,16 @@ async fn access_policy(
         let oauth_audience = match &state.config.oauth_audience {
             Some(a) => a.clone(),
             None => {
+                tracing::error!(
+                    event = "relay.auth.validate",
+                    outcome = "config_missing",
+                    reason = "oauth_audience_missing"
+                );
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse::new(
                         None,
-                        &McpError::Internal("oauth_audience is required for Remote mode".into()),
+                        &McpError::Internal("OAuth configuration is unavailable".into()),
                     )),
                 )
                     .into_response();
@@ -361,8 +386,18 @@ async fn access_policy(
         // here, and they get the identical invalid_token/401 response that
         // a missing bearer token receives.
         let header = match auth::parse_structurally_plausible_jwt(token) {
-            Some(header) => header,
+            Some(header) => {
+                tracing::debug!(
+                    event = "relay.auth.validate",
+                    outcome = "structurally_valid"
+                );
+                header
+            }
             None => {
+                tracing::warn!(
+                    event = "relay.auth.validate",
+                    outcome = "structurally_invalid"
+                );
                 return oauth_error_response(
                     StatusCode::UNAUTHORIZED,
                     None,
@@ -394,11 +429,21 @@ async fn access_policy(
             let discovered_url = match auth::fetch_discovery(client.clone(), discovery_url).await {
                 Ok(url) => url,
                 Err(msg) => {
+                    // The raw upstream/network/OIDC error text (`msg`) may
+                    // contain hostnames, TLS errors, or HTTP status text —
+                    // it goes ONLY into private telemetry, never the
+                    // client-visible body (Plan 035 Phase 9, confirmed leak
+                    // at the pre-fix baseline).
+                    tracing::error!(
+                        event = "relay.auth.discovery",
+                        outcome = "error",
+                        detail = safe_log_field(&msg)
+                    );
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse::new(
                             None,
-                            &McpError::Internal(format!("OIDC discovery unavailable: {msg}")),
+                            &McpError::Internal("OIDC discovery unavailable".into()),
                         )),
                     )
                         .into_response();
@@ -406,6 +451,7 @@ async fn access_policy(
             };
             if !auth::validate_jwks_uri(&discovered_url, fixture_override) {
                 if url::Url::parse(&discovered_url).is_err() {
+                    tracing::error!(event = "relay.auth.discovery", outcome = "invalid_jwks_uri");
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse::new(
@@ -417,6 +463,7 @@ async fn access_policy(
                     )
                         .into_response();
                 }
+                tracing::error!(event = "relay.auth.discovery", outcome = "unsafe_jwks_uri");
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse::new(
@@ -426,6 +473,7 @@ async fn access_policy(
                 )
                     .into_response();
             }
+            tracing::debug!(event = "relay.auth.discovery", outcome = "refreshed");
             discovered_url
         } else {
             cache_snapshot
@@ -435,13 +483,23 @@ async fn access_policy(
 
         if cache_needs_refresh {
             match auth::refresh_cache(&state.jwks_cache, client.clone(), jwks_url.clone()).await {
-                Ok(()) => {}
+                Ok(()) => {
+                    tracing::debug!(event = "relay.auth.discovery", outcome = "jwks_refreshed");
+                }
                 Err(msg) => {
+                    // Same private-only-detail rule as the discovery leak
+                    // above: `msg` (raw JWKS fetch/parse error) never
+                    // reaches the client.
+                    tracing::error!(
+                        event = "relay.auth.discovery",
+                        outcome = "jwks_error",
+                        detail = safe_log_field(&msg)
+                    );
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse::new(
                             None,
-                            &McpError::Internal(format!("JWKS unavailable: {msg}")),
+                            &McpError::Internal("JWKS unavailable".into()),
                         )),
                     )
                         .into_response();
@@ -542,6 +600,7 @@ async fn access_policy(
                     )
                 }
             };
+        tracing::debug!(event = "relay.auth.validate", outcome = "signature_valid");
         auth_ctx.claims = Some(claims);
 
         let claims = auth_ctx.claims.as_ref().expect("claims were just stored");
@@ -550,8 +609,14 @@ async fn access_policy(
             state.config.oauth_owner_subject.as_deref(),
             CODING_SCOPE,
         ) {
-            Ok(()) => {}
+            Ok(()) => {
+                tracing::debug!(event = "relay.auth.validate", outcome = "authorized");
+            }
             Err(ClaimValidationError::UnauthorizedSubject) => {
+                tracing::warn!(
+                    event = "relay.auth.validate",
+                    outcome = "unauthorized_subject"
+                );
                 return (
                     StatusCode::FORBIDDEN,
                     Json(ErrorResponse::new(
@@ -562,6 +627,10 @@ async fn access_policy(
                     .into_response();
             }
             Err(ClaimValidationError::InsufficientScope) => {
+                tracing::warn!(
+                    event = "relay.auth.validate",
+                    outcome = "insufficient_scope"
+                );
                 if is_tools_call {
                     auth_ctx.decision = AuthDecision::InsufficientScope;
                     req.extensions_mut().insert(auth_ctx);
@@ -578,10 +647,11 @@ async fn access_policy(
                 );
             }
         }
+    } else if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
+        tracing::warn!(event = "relay.access.local", outcome = "denied");
+        return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
     } else {
-        if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
-            return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
-        }
+        tracing::debug!(event = "relay.access.local", outcome = "allowed");
     }
 
     req.extensions_mut().insert(auth_ctx);
@@ -591,117 +661,143 @@ async fn access_policy(
 async fn handle_mcp(
     State(_state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
-    axum::extract::Extension(correlation_id): axum::extract::Extension<CorrelationId>,
+    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
+    axum::extract::Extension(client_hint): axum::extract::Extension<CorrelationId>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> AxumResponse {
-    let started = Instant::now();
-    // Content-Type must be application/json for the Streamable HTTP JSON
-    // mode used in this phase (no SSE upgrade implemented yet — see audit
-    // doc section 3).
-    let content_type = headers
-        .get(axum::http::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    if let Err(err) =
-        relay_interfaces::transport_validation::validate_content_type(Some(content_type))
-    {
-        let response = err_response(StatusCode::BAD_REQUEST, None, &err).into_response();
-        audit(
-            correlation_id.as_str(),
-            "http",
-            None,
-            "invalid_content_type",
-            StatusCode::BAD_REQUEST,
-            started,
-            auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
-        );
-        return response;
-    }
+    // W3C Trace Context extraction (Plan 035 Phase 8/9): joins this span to
+    // the caller's distributed trace when a trusted first-party caller sends
+    // `traceparent`. No-op (root span) when absent.
+    let parent_cx = extract_traceparent(&headers);
+    let span = tracing::info_span!("relay.request", request_id = %request_id.as_str());
+    let _ = span.set_parent(parent_cx);
 
-    // Body size is already bounded by DefaultBodyLimit before this handler
-    // runs; parse only after that gate, never before.
-    let payload: Value = match serde_json::from_slice(&body) {
-        Ok(v) => v,
-        Err(_) => {
-            let response = json_error_response(err_response(
-                StatusCode::BAD_REQUEST,
-                None,
-                &McpError::ParseError,
-            ));
+    async move {
+        let started = Instant::now();
+        let request_id_str = request_id.as_str();
+        let client_hint_str = client_hint.as_str();
+        // Content-Type must be application/json for the Streamable HTTP JSON
+        // mode used in this phase (no SSE upgrade implemented yet — see audit
+        // doc section 3).
+        let content_type = headers
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        if let Err(err) =
+            relay_interfaces::transport_validation::validate_content_type(Some(content_type))
+        {
+            let response = err_response(StatusCode::BAD_REQUEST, None, &err).into_response();
             audit(
-                correlation_id.as_str(),
+                request_id_str,
+                client_hint_str,
                 "http",
                 None,
-                "parse_error",
+                "invalid_content_type",
                 StatusCode::BAD_REQUEST,
                 started,
                 auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
             );
             return response;
         }
-    };
 
-    let request = match parse_request(&payload) {
-        Ok(req) => req,
-        Err(None) => {
-            // A notification the server accepts: MCP `2026-07-28` mandates
-            // `202 Accepted` with no body, never a JSON envelope. Header
-            // requirements for notification POSTs are explicitly left
-            // undefined by this revision (see module docs), so no further
-            // validation runs here.
-            return StatusCode::ACCEPTED.into_response();
+        // Body size is already bounded by DefaultBodyLimit before this handler
+        // runs; parse only after that gate, never before.
+        let payload: Value = match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(_) => {
+                let response = json_error_response(err_response(
+                    StatusCode::BAD_REQUEST,
+                    None,
+                    &McpError::ParseError,
+                ));
+                audit(
+                    request_id_str,
+                    client_hint_str,
+                    "http",
+                    None,
+                    "parse_error",
+                    StatusCode::BAD_REQUEST,
+                    started,
+                    auth_ctx.claims.as_ref().and_then(|c| c.sub.as_deref()),
+                );
+                return response;
+            }
+        };
+
+        let request = match parse_request(&payload) {
+            Ok(req) => req,
+            Err(None) => {
+                // A notification the server accepts: MCP `2026-07-28` mandates
+                // `202 Accepted` with no body, never a JSON envelope. Header
+                // requirements for notification POSTs are explicitly left
+                // undefined by this revision (see module docs), so no further
+                // validation runs here.
+                return StatusCode::ACCEPTED.into_response();
+            }
+            Err(Some(mcp_err)) => {
+                let id = payload
+                    .get("id")
+                    .and_then(|v| serde_json::from_value::<Id>(v.clone()).ok());
+                return json_error_response(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
+            }
+        };
+
+        // The legacy lifecycle is intentionally the only path that bypasses the
+        // modern 2026 routing headers, allowing standard MCP clients to discover
+        // this server before switching to the existing request contract.
+        if request.method == "initialize" {
+            tracing::info!(event = "relay.mcp.initialize");
+            return handle_initialize(&request)
+                .map_or_else(json_error_response, |body| body.into_response());
         }
-        Err(Some(mcp_err)) => {
-            let id = payload
-                .get("id")
-                .and_then(|v| serde_json::from_value::<Id>(v.clone()).ok());
-            return json_error_response(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
+
+        // Legacy clients do not send the 2026 request metadata or routing
+        // headers on the follow-up tools/list request. Keep this compatibility
+        // exception narrow; a tools/list request that presents any modern header
+        // or metadata remains subject to the strict 2026 validation below.
+        let legacy_tools_list =
+            relay_interfaces::transport_validation::is_legacy_tools_list(&headers, &request);
+        if legacy_tools_list {
+            tracing::info!(event = "relay.mcp.tools_list", outcome = "legacy");
+            return handle_tools_list(&request)
+                .map_or_else(json_error_response, |body| body.into_response());
         }
-    };
 
-    // The legacy lifecycle is intentionally the only path that bypasses the
-    // modern 2026 routing headers, allowing standard MCP clients to discover
-    // this server before switching to the existing request contract.
-    if request.method == "initialize" {
-        return handle_initialize(&request)
-            .map_or_else(json_error_response, |body| body.into_response());
-    }
-
-    // Legacy clients do not send the 2026 request metadata or routing
-    // headers on the follow-up tools/list request. Keep this compatibility
-    // exception narrow; a tools/list request that presents any modern header
-    // or metadata remains subject to the strict 2026 validation below.
-    let legacy_tools_list =
-        relay_interfaces::transport_validation::is_legacy_tools_list(&headers, &request);
-    if legacy_tools_list {
-        return handle_tools_list(&request)
-            .map_or_else(json_error_response, |body| body.into_response());
-    }
-
-    if let Err(err) =
-        relay_interfaces::transport_validation::validate_routing_headers(&headers, &request)
-    {
-        return json_error_response(err_response(
-            StatusCode::BAD_REQUEST,
-            Some(request.id.clone()),
-            &err,
-        ));
-    }
-
-    match relay_application::dispatcher::dispatch(&request) {
-        relay_application::dispatcher::Dispatch::Discover => handle_discover(&request),
-        relay_application::dispatcher::Dispatch::ToolsList => handle_tools_list(&request),
-        relay_application::dispatcher::Dispatch::ToolsCall => {
-            handle_tools_call(&request, _state, auth_ctx, correlation_id.as_str()).await
+        if let Err(err) =
+            relay_interfaces::transport_validation::validate_routing_headers(&headers, &request)
+        {
+            tracing::warn!(event = "relay.mcp.header_validation", outcome = "rejected");
+            return json_error_response(err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &err,
+            ));
         }
-        relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
-            StatusCode::NOT_FOUND,
-            Some(request.id.clone()),
-            &McpError::MethodNotFound(other),
-        )),
+
+        match relay_application::dispatcher::dispatch(&request) {
+            relay_application::dispatcher::Dispatch::Discover => {
+                tracing::info!(event = "relay.mcp.discover");
+                handle_discover(&request)
+            }
+            relay_application::dispatcher::Dispatch::ToolsList => {
+                tracing::info!(event = "relay.mcp.tools_list");
+                handle_tools_list(&request)
+            }
+            relay_application::dispatcher::Dispatch::ToolsCall => {
+                tracing::info!(event = "relay.mcp.tools_call");
+                handle_tools_call(&request, _state, auth_ctx, request_id_str, client_hint_str).await
+            }
+            relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
+                StatusCode::NOT_FOUND,
+                Some(request.id.clone()),
+                &McpError::MethodNotFound(other),
+            )),
+        }
+        .map_or_else(json_error_response, |body| body.into_response())
     }
-    .map_or_else(json_error_response, |body| body.into_response())
+    .instrument(span)
+    .await
 }
 
 fn handle_discover(request: &mcp::Request) -> JsonErr2 {
@@ -771,7 +867,8 @@ async fn handle_tools_call(
     request: &mcp::Request,
     state: Arc<AppState>,
     auth_ctx: AuthContext,
-    correlation_id: &str,
+    request_id: &str,
+    client_hint: Option<&str>,
 ) -> JsonErr2 {
     let auth_challenge = match auth_ctx.decision {
         AuthDecision::Authorized => None,
@@ -832,7 +929,8 @@ async fn handle_tools_call(
 
         let subject = claims.sub.as_deref().unwrap_or("unknown");
         audit(
-            correlation_id,
+            request_id,
+            client_hint,
             "tools/call",
             Some(&call.name),
             "authorized",
@@ -842,13 +940,29 @@ async fn handle_tools_call(
         );
     }
 
-    // Acquire global execution permit
+    // Acquire global execution permit. `tool.name` is the only attribute
+    // recorded — never arguments/output — matching the existing
+    // `privacy_id()` present/absent pattern for other sensitive fields.
+    let semaphore_wait_started = Instant::now();
     let _permit = match std::sync::Arc::clone(&state.execution_semaphore)
         .acquire_owned()
         .await
     {
-        Ok(p) => p,
+        Ok(p) => {
+            tracing::debug!(
+                event = "relay.execution.semaphore_wait",
+                outcome = "acquired",
+                tool = call.name.as_str(),
+                wait_ms = semaphore_wait_started.elapsed().as_millis() as u64,
+            );
+            p
+        }
         Err(_) => {
+            tracing::error!(
+                event = "relay.execution.semaphore_wait",
+                outcome = "unavailable",
+                tool = call.name.as_str(),
+            );
             return Err(err_response(
                 StatusCode::SERVICE_UNAVAILABLE,
                 Some(request.id.clone()),
@@ -858,16 +972,29 @@ async fn handle_tools_call(
     };
 
     // Tool exists in the registry and both the request shape and its
-    // actual execution is Phase 3 scope.
-    let result =
+    // actual execution is Phase 3 scope. Timeout/kill/output-limit outcomes
+    // are classified distinctly inside `dispatch_tool_call` itself (never
+    // lumped in with a generic "error"), never logging tool arguments/output.
+    let tool_dispatch_started = Instant::now();
+    let dispatch_result =
         relay_application::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
-            .await
-            .unwrap_or_else(|e| {
-                ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
-                    kind: "text",
-                    text: format!("execution failed: {}", e.message()),
-                }])
-            });
+            .await;
+    tracing::info!(
+        event = "relay.tool.dispatch",
+        outcome = if dispatch_result.is_ok() {
+            "ok"
+        } else {
+            "error"
+        },
+        tool = call.name.as_str(),
+        duration_ms = tool_dispatch_started.elapsed().as_millis() as u64,
+    );
+    let result = dispatch_result.unwrap_or_else(|e| {
+        ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
+            kind: "text",
+            text: format!("execution failed: {}", e.message()),
+        }])
+    });
 
     let response = Response::new(
         request.id.clone(),

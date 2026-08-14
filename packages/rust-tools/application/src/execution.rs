@@ -218,6 +218,10 @@ fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
     }
 }
 
+/// Terminal/curl/search execution lifecycle boundary (Plan 035 Phase 9,
+/// `relay.tool.dispatch`). Only `tool.name` (already low-cardinality) is
+/// recorded as a span field — never arguments/output/command content.
+#[tracing::instrument(name = "relay.tool.dispatch", skip(arguments, config), fields(tool = tool.name))]
 pub async fn dispatch_tool_call(
     tool: &Tool,
     arguments: &Value,
@@ -359,6 +363,10 @@ pub async fn dispatch_tool_call(
                 let stderr_buf = err_res?;
 
                 if stdout_buf.len() > MAX_OUTPUT_BYTES || stderr_buf.len() > MAX_OUTPUT_BYTES {
+                    tracing::warn!(
+                        event = "relay.tool.dispatch",
+                        outcome = "output_limit_exceeded"
+                    );
                     if let Some(p) = pid {
                         #[cfg(unix)]
                         {
@@ -424,9 +432,15 @@ pub async fn dispatch_tool_call(
                         Ok(ToolCallResult::complete(contents))
                     }
                 }
-                Ok(Err(_e)) => Err(McpError::Internal("failed to read tool output".to_string())),
+                Ok(Err(_e)) => {
+                    tracing::error!(event = "relay.tool.dispatch", outcome = "read_failed");
+                    Err(McpError::Internal("failed to read tool output".to_string()))
+                }
                 Err(_) => {
-                    // Timeout occurred
+                    // Timeout occurred: classified distinctly from a generic
+                    // "error" outcome (Plan 035 Phase 9), never a raw error
+                    // message from the killed process.
+                    tracing::warn!(event = "relay.tool.dispatch", outcome = "timeout");
                     if let Some(p) = pid {
                         #[cfg(unix)]
                         {
@@ -444,6 +458,9 @@ pub async fn dispatch_tool_call(
                 }
             }
         }
-        Err(_) => Err(McpError::Internal("failed to spawn tool".to_string())),
+        Err(_) => {
+            tracing::error!(event = "relay.tool.dispatch", outcome = "spawn_failed");
+            Err(McpError::Internal("failed to spawn tool".to_string()))
+        }
     }
 }

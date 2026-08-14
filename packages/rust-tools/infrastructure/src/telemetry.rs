@@ -84,6 +84,16 @@ fn env_enabled() -> bool {
 /// into OTel spans via `tracing-opentelemetry`.
 pub fn init_telemetry() -> Option<TelemetryGuard> {
     if !env_enabled() {
+        // No OTel exporter, but private diagnostic `tracing::*!` events
+        // (Plan 035 Phase 9 — e.g. OIDC/JWKS failure detail) must still
+        // reach an operator-visible sink even when the OTel backend is not
+        // configured. Install a minimal stderr-only fmt subscriber so
+        // `tracing` calls are never silently dropped; this does not change
+        // any execution behavior (Phase 8 invariant), only observability.
+        let _ = tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_target(false)
+            .try_init();
         return None;
     }
 
