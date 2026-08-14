@@ -19,7 +19,7 @@
 - [x] Phase 1 — centralized safe exception representation and real Jaeger redaction proof.
 - [x] Phase 2 — all LangGraph/tool/client error confidentiality.
 - [x] Phase 3 — Rust trace filtering/data hygiene.
-- [ ] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
+- [x] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
 - [ ] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
 - [ ] Phase 6 — real browser chat happy-path evidence.
 - [ ] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.

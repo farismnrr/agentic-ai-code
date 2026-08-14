@@ -4,7 +4,9 @@ import { execa } from 'execa'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, context: string) => Promise<void> }) => {
+export type AiToolsEnvProvider = () => Record<string, string>
+
+export const createCurlTool = ({ assertSafeUrl, getChildEnv = () => ({}) }: { assertSafeUrl: (url: URL, context: string) => Promise<void>, getChildEnv?: AiToolsEnvProvider }) => {
   return tool(
     async ({ url, method = 'GET', headers, body }) => {
       try {
@@ -33,7 +35,7 @@ export const createCurlTool = ({ assertSafeUrl }: { assertSafeUrl: (url: URL, co
 
         args.push('--no-guard')
 
-        const res = await execa(rustBin, args, { reject: false })
+        const res = await execa(rustBin, args, { reject: false, extendEnv: false, env: getChildEnv() })
         if (res.failed || res.stdout.startsWith('Error:')) return 'Tool execution failed'
 
         return res.stdout

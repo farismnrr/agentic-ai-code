@@ -8,6 +8,7 @@ import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from '../providers/langgraph-model'
 import type { RequestTelemetryContext } from '../../../application/observability/contracts'
+import { aiToolsTraceEnv } from '../../observability/ai-tools-trace'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
@@ -158,7 +159,7 @@ export function runLanggraphChat({
 
           let searchResultText: string
           try {
-            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl })
+            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl, getChildEnv: aiToolsTraceEnv })
             searchResultText = await searxngSearchTool.invoke({ query: cleanedText })
           } catch (err) {
             // Plan 035 remediation round 2 — same class of leak as the MCP

@@ -4,7 +4,9 @@ import { execa } from 'execa'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const createSearxngSearchTool = ({ baseUrl }: { baseUrl: string }) => {
+export type AiToolsEnvProvider = () => Record<string, string>
+
+export const createSearxngSearchTool = ({ baseUrl, getChildEnv = () => ({}) }: { baseUrl: string, getChildEnv?: AiToolsEnvProvider }) => {
   return tool(
     async ({ query }) => {
       try {
@@ -13,7 +15,9 @@ export const createSearxngSearchTool = ({ baseUrl }: { baseUrl: string }) => {
 
         const cliArgs = ['searxng', query, '--base-url', baseUrl]
         const res = await execa(rustBin, cliArgs, {
-          reject: false
+          reject: false,
+          extendEnv: false,
+          env: getChildEnv()
         })
         if (res.failed || res.stdout.startsWith('Error:') || res.stdout.startsWith('Search failed')) return 'Tool execution failed'
 
