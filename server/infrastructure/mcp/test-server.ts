@@ -2,6 +2,7 @@ import { logger } from '../observability/logger'
 import { useDb } from '../database/connection'
 import { and, eq } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
+import { createMcpClient } from './client'
 import type { McpTool } from '#shared/types/chat'
 
 export async function testMcpServer(userId: string, id: string) {
