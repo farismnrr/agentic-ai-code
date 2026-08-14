@@ -6,7 +6,7 @@ import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
-import type { getLanggraphModel } from '../infrastructure/ai/providers/langgraph-model'
+import type { getLanggraphModel } from '../providers/langgraph-model'
 import type { RequestTelemetryContext } from '../../../application/observability/contracts'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
@@ -161,7 +161,14 @@ export function runLanggraphChat({
             const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl })
             searchResultText = await searxngSearchTool.invoke({ query: cleanedText })
           } catch (err) {
-            searchResultText = `Error: ${(err as Error).message}`
+            // Plan 035 remediation round 2 — same class of leak as the MCP
+            // tool-result fix: this text becomes user-visible chat content
+            // (not an HTTP error path), so raw err.message (which can carry
+            // internal hostnames/ports/provider detail) must never surface
+            // here. Generic message to the client; raw cause to private
+            // observability only.
+            telemetry?.error('chat.tool.search.dispatch', 'searxng_search_failed', err)
+            searchResultText = 'Search failed'
           }
 
           const invocation = parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === toolCallId)
