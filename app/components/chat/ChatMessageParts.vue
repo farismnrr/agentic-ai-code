@@ -44,6 +44,7 @@ defineProps<{ message: UIMessage }>()
         :value="part.text"
         :streaming="isPartStreaming(part)"
         :class="[
+          'prose dark:prose-invert max-w-none',
           '*:first:mt-0 *:last:mb-0 transition-opacity duration-150',
           isPartStreaming(part) ? 'opacity-80' : 'opacity-100'
         ]"

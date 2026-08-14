@@ -32,3 +32,9 @@ target/
 
 # Local external MCP client Code session runtime (not repository-owned agent guidance)
 .external-mcp/
+
+# Local SQLite databases
+*.db
+
+# Local scratch/debug scripts
+scratch_*

@@ -231,7 +231,9 @@ defineShortcuts({
           class="max-w-3xl mx-auto w-full"
         >
           <template #content="{ message }">
-            <ChatMessageParts :message="message" />
+            <div class="flex flex-col gap-y-4 w-full">
+              <ChatMessageParts :message="message" />
+            </div>
           </template>
 
           <template #indicator>
