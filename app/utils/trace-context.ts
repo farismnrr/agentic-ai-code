@@ -66,3 +66,66 @@ export function isTelemetryEndpoint(input: unknown): boolean {
   }
   return url.pathname === TELEMETRY_ENDPOINT_PATH
 }
+
+/**
+ * The single reusable traced-fetch primitive (Plan 035 P1 — "actual browser
+ * chat trace continuity"). Matches the native `fetch` signature so it can be
+ * plugged into ANY fetch-consuming call site — both `globalThis.$fetch`
+ * (`trace-context.client.ts`, via ofetch's `create(defaults, { fetch })`
+ * underlying-fetch hook) and the AI SDK's `DefaultChatTransport({ fetch })`
+ * option (`chat-transport.ts`) — without duplicating trace-generation or
+ * telemetry-recording logic between them.
+ *
+ * Same security rules as before, enforced in one place:
+ *  - `traceparent` is injected ONLY for `isSameOriginApiRequest()` requests —
+ *    never for a third-party origin fetch, no matter which call site uses
+ *    this function.
+ *  - no `baggage` header, ever.
+ *  - the response's `x-request-id` header is captured and correlated with
+ *    the trace ID via `useTelemetry().logEvent`, the same Phase 4 event path
+ *    other requests already use.
+ */
+export function createTracedFetch(
+  telemetry: Pick<ReturnType<typeof useTelemetry>, 'logEvent'>,
+  baseFetch: typeof fetch = globalThis.fetch
+): typeof fetch {
+  return async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    if (!isSameOriginApiRequest(input)) return baseFetch(input, init)
+
+    const traceId = generateTraceId()
+    const spanId = generateSpanId()
+    const headers = new Headers(init?.headers)
+    headers.set('traceparent', buildTraceparent(traceId, spanId))
+
+    let response: Response
+    try {
+      response = await baseFetch(input, { ...init, headers })
+    } catch (error) {
+      if (!isTelemetryEndpoint(input)) {
+        telemetry.logEvent('error', 'api.request.error', 'API request failed', {
+          'trace.id': traceId,
+          'outcome': 'error'
+        })
+      }
+      throw error
+    }
+
+    if (!isTelemetryEndpoint(input)) {
+      const requestId = response.headers.get('x-request-id') ?? undefined
+      const ok = response.status < 400
+      telemetry.logEvent(
+        ok ? 'info' : 'warn',
+        ok ? 'api.request.success' : 'api.request.error',
+        `API request ${ok ? 'succeeded' : 'failed'}`,
+        {
+          'http.response.status_code': response.status,
+          'trace.id': traceId,
+          'request.id': requestId,
+          'outcome': ok ? 'success' : 'error'
+        }
+      )
+    }
+
+    return response
+  }
+}
