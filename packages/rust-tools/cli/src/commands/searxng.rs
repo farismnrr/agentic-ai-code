@@ -1,3 +1,4 @@
+use relay_infrastructure::observability::classify_reqwest_error;
 use reqwest::Url;
 use serde::Deserialize;
 
@@ -46,7 +47,7 @@ async fn run_search(query: &str, base_url: &str) -> String {
     };
     let res = match client.get(url).send().await {
         Ok(r) => r,
-        Err(e) => return format!("Error: {e}"),
+        Err(e) => return format!("Error: {}", classify_reqwest_error(&e)),
     };
 
     if !res.status().is_success() {
@@ -55,7 +56,7 @@ async fn run_search(query: &str, base_url: &str) -> String {
 
     let data: SearxngResponse = match res.json().await {
         Ok(d) => d,
-        Err(e) => return format!("Error: {e}"),
+        Err(e) => return format!("Error: {}", classify_reqwest_error(&e)),
     };
 
     let items = data.results.unwrap_or_default();
