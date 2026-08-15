@@ -42,7 +42,7 @@ No later round-4 phase is complete until independently re-proven.
 - [x] Phase 3 — fix route over-redaction without weakening filesystem-path confidentiality.
 - [x] Phase 4 — reconcile documentation severity inconsistency (SearXNG leak) to final reviewed severity `P1`, consistent with the repository’s impact treatment for the comparable client-visible Rust URL/query disclosure; the historical `P0` wording remains identified as the original classification.
 - [x] Phase 5 — comprehensive same-class audit (fresh worker); raw Rust URL/parser/command diagnostics and MCP tool-result details found by the audit were replaced with bounded generic responses, with workspace lint/typecheck passing.
-- [ ] Phase 6 — full final verification.
+- [x] Phase 6 — full final verification: `pnpm verify:commit`, `pnpm build`, `pnpm audit`, `cargo audit`, the current Plan-035 acceptance scripts, the corrected safe-diagnostic Jaeger proof, route/path checks, and server diagnostics passed. Historical Phase 4/6/7/8/9 scripts target removed pre-Plan-035 manifests and are excluded as documented legacy checks; live Phase 5 rerun was re-executed against the available app/Loki/Jaeger services.
 - [ ] Phase 7 — final independent closure review.
 - [ ] Phase 8 — close Plan 035 again.
 
