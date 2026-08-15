@@ -89,6 +89,22 @@ The gate includes repository policy enforcement, compact agent-doc integrity, al
 
 For local runtime verification, prefer a clean `pnpm build` followed by `pnpm preview` when relevant.
 
+## Releases
+
+The repository deliberately has no GitHub Actions release workflow. Releases are promoted manually from a reviewed `main` commit after local verification.
+
+For a stable `vX.Y.Z` release:
+
+1. merge the implementation branch into `dev`, then promote `dev` to `main` through a PR;
+2. verify the final `main` commit locally with `pnpm verify:commit` and `pnpm build`;
+3. create and push the annotated `vX.Y.Z` tag on that exact commit;
+4. build and verify release artifacts with `pnpm release:build vX.Y.Z`;
+5. publish the multi-arch web image to GHCR and the native archive/checksums to GitHub Releases with `pnpm release:publish vX.Y.Z`.
+
+The native release target is `x86_64-unknown-linux-gnu`; the production relay contract remains Linux + Bubblewrap. The GHCR image defaults to `ghcr.io/farismnrr/ai-code`, is built for `linux/amd64` and `linux/arm64`, and publishes `vX.Y.Z`, `X.Y.Z`, and `latest` tags for stable releases. The publish script fails closed unless the checkout is clean, on `main`, the requested tag points at `HEAD`, and that tag is already present on `origin`.
+
+`pnpm release:build vX.Y.Z` runs the mandatory local gate, builds Nuxt, builds the native CLI, and writes the direct `dist/vX.Y.Z/ai-tools-x86_64-unknown-linux-gnu` download used by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. `dist/` remains untracked build output.
+
 ## Verification policy
 
 There is no CI and no unit-test suite. Quality is enforced locally before each normal commit.
