@@ -65,7 +65,15 @@ function withFirstPartyTrace(fetchImpl: typeof fetch, enabled: boolean): typeof 
   return async (input, init) => {
     const traceHeaders: Record<string, string> = {}
     propagation.inject(context.active(), traceHeaders)
-    const headers = new Headers(input instanceof Request ? input.headers : init?.headers)
+
+    // Fetch semantics let `init.headers` override headers carried by a Request.
+    // Preserve that precedence before injecting trace context; otherwise a
+    // custom transport that supplies Request + init could accidentally lose its
+    // Authorization header when this wrapper is active.
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    for (const [name, value] of new Headers(init?.headers).entries()) {
+      headers.set(name, value)
+    }
     for (const [name, value] of Object.entries(traceHeaders)) {
       headers.set(name, value)
     }
