@@ -1,4 +1,5 @@
 import type { ChatOwnershipPort } from './contracts'
+import type { RequestTelemetryContext } from '../observability/contracts'
 
 /**
  * Resolves workspace path/name for the chat-turn system prompt only after
@@ -8,7 +9,7 @@ import type { ChatOwnershipPort } from './contracts'
  * context in the prompt) instead of leaking another tenant's workspace
  * name/path.
  */
-export async function resolveChatWorkspaceContext(userId: string, workspaceId: string | null, ownership: ChatOwnershipPort, resolvePath: (path: string) => Promise<string>) {
+export async function resolveChatWorkspaceContext(userId: string, workspaceId: string | null, ownership: ChatOwnershipPort, resolvePath: (path: string) => Promise<string>, telemetry?: RequestTelemetryContext) {
   if (!workspaceId) return { path: undefined, name: undefined }
   let workspace
   try {
@@ -19,7 +20,7 @@ export async function resolveChatWorkspaceContext(userId: string, workspaceId: s
   try {
     return { path: await resolvePath(workspace.path), name: workspace.name }
   } catch (err) {
-    console.error('[chat] failed to resolve workspace path for terminal tool', err)
+    telemetry?.error('chat.workspace.resolve', 'workspace_path_resolution_failed', err)
     return { path: undefined, name: undefined }
   }
 }
