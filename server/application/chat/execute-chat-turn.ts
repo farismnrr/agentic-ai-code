@@ -76,7 +76,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     getSummarizerModel: () => deps.getChatModel(provider, modelInfo.modelId)
   })
 
-  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId, deps.ownership, deps.resolveWorkspacePath)
+  const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId, deps.ownership, deps.resolveWorkspacePath, telemetry)
 
   // The server itself no longer has any file/shell access to offer the
   // model — that tool (`native.terminal`, workspace-sandboxed, server-side)
@@ -125,7 +125,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     // exist yet, taking down the *entire* chat request (including MCP tools
     // that had nothing to do with this). A hiccup here should degrade to
     // "no local terminal this turn", not break agent mode outright.
-    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, localTerminal: deps.localTerminal })
+    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, localTerminal: deps.localTerminal, telemetry })
     if (localTerminalPolicy.paired) {
       // No `execute` here — this makes it a client-executed tool in the AI
       // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
