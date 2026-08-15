@@ -1,4 +1,6 @@
 import type * as v from 'valibot'
+import { classifyRawCause } from './classify'
+import { SafeDiagnosticError, isSafeDiagnostic } from './safe-diagnostic'
 
 // Private diagnostic payload for a thrown problem — carried on the error's
 // `data` (server-side only) so the Nitro error handler (server/core/errors/
@@ -39,10 +41,18 @@ interface ProblemInit {
   extra?: Record<string, unknown> // extension members, mis. { errors: [...] } atau retryAfter — client-visible only for status < 500
 }
 
+// Plan 035 P1 remediation (round 4): a raw `.message` (or a raw non-Error
+// thrown value stringified via `String(cause)`) is not a data-classification
+// boundary — it can carry request-derived/PII text. Only a plain `string`
+// (a developer literal passed directly, e.g. `internal('Account creation
+// failed')`) or a `SafeDiagnosticError` (a developer opted a composed
+// message in deliberately) is safe to surface verbatim; any other Error/
+// thrown value is reduced to a bounded static classification instead.
 function causeText(cause: unknown): string | undefined {
-  if (cause instanceof Error) return cause.message
   if (cause === undefined) return undefined
-  return String(cause)
+  if (typeof cause === 'string') return cause
+  if (isSafeDiagnostic(cause)) return cause.message
+  return classifyRawCause(cause)
 }
 
 // Every thrown API error funnels through here, so this is the one place
@@ -97,11 +107,16 @@ export const gone = (detail?: string) => problem({ status: 410, title: 'Gone', d
 // it is appended to the logged cause only, never to the client body. Use it
 // to disambiguate which upstream failed without leaking that identity (or
 // the upstream's own error text) to the client.
+// `context` is developer-authored (e.g. a provider name) and `causeText(cause)`
+// is now itself a bounded classification (never raw free text — see
+// `causeText` above), so the composed message is safe to log verbatim.
+// Wrap it in `SafeDiagnosticError` so it survives the logger's own safe-vs-
+// raw check unchanged instead of being re-reduced to 'unclassified'.
 export const badGateway = (cause?: unknown, context?: string) =>
   problem({
     status: 502,
     title: 'Bad Gateway',
-    cause: context ? new Error(`${context}: ${causeText(cause) ?? 'unknown error'}`) : cause
+    cause: context ? new SafeDiagnosticError(`${context}: ${causeText(cause) ?? 'unknown error'}`) : cause
   })
 
 export function unprocessable(issues: v.BaseIssue<unknown>[]) {

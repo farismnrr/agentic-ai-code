@@ -2,6 +2,8 @@ import { consola } from 'consola'
 import { trace } from '@opentelemetry/api'
 import { getLogger } from './otel'
 import { redactSecrets, sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
+import { classifyRawCause } from '../../core/errors/classify'
+import { isSafeDiagnostic } from '../../core/errors/safe-diagnostic'
 
 /**
  * Single logging entry point for server code — replaces raw `console.*`
@@ -24,17 +26,30 @@ import { redactSecrets, sanitizeAttributes, sanitizeMessage, shouldIncludeStack 
 
 type LogAttributes = Record<string, unknown>
 
+// Plan 035 P1 remediation (round 4): raw `Error.message`/`stack` are NOT a
+// data-classification boundary — `redactSecrets()` only masks
+// credential-shaped substrings/paths, not arbitrary request-derived/PII
+// text (e.g. a DB unique-constraint message embedding a submitted email).
+// Only a `SafeDiagnosticError` (a developer deliberately opted a composed,
+// non-interpolated message in — see server/core/errors/safe-diagnostic.ts)
+// may have its `.message`/`.stack` logged verbatim. Every other raw/
+// untrusted exception gets only its constructor name plus a bounded static
+// classification (server/core/errors/classify.ts) — fail-closed by design:
+// less detail for truly unknown exceptions is the point, not a regression.
 function errorAttributes(err: unknown): LogAttributes {
-  if (err instanceof Error) {
-    const attrs: LogAttributes = {
-      'error.type': err.name || err.constructor?.name || 'Error',
-      'error.message': err.message
-    }
+  if (err === undefined) return {}
+  if (isSafeDiagnostic(err)) {
+    const attrs: LogAttributes = { 'error.type': err.name || 'SafeDiagnosticError', 'error.message': err.message }
     if (shouldIncludeStack() && err.stack) attrs.stack = err.stack
     return attrs
   }
-  if (err === undefined) return {}
-  return { 'error.type': 'UnknownError', 'error.message': String(err) }
+  if (err instanceof Error) {
+    return {
+      'error.type': err.name || err.constructor?.name || 'Error',
+      'error.classification': classifyRawCause(err)
+    }
+  }
+  return { 'error.type': 'UnknownError', 'error.classification': classifyRawCause(err) }
 }
 
 function emit(severityNumber: number, severityText: string, message: string, attributes: LogAttributes) {
@@ -66,14 +81,19 @@ function emit(severityNumber: number, severityText: string, message: string, att
 // prints its message/stack unredacted, defeating Plan 035's value-level
 // secret redaction for this output path even though Loki stays clean.
 function consolaSafe(err: unknown): unknown {
-  if (err instanceof Error) {
+  if (err === undefined) return undefined
+  if (isSafeDiagnostic(err)) {
     const safe = new Error(redactSecrets(err.message))
     safe.name = err.name
     if (err.stack) safe.stack = redactSecrets(err.stack)
     return safe
   }
-  if (err === undefined) return undefined
-  return redactSecrets(String(err))
+  if (err instanceof Error) {
+    const safe = new Error(classifyRawCause(err))
+    safe.name = err.name || err.constructor?.name || 'Error'
+    return safe
+  }
+  return classifyRawCause(err)
 }
 
 export const logger = {

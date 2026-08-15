@@ -32,6 +32,7 @@ const ALLOWED_ATTRIBUTE_KEYS = new Set<string>([
   'error.type',
   'error.code',
   'error.message',
+  'error.classification',
   'stack',
   'provider.type',
   'tool.name',
