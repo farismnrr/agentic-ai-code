@@ -124,9 +124,9 @@ export function createSsrfSafeFetch(context: string, options: SsrfFetchOptions =
     // a Request. This matters for authenticated SDK transports that construct
     // a Request and then attach Authorization through request options.
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
-    for (const [name, value] of new Headers(init?.headers).entries()) {
+    new Headers(init?.headers).forEach((value, name) => {
       headers.set(name, value)
-    }
+    })
 
     let body = init?.body ?? (input instanceof Request ? input.body : undefined)
     const originalOrigin = url.origin
