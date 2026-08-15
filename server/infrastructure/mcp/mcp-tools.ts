@@ -3,9 +3,8 @@ import { logger } from '../observability/logger'
 import { getTracer } from '../observability/otel'
 import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { loadEnabledMcpServers } from './server-config'
-import { createMcpClient } from './client'
+import { createMcpClient, type McpClientLike } from './client'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -61,7 +60,7 @@ function sanitizeToolName(mcpToolId: string) {
  * must be closed via the returned `close()` once the stream finishes.
  */
 export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>) {
-  const clients: Client[] = []
+  const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
 
@@ -73,7 +72,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   const servers = await loadEnabledMcpServers(userId, serverIds)
 
   for (const server of servers) {
-    let client: Client
+    let client: McpClientLike
     try {
       client = await createMcpClient(server)
     } catch (err) {
@@ -97,7 +96,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       const modelName = sanitizeToolName(mcpToolId)
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
-        inputSchema: jsonSchema(mcpTool.inputSchema as Record<string, unknown>),
+        inputSchema: jsonSchema(mcpTool.inputSchema),
         execute: async (input: unknown) => {
           const result = await withMcpSpan('mcp.tools_call', {}, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
           return result.content

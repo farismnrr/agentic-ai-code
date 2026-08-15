@@ -14,6 +14,25 @@ type RemoteMcpRuntimeConfig = {
 }
 
 const MODERN_MCP_VERSION = '2026-07-28'
+const MCP_CLIENT_INFO = { name: 'ai-code', version: '1.0.0' } as const
+
+export type McpClientTool = {
+  name: string
+  description?: string
+  inputSchema: Record<string, unknown>
+}
+
+export type McpClientCallResult = {
+  content: unknown[]
+  isError?: boolean
+  [key: string]: unknown
+}
+
+export interface McpClientLike {
+  listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
+  callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
+  close(): Promise<void>
+}
 
 function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
   const config = useRuntimeConfig()
@@ -21,11 +40,11 @@ function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
 }
 
 /**
- * Returns the private bearer token only when the stored MCP URL is the exact
- * first-party remote resource configured by the operator. This avoids a
+ * Returns the private first-party configuration only when the stored MCP URL
+ * is the exact resource configured by the operator. This avoids creating a
  * generic "send this secret to any user-provided URL" capability.
  */
-function resolveFirstPartyBearer(url: URL, serverName: string) {
+function resolveFirstPartyRemote(url: URL, serverName: string) {
   const configured = getRemoteMcpRuntimeConfig()
   const configuredUrlRaw = configured.url?.trim()
   if (!configuredUrlRaw) return undefined
@@ -53,7 +72,7 @@ function resolveFirstPartyBearer(url: URL, serverName: string) {
     throw new Error(`Server "${serverName}" matches the configured remote MCP resource but no access token is configured`)
   }
 
-  return accessToken
+  return { accessToken }
 }
 
 /**
@@ -61,17 +80,13 @@ function resolveFirstPartyBearer(url: URL, serverName: string) {
  * internal trace identity to arbitrary third-party MCP servers would broaden
  * the telemetry trust boundary unnecessarily.
  */
-function withFirstPartyTrace(fetchImpl: typeof fetch, enabled: boolean): typeof fetch {
-  if (!enabled) return fetchImpl
-
+function withFirstPartyTrace(fetchImpl: typeof fetch): typeof fetch {
   return async (input, init) => {
     const traceHeaders: Record<string, string> = {}
     propagation.inject(context.active(), traceHeaders)
 
     // Fetch semantics let `init.headers` override headers carried by a Request.
-    // Preserve that precedence before injecting trace context; otherwise a
-    // custom transport that supplies Request + init could accidentally lose its
-    // Authorization header when this wrapper is active.
+    // Preserve that precedence before injecting trace context.
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
     for (const [name, value] of new Headers(init?.headers).entries()) {
       headers.set(name, value)
@@ -87,100 +102,167 @@ function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function encodeMcpHeaderValue(value: string) {
+  // The public relay's current tool names are ASCII, but the 2026 transport
+  // defines a Base64 sentinel for values that cannot be represented directly
+  // as an HTTP header. Keep the adapter correct if a future tool name changes.
+  return /^[\x20-\x7e]*$/.test(value)
+    ? value
+    : `=?base64?${Buffer.from(value, 'utf8').toString('base64')}?=`
+}
+
 /**
- * Temporary Plan 036 bridge for the monolithic MCP SDK v1 still used by the
- * repository. The Rust first-party relay is strict MCP 2026-07-28 for normal
- * tool RPCs, while the v1 Client performs a legacy `initialize` handshake and
- * then emits legacy-shaped `tools/list` / `tools/call` requests.
+ * Small, first-party-only MCP 2026 client for the Rust relay.
  *
- * The relay deliberately keeps its modern validation strict. Instead, only
- * requests to the exact first-party resource are upgraded at this outbound
- * infrastructure boundary by adding the 2026 routing headers and per-request
- * `_meta` envelope. `initialize` and notifications are left untouched so the
- * existing narrow legacy handshake compatibility continues to work.
+ * The repository still carries the monolithic MCP SDK v1 for unrelated
+ * third-party integrations and the legacy inbound Nuxt MCP endpoint. Rather
+ * than weaken the Rust relay or make its modern path depend on a legacy SDK
+ * lifecycle, this adapter speaks only the three RPCs ai-code needs against its
+ * own relay: `server/discover`, `tools/list`, and `tools/call`.
  *
- * Remove this bridge when the outbound client is migrated to
- * `@modelcontextprotocol/client` v2 with `versionNegotiation: { mode: 'auto' }`
- * and the lockfile/local verification can be updated together.
+ * It is intentionally not a generic replacement for the MCP SDK. When the
+ * repository can migrate the outbound client to `@modelcontextprotocol/client`
+ * v2 with an atomic lockfile update + local verification, this class should be
+ * deleted in favor of the official modern client with version negotiation.
  */
-function withFirstPartyRelay2026ToolEnvelope(fetchImpl: typeof fetch): typeof fetch {
-  return async (input, init) => {
-    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
-    if (method.toUpperCase() !== 'POST' || typeof init?.body !== 'string') {
-      return fetchImpl(input, init)
+class FirstPartyRelayMcpClient implements McpClientLike {
+  private requestSequence = 0
+
+  constructor(
+    private readonly url: URL,
+    private readonly accessToken: string,
+    private readonly fetchImpl: typeof fetch
+  ) {}
+
+  async connect() {
+    const result = await this.request('server/discover', {})
+    if (!isJsonRecord(result)
+      || !Array.isArray(result.supportedVersions)
+      || !result.supportedVersions.includes(MODERN_MCP_VERSION)) {
+      throw new Error('Remote MCP server does not advertise the required protocol version')
+    }
+  }
+
+  async listTools() {
+    const result = await this.request('tools/list', {})
+    if (!isJsonRecord(result) || !Array.isArray(result.tools)) {
+      throw new Error('Remote MCP server returned an invalid tools/list result')
+    }
+
+    const tools = result.tools.map((tool) => {
+      if (!isJsonRecord(tool)
+        || typeof tool.name !== 'string'
+        || !isJsonRecord(tool.inputSchema)) {
+        throw new Error('Remote MCP server returned an invalid tool definition')
+      }
+      return {
+        ...tool,
+        name: tool.name,
+        description: typeof tool.description === 'string' ? tool.description : undefined,
+        inputSchema: tool.inputSchema
+      } satisfies McpClientTool
+    })
+
+    return { ...result, tools }
+  }
+
+  async callTool(params: { name: string, arguments?: Record<string, unknown> }) {
+    const result = await this.request('tools/call', {
+      name: params.name,
+      arguments: params.arguments ?? {}
+    })
+    if (!isJsonRecord(result) || !Array.isArray(result.content)) {
+      throw new Error('Remote MCP server returned an invalid tools/call result')
+    }
+    return {
+      ...result,
+      content: result.content,
+      ...(typeof result.isError === 'boolean' && { isError: result.isError })
+    }
+  }
+
+  close() {
+    // MCP 2026-07-28 is stateless for this relay. There is no protocol session
+    // or background SSE channel to terminate.
+    return Promise.resolve()
+  }
+
+  private async request(method: 'server/discover' | 'tools/list' | 'tools/call', params: Record<string, unknown>) {
+    const id = `ai-code-${++this.requestSequence}`
+    const requestParams = {
+      ...params,
+      _meta: {
+        'io.modelcontextprotocol/protocolVersion': MODERN_MCP_VERSION,
+        'io.modelcontextprotocol/clientCapabilities': {},
+        'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO
+      }
+    }
+    const headers = new Headers({
+      Accept: 'application/json, text/event-stream',
+      Authorization: `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json',
+      'MCP-Protocol-Version': MODERN_MCP_VERSION,
+      'Mcp-Method': method
+    })
+    if (method === 'tools/call' && typeof params.name === 'string') {
+      headers.set('Mcp-Name', encodeMcpHeaderValue(params.name))
+    }
+
+    const response = await this.fetchImpl(this.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method,
+        params: requestParams
+      })
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Remote MCP authorization failed')
+    }
+    if (!response.ok) {
+      throw new Error(`Remote MCP request failed with HTTP ${response.status}`)
     }
 
     let payload: unknown
     try {
-      payload = JSON.parse(init.body)
+      payload = await response.json()
     } catch {
-      return fetchImpl(input, init)
+      throw new Error('Remote MCP server returned invalid JSON')
     }
-    if (!isJsonRecord(payload)) return fetchImpl(input, init)
-
-    const rpcMethod = typeof payload.method === 'string' ? payload.method : undefined
-    if (rpcMethod !== 'tools/list' && rpcMethod !== 'tools/call') {
-      return fetchImpl(input, init)
+    if (!isJsonRecord(payload)
+      || payload.jsonrpc !== '2.0'
+      || payload.id !== id) {
+      throw new Error('Remote MCP server returned an invalid JSON-RPC response')
     }
-
-    const params = isJsonRecord(payload.params) ? { ...payload.params } : {}
-    const existingMeta = isJsonRecord(params._meta) ? params._meta : {}
-    params._meta = {
-      ...existingMeta,
-      'io.modelcontextprotocol/protocolVersion': MODERN_MCP_VERSION,
-      'io.modelcontextprotocol/clientCapabilities': {}
+    if ('error' in payload) {
+      // Do not forward arbitrary remote error text into application logs/UI.
+      throw new Error('Remote MCP request returned a protocol error')
     }
-
-    const headers = new Headers(input instanceof Request ? input.headers : undefined)
-    for (const [name, value] of new Headers(init.headers).entries()) {
-      headers.set(name, value)
+    if (!('result' in payload)) {
+      throw new Error('Remote MCP response is missing a result')
     }
-    headers.set('MCP-Protocol-Version', MODERN_MCP_VERSION)
-    headers.set('Mcp-Method', rpcMethod)
-
-    if (rpcMethod === 'tools/call') {
-      const toolName = typeof params.name === 'string' ? params.name : undefined
-      if (toolName) headers.set('Mcp-Name', toolName)
-    }
-
-    return fetchImpl(input, {
-      ...init,
-      headers,
-      body: JSON.stringify({ ...payload, params })
-    })
+    return payload.result
   }
 }
 
 /**
- * Connects to a stored third-party MCP server, per request — no pooling, no
- * reconnect logic (see plan 012's "Scope boundary" decision). Callers must
- * `client.close()` when done.
+ * Connects to a stored MCP server, per request — no pooling, no reconnect
+ * logic (see plan 012's "Scope boundary" decision). Callers must `close()`
+ * when done.
  *
  * `stdio` transport is deliberately unsupported here: it would spawn
- * `mcpServers.command` — a value any authenticated user can set, including
- * through the inbound `create_mcp_server` MCP tool — as a server-side child
- * process. That's an RCE path in a multi-tenant app, flagged in the plan's
- * Decisions and left unresolved for Phase 1; resolving it (allow-listing,
- * admin gating, or a sandboxed runner) is separate work, not a shortcut to
- * take here. Rows with `transport: 'stdio'` fail closed instead.
+ * `mcpServers.command` — a value any authenticated user can set — as a
+ * server-side child process. Rows with `transport: 'stdio'` fail closed.
  *
- * `http`/`sse` rows carry a user-supplied `url` with no upstream
- * validation (`mcpServers.url` is a bare optional string at the API layer)
- * — this is what actually makes the outbound connection, so the SSRF guard
- * belongs here: reject non-http(s) schemes and any hostname resolving to a
- * loopback/private/link-local address (including cloud metadata IPs),
- * re-checked on every connection rather than only at server registration.
- *
- * Plan 036 adds one deliberately narrow authenticated path: when an HTTP
- * server URL exactly matches private `runtimeConfig.remoteMcp.url`, the
- * corresponding private access token is attached as a Bearer credential.
- * The same SSRF-safe fetch used by provider traffic validates every redirect
- * hop and rejects cross-origin/downgraded redirects, so the credential cannot
- * be silently forwarded to another origin.
+ * Generic HTTP/SSE rows still use the SDK v1 client for existing third-party
+ * integrations. Plan 036's exact first-party remote resource instead uses the
+ * strict MCP 2026 adapter above, with an externally-issued private Bearer token
+ * and the same redirect/DNS SSRF guard used by provider traffic.
  */
-export async function createMcpClient(serverConfig: McpServerConfig) {
-  const client = new Client({ name: 'ai-code', version: '1.0.0' }, { capabilities: {} })
-
+export async function createMcpClient(serverConfig: McpServerConfig): Promise<McpClientLike> {
   if (serverConfig.transport === 'stdio') {
     throw new Error(`Server "${serverConfig.name}" uses the stdio transport, which is not enabled for outbound connections (see server/infrastructure/mcp/client.ts)`)
   }
@@ -191,33 +273,29 @@ export async function createMcpClient(serverConfig: McpServerConfig) {
 
   const url = new URL(serverConfig.url)
   await assertSafeUrl(url, `Server "${serverConfig.name}"`)
+  const firstParty = resolveFirstPartyRemote(url, serverConfig.name)
 
-  if (serverConfig.transport === 'sse') {
-    // Legacy SSE remains supported for existing third-party integrations. The
-    // Plan 036 first-party remote relay is Streamable HTTP only, so its OAuth
-    // credential is never attached to this legacy transport.
-    const transport = new SSEClientTransport(url)
-    await client.connect(transport)
+  if (firstParty) {
+    if (serverConfig.transport !== 'http') {
+      throw new Error('The configured first-party remote MCP resource must use the http transport')
+    }
+    const guardedFetch = createSsrfSafeFetch(`Server "${serverConfig.name}"`)
+    const client = new FirstPartyRelayMcpClient(
+      url,
+      firstParty.accessToken,
+      withFirstPartyTrace(guardedFetch)
+    )
+    await client.connect()
     return client
   }
 
-  const accessToken = resolveFirstPartyBearer(url, serverConfig.name)
-  const firstParty = Boolean(accessToken)
-  const guardedFetch = createSsrfSafeFetch(`Server "${serverConfig.name}"`)
-  const protocolFetch = firstParty
-    ? withFirstPartyRelay2026ToolEnvelope(guardedFetch)
-    : guardedFetch
-  const transport = new StreamableHTTPClientTransport(url, {
-    fetch: withFirstPartyTrace(protocolFetch, firstParty),
-    ...(accessToken && {
-      requestInit: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      }
-    })
-  })
+  const client = new Client({ name: MCP_CLIENT_INFO.name, version: MCP_CLIENT_INFO.version }, { capabilities: {} })
+  const transport = serverConfig.transport === 'sse'
+    ? new SSEClientTransport(url)
+    : new StreamableHTTPClientTransport(url, {
+        fetch: createSsrfSafeFetch(`Server "${serverConfig.name}"`)
+      })
 
   await client.connect(transport)
-  return client
+  return client as unknown as McpClientLike
 }
