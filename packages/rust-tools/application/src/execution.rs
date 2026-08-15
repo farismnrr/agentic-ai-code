@@ -340,19 +340,22 @@ async fn run_job(
     stdout: Arc<Mutex<OutputBuffer>>,
     stderr: Arc<Mutex<OutputBuffer>>,
 ) {
-    let permit = manager.semaphore.clone().acquire_owned().await;
-    let Ok(_permit) = permit else {
-        finish(
-            &manager,
-            &id,
-            JobState::Failed,
-            -1,
-            "execution semaphore unavailable".into(),
-            String::new(),
-            0,
-        )
-        .await;
-        return;
+    let semaphore = manager.semaphore.clone();
+    let permit = tokio::select! {
+        permit = semaphore.acquire_owned() => permit,
+        _ = cancel.changed() => {
+            finish(
+                &manager,
+                &id,
+                JobState::Cancelled,
+                -1,
+                String::new(),
+                String::new(),
+                0,
+            )
+            .await;
+            return;
+        }
     };
     if *cancel.borrow() {
         finish(
@@ -367,6 +370,19 @@ async fn run_job(
         .await;
         return;
     }
+    let Ok(_permit) = permit else {
+        finish(
+            &manager,
+            &id,
+            JobState::Failed,
+            -1,
+            "execution semaphore unavailable".into(),
+            String::new(),
+            0,
+        )
+        .await;
+        return;
+    };
     update_state(&manager, &id, JobState::Running, Some(now_ms()), None).await;
     let result = run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await;
     match result {

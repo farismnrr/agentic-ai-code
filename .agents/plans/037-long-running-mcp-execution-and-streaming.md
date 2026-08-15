@@ -841,6 +841,12 @@ A fresh ChatGPT conversation loaded the refreshed Masih Awam MCP action snapshot
 
 This fresh-client proof reconciles the deployed server, frozen repository tool catalog, and ChatGPT-visible action contract. No Plan 037 closure blocker remains.
 
+### Post-close release review (2026-08-16)
+
+A deeper pre-release source review found one bounded lifecycle race after the client closeout: a queued job awaited `Semaphore::acquire_owned()` before observing its cancellation channel. With all execution slots occupied by deadline-free jobs, cancelling a queued job could therefore remain stuck in `queued` until an unrelated running job released a permit.
+
+The job runner now races semaphore acquisition against cancellation and re-checks cancellation before entering `running`. `scripts/phase4-black-box.sh` was extended with a deterministic one-slot regression: keep one job running, enqueue a second job, cancel the queued job, require it to reach `cancelled` while the first job is still `working`, then cleanly cancel the first job. The updated harness passes. This is a release-review hardening fix within Plan 037's existing concurrency/cancellation contract; the plan remains CLOSED / VERIFIED.
+
 ### Phase 9 — Security and observability review (deferred; do not execute in implementation pass)
 
 The first implementation executor must leave this entire phase unchecked. A separate reviewer performs it after the rebuilt home-scoped relay is running.

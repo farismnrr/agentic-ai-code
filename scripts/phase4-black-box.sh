@@ -168,9 +168,10 @@ def wait_for_health(port, process):
     raise AssertionError("relay did not become healthy")
 
 
-def start_relay(temp_dir, port, issuer=None, trusted_proxy=False):
+def start_relay(temp_dir, port, issuer=None, trusted_proxy=False, extra_args=()):
     args = [RELAY, "relay", "--port", str(port), "--dir", temp_dir, "--execution-root", temp_dir,
             "--origin", ORIGIN]
+    args += list(extra_args)
     if issuer is None:
         args += ["--mode", "local"]
     else:
@@ -234,7 +235,7 @@ def run():
         local = remote_untrusted = remote = None
         try:
             local_port = free_port()
-            local = start_relay(temp_dir, local_port)
+            local = start_relay(temp_dir, local_port, extra_args=("--max-running-jobs", "1"))
             local_url = f"http://127.0.0.1:{local_port}/mcp"
             valid_discover = mcp("server/discover")
             initialize_request = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -300,6 +301,59 @@ def run():
                 assert result["isError"] is expected_error
                 assert isinstance(result["content"], list) and result["content"]
                 assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
+
+            def fallback_job(name, arguments, request_id):
+                body = mcp("tools/call", {
+                    "name": name,
+                    "arguments": arguments,
+                    "_meta": call_meta,
+                }, request_id=request_id)
+                status, _, response = request_after_admission(
+                    local_url,
+                    headers=headers(method="tools/call", name=name),
+                    body=body,
+                )
+                assert_status(status, 200, name)
+                result = response["result"]
+                assert result["resultType"] == "complete" and result["isError"] is False
+                text = next(item["text"] for item in result["content"] if item.get("type") == "text")
+                return json.loads(text)
+
+            first_job = fallback_job(
+                "terminal_job_start",
+                {"command": "sh", "args": ["-c", "sleep 5"], "timeout_ms": 0},
+                20,
+            )
+            first_id = first_job["taskId"]
+            deadline = time.monotonic() + 2
+            while True:
+                first_snapshot = fallback_job("terminal_job_get", {"taskId": first_id}, 21)
+                if first_snapshot["status"] == "working":
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(f"first fallback job did not start: {first_snapshot}")
+                time.sleep(0.05)
+
+            queued_job = fallback_job("terminal_job_start", {"command": "true"}, 22)
+            queued_id = queued_job["taskId"]
+            queued_snapshot = fallback_job("terminal_job_get", {"taskId": queued_id}, 23)
+            assert queued_snapshot["status"] == "queued", queued_snapshot
+            fallback_job("terminal_job_cancel", {"taskId": queued_id}, 24)
+
+            deadline = time.monotonic() + 2
+            while True:
+                cancelled_snapshot = fallback_job("terminal_job_get", {"taskId": queued_id}, 25)
+                if cancelled_snapshot["status"] == "cancelled":
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(
+                        f"queued job cancellation waited for a semaphore permit: {cancelled_snapshot}"
+                    )
+                time.sleep(0.05)
+
+            first_snapshot = fallback_job("terminal_job_get", {"taskId": first_id}, 26)
+            assert first_snapshot["status"] == "working", first_snapshot
+            fallback_job("terminal_job_cancel", {"taskId": first_id}, 27)
 
             dispatch_marker = os.path.join(temp_dir, "rejected-dispatch-marker")
 
