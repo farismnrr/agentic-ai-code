@@ -99,8 +99,15 @@ impl McpError {
     /// protocol response.
     pub fn message(&self) -> String {
         match self {
+            McpError::InvalidRequest(_) => "Invalid request".to_string(),
+            McpError::MethodNotFound(_) => "Method not found".to_string(),
+            McpError::InvalidParams(_) => "Invalid parameters".to_string(),
             McpError::Internal(_) => "Internal error".to_string(),
-            _ => self.to_string(),
+            McpError::HeaderMismatch(_) => {
+                "Request headers do not match the request body".to_string()
+            }
+            McpError::ParseError => "Parse error".to_string(),
+            McpError::UnsupportedProtocolVersion { .. } => self.to_string(),
         }
     }
 

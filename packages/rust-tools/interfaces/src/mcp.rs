@@ -365,22 +365,17 @@ pub fn find_tool(name: &str) -> Option<Tool> {
 /// Validate `arguments` against a tool's declared `inputSchema` (JSON
 /// Schema 2020-12) — the enforcement boundary required before execution:
 /// `tools/call` validates argument *shape*, not just that a tool with this
-/// name exists. Returns the first validation error's message on failure.
+/// name exists. Validation diagnostics are deliberately not returned: schema
+/// errors can echo request values, property names, or other attacker-
+/// controlled text through `Display`.
 pub fn validate_tool_arguments(tool: &Tool, arguments: &Value) -> Result<(), McpError> {
-    let validator = jsonschema::validator_for(&tool.input_schema).map_err(|e| {
-        McpError::Internal(format!(
-            "tool '{}' has an invalid inputSchema: {e}",
-            tool.name
-        ))
-    })?;
+    let validator = jsonschema::validator_for(&tool.input_schema)
+        .map_err(|_| McpError::Internal("invalid tool schema".to_string()))?;
 
-    if let Some(first_error) = validator.iter_errors(arguments).next() {
-        return Err(McpError::InvalidParams(format!(
-            "arguments for tool '{}' failed schema validation at '{}': {}",
-            tool.name,
-            first_error.instance_path(),
-            first_error
-        )));
+    if validator.iter_errors(arguments).next().is_some() {
+        return Err(McpError::InvalidParams(
+            "tool arguments do not match the required schema".to_string(),
+        ));
     }
 
     Ok(())
