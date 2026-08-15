@@ -7,9 +7,9 @@ pub fn validate_content_type(value: Option<&str>) -> Result<(), McpError> {
     if content_type.starts_with("application/json") {
         Ok(())
     } else {
-        Err(McpError::InvalidRequest(format!(
-            "unsupported Content-Type '{content_type}', expected application/json"
-        )))
+        Err(McpError::InvalidRequest(
+            "unsupported content type; expected application/json".to_string(),
+        ))
     }
 }
 
@@ -41,7 +41,7 @@ pub fn validate_routing_headers(
     let meta = extract_meta(request.params.as_ref());
     match meta.as_ref().and_then(|m| m.protocol_version.as_deref()) {
         Some(v) if v == protocol => {}
-        Some(v) => return Err(McpError::HeaderMismatch(format!("'mcp-protocol-version' header value '{protocol}' does not match body params._meta['io.modelcontextprotocol/protocolVersion'] value '{v}'"))),
+        Some(_) => return Err(McpError::HeaderMismatch("protocol-version header does not match the request body".into())),
         None => return Err(McpError::HeaderMismatch("required params._meta['io.modelcontextprotocol/protocolVersion'] is missing from the request body".into())),
     }
     if meta
@@ -58,10 +58,9 @@ pub fn validate_routing_headers(
             ))
         }
         Some(v) if v != request.method => {
-            return Err(McpError::HeaderMismatch(format!(
-                "'mcp-method' header value '{v}' does not match body method '{}'",
-                request.method
-            )))
+            return Err(McpError::HeaderMismatch(
+                "method header does not match the request body".into(),
+            ))
         }
         Some(_) => {}
     }
@@ -79,15 +78,12 @@ pub fn validate_routing_headers(
                     "required standard header 'mcp-name' is missing for method 'tools/call'".into(),
                 )
             })?;
-        let decoded = decode_header_value(raw).ok_or_else(|| {
-            McpError::HeaderMismatch(format!(
-                "'mcp-name' header value '{raw}' is not valid Base64-sentinel or ASCII"
-            ))
-        })?;
+        let decoded = decode_header_value(raw)
+            .ok_or_else(|| McpError::HeaderMismatch("tool-name header is not valid".into()))?;
         if Some(decoded.as_str()) != expected {
-            return Err(McpError::HeaderMismatch(format!(
-                "'mcp-name' header value '{decoded}' does not match body params.name"
-            )));
+            return Err(McpError::HeaderMismatch(
+                "tool-name header does not match the request body".into(),
+            ));
         }
     }
     Ok(())
