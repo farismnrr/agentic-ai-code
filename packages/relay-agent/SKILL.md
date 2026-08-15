@@ -10,11 +10,19 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Platform:** Linux only for the relay binary; sandboxed execution requires Bubblewrap (`bwrap`).
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
-- **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap.
-- **Tools:** sandboxed terminal execution, HTTP fetch, and SearXNG-backed web search.
+- **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
+- **Tools:** `terminal_exec`, `http_fetch`, `web_search`, plus `terminal_job_start`, `terminal_job_get`, and `terminal_job_cancel` for fallback live-job polling.
 - **Docker:** intentionally unsupported/deferred until an isolated Docker backend/broker exists; never expose the host Docker socket to make it work.
 
 The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
+
+### Long-running terminal contract
+
+- `terminal_exec` declares optional MCP Tasks support. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; tool-level non-zero exits complete the task with `isError: true` rather than becoming JSON-RPC failures.
+- First-party/non-Tasks clients that need live output use `terminal_job_start/get/cancel`; polling returns bounded current stdout/stderr tails without introducing a second process runner.
+- `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
+- Running pipes are drained continuously. Output retention is bounded and reports omitted earlier bytes rather than killing noisy commands solely for exceeding the retained log window.
+- Manual cancel, timeout, and relay shutdown terminate/reap the sandbox process tree through the same authoritative job manager.
 
 ## Build
 
@@ -40,18 +48,20 @@ Local mode is the default and binds to loopback. Supply the project directory an
 cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- relay \
   --mode local \
   --dir /home/user/project \
-  --execution-root /home/user/project \
+  --execution-root /home/user \
   --origin http://localhost:3333
 ```
 
 Important:
 
 - `--dir` is the default working directory.
-- `--execution-root` is the filesystem containment root. When omitted it resolves from `--dir`; prefer setting it explicitly in operator-facing examples.
+- `--execution-root` is the filesystem containment root. For a single-owner coding relay, set it to `/home/user`; sibling projects can then be selected with `cwd` without restarting or reconnecting.
 - The execution root must resolve to an allowed user-owned path; unsafe/shallow system roots are rejected.
 - Bubblewrap must be installed before startup.
 - The process must run as an unprivileged user.
 - Wildcard origins are rejected.
+- User-managed toolchains are opt-in through repeated `--toolchain-path` flags (or `RELAY_TOOLCHAIN_PATH`); the relay never inherits an arbitrary parent `PATH`.
+- The owner-home Bubblewrap namespace masks common credential stores (`.ssh`, cloud credentials, Docker/Kubernetes credentials, and common token files). Review the exact deployment policy before relying on a command that needs one of them.
 
 Default port: `47821`.
 

@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git(root: str, *args: str) -> str:
+    proc = subprocess.run(['git', '-C', root, *args], text=True, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or 'git command failed')
+    return proc.stdout.strip()
+
+
+def normalize_remote(value: str) -> str:
+    value = value.strip()
+    m = re.match(r'^git@([^:]+):(.+)$', value)
+    if m:
+        host, path = m.groups()
+    else:
+        value = re.sub(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', '', value)
+        value = value.split('@')[-1]
+        parts = value.split('/', 1)
+        host, path = (parts[0], parts[1] if len(parts) > 1 else '')
+    path = path.removesuffix('.git').strip('/')
+    return f'{host.lower()}/{path.lower()}'
+
+
+def parse_manifest(path: Path) -> tuple[str | None, list[str]]:
+    expected = None
+    markers: list[str] = []
+    in_markers = False
+    for raw in path.read_text(encoding='utf-8').splitlines():
+        if re.match(r'^\s{2}expected_origin:\s*', raw):
+            expected = raw.split(':', 1)[1].strip().strip('"\'')
+            in_markers = False
+        elif re.match(r'^\s{2}required_markers:\s*$', raw):
+            in_markers = True
+        elif in_markers and re.match(r'^\s{4}-\s+', raw):
+            markers.append(re.sub(r'^\s{4}-\s+', '', raw).strip().strip('"\''))
+        elif in_markers and raw and not raw.startswith('    '):
+            in_markers = False
+    return expected, markers
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description='Verify project identity and workspace boundary.')
+    parser.add_argument('--root', default='.', help='Candidate repository path')
+    parser.add_argument('--path', action='append', default=[], help='Path that must resolve inside repository root')
+    args = parser.parse_args()
+
+    try:
+        root = Path(git(args.root, 'rev-parse', '--show-toplevel')).resolve()
+        manifest = root / 'ai-self' / 'project.yaml'
+        if not manifest.is_file():
+            raise RuntimeError(f'missing project manifest: {manifest}')
+        expected, markers = parse_manifest(manifest)
+        actual = git(str(root), 'remote', 'get-url', 'origin') if expected else None
+        if expected and normalize_remote(expected) != normalize_remote(actual or ''):
+            raise RuntimeError(f'origin mismatch: expected {expected!r}, got {actual!r}')
+        missing = [marker for marker in markers if not (root / marker).exists()]
+        if missing:
+            raise RuntimeError('missing required marker(s): ' + ', '.join(missing))
+        checked_paths = []
+        for raw in args.path:
+            candidate = Path(raw)
+            if not candidate.is_absolute():
+                candidate = root / candidate
+            resolved = candidate.resolve(strict=False)
+            try:
+                resolved.relative_to(root)
+            except ValueError as exc:
+                raise RuntimeError(f'path escapes workspace root: {raw} -> {resolved}') from exc
+            checked_paths.append(str(resolved))
+        print(json.dumps({
+            'verified': True,
+            'root': str(root),
+            'origin': actual,
+            'manifest': str(manifest),
+            'checked_paths': checked_paths,
+        }, indent=2))
+        return 0
+    except Exception as exc:
+        print(json.dumps({'verified': False, 'error': str(exc)}, indent=2), file=sys.stderr)
+        return 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

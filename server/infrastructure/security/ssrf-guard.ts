@@ -119,7 +119,15 @@ export function createSsrfSafeFetch(context: string, options: SsrfFetchOptions =
   return async (input, init) => {
     let url = new URL(input instanceof Request ? input.url : input.toString())
     let method = init?.method ?? (input instanceof Request ? input.method : 'GET')
-    const headers = new Headers(input instanceof Request ? input.headers : init?.headers)
+
+    // Match native fetch precedence: init headers override headers already on
+    // a Request. This matters for authenticated SDK transports that construct
+    // a Request and then attach Authorization through request options.
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    new Headers(init?.headers).forEach((value, name) => {
+      headers.set(name, value)
+    })
+
     let body = init?.body ?? (input instanceof Request ? input.body : undefined)
     const originalOrigin = url.origin
     const originalProtocol = url.protocol

@@ -13,7 +13,7 @@ The authoritative agent-facing project notes live in [`.agents/`](.agents/README
 - **Native tools:** A single unified Rust binary (`ai-tools`) for terminal execution, HTTP requests, SearXNG search, and the relay agent
 - **Package manager:** pnpm
 
-See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
+See [`package.json`](package.json), [`Cargo.toml`](Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
 
 ## Repository layout
 
@@ -33,6 +33,12 @@ scripts/                Local policy/quality/hook helpers plus deterministic acc
 ```
 
 This repository intentionally has **no CI workflow** and **no unit-test suite**.
+
+## Relay execution lifecycle
+
+The native relay exposes the synchronous `terminal_exec`, `http_fetch`, and `web_search` tools plus `terminal_job_start`, `terminal_job_get`, and `terminal_job_cancel` for first-party/non-Tasks polling. `terminal_exec` advertises optional MCP Tasks support: Tasks-capable clients get the standard task lifecycle, while the fallback job tools expose bounded live stdout/stderr for clients such as the local Nuxt terminal.
+
+Terminal deadlines are operator policy, not a hard-coded five-minute ceiling. `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` configures an operator maximum. Running output is drained continuously and retained as bounded tails; cancellation, timeout, and relay shutdown terminate the full sandboxed process tree. The owner-home profile uses an explicit `RELAY_TOOLCHAIN_PATH` allowlist and masks common credential stores rather than inheriting the relay process PATH.
 
 ## Setup
 
@@ -82,6 +88,22 @@ The gate includes repository policy enforcement, compact agent-doc integrity, al
 | Apply DB migrations | `pnpm db:migrate` |
 
 For local runtime verification, prefer a clean `pnpm build` followed by `pnpm preview` when relevant.
+
+## Releases
+
+The repository deliberately has no GitHub Actions release workflow. Releases are promoted manually from a reviewed `main` commit after local verification.
+
+For a stable `vX.Y.Z` release:
+
+1. merge the implementation branch into `dev`, then promote `dev` to `main` through a PR;
+2. verify the final `main` commit locally with `pnpm verify:commit` and `pnpm build`;
+3. create and push the annotated `vX.Y.Z` tag on that exact commit;
+4. build and verify release artifacts with `pnpm release:build vX.Y.Z`;
+5. publish the multi-arch web image to GHCR and the native archive/checksums to GitHub Releases with `pnpm release:publish vX.Y.Z`.
+
+The native release target is `x86_64-unknown-linux-gnu`; the production relay contract remains Linux + Bubblewrap. The GHCR image defaults to `ghcr.io/farismnrr/ai-code`, is built for `linux/amd64` and `linux/arm64`, and publishes `vX.Y.Z`, `X.Y.Z`, and `latest` tags for stable releases. The publish script fails closed unless the checkout is clean, on `main`, the requested tag points at `HEAD`, and that tag is already present on `origin`.
+
+`pnpm release:build vX.Y.Z` runs the mandatory local gate, builds Nuxt, builds the native CLI, and writes the direct `dist/vX.Y.Z/ai-tools-x86_64-unknown-linux-gnu` download used by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. `dist/` remains untracked build output.
 
 ## Verification policy
 

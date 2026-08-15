@@ -207,7 +207,7 @@ impl DiscoverResult {
         Self {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
-            capabilities: json!({ "tools": { "listChanged": false } }),
+            capabilities: json!({ "tools": { "listChanged": false }, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
             instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
             ttl_ms: 0,
             cache_scope: "private",
@@ -229,6 +229,8 @@ pub struct Tool {
     pub annotations: Option<ToolAnnotations>,
     #[serde(rename = "securitySchemes")]
     pub security_schemes: Vec<ToolSecurityScheme>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -272,7 +274,6 @@ pub fn tool_catalog() -> Vec<Tool> {
                     "timeout_ms": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 300000,
                         "default": 30000
                     }
                 },
@@ -289,6 +290,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 scheme_type: "oauth2",
                 scopes: vec!["relay.coding"],
             }],
+            execution: Some(json!({ "taskSupport": "optional" })),
         },
         Tool {
             name: "http_fetch",
@@ -330,6 +332,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 scheme_type: "oauth2",
                 scopes: vec!["relay.coding"],
             }],
+            execution: None,
         },
         Tool {
             name: "web_search",
@@ -354,6 +357,49 @@ pub fn tool_catalog() -> Vec<Tool> {
                 scheme_type: "oauth2",
                 scopes: vec!["relay.coding"],
             }],
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_start",
+            title: Some("Start Terminal Job"),
+            description: "Start a bounded sandboxed terminal job and return its task ID for polling.",
+            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 } }, "required": ["command"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_get",
+            title: Some("Get Terminal Job"),
+            description: "Get bounded state and retained output for a terminal job.",
+            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_cancel",
+            title: Some("Cancel Terminal Job"),
+            description: "Cancel a running terminal job and its process group.",
+            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: true,
+                open_world_hint: true,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
         },
     ]
 }

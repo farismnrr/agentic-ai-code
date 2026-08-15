@@ -4,7 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 catalog="$root/.agents/contracts/029-tool-catalog-v1.json"
 catalog_hash_file="$root/.agents/contracts/029-tool-catalog-v1.sha256"
-manifest="$root/packages/rust-tools/Cargo.toml"
+manifest="$root/Cargo.toml"
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
@@ -13,15 +13,15 @@ command -v sha256sum >/dev/null
 command -v bwrap >/dev/null
 
 jq -e 'type == "array" and all(.[]; (.name and .description and .inputSchema and .annotations and (.securitySchemes == [{"type":"oauth2","scopes":["relay.coding"]}]) and (has("security") | not)))' "$catalog" >/dev/null
-test "$(jq -r '.[].name' "$catalog" | paste -sd' ' -)" = "terminal_exec http_fetch web_search"
-test "$(jq -r '.[].title' "$catalog" | paste -sd' ' -)" = "Sandboxed Coding Terminal HTTP Fetch Web Search"
+test "$(jq -r '.[].name' "$catalog" | paste -sd' ' -)" = "terminal_exec http_fetch web_search terminal_job_start terminal_job_get terminal_job_cancel"
+test "$(jq -r '.[].title' "$catalog" | paste -sd' ' -)" = "Sandboxed Coding Terminal HTTP Fetch Web Search Start Terminal Job Get Terminal Job Cancel Terminal Job"
 
-RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked --bin relay-agent
+RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked --bin ai-tools
 
 runtime_file="$(mktemp)"
 trap 'rm -f "$runtime_file"' EXIT
 
-python3 - "$root/target/debug/relay-agent" "$runtime_file" "$root" <<'PY'
+python3 - "$root/target/debug/ai-tools" "$runtime_file" "$root" <<'PY'
 import json
 import os
 import socket
@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory(prefix="relay-phase7-") as workspace:
     port = free_port()
     environment = os.environ.copy()
     process = subprocess.Popen(
-        [relay, "--port", str(port), "--dir", workspace, "--execution-root", workspace,
+        [relay, "relay", "--port", str(port), "--dir", workspace, "--execution-root", workspace,
          "--origin", "http://localhost:3333", "--mode", "local"],
         cwd=root,
         env=environment,

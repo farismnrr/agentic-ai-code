@@ -35,6 +35,9 @@ The `relay` subcommand executes other subcommands relative to its own executable
 - **Filesystem containment.** Execution is constrained to the configured execution root through Bubblewrap plus server policy.
 - **Local/remote modes.** Local is loopback-oriented; remote is OAuth-protected and fail-closed.
 - **Docker is deferred.** Do not expose the host Docker socket as a workaround for missing isolated Docker execution.
+- **Long-running execution.** One bounded job manager owns spawn, output draining, timeout, cancellation, process-tree cleanup, retention, and concurrency for synchronous calls, MCP Tasks, and fallback jobs.
+- **Timeout policy.** `timeout_ms = 0` is deadline-free unless an operator maximum is configured; terminal execution has no unconditional five-minute server ceiling.
+- **Output policy.** stdout/stderr are drained continuously into bounded retained tails; exceeding retention omits older bytes instead of killing an otherwise valid process.
 
 See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), the canonical [memory](../../.agents/memories/README.md#rust-cli-migration-invariants), and [Plan 030 history](../../.agents/plans/030-previous-plans-summary.md) before changing these boundaries.
 
@@ -49,7 +52,7 @@ pnpm build:tools
 Or directly:
 
 ```bash
-cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked
+cargo build --manifest-path Cargo.toml --release --locked --bin ai-tools
 ```
 
 ## Mandatory commit verification
@@ -82,9 +85,12 @@ When publishing native artifacts manually:
 
 - build from the reviewed commit with the pinned Rust toolchain;
 - run the mandatory local commit gate plus applicable Rust security checks;
-- package intended Linux artifact(s);
-- generate and publish SHA-256 checksums;
+- build the reviewed release bundle with `pnpm release:build vX.Y.Z`;
+- publish the native archive and generated `SHA256SUMS` from the exact stable tag with `pnpm release:publish vX.Y.Z`;
+- keep publish operations fail-closed to a clean `main` checkout whose requested tag points at `HEAD` and is already present on `origin`;
 - do not weaken sandbox/platform contracts merely to broaden the release matrix.
+
+The GitHub Release publishes the direct `ai-tools-x86_64-unknown-linux-gnu` asset required by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. The same publish command also builds and pushes the web image to GHCR for `linux/amd64` and `linux/arm64`.
 
 ## CLI notes
 
