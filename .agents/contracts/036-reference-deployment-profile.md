@@ -137,10 +137,18 @@ The current source slice accepts an externally-issued access token through priva
 
 ```text
 NUXT_REMOTE_MCP_URL=https://mcp.farismunir.my.id/mcp
+NUXT_REMOTE_MCP_OWNER_USER_ID=<ai_code.users.id for the single app owner>
 NUXT_REMOTE_MCP_ACCESS_TOKEN=<owner access token>
 ```
 
-This token is attached only when a stored HTTP MCP server URL exactly matches the configured resource. It is never written into the MCP server database row or returned to the browser.
+Two independent owner identities are intentional:
+
+- `NUXT_REMOTE_MCP_OWNER_USER_ID` is the ai-code application's database user id. It controls which authenticated ai-code account is allowed to make Nitro use the private first-party relay credential.
+- `OAUTH_OWNER_SUBJECT` is the external Authorization Server's `sub` claim. It controls which OAuth identity the Rust relay will accept.
+
+The access token is attached only when **both** the stored HTTP MCP server URL exactly matches the configured resource and the row's authoritative `userId` matches `NUXT_REMOTE_MCP_OWNER_USER_ID`. This multi-tenant guard is required: URL matching alone would let another authenticated ai-code user create their own row for the same resource and cause Nitro to reuse the operator's token.
+
+The token and owner binding remain private runtime config. They are never written into the MCP server database row or returned to the browser.
 
 This is the first deployable single-owner path, not the final token-lifecycle solution. Short-lived access-token expiry/rotation remains operational work until a reviewed refresh/linking flow is implemented. Do not work around expiry by issuing an effectively permanent bearer token.
 
@@ -156,9 +164,10 @@ Provisioning should be proven in this order so failures stay attributable:
 4. confirm public Protected Resource Metadata;
 5. confirm unauthenticated `server/discover` gets a Bearer challenge;
 6. issue an owner token and run `scripts/phase36-public-mcp-smoke.sh` with `REMOTE_MCP_ACCESS_TOKEN_FILE`;
-7. configure hosted Nuxt with the same resource and an owner token, then use Settings -> MCP servers -> Test;
-8. connect ChatGPT in developer mode, complete OAuth, inspect tools, then test a safe tool call before terminal execution;
-9. only after those pass, run a deliberately approved `terminal_exec` inside the configured execution root.
+7. configure hosted Nuxt with the same resource, the single owner's ai-code user id, and an owner token, then use Settings -> MCP servers -> Test from that owner account;
+8. verify a different ai-code user cannot use the first-party credential even if they create an MCP row containing the same public URL;
+9. connect ChatGPT in developer mode, complete OAuth, inspect tools, then test a safe tool call before terminal execution;
+10. only after those pass, run a deliberately approved `terminal_exec` inside the configured execution root.
 
 A metadata-only pass is not ChatGPT interoperability evidence, and a successful tool list is not terminal-execution evidence.
 
@@ -170,6 +179,8 @@ This contract does not claim any of the following until they are observed agains
 - active Cloudflare Tunnel connection;
 - Auth0 tenant configuration;
 - an issued token with the exact expected audience/subject/scope;
+- correct `NUXT_REMOTE_MCP_OWNER_USER_ID` ownership binding in the hosted deployment;
 - hosted Nuxt -> public relay execution;
+- negative proof that another ai-code user cannot consume the owner credential;
 - ChatGPT OAuth completion;
 - ChatGPT tool invocation.
