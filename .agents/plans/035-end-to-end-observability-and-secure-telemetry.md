@@ -1,6 +1,13 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: CLOSED — remediation round 3 complete (Phases 0–12).** Implementation branch `feat/035-p0-observability-contract`, final commit `221a491` at close (Phase 12 documentation commit follows this one). Round 1 and round 2 histories remain preserved below for forensic record; round 3 independently re-proved P1-A–D and E1–E4 rather than trusting prior claims. One item remains explicitly UNPROVEN, not closed-over: Phase 6's full AI-provider chat completion (no authenticatable provider credential exists in this environment — see `.agents/contracts/035-evidence/phase6-browser-chat.md`); this does not block closure because it is not a Definition-of-Done requirement — the DoD requires real browser-originated trace continuity and requestId→Loki→Jaeger reconstruction, both of which are proven, not a successful model response.
+**Status: OPEN / REMEDIATION ROUND 4 IN PROGRESS.** Implementation branch `feat/035-p0-observability-contract`, reopened from round-3 close commit `e1074ce`. Round 1–3 histories remain preserved below for forensic record; do not delete them.
+
+**Round 4 reopening reason (fresh external review, not self-discovered):**
+- **P1** — raw unhandled exception diagnostics can still carry direct PII/request-derived data into private logs because raw `Error.message` is allowed through the logger sanitizer path; secret-shaped redaction is not a general PII/data-classification boundary.
+- **P2** — lifecycle `route` attribute is over-redacted into `[REDACTED-PATH]` for nested API routes, making it largely useless.
+- **P2** — final round-3 documentation has an internal severity inconsistency for the Phase 9 SearXNG leak (`P0` in one place, `P1` in another).
+
+No later round-4 phase is complete until independently re-proven.
 
 **Remediation round 3 reason:** the user's confirmed review blockers are: **P1-A** raw exceptions leak secrets/internal detail into Jaeger; **P1-B** LangGraph/tool failure paths stream raw internal errors; **P1-C** Rust telemetry exports dependency noise/filesystem paths; **P1-D** the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace. The evidence gaps are: **E1** the browser happy path is not real; **E2** the Rust internal proof is a 400, not a genuine 5xx; **E3** requestId → Loki → trace is not guaranteed; **E4** closure docs overstate claims. This is a documentation/contract reset only; no later phase is complete until these blockers and evidence gaps are independently re-proven.
 
@@ -28,6 +35,16 @@
 - [x] Phase 10 — full release verification including build/audits/scripts/LSP.
 - [x] Phase 11 — fresh independent worker closure review.
 - [x] Phase 12 — truthful final documentation and closure.
+
+**Remediation round 4 checklist (Phase 1–8):**
+- [ ] Phase 1 — fix raw Error.message/PII leakage into private telemetry.
+- [ ] Phase 2 — real PII/user-data canary proof against a genuine runtime failure.
+- [ ] Phase 3 — fix route over-redaction without weakening filesystem-path confidentiality.
+- [ ] Phase 4 — reconcile documentation severity inconsistency (SearXNG leak).
+- [ ] Phase 5 — comprehensive same-class audit (fresh worker).
+- [ ] Phase 6 — full final verification.
+- [ ] Phase 7 — final independent closure review.
+- [ ] Phase 8 — close Plan 035 again.
 
 **Remediation round 2 summary:** Reopened at commit `2f67f4dd85a8c5e9130b81a9157d49a93a1b8909` (2026-08-14) after the user's own fresh review found three confirmed P1 gaps missed by round 1's independent review: (1) `server/core/errors/http.ts` imported `server/infrastructure/observability/logger` directly, violating the Plan 031-034 dependency direction; (2) `server/api/mcp/index.ts:97` returned raw caught-error text inside a 200 JSON-RPC MCP tool-result, bypassing the 5xx sanitizer entirely; (3) chat traffic used AI SDK's `DefaultChatTransport`, which never went through the `globalThis.$fetch` override Phase 4/7 patched — the single most user-visible request path got no trace correlation at all. All three fixed and re-proven live. Full remediation lane list:
 
