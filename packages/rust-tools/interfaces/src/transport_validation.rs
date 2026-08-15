@@ -64,11 +64,21 @@ pub fn validate_routing_headers(
         }
         Some(_) => {}
     }
-    if request.method == "tools/call" {
+    if request.method == "tools/call"
+        || request.method == "tasks/get"
+        || request.method == "tasks/update"
+        || request.method == "tasks/cancel"
+    {
         let expected = request
             .params
             .as_ref()
-            .and_then(|p| p.get("name"))
+            .and_then(|p| {
+                p.get(if request.method == "tools/call" {
+                    "name"
+                } else {
+                    "taskId"
+                })
+            })
             .and_then(|v| v.as_str());
         let raw = headers
             .get("mcp-name")

@@ -40,6 +40,29 @@ export function useMcpServers() {
       body: server
     })
     servers.value = [...servers.value, data]
+    return data
+  }
+
+  async function test(id: string) {
+    try {
+      const result = await $fetch<{ id: string, status: McpServer['status'], tools: McpTool[] }>(`/api/mcp-servers/${id}/test`, {
+        method: 'POST'
+      })
+      servers.value = servers.value.map(server =>
+        server.id === id
+          ? { ...server, status: result.status, tools: result.tools }
+          : server
+      )
+      return result
+    } catch (error) {
+      // The server persists the failed test as `error`; mirror that state
+      // immediately so the UI doesn't keep displaying a stale connected badge
+      // until the next full settings reload.
+      servers.value = servers.value.map(server =>
+        server.id === id ? { ...server, status: 'error' } : server
+      )
+      throw error
+    }
   }
 
   async function remove(id: string) {
@@ -47,5 +70,5 @@ export function useMcpServers() {
     await $fetch(`/api/mcp-servers/${id}`, { method: 'DELETE' })
   }
 
-  return { servers, availableTools, toolsById, loadAll, setEnabled, add, remove }
+  return { servers, availableTools, toolsById, loadAll, setEnabled, add, test, remove }
 }

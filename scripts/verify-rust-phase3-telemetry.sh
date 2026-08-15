@@ -13,7 +13,7 @@ cleanup() { if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2
 trap cleanup EXIT
 
 cargo build --quiet --release --bin ai-tools --manifest-path "$root/packages/rust-tools/cli/Cargo.toml"
-eval "$(PHASE4_PRINT_ENV=1 PHASE4_TRACE_ID="$trace_id" NUXT_OTEL_JAEGER_ENDPOINT="$NUXT_OTEL_JAEGER_ENDPOINT" pnpm exec tsx "$root/scripts/verify-phase4-process-boundary.ts" | tail -n 4)"
+eval "$(PHASE4_PRINT_ENV=1 PHASE4_TRACE_ID="$trace_id" NUXT_OTEL_JAEGER_ENDPOINT="$NUXT_OTEL_JAEGER_ENDPOINT" node "$root/scripts/verify-phase4-process-boundary.ts" | tail -n 4)"
 export NUXT_OTEL_ENABLED NUXT_OTEL_JAEGER_ENDPOINT AI_TOOLS_TRACEPARENT
 "$bin" relay --mode local --port "$port" --dir "$tmp" --execution-root "$tmp" --origin "http://localhost:$port" \
   >"$tmp/stdout" 2>"$tmp/stderr" &

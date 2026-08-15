@@ -1,5 +1,6 @@
 {
   "name": "ai-code",
+  "version": "0.0.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +16,9 @@
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "release:build": "bash scripts/build-release-artifacts.sh",
+    "release:publish": "bash scripts/publish-release.sh"
   },
   "dependencies": {
     "@ai-code/curl-tool": "workspace:*",

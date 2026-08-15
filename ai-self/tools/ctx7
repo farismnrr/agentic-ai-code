@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FNM_DEFAULT_BIN="/home/farismnrr/.local/share/fnm/aliases/default/bin"
+if [[ -d "$FNM_DEFAULT_BIN" ]]; then
+  export PATH="$FNM_DEFAULT_BIN:$PATH"
+fi
+
+if command -v ctx7 >/dev/null 2>&1; then
+  exec ctx7 "$@"
+fi
+
+if command -v npx >/dev/null 2>&1; then
+  exec npx --yes ctx7@latest "$@"
+fi
+
+echo "ctx7 requires Node.js 18+ and either ctx7 or npx on PATH" >&2
+exit 127

@@ -28,6 +28,16 @@ RUN pnpm install --config.ignore-scripts=true
 RUN pnpm build
 
 FROM runtime-tools AS runtime
+ARG VERSION=dev
+ARG REVISION=unknown
+ARG CREATED=unknown
+LABEL org.opencontainers.image.title="AI Code" \
+      org.opencontainers.image.description="MasihAwam AI Code web application" \
+      org.opencontainers.image.source="https://github.com/farismnrr/ai-code" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}"
+ENV APP_VERSION="${VERSION}"
 WORKDIR /app
 COPY --from=build /app/.output ./.output
 # otel-preload.mjs runs via `node --import` before Nitro's own build output

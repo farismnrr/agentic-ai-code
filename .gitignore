@@ -39,3 +39,10 @@ target/
 # Local scratch/debug scripts
 scratch_*
 docker-compose.override.yml
+
+# Externally installed agent skills (provenance tracked in ai-self/registry.yaml)
+.agents/skills/context7-cli/
+.agents/skills/git-commit/
+.agents/skills/make-repo-contribution/
+.agents/skills/create-implementation-plan/
+.agents/skills/agent-skill-stack/

@@ -31,6 +31,17 @@ export default defineNuxtConfig({
     modelProviderSecretKey: '',
     searxngBaseUrl: 'http://127.0.0.1:8888',
     workspacesRoot: '',
+    // Plan 036: private credentials for the one first-party public MCP
+    // resource backed by the laptop relay. `url` and `ownerUserId` are both
+    // matched before `accessToken` is ever attached, preventing another
+    // authenticated ai-code user from reusing the operator's relay token by
+    // creating an MCP row with the same URL. All three values are server-only;
+    // never move them under `public`.
+    remoteMcp: {
+      url: '',
+      ownerUserId: '',
+      accessToken: ''
+    },
     // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
     // be ≥ 32 characters. Generated once per environment, never reused.
     session: {

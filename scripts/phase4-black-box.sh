@@ -5,17 +5,16 @@ set -euo pipefail
 # exercise the built relay over HTTP; source inspection belongs only in the
 # structural zero-bypass gate.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-manifest="$root/packages/rust-tools/Cargo.toml"
+manifest="$root/Cargo.toml"
 
 command -v cargo >/dev/null
 command -v python3 >/dev/null
 command -v openssl >/dev/null
 command -v bwrap >/dev/null
 
-RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked \
-  --bin relay-agent --bin terminal-tool
+RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked --bin ai-tools
 
-exec python3 - "$root/target/debug/relay-agent" <<'PY'
+exec python3 - "$root/target/debug/ai-tools" <<'PY'
 import base64
 import json
 import os
@@ -169,9 +168,10 @@ def wait_for_health(port, process):
     raise AssertionError("relay did not become healthy")
 
 
-def start_relay(temp_dir, port, issuer=None, trusted_proxy=False):
-    args = [RELAY, "--port", str(port), "--dir", temp_dir, "--execution-root", temp_dir,
+def start_relay(temp_dir, port, issuer=None, trusted_proxy=False, extra_args=()):
+    args = [RELAY, "relay", "--port", str(port), "--dir", temp_dir, "--execution-root", temp_dir,
             "--origin", ORIGIN]
+    args += list(extra_args)
     if issuer is None:
         args += ["--mode", "local"]
     else:
@@ -235,7 +235,7 @@ def run():
         local = remote_untrusted = remote = None
         try:
             local_port = free_port()
-            local = start_relay(temp_dir, local_port)
+            local = start_relay(temp_dir, local_port, extra_args=("--max-running-jobs", "1"))
             local_url = f"http://127.0.0.1:{local_port}/mcp"
             valid_discover = mcp("server/discover")
             initialize_request = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -260,7 +260,7 @@ def run():
             instructions = body["result"]["instructions"]
             assert "Local" not in instructions
             assert "Plan 0" not in instructions
-            assert response_headers.get("x-correlation-id")
+            assert response_headers.get("x-request-id")
 
             status, _, body = request(local_url, headers=headers(origin=None), body=valid_discover)
             assert_status(status, 403, "missing Origin")
@@ -301,6 +301,59 @@ def run():
                 assert result["isError"] is expected_error
                 assert isinstance(result["content"], list) and result["content"]
                 assert "io.modelcontextprotocol/serverInfo" in result["_meta"]
+
+            def fallback_job(name, arguments, request_id):
+                body = mcp("tools/call", {
+                    "name": name,
+                    "arguments": arguments,
+                    "_meta": call_meta,
+                }, request_id=request_id)
+                status, _, response = request_after_admission(
+                    local_url,
+                    headers=headers(method="tools/call", name=name),
+                    body=body,
+                )
+                assert_status(status, 200, name)
+                result = response["result"]
+                assert result["resultType"] == "complete" and result["isError"] is False
+                text = next(item["text"] for item in result["content"] if item.get("type") == "text")
+                return json.loads(text)
+
+            first_job = fallback_job(
+                "terminal_job_start",
+                {"command": "sh", "args": ["-c", "sleep 5"], "timeout_ms": 0},
+                20,
+            )
+            first_id = first_job["taskId"]
+            deadline = time.monotonic() + 2
+            while True:
+                first_snapshot = fallback_job("terminal_job_get", {"taskId": first_id}, 21)
+                if first_snapshot["status"] == "working":
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(f"first fallback job did not start: {first_snapshot}")
+                time.sleep(0.05)
+
+            queued_job = fallback_job("terminal_job_start", {"command": "true"}, 22)
+            queued_id = queued_job["taskId"]
+            queued_snapshot = fallback_job("terminal_job_get", {"taskId": queued_id}, 23)
+            assert queued_snapshot["status"] == "queued", queued_snapshot
+            fallback_job("terminal_job_cancel", {"taskId": queued_id}, 24)
+
+            deadline = time.monotonic() + 2
+            while True:
+                cancelled_snapshot = fallback_job("terminal_job_get", {"taskId": queued_id}, 25)
+                if cancelled_snapshot["status"] == "cancelled":
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(
+                        f"queued job cancellation waited for a semaphore permit: {cancelled_snapshot}"
+                    )
+                time.sleep(0.05)
+
+            first_snapshot = fallback_job("terminal_job_get", {"taskId": first_id}, 26)
+            assert first_snapshot["status"] == "working", first_snapshot
+            fallback_job("terminal_job_cancel", {"taskId": first_id}, 27)
 
             dispatch_marker = os.path.join(temp_dir, "rejected-dispatch-marker")
 
@@ -355,7 +408,7 @@ def run():
             status, _, body = request(untrusted_url,
                                       headers=headers(method="server/discover", forwarded="https"), body=valid_discover)
             assert_status(status, 403, "spoofed forwarded HTTPS without trust")
-            assert "requires HTTPS" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
 
             remote_port = free_port()
             remote = start_relay(temp_dir, remote_port, issuer=issuer, trusted_proxy=True)
@@ -493,14 +546,14 @@ def run():
             status, _, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="http"), body=valid_discover)
             assert_status(status, 403, "trusted proxy rejects non-https forwarded scheme")
-            assert "requires HTTPS" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
 
             wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {wrong_owner}"),
                 body=auth_call(dispatch_marker))
             assert_status(status, 403, "wrong owner")
-            assert "Authenticated subject is not authorized" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
             assert "other" not in body["error"]["message"]
             assert not os.path.exists(dispatch_marker), "wrong owner reached tool execution"
         finally:
