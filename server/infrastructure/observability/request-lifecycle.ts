@@ -8,7 +8,9 @@ const STARTED_AT = Symbol('plan035.request.startedAt')
 const RECORDED = Symbol('plan035.request.recorded')
 const TRACE_ID = Symbol('plan035.request.traceId')
 const SPAN_ID = Symbol('plan035.request.spanId')
+const REQUEST_PATH = Symbol('plan035.request.path')
 const MAX_DURATION_MS = 60_000
+const SAFE_STATIC_ROUTES = new Set(['/api/auth/register'])
 
 type LifecycleContext = Record<PropertyKey, unknown>
 
@@ -22,6 +24,13 @@ function lifecycleRoute(event: H3Event): string {
   if (typeof matchedRoute === 'string' && matchedRoute.startsWith('/')) {
     return sanitizeRoute(matchedRoute)
   }
+
+  // The request hook can run before Nitro attaches its matched-route context
+  // in the production node preset. Preserve exact classification only for
+  // static routes explicitly known to contain no attacker-controlled segment;
+  // dynamic and unknown paths must continue through the coarse fallback.
+  const requestPath = (context?.[REQUEST_PATH] as string | undefined || event.node?.req?.url || event.node?.req?.originalUrl || event.path || '').split('?')[0]
+  if (SAFE_STATIC_ROUTES.has(requestPath)) return requestPath
 
   // A missing match is expected for unmatched/early-failed requests. Keep only
   // a coarse, static family classification; never derive a route from the
@@ -54,6 +63,7 @@ export function beginRequestLifecycle(event: H3Event): void {
   const context = lifecycleContext(event)
   if (!context) return
   context[STARTED_AT] = performance.now()
+  context[REQUEST_PATH] = event.node?.req?.url || event.node?.req?.originalUrl || event.path || ''
   const spanContext = trace.getActiveSpan()?.spanContext()
   if (spanContext?.traceId) context[TRACE_ID] = spanContext.traceId
   if (spanContext?.spanId) context[SPAN_ID] = spanContext.spanId

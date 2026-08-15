@@ -6,11 +6,11 @@ command -v jq >/dev/null || { echo 'jq is required' >&2; exit 1; }
 
 if [[ -z "${APP_URL:-}" ]]; then
   echo 'UNAVAILABLE: APP_URL is not set; route telemetry acceptance was not executed.' >&2
-  exit 0
+  exit 1
 fi
 if ! curl -sS --connect-timeout 2 --max-time 5 "$APP_URL" >/dev/null 2>&1; then
   echo "UNAVAILABLE: APP_URL=$APP_URL is not reachable; route telemetry acceptance was not executed." >&2
-  exit 0
+  exit 1
 fi
 
 dynamic_id='123e4567-e89b-12d3-a456-426614174035'
@@ -19,17 +19,18 @@ query_canary='ROUTE-QUERY-CANARY-035'
 
 if [[ -z "${LOKI_QUERY_URL:-}" ]]; then
   echo 'UNAVAILABLE: LOKI_QUERY_URL is not set; route telemetry acceptance was not executed.' >&2
-  exit 0
+  exit 1
 fi
 if ! curl -fsS --connect-timeout 2 --max-time 5 "$LOKI_QUERY_URL" --get --data-urlencode 'query={job="ai-code-server"}' --data-urlencode 'limit=1' >/dev/null; then
   echo "UNAVAILABLE: LOKI_QUERY_URL=$LOKI_QUERY_URL is not reachable; route telemetry acceptance was not executed." >&2
-  exit 0
+  exit 1
 fi
 if [[ -z "${JAEGER_QUERY_URL:-}" ]]; then
-  echo 'UNAVAILABLE: JAEGER_QUERY_URL is not set; request trace backend correlation is skipped.' >&2
+  echo 'UNAVAILABLE: JAEGER_QUERY_URL is not set; request trace backend correlation is required.' >&2
+  exit 1
 elif ! curl -fsS --connect-timeout 2 --max-time 5 "$JAEGER_QUERY_URL/api/services" >/dev/null; then
-  echo "UNAVAILABLE: JAEGER_QUERY_URL=$JAEGER_QUERY_URL is not reachable; request trace backend correlation is skipped." >&2
-  unset JAEGER_QUERY_URL
+  echo "UNAVAILABLE: JAEGER_QUERY_URL=$JAEGER_QUERY_URL is not reachable; request trace backend correlation is required." >&2
+  exit 1
 fi
 
 tmpdir=$(mktemp -d)
@@ -59,7 +60,9 @@ if [[ -n "${LOKI_QUERY_URL:-}" ]]; then
     count=0
     for _ in {1..10}; do
       payload=$(curl -fsS "$LOKI_QUERY_URL" --get --data-urlencode "query={job=\"ai-code-server\"} |= \"$request_id\"" --data-urlencode 'limit=20')
-      count=$(jq --arg id "$request_id" --arg name "$name" --arg raw "$(<"$tmpdir/$name.url")" --arg unmatched "$unmatched" --arg query "$query_canary" '[.data.result[].values[][1]? | fromjson | select((.attributes["request.id"] // .["request.id"]) == $id and .attributes.operation == "http.request.lifecycle" and ((($name == "static" or $name == "query") and .attributes.route == "/api/auth/register") or ($name == "unmatched" and .attributes.route == "/api/*") or ($name == "dynamic" and (.attributes.route == "/api/providers/:id/models" or .attributes.route == "/api/providers/[id]/models" or .attributes.route == "/api/*"))) and (tostring | contains($raw) | not) and (tostring | contains($unmatched) | not) and (tostring | contains($query) | not))] | length' <<<"$payload")
+      # The static request's raw path is intentionally the exact classified
+      # route value; retain raw-URL containment for every other journey.
+      count=$(jq --arg id "$request_id" --arg name "$name" --arg raw "$(<"$tmpdir/$name.url")" --arg unmatched "$unmatched" --arg query "$query_canary" '[.data.result[].values[][1]? | fromjson | select((.attributes["request.id"] // .["request.id"]) == $id and .attributes.operation == "http.request.lifecycle" and ((($name == "static" or $name == "query") and .attributes.route == "/api/auth/register") or ($name == "unmatched" and .attributes.route == "/api/*") or ($name == "dynamic" and (.attributes.route == "/api/providers/:id/models" or .attributes.route == "/api/providers/[id]/models" or .attributes.route == "/api/*"))) and (($name == "static") or (tostring | contains($raw) | not)) and (tostring | contains($unmatched) | not) and (tostring | contains($query) | not))] | length' <<<"$payload")
       [[ "$count" == 1 ]] && break
       sleep 1
     done
