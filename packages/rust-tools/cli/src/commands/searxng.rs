@@ -29,9 +29,9 @@ async fn run_search(query: &str, base_url: &str) -> String {
     let mut url = match Url::parse(base_url) {
         Ok(u) => match u.join("/search") {
             Ok(joined) => joined,
-            Err(e) => return format!("Error: {e}"),
+            Err(_) => return "Error: failed to build search request".to_string(),
         },
-        Err(e) => return format!("Error: {e}"),
+        Err(_) => return "Error: invalid search endpoint".to_string(),
     };
 
     url.query_pairs_mut()
@@ -43,7 +43,7 @@ async fn run_search(query: &str, base_url: &str) -> String {
         .build()
     {
         Ok(c) => c,
-        Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
+        Err(_) => return "Error: failed to build HTTP client".to_string(),
     };
     let res = match client.get(url).send().await {
         Ok(r) => r,

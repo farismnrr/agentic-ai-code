@@ -105,7 +105,7 @@ async fn run_curl(
 ) -> String {
     let parsed_url = match Url::parse(url_str) {
         Ok(u) => u,
-        Err(e) => return format!("Error: URL Error: {e}"),
+        Err(_) => return "Error: invalid URL".to_string(),
     };
 
     if !no_guard {
@@ -127,7 +127,7 @@ async fn run_curl(
 
     let method = match Method::from_str(&method_str.to_uppercase()) {
         Ok(m) => m,
-        Err(e) => return format!("Error: {e}"),
+        Err(_) => return "Error: invalid HTTP method".to_string(),
     };
 
     let timeout = if timeout_ms == 0 {
@@ -167,7 +167,7 @@ async fn run_curl(
         }
         match builder.build() {
             Ok(c) => c,
-            Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
+            Err(_) => return "Error: failed to build HTTP client".to_string(),
         }
     } else {
         let mut builder =
@@ -177,7 +177,7 @@ async fn run_curl(
         }
         match builder.build() {
             Ok(c) => c,
-            Err(e) => return format!("Error: Failed to build HTTP client: {e}"),
+            Err(_) => return "Error: failed to build HTTP client".to_string(),
         }
     };
 

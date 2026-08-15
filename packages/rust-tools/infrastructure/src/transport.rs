@@ -897,11 +897,11 @@ async fn handle_tools_call(
         )
     })?;
 
-    let call: ToolsCallParams = serde_json::from_value(params_val).map_err(|e| {
+    let call: ToolsCallParams = serde_json::from_value(params_val).map_err(|_| {
         err_response(
             StatusCode::BAD_REQUEST,
             Some(request.id.clone()),
-            &McpError::InvalidParams(format!("invalid tools/call parameters: {e}")),
+            &McpError::InvalidParams("invalid tools/call parameters".to_string()),
         )
     })?;
 
@@ -909,7 +909,7 @@ async fn handle_tools_call(
         return Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
-            &McpError::InvalidParams(format!("unknown tool '{}'", call.name)),
+            &McpError::InvalidParams("unknown tool".to_string()),
         ));
     };
 
@@ -989,10 +989,14 @@ async fn handle_tools_call(
         tool = call.name.as_str(),
         duration_ms = tool_dispatch_started.elapsed().as_millis() as u64,
     );
-    let result = dispatch_result.unwrap_or_else(|e| {
+    let result = dispatch_result.unwrap_or_else(|_| {
         ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
             kind: "text",
-            text: format!("execution failed: {}", e.message()),
+            // Internal diagnostics can contain provider, filesystem, or
+            // process details.  The tool-result is a client-visible 200
+            // response, so keep it at the same fixed public boundary as
+            // JSON-RPC internal errors.
+            text: "Tool execution failed".to_string(),
         }])
     });
 

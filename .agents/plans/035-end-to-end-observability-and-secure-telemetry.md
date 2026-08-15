@@ -5,7 +5,7 @@
 **Round 4 reopening reason (fresh external review, not self-discovered):**
 - **P1** — raw unhandled exception diagnostics can still carry direct PII/request-derived data into private logs because raw `Error.message` is allowed through the logger sanitizer path; secret-shaped redaction is not a general PII/data-classification boundary.
 - **P2** — lifecycle `route` attribute is over-redacted into `[REDACTED-PATH]` for nested API routes, making it largely useless.
-- **P2** — final round-3 documentation has an internal severity inconsistency for the Phase 9 SearXNG leak (`P0` in one place, `P1` in another).
+- **P2** — final round-3 documentation has an internal severity inconsistency for the Phase 9 SearXNG leak (originally written as `P0` in one place, `P1` in another); the final reviewed severity is reconciled to `P1` below.
 
 No later round-4 phase is complete until independently re-proven.
 
@@ -40,8 +40,8 @@ No later round-4 phase is complete until independently re-proven.
 - [x] Phase 1 — fix raw Error.message/PII leakage into private telemetry.
 - [x] Phase 2 — real PII/user-data canary proof against a genuine runtime failure.
 - [x] Phase 3 — fix route over-redaction without weakening filesystem-path confidentiality.
-- [ ] Phase 4 — reconcile documentation severity inconsistency (SearXNG leak).
-- [ ] Phase 5 — comprehensive same-class audit (fresh worker).
+- [x] Phase 4 — reconcile documentation severity inconsistency (SearXNG leak) to final reviewed severity `P1`, consistent with the repository’s impact treatment for the comparable client-visible Rust URL/query disclosure; the historical `P0` wording remains identified as the original classification.
+- [x] Phase 5 — comprehensive same-class audit (fresh worker); raw Rust URL/parser/command diagnostics and MCP tool-result details found by the audit were replaced with bounded generic responses, with workspace lint/typecheck passing.
 - [ ] Phase 6 — full final verification.
 - [ ] Phase 7 — final independent closure review.
 - [ ] Phase 8 — close Plan 035 again.
@@ -644,7 +644,7 @@ All items above were independently re-proven at round-3 HEAD `221a491`, not carr
 
 - [x] P1-A (raw exceptions in Jaeger) — closed, Phase 1/9/11.
 - [x] P1-B (LangGraph/tool streamed-error confidentiality) — closed, Phase 2/9/11.
-- [x] P1-C (Rust telemetry dependency/path noise) — closed, Phase 3/8/9/11; Phase 8/9 additionally found and fixed two previously-undetected leaks (JSON-quoted-key redaction gap, `ai-tools curl`/`searxng` raw-URL-in-error leaks) beyond what round 2 had proven.
+- [x] P1-C (Rust telemetry dependency/path noise) — closed, Phase 3/8/9/11; Phase 8/9 additionally found and fixed two previously-undetected leaks (JSON-quoted-key redaction gap, `ai-tools curl`/`searxng` raw-URL-in-error leaks) beyond what round 2 had proven. The SearXNG leak was originally classified as P0 in one historical summary, but final review reconciles it to P1.
 - [x] P1-D (Nuxt→`ai-tools` subprocess trace continuity) — closed, Phase 4/11 (`set_parent`, genuine W3C join, not correlation).
 - [x] E1 (browser happy path not real) — closed for trace continuity, Phase 6; provider-completion explicitly UNPROVEN (environmental, not a DoD blocker — see status header).
 - [x] E2 (Rust internal proof was a 400) — closed, Phase 7: genuine internal 5xx reproduced through real admission/auth-ordered middleware; a real private-stderr URL/canary leak found during that same repro was fixed, not just documented.

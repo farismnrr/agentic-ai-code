@@ -461,7 +461,7 @@ pub fn parse_request(payload: &Value) -> Result<Request, Option<McpError>> {
     }
 
     let request: Request = serde_json::from_value(payload.clone())
-        .map_err(|e| Some(McpError::InvalidRequest(e.to_string())))?;
+        .map_err(|_| Some(McpError::InvalidRequest("invalid request".to_string())))?;
 
     if request.jsonrpc != "2.0" {
         return Err(Some(McpError::InvalidRequest(
