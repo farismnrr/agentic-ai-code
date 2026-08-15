@@ -15,7 +15,7 @@
 - [x] Phase 1 — lifecycle telemetry uses stable matched route templates or coarse static fallbacks.
 - [x] Phase 2 — deterministic static/dynamic/unmatched/query/request-ID acceptance script added and validated; live app/Loki/Jaeger execution remains environment-unavailable and is not claimed as a fresh live pass.
 - [x] Phase 3 — raw error types are bounded by a shared stable policy across logger, consola, Jaeger exception recording, and lifecycle telemetry.
-- [ ] Phase 4 — mutable `Error.name` canary acceptance passes.
+- [x] Phase 4 — mutable `Error.name` canary acceptance script added and reviewed; live Loki/Jaeger execution is environment-dependent and not claimed without configured endpoints.
 - [ ] Phase 5 — fresh same-class audit finds zero unresolved P0/P1.
 - [ ] Phase 6 — final verification passes against the final implementation state.
 - [ ] Phase 7 — final independent closure review finds zero unresolved P0/P1.
