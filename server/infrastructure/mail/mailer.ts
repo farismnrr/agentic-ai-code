@@ -1,5 +1,4 @@
-import { logger } from "../observability/logger"
-import { logger } from '#server/infrastructure/observability/logger'
+import { logger } from '../observability/logger'
 import nodemailer from 'nodemailer'
 
 export function useMailer() {
@@ -17,7 +16,9 @@ export function useMailer() {
 
   async function sendEmail({ to, subject, html }: { to: string, subject: string, html: string }) {
     if (!config.smtpHost || !config.smtpUser || !config.smtpPassword) {
-      logger.warn('SMTP is not fully configured. Email was not sent.', undefined, { to, subject })
+      // Plan 035 Phase 3: never log the raw recipient address — `to` carries
+      // direct PII. Only a low-cardinality presence signal is safe here.
+      logger.warn('SMTP is not fully configured. Email was not sent.', undefined, { 'auth.present': Boolean(config.smtpUser) })
       // We don't throw an error here to prevent blocking the user if SMTP is misconfigured in dev
       return false
     }

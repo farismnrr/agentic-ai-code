@@ -2,6 +2,7 @@ import { badRequest, notFound } from '#server/core/errors/http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { publicMcpToolFailure } from '../../application/observability/public-tool-error'
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers
@@ -10,9 +11,20 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 const transports = new Map<string, SSEServerTransport>()
 
 export default defineEventHandler(async (event) => {
+  const telemetry = event.context.application.observability.request
   const authHeader = getHeader(event, 'Authorization')
-  if (!authHeader?.startsWith('Bearer ')) throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
-  const userId = await event.context.application.auth.verifyApiKey(authHeader.slice(7))
+  if (!authHeader?.startsWith('Bearer ')) {
+    telemetry.event('auth.login', 'denied', { 'auth.present': false })
+    throw createError({ statusCode: 401, message: 'Missing or invalid Authorization header' })
+  }
+  let userId: string
+  try {
+    userId = await event.context.application.auth.verifyApiKey(authHeader.slice(7))
+    telemetry.event('auth.login', 'ok', { 'auth.present': true })
+  } catch (err) {
+    telemetry.event('auth.login', 'denied', { 'auth.present': true })
+    throw err
+  }
   const method = event.method
 
   if (method === 'GET') {
@@ -38,7 +50,7 @@ export default defineEventHandler(async (event) => {
       }
     })
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async request => telemetry.withSpan('mcp.inbound.dispatch', { 'mcp.method': 'tools/call' }, async () => {
       const name = request.params.name
       const args = request.params.arguments || {}
 
@@ -83,9 +95,16 @@ export default defineEventHandler(async (event) => {
 
         throw new Error(`Unknown tool: ${name}`)
       } catch (err: unknown) {
-        return { content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
+        // Plan 035 P1/P2: this is a successful (HTTP 200) JSON-RPC MCP
+        // tool-result body, so the 5xx sanitization in server/core/errors/
+        // http.ts never runs for it. Mirror the same public/private split
+        // here by hand — a stable, generic message on the client-visible
+        // content array, with the raw diagnostic (which may contain
+        // filesystem paths, DB errors, provider text, or other internal
+        // detail) sent only to the request-scoped private telemetry sink.
+        return publicMcpToolFailure(telemetry, name, err)
       }
-    })
+    }))
 
     await server.connect(transport)
     transports.set(transport.sessionId, transport)

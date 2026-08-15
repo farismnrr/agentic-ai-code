@@ -1,4 +1,5 @@
 import { unprocessable, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import * as v from 'valibot'
 
 const createSchema = v.object({
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!conversation) {
-    throw internal('Failed to create conversation')
+    throw internal(safeDiagnostic('Failed to create conversation'))
   }
 
   return {

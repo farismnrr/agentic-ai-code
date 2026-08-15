@@ -1,4 +1,5 @@
 import { badRequest, forbidden, conflict, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { eq, and } from 'drizzle-orm'
 import { users, oauthAccounts } from '../../database/schema'
 
@@ -120,7 +121,7 @@ export default defineOAuthGoogleEventHandler({
       throw err
     }
 
-    if (!createdUser) throw internal('Account creation failed')
+    if (!createdUser) throw internal(safeDiagnostic('Account creation failed'))
 
     try {
       await db.insert(oauthAccounts).values({

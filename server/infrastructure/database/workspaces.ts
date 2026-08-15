@@ -1,5 +1,6 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { eq, desc, and } from 'drizzle-orm'
 import { workspaces } from '../../database/schema'
 import fs from 'node:fs/promises'
@@ -66,7 +67,7 @@ export async function createWorkspace(userId: string, name: string, path: string
     .returning()
 
   if (!workspace) {
-    throw internal('Failed to create workspace')
+    throw internal(safeDiagnostic('Failed to create workspace'))
   }
 
   return {

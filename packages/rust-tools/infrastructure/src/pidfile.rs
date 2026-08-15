@@ -35,10 +35,10 @@ impl Pidfile {
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|e| McpError::Internal(format!("Failed to create pidfile: {}", e)))?;
+            .map_err(|_| McpError::Internal("Failed to create pidfile".to_string()))?;
 
         writeln!(file, "{}", pid)
-            .map_err(|e| McpError::Internal(format!("Failed to write pidfile: {}", e)))?;
+            .map_err(|_| McpError::Internal("Failed to write pidfile".to_string()))?;
 
         Ok(Self { path })
     }
@@ -50,7 +50,7 @@ impl Pidfile {
         }
 
         let content =
-            fs::read_to_string(&path).map_err(|e| format!("Failed to read pidfile: {}", e))?;
+            fs::read_to_string(&path).map_err(|_| "Failed to read pidfile".to_string())?;
 
         let pid = content
             .trim()
@@ -62,7 +62,7 @@ impl Pidfile {
             if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
                 println!("Sent SIGTERM to process {}", pid);
             } else {
-                return Err(format!("Process {} not found or cannot be killed", pid));
+                return Err("Process not found or cannot be killed".to_string());
             }
         }
         #[cfg(not(unix))]

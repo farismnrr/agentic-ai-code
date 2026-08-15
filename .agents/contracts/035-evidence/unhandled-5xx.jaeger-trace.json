@@ -1,0 +1,36 @@
+{
+  "traceID": "9a6833960bb15ee09ed22c1e8c1c5a32",
+  "spans": [
+    {
+      "operationName": "POST",
+      "spanID": "b0d80fd7e1fd64d8",
+      "tags": [
+        {
+          "key": "http.request.method",
+          "type": "string",
+          "value": "POST"
+        },
+        {
+          "key": "http.response.status_code",
+          "type": "int64",
+          "value": 500
+        },
+        {
+          "key": "otel.scope.name",
+          "type": "string",
+          "value": "@opentelemetry/instrumentation-http"
+        },
+        {
+          "key": "span.kind",
+          "type": "string",
+          "value": "server"
+        },
+        {
+          "key": "url.path",
+          "type": "string",
+          "value": "/api/auth/register"
+        }
+      ]
+    }
+  ]
+}

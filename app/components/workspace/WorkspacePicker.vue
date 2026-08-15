@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { clientErrorMessage } from '../../utils/client-errors'
+
 const { workspaces, create: createWorkspace, update: updateWorkspace, setActive } = useWorkspaces()
 
 const workspaceCreating = ref(false)
@@ -22,7 +24,7 @@ async function handleSelectFolder(result: { name: string, path: string }) {
   } catch (err) {
     toast.add({
       title: workspaceConfirming.value ? 'Failed to update workspace' : 'Failed to create workspace',
-      description: (err as Error).message,
+      description: clientErrorMessage(err, 'Could not save the workspace. Please try again.'),
       color: 'error'
     })
   } finally {

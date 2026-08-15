@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { clientErrorMessage } from '~/utils/client-errors'
+
 definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Verify email' })
 
@@ -23,8 +25,7 @@ onMounted(async () => {
     state.value = 'success'
   } catch (err: unknown) {
     state.value = 'error'
-    const fe = err as { data?: { message?: string } }
-    errorMessage.value = fe.data?.message || 'Verification failed. The link may have expired.'
+    errorMessage.value = clientErrorMessage(err, 'Verification failed. The link may have expired.')
   }
 })
 </script>

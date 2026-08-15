@@ -1,8 +1,9 @@
 import { createCurlTool } from '@ai-code/curl-tool'
 import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
-import { assertSafeUrl } from './ssrf-guard'
+import { assertSafeUrl } from '../../security/ssrf-guard'
+import { aiToolsTraceEnv } from '../../observability/ai-tools-trace'
 
 export const buildLanggraphTools = () => [
-  createCurlTool({ assertSafeUrl }),
-  createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl })
+  createCurlTool({ assertSafeUrl, getChildEnv: aiToolsTraceEnv }),
+  createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl, getChildEnv: aiToolsTraceEnv })
 ]

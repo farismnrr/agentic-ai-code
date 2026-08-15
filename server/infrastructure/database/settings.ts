@@ -1,5 +1,6 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { notFound, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { eq } from 'drizzle-orm'
 import { userSettings, users } from '../../database/schema'
 
@@ -49,7 +50,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
 
   const [newSettings] = await db.insert(userSettings).values(defaultSettings).returning()
   if (!newSettings) {
-    throw internal('Failed to create settings')
+    throw internal(safeDiagnostic('Failed to create settings'))
   }
 
   return {

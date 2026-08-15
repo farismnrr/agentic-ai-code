@@ -1,0 +1,9 @@
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-request-id: 77ccc29b-027a-4814-ac06-6d5325c8cf15
+vary: origin, access-control-request-method, access-control-request-headers
+access-control-allow-origin: http://localhost:3333
+content-length: 175
+date: Fri, 14 Aug 2026 05:57:14 GMT
+
+{"jsonrpc":"2.0","id":4,"error":{"code":-32020,"message":"Header mismatch: required params._meta['io.modelcontextprotocol/protocolVersion'] is missing from the request body"}}

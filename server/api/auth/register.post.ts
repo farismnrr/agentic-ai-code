@@ -1,4 +1,5 @@
 import { conflict, unprocessable, tooManyRequests, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import * as v from 'valibot'
 import { registerSchema } from '../../../shared/schemas/auth'
 
@@ -45,7 +46,7 @@ export default defineEventHandler(async (event) => {
   // Fetch the created user to seed the session.
   const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null } | undefined
 
-  if (!created) throw internal('Account creation failed')
+  if (!created) throw internal(safeDiagnostic('Account creation failed'))
 
   await setUserSession(event, {
     user: {

@@ -2,6 +2,7 @@ import type { Workspace } from '#shared/types/chat'
 import { removeById, replaceById } from '../utils/collection'
 
 export function useWorkspaces() {
+  const telemetry = useTelemetry()
   const workspaces = useState<Workspace[]>('workspaces', () => [])
   const loaded = useState<boolean>('workspaces-loaded', () => false)
   // Persist the active workspace across reloads
@@ -33,7 +34,12 @@ export function useWorkspaces() {
       $fetch('/api/workspaces/active', {
         method: 'PUT',
         body: { id }
-      }).catch(e => console.error('Failed to persist active workspace:', e))
+      }).catch((error: unknown) => {
+        telemetry.logError('api.request.error', error, {
+          component: 'workspace',
+          operation: 'workspace.active.persist'
+        })
+      })
     }
   }
 

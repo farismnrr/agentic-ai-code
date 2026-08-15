@@ -1,5 +1,6 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { conversations, messages as messagesTable } from '../../database/schema'
 import type { UIMessage } from '#shared/types/chat'
@@ -39,7 +40,7 @@ export async function loadHistoryMessages(conversation: typeof conversations.$in
 export async function insertUserMessage(conversationId: string, message: UIMessage) {
   const db = useDb()
   const [inserted] = await db.insert(messagesTable).values({ conversationId, role: 'user', parts: message.parts }).returning({ id: messagesTable.id })
-  if (!inserted) throw internal('Failed to insert user message')
+  if (!inserted) throw internal(safeDiagnostic('Failed to insert user message'))
   return inserted
 }
 
@@ -59,7 +60,7 @@ export async function updateAssistantMessage(messageId: string, parts: UIMessage
 export async function insertAssistantMessage(conversationId: string, parts: UIMessage['parts'], totalTokens?: number | null) {
   const db = useDb()
   const [inserted] = await db.insert(messagesTable).values({ conversationId, role: 'assistant', parts, totalTokens }).returning({ id: messagesTable.id })
-  if (!inserted) throw internal('Failed to insert assistant message')
+  if (!inserted) throw internal(safeDiagnostic('Failed to insert assistant message'))
   return inserted
 }
 

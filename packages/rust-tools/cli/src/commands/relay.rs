@@ -27,15 +27,17 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
                 println!("relay-agent: stopped port {port}");
                 std::process::exit(0);
             }
-            Err(e) => {
-                eprintln!("relay-agent: error stopping port {port}: {e}");
+            Err(_) => {
+                eprintln!("relay-agent: failed to stop relay");
                 std::process::exit(1);
             }
         }
     }
 
     let config = ServerConfig::from(&cli);
-    config.validate().map_err(|e| e.to_string())?;
+    config
+        .validate()
+        .map_err(|_| "invalid relay configuration")?;
 
     // P0-1 / P0-8: verify bwrap is available BEFORE binding. If bwrap is missing or
     // not executable, execution would silently fail per-call without this gate.
@@ -58,17 +60,23 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
 
     // Fail fast if the resolved working directory doesn't exist, matching
     // the legacy relay's startup behavior.
-    let dir = config.resolved_dir().map_err(|e| e.to_string())?;
+    let dir = config
+        .resolved_dir()
+        .map_err(|_| "failed to resolve relay working directory")?;
     if !dir.is_dir() {
-        return Err(format!("working directory does not exist: {}", dir.display()).into());
+        return Err("relay working directory does not exist".into());
     }
 
     let router = create_router(config.clone());
 
-    let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port).parse()?;
-    println!("relay-agent listening on {addr}");
+    let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port)
+        .parse()
+        .map_err(|_| "invalid relay bind address")?;
+    println!("relay-agent listening");
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|_| "failed to bind relay listener")?;
 
     // Support graceful shutdown
     let shutdown_signal = async {
@@ -101,7 +109,8 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal)
-    .await?;
+    .await
+    .map_err(|_| "relay server failed")?;
 
     Ok(())
 }

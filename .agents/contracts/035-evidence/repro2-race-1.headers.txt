@@ -1,0 +1,9 @@
+HTTP/1.1 201 Created
+x-request-id: 7ea9e078-3b6c-4bc1-b269-72c8b814d646
+set-cookie: nuxt-session=Fe26.2**c4ef02956b4b6d42b24a21188cb077d721d528449006dc855ee7ee9b95e2da31*8oQOzj5JPAAXxR_z44ZqVw*UGGgUh7FyG4-qk76uxa401sMRavZDSS9DMIZXiFlk9bbbik6_uA_ZD_2RZcFXV6Q2wjmRZcTVMJ1CoxGIEtXt3Ww7AD9shwsb9MaqMHKEQDfRPJC-xL3ceR5pRyTB2yUx0gRjegmw79bUUhc8K74OoWXkHoUyt8v20J0TN48eYWM486nBmNkZ1iJwQesTON2C9s55BiVGFiVtK4NdACBDAVoIqEQKnfzeSN6lOTaZtghvnHxP2YCF6Z3K26TDxojlxUr0FxCATITgnWeo4Yw6L-Hd5VwPHAzaIdziSzQzNhYYzCy8EM5UiC5qmFujUrx**15ea25b6e403d5508116e3fda8308f989222ac645ae4f3ee69bf37dc50988789*Wzd6Hol-S76h2WofBvSesRpbCpt91Dl8BIkQu537ntM; Path=/; HttpOnly; SameSite=Lax
+content-type: application/json
+Date: Sat, 15 Aug 2026 09:05:47 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 11
+
