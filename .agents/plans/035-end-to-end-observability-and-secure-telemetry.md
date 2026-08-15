@@ -17,7 +17,7 @@
 - [x] Phase 3 — raw error types are bounded by a shared stable policy across logger, consola, Jaeger exception recording, and lifecycle telemetry.
 - [x] Phase 4 — mutable `Error.name` canary acceptance script added and reviewed; live Loki/Jaeger execution is environment-dependent and not claimed without configured endpoints.
 - [x] Phase 5 — fresh same-class audit found zero unresolved P0/P1.
-- [ ] Phase 6 — final verification passes against the final implementation state.
+- [ ] Phase 6 — mandatory build/audit checks ran, but live APP/Loki/Jaeger-dependent route and Error.name proofs were unavailable; phase not accepted.
 - [ ] Phase 7 — final independent closure review finds zero unresolved P0/P1.
 - [ ] Phase 8 — closure docs, memory, evidence, and final SHA agree.
 
