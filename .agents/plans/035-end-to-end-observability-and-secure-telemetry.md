@@ -13,12 +13,12 @@
 
 **Final focused route/error-type checklist:**
 - [x] Phase 1 — lifecycle telemetry uses stable matched route templates or coarse static fallbacks.
-- [x] Phase 2 — deterministic static/dynamic/unmatched/query/request-ID acceptance script added and validated; live app/Loki/Jaeger execution remains environment-unavailable and is not claimed as a fresh live pass.
+- [x] Phase 2 — live static/dynamic/unmatched/query/request-ID proof passed against the shared app/Loki/Jaeger.
 - [x] Phase 3 — raw error types are bounded by a shared stable policy across logger, consola, Jaeger exception recording, and lifecycle telemetry.
-- [x] Phase 4 — mutable `Error.name` canary acceptance script added and reviewed; live Loki/Jaeger execution is environment-dependent and not claimed without configured endpoints.
+- [x] Phase 4 — mutable `Error.name` canary executed live with stdout/Loki/Jaeger assertions passed.
 - [x] Phase 5 — fresh same-class audit found zero unresolved P0/P1.
 - [x] Phase 6 — rebuilt current app runtime connected to the existing shared stack; strict live APP/Loki/Jaeger route privacy proof passed, including static, dynamic, unmatched, query, and request-ID correlation.
-- [x] Phase 7 — final independent closure review found zero unresolved P0/P1; closure remains blocked by Phase 6 unavailable live proofs.
+- [x] Phase 7 — independent closure review passed, zero unresolved P0/P1, no Phase 6 blocker.
 - [x] Phase 8 — closure docs, memory, bounded evidence, and final SHA agree.
 
 ## Current live closure evidence (2026-08-15)
