@@ -177,21 +177,41 @@ As of 2026-08-15, the operator's existing Cloudflare Tunnel is the remotely
 managed `farismunir-tunnel` (`3ea77293-142c-449f-9e4c-69d383ab4626`), reported
 healthy by Wrangler. Its `mcp.farismunir.my.id` ingress is configured for
 `http://127.0.0.1:47821` and retains the unrelated routes plus the final
-`http_status:404` catch-all. The local `cloudflared.service` owns the tunnel;
-this deployment does not use a local `~/.cloudflared/config.yml`.
+`http_status:404` catch-all. Its existing `auth.farismunir.my.id` ingress is
+configured for `http://127.0.0.1:8082` and serves the local Keycloak instance.
+The local `cloudflared.service` owns the tunnel; this deployment does not use
+a local `~/.cloudflared/config.yml`.
 
 The `0.0.8-beta` `ai-tools` binary is installed at the operator's
-`~/.local/bin/ai-tools`, but the relay is not started until real
-`OAUTH_ISSUER` and `OAUTH_OWNER_SUBJECT` values are supplied. No OAuth values
-are fabricated to make the public route appear healthy.
+`~/.local/bin/ai-tools` and runs as the unprivileged `farismnrr` user through
+the persistent user service `ai-tools-relay.service`. The service keeps the
+listener on `127.0.0.1:47821`, requires Bubblewrap, and reads its protected
+issuer/owner configuration from a mode-0600 environment file.
+
+The operator's existing Keycloak 26.7.0 deployment is the concrete
+Authorization Server for this laptop deployment. It runs in Docker, listens
+locally only on `127.0.0.1:8082`, and is published through the existing
+remotely-managed tunnel route `auth.farismunir.my.id`. Realm `masihawam`
+advertises issuer `https://auth.farismunir.my.id/realms/masihawam`, uses
+RS256/JWKS, and has the `relay.coding` scope mapped to the canonical MCP
+audience. The existing `farismnrr` human account supplies the stable owner
+subject configured for the relay; the subject value is intentionally kept out
+of this contract.
+
+Keycloak's public OIDC dynamic-registration endpoint is enabled for MCP
+compatibility. Anonymous registration is consent-protected, limited to the
+requested `relay.coding` scope, and has a trusted-host policy allowing the
+ChatGPT callback hosts (`chatgpt.com` and `chat.openai.com`) while rejecting an
+untrusted synthetic redirect. This deployment does not claim an authenticated
+owner token or ChatGPT OAuth completion until an interactive login is actually
+performed.
 
 ## Remaining external evidence
 
 This contract does not claim any of the following until they are observed against real accounts/deployment:
 
-- DNS ownership/routing for `mcp.farismunir.my.id`;
-- active Cloudflare Tunnel connection;
-- Auth0 tenant configuration;
+- an exposed Cloudflare tunnel token being rotated through the dashboard or a
+  token with the required tunnel-write permission;
 - an issued token with the exact expected audience/subject/scope;
 - correct `NUXT_REMOTE_MCP_OWNER_USER_ID` ownership binding in the hosted deployment;
 - hosted Nuxt -> public relay execution;
