@@ -48,6 +48,16 @@ const response = await fetch(endpoint)
 if (!response.ok) throw new Error(`Jaeger query failed: ${response.status}`)
 const payload = await response.text()
 if (!payload.includes('phase1.exception.canary')) throw new Error('Jaeger query returned no Phase 1 canary span')
-if (payload.includes(canary) || payload.includes('/srv/private/workspace')) throw new Error('Jaeger contains forbidden exception data')
-if (!payload.includes('ProviderRequestError') || !payload.includes('provider failed')) throw new Error('Jaeger span lacks useful sanitized diagnostics')
-console.log(JSON.stringify({ jaeger: 'PASS', operation: 'phase1.exception.canary' }))
+if (payload.includes(canary) || payload.includes('provider failed') || payload.includes('/srv/private/workspace')) {
+  throw new Error('Jaeger contains forbidden raw exception data')
+}
+
+const traces = JSON.parse(payload)?.data ?? []
+const span = traces.flatMap(trace => trace.spans ?? []).find(candidate => candidate.operationName === 'phase1.exception.canary')
+if (!span) throw new Error('Jaeger query returned no Phase 1 canary span object')
+const exception = (span.logs ?? [])
+  .find(log => log.fields?.some(field => field.key === 'event' && field.value === 'exception'))
+const fields = Object.fromEntries((exception?.fields ?? []).map(field => [field.key, field.value]))
+if (fields['exception.type'] !== 'ProviderRequestError') throw new Error('Jaeger span lacks bounded error.type')
+if (fields['exception.message'] !== 'unclassified') throw new Error('Jaeger span lacks bounded error.classification')
+console.log(JSON.stringify({ jaeger: 'PASS', operation: 'phase1.exception.canary', errorType: fields['exception.type'], classification: fields['exception.message'] }))
