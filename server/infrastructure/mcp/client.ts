@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { context, propagation } from '@opentelemetry/api'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -29,7 +30,7 @@ export type McpClientCallResult = {
 }
 
 export interface McpClientLike {
-  listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
+  listTools(): Promise<{ tools: McpClientTool[]; [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
   close(): Promise<void>
 }
@@ -88,9 +89,9 @@ function withFirstPartyTrace(fetchImpl: typeof fetch): typeof fetch {
     // Fetch semantics let `init.headers` override headers carried by a Request.
     // Preserve that precedence before injecting trace context.
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
-    for (const [name, value] of new Headers(init?.headers).entries()) {
+    new Headers(init?.headers).forEach((value, name) => {
       headers.set(name, value)
-    }
+    })
     for (const [name, value] of Object.entries(traceHeaders)) {
       headers.set(name, value)
     }
@@ -166,7 +167,7 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     return { ...result, tools }
   }
 
-  async callTool(params: { name: string, arguments?: Record<string, unknown> }) {
+  async callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult> {
     const result = await this.request('tools/call', {
       name: params.name,
       arguments: params.arguments ?? {}
