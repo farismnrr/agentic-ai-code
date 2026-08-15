@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: OPEN — final focused route/error-type remediation in progress.** Implementation branch `feat/035-p0-observability-contract`; prior round histories remain preserved below for forensic record; do not delete them. This reopening addresses concrete request paths in lifecycle telemetry and mutable raw `Error.name` trust.
+**Status: CLOSED — live shared-observability closure completed at `10f5dfd6b93f7e0bae9619005e81af4b5dc1abcf`.** Implementation branch `feat/035-p0-observability-contract`; prior round histories remain preserved below for forensic record. The final closure used the existing shared Docker observability infrastructure on this machine; no duplicate or destructive shared-stack operation was performed.
 
 **Focused remediation checklist (fresh external review):**
 - [x] Phase 1 — raw/untrusted exceptions use bounded non-Error stdout/consola representations; no synthetic printed stacks.
@@ -17,9 +17,17 @@
 - [x] Phase 3 — raw error types are bounded by a shared stable policy across logger, consola, Jaeger exception recording, and lifecycle telemetry.
 - [x] Phase 4 — mutable `Error.name` canary acceptance script added and reviewed; live Loki/Jaeger execution is environment-dependent and not claimed without configured endpoints.
 - [x] Phase 5 — fresh same-class audit found zero unresolved P0/P1.
-- [ ] Phase 6 — mandatory build/audit checks ran, but live APP/Loki/Jaeger-dependent route and Error.name proofs were unavailable; phase not accepted.
+- [x] Phase 6 — rebuilt current app runtime connected to the existing shared stack; strict live APP/Loki/Jaeger route privacy proof passed, including static, dynamic, unmatched, query, and request-ID correlation.
 - [x] Phase 7 — final independent closure review found zero unresolved P0/P1; closure remains blocked by Phase 6 unavailable live proofs.
-- [ ] Phase 8 — closure docs, memory, evidence, and final SHA agree.
+- [x] Phase 8 — closure docs, memory, bounded evidence, and final SHA agree.
+
+## Current live closure evidence (2026-08-15)
+
+- Shared stack: existing Compose runtime `ai-code-app-1` on external networks `masihawam-net` and `shared-network`; Jaeger query `:16686`, Loki query `:3101`, Loki push `loki:3100`, and Jaeger OTLP gRPC `jaeger:4317` from the app network. Shared containers were not stopped, recreated, or replaced.
+- Live commands: `scripts/verify-phase2-route-telemetry.sh` and `node scripts/verify-phase4-raw-error-canary.mjs`, configured with the discovered app/Loki/Jaeger endpoints. Both passed against the rebuilt current app.
+- Route proof: exact `/api/auth/register` static route; dynamic `/api/providers/:id/models` or approved `/api/*` coarse fallback; unmatched `/api/*`; query canary absent; raw dynamic/unmatched/query canaries absent; `x-request-id -> Loki request.id -> trace_id -> Jaeger` resolved live.
+- Error proof: mutable raw `Error.name`, raw message, and raw stack/path canaries were absent from stdout, Loki, and Jaeger; bounded error type/classification assertions passed.
+- Verification: worker ran `pnpm verify:commit`, `pnpm build`, `pnpm audit`, `cargo audit`, current deterministic Plan 035 checks, live route/error canaries, and server/LSP review. Fresh independent worker review found zero unresolved P0/P1. No executable PII canary harness exists in the current tree; the committed live PII evidence remains `.agents/contracts/035-evidence/phase2-pii-canary-proof.md`, and this absence is not represented as a new PASS.
 
 **Round 4 reopening reason (fresh external review, not self-discovered):**
 - **P1** — raw unhandled exception diagnostics can still carry direct PII/request-derived data into private logs because raw `Error.message` is allowed through the logger sanitizer path; secret-shaped redaction is not a general PII/data-classification boundary.
