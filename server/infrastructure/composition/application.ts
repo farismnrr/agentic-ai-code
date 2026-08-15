@@ -109,7 +109,7 @@ const providerPort: ProviderManagementPort<ProviderCreate, ProviderUpdate, Await
   remove: deleteUserProvider,
   discoverModels: async (userId, id) => {
     const provider = await findUserProvider(userId, id)
-    if (providerRequiresBaseUrl(provider.type) && !provider.baseUrl) throw badRequest(`${provider.name} has no base URL set`)
+    if (providerRequiresBaseUrl(provider.type) && !provider.baseUrl) throw badRequest('Provider base URL is required')
     const tracer = getTracer('ai-code-server')
     return tracer.startActiveSpan('provider.reachability_check', { attributes: { 'provider.type': provider.type } }, async (span) => {
       try {
