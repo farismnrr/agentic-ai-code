@@ -40,6 +40,19 @@ export function useMcpServers() {
       body: server
     })
     servers.value = [...servers.value, data]
+    return data
+  }
+
+  async function test(id: string) {
+    const result = await $fetch<{ id: string, status: McpServer['status'], tools: McpTool[] }>(`/api/mcp-servers/${id}/test`, {
+      method: 'POST'
+    })
+    servers.value = servers.value.map(server =>
+      server.id === id
+        ? { ...server, status: result.status, tools: result.tools }
+        : server
+    )
+    return result
   }
 
   async function remove(id: string) {
@@ -47,5 +60,5 @@ export function useMcpServers() {
     await $fetch(`/api/mcp-servers/${id}`, { method: 'DELETE' })
   }
 
-  return { servers, availableTools, toolsById, loadAll, setEnabled, add, remove }
+  return { servers, availableTools, toolsById, loadAll, setEnabled, add, test, remove }
 }

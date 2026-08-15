@@ -5,7 +5,7 @@ import type { McpTransport } from '#shared/types/chat'
 
 useSeoMeta({ title: 'MCP servers' })
 
-const { servers, setEnabled, add, remove } = useMcpServers()
+const { servers, setEnabled, add, test, remove } = useMcpServers()
 const toast = useToast()
 
 const statusColor = {
@@ -16,6 +16,7 @@ const statusColor = {
 } as const
 
 const addOpen = ref(false)
+const testingId = ref<string | null>(null)
 
 const schema = v.pipe(
   v.object({
@@ -53,8 +54,8 @@ const state = reactive<{
   command: string
 }>({ name: '', description: '', transport: 'http', url: '', command: '' })
 
-function onSubmit(event: FormSubmitEvent<Schema>) {
-  add({
+async function onSubmit(event: FormSubmitEvent<Schema>) {
+  await add({
     name: event.data.name,
     description: event.data.description,
     transport: event.data.transport,
@@ -62,13 +63,35 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     command: event.data.command || undefined,
     enabled: true
   })
-  toast.add({ title: `Added ${event.data.name}`, icon: 'i-lucide-check', color: 'success' })
+  toast.add({ title: `Added ${event.data.name}`, description: 'Test the connection to discover its tools.', icon: 'i-lucide-check', color: 'success' })
   addOpen.value = false
   Object.assign(state, { name: '', description: '', transport: 'http', url: '', command: '' })
 }
 
-function removeServer(id: string, name: string) {
-  remove(id)
+async function testServer(id: string, name: string) {
+  testingId.value = id
+  try {
+    const result = await test(id)
+    toast.add({
+      title: `${name} connected`,
+      description: `${result.tools.length} tools discovered.`,
+      icon: 'i-lucide-plug-zap',
+      color: 'success'
+    })
+  } catch {
+    toast.add({
+      title: `Could not connect to ${name}`,
+      description: 'Check the endpoint, tunnel, and server-side OAuth configuration.',
+      icon: 'i-lucide-circle-alert',
+      color: 'error'
+    })
+  } finally {
+    testingId.value = null
+  }
+}
+
+async function removeServer(id: string, name: string) {
+  await remove(id)
   toast.add({ title: `Removed ${name}`, icon: 'i-lucide-trash-2', color: 'neutral' })
 }
 </script>
@@ -150,6 +173,16 @@ function removeServer(id: string, name: string) {
         </div>
 
         <div class="flex items-center gap-2">
+          <UButton
+            icon="i-lucide-plug-zap"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :loading="testingId === server.id"
+            :disabled="server.transport === 'stdio' || (testingId !== null && testingId !== server.id)"
+            :aria-label="`Test ${server.name}`"
+            @click="testServer(server.id, server.name)"
+          />
           <USwitch
             :model-value="server.enabled"
             :aria-label="`Enable ${server.name}`"
@@ -195,7 +228,7 @@ function removeServer(id: string, name: string) {
         v-else
         class="text-xs text-dimmed"
       >
-        No tools discovered.
+        No tools discovered. Test the connection after adding or changing the server.
       </p>
     </UCard>
 
@@ -218,7 +251,7 @@ function removeServer(id: string, name: string) {
           >
             <UInput
               v-model="state.name"
-              placeholder="Filesystem"
+              placeholder="Laptop relay"
               class="w-full"
             />
           </UFormField>
@@ -229,7 +262,7 @@ function removeServer(id: string, name: string) {
           >
             <UInput
               v-model="state.description"
-              placeholder="Read and search files"
+              placeholder="Remote coding tools on my laptop"
               class="w-full"
             />
           </UFormField>
@@ -261,10 +294,11 @@ function removeServer(id: string, name: string) {
             v-else
             label="URL"
             name="url"
+            :description="state.transport === 'http' ? 'For the first-party laptop relay, use the exact NUXT_REMOTE_MCP_URL configured on the Nuxt server. Its OAuth access token remains server-only.' : undefined"
           >
             <UInput
               v-model="state.url"
-              placeholder="https://example.com/mcp"
+              placeholder="https://mcp.farismunir.my.id/mcp"
               class="w-full"
             />
           </UFormField>
