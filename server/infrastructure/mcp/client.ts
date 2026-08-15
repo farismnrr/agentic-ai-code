@@ -31,7 +31,7 @@ export type McpClientCallResult = {
 }
 
 export interface McpClientLike {
-  listTools(): Promise<{ tools: McpClientTool[]; [key: string]: unknown }>
+  listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
   close(): Promise<void>
 }
@@ -213,8 +213,8 @@ class FirstPartyRelayMcpClient implements McpClientLike {
       }
     }
     const headers = new Headers({
-      Accept: 'application/json, text/event-stream',
-      Authorization: `Bearer ${this.accessToken}`,
+      'Accept': 'application/json, text/event-stream',
+      'Authorization': `Bearer ${this.accessToken}`,
       'Content-Type': 'application/json',
       'MCP-Protocol-Version': MODERN_MCP_VERSION,
       'Mcp-Method': method
