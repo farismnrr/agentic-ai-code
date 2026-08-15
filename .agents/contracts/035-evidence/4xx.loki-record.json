@@ -1,0 +1,18 @@
+{
+  "message": "http.request.lifecycle",
+  "attributes": {
+    "service.name": "ai-code-server",
+    "event.name": "http.request.lifecycle",
+    "operation": "http.request.lifecycle",
+    "http.request.method": "POST",
+    "route": "[REDACTED-PATH]",
+    "http.response.status_code": 422,
+    "duration_ms": 0,
+    "outcome": "client_error",
+    "request.id": "063538c0-54c5-4d80-8394-c19c99fd43af",
+    "trace_id": "98e8d9610c4998689bc0781ed0a92c8e",
+    "span_id": "88c5c69aa0e2436f"
+  },
+  "trace_id": "98e8d9610c4998689bc0781ed0a92c8e",
+  "span_id": "88c5c69aa0e2436f"
+}

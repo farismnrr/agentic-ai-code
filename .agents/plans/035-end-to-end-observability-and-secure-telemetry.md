@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phase 0 only).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
+**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phases 0–5 complete).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
 
 **Remediation round 3 reason:** the user's confirmed review blockers are: **P1-A** raw exceptions leak secrets/internal detail into Jaeger; **P1-B** LangGraph/tool failure paths stream raw internal errors; **P1-C** Rust telemetry exports dependency noise/filesystem paths; **P1-D** the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace. The evidence gaps are: **E1** the browser happy path is not real; **E2** the Rust internal proof is a 400, not a genuine 5xx; **E3** requestId → Loki → trace is not guaranteed; **E4** closure docs overstate claims. This is a documentation/contract reset only; no later phase is complete until these blockers and evidence gaps are independently re-proven.
 
@@ -20,7 +20,7 @@
 - [x] Phase 2 — all LangGraph/tool/client error confidentiality.
 - [x] Phase 3 — Rust trace filtering/data hygiene.
 - [x] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
-- [ ] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
+- [x] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
 - [ ] Phase 6 — real browser chat happy-path evidence.
 - [ ] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.
 - [ ] Phase 8 — comprehensive runtime canary leakage falsification.

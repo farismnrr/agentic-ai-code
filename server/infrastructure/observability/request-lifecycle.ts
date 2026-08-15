@@ -1,0 +1,66 @@
+import type { H3Event } from 'h3'
+import { trace } from '@opentelemetry/api'
+import { logger } from './logger'
+
+const STARTED_AT = Symbol('plan035.request.startedAt')
+const RECORDED = Symbol('plan035.request.recorded')
+const TRACE_ID = Symbol('plan035.request.traceId')
+const SPAN_ID = Symbol('plan035.request.spanId')
+const MAX_DURATION_MS = 60_000
+const MAX_ROUTE_LENGTH = 256
+
+type LifecycleContext = Record<PropertyKey, unknown>
+
+// Nitro's 'error' hook can fire for errors captured outside a real inbound
+// request (e.g. during prerendering, or other internal error-capture paths
+// that pass a partial/synthetic event) where `event` itself may be
+// missing entirely. Guard against that rather than throwing out of an error
+// handler — a missing event means there is no request to correlate, so
+// the safe behavior is a no-op, never a crash.
+function lifecycleContext(event?: H3Event): LifecycleContext | undefined {
+  return event?.context as LifecycleContext | undefined
+}
+
+function safeRoute(event: H3Event): string {
+  const route = event.path?.split('?')[0] || '/'
+  return route.slice(0, MAX_ROUTE_LENGTH)
+}
+
+function outcome(status: number): 'ok' | 'client_error' | 'server_error' {
+  if (status >= 500) return 'server_error'
+  if (status >= 400) return 'client_error'
+  return 'ok'
+}
+
+export function beginRequestLifecycle(event: H3Event): void {
+  const context = lifecycleContext(event)
+  if (!context) return
+  context[STARTED_AT] = performance.now()
+  const spanContext = trace.getActiveSpan()?.spanContext()
+  if (spanContext?.traceId) context[TRACE_ID] = spanContext.traceId
+  if (spanContext?.spanId) context[SPAN_ID] = spanContext.spanId
+}
+
+export function recordRequestLifecycle(event: H3Event | undefined, statusOverride?: number): void {
+  const context = lifecycleContext(event)
+  if (!context || !event?.node?.res) return
+  if (context[RECORDED] === true) return
+  context[RECORDED] = true
+
+  const startedAt = typeof context[STARTED_AT] === 'number' ? context[STARTED_AT] : performance.now()
+  const duration = Math.max(0, Math.min(MAX_DURATION_MS, Math.round(performance.now() - startedAt)))
+  const status = statusOverride ?? event.node?.res?.statusCode ?? 500
+  const attributes: Record<string, unknown> = {
+    'event.name': 'http.request.lifecycle',
+    'operation': 'http.request.lifecycle',
+    'http.request.method': (event.method || 'UNKNOWN').slice(0, 16),
+    'route': safeRoute(event),
+    'http.response.status_code': status,
+    'duration_ms': duration,
+    'outcome': outcome(status)
+  }
+  if (typeof context.requestId === 'string') attributes['request.id'] = context.requestId
+  if (typeof context[TRACE_ID] === 'string') attributes.trace_id = context[TRACE_ID]
+  if (typeof context[SPAN_ID] === 'string') attributes.span_id = context[SPAN_ID]
+  logger.info('http.request.lifecycle', attributes)
+}
