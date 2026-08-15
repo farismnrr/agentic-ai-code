@@ -68,11 +68,28 @@ function stripControlChars(value: string): string {
 // detection, per the plan's explicit KISS instruction. Order matters: URL
 // userinfo and Bearer/Basic are matched before the generic
 // key=value/JWT passes so nothing double-matches oddly.
+const FILESYSTEM_PATH_PATTERN: readonly [RegExp, string] = [
+  /\/(?:[A-Za-z0-9._-]+\/){2,}[A-Za-z0-9._-]*/g,
+  '[REDACTED-PATH]'
+]
+
+// Keys whose values are already structured/validated elsewhere (never raw
+// free text) and must NOT go through `FILESYSTEM_PATH_PATTERN`: that
+// pattern is tuned for error messages/stacks and would otherwise collapse a
+// normal multi-segment API route like `/api/auth/register` down to
+// `[REDACTED-PATH]`. `route` is validated/normalized by `safeRoute()` in
+// `request-lifecycle.ts` before it ever reaches this module (query string
+// stripped, length-capped, charset-checked) — see that module for the
+// dedicated route sanitizer. Other §2.1 attribute keys are short enum-like
+// tokens (e.g. `operation`, `event.name`) with no slashes in practice, so
+// they are unaffected by the generic pattern and don't need this bypass.
+const SKIP_FILESYSTEM_PATH_REDACTION = new Set<string>(['route'])
+
 const REDACTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Absolute filesystem paths (including source-map stack locations). Paths
   // are sensitive workspace/environment data and are not useful as a stable
   // exception classification.
-  [/\/(?:[A-Za-z0-9._-]+\/){2,}[A-Za-z0-9._-]*/g, '[REDACTED-PATH]'],
+  FILESYSTEM_PATH_PATTERN,
   // URL userinfo credentials, incl. DB connection strings:
   // postgres://user:pass@host -> postgres://[REDACTED]@host
   [/([a-zA-Z][a-zA-Z0-9+.-]*):\/\/[^/\s:@]+:[^/\s:@]+@/g, '$1://[REDACTED]@'],
@@ -100,10 +117,12 @@ const REDACTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
  * defensive posture as `sanitizeValue`'s JSON.stringify fallback. Bounded:
  * only substitutes matched substrings, never expands the string.
  */
-export function redactSecrets(value: string): string {
+export function redactSecrets(value: string, attributeKey?: string): string {
   try {
     let out = value
+    const skipFilesystemPath = attributeKey !== undefined && SKIP_FILESYSTEM_PATH_REDACTION.has(attributeKey)
     for (const [pattern, replacement] of REDACTION_PATTERNS) {
+      if (skipFilesystemPath && pattern === FILESYSTEM_PATH_PATTERN[0]) continue
       out = out.replace(pattern, replacement)
     }
     return out
@@ -112,21 +131,21 @@ export function redactSecrets(value: string): string {
   }
 }
 
-function sanitizeString(value: string, maxLength: number): string {
-  const cleaned = stripControlChars(redactSecrets(value)).trim()
+function sanitizeString(value: string, maxLength: number, attributeKey?: string): string {
+  const cleaned = stripControlChars(redactSecrets(value, attributeKey)).trim()
   return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength)}…` : cleaned
 }
 
-function sanitizeValue(value: unknown): string | number | boolean | undefined {
+function sanitizeValue(value: unknown, attributeKey?: string): string | number | boolean | undefined {
   if (value === null || value === undefined) return undefined
-  if (typeof value === 'string') return sanitizeString(value, MAX_ATTRIBUTE_VALUE_LENGTH)
+  if (typeof value === 'string') return sanitizeString(value, MAX_ATTRIBUTE_VALUE_LENGTH, attributeKey)
   if (typeof value === 'number' || typeof value === 'boolean') return value
   // Any other shape (object/array/function/symbol) is not part of the
   // vocabulary's allowed value shapes — stringify defensively and cap, or
   // drop entirely if it can't be serialized (e.g. circular structures),
   // rather than ever throwing from the logging path.
   try {
-    return sanitizeString(JSON.stringify(value), MAX_ATTRIBUTE_VALUE_LENGTH)
+    return sanitizeString(JSON.stringify(value), MAX_ATTRIBUTE_VALUE_LENGTH, attributeKey)
   } catch {
     return undefined
   }
@@ -144,7 +163,7 @@ export function sanitizeAttributes(attributes: Record<string, unknown>): Record<
   for (const [key, raw] of Object.entries(attributes)) {
     if (count >= MAX_ATTRIBUTE_COUNT) break
     if (!ALLOWED_ATTRIBUTE_KEYS.has(key)) continue
-    const value = sanitizeValue(raw)
+    const value = sanitizeValue(raw, key)
     if (value === undefined) continue
     out[key] = value
     count += 1

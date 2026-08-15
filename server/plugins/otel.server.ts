@@ -1,7 +1,7 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
 import { LokiLogExporter } from '../infrastructure/observability/otel'
 import { logger } from '../infrastructure/observability/logger'
-import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
+import { LoggerProvider, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
 import { logs } from '@opentelemetry/api-logs'
@@ -32,7 +32,11 @@ export default defineNitroPlugin(async () => {
   const logExporter = new LokiLogExporter()
   const loggerProvider = new LoggerProvider({
     resource,
-    processors: [new BatchLogRecordProcessor({ exporter: logExporter })]
+    // Error-handler telemetry must be exported before the short-lived request
+    // process can finish. A batch processor can leave the unhandled-error
+    // record buffered while the lifecycle record is queried, hiding the
+    // bounded error.type/error.classification fields from Loki.
+    processors: [new SimpleLogRecordProcessor({ exporter: logExporter })]
   })
   logs.setGlobalLoggerProvider(loggerProvider)
 

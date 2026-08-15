@@ -1,0 +1,4 @@
+Listening on http://[::]:3349
+ERROR  [unhandled] unclassified
+    at consolaSafe (.output/server/chunks/nitro/nitro.mjs:7666:18)
+    at Object.error (.output/server/chunks/nitro/nitro.mjs:7675:48)
