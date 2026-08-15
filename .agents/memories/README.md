@@ -126,7 +126,9 @@ Durable final rules:
 
 ## Current Plan 035 status
 
-The round-3 CLOSED wording above is historical and superseded. The current Plan 035 file is OPEN during remediation round 4 and must remain open until its acceptance conditions are independently verified.
+The round-3 CLOSED wording above is historical and superseded by the final remediation closure recorded below.
+
+Plan 035 final remediation is now CLOSED at implementation state `12c1f2df7a93c58baf4a78885b513a6a233414b9` on `feat/035-p0-observability-contract` (not merged to `dev`). Durable rules: raw exception messages are never trusted telemetry; secret redaction is not a substitute for safe diagnostic classification; direct PII and request-derived data never enter logs, traces, stdout, stderr, client errors, or tool results; structured routes use field-aware sanitization while filesystem paths remain redacted; public errors remain generic; and Node/Rust trace boundaries remain fail-closed and unchanged. The final live canary evidence is superseding evidence under `.agents/contracts/035-evidence/phase2-pii-canary-proof-success-20260815.md`; the failed first rerun remains preserved for forensic accuracy.
 
 ## Maintenance rule
 
