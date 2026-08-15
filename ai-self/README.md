@@ -1,21 +1,40 @@
 # ai-self
 
-Persistent self-improvement workspace for ChatGPT + Masih Awam MCP.
+Persistent self-improvement workspace for ChatGPT + Masih Awam MCP. It stores procedural knowledge and policy, not user-memory data or custom RAG.
+
+## Authority
+
+Read `CONSTITUTION.md` first when policy matters. In short: platform/user constraints outrank local policy; local policy outranks repository-local skills; reviewed first-party skills outrank community skills. Lower layers may specialize but never weaken higher-layer safety or approval boundaries.
 
 ## Layout
-- `CONSTITUTION.md` — behavioral and safety rules.
-- `registry.yaml` — index of reusable skills and local tools.
-- `skills/` — reusable procedural knowledge.
-- `tools/` — local scripts/binaries callable through `terminal_exec`.
+
+- `CONSTITUTION.md` — authority, behavioral rules, safety boundaries.
+- `registry.yaml` — routing index for local/external skills and tool providers.
+- `skills/` — reusable local procedural skills.
+- `tools/` — narrowly scoped local helpers callable through MCP.
 - `lessons/` — durable corrections and reusable lessons.
-- `policies/` — autonomy and approval boundaries.
+- `policies/` — explicit autonomy/approval boundaries.
 
-## Intended loop
-1. Load the constitution and registry when a complex technical task benefits from persistent procedural context.
-2. Load only relevant skills.
-3. Perform the task using Masih Awam MCP.
-4. Reflect after substantial work.
-5. Persist only reusable improvements.
-6. Validate new or changed tools/skills before relying on them.
+## Runtime loop
 
-This directory is not a custom RAG system and should not duplicate ChatGPT native Memory.
+1. For substantial technical work, load the constitution/registry when relevant.
+2. Load only the skill(s) matching the current task.
+3. Perform work through Masih Awam MCP or other explicitly available tools.
+4. Respect tool boundaries as hard boundaries; never bypass missing sudo/elevation/system access.
+5. Validate before relying on changes.
+6. Reflect after substantial work and persist only reusable improvements.
+7. Use `github-delivery` to commit/push task-owned completed work when policy allows.
+
+## Primary local skills
+
+- `implementation-planning` — structured plan-only-by-default technical planning.
+- `github-delivery` — safe task-owned commit/push completion.
+- `skill-acquisition` — reviewed skill discovery, installation, update, and conflict control.
+
+## Skill providers
+
+- Prefer GitHub CLI native `gh skill` search/preview/install/update while available.
+- Use Context7 as a secondary discovery/documentation provider.
+- Externally installed skill directories are local dependencies and are ignored by Git; canonical sources are recorded in `registry.yaml`.
+
+This directory intentionally does not duplicate ChatGPT native Memory.

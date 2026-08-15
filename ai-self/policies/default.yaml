@@ -1,4 +1,4 @@
-version: 2
+version: 3
 
 actions:
   read_workspace:
@@ -9,6 +9,24 @@ actions:
     approval: auto
   install_reviewed_project_skill:
     approval: auto
+    constraints:
+      - project_scope_default
+      - preview_and_review_before_install
+      - no_force_overwrite
+      - no_secret_or_privilege_escalation
+      - register_source_and_revision
+  update_installed_skill:
+    approval: auto
+    constraints:
+      - review_incoming_change
+      - no_blind_update
+      - revalidate_after_update
+  create_or_update_plan:
+    approval: auto
+    constraints:
+      - plan_only_unless_execution_requested
+      - ground_in_verified_context
+      - respect_repository_plan_convention
   run_relevant_validation:
     approval: auto
   git_diff_status:
@@ -36,6 +54,7 @@ actions:
   git_push_current_branch:
     approval: auto
     constraints:
+      - task_branch_only_in_team_repositories
       - no_force
       - no_secrets
       - task_owned_changes_only
@@ -44,7 +63,13 @@ actions:
   access_secrets:
     approval: ask
   sudo:
-    approval: ask
+    approval: manual_only
+    constraints:
+      - tool_boundary_is_final
+      - no_privilege_bypass
+      - no_alternate_escalation_path
+      - provide_exact_manual_command_or_steps
+      - resume_only_after_user_reports_result
   production_change:
     approval: ask
   destructive_action:

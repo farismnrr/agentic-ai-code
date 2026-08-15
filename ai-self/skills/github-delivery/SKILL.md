@@ -1,6 +1,7 @@
 ---
 name: github-delivery
-description: Automatically finish substantial successful repository work by safely staging only task-owned changes, creating a conventional commit, and pushing the current branch. Use after implementation, fixes, refactors, docs, tooling, or skill changes unless the user explicitly says not to commit or push.
+description: Use when substantial repository work is complete and task-owned changes should be validated, committed, and pushed unless the user explicitly opts out.
+license: MIT
 ---
 
 # GitHub Delivery
