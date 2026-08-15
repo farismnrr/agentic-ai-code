@@ -13,7 +13,7 @@
 
 **Final focused route/error-type checklist:**
 - [x] Phase 1 — lifecycle telemetry uses stable matched route templates or coarse static fallbacks.
-- [ ] Phase 2 — static, dynamic, unmatched, query, and request-ID route privacy acceptance passes.
+- [x] Phase 2 — deterministic static/dynamic/unmatched/query/request-ID acceptance script added and validated; live app/Loki/Jaeger execution remains environment-unavailable and is not claimed as a fresh live pass.
 - [ ] Phase 3 — raw error types are bounded by a shared stable policy.
 - [ ] Phase 4 — mutable `Error.name` canary acceptance passes.
 - [ ] Phase 5 — fresh same-class audit finds zero unresolved P0/P1.
