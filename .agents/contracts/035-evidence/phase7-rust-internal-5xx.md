@@ -195,15 +195,20 @@ Jaeger query — see (d).
 
 ## (d) Canary-absence proof
 
-Canary marker: `CANARY-SECRET-9f3ab1e2c7` (embedded in the `--oauth-issuer` path segment).
+**Superseded by the CORRECTION at the top of this file.** This section originally reported the
+canary present (count `1`) in stderr, matching the pre-fix repro where `detail` embedded the raw
+issuer URL. After the `classify_reqwest_error()` fix, the repro was re-run and both evidence files
+were replaced in place — the canary is now **absent from both**, not just the client response:
 
 ```
 $ grep -c CANARY-SECRET-9f3ab1e2c7 phase7-client-response.txt
 0
 $ grep -c CANARY-SECRET-9f3ab1e2c7 phase7-relay-stderr.txt
-1   # present, expected — private stderr diagnostic only, per contract rule "dynamic
-    # upstream/OIDC/JWKS text goes only to tracing::error!"
+0
 ```
+
+This is a strictly better outcome than the frozen contract's minimum bar (client-only exclusion) —
+the fix removes the URL/canary from private telemetry entirely, not just from the client boundary.
 
 Jaeger (OTel-enabled run): `GET /api/traces?service=ai-code-relay` returned only the
 `ai_tools.startup` span (no request span, no `relay.auth.discovery` event, per (c)) — the canary
