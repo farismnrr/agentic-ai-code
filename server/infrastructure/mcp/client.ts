@@ -13,6 +13,8 @@ type RemoteMcpRuntimeConfig = {
   accessToken?: string
 }
 
+const MODERN_MCP_VERSION = '2026-07-28'
+
 function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
   const config = useRuntimeConfig()
   return config.remoteMcp as RemoteMcpRuntimeConfig
@@ -81,6 +83,74 @@ function withFirstPartyTrace(fetchImpl: typeof fetch, enabled: boolean): typeof 
   }
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Temporary Plan 036 bridge for the monolithic MCP SDK v1 still used by the
+ * repository. The Rust first-party relay is strict MCP 2026-07-28 for normal
+ * tool RPCs, while the v1 Client performs a legacy `initialize` handshake and
+ * then emits legacy-shaped `tools/list` / `tools/call` requests.
+ *
+ * The relay deliberately keeps its modern validation strict. Instead, only
+ * requests to the exact first-party resource are upgraded at this outbound
+ * infrastructure boundary by adding the 2026 routing headers and per-request
+ * `_meta` envelope. `initialize` and notifications are left untouched so the
+ * existing narrow legacy handshake compatibility continues to work.
+ *
+ * Remove this bridge when the outbound client is migrated to
+ * `@modelcontextprotocol/client` v2 with `versionNegotiation: { mode: 'auto' }`
+ * and the lockfile/local verification can be updated together.
+ */
+function withFirstPartyRelay2026ToolEnvelope(fetchImpl: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (method.toUpperCase() !== 'POST' || typeof init?.body !== 'string') {
+      return fetchImpl(input, init)
+    }
+
+    let payload: unknown
+    try {
+      payload = JSON.parse(init.body)
+    } catch {
+      return fetchImpl(input, init)
+    }
+    if (!isJsonRecord(payload)) return fetchImpl(input, init)
+
+    const rpcMethod = typeof payload.method === 'string' ? payload.method : undefined
+    if (rpcMethod !== 'tools/list' && rpcMethod !== 'tools/call') {
+      return fetchImpl(input, init)
+    }
+
+    const params = isJsonRecord(payload.params) ? { ...payload.params } : {}
+    const existingMeta = isJsonRecord(params._meta) ? params._meta : {}
+    params._meta = {
+      ...existingMeta,
+      'io.modelcontextprotocol/protocolVersion': MODERN_MCP_VERSION,
+      'io.modelcontextprotocol/clientCapabilities': {}
+    }
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    for (const [name, value] of new Headers(init.headers).entries()) {
+      headers.set(name, value)
+    }
+    headers.set('MCP-Protocol-Version', MODERN_MCP_VERSION)
+    headers.set('Mcp-Method', rpcMethod)
+
+    if (rpcMethod === 'tools/call') {
+      const toolName = typeof params.name === 'string' ? params.name : undefined
+      if (toolName) headers.set('Mcp-Name', toolName)
+    }
+
+    return fetchImpl(input, {
+      ...init,
+      headers,
+      body: JSON.stringify({ ...payload, params })
+    })
+  }
+}
+
 /**
  * Connects to a stored third-party MCP server, per request — no pooling, no
  * reconnect logic (see plan 012's "Scope boundary" decision). Callers must
@@ -134,8 +204,11 @@ export async function createMcpClient(serverConfig: McpServerConfig) {
   const accessToken = resolveFirstPartyBearer(url, serverConfig.name)
   const firstParty = Boolean(accessToken)
   const guardedFetch = createSsrfSafeFetch(`Server "${serverConfig.name}"`)
+  const protocolFetch = firstParty
+    ? withFirstPartyRelay2026ToolEnvelope(guardedFetch)
+    : guardedFetch
   const transport = new StreamableHTTPClientTransport(url, {
-    fetch: withFirstPartyTrace(guardedFetch, firstParty),
+    fetch: withFirstPartyTrace(protocolFetch, firstParty),
     ...(accessToken && {
       requestInit: {
         headers: {
