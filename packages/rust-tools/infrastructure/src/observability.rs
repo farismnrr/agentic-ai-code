@@ -108,12 +108,23 @@ pub fn redact_secrets(value: &str) -> String {
             if starts_with_ci(value, i, k) {
                 let after = i + k.len();
                 let mut j = after;
+                // Allow a JSON-shaped closing quote right after the key
+                // name (e.g. `"apiKey":"value"`) before the separator.
+                if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
+                    j += 1;
+                }
                 while j < bytes.len() && bytes[j] == b' ' {
                     j += 1;
                 }
                 if j < bytes.len() && (bytes[j] == b'=' || bytes[j] == b':') {
                     j += 1;
                     while j < bytes.len() && bytes[j] == b' ' {
+                        j += 1;
+                    }
+                    // Allow a JSON-shaped opening quote around the value
+                    // (e.g. `"apiKey":"value"`) — consume it without
+                    // including it in the redacted-substring span.
+                    if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
                         j += 1;
                     }
                     let mut end = j;
@@ -178,6 +189,35 @@ fn token_end_jwt(value: &str, start: usize) -> usize {
         j
     } else {
         start
+    }
+}
+
+/// Classifies a `reqwest::Error` into a bounded, static label instead of
+/// ever interpolating its `Display` text — `reqwest::Error`'s `Display`
+/// impl embeds the request URL (and thus any credential-shaped query
+/// param, canary, or path segment it contained), so formatting it
+/// directly into a log line or a tool-result string is a confidentiality
+/// leak even though the value never reached a raw secret. Shared by any
+/// call site (Rust HTTP client error paths, OIDC/JWKS fetches, the
+/// `ai-tools curl` subcommand, etc.) that needs to report *why* an
+/// outbound request failed without repeating what it failed against.
+pub fn classify_reqwest_error(e: &reqwest::Error) -> &'static str {
+    if e.is_timeout() {
+        "timeout"
+    } else if e.is_connect() {
+        "connect_failed"
+    } else if e.is_redirect() {
+        "redirect_blocked"
+    } else if e.is_builder() {
+        "request_builder_failed"
+    } else if e.is_status() {
+        "http_error_status"
+    } else if e.is_decode() {
+        "response_decode_failed"
+    } else if e.is_body() {
+        "body_error"
+    } else {
+        "request_failed"
     }
 }
 

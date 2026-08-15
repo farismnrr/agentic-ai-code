@@ -216,22 +216,6 @@ pub fn parse_discovery_metadata(metadata: &serde_json::Value) -> Result<String, 
 /// never be interpolated into a log/trace field directly — the frozen Plan
 /// 035 observability contract forbids arbitrary URLs in telemetry/stderr
 /// even when private-only. This never reveals the upstream host/path.
-fn classify_reqwest_error(e: &reqwest::Error) -> &'static str {
-    if e.is_timeout() {
-        "timeout"
-    } else if e.is_connect() {
-        "connect_failed"
-    } else if e.is_status() {
-        "http_error_status"
-    } else if e.is_decode() {
-        "response_decode_failed"
-    } else if e.is_body() {
-        "body_error"
-    } else {
-        "request_failed"
-    }
-}
-
 pub async fn fetch_discovery(
     client: Result<reqwest::Client, String>,
     discovery_url: String,
@@ -241,18 +225,25 @@ pub async fn fetch_discovery(
         .get(&discovery_url)
         .send()
         .await
-        .map_err(|e| format!("oidc_discovery_fetch_failed:{}", classify_reqwest_error(&e)))?
+        .map_err(|e| {
+            format!(
+                "oidc_discovery_fetch_failed:{}",
+                crate::observability::classify_reqwest_error(&e)
+            )
+        })?
         .error_for_status()
         .map_err(|e| {
             format!(
                 "oidc_discovery_request_failed:{}",
-                classify_reqwest_error(&e)
+                crate::observability::classify_reqwest_error(&e)
             )
         })?;
-    let metadata = response
-        .json::<serde_json::Value>()
-        .await
-        .map_err(|e| format!("oidc_discovery_parse_failed:{}", classify_reqwest_error(&e)))?;
+    let metadata = response.json::<serde_json::Value>().await.map_err(|e| {
+        format!(
+            "oidc_discovery_parse_failed:{}",
+            crate::observability::classify_reqwest_error(&e)
+        )
+    })?;
     parse_discovery_metadata(&metadata)
 }
 
@@ -265,13 +256,28 @@ pub async fn fetch_jwks(
         .get(&jwks_url)
         .send()
         .await
-        .map_err(|e| format!("jwks_fetch_failed:{}", classify_reqwest_error(&e)))?
+        .map_err(|e| {
+            format!(
+                "jwks_fetch_failed:{}",
+                crate::observability::classify_reqwest_error(&e)
+            )
+        })?
         .error_for_status()
-        .map_err(|e| format!("jwks_request_failed:{}", classify_reqwest_error(&e)))?;
+        .map_err(|e| {
+            format!(
+                "jwks_request_failed:{}",
+                crate::observability::classify_reqwest_error(&e)
+            )
+        })?;
     response
         .json::<jsonwebtoken::jwk::JwkSet>()
         .await
-        .map_err(|e| format!("jwks_parse_failed:{}", classify_reqwest_error(&e)))
+        .map_err(|e| {
+            format!(
+                "jwks_parse_failed:{}",
+                crate::observability::classify_reqwest_error(&e)
+            )
+        })
 }
 
 pub async fn refresh_cache(

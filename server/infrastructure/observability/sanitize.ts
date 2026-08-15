@@ -80,9 +80,11 @@ const REDACTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Basic <base64>
   [/\bBasic\s+[A-Za-z0-9+/]+=*/gi, 'Basic [REDACTED]'],
   // Header/assignment-style credentials: x-api-key=, apikey:, cookie=,
-  // session=, password=, token=, secret=, key= (and separator variants).
+  // session=, password=, token=, secret=, key= (and separator variants),
+  // including JSON-shaped `"apiKey":"value"` where the key itself is
+  // quoted before the `:`/`=` separator.
   [
-    /\b(x-api-key|api[-_]?key|apikey|cookie|session|password|passwd|token|secret|access[-_]?key|client[-_]?secret|key)\s*[:=]\s*['"]?[^\s'",;]+/gi,
+    /\b(x-api-key|api[-_]?key|apikey|cookie|session|password|passwd|token|secret|access[-_]?key|client[-_]?secret|key)['"]?\s*[:=]\s*['"]?[^\s'",;}]+/gi,
     '$1=[REDACTED]'
   ],
   // JWT-like values: header.payload.signature, base64url, header starts eyJ
