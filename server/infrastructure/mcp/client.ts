@@ -11,6 +11,7 @@ type McpServerConfig = InferSelectModel<typeof mcpServers>
 
 type RemoteMcpRuntimeConfig = {
   url?: string
+  ownerUserId?: string
   accessToken?: string
 }
 
@@ -41,11 +42,16 @@ function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
 }
 
 /**
- * Returns the private first-party configuration only when the stored MCP URL
- * is the exact resource configured by the operator. This avoids creating a
- * generic "send this secret to any user-provided URL" capability.
+ * Returns the private first-party configuration only when both the stored MCP
+ * URL and the owning ai-code user match the operator's private runtime config.
+ *
+ * URL matching alone is not an authorization boundary in this multi-tenant
+ * app: another authenticated user can create their own MCP row pointing at the
+ * same public URL. Binding the credential to the database row's authoritative
+ * `userId` prevents that user from causing Nitro to attach the laptop owner's
+ * bearer token to their requests.
  */
-function resolveFirstPartyRemote(url: URL, serverName: string) {
+function resolveFirstPartyRemote(url: URL, serverConfig: McpServerConfig) {
   const configured = getRemoteMcpRuntimeConfig()
   const configuredUrlRaw = configured.url?.trim()
   if (!configuredUrlRaw) return undefined
@@ -68,9 +74,17 @@ function resolveFirstPartyRemote(url: URL, serverName: string) {
   // https://host/mcp must never be attached to https://host/other-path.
   if (configuredUrl.href !== url.href) return undefined
 
+  const ownerUserId = configured.ownerUserId?.trim()
+  if (!ownerUserId) {
+    throw new Error('Remote MCP runtime configuration is missing the owner user id')
+  }
+  if (serverConfig.userId !== ownerUserId) {
+    throw new Error(`Server "${serverConfig.name}" is not available for this user`)
+  }
+
   const accessToken = configured.accessToken?.trim()
   if (!accessToken) {
-    throw new Error(`Server "${serverName}" matches the configured remote MCP resource but no access token is configured`)
+    throw new Error(`Server "${serverConfig.name}" matches the configured remote MCP resource but no access token is configured`)
   }
 
   return { accessToken }
@@ -274,7 +288,7 @@ export async function createMcpClient(serverConfig: McpServerConfig): Promise<Mc
 
   const url = new URL(serverConfig.url)
   await assertSafeUrl(url, `Server "${serverConfig.name}"`)
-  const firstParty = resolveFirstPartyRemote(url, serverConfig.name)
+  const firstParty = resolveFirstPartyRemote(url, serverConfig)
 
   if (firstParty) {
     if (serverConfig.transport !== 'http') {
