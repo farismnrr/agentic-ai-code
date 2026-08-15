@@ -43,14 +43,12 @@ interface ProblemInit {
 
 // Plan 035 P1 remediation (round 4): a raw `.message` (or a raw non-Error
 // thrown value stringified via `String(cause)`) is not a data-classification
-// boundary — it can carry request-derived/PII text. Only a plain `string`
-// (a developer literal passed directly, e.g. `internal('Account creation
-// failed')`) or a `SafeDiagnosticError` (a developer opted a composed
-// message in deliberately) is safe to surface verbatim; any other Error/
+// boundary — it can carry request-derived/PII text. Only a
+// `SafeDiagnosticError` (a developer opted a composed message in deliberately)
+// is safe to surface verbatim; any other Error/
 // thrown value is reduced to a bounded static classification instead.
 function causeText(cause: unknown): string | undefined {
   if (cause === undefined) return undefined
-  if (typeof cause === 'string') return cause
   if (isSafeDiagnostic(cause)) return cause.message
   return classifyRawCause(cause)
 }
@@ -112,11 +110,11 @@ export const gone = (detail?: string) => problem({ status: 410, title: 'Gone', d
 // `causeText` above), so the composed message is safe to log verbatim.
 // Wrap it in `SafeDiagnosticError` so it survives the logger's own safe-vs-
 // raw check unchanged instead of being re-reduced to 'unclassified'.
-export const badGateway = (cause?: unknown, context?: string) =>
+export const badGateway = (cause?: unknown, context?: SafeDiagnosticError) =>
   problem({
     status: 502,
     title: 'Bad Gateway',
-    cause: context ? new SafeDiagnosticError(`${context}: ${causeText(cause) ?? 'unknown error'}`) : cause
+    cause: context ? new SafeDiagnosticError(`${context.message}: ${causeText(cause) ?? 'unknown error'}`) : cause
   })
 
 export function unprocessable(issues: v.BaseIssue<unknown>[]) {

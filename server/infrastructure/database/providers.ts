@@ -1,5 +1,6 @@
 import { useDb } from './connection'
 import { badRequest, notFound, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { and, eq } from 'drizzle-orm'
 import { modelProviders, type ModelProviderType } from '../../database/schema'
 
@@ -62,7 +63,7 @@ async function upgradeLegacyPlaintextHeaders(provider: typeof modelProviders.$in
 
 export async function insertUserProvider(userId: string, input: ProviderInput, apiKeyEncrypted: string) {
   const [provider] = await useDb().insert(modelProviders).values({ userId, type: input.type, name: input.name, baseUrl: input.baseUrl, apiKeyEncrypted, customHeaders: input.customHeaders ?? {}, enabled: true }).returning()
-  if (!provider) throw internal('Failed to create model provider')
+  if (!provider) throw internal(safeDiagnostic('Failed to create model provider'))
   return projectProvider(provider)
 }
 

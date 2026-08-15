@@ -10,6 +10,7 @@ import { createRequestTelemetryContext } from '../observability/request-context'
 import { useMailer } from '../mail/mailer'
 import { rateLimit } from '../network/rate-limit'
 import { badRequest, badGateway } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import * as account from '../database/account-data'
 import * as messages from '../database/messages'
 import * as settings from '../database/settings'
@@ -120,7 +121,7 @@ const providerPort: ProviderManagementPort<ProviderCreate, ProviderUpdate, Await
         recordSanitizedException(span, error)
         span.setStatus({ code: SpanStatusCode.ERROR })
         span.end()
-        throw badGateway(error, `Could not reach provider "${provider.name}"`)
+        throw badGateway(error, safeDiagnostic('Could not reach provider'))
       }
     })
   }

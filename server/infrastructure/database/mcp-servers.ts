@@ -1,5 +1,6 @@
 import { useDb } from './connection'
 import { notFound, conflict, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { eq, and } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
 import { isUniqueViolation } from './errors'
@@ -54,7 +55,7 @@ export async function createMcpServer(userId: string, body: { name: string, desc
     throw err
   }
 
-  if (!server) throw internal('Failed to create server')
+  if (!server) throw internal(safeDiagnostic('Failed to create server'))
 
   return {
     ...server,
