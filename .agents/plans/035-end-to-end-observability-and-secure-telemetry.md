@@ -6,7 +6,7 @@
 - [x] Phase 1 — raw/untrusted exceptions use bounded non-Error stdout/consola representations; no synthetic printed stacks.
 - [x] Phase 2 — arbitrary plain-string causes are fail-closed; only explicit safe diagnostics preserve free text.
 - [x] Phase 3 — genuine production-runtime DB-failure canary proof covers client, stdout, Loki, and Jaeger.
-- [ ] Phase 4 — fresh same-class security audit finds zero unresolved P0/P1.
+- [x] Phase 4 — fresh same-class security audit found and remediated two additional diagnostic paths; follow-up review found zero unresolved P0/P1.
 - [ ] Phase 5 — final verification passes against the final implementation state.
 - [ ] Phase 6 — fresh independent closure review finds zero unresolved P0/P1.
 - [ ] Phase 7 — closure docs, memory, evidence, and final SHA are reconciled truthfully.
