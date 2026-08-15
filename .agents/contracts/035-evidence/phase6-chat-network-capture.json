@@ -1,0 +1,25 @@
+{
+  "chatReqHeaders": {
+    "traceparent": "00-752f88f9cae43bb692a2aba2a4d3d20e-4c3b47b99e5b06c7-01",
+    "sec-ch-ua-platform": "\"Linux\"",
+    "referer": "http://localhost:3333/chat/bd6a9a97-6c66-4aa2-9f37-2026114ae3a6",
+    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36",
+    "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+    "content-type": "application/json",
+    "sec-ch-ua-mobile": "?0"
+  },
+  "chatReqBody": "{\"id\":\"bd6a9a97-6c66-4aa2-9f37-2026114ae3a6\",\"trigger\":\"submit-message\",\"message\":{\"parts\":[{\"type\":\"text\",\"text\":\"Hello, verifying phase 6 chat send after clean rebuild.\"}],\"id\":\"IQsFt5SZ63c3F3G8\",\"role\":\"user\"}}",
+  "chatResStatus": 200,
+  "chatResHeaders": {
+    "x-vercel-ai-ui-message-stream": "v1",
+    "transfer-encoding": "chunked",
+    "x-request-id": "814bdc45-6746-45da-94df-d2156f15aeb8",
+    "cache-control": "no-cache",
+    "x-accel-buffering": "no",
+    "connection": "keep-alive",
+    "date": "Sat, 15 Aug 2026 07:28:04 GMT",
+    "content-type": "text/event-stream"
+  },
+  "chatResBody": "data: {\"type\":\"error\",\"errorText\":\"Tool execution failed\"}\n\ndata: [DONE]\n\n",
+  "note": "This is the CORRECTED re-run after a `docker compose build --no-cache app` from the same HEAD commit (424bb2c). The prior evidence in this file (500 'runLanggraphChat is not defined') was captured against a stale/cached ai-code-app image and has been replaced. See phase6-browser-chat.md for the full correction record."
+}

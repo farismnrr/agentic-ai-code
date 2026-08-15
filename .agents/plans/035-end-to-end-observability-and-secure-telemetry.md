@@ -21,7 +21,7 @@
 - [x] Phase 3 — Rust trace filtering/data hygiene.
 - [x] Phase 4 — explicit Node→`ai-tools` subprocess trace propagation and third-party fail-closed proof.
 - [x] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
-- [ ] Phase 6 — real browser chat happy-path evidence.
+- [x] Phase 6 — real browser chat happy-path evidence (provider-completion portion UNPROVEN — see evidence).
 - [ ] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.
 - [ ] Phase 8 — comprehensive runtime canary leakage falsification.
 - [ ] Phase 9 — fresh source-level security/architecture falsification.
