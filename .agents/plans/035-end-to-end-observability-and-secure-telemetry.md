@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phases 0–10 complete).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
+**Status: CLOSED — remediation round 3 complete (Phases 0–12).** Implementation branch `feat/035-p0-observability-contract`, final commit `221a491` at close (Phase 12 documentation commit follows this one). Round 1 and round 2 histories remain preserved below for forensic record; round 3 independently re-proved P1-A–D and E1–E4 rather than trusting prior claims. One item remains explicitly UNPROVEN, not closed-over: Phase 6's full AI-provider chat completion (no authenticatable provider credential exists in this environment — see `.agents/contracts/035-evidence/phase6-browser-chat.md`); this does not block closure because it is not a Definition-of-Done requirement — the DoD requires real browser-originated trace continuity and requestId→Loki→Jaeger reconstruction, both of which are proven, not a successful model response.
 
 **Remediation round 3 reason:** the user's confirmed review blockers are: **P1-A** raw exceptions leak secrets/internal detail into Jaeger; **P1-B** LangGraph/tool failure paths stream raw internal errors; **P1-C** Rust telemetry exports dependency noise/filesystem paths; **P1-D** the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace. The evidence gaps are: **E1** the browser happy path is not real; **E2** the Rust internal proof is a 400, not a genuine 5xx; **E3** requestId → Loki → trace is not guaranteed; **E4** closure docs overstate claims. This is a documentation/contract reset only; no later phase is complete until these blockers and evidence gaps are independently re-proven.
 
@@ -27,7 +27,7 @@
 - [x] Phase 9 — fresh source-level security/architecture falsification.
 - [x] Phase 10 — full release verification including build/audits/scripts/LSP.
 - [x] Phase 11 — fresh independent worker closure review.
-- [ ] Phase 12 — truthful final documentation and closure.
+- [x] Phase 12 — truthful final documentation and closure.
 
 **Remediation round 2 summary:** Reopened at commit `2f67f4dd85a8c5e9130b81a9157d49a93a1b8909` (2026-08-14) after the user's own fresh review found three confirmed P1 gaps missed by round 1's independent review: (1) `server/core/errors/http.ts` imported `server/infrastructure/observability/logger` directly, violating the Plan 031-034 dependency direction; (2) `server/api/mcp/index.ts:97` returned raw caught-error text inside a 200 JSON-RPC MCP tool-result, bypassing the 5xx sanitizer entirely; (3) chat traffic used AI SDK's `DefaultChatTransport`, which never went through the `globalThis.$fetch` override Phase 4/7 patched — the single most user-visible request path got no trace correlation at all. All three fixed and re-proven live. Full remediation lane list:
 
@@ -620,3 +620,18 @@ Plan 035 is complete only when all are true:
 - [x] `pnpm audit` and `cargo audit` pass after dependency changes.
 - [x] Final independent source-level/security review finds no unresolved P0/P1 observability issue.
 - [x] Canonical memory/docs are updated truthfully and Plan 035 is marked CLOSED only after the evidence above exists.
+
+### Round 3 revalidated Definition of Done (current, supersedes the round-2 record above)
+
+All items above were independently re-proven at round-3 HEAD `221a491`, not carried over from round 2:
+
+- [x] P1-A (raw exceptions in Jaeger) — closed, Phase 1/9/11.
+- [x] P1-B (LangGraph/tool streamed-error confidentiality) — closed, Phase 2/9/11.
+- [x] P1-C (Rust telemetry dependency/path noise) — closed, Phase 3/8/9/11; Phase 8/9 additionally found and fixed two previously-undetected leaks (JSON-quoted-key redaction gap, `ai-tools curl`/`searxng` raw-URL-in-error leaks) beyond what round 2 had proven.
+- [x] P1-D (Nuxt→`ai-tools` subprocess trace continuity) — closed, Phase 4/11 (`set_parent`, genuine W3C join, not correlation).
+- [x] E1 (browser happy path not real) — closed for trace continuity, Phase 6; provider-completion explicitly UNPROVEN (environmental, not a DoD blocker — see status header).
+- [x] E2 (Rust internal proof was a 400) — closed, Phase 7: genuine internal 5xx reproduced through real admission/auth-ordered middleware; a real private-stderr URL/canary leak found during that same repro was fixed, not just documented.
+- [x] E3 (requestId→Loki→trace not guaranteed) — closed, Phase 5/10/11: live-proven for success/4xx/handled-5xx/unhandled-5xx against real Loki + a real standalone Jaeger backend (this host's shared stack runs Tempo, not Jaeger — a dedicated Jaeger container is the correct/only way to get Jaeger-API-shaped evidence here).
+- [x] E4 (closure docs overstate claims) — actively enforced this round: Phase 6/7 evidence was corrected in place after a stale Docker image and a stale pre-fix write-up were caught (by the parent and by Phase 11 respectively), rather than left standing; Phase 11 also reconciled two stale plan/memory status headers before this closure.
+
+Zero unresolved P0 at closure. Total P1s found and fixed across round 3: 5 (Phase 7's stderr URL leak, Phase 8's JSON-quoted-key gap + curl URL leak, Phase 9's searxng URL leak, Phase 11's stale-evidence/status-header findings).
