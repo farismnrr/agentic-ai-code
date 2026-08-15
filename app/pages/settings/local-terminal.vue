@@ -11,12 +11,16 @@ const {
   isConnecting,
   error: _error,
   checkConnection,
-  exec
+  startJob,
+  getJob,
+  cancelJob
 } = useRelayAgent()
 
 const commandInput = ref('')
 const execPending = ref(false)
 const history = ref<Array<{ id: string, command: string, result: RelayExecResult }>>([])
+const activeJob = ref<{ id: string, command: string } | null>(null)
+const activeSnapshot = ref<{ status: string, output?: { stdout?: string, stderr?: string, omittedBytes?: number, exitCode?: number } } | null>(null)
 
 // The relay runs as a separate local process, so it cannot read this app's
 // runtime config. Pass the origin this page is actually served from so the
@@ -39,14 +43,33 @@ async function handleExec() {
   const entryId = Math.random().toString(36).substring(2, 9)
 
   try {
-    const res = await exec(cmd)
-    history.value.push({ id: entryId, command: cmd, result: res })
-    commandInput.value = ''
+    const jobId = await startJob(cmd)
+    activeJob.value = { id: jobId, command: cmd }
+    while (activeJob.value?.id === jobId) {
+      const snapshot = await getJob(jobId)
+      activeSnapshot.value = snapshot
+      if (['completed', 'failed', 'timed_out', 'cancelled'].includes(snapshot.status)) {
+        const output = snapshot.output || {}
+        const isError = Boolean((snapshot as { result?: { isError?: boolean } }).result?.isError)
+        const res: RelayExecResult = { type: 'exec_result', success: snapshot.status === 'completed' && !isError, stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode ?? (snapshot.status === 'completed' && !isError ? 0 : 1) }
+        history.value.push({ id: entryId, command: cmd, result: res })
+        activeJob.value = null
+        activeSnapshot.value = null
+        commandInput.value = ''
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
   } catch (err: unknown) {
     toast.add({ title: 'Execution failed', description: friendlyRelayErrorMessage(err), color: 'error' })
   } finally {
     execPending.value = false
   }
+}
+
+async function handleCancel() {
+  if (!activeJob.value) return
+  await cancelJob(activeJob.value.id)
 }
 </script>
 
@@ -140,10 +163,9 @@ async function handleExec() {
           </h3>
 
           <p class="text-xs text-muted">
-            Pick the project directory the relay is allowed to access. The
-            <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--execution-root</code>
-            is the containment boundary; commands cannot freely access the rest
-            of your machine. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir</code>
+            Set <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--execution-root</code>
+            to your non-root home directory so the relay can switch between
+            sibling projects without reconnecting. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--dir</code>
             sets the default working directory inside that boundary.
           </p>
 
@@ -151,7 +173,7 @@ async function handleExec() {
 ./{{ relayBinaryName }} relay \
   --mode local \
   --dir /path/to/project \
-  --execution-root /path/to/project \
+  --execution-root $HOME \
   --origin {{ siteOrigin }}</code></pre>
 
           <p class="text-xs text-muted">
@@ -167,7 +189,7 @@ async function handleExec() {
           <pre class="overflow-x-auto rounded-lg border border-default bg-elevated p-3 text-xs text-highlighted"><code>nohup ./{{ relayBinaryName }} relay \
   --mode local \
   --dir /path/to/project \
-  --execution-root /path/to/project \
+  --execution-root $HOME \
   --origin {{ siteOrigin }} \
   &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code></pre>
 
@@ -202,6 +224,30 @@ async function handleExec() {
       </template>
 
       <div class="min-h-48 max-h-96 overflow-y-auto rounded-lg border border-default bg-elevated p-4 font-mono text-xs space-y-3">
+        <div
+          v-if="activeJob"
+          class="space-y-2 rounded border border-primary/40 p-3"
+        >
+          <div class="flex items-center justify-between text-highlighted">
+            <span><span class="text-primary">●</span> {{ activeSnapshot?.status || 'queued' }} · {{ activeJob.command }}</span>
+            <UButton
+              label="Cancel"
+              color="error"
+              variant="outline"
+              size="xs"
+              @click="handleCancel"
+            />
+          </div>
+          <pre class="max-h-48 overflow-y-auto whitespace-pre-wrap text-muted">
+            {{ activeSnapshot?.output?.stdout }}{{ activeSnapshot?.output?.stderr }}
+          </pre>
+          <div
+            v-if="activeSnapshot?.output?.omittedBytes"
+            class="text-dimmed"
+          >
+            {{ activeSnapshot.output.omittedBytes }} earlier output bytes omitted
+          </div>
+        </div>
         <div
           v-if="!history.length"
           class="italic text-dimmed"

@@ -91,7 +91,7 @@ const CODING_SCOPE: &str = "relay.coding";
 /// token when admitted; it does not consume tokens while it remains active.
 pub struct AppState {
     pub config: ServerConfig,
-    pub execution_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    pub jobs: std::sync::Arc<relay_application::execution::JobManager>,
     /// Coarse request admission is deliberately separate from both the HTTP
     /// concurrency limit and the execution semaphore. It runs before OAuth
     /// validation so unauthenticated floods cannot reach JWKS or execution.
@@ -124,6 +124,14 @@ pub struct AuthContext {
 }
 
 pub fn create_router(config: ServerConfig) -> Router {
+    let jobs = relay_application::execution::JobManager::new(config.clone());
+    create_router_with_jobs(config, jobs)
+}
+
+pub fn create_router_with_jobs(
+    config: ServerConfig,
+    jobs: Arc<relay_application::execution::JobManager>,
+) -> Router {
     let cors_origin = match &config.origin {
         Some(origin) if origin != "*" => match origin.parse() {
             Ok(header_val) => AllowOrigin::exact(header_val),
@@ -152,7 +160,7 @@ pub fn create_router(config: ServerConfig) -> Router {
 
     let state = Arc::new(AppState {
         config: config.clone(),
-        execution_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
+        jobs,
         request_admission: Arc::new(RequestAdmission::configured()),
         jwks_cache: tokio::sync::RwLock::new(None),
     });
@@ -359,7 +367,13 @@ async fn access_policy(
             .headers()
             .get(HDR_MCP_METHOD)
             .and_then(|value| value.to_str().ok())
-            == Some("tools/call");
+            .map(|method| {
+                matches!(
+                    method,
+                    "tools/call" | "tasks/get" | "tasks/update" | "tasks/cancel"
+                )
+            })
+            .unwrap_or(false);
 
         if !auth_header.starts_with("Bearer ") {
             if auth_header.is_empty() && is_tools_call {
@@ -659,7 +673,7 @@ async fn access_policy(
 }
 
 async fn handle_mcp(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
     axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     axum::extract::Extension(client_hint): axum::extract::Extension<CorrelationId>,
@@ -786,7 +800,16 @@ async fn handle_mcp(
             }
             relay_application::dispatcher::Dispatch::ToolsCall => {
                 tracing::info!(event = "relay.mcp.tools_call");
-                handle_tools_call(&request, _state, auth_ctx, request_id_str, client_hint_str).await
+                handle_tools_call(&request, state, auth_ctx, request_id_str, client_hint_str).await
+            }
+            relay_application::dispatcher::Dispatch::TasksGet => {
+                handle_task_get(&request, state).await
+            }
+            relay_application::dispatcher::Dispatch::TasksUpdate => {
+                handle_task_update(&request, state).await
+            }
+            relay_application::dispatcher::Dispatch::TasksCancel => {
+                handle_task_cancel(&request, state).await
             }
             relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
                 StatusCode::NOT_FOUND,
@@ -841,7 +864,7 @@ fn handle_initialize(request: &mcp::Request) -> JsonErr2 {
         request.id.clone(),
         json!({
             "protocolVersion": requested,
-            "capabilities": { "tools": { "listChanged": false } },
+            "capabilities": { "tools": { "listChanged": false }, "extensions": { "io.modelcontextprotocol/tasks": {} } },
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
         }),
@@ -921,6 +944,59 @@ async fn handle_tools_call(
         ));
     }
 
+    if call.name == "terminal_job_start" {
+        let task_id = relay_application::execution::start_terminal_job(
+            &call.arguments,
+            &state.config,
+            &state.jobs,
+        )
+        .await
+        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
+        let task = state.jobs.get(&task_id).await.ok_or_else(|| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Some(request.id.clone()),
+                &McpError::Internal("task creation failed".into()),
+            )
+        })?;
+        let response = Response::new(
+            request.id.clone(),
+            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+    if call.name == "terminal_job_get" || call.name == "terminal_job_cancel" {
+        let id = call
+            .arguments
+            .get("taskId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                err_response(
+                    StatusCode::BAD_REQUEST,
+                    Some(request.id.clone()),
+                    &McpError::InvalidParams("taskId is required".into()),
+                )
+            })?;
+        let task = if call.name == "terminal_job_cancel" {
+            state.jobs.cancel(id).await.map_err(|err| {
+                err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err)
+            })?
+        } else {
+            state.jobs.get(id).await.ok_or_else(|| {
+                err_response(
+                    StatusCode::NOT_FOUND,
+                    Some(request.id.clone()),
+                    &McpError::InvalidParams("unknown task".into()),
+                )
+            })?
+        };
+        let response = Response::new(
+            request.id.clone(),
+            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+
     if let relay_core::config::SecurityMode::Remote = state.config.mode {
         let claims = auth_ctx
             .claims
@@ -940,45 +1016,37 @@ async fn handle_tools_call(
         );
     }
 
-    // Acquire global execution permit. `tool.name` is the only attribute
-    // recorded — never arguments/output — matching the existing
-    // `privacy_id()` present/absent pattern for other sensitive fields.
-    let semaphore_wait_started = Instant::now();
-    let _permit = match std::sync::Arc::clone(&state.execution_semaphore)
-        .acquire_owned()
+    if call.name == "terminal_exec" && client_supports_tasks(request.params.as_ref()) {
+        let task_id = relay_application::execution::start_terminal_job(
+            &call.arguments,
+            &state.config,
+            &state.jobs,
+        )
         .await
-    {
-        Ok(p) => {
-            tracing::debug!(
-                event = "relay.execution.semaphore_wait",
-                outcome = "acquired",
-                tool = call.name.as_str(),
-                wait_ms = semaphore_wait_started.elapsed().as_millis() as u64,
-            );
-            p
-        }
-        Err(_) => {
-            tracing::error!(
-                event = "relay.execution.semaphore_wait",
-                outcome = "unavailable",
-                tool = call.name.as_str(),
-            );
-            return Err(err_response(
-                StatusCode::SERVICE_UNAVAILABLE,
+        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
+        let task = state.jobs.get(&task_id).await.ok_or_else(|| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Some(request.id.clone()),
-                &McpError::Internal("Execution system unavailable".to_string()),
-            ));
-        }
-    };
+                &McpError::Internal("task creation failed".into()),
+            )
+        })?;
+        let response = Response::new(request.id.clone(), task.create_task_json());
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
 
     // Tool exists in the registry and both the request shape and its
     // actual execution is Phase 3 scope. Timeout/kill/output-limit outcomes
     // are classified distinctly inside `dispatch_tool_call` itself (never
     // lumped in with a generic "error"), never logging tool arguments/output.
     let tool_dispatch_started = Instant::now();
-    let dispatch_result =
-        relay_application::execution::dispatch_tool_call(&tool, &call.arguments, &state.config)
-            .await;
+    let dispatch_result = relay_application::execution::dispatch_tool_call(
+        &tool,
+        &call.arguments,
+        &state.config,
+        &state.jobs,
+    )
+    .await;
     tracing::info!(
         event = "relay.tool.dispatch",
         outcome = if dispatch_result.is_ok() {
@@ -989,14 +1057,16 @@ async fn handle_tools_call(
         tool = call.name.as_str(),
         duration_ms = tool_dispatch_started.elapsed().as_millis() as u64,
     );
-    let result = dispatch_result.unwrap_or_else(|_| {
+    let result = dispatch_result.unwrap_or_else(|err| {
+        let text = match &err {
+            McpError::InvalidRequest(_) | McpError::InvalidParams(_) => err.to_string(),
+            _ => "Tool execution failed".to_string(),
+        };
         ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
             kind: "text",
-            // Internal diagnostics can contain provider, filesystem, or
-            // process details.  The tool-result is a client-visible 200
-            // response, so keep it at the same fixed public boundary as
-            // JSON-RPC internal errors.
-            text: "Tool execution failed".to_string(),
+            // Policy/argument rejections are safe and useful to return to the
+            // caller; internal/provider/process diagnostics remain redacted.
+            text,
         }])
     });
 
@@ -1012,3 +1082,92 @@ async fn handle_tools_call(
 /// [`AxumResponse`] by `.into_response()` in [`handle_mcp`] — this alias
 /// just keeps their signatures short.
 type JsonErr2 = Result<Json<Value>, JsonErr>;
+
+fn client_supports_tasks(params: Option<&Value>) -> bool {
+    params
+        .and_then(|value| value.get("_meta"))
+        .and_then(|value| value.get("io.modelcontextprotocol/clientCapabilities"))
+        .and_then(|value| value.get("extensions"))
+        .and_then(|value| value.get("io.modelcontextprotocol/tasks"))
+        .is_some()
+}
+
+fn task_id(request: &mcp::Request) -> Result<&str, JsonErr> {
+    request
+        .params
+        .as_ref()
+        .and_then(|value| value.get("taskId"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidParams("taskId is required".into()),
+            )
+        })
+}
+
+async fn handle_task_get(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
+    let id = task_id(request)?;
+    let task = state.jobs.get(id).await.ok_or_else(|| {
+        err_response(
+            StatusCode::NOT_FOUND,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("unknown task".into()),
+        )
+    })?;
+    Ok(Json(
+        serde_json::to_value(Response::new(
+            request.id.clone(),
+            task.task_json(state.config.completed_job_ttl_ms),
+        ))
+        .unwrap_or(json!({})),
+    ))
+}
+
+async fn handle_task_update(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
+    let id = task_id(request)?;
+    let has_input_responses = request
+        .params
+        .as_ref()
+        .and_then(|value| value.get("inputResponses"))
+        .and_then(Value::as_object)
+        .is_some();
+    if !has_input_responses {
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("inputResponses is required".into()),
+        ));
+    }
+    if state.jobs.get(id).await.is_none() {
+        return Err(err_response(
+            StatusCode::NOT_FOUND,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("unknown task".into()),
+        ));
+    }
+    Ok(Json(
+        serde_json::to_value(Response::new(
+            request.id.clone(),
+            json!({ "resultType": "complete" }),
+        ))
+        .unwrap_or(json!({})),
+    ))
+}
+
+async fn handle_task_cancel(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
+    let id = task_id(request)?;
+    state
+        .jobs
+        .cancel(id)
+        .await
+        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
+    Ok(Json(
+        serde_json::to_value(Response::new(
+            request.id.clone(),
+            json!({ "resultType": "complete" }),
+        ))
+        .unwrap_or(json!({})),
+    ))
+}

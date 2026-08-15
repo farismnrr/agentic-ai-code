@@ -5,17 +5,16 @@ set -euo pipefail
 # exercise the built relay over HTTP; source inspection belongs only in the
 # structural zero-bypass gate.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-manifest="$root/packages/rust-tools/Cargo.toml"
+manifest="$root/Cargo.toml"
 
 command -v cargo >/dev/null
 command -v python3 >/dev/null
 command -v openssl >/dev/null
 command -v bwrap >/dev/null
 
-RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked \
-  --bin relay-agent --bin terminal-tool
+RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked --bin ai-tools
 
-exec python3 - "$root/target/debug/relay-agent" <<'PY'
+exec python3 - "$root/target/debug/ai-tools" <<'PY'
 import base64
 import json
 import os
@@ -170,7 +169,7 @@ def wait_for_health(port, process):
 
 
 def start_relay(temp_dir, port, issuer=None, trusted_proxy=False):
-    args = [RELAY, "--port", str(port), "--dir", temp_dir, "--execution-root", temp_dir,
+    args = [RELAY, "relay", "--port", str(port), "--dir", temp_dir, "--execution-root", temp_dir,
             "--origin", ORIGIN]
     if issuer is None:
         args += ["--mode", "local"]
@@ -260,7 +259,7 @@ def run():
             instructions = body["result"]["instructions"]
             assert "Local" not in instructions
             assert "Plan 0" not in instructions
-            assert response_headers.get("x-correlation-id")
+            assert response_headers.get("x-request-id")
 
             status, _, body = request(local_url, headers=headers(origin=None), body=valid_discover)
             assert_status(status, 403, "missing Origin")
@@ -355,7 +354,7 @@ def run():
             status, _, body = request(untrusted_url,
                                       headers=headers(method="server/discover", forwarded="https"), body=valid_discover)
             assert_status(status, 403, "spoofed forwarded HTTPS without trust")
-            assert "requires HTTPS" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
 
             remote_port = free_port()
             remote = start_relay(temp_dir, remote_port, issuer=issuer, trusted_proxy=True)
@@ -493,14 +492,14 @@ def run():
             status, _, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="http"), body=valid_discover)
             assert_status(status, 403, "trusted proxy rejects non-https forwarded scheme")
-            assert "requires HTTPS" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
 
             wrong_owner = make_token(key_path, issuer, "relay.coding", subject="other")
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="tools/call", name="terminal_exec", forwarded="https", auth=f"Bearer {wrong_owner}"),
                 body=auth_call(dispatch_marker))
             assert_status(status, 403, "wrong owner")
-            assert "Authenticated subject is not authorized" in body["error"]["message"]
+            assert body["error"]["message"] == "Invalid request"
             assert "other" not in body["error"]["message"]
             assert not os.path.exists(dispatch_marker), "wrong owner reached tool execution"
         finally:

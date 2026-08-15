@@ -66,6 +66,42 @@ pub struct Cli {
     /// Explicit execution root for filesystem containment.
     #[arg(long, env = "EXECUTION_ROOT")]
     pub execution_root: Option<String>,
+
+    /// Default terminal deadline in milliseconds; zero means no deadline.
+    #[arg(
+        long,
+        env = "RELAY_DEFAULT_TERMINAL_TIMEOUT_MS",
+        default_value_t = 30_000
+    )]
+    pub default_terminal_timeout_ms: u64,
+
+    /// Maximum terminal deadline in milliseconds; zero means no operator maximum.
+    #[arg(long, env = "RELAY_MAX_TERMINAL_TIMEOUT_MS", default_value_t = 0)]
+    pub max_terminal_timeout_ms: u64,
+
+    /// Completed-job retention in milliseconds.
+    #[arg(long, env = "RELAY_COMPLETED_JOB_TTL_MS", default_value_t = 3_600_000)]
+    pub completed_job_ttl_ms: u64,
+
+    /// Total retained stdout/stderr bytes per job.
+    #[arg(
+        long,
+        env = "RELAY_MAX_RETAINED_OUTPUT_BYTES",
+        default_value_t = 1_048_576
+    )]
+    pub max_retained_output_bytes: usize,
+
+    /// Maximum simultaneously running jobs.
+    #[arg(long, env = "RELAY_MAX_RUNNING_JOBS", default_value_t = 16)]
+    pub max_running_jobs: usize,
+
+    /// Explicit user-owned toolchain directories added to the safe PATH.
+    #[arg(
+        long = "toolchain-path",
+        env = "RELAY_TOOLCHAIN_PATH",
+        value_delimiter = ','
+    )]
+    pub toolchain_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
@@ -104,6 +140,12 @@ pub struct ServerConfig {
     pub bind_host: String,
     pub trusted_proxy: bool,
     pub trusted_proxy_cidr: Option<String>,
+    pub default_terminal_timeout_ms: u64,
+    pub max_terminal_timeout_ms: u64,
+    pub completed_job_ttl_ms: u64,
+    pub max_retained_output_bytes: usize,
+    pub max_running_jobs: usize,
+    pub toolchain_paths: Vec<String>,
 }
 
 impl Default for ServerConfig {
@@ -121,6 +163,12 @@ impl Default for ServerConfig {
             bind_host: "127.0.0.1".into(),
             trusted_proxy: false,
             trusted_proxy_cidr: None,
+            default_terminal_timeout_ms: 30_000,
+            max_terminal_timeout_ms: 0,
+            completed_job_ttl_ms: 3_600_000,
+            max_retained_output_bytes: 1_048_576,
+            max_running_jobs: 16,
+            toolchain_paths: Vec::new(),
         }
     }
 }
@@ -180,13 +228,13 @@ impl ServerConfig {
                 )));
             }
         }
-        // Also reject shallow roots (depth < 3 components e.g. /home/user is allowed, / is not).
-        // This catches unnamed top-level dirs that aren't in the explicit list above.
+        // `/home/user` is the minimum supported owner-home boundary. This
+        // still rejects `/home` and arbitrary top-level roots.
         let depth = canonical.components().count();
         if depth < 3 {
             return Err(RelayError::InvalidConfig(format!(
                 "execution root '{}' is too shallow (depth {}). \
-                 Use a directory at least 2 levels deep (e.g. /home/user/project).",
+                Use a canonical non-root owner home (e.g. /home/user).",
                 canonical.display(),
                 depth
             )));
@@ -331,6 +379,28 @@ impl ServerConfig {
                     .into(),
             ));
         }
+        if self.max_running_jobs == 0 {
+            return Err(RelayError::InvalidConfig(
+                "max_running_jobs must be non-zero".into(),
+            ));
+        }
+        if self.max_retained_output_bytes == 0 {
+            return Err(RelayError::InvalidConfig(
+                "max_retained_output_bytes must be non-zero".into(),
+            ));
+        }
+        for path in &self.toolchain_paths {
+            let candidate = std::fs::canonicalize(path).map_err(|_| {
+                RelayError::InvalidConfig(
+                    "toolchain-path must resolve to an existing directory".into(),
+                )
+            })?;
+            if !candidate.is_dir() || !candidate.starts_with(self.resolved_execution_root()?) {
+                return Err(RelayError::InvalidConfig(
+                    "toolchain-path must be a directory beneath execution root".into(),
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -359,6 +429,12 @@ impl From<&Cli> for ServerConfig {
             // explicitly trusted with --trusted-proxy; remote mode never
             // exposes a public plaintext listener by default.
             bind_host: "127.0.0.1".into(),
+            default_terminal_timeout_ms: cli.default_terminal_timeout_ms,
+            max_terminal_timeout_ms: cli.max_terminal_timeout_ms,
+            completed_job_ttl_ms: cli.completed_job_ttl_ms,
+            max_retained_output_bytes: cli.max_retained_output_bytes,
+            max_running_jobs: cli.max_running_jobs,
+            toolchain_paths: cli.toolchain_paths.clone(),
         }
     }
 }

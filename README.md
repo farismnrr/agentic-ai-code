@@ -13,7 +13,7 @@ The authoritative agent-facing project notes live in [`.agents/`](.agents/README
 - **Native tools:** A single unified Rust binary (`ai-tools`) for terminal execution, HTTP requests, SearXNG search, and the relay agent
 - **Package manager:** pnpm
 
-See [`package.json`](package.json), [`packages/rust-tools/Cargo.toml`](packages/rust-tools/Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
+See [`package.json`](package.json), [`Cargo.toml`](Cargo.toml), and [`.agents/knowledge/project.md`](.agents/knowledge/project.md) for current implementation/toolchain details.
 
 ## Repository layout
 
@@ -33,6 +33,12 @@ scripts/                Local policy/quality/hook helpers plus deterministic acc
 ```
 
 This repository intentionally has **no CI workflow** and **no unit-test suite**.
+
+## Relay execution lifecycle
+
+The native relay exposes the synchronous `terminal_exec`, `http_fetch`, and `web_search` tools plus `terminal_job_start`, `terminal_job_get`, and `terminal_job_cancel` for first-party/non-Tasks polling. `terminal_exec` advertises optional MCP Tasks support: Tasks-capable clients get the standard task lifecycle, while the fallback job tools expose bounded live stdout/stderr for clients such as the local Nuxt terminal.
+
+Terminal deadlines are operator policy, not a hard-coded five-minute ceiling. `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` configures an operator maximum. Running output is drained continuously and retained as bounded tails; cancellation, timeout, and relay shutdown terminate the full sandboxed process tree. The owner-home profile uses an explicit `RELAY_TOOLCHAIN_PATH` allowlist and masks common credential stores rather than inheriting the relay process PATH.
 
 ## Setup
 

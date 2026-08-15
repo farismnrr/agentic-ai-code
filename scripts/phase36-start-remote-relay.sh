@@ -12,7 +12,7 @@ set -euo pipefail
 #   REMOTE_MCP_URL=https://mcp.farismunir.my.id/mcp
 #   OAUTH_ISSUER=https://<authorization-server-issuer>/
 #   OAUTH_OWNER_SUBJECT=<stable owner sub claim>
-#   EXECUTION_ROOT=/home/<user>/<project>
+#   EXECUTION_ROOT=/home/<user> (canonical non-root owner home)
 #
 # Optional:
 #   RELAY_WORKING_DIR=$EXECUTION_ROOT
@@ -26,7 +26,7 @@ set -euo pipefail
 : "${REMOTE_MCP_URL:?set REMOTE_MCP_URL to the canonical public MCP resource}"
 : "${OAUTH_ISSUER:?set OAUTH_ISSUER to the Authorization Server issuer}"
 : "${OAUTH_OWNER_SUBJECT:?set OAUTH_OWNER_SUBJECT to the allowed owner subject}"
-: "${EXECUTION_ROOT:?set EXECUTION_ROOT to the user-owned sandbox root}"
+EXECUTION_ROOT="${EXECUTION_ROOT:-${HOME:?HOME must be set for the owner-home relay scope}}"
 
 command -v node >/dev/null
 

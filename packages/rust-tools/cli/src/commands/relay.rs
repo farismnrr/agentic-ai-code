@@ -1,6 +1,6 @@
 use relay_core::config::{Command, ServerConfig};
 use relay_infrastructure::pidfile::Pidfile;
-use relay_infrastructure::transport::create_router;
+use relay_infrastructure::transport::create_router_with_jobs;
 use std::net::SocketAddr;
 use tokio::signal;
 
@@ -67,7 +67,8 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
         return Err("relay working directory does not exist".into());
     }
 
-    let router = create_router(config.clone());
+    let jobs = relay_application::execution::JobManager::new(config.clone());
+    let router = create_router_with_jobs(config.clone(), jobs.clone());
 
     let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port)
         .parse()
@@ -78,8 +79,10 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
         .await
         .map_err(|_| "failed to bind relay listener")?;
 
-    // Support graceful shutdown
-    let shutdown_signal = async {
+    // Support graceful shutdown and cancel all running/queued execution jobs
+    // before Axum waits for in-flight requests to drain.
+    let shutdown_jobs = jobs.clone();
+    let shutdown_signal = async move {
         let ctrl_c = async {
             signal::ctrl_c()
                 .await
@@ -101,16 +104,18 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
             _ = ctrl_c => {},
             _ = terminate => {},
         }
-        println!("Shutting down gracefuly...");
+        shutdown_jobs.shutdown().await;
+        println!("Shutting down gracefully...");
     };
 
-    axum::serve(
+    let server_result = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal)
-    .await
-    .map_err(|_| "relay server failed")?;
+    .await;
 
+    jobs.shutdown().await;
+    server_result.map_err(|_| "relay server failed")?;
     Ok(())
 }

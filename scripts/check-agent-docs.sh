@@ -21,8 +21,9 @@ for path in CLAUDE.md GEMINI.md .claude .gemini; do
   fi
 done
 
-# Shared guidance, root README, and package skills stay client/vendor neutral.
-# Runtime/provider support is intentionally outside this scan.
+# Canonical/shared guidance and top-level skills stay client/vendor neutral.
+# Skill reference material may document factual interoperability flags for
+# external tools, so references are intentionally outside this guidance scan.
 if grep -RInE \
   --exclude='check-agent-docs.sh' \
   --exclude-dir='.git' \
@@ -30,7 +31,8 @@ if grep -RInE \
   --exclude-dir='.nuxt' \
   --exclude-dir='.output' \
   '([Cc]laude|CLAUDE\.md|\.claude/|GEMINI\.md|\.gemini/|Gemini/Antigravity)' \
-  README.md AGENTS.md .agents packages/*/SKILL.md 2>/dev/null; then
+  README.md AGENTS.md .agents/knowledge .agents/memories .agents/plans .agents/contracts \
+  .agents/skills/*/SKILL.md packages/*/SKILL.md 2>/dev/null; then
   fail 'vendor-specific agent guidance/reference found; use general agent wording instead'
 fi
 

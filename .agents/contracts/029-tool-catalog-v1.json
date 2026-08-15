@@ -1,5 +1,266 @@
 [
-    {"name":"terminal_exec","title":"Sandboxed Coding Terminal","description":"Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.","inputSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"command":{"type":"string","minLength":1,"maxLength":65536},"args":{"type":"array","items":{"type":"string","maxLength":65536},"maxItems":100,"default":[]},"cwd":{"type":"string"},"timeout_ms":{"type":"integer","minimum":0,"maximum":300000,"default":30000}},"required":["command"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":true},"securitySchemes":[{"scopes":["relay.coding"],"type":"oauth2"}]},
-    {"name":"http_fetch","title":"HTTP Fetch","description":"Make an HTTP(S) request and return the response; methods may mutate remote state.","inputSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"url":{"type":"string","format":"uri","maxLength":65536},"method":{"type":"string","enum":["GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS"],"default":"GET"},"headers":{"type":"object","maxProperties":100,"additionalProperties":{"type":"string","maxLength":65536}},"data":{"type":"string","maxLength":65536},"timeout_ms":{"type":"integer","minimum":0,"maximum":300000,"default":30000}},"required":["url"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":true},"securitySchemes":[{"scopes":["relay.coding"],"type":"oauth2"}]},
-    {"name":"web_search","title":"Web Search","description":"Search the web through the configured SearxNG backend and return matching results.","inputSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":65536}},"required":["query"],"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true},"securitySchemes":[{"scopes":["relay.coding"],"type":"oauth2"}]}
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
+    "execution": {
+      "taskSupport": "optional"
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "command": {
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "name": "terminal_exec",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Sandboxed Coding Terminal"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Make an HTTP(S) request and return the response; methods may mutate remote state.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "maxLength": 65536,
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "maxProperties": 100,
+          "type": "object"
+        },
+        "method": {
+          "default": "GET",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH",
+            "HEAD",
+            "OPTIONS"
+          ],
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "maximum": 300000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 65536,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "name": "http_fetch",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "HTTP Fetch"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search the web through the configured SearxNG backend and return matching results.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "web_search",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Web Search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Start a bounded sandboxed terminal job and return its task ID for polling.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "command": {
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "name": "terminal_job_start",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Start Terminal Job"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Get bounded state and retained output for a terminal job.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "taskId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "name": "terminal_job_get",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Get Terminal Job"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Cancel a running terminal job and its process group.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "taskId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "name": "terminal_job_cancel",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Cancel Terminal Job"
+  }
 ]
