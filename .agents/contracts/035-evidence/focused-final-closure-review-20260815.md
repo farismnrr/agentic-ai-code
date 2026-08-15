@@ -3,6 +3,8 @@
 Date: 2026-08-15. This evidence supersedes the prior focused-remediation
 status claims without deleting earlier failed or superseded evidence.
 
+Final documentation state: `f3eeae41521856bcc5d1c50e9c4a6f7d561bf1a0`.
+
 ## Review result
 
 - Phase 1 removed Error objects from raw/untrusted stdout/consola diagnostics;
