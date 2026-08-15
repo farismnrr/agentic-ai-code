@@ -16,14 +16,9 @@ import { createMessageMirror } from './chat/message-mirror'
  *
  *   new DefaultChatTransport({ api: '/api/chat' })
  */
-// AI SDK errors from a failed provider call carry a JSON blob as the
-// message (e.g. `[503]: {"error":{"message":"Upstream request failed..."}}`)
-// rather than something fit for a toast — pull the human-readable part out
-// if present. Some providers (seen via a fallback/router chain) throw a
-// non-Error value that both this SDK and the server's own logger (see
-// server/utils/logger.ts's errorAttributes) can only stringify as the
-// literal text "[object Object]" — that's not a message, so treat it (and
-// any other non-informative raw message) the same as no message at all.
+// Provider/transport error messages are private diagnostics and may contain
+// prompts, database details, paths, or user input. The UI receives only the
+// stable category returned by friendlyChatErrorMessage().
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages, loadOne } = useConversations()
   const toast = useToast()
@@ -105,7 +100,6 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     sendAutomaticallyWhen: options =>
       lastAssistantMessageIsCompleteWithApprovalResponses(options) || lastAssistantMessageIsCompleteWithToolCalls(options),
     onError: (error: Error) => {
-      console.error('[chat]', error)
       toast.add({
         title: 'Message failed to send',
         description: friendlyChatErrorMessage(error),

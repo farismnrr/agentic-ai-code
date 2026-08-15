@@ -1,4 +1,5 @@
 import type { Conversation } from '#shared/types/chat'
+import { friendlyRequestErrorMessage } from '../utils/chat-errors'
 
 export function useNewChatController(input: Ref<string>, workspaceId: Ref<string | undefined>, modelId: Ref<string | undefined>, mode: Ref<Conversation['mode']>, reasoningEffort: Ref<NonNullable<Conversation['reasoningEffort']>>, enabledToolIds: Ref<string[]>) {
   const { create, update, titleFrom } = useConversations()
@@ -18,7 +19,7 @@ export function useNewChatController(input: Ref<string>, workspaceId: Ref<string
       setPendingPrompt(conversation.id, trimmed)
       void router.push(`/chat/${conversation.id}`)
     } catch (err) {
-      toast.add({ title: 'Failed to start conversation', description: (err as Error).message, color: 'error' })
+      toast.add({ title: 'Failed to start conversation', description: friendlyRequestErrorMessage(err), color: 'error' })
     }
   }
 
