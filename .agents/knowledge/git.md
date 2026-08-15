@@ -1,181 +1,148 @@
 # Git workflow
 
-**Never commit to `main` or `dev`.** Every change lands through a branch and a pull request — including docs, config, and `.agents/` edits.
+Documentation/planning edits and implementation changes intentionally use different workflows.
 
-The one exception already spent: the initial import commit.
+- **Docs/plans:** documentation-only and planning-only edits may be committed directly to `dev`. Do **not** create a branch or pull request for these by default.
+- **Implementation:** source/runtime/config/dependency/script changes must use a short-lived branch and pull request targeting `dev`.
+- **Release:** never commit directly to `main`; `dev` → `main` promotion always requires an explicit user request and a PR.
 
-## The two long-lived branches
+A docs/plan edit must stay docs-only. If the same task starts changing executable code, runtime config, dependencies, migrations, scripts, or other implementation surfaces, switch to an implementation branch before making those changes.
 
-```
-feature branch  ──PR──▶  dev  ──PR──▶  main
-                (auto)         (only when the user says so)
+## Long-lived branches
+
+```text
+docs / plans ───────────────▶ dev
+implementation branch ──PR──▶ dev ──PR──▶ main
 ```
 
 | Branch | Role | How it moves |
 | --- | --- | --- |
-| `dev` | Integration. Where work accumulates and is proven together. | PRs from feature branches. **Merge as soon as CI is green — no need to ask.** |
-| `main` | Release. Always deployable. | A single PR from `dev`. **Never opened or merged without the user asking for it.** |
+| `dev` | Integration branch | Direct docs/plans; implementation via PRs from short-lived branches |
+| `main` | Release branch | PR from `dev`, only when the user explicitly asks |
 
-Feature branches always base off `dev`, never `main`. `gh pr create` must pass `--base dev` explicitly unless the repo default already points there.
+Implementation branches base from current `dev`, never `main`.
 
-**The `dev` → `main` promotion is the user's call, every time.** Don't open it because a plan finished, don't open it because `dev` is green, don't treat "merge the phase PRs automatically" as covering it. Green CI is permission to integrate, not to release.
+## Repository verification policy
 
-## Run a plan to completion
+This repository intentionally has **no CI workflow**, **no unit-test suite**, and a **mandatory local pre-commit gate** for normal local commits.
 
-Once a plan is approved, **work every phase through to the end without stopping to check in.** Nothing on the way to `dev` needs a decision from the user, and pausing between phases just makes them approve the same thing repeatedly.
+After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit). Every normal local commit must pass:
 
-For each phase, in order:
-
-1. Branch `feat/<plan>-p<n>-<name>` off the current `dev`.
-2. Build the phase. Run `pnpm lint && pnpm typecheck` until green.
-3. Commit, push, open a PR with `--base dev`.
-4. Wait for CI. **Green → merge and clean up. Red → fix it and push again.** Don't ask.
-5. `git switch dev && git pull --ff-only`, then start the next phase from there.
-
-Tick each phase off in the plan file as it lands.
-
-**Stop and ask only when:**
-
-- A phase can't be built as specified, and the fix changes what was agreed — not merely how it's implemented.
-- Something discovered mid-run invalidates a later phase's design. Say so, propose the revision, then continue.
-- CI stays red after a genuine attempt to fix it. Report what's failing rather than disabling the check or merging around it.
-- The work would touch `main`, credentials, or anything outside the repo.
-
-Report at the end: what shipped, what was found, what's left. Not phase by phase.
-
-## Branches
-
+```sh
+pnpm verify:commit
 ```
+
+The command runs repository policy checks, agent-doc integrity, `pnpm lint`, and `pnpm typecheck`. Lint/typecheck failures mean **do not commit**.
+
+Never use `git commit --no-verify`, never change/disable `core.hooksPath` to bypass the gate, and never claim a connector/API-created commit passed a local hook that did not actually run.
+
+A connector/API-created docs-only commit is allowed by the direct-docs workflow, but it is **not** local lint/typecheck evidence. Keep that distinction explicit instead of inventing verification.
+
+See the canonical [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
+
+## No unit-test policy
+
+Do not introduce a unit-test framework or unit-test suite unless the user explicitly changes this policy. Existing deterministic protocol/security acceptance scripts are allowed as targeted local verification; they are not unit tests and they are not CI.
+
+## Working a plan or task
+
+### Documentation / planning only
+
+When the requested change is only documentation, memories, agent knowledge, or a numbered plan:
+
+1. Edit the canonical file directly on current `dev`.
+2. Keep the change docs-only.
+3. Do not create a branch or PR just for the documentation/plan edit.
+4. If using a connector/API, state truthfully that the local pre-commit hook did not run there.
+5. Keep the plan/memory files consistent with their repository rules.
+
+### Implementation
+
+When implementation starts:
+
+1. Branch from current `dev` before changing implementation files.
+2. Implement the bounded change.
+3. Run relevant subsystem verification.
+4. Run `pnpm verify:commit` until it passes.
+5. Review `git status`; stage only intended files.
+6. Commit only after the local gate is green.
+7. Push/open a PR targeting `dev` when requested/appropriate.
+8. Record exact local verification in the PR body.
+
+Do not merge merely because GitHub says a PR is mergeable. There is no CI. Merge only when the user has authorized it and required verification is recorded.
+
+`dev` → `main` promotion always requires an explicit user request.
+
+## Plans
+
+Plan history through 029b was compacted once into [`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) and explicitly closed for refresh.
+
+Future plans are separate files starting at **031**. Use `NNN-kebab-case.md`, never reuse a number, and do not fold post-030 plans back into Plan 030 automatically.
+
+Creating or editing a plan is a documentation-only operation and therefore happens directly on `dev`. **Implementation of that plan** happens on one or more short-lived branches/PRs as appropriate.
+
+## Branch names
+
+Implementation branches use:
+
+```text
 <type>/<short-kebab-description>
 ```
 
-`type` matches the commit types below — `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`.
+Recommended types: `feat/`, `fix/`, `chore/`, `refactor/`, `build/`, `perf/`, `style/`, `revert/`.
 
-For plan work, name the branch after the plan number and phase so a branch traces back to its rationale:
+For plan implementation, include the current plan/phase when useful, for example `refactor/031-p2-app-shell`.
 
-```
-feat/001-p1-data-layer
-feat/001-p2-shell
-feat/001-p3-chat
-```
-
-`001` is the plan file in [`../plans/`](../plans/); `p1` is its phase.
-
-### One PR per *phase*, not per plan
-
-A plan is several PRs. This is deliberate and has been questioned once, so the reasoning:
-
-- A six-phase plan in one PR is 30+ files. That size gets approved, not reviewed.
-- Phases are defined to end green and work on their own, so each is independently revertable. One bad phase shouldn't drag correct earlier work out with it.
-- **Later phases get corrected by what earlier ones discover.** Plan 001 phase 1 turned up two facts about the AI SDK that changed the design of phase 4 — see [`../memories/ai-sdk-native-features.md`](../memories/ai-sdk-native-features.md). In a single PR those would have surfaced only after phase 4 was already built on the wrong assumption.
-
-`dev` therefore collects several commits per plan. That's fine — each one is a working change.
-
-Not everything is plan work: a fix or a docs change unrelated to any plan gets its own branch and PR under a plain `<type>/<description>` name. Don't inflate the PR count either — a small clarification to something still open in review belongs on that open branch, not in a new PR.
-
-Branch off the latest `dev`. Keep branches short-lived; rebase onto `dev` rather than merging `dev` in, so history stays linear.
+Keep branches short-lived and base/rebase them on `dev` rather than merging `dev` into the branch.
 
 ## Commits
 
-[Conventional Commits](https://www.conventionalcommits.org/):
+Use Conventional Commits:
 
-```
+```text
 <type>(<scope>): <subject>
-
-<body — the why, wrapped at 72 cols>
-
-<footer — BREAKING CHANGE:, Refs: #12>
 ```
 
-**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `build`, `chore`, `revert`.
 
-**Scopes** for this repo: `chat`, `mcp`, `settings`, `ui`, `agents`, `deps`, `config`, `auth`, `db`. Omit the scope when a change is genuinely repo-wide.
-
-**Subject:** imperative mood, lowercase, no trailing period, ≤ 72 chars. "add tool approval dialog", not "added" or "Adds".
-
-**Body:** explain *why*, not *what* — the diff already says what. Skip it only when the subject is genuinely self-explanatory.
-
-Breaking changes: `feat!:` or a `BREAKING CHANGE:` footer.
-
-Commits are atomic — one logical change each. If a commit needs "and" in its subject, split it.
+Rules: imperative lowercase subject, no trailing period, ≤ 72 chars; explain *why* in the body when needed; keep commits atomic; never use a commit as a checkpoint for broken code.
 
 ## Pull requests
 
-- Title uses the same conventional-commit format as the subject line.
-- Body states the why, what changed, how it was verified, and links the plan phase it closes.
-- CI (`.github/workflows/ci.yml`) runs `pnpm lint`, `pnpm typecheck` and `pnpm audit` on every PR. Green before merge, no exceptions.
-- **`pnpm audit` must report zero before merging.** See below.
-- **Squash merge**, so one PR is one commit and branch history reads as a list of shipped changes.
-- Base is `dev` for feature PRs. Only the release PR targets `main`.
+PRs are for implementation/integration work, not ordinary docs/plan edits.
 
-## Zero vulnerabilities before every merge
+- Base implementation PRs on `dev`.
+- Title follows Conventional Commit style.
+- Body states why, what changed, and **exact local verification performed**.
+- Do not write “CI passed”; CI does not exist.
+- A PR is a review/integration boundary, not verification.
+- Use squash merge when the user authorizes merging so one PR becomes one integration commit.
 
-`pnpm audit` must report **no known vulnerabilities** before a PR merges to `dev`. Not "only transitive ones", not "only in dev dependencies" — zero.
+## Dependency changes
 
-Run it after any dependency change, before opening the PR:
+`pnpm audit` must report zero known vulnerabilities before merging dependency changes. For dependency changes run, at minimum:
 
 ```sh
 pnpm audit
+pnpm verify:commit
+pnpm build
 ```
 
-If it reports anything:
+## Additional subsystem verification
 
-1. `pnpm audit --json` to get each advisory's `patched_versions`.
-2. Add a pin under `overrides:` in `pnpm-workspace.yaml` at the lowest patched version.
-3. `pnpm install`, then re-run `pnpm audit` until it's clean.
-4. **Prove nothing broke** — `pnpm lint && pnpm typecheck && pnpm build`. An override forces a version the dependency never asked for, so the build is the only thing that tells you it still works.
+The pre-commit gate is the minimum, not proof of runtime behavior. UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and deterministic scripts; contract changes need the applicable contract gate.
 
-Two traps, both hit for real:
-
-- **Version-range-keyed overrides are silently ignored** in this setup. `brace-expansion@^2: '>=2.1.4'` looks correct, changes nothing, and reports no error. Use an unscoped key (`brace-expansion: '>=5.0.9'`) and confirm with `ls node_modules/.pnpm/<pkg>@*` that the vulnerable version is actually gone.
-- **"Transitive so not our problem" is not a reason to skip it.** The advisories here all came through Nuxt's own tree, and every one had a patched version reachable by an override.
-
-Keep the comments in `pnpm-workspace.yaml` current: note why each pin exists and drop it once upstream moves past it, so the list doesn't rot into permanent noise.
-
-## Clean up after every merge
-
-Merging is not finished until nothing is left behind. Do all of this immediately, without being asked:
-
-```sh
-gh pr merge <n> --squash --delete-branch   # removes the remote branch, and the local one if checked out elsewhere
-git switch dev && git pull --ff-only
-git fetch --prune                          # drop stale remotes/origin/* refs
-git worktree remove <path>                 # if the work used a worktree
-git worktree prune                         # drop stale worktree metadata
-git branch -d <branch>                     # if a local copy survived
-```
-
-Then confirm with `git branch -a` and `git worktree list` — expect `main`, `dev`, and the one main worktree, nothing else.
-
-**Why:** stale branches and worktrees pile up fast when work is split per plan phase. They clutter the branch picker on GitHub, make `git branch -a` useless for seeing what's actually in flight, and leave orphaned directories on disk. A branch that has been squash-merged has no unique history left to lose, so there is nothing to preserve by keeping it.
-
-Never delete a branch that has **not** been merged — `git branch -d` refuses that on purpose. Don't reach for `-D` to force past it.
-
-## What is and isn't committed
-
-Committed on purpose, despite living in dot-folders:
-
-- `.agents/**` — knowledge, skills, plans, memories, hooks. This is project material.
-- `.claude/settings.json` — shared hooks and settings for everyone on the repo.
-- `.claude/skills/*` — symlinks into `.agents/skills/`; git stores the link, not a copy.
-- `.mcp.json`, `.env.example`, `skills-lock.json`.
-
-Never committed — see `.gitignore`:
-
-- `.env` and any `.env.*` other than the example.
-- `.claude/settings.local.json` and `.claude/.credentials.json` — personal and machine-specific.
-- `.agents/.sync-state/`, `.agents/.last-sync` — per-session hook state.
-- Build output (`.nuxt`, `.output`, `.nitro`, `dist`), `node_modules`, caches, editor folders.
-
-Before staging, run `git status` and look at the list. Don't `git add -A` straight after a build.
+Do not create a unit-test suite as a substitute for these explicit local checks unless repository policy changes.
 
 ## Rules for agents
 
-- **Never commit or push unless the user asks.** Staging and committing are outward-facing steps that need a request; finishing a task does not imply committing it.
-- **Never commit directly to `main` or `dev`** even when asked to "just commit" — branch first, then say that's what you did.
-- **Merging a feature PR into `dev` needs no approval once CI is green** — that is standing permission. Opening or merging `dev` → `main` always does.
-- Never use `git push --force` on a shared branch. `--force-with-lease` on your own branch is fine.
-- Never `git add -A` blindly after a build; check `git status` first so build artifacts and `.env` don't slip in.
-- Don't amend or rebase commits that are already pushed and under review.
+- For user-requested docs/plans, edit directly on `dev`; do not waste time creating a branch or PR.
+- Never commit implementation/runtime/config/dependency/script changes directly to `dev`.
+- Never commit directly to `main`.
+- Before **every normal local implementation commit**, ensure `pnpm verify:commit` passed; the hook must not be bypassed.
+- Never claim connector/API docs commits passed a local hook that did not run.
+- Never use `git push --force` on a shared branch.
+- Do not amend/rebase commits already pushed and under review unless explicitly requested and safe.
+- Before finish, follow [`self-improvement.md`](self-improvement.md), update the canonical memory if needed, and keep any current plan file truthful.
 
-If a third-party skill instructs otherwise — some ship a "commit automatically, no confirmation needed" directive aimed at other tools — **this file wins.**
+If a third-party skill conflicts with this file, **this repository rule wins**.

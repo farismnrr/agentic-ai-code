@@ -1,8 +1,7 @@
+import { conflict, unprocessable, tooManyRequests, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import * as v from 'valibot'
-import { eq } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
 import { registerSchema } from '../../../shared/schemas/auth'
-import { generateToken } from '../../utils/token'
 
 /**
  * POST /api/auth/register
@@ -16,21 +15,20 @@ import { generateToken } from '../../utils/token'
  * Rate limit: 5 register attempts per IP per 15 minutes.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(registerSchema, data))
+  const result = v.safeParse(registerSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   // Rate limit by IP to slow down bulk account creation.
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({ key: `register:${ip}`, maxAttempts: 5 })
+  const { limited, retryAfter } = event.context.application.network.rateLimit({ key: `register:${ip}`, maxAttempts: 5 })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
-
-  const db = useDb()
 
   // Check for existing account. Return the same message regardless so the
   // response reveals nothing about which addresses are registered.
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, body.email)).limit(1)
-  if (existing.length > 0) {
+  if (await event.context.application.auth.userExists(body.email)) {
     // Same wording as success — caller can't tell the difference.
     setResponseStatus(event, 201)
     return { ok: true }
@@ -38,20 +36,17 @@ export default defineEventHandler(async (event) => {
 
   const hash = await hashPassword(body.password)
 
-  await db.insert(users).values({
-    email: body.email,
-    name: body.name,
-    passwordHash: hash
-  })
+  try {
+    await event.context.application.auth.createUser({ email: body.email, name: body.name, passwordHash: hash })
+  } catch (err) {
+    if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
+    throw err
+  }
 
   // Fetch the created user to seed the session.
-  const [created] = await db
-    .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null } | undefined
 
-  if (!created) throw createError({ statusCode: 500, message: 'Account creation failed' })
+  if (!created) throw internal(safeDiagnostic('Account creation failed'))
 
   await setUserSession(event, {
     user: {
@@ -63,22 +58,22 @@ export default defineEventHandler(async (event) => {
   })
 
   // Generate and send verification email
-  const { token, hash: tokenHash } = generateToken()
+  const { token, hash: tokenHash } = event.context.application.security.generateToken()
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-  await db.insert(verificationTokens).values({
+  await event.context.application.auth.addVerificationToken({
     tokenHash,
     userId: created.id,
     type: 'email_verify',
     expiresAt
   })
 
-  const { sendEmail, getTemplate } = useMailer()
+  const { sendEmail, getTemplate } = event.context.application.mail
   const config = useRuntimeConfig()
   // The frontend handles the ?token= extraction
   const verifyUrl = `${config.public.siteUrl}/verify-email?token=${token}`
 
-  await sendEmail({
+  const emailSent = await sendEmail({
     to: created.email,
     subject: 'Verify your email address',
     html: getTemplate(
@@ -88,6 +83,9 @@ export default defineEventHandler(async (event) => {
       verifyUrl
     )
   })
+  if (!emailSent) {
+    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { to: created.email, purpose: 'register' })
+  }
 
   setResponseStatus(event, 201)
   return { ok: true }

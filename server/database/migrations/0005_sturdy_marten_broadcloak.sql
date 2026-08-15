@@ -1,0 +1,1 @@
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "reasoning_effort" text;

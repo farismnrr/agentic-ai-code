@@ -23,15 +23,26 @@ logs
 .eslintcache
 *.tsbuildinfo
 
-# Claude Code — settings.json is shared and committed; these are personal/machine state
-.claude/settings.local.json
-.claude/.credentials.json
-
 # Local env files
 .env
 .env.*
 !.env.example
 
-# Agent session state (regenerated per session)
-.agents/.sync-state
-.agents/.last-sync
+target/
+
+# Local Claude Code session runtime (not repository-owned agent guidance)
+.claude/
+
+# Local SQLite databases
+*.db
+
+# Local scratch/debug scripts
+scratch_*
+docker-compose.override.yml
+
+# Externally installed agent skills (provenance tracked in ai-self/registry.yaml)
+.agents/skills/context7-cli/
+.agents/skills/git-commit/
+.agents/skills/make-repo-contribution/
+.agents/skills/create-implementation-plan/
+.agents/skills/agent-skill-stack/

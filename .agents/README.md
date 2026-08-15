@@ -1,38 +1,91 @@
 # .agents
 
-Everything an AI agent needs for this repo lives here. `CLAUDE.md` and `AGENTS.md` at the repo root are pointers to this folder and nothing more — don't grow them, grow this.
+Authoritative guidance for **any coding agent** working in this repository lives here. Root [`AGENTS.md`](../AGENTS.md) is the only repository agent entrypoint; keep repo-specific guidance centralized here instead of creating client/vendor-specific instruction files.
 
 ## Read this first
 
-**This is a Nuxt 4 + Nuxt UI 4 project. Do things the idiomatic Nuxt way — dependencies, config, code, file placement — and prefer the framework's own mechanism over a generic JS/Vue solution, even when the generic one is shorter or more familiar.** The details are in [`knowledge/nuxt-way.md`](knowledge/nuxt-way.md); read it before writing code or adding a dependency.
+This is a **Nuxt 4 application plus a Rust native-tool workspace**. Use Nuxt-native mechanisms for web application work, and preserve the explicit Rust/MCP security boundaries for native execution work.
+
+Before changing anything, read the files relevant to the task:
+
+1. [`knowledge/project.md`](knowledge/project.md) — current stack, layout, and verification commands.
+2. [`knowledge/git.md`](knowledge/git.md) — branch/PR/commit rules; never commit directly to `main` or `dev`.
+3. [`knowledge/nuxt-way.md`](knowledge/nuxt-way.md) — required approach for Nuxt/Vue work.
+4. [`knowledge/conventions.md`](knowledge/conventions.md) — project conventions.
+5. [`memories/README.md`](memories/README.md) — the **single canonical durable memory**; read it before repeating old mistakes.
+6. The relevant numbered file under [`plans/`](plans/) when the task belongs to a current multi-step plan. [`plans/030-previous-plans-summary.md`](plans/030-previous-plans-summary.md) is historical only.
 
 ## What's where
 
-| Folder | Contents | When to read it |
+| Path | Contents | When to read it |
 | --- | --- | --- |
-| [`knowledge/`](knowledge/) | How this project works and the rules for changing it | Before any code change |
-| [`skills/`](skills/) | Installed agent skills (`nuxt`, `nuxt-ui`) | Before framework or UI work |
-| [`plans/`](plans/) | Implementation plans for in-flight work | When picking up a multi-step task |
-| [`memories/`](memories/) | Durable decisions and context that outlive a session | At session start; append when you learn something lasting |
-| [`hooks/`](hooks/) | Scripts wired into Claude Code via `.claude/settings.json` | Rarely — when changing the reminder behavior |
-
-**Before you finish a task, update this folder.** Read [`knowledge/self-improvement.md`](knowledge/self-improvement.md) for what belongs where. A `Stop` hook nudges you once per session if source changed and `.agents/` didn't.
+| [`knowledge/`](knowledge/) | Stable project rules and operating knowledge | Before changing the relevant subsystem |
+| [`skills/`](skills/) | Framework/UI/tool skills and package skill links | Before work covered by a skill |
+| [`memories/README.md`](memories/README.md) | All durable decisions, constraints, incidents, and traps | At task start and closeout |
+| [`plans/`](plans/) | Plan 030 historical snapshot plus future incrementing plan files | Before continuing planned work |
+| [`contracts/`](contracts/) | Frozen client-visible contracts used by acceptance gates | Before changing a published contract |
 
 ### knowledge/
 
 | File | Covers |
 | --- | --- |
-| [`nuxt-way.md`](knowledge/nuxt-way.md) | **The working agreement.** Dependency install rules, Nuxt-native mechanism table |
-| [`self-improvement.md`](knowledge/self-improvement.md) | **Keeping this folder current.** What to record, where, and what not to record |
-| [`project.md`](knowledge/project.md) | Stack, versions, directory layout, commands |
-| [`conventions.md`](knowledge/conventions.md) | Coding rules — colors, icons, auto-imports, gotchas |
-| [`git.md`](knowledge/git.md) | **Branching, commits, PRs.** Never commit to `main`; never commit unasked |
-| [`tooling.md`](knowledge/tooling.md) | ESLint setup, environment variables, runtime config |
-| [`resources.md`](knowledge/resources.md) | Skills and the Nuxt UI MCP server — what each is for |
+| [`nuxt-way.md`](knowledge/nuxt-way.md) | Nuxt-native dependency/config/code placement rules |
+| [`self-improvement.md`](knowledge/self-improvement.md) | Mandatory closeout, canonical-memory, and plan-maintenance rules |
+| [`project.md`](knowledge/project.md) | Current stack, repository layout, commands, runtime surfaces |
+| [`conventions.md`](knowledge/conventions.md) | Coding and UI conventions |
+| [`git.md`](knowledge/git.md) | Branching, commits, PRs, and local commit gates |
+| [`tooling.md`](knowledge/tooling.md) | Environment/runtime config, lint/typecheck, and local hook tooling |
+| [`resources.md`](knowledge/resources.md) | Installed skills, MCP resources, and Agentation |
+
+## Memory model
+
+The repository deliberately keeps **one durable memory file**: [`memories/README.md`](memories/README.md). All memory notes that existed before 2026-08-12 were compacted into it.
+
+- Do not add new sibling `memories/*.md` files.
+- Amend the canonical file in place when a durable decision/trap changes.
+- Delete or shorten stale memory instead of growing a second copy.
+- Git history is the place to recover the pre-compaction long-form memory notes.
+
+## Plan model
+
+[`plans/030-previous-plans-summary.md`](plans/030-previous-plans-summary.md) is a **one-time historical compaction** of every plan that existed through Plan 029b. The user explicitly closed those plans for a planning-data refresh.
+
+Future planning remains normal and incremental:
+
+- next plan: **031**;
+- filename: `NNN-kebab-case.md`;
+- never reuse a number;
+- keep each new plan as its own file, including after completion;
+- **do not automatically compact Plan 031+ into Plan 030**;
+- there is no `plans/README.md` index; the numbered plan files are the source of truth for their own status.
+
+An old unchecked item inside the Plan 030 history is not active work. Re-audit current source/external state and create a fresh numbered plan when needed.
+
+## Local quality policy
+
+The repository intentionally has **no CI workflow** and **no unit-test suite**. That makes the local commit gate non-optional.
+
+After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git-hooks.sh) configures Git to use [`.githooks/pre-commit`](../.githooks/pre-commit). Every commit must pass:
+
+```sh
+pnpm verify:commit
+```
+
+That gate runs repository-policy enforcement, agent-doc integrity, all configured lint checks, and all configured type/compile checks. Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path merely to avoid a failing gate.
+
+See the current durable policy in [`memories/README.md`](memories/README.md#repository-policy-and-verification).
+
+## Agent closeout is mandatory
+
+**Every agent must perform the closeout review in [`knowledge/self-improvement.md`](knowledge/self-improvement.md) before declaring a task finished.** Keep code, knowledge, the canonical memory, and any current plan file aligned.
+
+The repository deliberately has **no client/vendor-specific lifecycle hook**. Shared instructions live in `AGENTS.md` + `.agents/`; the tracked Git pre-commit hook is repository quality enforcement, not an agent-client lifecycle integration.
 
 ## Conventions for this folder
 
-- **Skills are the source of truth here.** `.claude/skills/*` are symlinks into `.agents/skills/*`, so Claude Code auto-discovers them while the real files stay in one place. Other agents can point at `.agents/skills/` directly.
-- `skills-lock.json` stays at the repo root — the `skills` CLI expects it there. Update with `npx skills update`.
-- Plans and memories are Markdown, one file per topic, named in kebab-case.
-- When you learn something durable — a decision, a constraint, a trap — write it to `memories/` rather than leaving it in the conversation.
+- `.agents/` is the source of truth for shared agent guidance.
+- Do **not** add repository-owned client/vendor agent directories, settings, discovery links, or alternate instruction entrypoints.
+- `skills-lock.json` remains at repo root because the `skills` CLI expects it there.
+- Durable memory stays in exactly one file: `memories/README.md`.
+- Plan 030 is the historical compaction snapshot; new plans are separate incrementing files starting at 031.
+- Delete or amend durable guidance when it stops being true; stale memory is worse than missing memory.

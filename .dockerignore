@@ -1,0 +1,10 @@
+.git
+node_modules
+target
+.output
+.nuxt
+dist
+.env
+.env.*
+!.env.example
+.agents

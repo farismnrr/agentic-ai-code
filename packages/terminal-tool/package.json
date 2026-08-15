@@ -1,0 +1,13 @@
+{
+  "name": "@ai-code/terminal-tool",
+  "version": "0.0.8",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@langchain/core": "^1.2.5",
+    "ai": "^7.0.56",
+    "execa": "^9.3.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,104 @@
+version: 3
+
+actions:
+  read_workspace:
+    approval: auto
+  resolve_workspace_scope:
+    approval: auto
+    constraints:
+      - fresh_per_task
+      - current_request_precedence
+      - memory_is_hint_not_authority
+      - read_only_discovery_until_verified
+      - verify_git_root_and_project_identity
+  write_workspace:
+    approval: auto
+    constraints:
+      - workspace_lock_verified
+      - canonical_path_within_locked_root
+      - no_cross_project_write
+      - no_silent_project_switch
+  cross_project_mutation:
+    approval: ask
+    constraints:
+      - explicit_multi_repository_scope
+      - separate_workspace_lock_per_repository
+      - separate_git_operations_per_repository
+  write_ai_self:
+    approval: auto
+  create_local_tool:
+    approval: auto
+  install_reviewed_project_skill:
+    approval: auto
+    constraints:
+      - project_scope_default
+      - workspace_scope_verified
+      - preview_and_review_before_install
+      - no_force_overwrite
+      - no_secret_or_privilege_escalation
+      - register_source_and_revision
+  update_installed_skill:
+    approval: auto
+    constraints:
+      - review_incoming_change
+      - no_blind_update
+      - revalidate_after_update
+  create_or_update_plan:
+    approval: auto
+    constraints:
+      - plan_only_unless_execution_requested
+      - ground_in_verified_context
+      - respect_repository_plan_convention
+  run_relevant_validation:
+    approval: auto
+  git_diff_status:
+    approval: auto
+  git_commit_task_owned_changes:
+    approval: auto
+    constraints:
+      - workspace_identity_revalidated
+      - task_owned_changes_only
+      - all_paths_within_locked_root
+  create_pull_request:
+    approval: ask
+    constraints:
+      - prepare_title_and_body_automatically
+      - no_duplicate_pr
+      - respect_repository_template
+      - respect_codeowners_and_review_policy
+  merge_pull_request:
+    approval: ask
+    constraints:
+      - required_checks_passed
+      - required_reviews_satisfied
+      - no_policy_bypass
+  push_shared_or_default_branch:
+    approval: ask
+    constraints:
+      - repository_policy_allows_direct_push
+      - no_force
+  git_push_current_branch:
+    approval: auto
+    constraints:
+      - task_branch_only_in_team_repositories
+      - no_force
+      - no_secrets
+      - task_owned_changes_only
+      - validation_passed
+      - user_did_not_opt_out
+  access_secrets:
+    approval: ask
+  sudo:
+    approval: manual_only
+    constraints:
+      - tool_boundary_is_final
+      - no_privilege_bypass
+      - no_alternate_escalation_path
+      - provide_exact_manual_command_or_steps
+      - resume_only_after_user_reports_result
+  production_change:
+    approval: ask
+  destructive_action:
+    approval: always_ask
+  irreversible_external_action:
+    approval: always_ask

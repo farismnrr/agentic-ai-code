@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Forgot password' })
@@ -25,9 +26,9 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     })
     success.value = true
   } catch (err: unknown) {
-    const fe = err as { data?: { message?: string }, statusCode?: number }
-    if (fe?.statusCode === 429) {
-      serverError.value = fe.data?.message ?? 'Too many attempts. Try again later.'
+    const statusCode = (err as { statusCode?: number })?.statusCode
+    if (statusCode === 429) {
+      serverError.value = clientErrorMessage(err, 'Too many attempts. Try again later.')
     } else {
       serverError.value = 'Could not request password reset. Please try again.'
     }

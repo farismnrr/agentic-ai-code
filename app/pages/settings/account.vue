@@ -20,14 +20,10 @@ const state = reactive({
   email: settings.value.email
 })
 
-function onSubmit(event: FormSubmitEvent<Schema>) {
-  settings.value = { ...settings.value, ...event.data }
+async function onSubmit(event: FormSubmitEvent<Schema>) {
+  await settings.update({ displayName: event.data.displayName, email: event.data.email })
   toast.add({ title: 'Profile saved', icon: 'i-lucide-check', color: 'success' })
 }
-
-const messageCount = computed(() =>
-  conversations.value.reduce((total, c) => total + c.messages.length, 0)
-)
 </script>
 
 <template>
@@ -80,10 +76,10 @@ const messageCount = computed(() =>
 
     <UCard>
       <h3 class="mb-3 text-sm font-medium text-highlighted">
-        Usage this session
+        Usage
       </h3>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4">
         <div>
           <p class="text-2xl font-semibold text-highlighted">
             {{ conversations.length }}
@@ -92,18 +88,10 @@ const messageCount = computed(() =>
             Conversations
           </p>
         </div>
-        <div>
-          <p class="text-2xl font-semibold text-highlighted">
-            {{ messageCount }}
-          </p>
-          <p class="text-sm text-muted">
-            Messages
-          </p>
-        </div>
       </div>
 
       <p class="mt-4 text-xs text-dimmed">
-        Counts reset on reload — nothing is persisted in this build.
+        Your data is securely persisted to your account.
       </p>
     </UCard>
   </div>

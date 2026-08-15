@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import type { UIMessageChunk } from 'ai'
-import { MockChatTransport } from '~/utils/mock-transport'
+import { pickScenario } from '#shared/utils/fixtures/replies'
 
 /**
  * A conversation that runs itself: types a prompt, streams a reply, calls a
  * tool, then starts over.
  *
- * It is driven by the same `MockChatTransport` the app uses, not a script of
- * hardcoded strings. So the hero shows the product's actual behaviour, and it
- * cannot drift from it — change the fixtures and the hero changes with them.
+ * It is driven by a hardcoded set of data to ensure consistent presentation
+ * on the landing page regardless of external state.
  *
  * Motion budget: this is the page's one orchestrated moment. Everything else
  * on the landing page is a scroll reveal.
@@ -69,34 +67,20 @@ async function runOnce() {
   await sleep(500)
   if (cancelled) return
 
-  const transport = new MockChatTransport({
-    initialDelayInMs: 260,
-    chunkDelayInMs: 26,
-    getEnabledToolIds: () => ['github.search_repositories']
-  })
-
-  const stream = await transport.sendMessages({
-    trigger: 'submit-message',
-    chatId: 'hero',
-    messageId: undefined,
-    messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: PROMPT }] }],
-    abortSignal: undefined
-  })
-
   phase.value = 'streaming'
-  const reader = stream.getReader()
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done || cancelled) break
+  const chunks = pickScenario('search').build({ enabledToolIds: ['github'] })
 
-    const chunk = value as UIMessageChunk
+  for (const chunk of chunks) {
+    if (cancelled) break
+
     if (chunk.type === 'text-delta') reply.value += chunk.delta
     else if (chunk.type === 'tool-input-available') toolName.value = `github · ${chunk.toolName}`
     else if (chunk.type === 'tool-output-available') toolDone.value = true
+
+    await sleep(26)
   }
 
-  await reader.cancel().catch(() => {})
   phase.value = 'done'
 }
 

@@ -1,0 +1,9 @@
+HTTP/1.1 500 Internal Server Error
+content-type: application/json
+x-request-id: db26592a-a1c4-4603-b29f-2600045b8ecd
+vary: origin, access-control-request-method, access-control-request-headers
+access-control-allow-origin: https://phase7-isolated.invalid
+content-length: 78
+date: Sat, 15 Aug 2026 07:50:28 GMT
+
+{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Internal error"}}
