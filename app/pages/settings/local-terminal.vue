@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { RelayExecResult } from '~/composables/useRelayAgent'
+import { friendlyRelayErrorMessage } from '~/utils/chat-errors'
 
 useSeoMeta({ title: 'Local Terminal' })
 
@@ -42,7 +43,7 @@ async function handleExec() {
     history.value.push({ id: entryId, command: cmd, result: res })
     commandInput.value = ''
   } catch (err: unknown) {
-    toast.add({ title: 'Execution failed', description: (err as Error).message, color: 'error' })
+    toast.add({ title: 'Execution failed', description: friendlyRelayErrorMessage(err), color: 'error' })
   } finally {
     execPending.value = false
   }
