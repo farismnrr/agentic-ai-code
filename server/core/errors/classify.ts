@@ -12,6 +12,22 @@
 // fail-closed per the frozen contract, not a denylist of "bad" patterns.
 export type SafeCauseClassification = string
 
+const SAFE_ERROR_TYPES = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'AbortError',
+  'TimeoutError',
+  'AggregateError'
+])
+
+/** Return only reviewed error types; Error.name is mutable untrusted input. */
+export function classifyErrorType(cause: unknown): string {
+  if (!(cause instanceof Error)) return 'UnknownError'
+  if (cause.name === 'SafeDiagnosticError') return 'SafeDiagnosticError'
+  return SAFE_ERROR_TYPES.has(cause.name) ? cause.name : 'Error'
+}
+
 const CODE_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 export function classifyRawCause(cause: unknown): SafeCauseClassification {

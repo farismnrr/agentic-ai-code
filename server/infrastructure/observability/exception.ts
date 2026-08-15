@@ -1,6 +1,6 @@
 import type { Span } from '@opentelemetry/api'
 import { sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
-import { classifyRawCause } from '../../core/errors/classify'
+import { classifyErrorType, classifyRawCause } from '../../core/errors/classify'
 import { isSafeDiagnostic } from '../../core/errors/safe-diagnostic'
 
 const MAX_EXCEPTION_FIELD_LENGTH = 512
@@ -27,9 +27,8 @@ function bounded(value: string): string {
  */
 export function recordSanitizedException(span: Span, cause: unknown): void {
   try {
-    const isError = cause instanceof Error
     const safeDiagnostic = isSafeDiagnostic(cause)
-    const rawType = isError ? cause.name || cause.constructor?.name || 'Error' : 'UnknownError'
+    const rawType = safeDiagnostic ? 'SafeDiagnosticError' : classifyErrorType(cause)
     const rawMessage = safeDiagnostic ? cause.message : classifyRawCause(cause)
     const rawStack = safeDiagnostic ? cause.stack : undefined
     const safe = sanitizeAttributes({
