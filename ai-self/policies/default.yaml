@@ -1,0 +1,35 @@
+version: 2
+
+actions:
+  read_workspace:
+    approval: auto
+  write_ai_self:
+    approval: auto
+  create_local_tool:
+    approval: auto
+  install_reviewed_project_skill:
+    approval: auto
+  run_relevant_validation:
+    approval: auto
+  git_diff_status:
+    approval: auto
+  git_commit_task_owned_changes:
+    approval: auto
+  git_push_current_branch:
+    approval: auto
+    constraints:
+      - no_force
+      - no_secrets
+      - task_owned_changes_only
+      - validation_passed
+      - user_did_not_opt_out
+  access_secrets:
+    approval: ask
+  sudo:
+    approval: ask
+  production_change:
+    approval: ask
+  destructive_action:
+    approval: always_ask
+  irreversible_external_action:
+    approval: always_ask

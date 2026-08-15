@@ -1,0 +1,41 @@
+version: 2
+
+skills:
+  github-delivery:
+    path: skills/github-delivery/SKILL.md
+    source: local
+    status: active
+    purpose: safely commit and push completed task-owned changes proactively
+  skill-acquisition:
+    path: skills/skill-acquisition/SKILL.md
+    source: local
+    status: active
+    purpose: discover, review, install, and register missing reusable skills
+  context7-cli:
+    path: ../.agents/skills/context7-cli/SKILL.md
+    source: https://github.com/upstash/context7
+    status: active
+    purpose: current documentation and agent-skill discovery/management
+  git-commit:
+    path: ../.agents/skills/git-commit/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    status: active
+    purpose: conventional commit analysis and intelligent staging
+  make-repo-contribution:
+    path: ../.agents/skills/make-repo-contribution/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    status: active
+    purpose: repository contribution-policy checks around commits, pushes, issues, and PRs
+
+tools:
+  ctx7:
+    path: tools/ctx7
+    type: executable
+    status: active
+    purpose: invoke the latest Context7 CLI through the user's fnm Node runtime
+
+lessons:
+  path: lessons/lessons.md
+
+policies:
+  path: policies/default.yaml
