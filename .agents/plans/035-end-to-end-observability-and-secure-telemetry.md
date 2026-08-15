@@ -38,7 +38,7 @@ No later round-4 phase is complete until independently re-proven.
 
 **Remediation round 4 checklist (Phase 1–8):**
 - [x] Phase 1 — fix raw Error.message/PII leakage into private telemetry.
-- [ ] Phase 2 — real PII/user-data canary proof against a genuine runtime failure.
+- [x] Phase 2 — real PII/user-data canary proof against a genuine runtime failure.
 - [ ] Phase 3 — fix route over-redaction without weakening filesystem-path confidentiality.
 - [ ] Phase 4 — reconcile documentation severity inconsistency (SearXNG leak).
 - [ ] Phase 5 — comprehensive same-class audit (fresh worker).
