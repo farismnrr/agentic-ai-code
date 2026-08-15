@@ -12,6 +12,28 @@ const MAX_DURATION_MS = 60_000
 
 type LifecycleContext = Record<PropertyKey, unknown>
 
+type MatchedRouteContext = LifecycleContext & {
+  matchedRoute?: { route?: unknown }
+}
+
+function lifecycleRoute(event: H3Event): string {
+  const context = event.context as MatchedRouteContext | undefined
+  const matchedRoute = context?.matchedRoute?.route
+  if (typeof matchedRoute === 'string' && matchedRoute.startsWith('/')) {
+    return sanitizeRoute(matchedRoute)
+  }
+
+  // A missing match is expected for unmatched/early-failed requests. Keep only
+  // a coarse, static family classification; never derive a route from the
+  // attacker-controlled path or query string.
+  const path = event.path || ''
+  if (path.startsWith('/api/')) return '/api/*'
+  if (path === '/api') return '/api/*'
+  if (path.startsWith('/auth/')) return '/auth/*'
+  if (path === '/') return '/'
+  return 'unmatched'
+}
+
 // Nitro's 'error' hook can fire for errors captured outside a real inbound
 // request (e.g. during prerendering, or other internal error-capture paths
 // that pass a partial/synthetic event) where `event` itself may be
@@ -50,7 +72,7 @@ export function recordRequestLifecycle(event: H3Event | undefined, statusOverrid
     'event.name': 'http.request.lifecycle',
     'operation': 'http.request.lifecycle',
     'http.request.method': (event.method || 'UNKNOWN').slice(0, 16),
-    'route': sanitizeRoute(event.path || '/'),
+    'route': lifecycleRoute(event),
     'http.response.status_code': status,
     'duration_ms': duration,
     'outcome': outcome(status)

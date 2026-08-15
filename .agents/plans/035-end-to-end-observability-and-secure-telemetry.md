@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: CLOSED — focused fresh external-review remediation complete.** Implementation branch `feat/035-p0-observability-contract`; prior round histories remain preserved below for forensic record; do not delete them. This reopening addressed the confirmed stdout/consola synthetic-stack leak and implicit plain-string diagnostic trust bypass.
+**Status: OPEN — final focused route/error-type remediation in progress.** Implementation branch `feat/035-p0-observability-contract`; prior round histories remain preserved below for forensic record; do not delete them. This reopening addresses concrete request paths in lifecycle telemetry and mutable raw `Error.name` trust.
 
 **Focused remediation checklist (fresh external review):**
 - [x] Phase 1 — raw/untrusted exceptions use bounded non-Error stdout/consola representations; no synthetic printed stacks.
@@ -10,6 +10,16 @@
 - [x] Phase 5 — final verification passes against the final implementation state; live-only reruns unavailable, committed runtime evidence independently checked.
 - [x] Phase 6 — fresh independent closure review found zero unresolved P0/P1.
 - [x] Phase 7 — closure docs, memory, evidence, and final SHA are reconciled truthfully.
+
+**Final focused route/error-type checklist:**
+- [x] Phase 1 — lifecycle telemetry uses stable matched route templates or coarse static fallbacks.
+- [ ] Phase 2 — static, dynamic, unmatched, query, and request-ID route privacy acceptance passes.
+- [ ] Phase 3 — raw error types are bounded by a shared stable policy.
+- [ ] Phase 4 — mutable `Error.name` canary acceptance passes.
+- [ ] Phase 5 — fresh same-class audit finds zero unresolved P0/P1.
+- [ ] Phase 6 — final verification passes against the final implementation state.
+- [ ] Phase 7 — final independent closure review finds zero unresolved P0/P1.
+- [ ] Phase 8 — closure docs, memory, evidence, and final SHA agree.
 
 **Round 4 reopening reason (fresh external review, not self-discovered):**
 - **P1** — raw unhandled exception diagnostics can still carry direct PII/request-derived data into private logs because raw `Error.message` is allowed through the logger sanitizer path; secret-shaped redaction is not a general PII/data-classification boundary.
