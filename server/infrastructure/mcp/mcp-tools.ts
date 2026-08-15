@@ -77,7 +77,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     try {
       client = await createMcpClient(server)
     } catch (err) {
-      logger.error(`[mcp-tools] failed to connect to "${server.name}"`, err)
+      logger.error('[mcp-tools] failed to connect to configured server', err)
       continue
     }
     clients.push(client)
@@ -86,7 +86,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     try {
       listed = await withMcpSpan('mcp.tools_list', {}, () => client.listTools())
     } catch (err) {
-      logger.error(`[mcp-tools] failed to list tools for "${server.name}"`, err)
+      logger.error('[mcp-tools] failed to list tools from configured server', err)
       continue
     }
 
@@ -99,7 +99,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema as Record<string, unknown>),
         execute: async (input: unknown) => {
-          const result = await withMcpSpan('mcp.tools_call', { 'tool.name': mcpTool.name }, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
+          const result = await withMcpSpan('mcp.tools_call', {}, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
           return result.content
         }
       })
