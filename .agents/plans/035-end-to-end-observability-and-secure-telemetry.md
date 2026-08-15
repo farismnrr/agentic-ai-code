@@ -23,7 +23,7 @@
 - [x] Phase 5 — guaranteed requestId→Loki→trace lifecycle lookup.
 - [x] Phase 6 — real browser chat happy-path evidence (provider-completion portion UNPROVEN — see evidence).
 - [x] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.
-- [ ] Phase 8 — comprehensive runtime canary leakage falsification.
+- [x] Phase 8 — comprehensive runtime canary leakage falsification.
 - [ ] Phase 9 — fresh source-level security/architecture falsification.
 - [ ] Phase 10 — full release verification including build/audits/scripts/LSP.
 - [ ] Phase 11 — fresh independent worker closure review.
