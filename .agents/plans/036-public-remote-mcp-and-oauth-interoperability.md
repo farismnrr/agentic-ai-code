@@ -1,6 +1,6 @@
 # Plan 036 — Public Remote MCP and OAuth Interoperability
 
-**Status:** Planned — discussion complete enough to start implementation planning; no implementation has started.
+**Status:** Implementation in progress — source and local validation are present on `feat/plan-036-remote-mcp`; external deployment, OAuth, hosted-Nuxt, and ChatGPT interoperability remain unproven.
 
 ## Goal
 
