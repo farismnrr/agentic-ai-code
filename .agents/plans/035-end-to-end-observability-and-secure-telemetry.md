@@ -25,7 +25,7 @@
 - [x] Phase 7 — genuine Rust internal/OIDC/JWKS 5xx evidence.
 - [x] Phase 8 — comprehensive runtime canary leakage falsification.
 - [x] Phase 9 — fresh source-level security/architecture falsification.
-- [ ] Phase 10 — full release verification including build/audits/scripts/LSP.
+- [x] Phase 10 — full release verification including build/audits/scripts/LSP.
 - [ ] Phase 11 — fresh independent worker closure review.
 - [ ] Phase 12 — truthful final documentation and closure.
 
