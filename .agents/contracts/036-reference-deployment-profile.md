@@ -1,19 +1,19 @@
 # Plan 036 — Reference Deployment Profile
 
-Status: source-level reference profile selected; external account provisioning remains operator-owned.
+Status: provider-neutral source contract implemented; the current operator profile uses Cloudflare Tunnel + Keycloak, with hosted-Nuxt and remaining OAuth/negative-case evidence still open.
 
 ## Purpose
 
 Plan 036 keeps the protocol and security boundaries provider-neutral, but implementation needs one concrete deployment profile that can be exercised end to end. The reference profile is:
 
 - public edge / outbound tunnel: **Cloudflare Tunnel (`cloudflared`)**;
-- Authorization Server / identity provider: **Auth0**;
+- Authorization Server / identity provider: **external OAuth/OIDC provider; current operator deployment uses Keycloak 26.7.0**;
 - MCP Resource Server: the existing Rust `ai-tools relay`;
 - canonical resource: `https://mcp.farismunir.my.id/mcp`;
 - hosted application client: Nuxt/Nitro using the first-party MCP 2026 adapter;
 - external interactive client: ChatGPT using its MCP OAuth flow.
 
-Cloudflare and Auth0 are reference providers, not protocol dependencies. Another tunnel or Authorization Server is acceptable only if it preserves the same contracts below.
+Cloudflare and Keycloak are the current concrete operator providers, not protocol dependencies. Another tunnel or Authorization Server is acceptable only if it preserves the same contracts below.
 
 ## Network contract
 
@@ -87,7 +87,7 @@ Required runtime values:
 
 ```text
 REMOTE_MCP_URL=https://mcp.farismunir.my.id/mcp
-OAUTH_ISSUER=<canonical HTTPS Auth0 issuer>
+OAUTH_ISSUER=<canonical HTTPS Authorization Server issuer>
 OAUTH_OWNER_SUBJECT=<the one allowed human subject>
 EXECUTION_ROOT=<user-owned project/workspace root>
 ```
@@ -113,11 +113,11 @@ ai-tools relay
 
 The existing Rust startup checks still remain authoritative: Linux/Bubblewrap, non-root execution, safe execution root, loopback bind, canonical HTTPS issuer/audience, and trusted proxy validation.
 
-## Auth0 reference profile
+## Authorization Server compatibility profile
 
-Auth0 is selected as the reference Authorization Server because the current OpenAI MCP authentication guidance recommends an established identity provider and specifically documents Auth0 for MCP authorization, including modern client registration/discovery patterns.
+The relay is provider-neutral. Auth0 was the initial source-level reference because it is a documented MCP-compatible identity-provider option; the current operator deployment uses the existing Keycloak 26.7.0 service instead. Either profile is acceptable only when it preserves the same OAuth/OIDC, PKCE, resource/audience, owner, scope, JWKS, and client-registration contracts.
 
-Required Auth0 behavior:
+Required Authorization Server behavior:
 
 - issuer and discovery metadata are public HTTPS;
 - asymmetric signing keys are published through JWKS;
@@ -129,7 +129,7 @@ Required Auth0 behavior:
 - ChatGPT client identification uses a supported standard path (prefer CIMD when the tenant/profile supports it; a predefined client or DCR is acceptable when intentionally configured);
 - only the callback URI shown by the current ChatGPT connection UI is allowlisted; do not guess or permanently hardcode a callback identifier from another connection.
 
-The relay remains generic and does not contain Auth0-specific token parsing. Auth0 tokens must satisfy the relay's normal issuer, audience, signature, time, owner-subject, and `relay.coding` checks.
+The relay remains generic and contains no provider-specific token parsing. Tokens from the selected Authorization Server must satisfy the relay's normal issuer, audience, signature, time, owner-subject, and `relay.coding` checks.
 
 ## Hosted Nuxt credential profile
 
@@ -202,9 +202,7 @@ Keycloak's public OIDC dynamic-registration endpoint is enabled for MCP
 compatibility. Anonymous registration is consent-protected, limited to the
 requested `relay.coding` scope, and has a trusted-host policy allowing the
 ChatGPT callback hosts (`chatgpt.com` and `chat.openai.com`) while rejecting an
-untrusted synthetic redirect. This deployment does not claim an authenticated
-owner token or ChatGPT OAuth completion until an interactive login is actually
-performed.
+untrusted synthetic redirect. An interactive ChatGPT connection was subsequently completed on 2026-08-16 and the live session successfully discovered the relay tools and invoked `terminal_exec`. That proves the connected client/tool path, but this repository does not expose the callback exchange or decoded token claims, so detailed callback/resource/audience assertions remain separately unproven.
 
 ## Remaining external evidence
 
@@ -216,5 +214,4 @@ This contract does not claim any of the following until they are observed agains
 - correct `NUXT_REMOTE_MCP_OWNER_USER_ID` ownership binding in the hosted deployment;
 - hosted Nuxt -> public relay execution;
 - negative proof that another ai-code user cannot consume the owner credential;
-- ChatGPT OAuth completion;
-- ChatGPT tool invocation.
+- independently captured ChatGPT OAuth callback/token-claim evidence beyond the successful connected session.

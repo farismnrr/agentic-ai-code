@@ -1,6 +1,6 @@
 # Plan 036 — Public Remote MCP and OAuth Interoperability
 
-**Status:** Implementation in progress — source and local validation are present on `feat/plan-036-remote-mcp`; external deployment, OAuth, hosted-Nuxt, and ChatGPT interoperability remain unproven.
+**Status:** OPEN — the runtime implementation, public deployment, and a live ChatGPT connection/tool call are proven as of 2026-08-16; hosted-Nuxt execution, OAuth callback/token-claim evidence, approval behavior, and the remaining negative-case matrix are still open.
 
 ## Goal
 
@@ -351,13 +351,13 @@ Prove the same public MCP endpoint against ChatGPT's current supported remote MC
 
 Tasks:
 
-- [ ] Connect the public endpoint using ChatGPT's current MCP/custom-app/developer connection mechanism.
-- [ ] Prove MCP server discovery.
+- [x] Connect the public endpoint using ChatGPT's current MCP/custom-app/developer connection mechanism. Live ChatGPT session on 2026-08-16 reached the configured `Masih_Awam_MCP` server.
+- [x] Prove MCP server discovery. ChatGPT surfaced the relay tool catalog in the live session.
 - [ ] Prove OAuth authorization flow from ChatGPT to the chosen Authorization Server.
 - [ ] Prove correct callback/redirect handling.
 - [ ] Prove token resource/audience and scope compatibility.
-- [ ] Prove `tools/list` visibility.
-- [ ] Prove at least one safe read-only/non-destructive tool call if available.
+- [x] Prove `tools/list` visibility. `terminal_exec`, `http_fetch`, and `web_search` were available through the connected server.
+- [x] Prove at least one safe read-only/non-destructive tool call if available. The live session executed repository inspection commands through `terminal_exec`.
 - [ ] Prove terminal tool authorization/approval behavior without weakening server security.
 - [ ] Record any ChatGPT-specific interoperability requirement separately from the MCP standard.
 
@@ -374,6 +374,8 @@ If ChatGPT cannot complete the flow, diagnose whether the failure belongs to:
 - tool schema/response compatibility.
 
 Do not weaken the relay auth model merely to get a green connection UI.
+
+**2026-08-16 live ChatGPT evidence:** connection, discovery/tool visibility, and non-destructive tool execution are proven through this session. OAuth callback internals, resource/audience assertions, destructive-action approval behavior, hosted-Nuxt reachability, and the broader negative-case matrix remain unproven here and stay open.
 
 ---
 
