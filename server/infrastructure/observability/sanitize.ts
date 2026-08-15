@@ -49,6 +49,18 @@ const ALLOWED_ATTRIBUTE_KEYS = new Set<string>([
 export const MAX_ATTRIBUTE_VALUE_LENGTH = 512
 export const MAX_ATTRIBUTE_COUNT = 20
 const MAX_MESSAGE_LENGTH = 1024
+const MAX_ROUTE_LENGTH = 256
+
+// Routes are structured classification attributes, not free text. Keep the
+// route exception narrow and validate it here at the logger chokepoint so
+// callers cannot accidentally reintroduce query strings or filesystem/URL
+// content by bypassing request-lifecycle.ts.
+const SAFE_ROUTE_PATTERN = /^\/[A-Za-z0-9._/-]*$/
+
+export function sanitizeRoute(value: string): string {
+  const withoutQuery = (value.split('?')[0] || '/').slice(0, MAX_ROUTE_LENGTH)
+  return SAFE_ROUTE_PATTERN.test(withoutQuery) ? withoutQuery : '/'
+}
 
 // Strips C0/C1 control characters (except none — logs are single JSON lines,
 // so even \n/\t are stripped) to keep stderr/console/Loki JSON lines safe
@@ -138,6 +150,7 @@ function sanitizeString(value: string, maxLength: number, attributeKey?: string)
 
 function sanitizeValue(value: unknown, attributeKey?: string): string | number | boolean | undefined {
   if (value === null || value === undefined) return undefined
+  if (attributeKey === 'route' && typeof value === 'string') return sanitizeRoute(value)
   if (typeof value === 'string') return sanitizeString(value, MAX_ATTRIBUTE_VALUE_LENGTH, attributeKey)
   if (typeof value === 'number' || typeof value === 'boolean') return value
   // Any other shape (object/array/function/symbol) is not part of the
