@@ -124,6 +124,10 @@ Durable final rules:
   - While exercising Phase 11 acceptance, several pre-existing (pre-Plan-035) bugs unrelated to this plan's scope were found and fixed because they blocked verification: broken relative imports in `server/infrastructure/mcp/client.ts`, `server/infrastructure/ai/langgraph/langgraph-tools.ts`, and `server/infrastructure/mcp/test-server.ts` (wrong `ssrf-guard`/`schema`/`createMcpClient` import paths — `pnpm typecheck`'s `vue-tsc -p .nuxt/tsconfig.json` does not cover `server/**`, so these only surfaced via `pnpm build`/runtime); missing `useDb` imports in 5 server files that left API-key auth non-functional in the production build; a missing `Bearer ` prefix strip in API-key verification; two telemetry-endpoint status-code bugs (429/400 misclassified as 500); and a `target/` entry missing from `.dockerignore` that made every `docker compose build` transfer 25GB+ of Rust build artifacts as context.
 - The next independent numeric plan is **036**.
 
+## Current Plan 035 status
+
+The round-3 CLOSED wording above is historical and superseded. The current Plan 035 file is OPEN during remediation round 4 and must remain open until its acceptance conditions are independently verified.
+
 ## Maintenance rule
 
 Keep this file concise and current. Prefer durable invariants over audit chronology. Remove stale guidance when decisions change; Git history preserves forensic detail.
