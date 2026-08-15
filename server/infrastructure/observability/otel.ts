@@ -45,7 +45,7 @@ export class LokiLogExporter implements LogRecordExporter {
     try {
       this.exportBatch(logsBatch, resultCallback)
     } catch (err) {
-      resultCallback({ code: ExportResultCode.FAILED, error: err instanceof Error ? err : new Error(String(err)) })
+      resultCallback({ code: ExportResultCode.FAILED, error: err instanceof Error ? err : new Error('OTel export failed') })
     }
   }
 

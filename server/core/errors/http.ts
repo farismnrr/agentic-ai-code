@@ -1,6 +1,6 @@
 import type * as v from 'valibot'
 import { classifyRawCause } from './classify'
-import { SafeDiagnosticError, isSafeDiagnostic } from './safe-diagnostic'
+import { isSafeDiagnostic } from './safe-diagnostic'
 
 // Private diagnostic payload for a thrown problem — carried on the error's
 // `data` (server-side only) so the Nitro error handler (server/core/errors/
@@ -101,21 +101,12 @@ export const notFound = (detail?: string) => problem({ status: 404, title: 'Not 
 export const conflict = (detail?: string) => problem({ status: 409, title: 'Conflict', detail })
 export const gone = (detail?: string) => problem({ status: 410, title: 'Gone', detail })
 
-// `context` is a private, developer-authored label (e.g. a provider name) —
-// it is appended to the logged cause only, never to the client body. Use it
-// to disambiguate which upstream failed without leaking that identity (or
-// the upstream's own error text) to the client.
-// `context` is developer-authored (e.g. a provider name) and `causeText(cause)`
-// is now itself a bounded classification (never raw free text — see
-// `causeText` above), so the composed message is safe to log verbatim.
-// Wrap it in `SafeDiagnosticError` so it survives the logger's own safe-vs-
-// raw check unchanged instead of being re-reduced to 'unclassified'.
-export const badGateway = (cause?: unknown, context?: SafeDiagnosticError) =>
-  problem({
-    status: 502,
-    title: 'Bad Gateway',
-    cause: context ? new SafeDiagnosticError(`${context.message}: ${causeText(cause) ?? 'unknown error'}`) : cause
-  })
+// Keep the cause on the private diagnostic channel without composing a new
+// SafeDiagnosticError from runtime data. Safe diagnostics are reserved for
+// static, developer-authored messages; dynamic wrapping would bypass that
+// boundary even when the current classification happens to be bounded.
+export const badGateway = (cause?: unknown) =>
+  problem({ status: 502, title: 'Bad Gateway', cause })
 
 export function unprocessable(issues: v.BaseIssue<unknown>[]) {
   const errors = issues.map(issue => ({
