@@ -30,6 +30,6 @@ export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('error', (error, context) => {
     const statusCode = (error as { statusCode?: unknown })?.statusCode
     const status = typeof statusCode === 'number' ? statusCode : 500
-    recordRequestLifecycle(context?.event, status)
+    recordRequestLifecycle(context?.event, status, error)
   })
 })
