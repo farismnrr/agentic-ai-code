@@ -27,6 +27,7 @@ Read `CONSTITUTION.md` first when policy matters. In short: platform/user constr
 
 ## Primary local skills
 
+- `workspace-scope` — resolve and lock the correct repository before mutation.
 - `implementation-planning` — structured plan-only-by-default technical planning.
 - `github-delivery` — safe task-owned commit/push completion.
 - `skill-acquisition` — reviewed skill discovery, installation, update, and conflict control.
@@ -38,3 +39,11 @@ Read `CONSTITUTION.md` first when policy matters. In short: platform/user constr
 - Externally installed skill directories are local dependencies and are ignored by Git; canonical sources are recorded in `registry.yaml`.
 
 This directory intentionally does not duplicate ChatGPT native Memory.
+
+## Project identity and workspace isolation
+
+`BOOTSTRAP.md` contains the global ChatGPT Custom Instructions needed to enforce workspace isolation before any project-local skill is selected.
+
+`project.yaml` identifies this repository using stable Git/project evidence. Before repository mutation, use `skills/workspace-scope/SKILL.md` to resolve and verify the requested project and establish an ephemeral task-local workspace lock.
+
+The lock is deliberately not persisted as a global current-project value. A new conversation or project switch must resolve the target again. Prior chat memory may help locate a repository but never authorizes writes.

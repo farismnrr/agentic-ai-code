@@ -3,6 +3,27 @@ version: 3
 actions:
   read_workspace:
     approval: auto
+  resolve_workspace_scope:
+    approval: auto
+    constraints:
+      - fresh_per_task
+      - current_request_precedence
+      - memory_is_hint_not_authority
+      - read_only_discovery_until_verified
+      - verify_git_root_and_project_identity
+  write_workspace:
+    approval: auto
+    constraints:
+      - workspace_lock_verified
+      - canonical_path_within_locked_root
+      - no_cross_project_write
+      - no_silent_project_switch
+  cross_project_mutation:
+    approval: ask
+    constraints:
+      - explicit_multi_repository_scope
+      - separate_workspace_lock_per_repository
+      - separate_git_operations_per_repository
   write_ai_self:
     approval: auto
   create_local_tool:
@@ -11,6 +32,7 @@ actions:
     approval: auto
     constraints:
       - project_scope_default
+      - workspace_scope_verified
       - preview_and_review_before_install
       - no_force_overwrite
       - no_secret_or_privilege_escalation
@@ -33,6 +55,10 @@ actions:
     approval: auto
   git_commit_task_owned_changes:
     approval: auto
+    constraints:
+      - workspace_identity_revalidated
+      - task_owned_changes_only
+      - all_paths_within_locked_root
   create_pull_request:
     approval: ask
     constraints:

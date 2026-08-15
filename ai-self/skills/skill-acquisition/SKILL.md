@@ -6,6 +6,8 @@ license: MIT
 
 # Skill Acquisition
 
+Before installing or updating any project-scoped skill, apply `workspace-scope` and verify the target repository. Never install into the last-used project merely because it is reachable.
+
 Use this when a task exposes a capability gap, the user asks for skills, or a repeated workflow would benefit from an existing reusable skill.
 
 ## Authority

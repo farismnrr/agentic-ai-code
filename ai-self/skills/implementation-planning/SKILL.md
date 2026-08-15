@@ -173,6 +173,8 @@ Each child plan must contain its parent roadmap, plan ID, dependencies, its own 
 
 ## Plan persistence
 
+Before persisting a plan file, apply `workspace-scope` and verify the target repository. Conversational planning may inspect multiple candidates read-only, but plan files must never be written to a guessed or previously used project.
+
 - If the repository already has a plan directory/convention, follow it.
 - If the user explicitly asks for a plan file, persist it using that convention.
 - If no convention exists and persistence is requested, prefer `docs/plans/YYYY-MM-DD-<topic>.md`.

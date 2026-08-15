@@ -6,6 +6,8 @@ license: MIT
 
 # GitHub Delivery
 
+Before any staging, branch mutation, commit, or push, apply `workspace-scope` and verify the current repository is the task's locked project. Revalidate the lock immediately before Git writes.
+
 Use this as the default completion workflow for substantial repository changes.
 
 ## Goal

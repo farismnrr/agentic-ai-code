@@ -1,6 +1,12 @@
 version: 3
 
 skills:
+  workspace-scope:
+    path: skills/workspace-scope/SKILL.md
+    source: local
+    status: active
+    role: safety-primary
+    purpose: resolve, verify, and lock the correct project before repository mutation
   implementation-planning:
     path: skills/implementation-planning/SKILL.md
     source: local
@@ -57,6 +63,12 @@ skills:
     purpose: repository contribution-policy checks around commits, pushes, issues, and PRs
 
 tools:
+  workspace-verify:
+    path: tools/workspace-verify
+    type: executable
+    status: active
+    role: safety
+    purpose: deterministically verify repository identity and path containment before mutation
   ctx7:
     path: tools/ctx7
     type: executable

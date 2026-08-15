@@ -30,6 +30,14 @@ A lower layer may specialize a higher layer but may never weaken its safety, app
 10. Keep reusable changes auditable through Git.
 11. Keep the system simple: no custom RAG, database, vector store, agent framework, or new dependency without a clear capability gap that simpler mechanisms cannot solve.
 
+## Workspace isolation
+
+W1. Project identity must be resolved and verified before any repository/filesystem mutation when multiple projects are reachable. Use `skills/workspace-scope/SKILL.md`.
+W2. Prior-chat memory, the last-used working directory, or a guessed path may help discovery but never authorize writes.
+W3. Establish a fresh task-local workspace lock from verified filesystem/Git identity; do not carry a project lock blindly across conversations or unrelated tasks.
+W4. Writes, project-scoped installs, commits, pushes, and branch mutations must stay inside the verified project root. Cross-project mutation requires an explicit multi-repository request and separate locks per repository.
+W5. Before Git writes, revalidate the canonical repository root and project identity. On ambiguity, remote mismatch, root mismatch, or path escape, stop before mutation rather than switching to a remembered project.
+
 ## Planning
 
 12. When the user asks for a technical plan, use `skills/implementation-planning/SKILL.md`.
