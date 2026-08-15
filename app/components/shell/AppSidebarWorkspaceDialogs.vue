@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { clientErrorMessage } from '../../utils/client-errors'
+
 const creating = defineModel<boolean>('creating', { required: true })
 const confirmingWorkspace = defineModel<{ id: string, name: string, path: string } | null>('confirmingWorkspace', { required: true })
 const renamingWorkspace = defineModel<{ id: string, name: string } | null>('renamingWorkspace', { required: true })
@@ -15,7 +17,7 @@ async function handleCreate(result: { name: string, path: string }) {
     setActive(workspace.id)
     creating.value = false
   } catch (err) {
-    toast.add({ title: 'Failed to create workspace', description: (err as Error).message, color: 'error' })
+    toast.add({ title: 'Failed to create workspace', description: clientErrorMessage(err, 'Could not create the workspace. Please try again.'), color: 'error' })
   } finally {
     creatingPending.value = false
   }
@@ -29,7 +31,7 @@ async function handleConfirm(result: { name: string, path: string }) {
     await updateWorkspace(confirmingWorkspace.value.id, { name: result.name, path: result.path })
     confirmingWorkspace.value = null
   } catch (err) {
-    toast.add({ title: 'Failed to confirm workspace', description: (err as Error).message, color: 'error' })
+    toast.add({ title: 'Failed to confirm workspace', description: clientErrorMessage(err, 'Could not confirm the workspace. Please try again.'), color: 'error' })
   } finally {
     confirmingPending.value = false
   }

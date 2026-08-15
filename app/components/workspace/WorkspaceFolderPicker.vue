@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { clientErrorMessage } from '../../utils/client-errors'
 
 const props = defineProps<{
   modelValue: boolean
@@ -30,7 +31,7 @@ async function loadPath(path: string) {
   loading.value = true
   try {
     const { data, error } = await useFetch('/api/fs/browse', { query: { path } })
-    if (error.value) throw new Error(error.value.message || 'Failed to load directory')
+    if (error.value) throw error.value
     if (data.value) {
       directories.value = data.value.entries || []
       currentPath.value = data.value.path || ''
@@ -39,7 +40,7 @@ async function loadPath(path: string) {
       rootName.value = rootParts.length ? (rootParts[rootParts.length - 1] || '~') : '~'
     }
   } catch (err) {
-    toast.add({ title: 'Error', description: (err as Error).message, color: 'error' })
+    toast.add({ title: 'Error', description: clientErrorMessage(err, 'Could not load this folder. Please try again.'), color: 'error' })
   } finally {
     loading.value = false
   }

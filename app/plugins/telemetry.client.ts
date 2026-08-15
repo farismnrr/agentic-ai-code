@@ -7,9 +7,6 @@ export default defineNuxtPlugin((nuxtApp) => {
   // Vue error handler
   nuxtApp.vueApp.config.errorHandler = (err, _instance, info) => {
     telemetry.logError('page.error', err, { component: 'vue', operation: String(info).slice(0, 256) })
-    if (import.meta.dev) {
-      console.error('[Vue Error]', err, info)
-    }
   }
 
   // Window error handler
