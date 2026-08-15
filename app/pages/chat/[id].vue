@@ -1,15 +1,49 @@
 <script setup lang="ts">
-import { getTextFromMessage } from '@nuxt/ui/utils/ai'
-import { models } from '~/utils/fixtures/models'
+import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
 
 const route = useRoute()
 const toast = useToast()
 
-const { get, update, titleFrom } = useConversations()
+const { get, loadOne, update, titleFrom } = useConversations()
 const { take: takePendingPrompt } = usePendingPrompt()
 
 const conversationId = computed(() => String(route.params.id))
 const conversation = computed(() => get(conversationId.value))
+
+const { models, load: loadModels } = useModels()
+
+const loadError = ref<Error | null>(null)
+
+async function fetchInitialData() {
+  loadError.value = null
+  try {
+    if (models.value.length === 0) {
+      await loadModels()
+    }
+    // The conversations list only carries metadata, not messages (see
+    // server/api/conversations/index.get.ts) — this page needs the full
+    // conversation, and it must resolve before useConversationChat() reads
+    // conversation.value.messages as the chat's initial seed. useChat() re-seeds
+    // and rebuilds its chat instance any time that reactive value changes, so
+    // loading it after mount would reset state instead of restoring it.
+    //
+    // The layout (app/layouts/default.vue) already resolves this conversation
+    // and syncs the active workspace before its own sidebar renders — this call
+    // is idempotent with that one, kept here because this page can't assume the
+    // layout always ran it (and needs the awaited result regardless).
+    await loadOne(conversationId.value)
+  } catch (err) {
+    loadError.value = err as Error
+  }
+}
+
+await fetchInitialData()
+
+const { get: getWorkspace } = useWorkspaces()
+const workspaceName = computed(() => {
+  if (!conversation.value?.workspaceId) return null
+  return getWorkspace(conversation.value.workspaceId)?.name
+})
 
 useSeoMeta({ title: () => conversation.value?.title ?? 'Chat' })
 
@@ -25,37 +59,57 @@ const {
   addToolApprovalResponse
 } = useConversationChat(conversation)
 
-const input = ref('')
-
-const enabledToolIds = computed({
-  get: () => conversation.value?.enabledToolIds ?? [],
-  set: (value: string[]) => {
-    if (conversation.value) update(conversation.value.id, { enabledToolIds: value })
-  }
+// UChatMessages' own #indicator only shows while status === 'submitted', or
+// while streaming with zero parts on the last message — the instant the
+// first tool call starts (e.g. terminal exploring a workspace), that parts
+// array is non-empty and the indicator disappears even though several more
+// tool calls and the final answer are usually still to come. Each tool
+// card does shimmer individually, but across a longer multi-step chain that
+// reads as "stuck" rather than "still working" at a glance.
+const isWorkingWithoutAnswerYet = computed(() => {
+  if (status.value !== 'streaming') return false
+  const last = messages.value[messages.value.length - 1]
+  if (!last || last.role !== 'assistant') return false
+  return !last.parts?.some(part => part.type === 'text' && part.text)
 })
 
-function rememberApproval({ toolId, decision }: { toolId: string, decision: 'always' | 'never' }) {
-  if (!conversation.value) return
-  update(conversation.value.id, {
-    approvals: { ...conversation.value.approvals, [toolId]: decision }
-  })
+const input = ref('')
+
+const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
+
+const { modelId, mode, reasoningEffort, enabledToolIds } = useConversationConfiguration(conversation, models)
+
+async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }) {
+  if (remember && toolId && conversation.value) {
+    await update(conversation.value.id, {
+      approvals: { ...conversation.value.approvals, [toolId]: remember }
+    })
+  }
+  addToolApprovalResponse({ id, approved })
+}
+
+function updateApprovals(approvals: Record<string, 'always' | 'never'>) {
+  if (conversation.value) {
+    update(conversation.value.id, { approvals })
+  }
 }
 
 const modelItems = computed(() =>
-  models.map(model => ({ label: model.label, value: model.id, icon: model.icon }))
+  models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
 
-const modelId = computed({
-  get: () => conversation.value?.modelId ?? models[0]!.id,
-  set: (value: string) => {
-    if (conversation.value) update(conversation.value.id, { modelId: value })
-  }
+const modeItems = chatModeItems
+
+const effortItems = reasoningEffortItems
+
+const supportsReasoning = computed(() => {
+  return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
 })
 
 function submit() {
   const text = input.value.trim()
   if (!text) return
-  input.value = ''
+  clearEditor()
   send(text)
 }
 
@@ -66,11 +120,6 @@ function send(text: string) {
   if (conversation.value && conversation.value.title === 'New chat') {
     update(conversation.value.id, { title: titleFrom(text) })
   }
-}
-
-async function copy(text: string) {
-  await navigator.clipboard.writeText(text)
-  toast.add({ title: 'Copied', icon: 'i-lucide-check', color: 'success' })
 }
 
 /**
@@ -86,13 +135,6 @@ function editAndResend(messageId: string, text: string) {
 }
 
 const editing = ref<{ id: string, text: string } | null>(null)
-
-function confirmEdit() {
-  const pending = editing.value
-  if (!pending?.text.trim()) return
-  editing.value = null
-  editAndResend(pending.id, pending.text.trim())
-}
 
 /** Feedback has nowhere to go without a backend, so it only acknowledges. */
 const feedback = ref<Record<string, 'up' | 'down'>>({})
@@ -123,16 +165,41 @@ defineShortcuts({
 <template>
   <UDashboardPanel :id="`chat-${conversationId}`">
     <template #header>
-      <UDashboardNavbar :title="conversation?.title ?? 'Chat'">
+      <UDashboardNavbar>
         <template #left>
           <UDashboardSidebarCollapse />
+          <div class="flex items-center gap-2">
+            <h1 class="font-semibold text-default truncate">
+              {{ conversation?.title ?? 'Chat' }}
+            </h1>
+            <UBadge
+              v-if="workspaceName"
+              variant="subtle"
+              size="xs"
+              color="neutral"
+              class="hidden sm:inline-flex rounded-full"
+            >
+              {{ workspaceName }}
+            </UBadge>
+          </div>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div
-        v-if="!conversation"
+        v-if="loadError"
+        class="flex flex-1 items-center justify-center p-6"
+      >
+        <DataLoadError
+          title="Couldn't load conversation"
+          description="Failed to load conversation details or models."
+          @retry="fetchInitialData()"
+        />
+      </div>
+
+      <div
+        v-else-if="!conversation"
         class="flex flex-1 items-center justify-center"
       >
         <UAlert
@@ -159,108 +226,57 @@ defineShortcuts({
           v-else
           :messages="messages"
           :status="status"
-          :assistant="{ actions: [] }"
+          :assistant="{ actions: [], ui: { root: 'animate-message-in' } }"
+          :user="{ ui: { root: 'animate-message-in' } }"
           class="max-w-3xl mx-auto w-full"
         >
           <template #content="{ message }">
-            <ChatMessageParts :message="message" />
+            <div class="flex flex-col gap-y-4 w-full">
+              <ChatMessageParts :message="message" />
+            </div>
           </template>
 
           <template #indicator>
-            <UChatShimmer text="Thinking…" />
+            <UChatShimmer
+              text="Thinking…"
+              class="animate-pulse"
+            />
           </template>
 
           <template #actions="{ message }">
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Copy message"
-              @click="copy(getTextFromMessage(message))"
+            <ChatMessageActions
+              :message="message"
+              :feedback="feedback[message.id]"
+              @edit="editing = $event"
+              @regenerate="regenerate()"
+              @rate="rate(message.id, $event)"
             />
-
-            <UButton
-              v-if="message.role === 'user'"
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Edit and resend"
-              @click="editing = { id: message.id, text: getTextFromMessage(message) }"
-            />
-
-            <template v-if="message.role === 'assistant'">
-              <UButton
-                icon="i-lucide-refresh-cw"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                aria-label="Regenerate"
-                @click="regenerate()"
-              />
-              <UButton
-                icon="i-lucide-thumbs-up"
-                :color="feedback[message.id] === 'up' ? 'primary' : 'neutral'"
-                variant="ghost"
-                size="xs"
-                aria-label="Good response"
-                @click="rate(message.id, 'up')"
-              />
-              <UButton
-                icon="i-lucide-thumbs-down"
-                :color="feedback[message.id] === 'down' ? 'error' : 'neutral'"
-                variant="ghost"
-                size="xs"
-                aria-label="Bad response"
-                @click="rate(message.id, 'down')"
-              />
-            </template>
           </template>
         </UChatMessages>
+
+        <div
+          v-if="isWorkingWithoutAnswerYet"
+          class="max-w-3xl mx-auto w-full px-4 pb-2"
+        >
+          <UChatShimmer
+            text="Still working…"
+            class="animate-pulse"
+          />
+        </div>
 
         <!-- Lives inside a named slot deliberately: a bare child alongside
              #header/#body/#footer is treated as default-slot content and
              makes Vue drop the named slots. It's a teleported modal, so its
              position in the tree has no visual effect. -->
-        <UModal
-          :open="editing !== null"
-          title="Edit message"
-          description="Everything after this message will be replaced."
-          @update:open="editing = null"
-        >
-          <template #body>
-            <UTextarea
-              v-if="editing"
-              v-model="editing.text"
-              :rows="4"
-              autoresize
-              autofocus
-              class="w-full"
-            />
-          </template>
-
-          <template #footer>
-            <div class="flex w-full justify-end gap-2">
-              <UButton
-                label="Cancel"
-                color="neutral"
-                variant="ghost"
-                @click="editing = null"
-              />
-              <UButton
-                label="Send"
-                @click="confirmEdit"
-              />
-            </div>
-          </template>
-        </UModal>
+        <ChatEditMessageModal
+          v-model="editing"
+          @send="editAndResend($event.id, $event.text)"
+        />
 
         <ChatToolApproval
           :messages="messages"
           :conversation="conversation"
-          @respond="addToolApprovalResponse"
-          @remember="rememberApproval"
+          @answer="handleApprovalAnswer"
         />
       </UContainer>
     </template>
@@ -272,13 +288,30 @@ defineShortcuts({
       <UContainer class="pb-4 sm:pb-6">
         <UChatPrompt
           v-model="input"
-          :submit-on-enter="settings.sendOnEnter"
           :error="error"
-          autofocus
-          placeholder="Message AI Code…"
-          :ui="{ footer: 'flex-wrap sm:flex-nowrap' }"
+          :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
           @submit="submit"
         >
+          <template #body="{ submit: promptSubmit, disabled }">
+            <UEditor
+              ref="editorRef"
+              v-slot="{ editor }"
+              autofocus
+              placeholder="Message AI Code…"
+              :editable="!disabled"
+              :mention="mode === 'chat'"
+              class="w-full bg-transparent min-h-[44px]"
+              :editor-props="{ handleKeyDown: (_view, event) => handleKeydown(event, promptSubmit) }"
+              @update:model-value="syncText()"
+            >
+              <UEditorMentionMenu
+                v-if="mode === 'chat'"
+                :editor="editor"
+                :items="mentionItems"
+              />
+            </UEditor>
+          </template>
+
           <UChatPromptSubmit
             :status="status"
             @stop="stop()"
@@ -286,14 +319,23 @@ defineShortcuts({
           />
 
           <template #footer>
-            <USelect
-              v-model="modelId"
-              :items="modelItems"
-              :icon="models.find(m => m.id === modelId)?.icon"
-              variant="ghost"
-              size="sm"
+            <ChatConfigControls
+              v-model:model-id="modelId"
+              v-model:mode="mode"
+              v-model:reasoning-effort="reasoningEffort"
+              v-model:enabled-tool-ids="enabledToolIds"
+              :model-items="modelItems"
+              :mode-items="modeItems"
+              :effort-items="effortItems"
+              :supports-reasoning="supportsReasoning"
+              :show-tools="mode === 'agent'"
+              :approvals="conversation?.approvals"
+              @update-approvals="updateApprovals"
             />
-            <ChatToolPicker v-model="enabledToolIds" />
+            <ChatContextUsage
+              :conversation="conversation"
+              :model-id="modelId"
+            />
           </template>
         </UChatPrompt>
       </UContainer>

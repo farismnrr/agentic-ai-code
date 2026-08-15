@@ -1,46 +1,71 @@
 # Self-improvement — keep `.agents/` current
 
-`.agents/` is the project's memory. Anything you learn that stays in the conversation is lost at the end of the session; anything you write here survives. **Updating `.agents/` is part of finishing a task, not an optional extra.**
+`.agents/` is the project's durable agent context. **Reviewing it before finish is part of every task, regardless of coding agent/client.**
 
-## When to write
+## Before declaring a task finished
 
-Write something down when any of these happen:
+1. Review the task's diff/findings for anything another agent would need later.
+2. If a durable decision, trap, or constraint changed, update the **single canonical** [`../memories/README.md`](../memories/README.md) in place.
+3. If the task belongs to a numbered plan, update that plan file's status/checklist honestly.
+4. If new multi-step work needs a durable handoff and no plan exists, create the next unused numbered plan file. After the historical compaction, numbering starts at **031** and continues upward without reuse.
+5. Remove or amend guidance that became false because of the task.
+6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing memory text just to satisfy process.
+7. Run `pnpm verify:commit` and do not finish with a failing local gate.
 
-| Trigger | Goes to |
-| --- | --- |
-| You made a decision someone could reasonably reverse without knowing why | `memories/<topic>.md` |
-| You hit a trap, dead end, or a "fix" that looks right but is wrong | `memories/<topic>.md` |
-| The user corrected you, or stated a preference for how work should be done | `memories/<topic>.md` |
-| A new command, convention, or rule for building this project | the matching file in `knowledge/` |
-| A new dependency, module, or tool changed how the project is set up | `knowledge/project.md` + `knowledge/tooling.md` |
-| Multi-step work that won't finish this session | `plans/<effort>.md` |
+A task is not documentation-complete when implementation and `.agents/` tell different stories.
 
-## What NOT to write
+## Memory rule
 
-- Anything already derivable from the code, config, or `package.json`. If reading the repo answers it, don't duplicate it — duplicates drift and then mislead.
-- Narration of what you did. Record the **why** and the **constraint**, not the changelog.
-- One-off details that only mattered inside a single conversation.
+There is exactly one durable memory file: [`../memories/README.md`](../memories/README.md).
 
-## How to write
+Update it when:
 
-- One file per fact, kebab-case, first line a one-sentence summary.
-- State the reasoning, and name the wrong-looking-right alternative if there is one — that's the part that actually prevents a repeat.
-- Add the file to the index in `memories/README.md`.
-- **Prefer updating an existing file over adding a near-duplicate.** Check the index first.
-- **Delete memories that stop being true.** A stale memory is worse than no memory.
+- a decision could reasonably be reversed without knowing why;
+- a trap/dead end/incident is likely to recur;
+- the user establishes a durable repo-specific working constraint;
+- an architecture/security invariant needs reasoning context that is not obvious from code.
 
-## The reminder hook
+Do **not** create new `memories/<topic>.md` files. Prefer concise sections/bullets in the canonical file, amend existing text when a decision changes, and delete stale material.
 
-`.external-mcp/settings.json` registers a `Stop` hook running [`../hooks/check-agents-sync.sh`](../hooks/check-agents-sync.sh). If watched source paths (`app/`, `server/`, `nuxt.config.ts`, `package.json`, …) changed but nothing under `.agents/` did, it interrupts once with a prompt to persist what you learned.
+## Plan rule
 
-It fires **at most once per session** — it cannot loop, and it will not nag.
+[`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) is a one-time archive of every plan that existed through 029b. It must **not** become a rolling bucket for future work.
 
-To acknowledge that nothing is worth saving:
+For new work:
 
-```sh
-touch .agents/.last-sync
-```
+- next plan is `031-...md`, then `032-...md`, etc.;
+- one multi-step effort per file;
+- never reuse a number;
+- keep status inside the plan file;
+- completed post-030 plans remain separate files;
+- do not add a `plans/README.md` index;
+- do not compact Plan 031+ into Plan 030 unless the user explicitly requests another compaction.
 
-Editing any file under `.agents/` clears it naturally. Session state lives in `.agents/.sync-state/` (gitignored) — safe to delete anytime.
+The pre-030 plans were explicitly closed for a planning refresh. Historical unchecked items are not active tasks; re-audit current source/external facts and create a fresh plan if work needs to resume.
 
-The hook is a backstop for forgetting, not the reason to do this. Write things down as you learn them.
+## What not to write
+
+- A second copy of facts already obvious from code/config when a link to the source is enough.
+- A chronological session transcript.
+- Temporary debugging state, credentials, tokens, private URLs, or copied sensitive output.
+- Speculation presented as durable fact.
+- A completed status that has not met the **current** plan's own acceptance definition.
+
+Durable docs may summarize implementation facts when needed to orient future agents, but point to authoritative code/config rather than pretending Markdown is runtime source of truth.
+
+## General enforcement
+
+The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
+
+The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
+
+- [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
+- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + `pnpm lint` + `pnpm typecheck`;
+- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
+- [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
+
+A failed gate means fix the issue before committing. `git commit --no-verify` and disabling the tracked hook are not acceptable shortcuts.
+
+## Principle
+
+The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → pass the local commit gate without bypassing it**.

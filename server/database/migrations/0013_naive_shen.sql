@@ -1,0 +1,3 @@
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "last_measured_tokens" integer;--> statement-breakpoint
+ALTER TABLE "ai_code"."conversations" ADD COLUMN "last_measured_message_id" uuid;--> statement-breakpoint
+ALTER TABLE "ai_code"."conversations" ADD CONSTRAINT "conversations_last_measured_message_id_messages_id_fk" FOREIGN KEY ("last_measured_message_id") REFERENCES "ai_code"."messages"("id") ON DELETE set null ON UPDATE no action;

@@ -1,0 +1,124 @@
+# Relay Agent
+
+`relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/cli/src/commands/relay.rs`](../rust-tools/cli/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/cli/src/main.rs`](../rust-tools/cli/src/main.rs).
+
+This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted no-jail behavior are historical and must not be reintroduced.
+
+## Current contract
+
+- **Protocol:** MCP `2026-07-28` over Streamable HTTP (`POST /mcp`).
+- **Platform:** Linux only for the relay binary; sandboxed execution requires Bubblewrap (`bwrap`).
+- **Privilege:** refuses to start as UID 0/root.
+- **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
+- **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
+- **Tools:** `terminal_exec`, `http_fetch`, `web_search`, plus `terminal_job_start`, `terminal_job_get`, and `terminal_job_cancel` for fallback live-job polling.
+- **Docker:** intentionally unsupported/deferred until an isolated Docker backend/broker exists; never expose the host Docker socket to make it work.
+
+The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
+
+### Long-running terminal contract
+
+- `terminal_exec` declares optional MCP Tasks support. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; tool-level non-zero exits complete the task with `isError: true` rather than becoming JSON-RPC failures.
+- First-party/non-Tasks clients that need live output use `terminal_job_start/get/cancel`; polling returns bounded current stdout/stderr tails without introducing a second process runner.
+- `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
+- Running pipes are drained continuously. Output retention is bounded and reports omitted earlier bytes rather than killing noisy commands solely for exceeding the retained log window.
+- Manual cancel, timeout, and relay shutdown terminate/reap the sandbox process tree through the same authoritative job manager.
+
+## Build
+
+From repository root:
+
+```bash
+pnpm build:tools
+```
+
+Or directly:
+
+```bash
+cargo build --manifest-path packages/rust-tools/cli/Cargo.toml --release --locked --bin ai-tools
+```
+
+The repository pins Rust 1.95.0. Current local verification/release policy is documented in [`../rust-tools/README.md`](../rust-tools/README.md).
+
+## Local mode
+
+Local mode is the default and binds to loopback. Supply the project directory and browser/Nuxt origin explicitly:
+
+```bash
+cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- relay \
+  --mode local \
+  --dir /home/user/project \
+  --execution-root /home/user \
+  --origin http://localhost:3333
+```
+
+Important:
+
+- `--dir` is the default working directory.
+- `--execution-root` is the filesystem containment root. For a single-owner coding relay, set it to `/home/user`; sibling projects can then be selected with `cwd` without restarting or reconnecting.
+- The execution root must resolve to an allowed user-owned path; unsafe/shallow system roots are rejected.
+- Bubblewrap must be installed before startup.
+- The process must run as an unprivileged user.
+- Wildcard origins are rejected.
+- User-managed toolchains are opt-in through repeated `--toolchain-path` flags (or `RELAY_TOOLCHAIN_PATH`); the relay never inherits an arbitrary parent `PATH`.
+- The owner-home Bubblewrap namespace masks common credential stores (`.ssh`, cloud credentials, Docker/Kubernetes credentials, and common token files). Review the exact deployment policy before relying on a command that needs one of them.
+
+Default port: `47821`.
+
+Stop a port-scoped relay instance with:
+
+```bash
+ai-tools relay stop --port 47821
+```
+
+## Remote mode
+
+Remote mode is an OAuth Resource Server and must fail closed. At minimum it requires the configured issuer, audience/resource, and owner subject; the issuer must be a canonical HTTPS URI.
+
+Representative invocation:
+
+```bash
+ai-tools relay \
+  --mode remote \
+  --dir /home/relay/workspace \
+  --execution-root /home/relay/workspace \
+  --origin https://app.example.com \
+  --oauth-issuer https://issuer.example.com/ \
+  --oauth-audience https://relay.example.com/mcp \
+  --oauth-owner-subject '<stable-subject>'
+```
+
+Do not weaken remote mode by falling back to local/no-auth behavior, trusting forwarded headers from arbitrary peers, accepting insecure production issuer URLs, moving permissions into tool arguments, or exposing the host Docker socket/privileged container controls.
+
+Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure the allowed peer/CIDR required by current relay config rather than treating all forwarded headers as trusted.
+
+## Verification
+
+This repository intentionally has **no CI workflow and no unit-test suite**. The mandatory local commit gate is the baseline:
+
+```bash
+pnpm verify:commit
+```
+
+For security-sensitive relay/MCP changes, also run applicable local checks, typically including:
+
+```bash
+cargo audit
+bash scripts/phase4-black-box.sh
+bash scripts/phase7-external-mcp-contract.sh
+bash scripts/phase8-zero-bypass.sh
+```
+
+The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
+
+Live external external MCP client/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
+
+## Durable design context
+
+Before changing the relay security model, read:
+
+- the canonical [relay/MCP memory](../../.agents/memories/README.md#relay-agent-and-mcp-security-invariants) for current durable invariants;
+- [Plan 030 historical summary](../../.agents/plans/030-previous-plans-summary.md) for compacted Plan 026/027/028/029/029b history;
+- current Rust source/config and deterministic contract/security scripts.
+
+All plans through 029b were explicitly closed for a planning refresh. If new relay/external MCP client work is needed, re-audit current behavior and create a new incrementing plan starting at 031 rather than reopening an old file.

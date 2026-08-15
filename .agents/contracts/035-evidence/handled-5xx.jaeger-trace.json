@@ -1,0 +1,68 @@
+{
+  "traceID": "a053b908fa9dfeb0617b747710add716",
+  "spans": [
+    {
+      "operationName": "provider.discover_models",
+      "spanID": "42bb4c663fa046db",
+      "tags": [
+        {
+          "key": "otel.scope.name",
+          "type": "string",
+          "value": "ai-code-server"
+        },
+        {
+          "key": "span.kind",
+          "type": "string",
+          "value": "internal"
+        }
+      ]
+    },
+    {
+      "operationName": "provider.reachability_check",
+      "spanID": "cbd10389b2f1c423",
+      "tags": [
+        {
+          "key": "otel.scope.name",
+          "type": "string",
+          "value": "ai-code-server"
+        },
+        {
+          "key": "span.kind",
+          "type": "string",
+          "value": "internal"
+        }
+      ]
+    },
+    {
+      "operationName": "GET",
+      "spanID": "269664db02c57de9",
+      "tags": [
+        {
+          "key": "http.request.method",
+          "type": "string",
+          "value": "GET"
+        },
+        {
+          "key": "http.response.status_code",
+          "type": "int64",
+          "value": 502
+        },
+        {
+          "key": "otel.scope.name",
+          "type": "string",
+          "value": "@opentelemetry/instrumentation-http"
+        },
+        {
+          "key": "span.kind",
+          "type": "string",
+          "value": "server"
+        },
+        {
+          "key": "url.path",
+          "type": "string",
+          "value": "/api/providers/f83dfdec-da1a-4f73-8e5b-2ef06aea715f/models"
+        }
+      ]
+    }
+  ]
+}

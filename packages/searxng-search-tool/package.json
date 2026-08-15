@@ -1,0 +1,12 @@
+{
+  "name": "@ai-code/searxng-search-tool",
+  "version": "0.0.8",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@langchain/core": "^1.2.5",
+    "execa": "^9.6.1",
+    "zod": "^4.4.3"
+  }
+}

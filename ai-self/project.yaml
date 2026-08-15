@@ -1,0 +1,16 @@
+schema: 1
+project_id: masih-awam-ai-code
+display_name: Masih Awam AI Code
+aliases:
+  - Masih Awam
+  - ai-code
+identity:
+  expected_origin: https://github.com/farismnrr/ai-code.git
+  required_markers:
+    - Cargo.toml
+    - package.json
+scope:
+  root_strategy: git_toplevel
+  allow_writes_outside_root: false
+  allow_cross_project_mutation: false
+  require_revalidation_before_git_write: true

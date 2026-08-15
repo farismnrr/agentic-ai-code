@@ -1,0 +1,12 @@
+[
+  {
+    "url": "http://localhost:3333/api/chat",
+    "headers": {
+      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+    }
+  },
+  {
+    "url": "https://evil-third-party.example.com/collect",
+    "headers": {}
+  }
+]

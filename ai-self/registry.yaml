@@ -1,0 +1,100 @@
+version: 3
+
+skills:
+  workspace-scope:
+    path: skills/workspace-scope/SKILL.md
+    source: local
+    status: active
+    role: safety-primary
+    purpose: resolve, verify, and lock the correct project before repository mutation
+  implementation-planning:
+    path: skills/implementation-planning/SKILL.md
+    source: local
+    status: active
+    role: primary
+    purpose: grounded, step-by-step, execution-ready technical planning
+  github-delivery:
+    path: skills/github-delivery/SKILL.md
+    source: local
+    status: active
+    role: primary
+    purpose: safely commit and push completed task-owned changes proactively
+  skill-acquisition:
+    path: skills/skill-acquisition/SKILL.md
+    source: local
+    status: active
+    role: primary
+    purpose: discover, review, install, update, and register missing reusable skills
+  agent-skill-stack:
+    path: ../.agents/skills/agent-skill-stack/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    source_ref: refs/heads/main
+    source_tree_sha: 1eb1086a047b65b10db61c57e1cf00ddd58c690f
+    installed_via: gh-skill
+    status: active
+    role: supporting
+    purpose: multi-skill discovery, conflict analysis, and minimal-stack auditing
+  create-implementation-plan:
+    path: ../.agents/skills/create-implementation-plan/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    source_ref: refs/heads/main
+    source_tree_sha: 87d75d82e4ef600fcf15503ba15cb1642b993bc1
+    installed_via: gh-skill
+    status: active
+    role: reference
+    purpose: deterministic machine-readable implementation-plan structure
+  context7-cli:
+    path: ../.agents/skills/context7-cli/SKILL.md
+    source: https://github.com/upstash/context7
+    status: active
+    role: supporting
+    purpose: current documentation and secondary agent-skill discovery/management
+  git-commit:
+    path: ../.agents/skills/git-commit/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    status: active
+    role: supporting
+    purpose: conventional commit analysis and intelligent staging
+  make-repo-contribution:
+    path: ../.agents/skills/make-repo-contribution/SKILL.md
+    source: https://github.com/github/awesome-copilot
+    status: active
+    role: supporting
+    purpose: repository contribution-policy checks around commits, pushes, issues, and PRs
+
+tools:
+  workspace-verify:
+    path: tools/workspace-verify
+    type: executable
+    status: active
+    role: safety
+    purpose: deterministically verify repository identity and path containment before mutation
+  ctx7:
+    path: tools/ctx7
+    type: executable
+    status: active
+    role: fallback
+    purpose: invoke Context7 CLI through the user's fnm Node runtime
+
+providers:
+  github-cli:
+    priority: 1
+    command: gh skill
+    status: preferred
+    capabilities:
+      - search
+      - preview
+      - install
+      - list
+      - update
+  context7:
+    priority: 2
+    command: ai-self/tools/ctx7
+    status: fallback
+    note: skill-management commands currently emit a deprecation warning
+
+lessons:
+  path: lessons/lessons.md
+
+policies:
+  path: policies/default.yaml

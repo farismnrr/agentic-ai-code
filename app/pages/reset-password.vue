@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Reset password' })
@@ -41,8 +42,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     })
     success.value = true
   } catch (err: unknown) {
-    const fe = err as { data?: { message?: string } }
-    serverError.value = fe.data?.message ?? 'Could not reset password. The link might have expired.'
+    serverError.value = clientErrorMessage(err, 'Could not reset password. The link might have expired.')
   } finally {
     loading.value = false
   }

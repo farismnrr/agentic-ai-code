@@ -1,28 +1,20 @@
-import { eq } from 'drizzle-orm'
-import { users, verificationTokens } from '../../database/schema'
-import { generateToken } from '../../utils/token'
+import { unprocessable, tooManyRequests } from '#server/core/errors/http'
+import { forgotPasswordSchema as forgotSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
-const forgotSchema = v.object({
-  email: v.pipe(v.string(), v.email())
-})
-
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, data => v.parse(forgotSchema, data))
+  const result = v.safeParse(forgotSchema, await readBody(event))
+  if (!result.success) throw unprocessable(result.issues)
+  const body = result.output
 
   // Rate limit
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
-  const { limited, retryAfter } = rateLimit({ key: `forgot:${ip}`, maxAttempts: 5 })
+  const { limited, retryAfter } = event.context.application.network.rateLimit({ key: `forgot:${ip}`, maxAttempts: 5 })
   if (limited) {
-    throw createError({ statusCode: 429, message: `Too many attempts. Try again in ${retryAfter}s.` })
+    throw tooManyRequests(retryAfter)
   }
 
-  const db = useDb()
-  const [user] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  const user = await event.context.application.auth.findUserByEmail(body.email) as { id: string, email: string } | undefined
 
   // We ALWAYS return success to prevent user enumeration
   if (!user) {
@@ -30,21 +22,21 @@ export default defineEventHandler(async (event) => {
   }
 
   // Generate and send password reset email
-  const { token, hash: tokenHash } = generateToken()
+  const { token, hash: tokenHash } = event.context.application.security.generateToken()
   const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
 
-  await db.insert(verificationTokens).values({
+  await event.context.application.auth.addVerificationToken({
     tokenHash,
     userId: user.id,
     type: 'password_reset',
     expiresAt
   })
 
-  const { sendEmail, getTemplate } = useMailer()
+  const { sendEmail, getTemplate } = event.context.application.mail
   const config = useRuntimeConfig()
   const resetUrl = `${config.public.siteUrl}/reset-password?token=${token}`
 
-  await sendEmail({
+  const emailSent = await sendEmail({
     to: user.email,
     subject: 'Reset your password',
     html: getTemplate(
@@ -54,6 +46,10 @@ export default defineEventHandler(async (event) => {
       resetUrl
     )
   })
+
+  if (!emailSent) {
+    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { to: user.email, purpose: 'forgot' })
+  }
 
   return { ok: true }
 })

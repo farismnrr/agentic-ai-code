@@ -67,7 +67,7 @@ const links: NavigationMenuItem[] = [
     <UFooter>
       <template #left>
         <p class="text-sm text-muted">
-          A prototype. No backend, no real accounts.
+          AI Code — connected to your tools.
         </p>
       </template>
 

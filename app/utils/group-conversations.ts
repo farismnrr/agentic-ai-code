@@ -1,4 +1,4 @@
-import type { Conversation } from '~/types/chat'
+import type { Conversation } from '#shared/types/chat'
 
 export interface ConversationGroup {
   label: string

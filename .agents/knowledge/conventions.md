@@ -1,5 +1,6 @@
 # Conventions
 
+- **API responses are shaped server-side, fully — joins, pagination, filtering, all of it.** A screen that needs data from more than one table gets one endpoint that returns it pre-joined, not two endpoints fetched and merged client-side. Chaining/orchestrating multiple composable calls to assemble one screen repeatedly broke Nuxt's SSR composable context in this codebase; see the canonical memory's [Nuxt/application invariants](../memories/README.md#nuxt-application-and-data-loading-invariants). If FE code is about to combine, re-key, or sequence multiple API responses for one screen, strongly prefer moving that shape to the backend endpoint.
 - **Use semantic color classes** — `text-default`, `text-muted`, `bg-elevated`, `border-muted`. Never raw palette colors like `text-gray-500`; they break dark mode and theming.
 - **The signal colour (cyan/primary) is reserved for things that are actually happening.** Streaming text, a running tool call, a connected MCP server, a focused input. Nothing decorative ever uses it.
 - **Brand colors live in `app/app.config.ts`** (`ui.colors.primary` / `ui.colors.neutral`), not hardcoded in components.

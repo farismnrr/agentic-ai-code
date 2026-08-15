@@ -1,29 +1,42 @@
-import { defaultModelId } from '~/utils/fixtures/models'
-
 export interface AppSettings {
   language: string
   streaming: boolean
   sendOnEnter: boolean
-  defaultModelId: string
+  defaultModelId: string | null
   temperature: number
   systemPrompt: string
   displayName: string
   email: string
+  lastActiveWorkspaceId: string | null
 }
 
-/**
- * App-wide preferences. In-memory like everything else this iteration —
- * persistence is the backend's job and is deliberately out of scope.
- */
 export function useSettings() {
-  return useState<AppSettings>('settings', () => ({
+  const settings = useState<AppSettings>('settings', () => ({
     language: 'en',
     streaming: true,
     sendOnEnter: true,
-    defaultModelId,
+    defaultModelId: null,
     temperature: 0.7,
     systemPrompt: '',
     displayName: 'Faris',
-    email: 'farismunir2@gmail.com'
+    email: 'farismunir2@gmail.com',
+    lastActiveWorkspaceId: null
   }))
+
+  async function load() {
+    const fetch = import.meta.server ? useRequestFetch() : $fetch
+    const data = await fetch<AppSettings>('/api/settings')
+    settings.value = data
+  }
+
+  async function update(patch: Partial<AppSettings>) {
+    settings.value = { ...settings.value, ...patch }
+    const data = await $fetch<AppSettings>('/api/settings', {
+      method: 'PUT',
+      body: patch
+    })
+    settings.value = data
+  }
+
+  return Object.assign(settings, { load, update })
 }

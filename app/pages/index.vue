@@ -5,7 +5,7 @@ definePageMeta({ layout: 'landing' })
 
 const title = 'AI Code — chat with models, connected to your tools'
 const description
-  = 'A chat interface with streaming replies, MCP tool calling with explicit approval, and multiple models. Prototype: no backend.'
+  = 'A chat interface with streaming replies, MCP tool calling with explicit approval, and multiple models. Securely authenticated and backed by a real database.'
 
 useSeoMeta({ title, description, ogTitle: title, ogDescription: description })
 
@@ -29,9 +29,9 @@ const features = [
     icon: 'i-lucide-sparkles'
   },
   {
-    title: 'Nothing leaves the page',
+    title: 'Securely persisted',
     description:
-      'This build has no backend. State lives in the browser and resets on reload — it is a prototype, honestly.',
+      'Conversations, tool configurations, and settings are securely stored and synced to your account.',
     icon: 'i-lucide-shield-check'
   }
 ]
@@ -99,7 +99,7 @@ const faq: AccordionItem[] = [
   {
     label: 'Does this actually talk to a model?',
     content:
-      'No. This build has no backend — replies come from fixtures and stream through the real AI SDK plumbing. Swapping in a live endpoint is a one-line change to the transport.'
+      'Yes. It connects to real AI models via the 9Router API with streaming responses.'
   },
   {
     label: 'What is MCP?',
@@ -109,12 +109,12 @@ const faq: AccordionItem[] = [
   {
     label: 'Is my data stored anywhere?',
     content:
-      'Only your session, so a refresh does not sign you out. Conversations, settings and server lists live in memory and reset when you reload the page.'
+      'Yes. Your account, settings, conversations, and MCP configurations are securely persisted in a real database.'
   },
   {
     label: 'Can I use my own MCP servers?',
     content:
-      'You can add them in settings and they show up in the tool picker. In this prototype nothing connects — the list is dummy data.'
+      'Yes. You can add them in settings and they show up in the tool picker. Note: in this phase, the backend securely stores your configuration but does not yet execute tool calls during chat.'
   },
   {
     label: 'Is the pricing real?',
@@ -147,7 +147,7 @@ const faq: AccordionItem[] = [
     </div>
 
     <UPageHero
-      description="Streaming replies, MCP tool calling that asks before it acts, and a model picker that does not lose your thread. This is a prototype — no backend behind it."
+      description="Streaming replies, MCP tool calling that asks before it acts, and a model picker that does not lose your thread. Powered by a real Postgres backend."
       :links="[
         { label: 'Get started', to: '/register', size: 'xl', trailingIcon: 'i-lucide-arrow-right' },
         { label: 'Sign in', to: '/login', size: 'xl', color: 'neutral', variant: 'subtle' }
@@ -236,7 +236,7 @@ const faq: AccordionItem[] = [
     <RevealSection>
       <UPageCTA
         title="Try it"
-        description="Any email and password gets you in. Nothing is stored."
+        description="Sign up for an account to start chatting with models and tools."
         variant="subtle"
         :links="[
           { label: 'Get started', to: '/register', size: 'lg', trailingIcon: 'i-lucide-arrow-right' }

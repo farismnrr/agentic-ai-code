@@ -52,3 +52,9 @@ export const resetPasswordSchema = v.pipe(
 )
 
 export type ResetPasswordInput = v.InferOutput<typeof resetPasswordSchema>
+
+export const verifySchema = v.object({
+  token: v.pipe(v.string(), v.minLength(1, 'Token is required'))
+})
+
+export type VerifyInput = v.InferOutput<typeof verifySchema>
