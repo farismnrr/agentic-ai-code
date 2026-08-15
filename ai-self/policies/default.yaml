@@ -15,6 +15,24 @@ actions:
     approval: auto
   git_commit_task_owned_changes:
     approval: auto
+  create_pull_request:
+    approval: ask
+    constraints:
+      - prepare_title_and_body_automatically
+      - no_duplicate_pr
+      - respect_repository_template
+      - respect_codeowners_and_review_policy
+  merge_pull_request:
+    approval: ask
+    constraints:
+      - required_checks_passed
+      - required_reviews_satisfied
+      - no_policy_bypass
+  push_shared_or_default_branch:
+    approval: ask
+    constraints:
+      - repository_policy_allows_direct_push
+      - no_force
   git_push_current_branch:
     approval: auto
     constraints:

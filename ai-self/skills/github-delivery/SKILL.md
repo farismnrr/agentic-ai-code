@@ -40,6 +40,32 @@ Do not stop at "files changed" when the work is complete. When validation succee
    - otherwise: `git push --set-upstream origin HEAD` when `origin` exists.
 9. Verify the push result and report the commit hash and branch.
 
+## Team repository mode
+
+Treat the repository as team/shared when the user says it is a work/team repository or when repository contribution metadata indicates a collaborative workflow (for example CONTRIBUTING guidance, CODEOWNERS, PR templates, protected/shared branch conventions, or organization-managed rules).
+
+In team/shared repositories:
+
+1. Respect repository guidance and server-side GitHub rules as the source of truth for branch naming, required checks, reviews, CODEOWNERS, and merge policy.
+2. Before creating a task branch from a shared base, fetch the relevant remote state first when network access is available. Do not branch from a knowingly stale local base.
+3. Never overwrite, reset, checkout over, or absorb unrelated teammate/user changes to make branching easier. If the worktree is mixed and a safe branch transition is not possible, keep the current state intact and report the blocker.
+4. Do not commit directly to the default branch or another shared/protected integration branch. If work starts there and changes are not yet committed, create an appropriate task branch when it is safe to do so.
+5. Auto-commit and auto-push are allowed only on the current task branch and only for task-owned changes after validation.
+6. Do not force push or rewrite published history. If remote history diverged, fetch and reconcile safely; stop for user input before any history-rewriting strategy.
+7. After pushing, inspect whether a PR already exists for the branch when tooling allows. Update the existing task branch rather than opening duplicate PRs.
+8. Creating a new PR is an external collaboration action: prepare the title/body automatically, but require user approval before opening it unless the user has explicitly enabled auto-PR for that repository/workflow.
+9. Never self-approve, bypass required reviews/checks, dismiss review feedback, merge the PR, delete shared branches, create a release, or deploy merely because CI passes. Those remain explicit-user or repository-automation actions.
+10. When a PR exists, preserve reviewer context: new commits should be pushed to the same task branch unless repository policy requires a new branch/PR.
+
+### Branch defaults when repository guidance is absent
+
+- New feature: `feat/<short-topic>`
+- Bug fix: `fix/<short-topic>`
+- Documentation: `docs/<short-topic>`
+- Maintenance/tooling: `chore/<short-topic>`
+
+Use repository-specific naming when it exists instead of these defaults.
+
 ## Safety rules
 
 - Never `git add .`, `git add -A`, or equivalent when unrelated changes are present.
