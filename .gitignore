@@ -38,3 +38,4 @@ target/
 
 # Local scratch/debug scripts
 scratch_*
+docker-compose.override.yml

@@ -1,4 +1,7 @@
 use clap::{Parser, Subcommand};
+use relay_infrastructure::telemetry::extract_ai_tools_traceparent;
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod commands;
 
@@ -24,21 +27,42 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let telemetry_guard = relay_infrastructure::telemetry::init_telemetry();
+    tracing::info_span!("ai_tools.startup").in_scope(|| {
+        tracing::info!("ai-tools starting");
+    });
+
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::Curl(args) => {
-            commands::curl::run(args).await;
-            Ok(())
-        }
-        Commands::Relay(args) => commands::relay::run(args).await,
-        Commands::Searxng(args) => {
-            commands::searxng::run(args).await;
-            Ok(())
-        }
-        Commands::Terminal(args) => {
-            commands::terminal::run(args).await;
-            Ok(())
+    let command_name = match &cli.command {
+        Commands::Curl(_) => "curl",
+        Commands::Relay(_) => "relay",
+        Commands::Searxng(_) => "searxng",
+        Commands::Terminal(_) => "terminal",
+    };
+    let command_span = tracing::info_span!("ai_tools.command", command = command_name);
+    let _ = command_span.set_parent(extract_ai_tools_traceparent());
+    let result = async move {
+        match cli.command {
+            Commands::Curl(args) => {
+                commands::curl::run(args).await;
+                Ok(())
+            }
+            Commands::Relay(args) => commands::relay::run(args).await,
+            Commands::Searxng(args) => {
+                commands::searxng::run(args).await;
+                Ok(())
+            }
+            Commands::Terminal(args) => {
+                commands::terminal::run(args).await;
+                Ok(())
+            }
         }
     }
+    .instrument(command_span)
+    .await;
+
+    relay_infrastructure::telemetry::shutdown_telemetry_default(telemetry_guard).await;
+
+    result
 }

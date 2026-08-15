@@ -1,11 +1,12 @@
 import type { LocalTerminalPort } from './contracts'
+import type { RequestTelemetryContext } from '../observability/contracts'
 
-export async function createLocalTerminalPolicy({ userId, approvals, toolId, localTerminal }: { userId: string, approvals?: Record<string, 'always' | 'never'>, toolId: string, localTerminal: LocalTerminalPort }) {
+export async function createLocalTerminalPolicy({ userId, approvals, toolId, localTerminal, telemetry }: { userId: string, approvals?: Record<string, 'always' | 'never'>, toolId: string, localTerminal: LocalTerminalPort, telemetry?: RequestTelemetryContext }) {
   let paired = false
   try {
     paired = await localTerminal.hasPairedDevice(userId)
   } catch (err) {
-    console.error('[chat] failed to check paired relay-agent devices', err)
+    telemetry?.error('chat.local_terminal.pairing', 'pairing_lookup_failed', err)
   }
 
   const approval = async (_input: { command: string, args?: string[] }) => {

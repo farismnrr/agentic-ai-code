@@ -1,4 +1,4 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { and, eq } from 'drizzle-orm'
 import { users, verificationTokens, workspaces } from '../../database/schema'
 

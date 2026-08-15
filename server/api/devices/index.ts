@@ -23,5 +23,5 @@ export default defineEventHandler(async (event) => {
     return event.context.application.account.registerUserDevice({ userId, name, fingerprint })
   }
 
-  throw badRequest(`Unsupported method: ${method}`)
+  throw badRequest('Unsupported method')
 })

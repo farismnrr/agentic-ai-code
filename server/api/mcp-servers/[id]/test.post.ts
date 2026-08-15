@@ -15,9 +15,9 @@ export default defineEventHandler(async (event) => {
     const result = await event.context.application.mcp.testMcpServer(session.user.id, id)
     if (!result) throw notFound('Server not found')
     return result
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error connecting to MCP server'
-
-    throw badRequest(message)
+  } catch {
+    // Never reflect provider/ORM diagnostics (or submitted values) in the
+    // client response. Private telemetry retains only bounded classification.
+    throw badRequest('Unable to connect to MCP server')
   }
 })

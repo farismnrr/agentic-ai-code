@@ -6,26 +6,30 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const relativePath = (query.path as string) || ''
 
-  const resolvedPath = await event.context.application.filesystem.resolveWorkspacePath(relativePath)
+  const telemetry = event.context.application.observability.request
 
-  try {
-    const entries = await fs.readdir(resolvedPath, { withFileTypes: true })
-    const directories = entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => ({
-        name: entry.name,
-        path: relativePath ? `${relativePath}/${entry.name}`.replace(/^\/+/, '') : entry.name
-      }))
+  return telemetry.withSpan('workspace.fs.browse', {}, async () => {
+    const resolvedPath = await event.context.application.filesystem.resolveWorkspacePath(relativePath)
 
-    return {
-      root: useRuntimeConfig().workspacesRoot,
-      path: relativePath,
-      entries: directories
+    try {
+      const entries = await fs.readdir(resolvedPath, { withFileTypes: true })
+      const directories = entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => ({
+          name: entry.name,
+          path: relativePath ? `${relativePath}/${entry.name}`.replace(/^\/+/, '') : entry.name
+        }))
+
+      return {
+        root: useRuntimeConfig().workspacesRoot,
+        path: relativePath,
+        entries: directories
+      }
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        throw createError({ statusCode: 404, statusMessage: 'Directory not found' })
+      }
+      throw error
     }
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      throw createError({ statusCode: 404, statusMessage: 'Directory not found' })
-    }
-    throw error
-  }
+  })
 })

@@ -1,4 +1,4 @@
-import { logger } from "../../observability/logger"
+import { logger } from '../../observability/logger'
 import { createAgent } from 'langchain'
 
 import { buildLanggraphTools } from './langgraph-tools'
@@ -6,7 +6,9 @@ import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
-import type { getLanggraphModel } from '../infrastructure/ai/providers/langgraph-model'
+import type { getLanggraphModel } from '../providers/langgraph-model'
+import type { RequestTelemetryContext } from '../../../application/observability/contracts'
+import { aiToolsTraceEnv } from '../../observability/ai-tools-trace'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
@@ -101,7 +103,8 @@ export function runLanggraphChat({
   systemPrompt,
   abortSignal,
   cleanup,
-  onEnd
+  onEnd,
+  telemetry
 }: {
   uiMessages: UIMessage[]
   baseModel: LanggraphModel
@@ -109,6 +112,7 @@ export function runLanggraphChat({
   abortSignal?: AbortSignal
   cleanup: () => Promise<void>
   onEnd: (parts: UIMessage['parts'], totalTokens?: number) => Promise<void>
+  telemetry?: RequestTelemetryContext
 }) {
   const { forced, cleanedText } = extractForcedSearch(uiMessages)
 
@@ -155,10 +159,17 @@ export function runLanggraphChat({
 
           let searchResultText: string
           try {
-            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl })
+            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl, getChildEnv: aiToolsTraceEnv })
             searchResultText = await searxngSearchTool.invoke({ query: cleanedText })
           } catch (err) {
-            searchResultText = `Error: ${(err as Error).message}`
+            // Plan 035 remediation round 2 — same class of leak as the MCP
+            // tool-result fix: this text becomes user-visible chat content
+            // (not an HTTP error path), so raw err.message (which can carry
+            // internal hostnames/ports/provider detail) must never surface
+            // here. Generic message to the client; raw cause to private
+            // observability only.
+            telemetry?.error('chat.tool.search.dispatch', 'searxng_search_failed', err)
+            searchResultText = 'Search failed'
           }
 
           const invocation = parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === toolCallId)
@@ -301,7 +312,10 @@ export function runLanggraphChat({
           writer.write({ type: 'text-end', id: `text-${textIndex}` })
           parts.push({ type: 'text', text: currentText })
         }
-        const errorText = (e as Error).message
+        const cancelled = abortSignal?.aborted === true
+        const errorText = cancelled ? 'Request cancelled' : 'Tool execution failed'
+        if (cancelled) telemetry?.event('chat.stream.chunk_error', 'cancelled')
+        else telemetry?.error('chat.stream.chunk_error', 'chat_stream_error', e)
         for (const part of parts) {
           if (part.type === 'dynamic-tool' && part.state === 'input-available') {
             part.state = 'output-error'

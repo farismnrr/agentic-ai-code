@@ -1,0 +1,155 @@
+{
+    "data": [
+        {
+            "traceID": "6da5c00d69bdfde02c3eb50bc2bc75a1",
+            "spans": [
+                {
+                    "traceID": "6da5c00d69bdfde02c3eb50bc2bc75a1",
+                    "spanID": "cca94fd380009bbe",
+                    "operationName": "relay.request",
+                    "references": [],
+                    "startTime": 1786687034106361,
+                    "duration": 434,
+                    "tags": [
+                        {
+                            "key": "busy_ns",
+                            "type": "int64",
+                            "value": 412639
+                        },
+                        {
+                            "key": "code.file.path",
+                            "type": "string",
+                            "value": "packages/rust-tools/infrastructure/src/transport.rs"
+                        },
+                        {
+                            "key": "code.line.number",
+                            "type": "int64",
+                            "value": 673
+                        },
+                        {
+                            "key": "code.module.name",
+                            "type": "string",
+                            "value": "relay_infrastructure::transport"
+                        },
+                        {
+                            "key": "idle_ns",
+                            "type": "int64",
+                            "value": 22688
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ai-code-relay"
+                        },
+                        {
+                            "key": "request_id",
+                            "type": "string",
+                            "value": "77ccc29b-027a-4814-ac06-6d5325c8cf15"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "target",
+                            "type": "string",
+                            "value": "relay_infrastructure::transport"
+                        },
+                        {
+                            "key": "thread.id",
+                            "type": "int64",
+                            "value": 13
+                        },
+                        {
+                            "key": "thread.name",
+                            "type": "string",
+                            "value": "tokio-rt-worker"
+                        }
+                    ],
+                    "logs": [
+                        {
+                            "timestamp": 1786687034106413,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "relay.mcp.header_validation"
+                                },
+                                {
+                                    "key": "code.file.path",
+                                    "type": "string",
+                                    "value": "packages/rust-tools/infrastructure/src/transport.rs"
+                                },
+                                {
+                                    "key": "code.line.number",
+                                    "type": "int64",
+                                    "value": 770
+                                },
+                                {
+                                    "key": "code.module.name",
+                                    "type": "string",
+                                    "value": "relay_infrastructure::transport"
+                                },
+                                {
+                                    "key": "level",
+                                    "type": "string",
+                                    "value": "WARN"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "rejected"
+                                },
+                                {
+                                    "key": "target",
+                                    "type": "string",
+                                    "value": "relay_infrastructure::transport"
+                                }
+                            ]
+                        }
+                    ],
+                    "processID": "p1",
+                    "warnings": null
+                }
+            ],
+            "processes": {
+                "p1": {
+                    "serviceName": "ai-code-relay",
+                    "tags": [
+                        {
+                            "key": "deployment.environment",
+                            "type": "string",
+                            "value": "development"
+                        },
+                        {
+                            "key": "service.version",
+                            "type": "string",
+                            "value": "0.0.7-beta"
+                        },
+                        {
+                            "key": "telemetry.sdk.language",
+                            "type": "string",
+                            "value": "rust"
+                        },
+                        {
+                            "key": "telemetry.sdk.name",
+                            "type": "string",
+                            "value": "opentelemetry"
+                        },
+                        {
+                            "key": "telemetry.sdk.version",
+                            "type": "string",
+                            "value": "0.32.1"
+                        }
+                    ]
+                }
+            },
+            "warnings": null
+        }
+    ],
+    "total": 0,
+    "limit": 0,
+    "offset": 0,
+    "errors": null
+}

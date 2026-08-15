@@ -1,3 +1,5 @@
+import { friendlyRelayErrorMessage } from '../../utils/chat-errors'
+
 type ChatToolOutput = {
   addToolOutput: (value: {
     tool: string
@@ -16,7 +18,7 @@ export function createLocalToolController({ chat, relayAgent, ledger }: { chat: 
     try {
       await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, output: await relayAgent.exec(command, args ?? [], cwd) })
     } catch (err: unknown) {
-      await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, state: 'output-error', errorText: (err as Error).message || 'Local relay agent is not connected' })
+      await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, state: 'output-error', errorText: friendlyRelayErrorMessage(err) })
     }
   }
 }

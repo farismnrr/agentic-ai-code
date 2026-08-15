@@ -1,0 +1,1 @@
+{"data":[{"traceID":"415865a0ff5aff2912ae135945df7150","spans":[{"operationName":"POST","tags":[{"key":"error","type":"bool","value":true},{"key":"http.request.method","type":"string","value":"POST"},{"key":"http.response.status_code","type":"int64","value":500},{"key":"server.port","type":"int64","value":3349},{"key":"url.path","type":"string","value":"/api/auth/register"}]}]}]}

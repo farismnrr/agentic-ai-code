@@ -93,12 +93,22 @@ impl McpError {
         }
     }
 
-    /// Human-readable JSON-RPC `message` field. Never includes secrets,
-    /// stack traces, or raw process/environment internals (security
-    /// invariant #12 in the plan) — callers should keep any detail passed
-    /// into these variants free of that data.
+    /// Human-readable JSON-RPC `message` field. Internal diagnostics are
+    /// intentionally discarded at this public boundary; callers may retain
+    /// the variant's detail for private tracing, but it must never cross the
+    /// protocol response.
     pub fn message(&self) -> String {
-        self.to_string()
+        match self {
+            McpError::InvalidRequest(_) => "Invalid request".to_string(),
+            McpError::MethodNotFound(_) => "Method not found".to_string(),
+            McpError::InvalidParams(_) => "Invalid parameters".to_string(),
+            McpError::Internal(_) => "Internal error".to_string(),
+            McpError::HeaderMismatch(_) => {
+                "Request headers do not match the request body".to_string()
+            }
+            McpError::ParseError => "Parse error".to_string(),
+            McpError::UnsupportedProtocolVersion { .. } => self.to_string(),
+        }
     }
 
     /// The JSON-RPC error object's optional `data` field. Only

@@ -7,7 +7,7 @@ services:
       - "3333:3333"
     networks:
       - masihawam-net
-      - sensio-network
+      - shared-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -32,5 +32,5 @@ services:
 networks:
   masihawam-net:
     external: true
-  sensio-network:
+  shared-network:
     external: true

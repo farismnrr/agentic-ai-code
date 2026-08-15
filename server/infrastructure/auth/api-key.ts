@@ -1,4 +1,5 @@
-import { logger } from "../observability/logger"
+import { logger } from '../observability/logger'
+import { useDb } from '../database/connection'
 import { randomBytes, createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { apiKeys } from '../../database/schema'

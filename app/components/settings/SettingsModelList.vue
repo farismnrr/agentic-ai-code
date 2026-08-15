@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Model } from '~/composables/useModels'
 import { VERTEX_AI_CHAT_MODELS, VERTEX_AI_MODEL_DEFAULTS } from '#shared/utils/vertex-ai-models'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 const { models, create, update, remove } = useModels()
 const { providers, listModels } = useModelProviders()
@@ -47,8 +48,7 @@ async function loadModelIdOptions(providerId: string | undefined) {
   try {
     modelIdOptionsByProvider.value[providerId] = await listModels(providerId)
   } catch (err: unknown) {
-    const error = err as Error
-    toast.add({ title: 'Could not load model list', description: error.message, color: 'warning' })
+    toast.add({ title: 'Could not load model list', description: clientErrorMessage(err, 'Could not load models from this provider.'), color: 'warning' })
   } finally {
     modelIdOptionsLoading.value = false
   }
@@ -120,8 +120,7 @@ async function save() {
     }
     isOpen.value = false
   } catch (err: unknown) {
-    const error = err as Error
-    toast.add({ title: 'Error', description: error.message, color: 'error' })
+    toast.add({ title: 'Error', description: clientErrorMessage(err, 'Could not save the model. Please try again.'), color: 'error' })
   }
 }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Sign in' })
@@ -21,11 +22,11 @@ async function onSubmit(event: FormSubmitEvent<typeof state>) {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/chat'
     await navigateTo(redirect)
   } catch (err: unknown) {
-    const fe = err as { data?: { message?: string, detail?: string }, statusCode?: number }
-    if (fe?.statusCode === 429) {
-      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Too many attempts. Try again later.'
+    const statusCode = (err as { statusCode?: number })?.statusCode
+    if (statusCode === 429) {
+      serverError.value = clientErrorMessage(err, 'Too many attempts. Try again later.')
     } else {
-      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Invalid email or password.'
+      serverError.value = clientErrorMessage(err, 'Invalid email or password.')
     }
     toast.add({
       title: 'Sign in failed',
@@ -39,7 +40,7 @@ async function onSubmit(event: FormSubmitEvent<typeof state>) {
 
 // Display errors passed via URL (e.g., from OAuth redirect)
 if (route.query.error) {
-  serverError.value = String(route.query.error)
+  serverError.value = 'Sign in could not be completed. Please try again.'
 }
 </script>
 

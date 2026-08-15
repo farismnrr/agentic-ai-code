@@ -43,6 +43,7 @@ impl RequestAdmission {
         state.tokens = (state.tokens + elapsed * self.refill_per_sec).min(self.capacity);
         state.updated_at = now;
         if state.tokens < 1.0 {
+            tracing::debug!(event = "relay.admission", outcome = "rate_limited");
             return false;
         }
         state.tokens -= 1.0;

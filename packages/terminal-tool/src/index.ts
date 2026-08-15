@@ -6,6 +6,8 @@ import { execa } from 'execa'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+export type AiToolsEnvProvider = () => Record<string, string>
+
 export const terminalToolSchema = z.object({
   command: z.string().describe('The binary to run, e.g. "ls" — do not include flags/arguments here, put them in `args` instead.'),
   args: z.array(z.string()).optional().describe('Arguments for the command, e.g. ["-la", "."].'),
@@ -20,12 +22,14 @@ export const runTerminalCommand = async ({
   command,
   args = [],
   cwd,
-  assertSafeCommand
+  assertSafeCommand,
+  getChildEnv
 }: {
   command: string
   args?: string[]
   cwd: string
   assertSafeCommand: (command: string, args: string[]) => Promise<void>
+  getChildEnv?: AiToolsEnvProvider
 }) => {
   try {
     const [binary, ...gluedArgs] = command.trim().split(/\s+/)
@@ -47,28 +51,30 @@ export const runTerminalCommand = async ({
     ]
 
     const result = await execa(rustBin, cliArgs, {
-      reject: false
+      reject: false,
+      extendEnv: false,
+      env: getChildEnv?.() ?? {}
     })
 
-    if (result.failed) {
-      return `Error: ${result.stderr || result.message}`
-    }
+    if (result.failed || result.stdout.startsWith('Error:')) return 'Tool execution failed'
 
     return result.stdout
-  } catch (e: unknown) {
-    return `Error: ${(e as Error).message}`
+  } catch {
+    return 'Tool execution failed'
   }
 }
 
 export const createTerminalTool = ({
   assertSafeCommand,
-  cwd
+  cwd,
+  getChildEnv
 }: {
   assertSafeCommand: (command: string, args: string[]) => Promise<void>
   cwd: string
+  getChildEnv?: AiToolsEnvProvider
 }) => {
   return langchainTool(
-    async ({ command, args }) => runTerminalCommand({ command, args, cwd, assertSafeCommand }),
+    async ({ command, args }) => runTerminalCommand({ command, args, cwd, assertSafeCommand, getChildEnv }),
     {
       name: 'terminal',
       description: 'Run a shell command within the workspace directory.',
@@ -79,14 +85,16 @@ export const createTerminalTool = ({
 
 export const createTerminalAiTool = ({
   assertSafeCommand,
-  cwd
+  cwd,
+  getChildEnv
 }: {
   assertSafeCommand: (command: string, args: string[]) => Promise<void>
   cwd: string
+  getChildEnv?: AiToolsEnvProvider
 }) => {
   return aiTool({
     description: 'Run a shell command within the workspace directory.',
     inputSchema: terminalToolSchema,
-    execute: async ({ command, args }) => runTerminalCommand({ command, args, cwd, assertSafeCommand })
+    execute: async ({ command, args }) => runTerminalCommand({ command, args, cwd, assertSafeCommand, getChildEnv })
   })
 }

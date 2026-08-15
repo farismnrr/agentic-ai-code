@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Create account' })
@@ -38,11 +39,11 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     await register(event.data.name, event.data.email, event.data.password, event.data.confirm)
     await navigateTo('/chat')
   } catch (err: unknown) {
-    const fe = err as { data?: { message?: string, detail?: string }, statusCode?: number }
-    if (fe?.statusCode === 429) {
-      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Too many attempts. Try again later.'
+    const statusCode = (err as { statusCode?: number })?.statusCode
+    if (statusCode === 429) {
+      serverError.value = clientErrorMessage(err, 'Too many attempts. Try again later.')
     } else {
-      serverError.value = fe.data?.detail ?? fe.data?.message ?? 'Could not create account. Please try again.'
+      serverError.value = clientErrorMessage(err, 'Could not create account. Please try again.')
     }
     toast.add({
       title: 'Registration failed',
@@ -55,7 +56,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 }
 
 if (route.query.error) {
-  serverError.value = String(route.query.error)
+  serverError.value = 'Account creation could not be completed. Please try again.'
 }
 </script>
 

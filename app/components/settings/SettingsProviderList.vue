@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ModelProvider } from '~/composables/useModelProviders'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 const { providers, types, create, update, remove } = useModelProviders()
 const toast = useToast()
@@ -76,8 +77,7 @@ async function save() {
     }
     isOpen.value = false
   } catch (err: unknown) {
-    const error = err as Error
-    toast.add({ title: 'Error', description: error.message, color: 'error' })
+    toast.add({ title: 'Error', description: clientErrorMessage(err, 'Could not save the provider. Please try again.'), color: 'error' })
   }
 }
 

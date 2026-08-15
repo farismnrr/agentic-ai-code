@@ -1,0 +1,156 @@
+{
+  "data": [
+    {
+      "traceID": "752f88f9cae43bb692a2aba2a4d3d20e",
+      "spans": [
+        {
+          "traceID": "752f88f9cae43bb692a2aba2a4d3d20e",
+          "spanID": "86cf5f187773b4e4",
+          "operationName": "chat.execute",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "752f88f9cae43bb692a2aba2a4d3d20e",
+              "spanID": "fb37dc6380c0a1e9"
+            }
+          ],
+          "startTime": 1786778884846000,
+          "duration": 18947,
+          "tags": [
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "ai-code-server"
+            },
+            {
+              "key": "request.id",
+              "type": "string",
+              "value": "814bdc45-6746-45da-94df-d2156f15aeb8"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "internal"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "752f88f9cae43bb692a2aba2a4d3d20e",
+          "spanID": "fb37dc6380c0a1e9",
+          "operationName": "POST",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "752f88f9cae43bb692a2aba2a4d3d20e",
+              "spanID": "4c3b47b99e5b06c7"
+            }
+          ],
+          "startTime": 1786778884831000,
+          "duration": 91660,
+          "tags": [
+            {
+              "key": "client.address",
+              "type": "string",
+              "value": "172.19.0.1"
+            },
+            {
+              "key": "http.request.method",
+              "type": "string",
+              "value": "POST"
+            },
+            {
+              "key": "http.response.status_code",
+              "type": "int64",
+              "value": 200
+            },
+            {
+              "key": "network.peer.address",
+              "type": "string",
+              "value": "172.19.0.1"
+            },
+            {
+              "key": "network.peer.port",
+              "type": "int64",
+              "value": 42152
+            },
+            {
+              "key": "network.protocol.version",
+              "type": "string",
+              "value": "1.1"
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "@opentelemetry/instrumentation-http"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.221.0"
+            },
+            {
+              "key": "server.address",
+              "type": "string",
+              "value": "localhost"
+            },
+            {
+              "key": "server.port",
+              "type": "int64",
+              "value": 3333
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "server"
+            },
+            {
+              "key": "url.path",
+              "type": "string",
+              "value": "/api/chat"
+            },
+            {
+              "key": "url.scheme",
+              "type": "string",
+              "value": "http"
+            },
+            {
+              "key": "user_agent.original",
+              "type": "string",
+              "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": [
+            "invalid parent span IDs=4c3b47b99e5b06c7; skipping clock skew adjustment"
+          ]
+        }
+      ],
+      "processes": {
+        "p1": {
+          "serviceName": "ai-code-server",
+          "tags": [
+            {
+              "key": "deployment.environment",
+              "type": "string",
+              "value": "development"
+            },
+            {
+              "key": "service.version",
+              "type": "string",
+              "value": "1.0.0"
+            }
+          ]
+        }
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

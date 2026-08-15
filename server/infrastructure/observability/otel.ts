@@ -36,6 +36,20 @@ export class LokiLogExporter implements LogRecordExporter {
   }
 
   export(logsBatch: LogRecord[], resultCallback: (result: ExportResult) => void): void {
+    // Plan 035 Phase 3 item 7: export failures must degrade safely and never
+    // propagate to/throw into the business request. The async `fetch(...)`
+    // path below already routes failures through `.catch(...)` into
+    // `resultCallback`; this try/catch additionally guards the synchronous
+    // batch-shaping work (JSON.stringify, attribute access) from ever
+    // throwing out of `export()` itself.
+    try {
+      this.exportBatch(logsBatch, resultCallback)
+    } catch (err) {
+      resultCallback({ code: ExportResultCode.FAILED, error: err instanceof Error ? err : new Error('OTel export failed') })
+    }
+  }
+
+  private exportBatch(logsBatch: LogRecord[], resultCallback: (result: ExportResult) => void): void {
     if (logsBatch.length === 0) {
       resultCallback({ code: ExportResultCode.SUCCESS })
       return

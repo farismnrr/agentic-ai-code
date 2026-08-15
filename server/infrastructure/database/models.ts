@@ -1,5 +1,6 @@
-import { useDb } from "./connection"
+import { useDb } from './connection'
 import { forbidden, notFound, internal } from '#server/core/errors/http'
+import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { and, eq } from 'drizzle-orm'
 import { models, modelProviders } from '../../database/schema'
 
@@ -36,7 +37,7 @@ export async function insertUserModel(userId: string, providerId: string, body: 
   const [provider] = await db.select().from(modelProviders).where(and(eq(modelProviders.id, providerId), eq(modelProviders.userId, userId)))
   if (!provider) throw forbidden('Provider not found or not owned by user')
   const [model] = await db.insert(models).values({ userId, providerId, ...body }).returning()
-  if (!model) throw internal('Failed to create model')
+  if (!model) throw internal(safeDiagnostic('Failed to create model'))
   return model
 }
 
