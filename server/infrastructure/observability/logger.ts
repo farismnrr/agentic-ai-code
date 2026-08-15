@@ -75,25 +75,25 @@ function emit(severityNumber: number, severityText: string, message: string, att
 }
 
 // consola prints straight to stdout (dev console / `docker compose logs`),
-// a separate output path from the sanitized `emit()` -> Loki bridge above —
-// so it needs its own pass through `redactSecrets` on `message`/`err.message`
-// before printing. Never pass the raw `err` object to consola: doing so
-// prints its message/stack unredacted, defeating Plan 035's value-level
-// secret redaction for this output path even though Loki stays clean.
-function consolaSafe(err: unknown): unknown {
+// a separate output path from the sanitized `emit()` -> Loki bridge above.
+// Never pass an exception object to consola: its formatter can inspect
+// message/stack (and nested properties) before our structured sanitizer sees
+// it. Raw causes are therefore represented only by bounded, non-Error
+// classification fields. SafeDiagnosticError is an explicit opt-in for a
+// developer-authored diagnostic and still uses a plain object to keep the
+// stdout boundary free of Error objects.
+function consolaSafe(err: unknown): Record<string, string> | undefined {
   if (err === undefined) return undefined
   if (isSafeDiagnostic(err)) {
-    const safe = new Error(redactSecrets(err.message))
-    safe.name = err.name
-    if (err.stack) safe.stack = redactSecrets(err.stack)
-    return safe
+    return { type: err.name || 'SafeDiagnosticError', message: redactSecrets(err.message) }
   }
   if (err instanceof Error) {
-    const safe = new Error(classifyRawCause(err))
-    safe.name = err.name || err.constructor?.name || 'Error'
-    return safe
+    return {
+      type: err.name || err.constructor?.name || 'Error',
+      classification: classifyRawCause(err)
+    }
   }
-  return classifyRawCause(err)
+  return { type: 'UnknownError', classification: classifyRawCause(err) }
 }
 
 export const logger = {

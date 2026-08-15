@@ -1,6 +1,15 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: CLOSED — FINAL REMEDIATION PASS COMPLETE.** Implementation branch `feat/035-p0-observability-contract`, final implementation state `12c1f2df7a93c58baf4a78885b513a6a233414b9`. Round 1–3 histories remain preserved below for forensic record; do not delete them.
+**Status: OPEN — focused fresh external-review remediation in progress.** Implementation branch `feat/035-p0-observability-contract`; prior round histories remain preserved below for forensic record; do not delete them. This reopening addresses the confirmed stdout/consola synthetic-stack leak and implicit plain-string diagnostic trust bypass.
+
+**Focused remediation checklist (fresh external review):**
+- [x] Phase 1 — raw/untrusted exceptions use bounded non-Error stdout/consola representations; no synthetic printed stacks.
+- [ ] Phase 2 — arbitrary plain-string causes are fail-closed; only explicit safe diagnostics preserve free text.
+- [ ] Phase 3 — genuine production-runtime DB-failure canary proof covers client, stdout, Loki, and Jaeger.
+- [ ] Phase 4 — fresh same-class security audit finds zero unresolved P0/P1.
+- [ ] Phase 5 — final verification passes against the final implementation state.
+- [ ] Phase 6 — fresh independent closure review finds zero unresolved P0/P1.
+- [ ] Phase 7 — closure docs, memory, evidence, and final SHA are reconciled truthfully.
 
 **Round 4 reopening reason (fresh external review, not self-discovered):**
 - **P1** — raw unhandled exception diagnostics can still carry direct PII/request-derived data into private logs because raw `Error.message` is allowed through the logger sanitizer path; secret-shaped redaction is not a general PII/data-classification boundary.
