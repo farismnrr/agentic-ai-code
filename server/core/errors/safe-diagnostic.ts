@@ -18,6 +18,8 @@ export class SafeDiagnosticError extends Error {
   }
 }
 
+export const safeDiagnostic = (message: string) => new SafeDiagnosticError(message)
+
 export function isSafeDiagnostic(err: unknown): err is SafeDiagnosticError {
   return err instanceof SafeDiagnosticError
 }
