@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as v from 'valibot'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { clientErrorMessage } from '~/utils/client-errors'
 
 useSeoMeta({ title: 'API Keys' })
 
@@ -38,8 +39,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     state.name = ''
     refresh()
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    toast.add({ title: 'Failed to create key', description: message, icon: 'i-lucide-alert-triangle', color: 'error' })
+    toast.add({ title: 'Failed to create key', description: clientErrorMessage(err, 'Could not create the API key. Please try again.'), icon: 'i-lucide-alert-triangle', color: 'error' })
   }
 }
 
@@ -49,8 +49,7 @@ async function removeKey(id: string, name: string) {
     toast.add({ title: `Revoked ${name}`, icon: 'i-lucide-trash-2', color: 'neutral' })
     refresh()
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    toast.add({ title: 'Failed to revoke key', description: message, icon: 'i-lucide-alert-triangle', color: 'error' })
+    toast.add({ title: 'Failed to revoke key', description: clientErrorMessage(err, 'Could not revoke the API key. Please try again.'), icon: 'i-lucide-alert-triangle', color: 'error' })
   }
 }
 </script>
