@@ -2,7 +2,7 @@ import { consola } from 'consola'
 import { trace } from '@opentelemetry/api'
 import { getLogger } from './otel'
 import { redactSecrets, sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
-import { classifyRawCause } from '../../core/errors/classify'
+import { classifyErrorType, classifyRawCause } from '../../core/errors/classify'
 import { isSafeDiagnostic } from '../../core/errors/safe-diagnostic'
 
 /**
@@ -39,13 +39,13 @@ type LogAttributes = Record<string, unknown>
 function errorAttributes(err: unknown): LogAttributes {
   if (err === undefined) return {}
   if (isSafeDiagnostic(err)) {
-    const attrs: LogAttributes = { 'error.type': err.name || 'SafeDiagnosticError', 'error.message': err.message }
+    const attrs: LogAttributes = { 'error.type': 'SafeDiagnosticError', 'error.message': err.message }
     if (shouldIncludeStack() && err.stack) attrs.stack = err.stack
     return attrs
   }
   if (err instanceof Error) {
     return {
-      'error.type': err.name || err.constructor?.name || 'Error',
+      'error.type': classifyErrorType(err),
       'error.classification': classifyRawCause(err)
     }
   }
@@ -85,11 +85,11 @@ function emit(severityNumber: number, severityText: string, message: string, att
 function consolaSafe(err: unknown): Record<string, string> | undefined {
   if (err === undefined) return undefined
   if (isSafeDiagnostic(err)) {
-    return { type: err.name || 'SafeDiagnosticError', message: redactSecrets(err.message) }
+    return { type: 'SafeDiagnosticError', message: redactSecrets(err.message) }
   }
   if (err instanceof Error) {
     return {
-      type: err.name || err.constructor?.name || 'Error',
+      type: classifyErrorType(err),
       classification: classifyRawCause(err)
     }
   }

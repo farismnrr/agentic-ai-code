@@ -58,6 +58,6 @@ if (!span) throw new Error('Jaeger query returned no Phase 1 canary span object'
 const exception = (span.logs ?? [])
   .find(log => log.fields?.some(field => field.key === 'event' && field.value === 'exception'))
 const fields = Object.fromEntries((exception?.fields ?? []).map(field => [field.key, field.value]))
-if (fields['exception.type'] !== 'ProviderRequestError') throw new Error('Jaeger span lacks bounded error.type')
+if (fields['exception.type'] !== 'Error') throw new Error('Jaeger span lacks bounded error.type')
 if (fields['exception.message'] !== 'unclassified') throw new Error('Jaeger span lacks bounded error.classification')
 console.log(JSON.stringify({ jaeger: 'PASS', operation: 'phase1.exception.canary', errorType: fields['exception.type'], classification: fields['exception.message'] }))

@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { trace } from '@opentelemetry/api'
 import { logger } from './logger'
 import { sanitizeRoute } from './sanitize'
-import { classifyRawCause } from '../../core/errors/classify'
+import { classifyErrorType, classifyRawCause } from '../../core/errors/classify'
 
 const STARTED_AT = Symbol('plan035.request.startedAt')
 const RECORDED = Symbol('plan035.request.recorded')
@@ -81,9 +81,7 @@ export function recordRequestLifecycle(event: H3Event | undefined, statusOverrid
   if (typeof context[TRACE_ID] === 'string') attributes.trace_id = context[TRACE_ID]
   if (typeof context[SPAN_ID] === 'string') attributes.span_id = context[SPAN_ID]
   if (errorCause !== undefined) {
-    attributes['error.type'] = errorCause instanceof Error
-      ? errorCause.name || errorCause.constructor?.name || 'Error'
-      : 'UnknownError'
+    attributes['error.type'] = classifyErrorType(errorCause)
     attributes['error.classification'] = classifyRawCause(errorCause)
   }
   logger.info('http.request.lifecycle', attributes)
