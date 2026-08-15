@@ -55,7 +55,7 @@ const MAX_ROUTE_LENGTH = 256
 // route exception narrow and validate it here at the logger chokepoint so
 // callers cannot accidentally reintroduce query strings or filesystem/URL
 // content by bypassing request-lifecycle.ts.
-const SAFE_ROUTE_PATTERN = /^\/[A-Za-z0-9._/-]*$/
+const SAFE_ROUTE_PATTERN = /^\/[A-Za-z0-9._:/*-]*$/
 
 export function sanitizeRoute(value: string): string {
   const withoutQuery = (value.split('?')[0] || '/').slice(0, MAX_ROUTE_LENGTH)
