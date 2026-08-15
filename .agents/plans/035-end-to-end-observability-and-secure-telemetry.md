@@ -1,6 +1,6 @@
 # Plan 035: End-to-End Observability and Secure Telemetry
 
-**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phases 0–5 complete).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
+**Status: OPEN / REMEDIATION ROUND 3 IN PROGRESS (Phases 0–10 complete).** Implementation branch `feat/035-p0-observability-contract`. Round 1 and round 2 histories remain preserved below; no later phase is complete for round 3.
 
 **Remediation round 3 reason:** the user's confirmed review blockers are: **P1-A** raw exceptions leak secrets/internal detail into Jaeger; **P1-B** LangGraph/tool failure paths stream raw internal errors; **P1-C** Rust telemetry exports dependency noise/filesystem paths; **P1-D** the actual Nuxt → Rust `ai-tools` subprocess lacks the same distributed trace. The evidence gaps are: **E1** the browser happy path is not real; **E2** the Rust internal proof is a 400, not a genuine 5xx; **E3** requestId → Loki → trace is not guaranteed; **E4** closure docs overstate claims. This is a documentation/contract reset only; no later phase is complete until these blockers and evidence gaps are independently re-proven.
 
@@ -26,7 +26,7 @@
 - [x] Phase 8 — comprehensive runtime canary leakage falsification.
 - [x] Phase 9 — fresh source-level security/architecture falsification.
 - [x] Phase 10 — full release verification including build/audits/scripts/LSP.
-- [ ] Phase 11 — fresh independent worker closure review.
+- [x] Phase 11 — fresh independent worker closure review.
 - [ ] Phase 12 — truthful final documentation and closure.
 
 **Remediation round 2 summary:** Reopened at commit `2f67f4dd85a8c5e9130b81a9157d49a93a1b8909` (2026-08-14) after the user's own fresh review found three confirmed P1 gaps missed by round 1's independent review: (1) `server/core/errors/http.ts` imported `server/infrastructure/observability/logger` directly, violating the Plan 031-034 dependency direction; (2) `server/api/mcp/index.ts:97` returned raw caught-error text inside a 200 JSON-RPC MCP tool-result, bypassing the 5xx sanitizer entirely; (3) chat traffic used AI SDK's `DefaultChatTransport`, which never went through the `globalThis.$fetch` override Phase 4/7 patched — the single most user-visible request path got no trace correlation at all. All three fixed and re-proven live. Full remediation lane list:

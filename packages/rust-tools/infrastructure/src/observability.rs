@@ -9,8 +9,13 @@ const HDR_REQUEST_ID: &str = "x-request-id";
 
 /// P1 value-level secret redaction (Plan 035 remediation round 2), kept
 /// policy-aligned with `server/infrastructure/observability/sanitize.ts`'s
-/// `redactSecrets`: same category list, same "mask the credential-shaped
-/// substring, keep surrounding context" approach. Deterministic regex-free
+/// `redactSecrets`: same "mask the credential-shaped substring, keep
+/// surrounding context" approach and mostly-overlapping category list —
+/// NOT identical: the TS version also redacts bare absolute filesystem
+/// paths (a category this function does not cover). No current call site
+/// here feeds a filesystem path through `redact_secrets`/`safe_log_field`,
+/// but add that category here too before routing any IO/path-bearing
+/// error string through this function. Deterministic regex-free
 /// scanning only (no `regex` crate dependency needed) — each category is a
 /// small hand-rolled scan so this stays a focused function, not a generic
 /// scanner framework. Applied BEFORE truncation in `safe_log_field` so a
