@@ -1,0 +1,8 @@
+HTTP/1.1 500 Internal Server Error
+x-request-id: c60b57b6-e34d-4674-89c4-b5a1847ffe59
+Content-Type: application/problem+json
+Date: Sat, 15 Aug 2026 09:05:47 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 150
+
