@@ -24,7 +24,7 @@ curl -fsS -H 'Origin: http://localhost:18787' "http://127.0.0.1:$port/health" >/
 headers=(-H 'Content-Type: application/json' -H 'Origin: http://localhost:18787' -H 'Mcp-Method: initialize' -H 'Mcp-Name: phase3-acceptance' -H 'MCP-Protocol-Version: 2026-07-28')
 curl -sS "http://127.0.0.1:$port/mcp" "${headers[@]}" --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"phase3","version":"1"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' >/dev/null
 headers=(-H 'Content-Type: application/json' -H 'Origin: http://localhost:18787' -H 'Mcp-Method: tools/list' -H 'Mcp-Name: phase3-acceptance' -H 'MCP-Protocol-Version: 2026-07-28')
-curl -sS "http://127.0.0.1:$port/mcp" "${headers[@]}" --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' >/dev/null
+curl -sS "http://127.0.0.1:$port/mcp" "${headers[@]}" --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' >/dev/null
 headers=(-H 'Content-Type: application/json' -H 'Origin: http://localhost:18787' -H 'Mcp-Method: tools/call' -H 'Mcp-Name: phase3-acceptance' -H 'MCP-Protocol-Version: 2026-07-28')
   curl -sS "http://127.0.0.1:$port/mcp" "${headers[@]}" --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"terminal_exec","arguments":{"command":"printf phase4-canary"}}}' >/dev/null
 
