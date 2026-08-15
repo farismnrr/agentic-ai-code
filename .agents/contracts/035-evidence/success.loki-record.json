@@ -1,0 +1,18 @@
+{
+  "message": "http.request.lifecycle",
+  "attributes": {
+    "service.name": "ai-code-server",
+    "event.name": "http.request.lifecycle",
+    "operation": "http.request.lifecycle",
+    "http.request.method": "GET",
+    "route": "/",
+    "http.response.status_code": 200,
+    "duration_ms": 2,
+    "outcome": "ok",
+    "request.id": "ca850616-60bf-401a-8da1-d3f6e36e0589",
+    "trace_id": "50c6ef25a92bdeca5a6c19479fec48d9",
+    "span_id": "5eb1ba999cfef842"
+  },
+  "trace_id": "50c6ef25a92bdeca5a6c19479fec48d9",
+  "span_id": "5eb1ba999cfef842"
+}
