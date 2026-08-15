@@ -171,6 +171,20 @@ Provisioning should be proven in this order so failures stay attributable:
 
 A metadata-only pass is not ChatGPT interoperability evidence, and a successful tool list is not terminal-execution evidence.
 
+## Current operator deployment observation
+
+As of 2026-08-15, the operator's existing Cloudflare Tunnel is the remotely
+managed `farismunir-tunnel` (`3ea77293-142c-449f-9e4c-69d383ab4626`), reported
+healthy by Wrangler. Its `mcp.farismunir.my.id` ingress is configured for
+`http://127.0.0.1:47821` and retains the unrelated routes plus the final
+`http_status:404` catch-all. The local `cloudflared.service` owns the tunnel;
+this deployment does not use a local `~/.cloudflared/config.yml`.
+
+The `0.0.8-beta` `ai-tools` binary is installed at the operator's
+`~/.local/bin/ai-tools`, but the relay is not started until real
+`OAUTH_ISSUER` and `OAUTH_OWNER_SUBJECT` values are supplied. No OAuth values
+are fabricated to make the public route appear healthy.
+
 ## Remaining external evidence
 
 This contract does not claim any of the following until they are observed against real accounts/deployment:
