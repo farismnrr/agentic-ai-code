@@ -258,7 +258,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
+            description: "Run a sandboxed executable in the workspace using direct argv semantics. Shell operators such as ;, |, &&, globbing, and redirection are not implicit; use command=sh with args=[\"-lc\", \"...\"] when shell syntax is required. Supports scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",

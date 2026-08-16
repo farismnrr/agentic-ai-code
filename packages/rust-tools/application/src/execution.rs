@@ -537,6 +537,20 @@ async fn run_process(
         let value = canonical.to_string_lossy().into_owned();
         args.extend(["--ro-bind".into(), value.clone(), value]);
     }
+    if config.allow_docker {
+        // Docker daemon access is an explicit local-development escape hatch:
+        // possession of the daemon socket is effectively host-level authority.
+        // Keep the default sandbox isolated and expose only the configured socket.
+        let docker_socket = Path::new(&config.docker_socket);
+        if !docker_socket.exists() {
+            return Err(std::io::Error::other(format!(
+                "Docker access enabled but socket '{}' is unavailable",
+                docker_socket.display()
+            )));
+        }
+        let socket = docker_socket.to_string_lossy().into_owned();
+        args.extend(["--bind".into(), socket.clone(), socket]);
+    }
     // Broader home scope must not expose common credential stores to commands.
     for relative in [".ssh", ".aws", ".config/gcloud", ".docker", ".kube"] {
         let path = execution_root.join(relative);
@@ -728,7 +742,7 @@ fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
 }
 
 fn resolve_safe_executable(config: &ServerConfig, binary: &str) -> Result<PathBuf, McpError> {
-    relay_core::terminal_policy::validate_executable(binary)?;
+    relay_core::terminal_policy::validate_executable(binary, config.allow_docker)?;
     for directory in safe_path_entries(config) {
         let candidate = directory.join(binary);
         if candidate.is_file() && is_executable(&candidate) {
