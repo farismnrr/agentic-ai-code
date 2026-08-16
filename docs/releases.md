@@ -73,7 +73,7 @@ ghcr.io/farismnrr/ai-code
 
 Web image publication requires a usable Docker daemon/build environment on the host running `release:publish`.
 
-The MCP coding relay intentionally has no Docker socket. Therefore invoking the release publisher from inside the restricted relay sandbox may successfully run source/build checks but must fail at the Docker step. Do not weaken the relay by exposing `/var/run/docker.sock`; run the release publisher from a normal trusted host shell with Docker available.
+The MCP coding relay keeps Docker access disabled by default. A trusted single-owner local coding relay may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker daemon socket to the Bubblewrap sandbox. Docker daemon access is effectively host-level authority, so production/remote relays should keep it disabled unless the operator deliberately accepts that trust expansion. When release publication is run through MCP, verify Docker client/server access first and ensure the relay was intentionally started with Docker enabled.
 
 ## Draft releases
 
