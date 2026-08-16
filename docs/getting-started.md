@@ -115,14 +115,21 @@ Install Bubblewrap, then from the repository root:
 ```bash
 ./target/release/ai-tools relay \
   --mode local \
-  --dir "$PWD" \
+  --dir "$HOME" \
   --execution-root "$HOME" \
-  --origin http://localhost:3333
+  --origin http://localhost:3333 \
+  --allowed-host mcp.example.com
 ```
 
-The relay remains loopback-only. `--execution-root "$HOME"` is appropriate for the single-owner coding profile when you want one MCP connection to reach sibling repositories under your home directory. Use a narrower root if you want stricter filesystem scope.
+The relay remains loopback-only. For a general single-owner coding profile, use `--dir "$HOME"` together with `--execution-root "$HOME"`; the relay starts in your home directory and each tool call can select any verified project beneath it with `cwd`. Use `--dir "$PWD"` when you intentionally want a project-scoped default, and use a narrower execution root when you want stricter filesystem scope.
 
-If your developer toolchains live outside the fixed system PATH, add reviewed user-owned directories explicitly with repeated `--toolchain-path` arguments or `RELAY_TOOLCHAIN_PATH`; do not inherit the entire shell PATH.
+The relay always permits `localhost:<port>` and `127.0.0.1:<port>`. If the MCP client reaches the loopback listener using an externally-addressed Host, add that exact hostname with `--allowed-host` (or `RELAY_ALLOWED_HOSTS`). An entry without a port matches only that hostname without a port; configure `hostname:<port>` when a port must be allowed.
+
+If your developer toolchains live outside the fixed system PATH, add reviewed user-owned directories explicitly with repeated `--toolchain-path` arguments or `RELAY_TOOLCHAIN_PATH`; do not inherit the entire shell PATH. For a general coding relay this commonly includes `$HOME/.cargo/bin` (Cargo/Rust), `$HOME/.bun/bin` (Bun), and the active fnm Node installation `bin` directory (Node/npm/pnpm/Corepack). Python, Go, Git, compilers, and build tools installed in the relay's fixed system PATH need no extra entry.
+
+After changing relay access, socket, or toolchain configuration, rebuild/restart the relay and verify capabilities through the MCP client itself. A useful smoke test covers a simple command plus the configured Node/package manager, Rust, Tailscale, and Docker commands; host-shell success alone does not prove the Bubblewrap execution environment can reach them.
+
+For local development that needs the host Tailscale daemon, add `--allow-tailscale` (or set `RELAY_ALLOW_TAILSCALE=true`). The socket defaults to `/var/run/tailscale/tailscaled.sock`; override it with `--tailscale-socket` or `RELAY_TAILSCALE_SOCKET` when needed.
 
 For trusted local debugging that needs Docker, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`). For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. This explicitly exposes the selected host Docker daemon socket to terminal commands and therefore grants substantially more authority than the default sandbox.
 
