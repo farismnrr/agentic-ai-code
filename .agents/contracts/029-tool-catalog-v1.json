@@ -6,7 +6,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Run a full sandboxed coding-terminal command in the workspace; supports shells, scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
+    "description": "Run a sandboxed executable in the workspace using direct argv semantics. Shell operators such as ;, |, &&, globbing, and redirection are not implicit; use command=sh with args=[\"-lc\", \"...\"] when shell syntax is required. Supports scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
     "execution": {
       "taskSupport": "optional"
     },
@@ -151,6 +151,307 @@
       }
     ],
     "title": "Web Search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "maxLength": 65536,
+          "type": "string"
+        },
+        "depth": {
+          "default": 2,
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_entries": {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "path": {
+          "default": ".",
+          "maxLength": 65536,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "directory_list",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Directory List"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "max_results": {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "pattern": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "name": "file_search",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 1048576,
+          "type": "string"
+        },
+        "create_parents": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "overwrite": {
+          "default": false,
+          "type": "boolean"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "type": "object"
+    },
+    "name": "file_write",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Write"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "new_text": {
+          "maxLength": 262144,
+          "type": "string"
+        },
+        "old_text": {
+          "maxLength": 262144,
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "replace_all": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "old_text",
+        "new_text"
+      ],
+      "type": "object"
+    },
+    "name": "file_edit",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Edit"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "limit_lines": {
+          "default": 200,
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset_line": {
+          "default": 1,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "file_read",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Read"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "case_sensitive": {
+          "default": true,
+          "type": "boolean"
+        },
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "glob": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "max_results": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "regex": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "text_search",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "Text Search"
   },
   {
     "annotations": {

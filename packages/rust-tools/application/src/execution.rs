@@ -3,6 +3,7 @@
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_interfaces::mcp::{Tool, ToolCallResult, ToolResultContent};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
@@ -11,7 +12,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{watch, Mutex, Semaphore};
 use tokio::time::{timeout, Duration};
@@ -23,6 +24,15 @@ const MAX_EXEC_ARG_BYTES: usize = 64 * 1024;
 const MAX_HTTP_HEADERS: usize = 100;
 const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024;
 const MAX_RETAINED_JOBS: usize = 64;
+const DEFAULT_TEXT_SEARCH_RESULTS: usize = 50;
+const MAX_TEXT_SEARCH_RESULTS: usize = 100;
+const MAX_TEXT_SEARCH_PREVIEW_BYTES: usize = 1024;
+const MAX_TEXT_SEARCH_RESULT_BYTES: usize = 256 * 1024;
+const MAX_TEXT_SEARCH_QUERY_BYTES: usize = 4096;
+const MAX_TEXT_SEARCH_GLOB_BYTES: usize = 4096;
+const MAX_TEXT_SEARCH_CWD_BYTES: usize = 4096;
+const MAX_TEXT_SEARCH_STDERR_BYTES: usize = 8192;
+const TEXT_SEARCH_MAX_COLUMNS: usize = 1024;
 
 #[derive(Clone)]
 enum InvocationProgram {
@@ -835,6 +845,306 @@ fn build_terminal_exec_invocation(
     })
 }
 
+#[derive(Debug, Serialize)]
+struct TextSearchResult {
+    matches: Vec<TextSearchMatch>,
+    count: usize,
+    truncated: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct TextSearchMatch {
+    path: String,
+    line: u64,
+    column: u64,
+    preview: String,
+}
+
+async fn read_bounded_line<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: &mut R,
+    max_bytes: usize,
+) -> Result<Option<Vec<u8>>, McpError> {
+    let mut line = Vec::new();
+    loop {
+        let buffer = reader
+            .fill_buf()
+            .await
+            .map_err(|_| McpError::InvalidRequest("text search output is invalid".into()))?;
+        if buffer.is_empty() {
+            return if line.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(line))
+            };
+        }
+        let take = buffer
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(buffer.len(), |index| index + 1);
+        if line.len().saturating_add(take) > max_bytes {
+            return Err(McpError::InvalidRequest(
+                "text search match line exceeds maximum".into(),
+            ));
+        }
+        line.extend_from_slice(&buffer[..take]);
+        reader.consume(take);
+        if line.last() == Some(&b'\n') {
+            return Ok(Some(line));
+        }
+    }
+}
+
+fn truncate_utf8(value: &str, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value.to_owned();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_owned()
+}
+
+fn build_text_search_command(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<(Command, usize), McpError> {
+    let query = arguments
+        .get("query")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("text search query is required".into()))?;
+    if query.is_empty() || query.len() > MAX_TEXT_SEARCH_QUERY_BYTES {
+        return Err(McpError::InvalidRequest(
+            "text search query exceeds allowed bounds".into(),
+        ));
+    }
+    let cwd_arg = arguments.get("cwd").and_then(Value::as_str);
+    if cwd_arg.is_some_and(|cwd| cwd.len() > MAX_TEXT_SEARCH_CWD_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "text search cwd exceeds maximum".into(),
+        ));
+    }
+    let glob = arguments.get("glob").and_then(Value::as_str);
+    if glob.is_some_and(|glob| glob.is_empty() || glob.len() > MAX_TEXT_SEARCH_GLOB_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "text search glob exceeds allowed bounds".into(),
+        ));
+    }
+    let regex = arguments
+        .get("regex")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let case_sensitive = arguments
+        .get("case_sensitive")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let max_results = arguments
+        .get("max_results")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(DEFAULT_TEXT_SEARCH_RESULTS)
+        .clamp(1, MAX_TEXT_SEARCH_RESULTS);
+
+    let execution_root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let cwd = relay_core::terminal_policy::resolve_contained_cwd(&execution_root, cwd_arg)?;
+    let rg = resolve_safe_executable(config, "rg")?;
+    let bwrap = resolve_safe_executable(config, "bwrap")?;
+
+    let root = execution_root.to_string_lossy().into_owned();
+    let mut sandbox_args = vec![
+        "--ro-bind".into(),
+        "/usr".into(),
+        "/usr".into(),
+        "--ro-bind".into(),
+        "/lib".into(),
+        "/lib".into(),
+        "--ro-bind-try".into(),
+        "/lib64".into(),
+        "/lib64".into(),
+        "--ro-bind-try".into(),
+        "/etc".into(),
+        "/etc".into(),
+        "--ro-bind-try".into(),
+        "/bin".into(),
+        "/bin".into(),
+        "--ro-bind-try".into(),
+        "/sbin".into(),
+        "/sbin".into(),
+        "--dev".into(),
+        "/dev".into(),
+        "--proc".into(),
+        "/proc".into(),
+        "--tmpfs".into(),
+        "/tmp".into(),
+        "--ro-bind".into(),
+        root.clone(),
+        root.clone(),
+        "--unshare-pid".into(),
+        "--die-with-parent".into(),
+    ];
+    for path in &config.toolchain_paths {
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|_| McpError::InvalidRequest("configured toolchain path is invalid".into()))?;
+        let value = canonical.to_string_lossy().into_owned();
+        sandbox_args.extend(["--ro-bind".into(), value.clone(), value]);
+    }
+    sandbox_args.extend([
+        "--chdir".into(),
+        cwd.to_string_lossy().into_owned(),
+        rg.to_string_lossy().into_owned(),
+        "--json".into(),
+        "--no-config".into(),
+        "--no-messages".into(),
+        "--max-columns".into(),
+        TEXT_SEARCH_MAX_COLUMNS.to_string(),
+        "--max-columns-preview".into(),
+        "--sort".into(),
+        "path".into(),
+    ]);
+    if !regex {
+        sandbox_args.push("--fixed-strings".into());
+    }
+    if !case_sensitive {
+        sandbox_args.push("--ignore-case".into());
+    }
+    if let Some(glob) = glob {
+        sandbox_args.extend(["--glob".into(), glob.to_owned()]);
+    }
+    sandbox_args.extend(["--".into(), query.to_owned(), ".".into()]);
+
+    let mut command = Command::new(bwrap);
+    command
+        .args(sandbox_args)
+        .env_clear()
+        .env("HOME", &root)
+        .env("LANG", "C.UTF-8")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
+    Ok((command, max_results))
+}
+
+async fn run_text_search(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<ToolCallResult, McpError> {
+    let (mut command, max_results) = build_text_search_command(arguments, config)?;
+    let mut child = command
+        .spawn()
+        .map_err(|_| McpError::Internal("failed to start text search".into()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| McpError::Internal("text search stdout unavailable".into()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| McpError::Internal("text search stderr unavailable".into()))?;
+    let stderr_buffer = Arc::new(Mutex::new(OutputBuffer::new(now_ms())));
+    let stderr_task = tokio::spawn(drain_pipe(
+        stderr,
+        stderr_buffer.clone(),
+        MAX_TEXT_SEARCH_STDERR_BYTES,
+    ));
+
+    let mut lines = BufReader::new(stdout);
+    let mut matches = Vec::new();
+    let mut truncated = false;
+    loop {
+        let line =
+            match read_bounded_line(&mut lines, MAX_TEXT_SEARCH_PREVIEW_BYTES.saturating_mul(8))
+                .await
+            {
+                Ok(Some(line)) => line,
+                Ok(None) => break,
+                Err(error) => {
+                    kill_process_group(&mut child).await;
+                    let _ = child.wait().await;
+                    let _ = stderr_task.await;
+                    return Err(error);
+                }
+            };
+        let event: Value = serde_json::from_slice(&line)
+            .map_err(|_| McpError::InvalidRequest("text search output is invalid".into()))?;
+        if event.get("type").and_then(Value::as_str) != Some("match") {
+            continue;
+        }
+        if matches.len() >= max_results {
+            truncated = true;
+            kill_process_group(&mut child).await;
+            break;
+        }
+        let data = &event["data"];
+        let path = data["path"]["text"]
+            .as_str()
+            .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
+        let line_number = data["line_number"]
+            .as_u64()
+            .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
+        let column = data["submatches"]
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(|item| item["start"].as_u64())
+            .unwrap_or(0)
+            .saturating_add(1);
+        let preview = data["lines"]["text"]
+            .as_str()
+            .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
+        matches.push(TextSearchMatch {
+            path: path.strip_prefix("./").unwrap_or(path).to_owned(),
+            line: line_number,
+            column,
+            preview: truncate_utf8(
+                preview.trim_end_matches(['\r', '\n']),
+                MAX_TEXT_SEARCH_PREVIEW_BYTES,
+            ),
+        });
+    }
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|_| McpError::Internal("text search process failed".into()))?;
+    let _ = stderr_task.await;
+    if !truncated {
+        match status.code() {
+            Some(0 | 1) => {}
+            Some(2) => {
+                return Err(McpError::InvalidRequest(
+                    "text search pattern is invalid".into(),
+                ))
+            }
+            _ => return Err(McpError::InvalidRequest("text search failed".into())),
+        }
+    }
+
+    let mut result = TextSearchResult {
+        count: matches.len(),
+        matches,
+        truncated,
+    };
+    while !result.matches.is_empty()
+        && serde_json::to_vec(&result)
+            .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?
+            .len()
+            > MAX_TEXT_SEARCH_RESULT_BYTES
+    {
+        result.matches.pop();
+        result.count = result.matches.len();
+        result.truncated = true;
+    }
+    let text = serde_json::to_string(&result)
+        .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?;
+    Ok(ToolCallResult::complete(vec![ToolResultContent {
+        kind: "text",
+        text,
+    }]))
+}
+
 fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvocation, McpError> {
     let url = arguments.get("url").and_then(Value::as_str).unwrap_or("");
     let method = arguments
@@ -923,6 +1233,75 @@ pub async fn dispatch_tool_call(
     config: &ServerConfig,
     manager: &Arc<JobManager>,
 ) -> Result<ToolCallResult, McpError> {
+    if tool.name == "directory_list" {
+        let result = crate::workspace::directory_list(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize directory listing".into()))?;
+        if text.len() > crate::workspace::MAX_DIRECTORY_RESULT_BYTES {
+            return Err(McpError::InvalidRequest(
+                "directory listing exceeds output maximum".into(),
+            ));
+        }
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
+    if tool.name == "file_search" {
+        let result = crate::workspace::file_search(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file search result".into()))?;
+        if text.len() > crate::workspace::MAX_FILE_SEARCH_RESULT_BYTES {
+            return Err(McpError::InvalidRequest(
+                "file search result exceeds output maximum".into(),
+            ));
+        }
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
+    if tool.name == "file_write" {
+        let result = crate::workspace::file_write(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file write result".into()))?;
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
+    if tool.name == "file_edit" {
+        let result = crate::workspace::file_edit(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file edit result".into()))?;
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
+    if tool.name == "file_read" {
+        let result = crate::workspace::file_read(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file read result".into()))?;
+        if text.len() > crate::workspace::MAX_FILE_READ_BYTES + 16 * 1024 {
+            return Err(McpError::InvalidRequest(
+                "file read result exceeds output maximum".into(),
+            ));
+        }
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
+    if tool.name == "text_search" {
+        return run_text_search(arguments, config).await;
+    }
+
     let invocation = match tool.name {
         "terminal_exec" => build_terminal_exec_invocation(arguments, config)?,
         "http_fetch" => build_http_fetch_invocation(arguments)?,

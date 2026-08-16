@@ -61,9 +61,10 @@ The relay:
 - uses Bubblewrap on Linux for filesystem/process containment;
 - validates server-side tool authorization independently of client UI;
 - supports both local and OAuth-protected remote modes;
-- owns terminal timeout, cancellation, job concurrency, bounded output retention, and process-tree cleanup.
+- owns terminal timeout, cancellation, job concurrency, bounded output retention, and process-tree cleanup;
+- exposes bounded native workspace inspection/search/read/edit/write operations without routing routine filesystem work through a shell.
 
-For the single-owner profile, `--execution-root` may be the canonical non-root home directory while `--dir` points at a particular starting repository. A request may change `cwd` between directories under the execution root without reconnecting the MCP client.
+For the single-owner profile, `--execution-root` may be the canonical non-root home directory while `--dir` points at a particular starting repository. A request may change `cwd` between directories under the execution root without reconnecting the MCP client. Workspace path resolution canonicalizes existing read targets and validates write parents against this boundary. Recursive native traversal does not follow symlink directories; edit/write operations additionally use no-follow directory/file descriptors and same-directory atomic replacement semantics so validation-time containment is not treated as sufficient mutation safety.
 
 ## Remote MCP and OAuth
 
