@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-08 VERIFIED
+**Status:** WORKSPACE V1 LOCALLY VERIFIED — LIVE CLIENT REFRESH PENDING
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -140,7 +140,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Complete | Guarded exact edits are atomic and contained |
 | PLAN-07 | `file_write` | PLAN-01 | Complete | Create/replace operations are explicit, atomic, and contained |
 | PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Complete | Full v1 surface passes black-box and regression coverage |
-| PLAN-09 | Documentation and agent guidance | PLAN-08 | Planned | Docs match the actual schemas and tool-selection behavior |
+| PLAN-09 | Documentation and agent guidance | PLAN-08 | Complete | Docs match the actual schemas and tool-selection behavior |
 | PLAN-10 | Read-only Git tools | PLAN-08 | Future | Structured `git_status` and `git_diff` are available |
 | PLAN-11 | Code intelligence | PLAN-08 | Future | Evidence-driven symbol/navigation support exists |
 | PLAN-12 | Semantic search | PLAN-08 | Deferred | Added only if lexical search proves insufficient |
@@ -660,10 +660,10 @@ new path beneath external symlinked ancestor
 Only modify documents where the information naturally belongs.
 
 **Steps:**
-- [ ] Document all six workspace tools and actual input semantics.
-- [ ] Document execution-root, `cwd`, and path containment behavior.
-- [ ] Update relay/server descriptions that currently mention only terminal, HTTP, and web search.
-- [ ] Keep examples synchronized with the real MCP schemas.
+- [x] Document all six workspace tools and actual input semantics.
+- [x] Document execution-root, `cwd`, and path containment behavior.
+- [x] Update relay/server descriptions that currently mention only terminal, HTTP, and web search.
+- [x] Keep examples synchronized with the real MCP schemas.
 
 ## TASK-902: Document agent tool selection
 
@@ -685,11 +685,13 @@ Clarify that terminal remains the correct escape hatch for builds, tests, packag
 - Documentation options match tool schemas.
 - README/tool inventory matches `tools/list`.
 
+**Evidence:** `scripts/verify-workspace-docs.sh` checks the 12-tool inventory and Workspace v1 defaults against the frozen runtime `tools/list` contract; `scripts/phase7-external-mcp-contract.sh` verifies that frozen catalog against a freshly built relay.
+
 **Commit boundary:** `docs(relay): document native coding workspace tools`
 
 **Phase exit criteria:**
-- [ ] Current tool behavior is accurately documented.
-- [ ] Agent guidance prefers structured native operations without discouraging legitimate terminal usage.
+- [x] Current tool behavior is accurately documented.
+- [x] Agent guidance prefers structured native operations without discouraging legitimate terminal usage.
 
 # PLAN-10: Read-only Git Tools
 
@@ -863,7 +865,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-06: Add guarded `file_edit`
 - [x] PLAN-07: Add atomic `file_write`
 - [x] PLAN-08: Complete MCP/security/black-box integration
-- [ ] PLAN-09: Update documentation and agent tool-selection guidance
+- [x] PLAN-09: Update documentation and agent tool-selection guidance
 - [ ] PLAN-10: Evaluate/add `git_status` and `git_diff`
 - [ ] PLAN-11: Evaluate LSP-backed code intelligence
 - [ ] PLAN-12: Re-evaluate semantic search only from demonstrated need
@@ -887,7 +889,7 @@ Workspace v1 is complete when:
 - [x] existing terminal/job/http/search behavior has no regression;
 - [x] Cargo format, Clippy, and tests pass;
 - [x] MCP black-box tests pass;
-- [ ] documentation matches actual schemas;
+- [x] documentation matches actual schemas;
 - [x] no semantic-index/vector infrastructure has been added prematurely.
 
 # Execution Handoff
