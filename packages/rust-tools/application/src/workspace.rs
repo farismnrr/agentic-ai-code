@@ -3,7 +3,6 @@ use relay_core::error::McpError;
 use relay_core::workspace_path::{resolve_existing_path, EntryKind};
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BinaryHeap;
 use std::path::Path;
 
 #[cfg(target_os = "linux")]
@@ -12,6 +11,8 @@ use std::ffi::{CStr, CString, OsStr};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 #[cfg(target_os = "linux")]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::MetadataExt;
 
 pub const DEFAULT_DIRECTORY_DEPTH: usize = 2;
 pub const MAX_DIRECTORY_DEPTH: usize = 4;
@@ -121,7 +122,7 @@ fn visit_directory(
         });
 
         if file_type.is_dir() && remaining_depth > 1 {
-            let child_directory = directory.open_child(&child.name)?;
+            let child_directory = directory.open_child(&child)?;
             visit_directory(
                 &child_directory,
                 &child_relative,
@@ -158,6 +159,14 @@ struct SecureDirectory {
 struct DirectoryEntry {
     name: std::ffi::OsString,
     file_type: EntryType,
+    identity: FileIdentity,
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
 }
 
 #[cfg(target_os = "linux")]
@@ -189,6 +198,7 @@ impl SecureDirectory {
             .map_err(|_| McpError::InvalidRequest("path is outside execution root".into()))?;
         let root_c = CString::new(root.as_os_str().as_bytes())
             .map_err(|_| McpError::InvalidRequest("execution root is invalid".into()))?;
+        let root_identity = path_identity(root)?;
         let root_fd = unsafe {
             libc::open(
                 root_c.as_ptr(),
@@ -201,18 +211,28 @@ impl SecureDirectory {
         let mut directory = Self {
             fd: unsafe { OwnedFd::from_raw_fd(root_fd) },
         };
+        directory.verify_identity(root_identity)?;
+
+        let mut expected_path = root.to_path_buf();
         for component in relative.components() {
             let std::path::Component::Normal(component) = component else {
                 return Err(McpError::InvalidRequest(
                     "path is not a relative directory".into(),
                 ));
             };
-            directory = directory.open_child(component)?;
+            expected_path.push(component);
+            let expected_identity = path_identity(&expected_path)?;
+            directory = directory.open_child_name(component, expected_identity)?;
         }
+        directory.verify_identity(path_identity(target)?)?;
         Ok(directory)
     }
 
-    fn open_child(&self, name: &OsStr) -> Result<Self, McpError> {
+    fn open_child(&self, child: &DirectoryEntry) -> Result<Self, McpError> {
+        self.open_child_name(&child.name, child.identity)
+    }
+
+    fn open_child_name(&self, name: &OsStr, expected: FileIdentity) -> Result<Self, McpError> {
         let name = CString::new(name.as_bytes())
             .map_err(|_| McpError::InvalidRequest("directory entry is invalid".into()))?;
         let fd = unsafe {
@@ -225,9 +245,24 @@ impl SecureDirectory {
         if fd < 0 {
             return Err(inaccessible_directory_error());
         }
-        Ok(Self {
+        let directory = Self {
             fd: unsafe { OwnedFd::from_raw_fd(fd) },
-        })
+        };
+        directory.verify_identity(expected)?;
+        Ok(directory)
+    }
+
+    fn verify_identity(&self, expected: FileIdentity) -> Result<(), McpError> {
+        let mut stat = unsafe { std::mem::zeroed::<libc::stat>() };
+        if unsafe { libc::fstat(self.fd.as_raw_fd(), &mut stat) } < 0 {
+            return Err(inaccessible_directory_error());
+        }
+        if file_identity(&stat) != expected {
+            return Err(McpError::InvalidRequest(
+                "directory changed during traversal".into(),
+            ));
+        }
+        Ok(())
     }
 
     fn read_entries(
@@ -292,10 +327,28 @@ impl SecureDirectory {
                         directory: kind == libc::S_IFDIR,
                         regular: kind == libc::S_IFREG,
                     },
+                    identity: file_identity(&stat),
                 })
             })
             .collect()
     }
+}
+
+#[cfg(target_os = "linux")]
+fn file_identity(stat: &libc::stat) -> FileIdentity {
+    FileIdentity {
+        device: stat.st_dev,
+        inode: stat.st_ino,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn path_identity(path: &Path) -> Result<FileIdentity, McpError> {
+    let metadata = std::fs::metadata(path).map_err(|_| inaccessible_directory_error())?;
+    Ok(FileIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    })
 }
 
 pub const DEFAULT_FILE_SEARCH_RESULTS: usize = 100;
@@ -348,88 +401,19 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
     let search_root = resolve_existing_path(&execution_root, cwd, ".", EntryKind::Directory)?;
     let search_root = SecureDirectory::open_relative(&execution_root, &search_root)?;
     let path_pattern = pattern.contains('/');
+    let mut state = FileSearchState {
+        pattern,
+        path_pattern,
+        max_results,
+        matches: Vec::new(),
+        visited_entries: 0,
+        truncated: false,
+    };
+    visit_file_search(&search_root, "", 0, &mut state)?;
 
-    let mut stack = vec![(search_root, String::new(), 0usize)];
-    let mut visited_entries = 0usize;
-    let mut match_count = 0usize;
-    let mut smallest_matches = BinaryHeap::new();
-
-    while let Some((directory, relative_directory, depth)) = stack.pop() {
-        let children = directory.read_entries(
-            MAX_FILE_SEARCH_DIRECTORY_ENTRIES,
-            "file search directory scan exceeds maximum",
-        )?;
-
-        let mut next_directories = Vec::new();
-        for child in children {
-            visited_entries = visited_entries.saturating_add(1);
-            if visited_entries > MAX_FILE_SEARCH_VISITED_ENTRIES {
-                return Err(McpError::InvalidRequest(
-                    "file search traversal exceeds maximum".into(),
-                ));
-            }
-
-            // Results are UTF-8 JSON paths. An entry whose native name cannot
-            // be represented as UTF-8 is deterministically omitted, including
-            // any directory below it; it is never lossily renamed or followed.
-            let Some(name) = child.name.to_str() else {
-                continue;
-            };
-            if name.len() > MAX_FILE_SEARCH_SEGMENT_BYTES {
-                return Err(McpError::InvalidRequest(
-                    "file search path segment exceeds maximum".into(),
-                ));
-            }
-            let child_depth = depth.saturating_add(1);
-            if child_depth > MAX_FILE_SEARCH_DEPTH {
-                return Err(McpError::InvalidRequest(
-                    "file search depth exceeds maximum".into(),
-                ));
-            }
-            let relative = append_search_path(&relative_directory, name)?;
-            let file_type = child.file_type;
-            if file_type.is_symlink() {
-                continue;
-            }
-            if file_type.is_dir() {
-                if FILE_SEARCH_SKIPPED_DIRECTORIES.contains(&name) {
-                    continue;
-                }
-                let child_directory = directory.open_child(&child.name)?;
-                next_directories.push((child_directory, relative, child_depth));
-                continue;
-            }
-            if !file_type.is_file() {
-                continue;
-            }
-
-            let matched = if path_pattern {
-                glob_match_path(pattern, &relative)
-            } else {
-                glob_match_segment(pattern, name)
-            };
-            if matched {
-                match_count = match_count.saturating_add(1);
-                smallest_matches.push(relative);
-                if smallest_matches.len() > max_results.saturating_add(1) {
-                    smallest_matches.pop();
-                }
-            }
-        }
-
-        // LIFO stack: reverse the sorted directory list so the next directory
-        // visited is lexically smallest. Final matches are sorted independently.
-        for item in next_directories.into_iter().rev() {
-            stack.push(item);
-        }
-    }
-
-    let mut matches = smallest_matches.into_vec();
+    let mut matches = state.matches;
     matches.sort();
-    let mut truncated = match_count > max_results;
-    if matches.len() > max_results {
-        matches.truncate(max_results);
-    }
+    let mut truncated = state.truncated;
     while !matches.is_empty()
         && file_search_result_size(pattern, &matches, truncated)? > MAX_FILE_SEARCH_RESULT_BYTES
     {
@@ -443,6 +427,88 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
         count,
         truncated,
     })
+}
+
+struct FileSearchState<'a> {
+    pattern: &'a str,
+    path_pattern: bool,
+    max_results: usize,
+    matches: Vec<String>,
+    visited_entries: usize,
+    truncated: bool,
+}
+
+fn visit_file_search(
+    directory: &SecureDirectory,
+    relative_directory: &str,
+    depth: usize,
+    state: &mut FileSearchState<'_>,
+) -> Result<(), McpError> {
+    if state.truncated {
+        return Ok(());
+    }
+    let children = directory.read_entries(
+        MAX_FILE_SEARCH_DIRECTORY_ENTRIES,
+        "file search directory scan exceeds maximum",
+    )?;
+
+    for child in children {
+        state.visited_entries = state.visited_entries.saturating_add(1);
+        if state.visited_entries > MAX_FILE_SEARCH_VISITED_ENTRIES {
+            return Err(McpError::InvalidRequest(
+                "file search traversal exceeds maximum".into(),
+            ));
+        }
+
+        let Some(name) = child.name.to_str() else {
+            continue;
+        };
+        if name.len() > MAX_FILE_SEARCH_SEGMENT_BYTES {
+            return Err(McpError::InvalidRequest(
+                "file search path segment exceeds maximum".into(),
+            ));
+        }
+        let child_depth = depth.saturating_add(1);
+        if child_depth > MAX_FILE_SEARCH_DEPTH {
+            return Err(McpError::InvalidRequest(
+                "file search depth exceeds maximum".into(),
+            ));
+        }
+        let relative = append_search_path(relative_directory, name)?;
+        let file_type = child.file_type;
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            if FILE_SEARCH_SKIPPED_DIRECTORIES.contains(&name) {
+                continue;
+            }
+            let child_directory = directory.open_child(&child)?;
+            visit_file_search(&child_directory, &relative, child_depth, state)?;
+            if state.truncated {
+                return Ok(());
+            }
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+
+        let matched = if state.path_pattern {
+            glob_match_path(state.pattern, &relative)
+        } else {
+            glob_match_segment(state.pattern, name)
+        };
+        if matched {
+            if state.matches.len() < state.max_results {
+                state.matches.push(relative);
+            } else {
+                state.truncated = true;
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_file_search_pattern(pattern: &str) -> Result<(), McpError> {
