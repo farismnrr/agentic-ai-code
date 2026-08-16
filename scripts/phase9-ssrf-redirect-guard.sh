@@ -11,7 +11,7 @@ cd "$root"
 command -v node >/dev/null
 
 node --input-type=module <<'NODE'
-import { isDisallowedAddress, createSsrfSafeFetch } from './server/utils/ssrf-guard.ts'
+import { isDisallowedAddress, createSsrfSafeFetch } from './server/infrastructure/security/ssrf-guard.ts'
 
 function fail(message) {
   console.error(`phase9-ssrf-redirect-guard: FAIL — ${message}`)
