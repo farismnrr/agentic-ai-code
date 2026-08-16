@@ -124,6 +124,8 @@ The relay remains loopback-only. `--execution-root "$HOME"` is appropriate for t
 
 If your developer toolchains live outside the fixed system PATH, add reviewed user-owned directories explicitly with repeated `--toolchain-path` arguments or `RELAY_TOOLCHAIN_PATH`; do not inherit the entire shell PATH.
 
+For trusted local debugging that needs Docker, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`). For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. This explicitly exposes the selected host Docker daemon socket to terminal commands and therefore grants substantially more authority than the default sandbox.
+
 ## Next step
 
 For public/remote tool access, continue with:
