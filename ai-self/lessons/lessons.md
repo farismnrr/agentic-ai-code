@@ -44,3 +44,9 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: `--dir` is only the relay's default working directory; `--execution-root` is the real filesystem containment boundary. For a general coding agent that should work across projects under one home directory, use `--dir "$HOME"` with `--execution-root "$HOME"`, then set task-specific `cwd` per tool call. Reserve `--dir "$PWD"` for intentionally project-scoped relay instances.
 - Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
 - Action taken: Updated agent-facing and operator documentation to use a home-based general coding profile by default.
+
+- Date: 2026-08-16
+- Context: Adding native read/search/edit/write tools to a filesystem-contained MCP coding relay.
+- Lesson: Treat canonical path containment as validation-time evidence, not mutation safety. For security-sensitive traversal and writes, keep one shared path contract, then use stable directory descriptors with no-follow opens, revalidate final entry identity at operation time, and commit writes through same-directory temporary files with explicit atomic/no-clobber semantics. When a broad regression check fails outside the changed surface, compare the same behavior against the baseline branch before expanding scope; unchanged baseline failures should be reported as unproven/pre-existing rather than silently “fixed” or falsely marked green.
+- Applies to: Sandboxed coding relays, filesystem MCP tools, local agents, and any service performing contained native filesystem mutation.
+- Action taken: Workspace v1 now shares one execution-root containment foundation, uses descriptor-based traversal and atomic mutation guards, includes adversarial MCP verification, and records the pre-existing outbound `http_fetch` limitation separately from Plan 038 regression results.

@@ -360,6 +360,158 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "directory_list",
+            title: Some("Directory List"),
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "maxLength": 65536, "default": "." },
+                    "cwd": { "type": "string", "maxLength": 65536 },
+                    "depth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 },
+                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
+            name: "file_search",
+            title: Some("File Search"),
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "required": ["pattern"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
+            name: "file_write",
+            title: Some("File Write"),
+            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "content": { "type": "string", "maxLength": 1048576 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "create_parents": { "type": "boolean", "default": false },
+                    "overwrite": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "content"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
+            name: "file_edit",
+            title: Some("File Edit"),
+            description: "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "old_text": { "type": "string", "minLength": 1, "maxLength": 262144 },
+                    "new_text": { "type": "string", "maxLength": 262144 },
+                    "replace_all": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "old_text", "new_text"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
+            name: "file_read",
+            title: Some("File Read"),
+            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1 },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
+            name: "text_search",
+            title: Some("Text Search"),
+            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "regex": { "type": "boolean", "default": false },
+                    "case_sensitive": { "type": "boolean", "default": true },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
             description: "Start a bounded sandboxed terminal job and return its task ID for polling.",

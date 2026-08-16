@@ -453,6 +453,38 @@ def run():
             assert 'resource_metadata="https://relay.example/.well-known/oauth-protected-resource/mcp"' in missing_challenge
             assert not os.path.exists(dispatch_marker), "missing auth reached tool execution"
 
+            workspace_auth_edit = os.path.join(temp_dir, "workspace-auth-edit.txt")
+            workspace_auth_read = os.path.join(temp_dir, "workspace-auth-read.txt")
+            with open(workspace_auth_edit, "w", encoding="utf-8") as output:
+                output.write("before")
+            with open(workspace_auth_read, "w", encoding="utf-8") as output:
+                output.write("read-canary")
+            workspace_call_meta = {"io.modelcontextprotocol/protocolVersion": PROTOCOL,
+                                   "io.modelcontextprotocol/clientCapabilities": {}}
+            workspace_auth_calls = {
+                "directory_list": {"path": "."},
+                "file_search": {"pattern": "**/*"},
+                "text_search": {"query": "read-canary"},
+                "file_read": {"path": "workspace-auth-read.txt"},
+                "file_edit": {"path": "workspace-auth-edit.txt", "old_text": "before", "new_text": "after"},
+                "file_write": {"path": "workspace-auth-write.txt", "content": "written"},
+            }
+            for index, (workspace_name, workspace_arguments) in enumerate(workspace_auth_calls.items(), start=60):
+                status, _, body = request_after_admission(
+                    remote_url,
+                    headers=headers(method="tools/call", name=workspace_name, forwarded="https"),
+                    body=mcp("tools/call", {"name": workspace_name, "arguments": workspace_arguments,
+                                             "_meta": workspace_call_meta}, request_id=index),
+                )
+                assert_status(status, 200, f"missing bearer workspace tool {workspace_name}")
+                result = body["result"]
+                assert result["resultType"] == "complete" and result["isError"] is True
+                challenges = result["_meta"]["mcp/www_authenticate"]
+                assert isinstance(challenges, list) and len(challenges) == 1
+                assert 'error="invalid_token"' in challenges[0]
+            assert open(workspace_auth_edit, encoding="utf-8").read() == "before"
+            assert not os.path.exists(os.path.join(temp_dir, "workspace-auth-write.txt"))
+
             status, challenge_headers, body = request(remote_url,
                 headers=headers(method="server/discover", forwarded="https", auth="Bearer malformed"), body=valid_discover)
             assert_status(status, 401, "invalid bearer token")
@@ -533,6 +565,23 @@ def run():
             assert scope_challenges[0] == insufficient_scope_http_challenge
             assert "error_description=" in scope_challenges[0]
             assert not os.path.exists(dispatch_marker), "missing scope reached tool execution"
+
+            for index, (workspace_name, workspace_arguments) in enumerate(workspace_auth_calls.items(), start=70):
+                status, _, body = request_after_admission(
+                    remote_url,
+                    headers=headers(method="tools/call", name=workspace_name, forwarded="https", auth=f"Bearer {no_scope}"),
+                    body=mcp("tools/call", {"name": workspace_name, "arguments": workspace_arguments,
+                                             "_meta": workspace_call_meta}, request_id=index),
+                )
+                assert_status(status, 200, f"missing scope workspace tool {workspace_name}")
+                result = body["result"]
+                assert result["resultType"] == "complete" and result["isError"] is True
+                challenges = result["_meta"]["mcp/www_authenticate"]
+                assert isinstance(challenges, list) and len(challenges) == 1
+                assert 'error="insufficient_scope"' in challenges[0]
+                assert 'scope="relay.coding"' in challenges[0]
+            assert open(workspace_auth_edit, encoding="utf-8").read() == "before"
+            assert not os.path.exists(os.path.join(temp_dir, "workspace-auth-write.txt"))
 
             invalid_dispatch = {"name": "terminal_exec", "arguments": {"command": "touch", "args": [dispatch_marker], "extra": True},
                                 "_meta": call_params["_meta"]}
