@@ -923,6 +923,21 @@ pub async fn dispatch_tool_call(
     config: &ServerConfig,
     manager: &Arc<JobManager>,
 ) -> Result<ToolCallResult, McpError> {
+    if tool.name == "directory_list" {
+        let result = crate::workspace::directory_list(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize directory listing".into()))?;
+        if text.len() > crate::workspace::MAX_DIRECTORY_RESULT_BYTES {
+            return Err(McpError::InvalidRequest(
+                "directory listing exceeds output maximum".into(),
+            ));
+        }
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
     let invocation = match tool.name {
         "terminal_exec" => build_terminal_exec_invocation(arguments, config)?,
         "http_fetch" => build_http_fetch_invocation(arguments)?,

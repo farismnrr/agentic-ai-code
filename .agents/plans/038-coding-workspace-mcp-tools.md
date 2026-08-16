@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-01 VERIFIED
+**Status:** IN PROGRESS — PLAN-02 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -133,7 +133,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | Plan | Goal | Depends On | Status | Exit Criteria |
 |---|---|---|---|---|
 | PLAN-01 | Shared workspace/path safety foundation | none | Complete | Read/write paths have one validation-time containment contract; mutation phases add operation-time atomic/no-follow safety |
-| PLAN-02 | `directory_list` | PLAN-01 | Planned | Bounded directory inspection works through MCP |
+| PLAN-02 | `directory_list` | PLAN-01 | Complete | Bounded directory inspection works through MCP |
 | PLAN-03 | `file_search` | PLAN-01 | Planned | Bounded deterministic file discovery works through MCP |
 | PLAN-04 | `text_search` | PLAN-01 | Planned | Bounded literal/regex source search works through MCP |
 | PLAN-05 | `file_read` | PLAN-01 | Planned | Complete/ranged text reading works through MCP |
@@ -237,32 +237,32 @@ directory_list(
 ```
 
 **Steps:**
-- [ ] Default `path` to `.`.
-- [ ] Default `depth` to a shallow value suitable for orientation.
-- [ ] Define server hard maximum depth and entry count.
-- [ ] Add correct read-only MCP annotations and `relay.coding` security scheme.
+- [x] Default `path` to `.`.
+- [x] Default `depth` to `2`, with server hard maximum `4`.
+- [x] Define server hard maxima: `100` returned entries, `4096` scanned entries per directory, and `256 KiB` serialized result size.
+- [x] Add correct read-only MCP annotations and `relay.coding` security scheme.
 
 ## TASK-202: Implement bounded native traversal
 
 **Outcome:** Deterministic directory listing without spawning `find` or `tree`.
 
 **Steps:**
-- [ ] Resolve the directory using PLAN-01 primitives.
-- [ ] Use deterministic lexical ordering.
-- [ ] Return entry type and relative path.
-- [ ] Bound recursion depth and total entries.
-- [ ] Do not recursively follow symlink directories.
-- [ ] Mark truncation explicitly.
+- [x] Resolve the directory using PLAN-01 primitives, including native-path re-resolution for filesystem-discovered entries.
+- [x] Use deterministic lexical ordering.
+- [x] Return entry type and relative path.
+- [x] Bound recursion depth, scanned entries, returned entries, and serialized result bytes.
+- [x] Do not recursively follow symlink directories.
+- [x] Mark caller/result-limit truncation explicitly; reject pathological directory scans at the hard scan cap.
 
 **Validation:**
-- Empty directory, normal directory, nested depth, huge directory truncation, symlink entries, symlink loop, nonexistent path, and file-as-directory cases.
+- `./scripts/verify-directory-list.sh` covers empty/normal directories, nested depth, deterministic ordering, caller/default result truncation, a `4097`-entry pathological scan-cap rejection, symlink entries/loops/external targets, traversal/absolute escapes, nonexistent paths, file-as-directory, schema rejection, and safe error output through real MCP `tools/list` + `tools/call`.
 
 **Commit boundary:** `feat(relay): add directory_list workspace tool`
 
 **Phase exit criteria:**
-- [ ] Tool appears in `tools/list`.
-- [ ] Bounded listing works through `tools/call`.
-- [ ] Root/symlink containment tests pass.
+- [x] Tool appears in `tools/list`.
+- [x] Bounded listing works through `tools/call`.
+- [x] Root/symlink containment tests pass.
 
 # PLAN-03: `file_search`
 
@@ -850,7 +850,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 # Master Todo
 
 - [x] PLAN-01: Shared workspace path and containment layer
-- [ ] PLAN-02: Add `directory_list`
+- [x] PLAN-02: Add `directory_list`
 - [ ] PLAN-03: Add `file_search`
 - [ ] PLAN-04: Add `text_search`
 - [ ] PLAN-05: Add `file_read`

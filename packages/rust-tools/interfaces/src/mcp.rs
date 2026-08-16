@@ -360,6 +360,33 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "directory_list",
+            title: Some("Directory List"),
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "maxLength": 65536, "default": "." },
+                    "cwd": { "type": "string", "maxLength": 65536 },
+                    "depth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 },
+                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
             description: "Start a bounded sandboxed terminal job and return its task ID for polling.",
