@@ -41,6 +41,8 @@ For the current explainer format:
 - orientation controls switch the actual video composition, not only the outer viewer surface;
 - both orientations share one story, timeline, captions, template, and semantic motion;
 - base/landscape layout stays deterministic, while portrait gets explicit composition overrides;
+- portrait recomposition must include a visual-density pass, not only position changes: resize illustrations, cards, diagrams, typography, padding, and gaps for the narrower 720px artboard while preserving useful negative space;
+- a layout can be collision-free and still be visually wrong if portrait elements remain landscape-sized; compare representative element proportions after recomposition;
 - test both compositions across portrait and landscape browser viewports;
 - keep composition-safe zones explicit per orientation;
 - use a dedicated caption shelf instead of placing captions opportunistically inside scene layouts.
@@ -137,7 +139,8 @@ Minimum checks:
 5. caption collisions;
 6. unexpected critical-element overlaps;
 7. the entire timeline in both portrait and landscape artboards, plus shared orientation controls when present;
-8. targeted geometry checks for any specific collision the user reported.
+8. portrait visual-density review: inspect representative illustration/card/diagram sizes and negative space, not just collisions;
+9. targeted geometry checks for any specific collision the user reported.
 
 For the current project, use:
 

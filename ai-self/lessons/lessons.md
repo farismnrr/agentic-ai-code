@@ -20,3 +20,9 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: Viewer orientation and video composition are different concerns. If the user asks for portrait and landscape output, changing only the outer preview surface is insufficient; switch the actual artboard (for example 1280×720 ↔ 720×1280), provide a real per-orientation composition, keep one shared story/timeline/template, and expose orientation to motion code only where geometry changes. Validate the entire timeline in both artboards, not just the orientation control state.
 - Applies to: YouTube/short-form explainers, responsive motion graphics, and browser-rendered video tooling.
 - Action taken: Reworked the motion-explainer system from letterboxed portrait preview to true dual-orientation artboards with per-segment portrait SCSS and dual-orientation full-timeline validation.
+
+- Date: 2026-08-16
+- Context: Portrait recomposition of dual-orientation browser-rendered motion explainers.
+- Lesson: A true portrait artboard can still feel wrong when it only repositions landscape-sized objects. After switching to 720×1280, explicitly retune visual density: illustration scale, card/diagram width, typography, padding, gaps, and negative space. Collision-free is necessary but not sufficient; compare representative element proportions in portrait before declaring the composition done.
+- Applies to: Dual-orientation motion explainers and responsive browser-rendered video compositions.
+- Action taken: Added a portrait density pass across all RAG segments, shared caption/background/play-overlay styling, and updated the reusable motion-explainer workflow.
