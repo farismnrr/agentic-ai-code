@@ -95,6 +95,19 @@ pub struct Cli {
     #[arg(long, env = "RELAY_MAX_RUNNING_JOBS", default_value_t = 16)]
     pub max_running_jobs: usize,
 
+    /// Explicit local-development access to a host Docker daemon socket.
+    /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
+    #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
+    pub allow_docker: bool,
+
+    /// Host Docker socket to expose when --allow-docker is enabled.
+    #[arg(
+        long,
+        env = "RELAY_DOCKER_SOCKET",
+        default_value = "/var/run/docker.sock"
+    )]
+    pub docker_socket: String,
+
     /// Explicit user-owned toolchain directories added to the safe PATH.
     #[arg(
         long = "toolchain-path",
@@ -145,6 +158,8 @@ pub struct ServerConfig {
     pub completed_job_ttl_ms: u64,
     pub max_retained_output_bytes: usize,
     pub max_running_jobs: usize,
+    pub allow_docker: bool,
+    pub docker_socket: String,
     pub toolchain_paths: Vec<String>,
 }
 
@@ -168,6 +183,8 @@ impl Default for ServerConfig {
             completed_job_ttl_ms: 3_600_000,
             max_retained_output_bytes: 1_048_576,
             max_running_jobs: 16,
+            allow_docker: false,
+            docker_socket: "/var/run/docker.sock".into(),
             toolchain_paths: Vec::new(),
         }
     }
@@ -389,6 +406,14 @@ impl ServerConfig {
                 "max_retained_output_bytes must be non-zero".into(),
             ));
         }
+        if self.allow_docker {
+            let socket = std::path::Path::new(&self.docker_socket);
+            if !socket.is_absolute() {
+                return Err(RelayError::InvalidConfig(
+                    "docker-socket must be an absolute path".into(),
+                ));
+            }
+        }
         for path in &self.toolchain_paths {
             let candidate = std::fs::canonicalize(path).map_err(|_| {
                 RelayError::InvalidConfig(
@@ -434,6 +459,8 @@ impl From<&Cli> for ServerConfig {
             completed_job_ttl_ms: cli.completed_job_ttl_ms,
             max_retained_output_bytes: cli.max_retained_output_bytes,
             max_running_jobs: cli.max_running_jobs,
+            allow_docker: cli.allow_docker,
+            docker_socket: cli.docker_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
         }
     }
