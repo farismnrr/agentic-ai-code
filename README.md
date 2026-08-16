@@ -40,12 +40,9 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
-- `terminal_exec`
-- `http_fetch`
-- `web_search`
-- `terminal_job_start`
-- `terminal_job_get`
-- `terminal_job_cancel`
+- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`;
+- execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
+- web: `http_fetch`, `web_search`.
 
 The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem.
 
