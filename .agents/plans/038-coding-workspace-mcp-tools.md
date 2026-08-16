@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-07 VERIFIED
+**Status:** IN PROGRESS — PLAN-08 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -139,7 +139,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-05 | `file_read` | PLAN-01 | Complete | Complete/ranged text reading works through MCP |
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Complete | Guarded exact edits are atomic and contained |
 | PLAN-07 | `file_write` | PLAN-01 | Complete | Create/replace operations are explicit, atomic, and contained |
-| PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Planned | Full v1 surface passes black-box and regression coverage |
+| PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Complete | Full v1 surface passes black-box and regression coverage |
 | PLAN-09 | Documentation and agent guidance | PLAN-08 | Planned | Docs match the actual schemas and tool-selection behavior |
 | PLAN-10 | Read-only Git tools | PLAN-08 | Future | Structured `git_status` and `git_diff` are available |
 | PLAN-11 | Code intelligence | PLAN-08 | Future | Evidence-driven symbol/navigation support exists |
@@ -553,12 +553,12 @@ overwrite = false
 - Modify: `packages/rust-tools/interfaces/src/mcp.rs`
 
 **Steps:**
-- [ ] Add all six tool definitions.
-- [ ] Use JSON Schema 2020-12 where current catalog conventions do so.
-- [ ] Set `additionalProperties: false`.
-- [ ] Bound argument lengths/counts in schemas where appropriate.
-- [ ] Set accurate MCP annotations.
-- [ ] Keep the `relay.coding` OAuth scheme.
+- [x] Add all six tool definitions.
+- [x] Use JSON Schema 2020-12 where current catalog conventions do so.
+- [x] Set `additionalProperties: false`.
+- [x] Bound argument lengths/counts in schemas where appropriate.
+- [x] Set accurate MCP annotations.
+- [x] Keep the `relay.coding` OAuth scheme.
 
 ## TASK-802: Refactor dispatch for native operations
 
@@ -569,26 +569,26 @@ overwrite = false
 **Outcome:** Native filesystem operations do not have to masquerade as terminal jobs.
 
 **Steps:**
-- [ ] Separate native workspace dispatch from subprocess-backed operations.
-- [ ] Keep `terminal_exec`, terminal jobs, `http_fetch`, and `web_search` behavior intact.
-- [ ] Reuse the existing `ToolCallResult` model unless a concrete result-shape gap requires a minimal extension.
+- [x] Separate native workspace dispatch from subprocess-backed operations.
+- [x] Keep `terminal_exec`, terminal jobs, `http_fetch`, and `web_search` behavior intact.
+- [x] Reuse the existing `ToolCallResult` model unless a concrete result-shape gap requires a minimal extension.
 
 ## TASK-803: Add negative schema tests
 
 **Steps:**
-- [ ] Missing required fields.
-- [ ] Unknown fields.
-- [ ] Wrong types.
-- [ ] Oversized values.
-- [ ] Invalid enums/ranges.
-- [ ] Verify malformed input is rejected before filesystem/search execution.
+- [x] Missing required fields.
+- [x] Unknown fields.
+- [x] Wrong types.
+- [x] Oversized values.
+- [x] Invalid enums/ranges.
+- [x] Verify malformed input is rejected before filesystem/search execution.
 
 ## TASK-804: Extend authentication coverage
 
 **Steps:**
-- [ ] Verify tools cannot execute without required authentication in remote mode.
-- [ ] Verify missing `relay.coding` scope never reaches dispatch.
-- [ ] Do not add additional OAuth scopes unless implementation uncovers a concrete policy need.
+- [x] Verify tools cannot execute without required authentication in remote mode.
+- [x] Verify missing `relay.coding` scope never reaches dispatch.
+- [x] Do not add additional OAuth scopes unless implementation uncovers a concrete policy need.
 
 ## TASK-805: Extend MCP black-box tests
 
@@ -596,11 +596,11 @@ overwrite = false
 - Modify: `scripts/phase4-black-box.sh` or a more appropriate existing black-box test location if discovered during execution.
 
 **Steps:**
-- [ ] Verify all six tools appear in `tools/list`.
-- [ ] Invoke each tool through `tools/call`.
-- [ ] Verify result bounds/truncation.
-- [ ] Verify schema rejection happens before dispatch.
-- [ ] Verify root and symlink escape failures through actual MCP requests.
+- [x] Verify all six tools appear in `tools/list`.
+- [x] Invoke each tool through `tools/call`.
+- [x] Verify result bounds/truncation.
+- [x] Verify schema rejection happens before dispatch.
+- [x] Verify root and symlink escape failures through actual MCP requests.
 
 ## TASK-806: Add filesystem security regression matrix
 
@@ -617,14 +617,16 @@ recursive symlink loop
 new path beneath external symlinked ancestor
 ```
 
+**PLAN-08 security matrix evidence:** `scripts/verify-workspace-v1-integration.sh` exercises this matrix through real MCP requests. The per-tool acceptance scripts additionally cover symlink swap races, scan/result caps, malformed arguments, and mutation integrity. `scripts/phase4-black-box.sh` now proves missing bearer and missing `relay.coding` scope cannot reach any of the six workspace dispatch paths.
+
 ## TASK-807: Verify existing tool regressions
 
 **Steps:**
-- [ ] `terminal_exec` still works with direct argv semantics.
-- [ ] Terminal job start/get/cancel still work.
-- [ ] `http_fetch` still works.
-- [ ] `web_search` still works.
-- [ ] Docker remains opt-in and unchanged.
+- [x] `terminal_exec` still works with direct argv semantics.
+- [x] Terminal job start/get/cancel still work.
+- [x] `http_fetch` has no Plan 038 regression: its SSRF block behavior matches the baseline. A positive outbound fetch remains a pre-existing unproven path because both `origin/dev` and this branch return the same `connect_failed` from the existing `ai-tools curl` SSRF resolver while host `curl` succeeds.
+- [x] `web_search` still works.
+- [x] Docker remains opt-in and unchanged.
 
 **Validation:**
 - `cargo fmt --check` → clean.
@@ -636,10 +638,10 @@ new path beneath external symlinked ancestor
 **Commit boundary:** `test(relay): harden workspace MCP tool integration`
 
 **Phase exit criteria:**
-- [ ] New tools work through real MCP calls.
-- [ ] Invalid inputs are rejected pre-dispatch.
-- [ ] Authentication/security boundaries remain intact.
-- [ ] Existing tools have no regression.
+- [x] New tools work through real MCP calls.
+- [x] Invalid inputs are rejected pre-dispatch.
+- [x] Authentication/security boundaries remain intact.
+- [x] Existing tools have no Plan 038 regression; the pre-existing positive `http_fetch` limitation above remains unchanged.
 
 # PLAN-09: Documentation & Agent Guidance
 
@@ -860,7 +862,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-05: Add `file_read`
 - [x] PLAN-06: Add guarded `file_edit`
 - [x] PLAN-07: Add atomic `file_write`
-- [ ] PLAN-08: Complete MCP/security/black-box integration
+- [x] PLAN-08: Complete MCP/security/black-box integration
 - [ ] PLAN-09: Update documentation and agent tool-selection guidance
 - [ ] PLAN-10: Evaluate/add `git_status` and `git_diff`
 - [ ] PLAN-11: Evaluate LSP-backed code intelligence
@@ -870,23 +872,23 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 
 Workspace v1 is complete when:
 
-- [ ] all six workspace tools appear in `tools/list`;
-- [ ] all schemas reject malformed input before execution;
-- [ ] every path operation stays beneath `execution_root`;
-- [ ] traversal and symlink escapes have regression tests;
-- [ ] read/search/list outputs are bounded;
-- [ ] mutation payloads are bounded;
-- [ ] `file_edit` rejects ambiguous matches;
-- [ ] `file_write` has explicit overwrite semantics;
-- [ ] mutation is atomic where intended;
-- [ ] no native workspace operation executes user input through a shell;
-- [ ] MCP annotations accurately describe effects;
-- [ ] OAuth requirements remain intact;
-- [ ] existing terminal/job/http/search behavior has no regression;
-- [ ] Cargo format, Clippy, and tests pass;
-- [ ] MCP black-box tests pass;
+- [x] all six workspace tools appear in `tools/list`;
+- [x] all schemas reject malformed input before execution;
+- [x] every path operation stays beneath `execution_root`;
+- [x] traversal and symlink escapes have regression tests;
+- [x] read/search/list outputs are bounded;
+- [x] mutation payloads are bounded;
+- [x] `file_edit` rejects ambiguous matches;
+- [x] `file_write` has explicit overwrite semantics;
+- [x] mutation is atomic where intended;
+- [x] no native workspace operation executes user input through a shell;
+- [x] MCP annotations accurately describe effects;
+- [x] OAuth requirements remain intact;
+- [x] existing terminal/job/http/search behavior has no regression;
+- [x] Cargo format, Clippy, and tests pass;
+- [x] MCP black-box tests pass;
 - [ ] documentation matches actual schemas;
-- [ ] no semantic-index/vector infrastructure has been added prematurely.
+- [x] no semantic-index/vector infrastructure has been added prematurely.
 
 # Execution Handoff
 
