@@ -78,6 +78,7 @@ Durable final rules:
 - Filesystem containment is OS-namespace based; do not replace Bubblewrap with fragile shell/path parsing.
 - Preserve one authoritative process-safety path: sibling binary resolution, bwrap mounts, execution root, env clearing, safe PATH, output bounds, timeout grace/kill, and process-group cleanup.
 - Local relay mode is loopback-oriented. Remote mode is an OAuth Resource Server, not an Authorization Server.
+- Local relay access still requires a configured exact browser Origin allowlist, but a non-browser MCP client may omit `Origin`; the mandatory loopback `Host` check remains the DNS-rebinding boundary. Additional local Host authorities are explicit exact host+optional-port entries via `--allowed-host`/`RELAY_ALLOWED_HOSTS`; missing ports do not imply arbitrary ports. When local access is denied, log only the check plus bounded Origin/configured-Origin/Host values—never auth material.
 - Remote auth preserves admission-before-expensive-work, trusted-proxy HTTPS policy, asymmetric JWKS verification, issuer/audience/time/signature checks, owner binding, and `relay.coding` scope.
 - Current MCP target remains stateless Streamable HTTP `POST /mcp` for `2026-07-28`; client-visible tool catalog/security metadata is frozen contract material and must move deliberately.
 - Plan 031A repaired the old Phase 4 discovery fixture and moved the Phase 7 catalog hash into `.agents/contracts/`. Plan 031B removed the optional `typ: JWT` requirement while retaining cheap malformed-token rejection and full verification ordering.

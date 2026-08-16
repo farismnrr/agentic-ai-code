@@ -21,6 +21,36 @@ Nuxt runtime config binding is by convention: `NUXT_FOO_BAR` → `runtimeConfig.
 
 The Rust `relay-agent` has its own CLI/environment contract under [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md). Do not assume Nuxt runtime config and relay process config are interchangeable.
 
+### Masih Awam MCP local coding relay
+
+When an agent is operating through the local Masih Awam MCP relay, treat the relay as a deliberately constrained coding environment rather than a copy of the interactive login shell:
+
+- The relay binds loopback, but an MCP bridge may preserve an external HTTP `Host` such as `mcp.example.com`. Keep `localhost:<port>` and `127.0.0.1:<port>` implicit, and add only the exact bridge authority with `--allowed-host` / `RELAY_ALLOWED_HOSTS`. Never disable Host validation or trust `X-Forwarded-Host`.
+- Non-browser MCP clients may omit `Origin`. A missing Origin is valid only when the relay has a configured browser Origin policy; when an Origin is present it must still match the configured `--origin` exactly.
+- The relay does not inherit the operator's full `$PATH`. System tools under the fixed safe PATH are available automatically; user-owned runtimes must be exposed explicitly with repeated `--toolchain-path` / `RELAY_TOOLCHAIN_PATH`. Typical coding directories are `$HOME/.cargo/bin`, `$HOME/.bun/bin`, and the active fnm Node installation `bin` directory. Prefer explicit reviewed directories over inheriting the login-shell PATH.
+- Docker and Tailscale are separate authority expansions. Enable them only when the task needs them with `--allow-docker` and `--allow-tailscale`; the relay binds only their configured Unix sockets. Docker daemon access is substantially more privileged than ordinary sandboxed command execution.
+- `terminal_exec` uses direct executable + argv semantics. Shell operators such as `&&`, `|`, redirects, glob expansion, and command substitution are not interpreted unless the agent explicitly invokes a shell such as `sh -lc` and doing so remains compatible with the execution policy.
+- For a coding-capable relay, verify the actual runtime after restart instead of assuming configuration worked: a simple command, Node/package manager, Rust toolchain, Tailscale when enabled, and Docker when enabled.
+
+A representative single-owner local coding profile is:
+
+```sh
+./target/release/ai-tools relay \
+  --mode local \
+  --port 47821 \
+  --dir "$HOME" \
+  --execution-root "$HOME" \
+  --origin http://localhost:3333 \
+  --allowed-host mcp.example.com \
+  --allow-docker \
+  --allow-tailscale \
+  --toolchain-path "$HOME/.cargo/bin" \
+  --toolchain-path "$HOME/.bun/bin" \
+  --toolchain-path "<active-fnm-node-installation>/bin"
+```
+
+For a general coding relay, prefer `--dir "$HOME"` so the default working directory is neutral while task calls select a specific repository with `cwd`. Use `--dir "$PWD"` only for intentionally project-scoped relay instances. Keep deployment-specific hostnames and versioned runtime paths in operator configuration, not hardcoded in source or agent policy.
+
 ## Package manager and native toolchain
 
 - Use **pnpm**; the exact pnpm version is pinned in root `package.json`.
