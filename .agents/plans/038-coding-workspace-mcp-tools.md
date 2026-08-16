@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-02 VERIFIED
+**Status:** IN PROGRESS — PLAN-03 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -134,7 +134,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 |---|---|---|---|---|
 | PLAN-01 | Shared workspace/path safety foundation | none | Complete | Read/write paths have one validation-time containment contract; mutation phases add operation-time atomic/no-follow safety |
 | PLAN-02 | `directory_list` | PLAN-01 | Complete | Bounded directory inspection works through MCP |
-| PLAN-03 | `file_search` | PLAN-01 | Planned | Bounded deterministic file discovery works through MCP |
+| PLAN-03 | `file_search` | PLAN-01 | Complete | Bounded deterministic file discovery works through MCP |
 | PLAN-04 | `text_search` | PLAN-01 | Planned | Bounded literal/regex source search works through MCP |
 | PLAN-05 | `file_read` | PLAN-01 | Planned | Complete/ranged text reading works through MCP |
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Planned | Guarded exact edits are atomic and contained |
@@ -284,22 +284,22 @@ file_search(
 ```
 
 **Steps:**
-- [ ] Use documented glob semantics rather than mixing regex/fuzzy/glob behavior in one field.
-- [ ] Support patterns such as `**/*.rs`, `**/*auth*`, and exact filenames.
-- [ ] Define hidden/ignored file behavior explicitly.
-- [ ] Set a hard server result maximum.
+- [x] Use documented glob semantics rather than mixing regex/fuzzy/glob behavior in one field.
+- [x] Support patterns such as `**/*.rs`, `**/*auth*`, and exact filenames.
+- [x] Define hidden/ignored file behavior explicitly.
+- [x] Set a hard server result maximum.
 
 ## TASK-302: Implement contained traversal
 
 **Outcome:** Deterministic file discovery with no symlink recursion.
 
 **Steps:**
-- [ ] Resolve `cwd` through PLAN-01.
-- [ ] Traverse natively unless implementation evidence strongly favors an already-approved binary.
-- [ ] Return paths relative to selected `cwd` where practical.
-- [ ] Sort results deterministically.
-- [ ] Stop at configured result limits and mark truncation.
-- [ ] Prevent symlink loops and root escape.
+- [x] Resolve `cwd` through PLAN-01.
+- [x] Traverse natively unless implementation evidence strongly favors an already-approved binary.
+- [x] Return paths relative to selected `cwd` where practical.
+- [x] Sort results deterministically.
+- [x] Stop at configured result limits and mark truncation.
+- [x] Prevent symlink loops and root escape.
 
 **Validation:**
 - Exact match, nested glob, no match, max-results truncation, hidden/generated directory behavior, and symlink loops.
@@ -307,8 +307,8 @@ file_search(
 **Commit boundary:** `feat(relay): add file_search workspace tool`
 
 **Phase exit criteria:**
-- [ ] File discovery is bounded, deterministic, and contained.
-- [ ] Ignore behavior is documented and tested.
+- [x] File discovery is bounded, deterministic, and contained.
+- [x] Ignore behavior is documented and tested.
 
 # PLAN-04: `text_search`
 
