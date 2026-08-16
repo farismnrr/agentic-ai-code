@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-06 VERIFIED
+**Status:** IN PROGRESS — PLAN-07 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -138,7 +138,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-04 | `text_search` | PLAN-01 | Complete | Bounded literal/regex source search works through MCP |
 | PLAN-05 | `file_read` | PLAN-01 | Complete | Complete/ranged text reading works through MCP |
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Complete | Guarded exact edits are atomic and contained |
-| PLAN-07 | `file_write` | PLAN-01 | Planned | Create/replace operations are explicit, atomic, and contained |
+| PLAN-07 | `file_write` | PLAN-01 | Complete | Create/replace operations are explicit, atomic, and contained |
 | PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Planned | Full v1 surface passes black-box and regression coverage |
 | PLAN-09 | Documentation and agent guidance | PLAN-08 | Planned | Docs match the actual schemas and tool-selection behavior |
 | PLAN-10 | Read-only Git tools | PLAN-08 | Future | Structured `git_status` and `git_diff` are available |
@@ -506,39 +506,41 @@ overwrite = false
 ```
 
 **Steps:**
-- [ ] Require `overwrite=true` to replace an existing regular file.
-- [ ] Reject directories and unsupported target types.
-- [ ] Enforce payload hard limits.
-- [ ] Define permission behavior for create versus replacement.
+- [x] Require `overwrite=true` to replace an existing regular file.
+- [x] Reject directories and unsupported target types.
+- [x] Enforce payload hard limits.
+- [x] Define permission behavior for create versus replacement.
 
 ## TASK-702: Implement contained parent creation
 
 **Outcome:** Optional parent creation cannot cross the execution root.
 
 **Steps:**
-- [ ] Resolve the nearest existing ancestor through PLAN-01.
-- [ ] Reject symlinked/external parent escapes.
-- [ ] Create missing parent segments only when `create_parents=true`.
-- [ ] Keep all created directories beneath the execution root.
+- [x] Resolve the nearest existing ancestor through PLAN-01.
+- [x] Reject symlinked/external parent escapes.
+- [x] Create missing parent segments only when `create_parents=true`.
+- [x] Keep all created directories beneath the execution root.
 
 ## TASK-703: Share atomic writer with `file_edit`
 
 **Outcome:** `file_write` and `file_edit` use one reviewed mutation primitive rather than duplicated write logic.
 
 **Steps:**
-- [ ] Extract/reuse the same temp-file and rename mechanism used by `file_edit`.
-- [ ] Ensure a failed replacement leaves the old file intact.
-- [ ] Make `idempotentHint` a deliberate decision based on final overwrite semantics rather than assuming it is safe.
+- [x] Extract/reuse the same temp-file and rename mechanism used by `file_edit`.
+- [x] Ensure a failed replacement leaves the old file intact.
+- [x] Make `idempotentHint` a deliberate decision based on final overwrite semantics rather than assuming it is safe.
 
 **Validation:**
 - Create new file, overwrite existing file, default overwrite rejection, parent creation disabled/enabled, symlinked parent escape, oversize payload, Unicode, permissions, and failed replacement integrity.
 
+**PLAN-07 implementation note:** Linux mutations walk parent directories from a stable execution-root directory descriptor using no-follow opens. New files use mode `0644`; overwrite preserves the existing regular file mode. Default creation commits with `renameat2(RENAME_NOREPLACE)` so a concurrent creator cannot be silently clobbered. Oversized MCP request bodies may be rejected by the transport with HTTP 413 before schema/dispatch, which is accepted as fail-closed pre-dispatch rejection.
+
 **Commit boundary:** `feat(relay): add atomic file_write tool`
 
 **Phase exit criteria:**
-- [ ] Creation and replacement semantics are explicit.
-- [ ] All writes remain contained.
-- [ ] Atomic mutation code is shared with `file_edit`.
+- [x] Creation and replacement semantics are explicit.
+- [x] All writes remain contained.
+- [x] Atomic mutation code is shared with `file_edit`.
 
 # PLAN-08: MCP Integration & Security Hardening
 
@@ -857,7 +859,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-04: Add `text_search`
 - [x] PLAN-05: Add `file_read`
 - [x] PLAN-06: Add guarded `file_edit`
-- [ ] PLAN-07: Add atomic `file_write`
+- [x] PLAN-07: Add atomic `file_write`
 - [ ] PLAN-08: Complete MCP/security/black-box integration
 - [ ] PLAN-09: Update documentation and agent tool-selection guidance
 - [ ] PLAN-10: Evaluate/add `git_status` and `git_diff`

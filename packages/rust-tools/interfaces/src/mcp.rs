@@ -414,6 +414,29 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "file_write",
+            title: Some("File Write"),
+            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "content": { "type": "string", "maxLength": 1048576 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "create_parents": { "type": "boolean", "default": false },
+                    "overwrite": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "content"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
             name: "file_edit",
             title: Some("File Edit"),
             description: "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",

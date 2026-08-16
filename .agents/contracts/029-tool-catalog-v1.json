@@ -250,6 +250,57 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
+    "description": "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 1048576,
+          "type": "string"
+        },
+        "create_parents": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "overwrite": {
+          "default": false,
+          "type": "boolean"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "type": "object"
+    },
+    "name": "file_write",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Write"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
     "description": "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
