@@ -414,6 +414,36 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "text_search",
+            title: Some("Text Search"),
+            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "regex": { "type": "boolean", "default": false },
+                    "case_sensitive": { "type": "boolean", "default": true },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
             description: "Start a bounded sandboxed terminal job and return its task ID for polling.",

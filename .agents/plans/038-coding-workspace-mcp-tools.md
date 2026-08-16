@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-03 VERIFIED
+**Status:** IN PROGRESS — PLAN-04 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -135,7 +135,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-01 | Shared workspace/path safety foundation | none | Complete | Read/write paths have one validation-time containment contract; mutation phases add operation-time atomic/no-follow safety |
 | PLAN-02 | `directory_list` | PLAN-01 | Complete | Bounded directory inspection works through MCP |
 | PLAN-03 | `file_search` | PLAN-01 | Complete | Bounded deterministic file discovery works through MCP |
-| PLAN-04 | `text_search` | PLAN-01 | Planned | Bounded literal/regex source search works through MCP |
+| PLAN-04 | `text_search` | PLAN-01 | Complete | Bounded literal/regex source search works through MCP |
 | PLAN-05 | `file_read` | PLAN-01 | Planned | Complete/ranged text reading works through MCP |
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Planned | Guarded exact edits are atomic and contained |
 | PLAN-07 | `file_write` | PLAN-01 | Planned | Create/replace operations are explicit, atomic, and contained |
@@ -333,22 +333,22 @@ text_search(
 ```
 
 **Steps:**
-- [ ] Choose documented defaults for literal/regex and case sensitivity.
-- [ ] Define hard result and preview-byte caps.
-- [ ] Add correct read-only/closed-world MCP annotations.
+- [x] Choose documented defaults for literal/regex and case sensitivity.
+- [x] Define hard result and preview-byte caps.
+- [x] Add correct read-only/closed-world MCP annotations.
 
 ## TASK-402: Implement direct-argv search execution
 
 **Outcome:** Search uses mature matching semantics without shell interpolation.
 
 **Steps:**
-- [ ] Resolve `cwd` through PLAN-01.
-- [ ] If using `rg`, resolve it through the existing approved executable policy.
-- [ ] Pass all user values as direct argv arguments.
-- [ ] Prefer machine-readable ripgrep output where practical.
-- [ ] Parse path, line, optional column, and bounded preview.
-- [ ] Cap pathological long matching lines.
-- [ ] Return explicit truncation state.
+- [x] Resolve `cwd` through PLAN-01.
+- [x] If using `rg`, resolve it through the existing approved executable policy.
+- [x] Pass all user values as direct argv arguments.
+- [x] Prefer machine-readable ripgrep output where practical.
+- [x] Parse path, line, optional column, and bounded preview.
+- [x] Cap pathological long matching lines.
+- [x] Return explicit truncation state.
 
 **Validation:**
 - Literal search, regex search, invalid regex, case sensitivity, glob restriction, Unicode, binary files, no results, maximum-result truncation, huge matching line, and symlink behavior.
@@ -356,9 +356,9 @@ text_search(
 **Commit boundary:** `feat(relay): add bounded text_search tool`
 
 **Phase exit criteria:**
-- [ ] Literal and regex searches work through MCP.
-- [ ] No user search value passes through a shell string.
-- [ ] Results are bounded and deterministic enough for agent consumption.
+- [x] Literal and regex searches work through MCP.
+- [x] No user search value passes through a shell string.
+- [x] Results are bounded and deterministic enough for agent consumption.
 
 # PLAN-05: `file_read`
 
@@ -852,7 +852,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-01: Shared workspace path and containment layer
 - [x] PLAN-02: Add `directory_list`
 - [x] PLAN-03: Add `file_search`
-- [ ] PLAN-04: Add `text_search`
+- [x] PLAN-04: Add `text_search`
 - [ ] PLAN-05: Add `file_read`
 - [ ] PLAN-06: Add guarded `file_edit`
 - [ ] PLAN-07: Add atomic `file_write`
