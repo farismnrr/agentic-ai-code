@@ -26,3 +26,9 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: A true portrait artboard can still feel wrong when it only repositions landscape-sized objects. After switching to 720×1280, explicitly retune visual density: illustration scale, card/diagram width, typography, padding, gaps, and negative space. Collision-free is necessary but not sufficient; compare representative element proportions in portrait before declaring the composition done.
 - Applies to: Dual-orientation motion explainers and responsive browser-rendered video compositions.
 - Action taken: Added a portrait density pass across all RAG segments, shared caption/background/play-overlay styling, and updated the reusable motion-explainer workflow.
+
+- Date: 2026-08-16
+- Context: Extending the Bubblewrap-backed MCP coding relay with host Docker debugging.
+- Lesson: Treat Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Keep Docker denied by default, require an opt-in flag/environment setting, bind only the selected Unix socket, support configurable/rootless socket paths, and document that daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics unless a shell-aware policy parser exists; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
+- Applies to: Sandboxed local-development relays, coding agents, and terminal execution services that expose privileged host daemons.
+- Action taken: Added opt-in Docker configuration and socket plumbing with default-deny policy/tests, clarified terminal shell semantics, and kept the relay self-update boundary intact.
