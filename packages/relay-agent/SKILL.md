@@ -121,4 +121,4 @@ Before changing the relay security model, read:
 - [Plan 030 historical summary](../../.agents/plans/030-previous-plans-summary.md) for compacted Plan 026/027/028/029/029b history;
 - current Rust source/config and deterministic contract/security scripts.
 
-All plans through 029b were explicitly closed for a planning refresh. If new relay/ChatGPT work is needed, re-audit current behavior and create a new incrementing plan starting at 031 rather than reopening an old file.
+All plans through 029b were explicitly closed for a planning refresh. Current 031+ plan status and the next unused numeric plan are recorded in the canonical memory; re-audit current behavior and use the next unused number rather than reopening an old file.

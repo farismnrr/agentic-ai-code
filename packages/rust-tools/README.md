@@ -90,7 +90,7 @@ When publishing native artifacts manually:
 - keep publish operations fail-closed to a clean `main` checkout whose requested tag points at `HEAD` and is already present on `origin`;
 - do not weaken sandbox/platform contracts merely to broaden the release matrix.
 
-The GitHub Release publishes the direct `ai-tools-x86_64-unknown-linux-gnu` asset required by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. The same publish command also builds and pushes the web image to GHCR for `linux/amd64` and `linux/arm64`.
+The GitHub Release publishes the direct `ai-tools-x86_64-unknown-linux-gnu` asset required by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. The same publish command builds and pushes the web image to GHCR for `linux/amd64` only. ARM64 is not part of the supported web-image release matrix unless a native/remote ARM64 builder is introduced and reviewed.
 
 ## CLI notes
 

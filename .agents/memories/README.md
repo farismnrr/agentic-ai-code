@@ -4,6 +4,7 @@
 
 ## Repository policy and verification
 
+- Human/operator documentation now lives under `docs/`; `README.md` is the concise project landing page, while `.agents/` remains agent-only durable context/contracts/history. Keep these roles separate and update `docs/` when installation/deployment behavior changes.
 - The repository intentionally has **no CI workflow** and **no unit-test suite**. Do not add normal test directories/files, package `test` scripts, or Rust `#[cfg(test)]` modules unless the user explicitly changes policy.
 - Every normal local commit must pass the tracked pre-commit gate. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm verify:commit`. Never use `--no-verify` or disable/replace the hook path.
 - `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. A failure means do not claim the commit is verified.
@@ -12,7 +13,8 @@
 - Do not replace the Vue gate with bare `nuxt typecheck`; the wrapper previously missed generated-project errors.
 - Production bundling is separate: run `pnpm build` when release/runtime output must be proven. Dependency/security-sensitive changes also require the relevant `pnpm audit`, `cargo audit`, and deterministic scripts.
 - Stable releases remain manual/no-CI: promote implementation branch -> `dev` -> `main` by PR, verify the reviewed `main` commit locally, tag that exact commit, publish `ai-tools-x86_64-unknown-linux-gnu` + SHA-256 checksums to GitHub Releases, and publish the web image to GHCR. Release publish scripts must fail closed unless the checkout is clean, on `main`, and exactly at the requested stable tag.
-- The stable line continues the published prerelease history: the first non-beta release is **`0.0.8`**. Do not reset the stable line to `0.0.1`; root `v0.0.5-beta` and relay `relay-agent-v0.0.8-beta` tags already exist, so a reset would be a SemVer downgrade and would make package/binary/tag history inconsistent.
+- The supported stable web-image release platform is **`linux/amd64` only**. `linux/arm64` was removed after the QEMU-emulated Nuxt/Vite release build hit severe swap thrashing on the release host. Reintroduce ARM64 only with a reviewed native/remote ARM64 builder path; do not restore local QEMU multi-arch as the default.
+- The stable line continues the published prerelease history. `v0.0.8` was tagged during the first stable-release attempt, but its GitHub Release stayed draft after the ARM64/QEMU web-image build became impractical; do not rewrite that public tag. The next stable release is **`0.0.9`**, with the web image intentionally amd64-only. Do not reset the stable line to `0.0.1`.
 - GitHub mergeability is not verification. Record only commands actually executed successfully.
 - `scripts/check-architecture.sh` is mandatory through `pnpm verify:commit` and now rejects representative direct, type-only, transitive-facade, and API-bypass violations.
 - Browser/Playwright automation may use the shared development database. Never assume browser-test data is isolated unless the environment explicitly provides isolation.
