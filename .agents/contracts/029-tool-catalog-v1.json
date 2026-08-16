@@ -245,6 +245,59 @@
   },
   {
     "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "new_text": {
+          "maxLength": 262144,
+          "type": "string"
+        },
+        "old_text": {
+          "maxLength": 262144,
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "replace_all": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "old_text",
+        "new_text"
+      ],
+      "type": "object"
+    },
+    "name": "file_edit",
+    "securitySchemes": [
+      {
+        "scopes": [
+          "relay.coding"
+        ],
+        "type": "oauth2"
+      }
+    ],
+    "title": "File Edit"
+  },
+  {
+    "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,

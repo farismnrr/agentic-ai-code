@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-05 VERIFIED
+**Status:** IN PROGRESS — PLAN-06 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -137,7 +137,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-03 | `file_search` | PLAN-01 | Complete | Bounded deterministic file discovery works through MCP |
 | PLAN-04 | `text_search` | PLAN-01 | Complete | Bounded literal/regex source search works through MCP |
 | PLAN-05 | `file_read` | PLAN-01 | Complete | Complete/ranged text reading works through MCP |
-| PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Planned | Guarded exact edits are atomic and contained |
+| PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Complete | Guarded exact edits are atomic and contained |
 | PLAN-07 | `file_write` | PLAN-01 | Planned | Create/replace operations are explicit, atomic, and contained |
 | PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Planned | Full v1 surface passes black-box and regression coverage |
 | PLAN-09 | Documentation and agent guidance | PLAN-08 | Planned | Docs match the actual schemas and tool-selection behavior |
@@ -445,25 +445,27 @@ When `replace_all=true`, replace all matches and report the replacement count.
 **Outcome:** Successful edits replace the target atomically where supported, and failed edits leave the original valid.
 
 **Steps:**
-- [ ] Resolve and validate target through PLAN-01.
-- [ ] Enforce an edit-size hard limit.
-- [ ] Read target as valid text.
-- [ ] Count matches before writing.
-- [ ] Build replacement content.
-- [ ] Write a temporary file in the same directory.
-- [ ] Preserve relevant file permissions.
-- [ ] Flush/write according to repository reliability conventions.
-- [ ] Rename atomically over the original where supported.
-- [ ] Clean up temporary artifacts on error.
+- [x] Resolve and validate target through PLAN-01.
+- [x] Enforce an edit-size hard limit.
+- [x] Read target as valid text.
+- [x] Count matches before writing.
+- [x] Build replacement content.
+- [x] Write a temporary file in the same directory.
+- [x] Preserve relevant file permissions.
+- [x] Flush/write according to repository reliability conventions.
+- [x] Rename atomically over the original where supported.
+- [x] Clean up temporary artifacts on error.
 
 ## TASK-603: Evaluate stale-edit protection without blocking v1
 
 **Outcome:** Decide whether an optional content hash is worthwhile now or should be deferred.
 
 **Steps:**
-- [ ] Evaluate returning a content hash from `file_read` and accepting `expected_hash` in `file_edit`.
-- [ ] Add it only if it stays simple and materially improves concurrent-change safety.
-- [ ] Otherwise record it as a follow-up, not a v1 requirement.
+- [x] Evaluate returning a content hash from `file_read` and accepting `expected_hash` in `file_edit`.
+- [x] Add it only if it stays simple and materially improves concurrent-change safety.
+- [x] Otherwise record it as a follow-up, not a v1 requirement.
+
+**Content-hash decision:** deferred from Workspace v1. Exact-match guards plus operation-time entry identity checks cover the current local edit contract without adding another client coordination field; a content hash remains a follow-up if real concurrent-edit usage shows a gap.
 
 **Validation:**
 - One match, zero matches, multiple matches, replace-all, same old/new text, empty replacement, Unicode, oversize target, permissions preservation, symlink escape, and failure-before-rename integrity.
@@ -471,9 +473,9 @@ When `replace_all=true`, replace all matches and report the replacement count.
 **Commit boundary:** `feat(relay): add guarded file_edit tool`
 
 **Phase exit criteria:**
-- [ ] Ambiguous edits cannot mutate files.
-- [ ] Successful edits are atomic under the selected implementation contract.
-- [ ] Failed writes preserve the original file.
+- [x] Ambiguous edits cannot mutate files.
+- [x] Successful edits are atomic under the selected implementation contract.
+- [x] Failed writes preserve the original file.
 
 # PLAN-07: `file_write`
 
@@ -854,7 +856,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-03: Add `file_search`
 - [x] PLAN-04: Add `text_search`
 - [x] PLAN-05: Add `file_read`
-- [ ] PLAN-06: Add guarded `file_edit`
+- [x] PLAN-06: Add guarded `file_edit`
 - [ ] PLAN-07: Add atomic `file_write`
 - [ ] PLAN-08: Complete MCP/security/black-box integration
 - [ ] PLAN-09: Update documentation and agent tool-selection guidance

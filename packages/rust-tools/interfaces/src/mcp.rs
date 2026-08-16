@@ -414,6 +414,29 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "file_edit",
+            title: Some("File Edit"),
+            description: "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "old_text": { "type": "string", "minLength": 1, "maxLength": 262144 },
+                    "new_text": { "type": "string", "maxLength": 262144 },
+                    "replace_all": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "old_text", "new_text"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme { scheme_type: "oauth2", scopes: vec!["relay.coding"] }],
+            execution: None,
+        },
+        Tool {
             name: "file_read",
             title: Some("File Read"),
             description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",

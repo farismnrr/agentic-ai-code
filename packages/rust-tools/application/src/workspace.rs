@@ -1,9 +1,9 @@
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_existing_path, EntryKind};
+use relay_core::workspace_path::{resolve_existing_path, resolve_write_target, EntryKind};
 use serde::Serialize;
 use serde_json::Value;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 
 #[cfg(target_os = "linux")]
@@ -261,6 +261,126 @@ impl SecureDirectory {
         if file_identity(&stat) != expected {
             return Err(McpError::InvalidRequest(
                 "directory changed during traversal".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn open_regular_file(
+        &self,
+        name: &OsStr,
+    ) -> Result<(std::fs::File, FileIdentity, u32), McpError> {
+        let name = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let fd = unsafe {
+            libc::openat(
+                self.fd.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(McpError::InvalidRequest("file is inaccessible".into()));
+        }
+        let mut stat = unsafe { std::mem::zeroed::<libc::stat>() };
+        if unsafe { libc::fstat(fd, &mut stat) } < 0 || stat.st_mode & libc::S_IFMT != libc::S_IFREG
+        {
+            unsafe { libc::close(fd) };
+            return Err(McpError::InvalidRequest(
+                "file has an unsupported entry type".into(),
+            ));
+        }
+        Ok((
+            unsafe { std::fs::File::from_raw_fd(fd) },
+            file_identity(&stat),
+            stat.st_mode & 0o7777,
+        ))
+    }
+
+    fn verify_regular_entry(&self, name: &OsStr, expected: FileIdentity) -> Result<(), McpError> {
+        let name = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let mut stat = unsafe { std::mem::zeroed::<libc::stat>() };
+        if unsafe {
+            libc::fstatat(
+                self.fd.as_raw_fd(),
+                name.as_ptr(),
+                &mut stat,
+                libc::AT_SYMLINK_NOFOLLOW,
+            )
+        } < 0
+            || stat.st_mode & libc::S_IFMT != libc::S_IFREG
+            || file_identity(&stat) != expected
+        {
+            return Err(McpError::InvalidRequest("file changed during edit".into()));
+        }
+        Ok(())
+    }
+
+    fn atomic_replace_regular_file(
+        &self,
+        name: &OsStr,
+        expected: FileIdentity,
+        content: &[u8],
+        mode: u32,
+    ) -> Result<(), McpError> {
+        self.verify_regular_entry(name, expected)?;
+        let target = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let temp_name = format!(".relay-edit-{}.tmp", uuid::Uuid::new_v4());
+        let temp = CString::new(temp_name.as_bytes())
+            .map_err(|_| McpError::Internal("failed to create temporary file name".into()))?;
+        let fd = unsafe {
+            libc::openat(
+                self.fd.as_raw_fd(),
+                temp.as_ptr(),
+                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+        if fd < 0 {
+            return Err(McpError::InvalidRequest(
+                "temporary file could not be created".into(),
+            ));
+        }
+        let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+        let write_result = (|| -> std::io::Result<()> {
+            file.write_all(content)?;
+            file.flush()?;
+            if unsafe { libc::fchmod(file.as_raw_fd(), mode as libc::mode_t) } < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            file.sync_all()?;
+            Ok(())
+        })();
+        drop(file);
+        if write_result.is_err() {
+            unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
+            return Err(McpError::InvalidRequest(
+                "file edit could not be written".into(),
+            ));
+        }
+        if let Err(error) = self.verify_regular_entry(name, expected) {
+            unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
+            return Err(error);
+        }
+        if unsafe {
+            libc::renameat(
+                self.fd.as_raw_fd(),
+                temp.as_ptr(),
+                self.fd.as_raw_fd(),
+                target.as_ptr(),
+            )
+        } < 0
+        {
+            unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
+            return Err(McpError::InvalidRequest(
+                "file edit could not be committed".into(),
+            ));
+        }
+        if unsafe { libc::fsync(self.fd.as_raw_fd()) } < 0 {
+            return Err(McpError::InvalidRequest(
+                "file edit durability sync failed".into(),
             ));
         }
         Ok(())
@@ -764,5 +884,111 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
         end_line,
         content,
         truncated,
+    })
+}
+
+pub const MAX_FILE_EDIT_BYTES: usize = 1024 * 1024;
+const MAX_FILE_EDIT_TEXT_BYTES: usize = 256 * 1024;
+const MAX_FILE_EDIT_PATH_BYTES: usize = 4_096;
+const MAX_FILE_EDIT_CWD_BYTES: usize = 4_096;
+
+#[derive(Debug, Serialize)]
+pub struct FileEditResult {
+    path: String,
+    replacements: usize,
+    changed: bool,
+}
+
+pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditResult, McpError> {
+    let path = arguments
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file edit path is required".into()))?;
+    let old_text = arguments
+        .get("old_text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file edit old_text is required".into()))?;
+    let new_text = arguments
+        .get("new_text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file edit new_text is required".into()))?;
+    let replace_all = arguments
+        .get("replace_all")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if path.is_empty() || path.len() > MAX_FILE_EDIT_PATH_BYTES {
+        return Err(McpError::InvalidRequest(
+            "file edit path exceeds allowed bounds".into(),
+        ));
+    }
+    if old_text.is_empty()
+        || old_text.len() > MAX_FILE_EDIT_TEXT_BYTES
+        || new_text.len() > MAX_FILE_EDIT_TEXT_BYTES
+    {
+        return Err(McpError::InvalidRequest(
+            "file edit text exceeds allowed bounds".into(),
+        ));
+    }
+    let cwd = arguments.get("cwd").and_then(Value::as_str);
+    if cwd.is_some_and(|value| value.len() > MAX_FILE_EDIT_CWD_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "file edit cwd exceeds maximum".into(),
+        ));
+    }
+    let root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let target = resolve_write_target(&root, cwd, path, EntryKind::File)?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| McpError::InvalidRequest("file edit target is invalid".into()))?;
+    let name = target
+        .file_name()
+        .ok_or_else(|| McpError::InvalidRequest("file edit target is invalid".into()))?;
+    let directory = SecureDirectory::open_relative(&root, parent)?;
+    let (mut file, identity, mode) = directory.open_regular_file(name)?;
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take((MAX_FILE_EDIT_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|_| McpError::InvalidRequest("file edit target is inaccessible".into()))?;
+    if bytes.len() > MAX_FILE_EDIT_BYTES {
+        return Err(McpError::InvalidRequest(
+            "file edit target exceeds maximum".into(),
+        ));
+    }
+    let source = String::from_utf8(bytes)
+        .map_err(|_| McpError::InvalidRequest("file edit target is not valid UTF-8 text".into()))?;
+    let matches = source.match_indices(old_text).count();
+    if matches == 0 {
+        return Err(McpError::InvalidRequest(
+            "file edit text was not found".into(),
+        ));
+    }
+    if !replace_all && matches != 1 {
+        return Err(McpError::InvalidRequest(
+            "file edit text is ambiguous".into(),
+        ));
+    }
+    let updated = if replace_all {
+        source.replace(old_text, new_text)
+    } else {
+        source.replacen(old_text, new_text, 1)
+    };
+    if updated.len() > MAX_FILE_EDIT_BYTES {
+        return Err(McpError::InvalidRequest(
+            "file edit result exceeds maximum".into(),
+        ));
+    }
+    let changed = updated != source;
+    if changed {
+        directory.atomic_replace_regular_file(name, identity, updated.as_bytes(), mode)?;
+    } else {
+        directory.verify_regular_entry(name, identity)?;
+    }
+    Ok(FileEditResult {
+        path: path.to_owned(),
+        replacements: if replace_all { matches } else { 1 },
+        changed,
     })
 }
