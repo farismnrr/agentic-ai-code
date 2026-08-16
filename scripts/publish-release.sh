@@ -14,7 +14,7 @@ tag="${1:-}"
 version="${BASH_REMATCH[1]}"
 target="x86_64-unknown-linux-gnu"
 image="${GHCR_IMAGE:-ghcr.io/farismnrr/ai-code}"
-platforms="${GHCR_PLATFORMS:-linux/amd64,linux/arm64}"
+platform="linux/amd64"
 
 [[ "$(git branch --show-current)" == "main" ]] || fail 'publish from main only'
 [[ -z "$(git status --porcelain)" ]] || fail 'working tree must be clean'
@@ -59,9 +59,9 @@ fi
 revision="$head"
 created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-printf 'release-publish: pushing multi-arch web image to GHCR...\n'
+printf 'release-publish: pushing linux/amd64 web image to GHCR...\n'
 if ! docker buildx build \
-  --platform "$platforms" \
+  --platform "$platform" \
   --build-arg "VERSION=$version" \
   --build-arg "REVISION=$revision" \
   --build-arg "CREATED=$created" \
