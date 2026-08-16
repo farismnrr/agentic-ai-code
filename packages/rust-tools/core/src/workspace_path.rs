@@ -52,10 +52,21 @@ pub fn resolve_existing_path(
     let root = canonical_root(execution_root)?;
     let base = resolve_cwd_from_root(&root, cwd)?;
     let requested = resolve_requested_path(&base, path)?;
-    let canonical = fs::canonicalize(&requested).map_err(|_| missing_path_error())?;
-    ensure_contained(&root, &canonical)?;
-    ensure_kind(&canonical, expected)?;
-    Ok(canonical)
+    resolve_existing_from_root(&root, &requested, expected)
+}
+
+/// Resolve an existing native filesystem path beneath `execution_root`.
+///
+/// This variant is for paths discovered from the filesystem itself, whose
+/// components are not required to be valid UTF-8. User-supplied MCP paths
+/// still enter through [`resolve_existing_path`].
+pub fn resolve_existing_native_path(
+    execution_root: &Path,
+    path: &Path,
+    expected: EntryKind,
+) -> Result<PathBuf, McpError> {
+    let root = canonical_root(execution_root)?;
+    resolve_existing_from_root(&root, path, expected)
 }
 
 /// Resolve a file target whose final component may not exist.
@@ -110,6 +121,17 @@ pub fn resolve_write_target(
         }
         Err(_) => Err(inaccessible_path_error()),
     }
+}
+
+fn resolve_existing_from_root(
+    root: &Path,
+    requested: &Path,
+    expected: EntryKind,
+) -> Result<PathBuf, McpError> {
+    let canonical = fs::canonicalize(requested).map_err(|_| missing_path_error())?;
+    ensure_contained(root, &canonical)?;
+    ensure_kind(&canonical, expected)?;
+    Ok(canonical)
 }
 
 fn canonical_root(execution_root: &Path) -> Result<PathBuf, McpError> {
