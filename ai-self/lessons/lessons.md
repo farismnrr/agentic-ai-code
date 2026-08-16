@@ -8,3 +8,15 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson:
 - Applies to:
 - Action taken:
+
+- Date: 2026-08-16
+- Context: Browser-rendered motion explainers built with vanilla HTML/SCSS/JS.
+- Lesson: Treat the video as a fixed artboard that scales uniformly; do not mix responsive canvas sizing with fixed-position child UI. Keep player/caption/timeline logic in a reusable core, keep each narrative segment in its own module and stylesheet, derive total runtime from segment durations, reserve explicit caption-safe zones, and validate every timestamp for out-of-frame and unexpected element overlap. Mark only intentional motion overlaps explicitly.
+- Applies to: Short-form explainer videos, animated diagrams, and browser-rendered video compositions.
+- Action taken: Refactored the explainer system into fixed-format artboards that scale uniformly, modular segment architecture, story-driven duration, and automated Playwright overlap validation; the current YouTube preset is 1280×720 (16:9).
+
+- Date: 2026-08-16
+- Context: Dual-orientation browser-rendered motion explainers.
+- Lesson: Viewer orientation and video composition are different concerns. If the user asks for portrait and landscape output, changing only the outer preview surface is insufficient; switch the actual artboard (for example 1280×720 ↔ 720×1280), provide a real per-orientation composition, keep one shared story/timeline/template, and expose orientation to motion code only where geometry changes. Validate the entire timeline in both artboards, not just the orientation control state.
+- Applies to: YouTube/short-form explainers, responsive motion graphics, and browser-rendered video tooling.
+- Action taken: Reworked the motion-explainer system from letterboxed portrait preview to true dual-orientation artboards with per-segment portrait SCSS and dual-orientation full-timeline validation.

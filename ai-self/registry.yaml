@@ -7,6 +7,12 @@ skills:
     status: active
     role: safety-primary
     purpose: resolve, verify, and lock the correct project before repository mutation
+  motion-explainer-video:
+    path: skills/motion-explainer-video/SKILL.md
+    source: local
+    status: active
+    role: primary
+    purpose: reusable story, architecture, motion, and validation workflow for browser-rendered explainer videos
   implementation-planning:
     path: skills/implementation-planning/SKILL.md
     source: local
