@@ -46,6 +46,16 @@ pub struct Cli {
     #[arg(short, long, env = "RELAY_AGENT_ORIGIN")]
     pub origin: Option<String>,
 
+    /// Additional exact Host authorities allowed in local mode. Entries may
+    /// optionally include a port; comma-separated and repeated values are
+    /// supported.
+    #[arg(
+        long = "allowed-host",
+        env = "RELAY_ALLOWED_HOSTS",
+        value_delimiter = ','
+    )]
+    pub allowed_hosts: Vec<String>,
+
     /// Legacy OAuth symmetric secret retained for compatibility; the remote
     /// auth path validates JWTs with issuer/audience and JWKS instead.
     #[arg(long, env = "OAUTH_SECRET")]
@@ -157,6 +167,7 @@ pub struct ServerConfig {
     pub mode: SecurityMode,
     pub dir: Option<String>,
     pub origin: Option<String>,
+    pub allowed_hosts: Vec<String>,
     pub oauth_secret: Option<String>,
     pub oauth_issuer: Option<String>,
     pub oauth_audience: Option<String>,
@@ -184,6 +195,7 @@ impl Default for ServerConfig {
             mode: SecurityMode::Local,
             dir: None,
             origin: None,
+            allowed_hosts: Vec::new(),
             oauth_secret: None,
             oauth_issuer: None,
             oauth_audience: None,
@@ -293,6 +305,13 @@ impl ServerConfig {
             if origin.trim().is_empty() {
                 return Err(RelayError::InvalidConfig(
                     "origin must not be blank".to_string(),
+                ));
+            }
+        }
+        for host in &self.allowed_hosts {
+            if parse_host_authority(host).is_none() {
+                return Err(RelayError::InvalidConfig(
+                    "allowed-host must be a hostname or IP address with an optional numeric port; wildcards and URL syntax are not permitted".to_string(),
                 ));
             }
         }
@@ -469,6 +488,7 @@ impl From<&Cli> for ServerConfig {
             trusted_proxy_cidr: cli.trusted_proxy_cidr.clone(),
             dir: cli.dir.clone(),
             origin: cli.origin.clone(),
+            allowed_hosts: cli.allowed_hosts.clone(),
             oauth_secret: cli.oauth_secret.clone(),
             oauth_issuer: cli.oauth_issuer.clone(),
             oauth_audience: cli.oauth_audience.clone(),
@@ -490,4 +510,30 @@ impl From<&Cli> for ServerConfig {
             toolchain_paths: cli.toolchain_paths.clone(),
         }
     }
+}
+
+/// Parse a Host header/configuration entry into a normalized host and exact
+/// optional port. No default port is added: a missing port remains distinct
+/// from every explicit port.
+pub fn parse_host_authority(raw: &str) -> Option<(String, Option<u16>)> {
+    if raw.is_empty()
+        || raw
+            .chars()
+            .any(|ch| ch.is_ascii_whitespace() || ch.is_ascii_control())
+        || raw.contains(['/', '?', '#', '@', '*'])
+    {
+        return None;
+    }
+
+    let parsed = url::Url::parse(&format!("http://{raw}")).ok()?;
+    if parsed.username() != ""
+        || parsed.password().is_some()
+        || parsed.path() != "/"
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return None;
+    }
+
+    Some((parsed.host_str()?.to_ascii_lowercase(), parsed.port()))
 }

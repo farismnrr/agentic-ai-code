@@ -248,7 +248,8 @@ async fn handle_path_well_known_oauth(
 
 /// Server-side access policy:
 /// If OAuth is configured, it validates the JWT Bearer token.
-/// If OAuth is NOT configured (local mode), it runs exact `Origin` + `Host` validation.
+/// If OAuth is NOT configured (local mode), it validates an optional exact
+/// `Origin` plus the mandatory loopback `Host`.
 async fn access_policy(
     State(state): State<Arc<AppState>>,
     mut req: Request,
@@ -662,7 +663,6 @@ async fn access_policy(
             }
         }
     } else if let Err(err) = enforce_local_access_policy(req.headers(), &state.config) {
-        tracing::warn!(event = "relay.access.local", outcome = "denied");
         return (StatusCode::FORBIDDEN, Json(ErrorResponse::new(None, &err))).into_response();
     } else {
         tracing::debug!(event = "relay.access.local", outcome = "allowed");
