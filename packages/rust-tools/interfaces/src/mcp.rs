@@ -387,6 +387,33 @@ pub fn tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
+            name: "file_search",
+            title: Some("File Search"),
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "required": ["pattern"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: vec![ToolSecurityScheme {
+                scheme_type: "oauth2",
+                scopes: vec!["relay.coding"],
+            }],
+            execution: None,
+        },
+        Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
             description: "Start a bounded sandboxed terminal job and return its task ID for polling.",
