@@ -551,6 +551,18 @@ async fn run_process(
         let socket = docker_socket.to_string_lossy().into_owned();
         args.extend(["--bind".into(), socket.clone(), socket]);
     }
+    if config.allow_tailscale {
+        // Tailscale local API access is opt-in and scoped to one Unix socket.
+        let tailscale_socket = Path::new(&config.tailscale_socket);
+        if !tailscale_socket.exists() {
+            return Err(std::io::Error::other(format!(
+                "Tailscale access enabled but socket '{}' is unavailable",
+                tailscale_socket.display()
+            )));
+        }
+        let socket = tailscale_socket.to_string_lossy().into_owned();
+        args.extend(["--bind".into(), socket.clone(), socket]);
+    }
     // Broader home scope must not expose common credential stores to commands.
     for relative in [".ssh", ".aws", ".config/gcloud", ".docker", ".kube"] {
         let path = execution_root.join(relative);

@@ -32,3 +32,15 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: Treat Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Keep Docker denied by default, require an opt-in flag/environment setting, bind only the selected Unix socket, support configurable/rootless socket paths, and document that daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics unless a shell-aware policy parser exists; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
 - Applies to: Sandboxed local-development relays, coding agents, and terminal execution services that expose privileged host daemons.
 - Action taken: Added opt-in Docker configuration and socket plumbing with default-deny policy/tests, clarified terminal shell semantics, and kept the relay self-update boundary intact.
+
+- Date: 2026-08-16
+- Context: Making the Bubblewrap-backed Masih Awam MCP relay usable as a full local coding environment through an external MCP bridge.
+- Lesson: Separate HTTP identity, host-daemon access, and developer toolchains into explicit trust surfaces. Non-browser MCP clients may legitimately omit Origin, but any present Origin must match the configured browser Origin and Host must remain an exact local or operator-allowlisted authority. Expose Docker/Tailscale only through opt-in socket binds. Do not inherit the login-shell PATH; add reviewed runtime directories with `--toolchain-path` and verify capabilities from inside MCP after restart.
+- Applies to: Local coding relays, MCP bridges, sandboxed coding agents, and developer environments using version-managed Node/Rust/Bun toolchains.
+- Action taken: Documented the relay coding profile, explicit Host/Origin behavior, Docker/Tailscale boundaries, safe toolchain PATH configuration, direct-argv shell semantics, and an MCP-side smoke-test checklist.
+
+- Date: 2026-08-16
+- Context: Choosing the default working directory for a single-owner general coding relay.
+- Lesson: `--dir` is only the relay's default working directory; `--execution-root` is the real filesystem containment boundary. For a general coding agent that should work across projects under one home directory, use `--dir "$HOME"` with `--execution-root "$HOME"`, then set task-specific `cwd` per tool call. Reserve `--dir "$PWD"` for intentionally project-scoped relay instances.
+- Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
+- Action taken: Updated agent-facing and operator documentation to use a home-based general coding profile by default.

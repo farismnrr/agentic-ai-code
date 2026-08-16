@@ -99,6 +99,10 @@ ChatGPT and the hosted Nuxt application can consume the same public MCP resource
 
 Those two owner identities are intentionally different concepts: the Nuxt owner is an `ai_code.users.id`; the relay owner is the Authorization Server's stable `sub` claim.
 
+## Tailscale boundary
+
+The coding relay does not expose the host Tailscale local API socket by default. A local operator may opt in with `RELAY_ALLOW_TAILSCALE=true`, which bind-mounts only `RELAY_TAILSCALE_SOCKET` (default `/var/run/tailscale/tailscaled.sock`) into the Bubblewrap sandbox so commands such as `tailscale ip -4` can query the host daemon.
+
 ## Docker boundary
 
 The coding relay does **not** expose the host Docker socket by default. For trusted single-owner local development, an operator may explicitly opt in with `RELAY_ALLOW_DOCKER=true`; that escape hatch permits the `docker` CLI and bind-mounts the daemon socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`) into the Bubblewrap sandbox. Docker daemon access is effectively host-level authority and therefore weakens the filesystem boundary. Production/remote deployments should keep it disabled unless the operator deliberately accepts that trust expansion.
