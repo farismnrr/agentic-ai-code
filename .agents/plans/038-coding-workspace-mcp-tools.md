@@ -1,6 +1,6 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** IN PROGRESS — PLAN-04 VERIFIED
+**Status:** IN PROGRESS — PLAN-05 VERIFIED
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
@@ -136,7 +136,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 | PLAN-02 | `directory_list` | PLAN-01 | Complete | Bounded directory inspection works through MCP |
 | PLAN-03 | `file_search` | PLAN-01 | Complete | Bounded deterministic file discovery works through MCP |
 | PLAN-04 | `text_search` | PLAN-01 | Complete | Bounded literal/regex source search works through MCP |
-| PLAN-05 | `file_read` | PLAN-01 | Planned | Complete/ranged text reading works through MCP |
+| PLAN-05 | `file_read` | PLAN-01 | Complete | Complete/ranged text reading works through MCP |
 | PLAN-06 | `file_edit` | PLAN-01, PLAN-05 | Planned | Guarded exact edits are atomic and contained |
 | PLAN-07 | `file_write` | PLAN-01 | Planned | Create/replace operations are explicit, atomic, and contained |
 | PLAN-08 | MCP integration and security hardening | PLAN-02..07 | Planned | Full v1 surface passes black-box and regression coverage |
@@ -381,22 +381,22 @@ file_read(
 ```
 
 **Steps:**
-- [ ] Use 1-based line numbers in model-facing metadata/output.
-- [ ] Define hard byte and line caps.
-- [ ] Define behavior for requests beyond EOF.
-- [ ] Reject directories.
-- [ ] Prefer explicit non-text/invalid-UTF-8 failure over silently corrupting source text.
+- [x] Use 1-based line numbers in model-facing metadata/output.
+- [x] Define hard byte and line caps.
+- [x] Define behavior for requests beyond EOF.
+- [x] Reject directories.
+- [x] Prefer explicit non-text/invalid-UTF-8 failure over silently corrupting source text.
 
 ## TASK-502: Implement streaming/bounded read
 
 **Outcome:** Reading a range does not require emitting or retaining an unbounded file payload.
 
 **Steps:**
-- [ ] Resolve target through PLAN-01.
-- [ ] Verify it is a regular file.
-- [ ] Read only enough data to satisfy the requested bounded range and metadata strategy.
-- [ ] Return range metadata and explicit truncation.
-- [ ] Handle empty files and long single lines safely.
+- [x] Resolve target through PLAN-01.
+- [x] Verify it is a regular file.
+- [x] Read only enough data to satisfy the requested bounded range and metadata strategy.
+- [x] Return range metadata and explicit truncation.
+- [x] Handle empty files and long single lines safely.
 
 **Validation:**
 - Empty/small files, beginning/middle ranges, beyond EOF, huge files, huge lines, Unicode, invalid UTF-8/binary files, and symlink escape attempts.
@@ -404,9 +404,9 @@ file_read(
 **Commit boundary:** `feat(relay): add bounded file_read tool`
 
 **Phase exit criteria:**
-- [ ] Complete and ranged reads work through MCP.
-- [ ] Hard server bounds are enforced.
-- [ ] Binary/non-text behavior is explicit.
+- [x] Complete and ranged reads work through MCP.
+- [x] Hard server bounds are enforced.
+- [x] Binary/non-text behavior is explicit.
 
 # PLAN-06: `file_edit`
 
@@ -853,7 +853,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 - [x] PLAN-02: Add `directory_list`
 - [x] PLAN-03: Add `file_search`
 - [x] PLAN-04: Add `text_search`
-- [ ] PLAN-05: Add `file_read`
+- [x] PLAN-05: Add `file_read`
 - [ ] PLAN-06: Add guarded `file_edit`
 - [ ] PLAN-07: Add atomic `file_write`
 - [ ] PLAN-08: Complete MCP/security/black-box integration

@@ -1263,6 +1263,21 @@ pub async fn dispatch_tool_call(
         }]));
     }
 
+    if tool.name == "file_read" {
+        let result = crate::workspace::file_read(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file read result".into()))?;
+        if text.len() > crate::workspace::MAX_FILE_READ_BYTES + 16 * 1024 {
+            return Err(McpError::InvalidRequest(
+                "file read result exceeds output maximum".into(),
+            ));
+        }
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
     if tool.name == "text_search" {
         return run_text_search(arguments, config).await;
     }
