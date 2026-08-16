@@ -4,7 +4,7 @@ AI Code uses manual reviewed releases. There is no GitHub Actions release workfl
 
 ## Versioning
 
-The stable line currently uses `0.0.x` semantic versions. The first stable line after the existing prerelease history is `0.0.8`; do not reset versioning to `0.0.1` because earlier beta tags already established higher versions.
+The stable line uses `0.0.x` semantic versions. The `v0.0.8` tag was created during the first stable-release attempt but its GitHub Release remained draft after the ARM64/QEMU publish path stalled; the next stable release is therefore `v0.0.9`. Do not rewrite published tags or reset versioning to `0.0.1`.
 
 Keep the root web/package version, Cargo workspace/CLI version, stable Git tag, and release assets aligned.
 
