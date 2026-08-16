@@ -1263,6 +1263,16 @@ pub async fn dispatch_tool_call(
         }]));
     }
 
+    if tool.name == "file_edit" {
+        let result = crate::workspace::file_edit(arguments, config)?;
+        let text = serde_json::to_string(&result)
+            .map_err(|_| McpError::Internal("failed to serialize file edit result".into()))?;
+        return Ok(ToolCallResult::complete(vec![ToolResultContent {
+            kind: "text",
+            text,
+        }]));
+    }
+
     if tool.name == "file_read" {
         let result = crate::workspace::file_read(arguments, config)?;
         let text = serde_json::to_string(&result)
