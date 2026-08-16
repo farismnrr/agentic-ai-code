@@ -317,17 +317,8 @@ impl SecureDirectory {
         Ok(())
     }
 
-    fn atomic_replace_regular_file(
-        &self,
-        name: &OsStr,
-        expected: FileIdentity,
-        content: &[u8],
-        mode: u32,
-    ) -> Result<(), McpError> {
-        self.verify_regular_entry(name, expected)?;
-        let target = CString::new(name.as_bytes())
-            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
-        let temp_name = format!(".relay-edit-{}.tmp", uuid::Uuid::new_v4());
+    fn create_temp_file(&self, content: &[u8], mode: u32) -> Result<CString, McpError> {
+        let temp_name = format!(".relay-write-{}.tmp", uuid::Uuid::new_v4());
         let temp = CString::new(temp_name.as_bytes())
             .map_err(|_| McpError::Internal("failed to create temporary file name".into()))?;
         let fd = unsafe {
@@ -357,9 +348,23 @@ impl SecureDirectory {
         if write_result.is_err() {
             unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
             return Err(McpError::InvalidRequest(
-                "file edit could not be written".into(),
+                "file content could not be written".into(),
             ));
         }
+        Ok(temp)
+    }
+
+    fn atomic_replace_regular_file(
+        &self,
+        name: &OsStr,
+        expected: FileIdentity,
+        content: &[u8],
+        mode: u32,
+    ) -> Result<(), McpError> {
+        self.verify_regular_entry(name, expected)?;
+        let target = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let temp = self.create_temp_file(content, mode)?;
         if let Err(error) = self.verify_regular_entry(name, expected) {
             unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
             return Err(error);
@@ -375,15 +380,112 @@ impl SecureDirectory {
         {
             unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
             return Err(McpError::InvalidRequest(
-                "file edit could not be committed".into(),
+                "file replacement could not be committed".into(),
             ));
         }
+        self.sync_directory()
+    }
+
+    fn atomic_create_regular_file(
+        &self,
+        name: &OsStr,
+        content: &[u8],
+        mode: u32,
+    ) -> Result<(), McpError> {
+        let target = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let temp = self.create_temp_file(content, mode)?;
+        #[cfg(target_os = "linux")]
+        let renamed = unsafe {
+            libc::renameat2(
+                self.fd.as_raw_fd(),
+                temp.as_ptr(),
+                self.fd.as_raw_fd(),
+                target.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        };
+        if renamed < 0 {
+            unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
+            return Err(McpError::InvalidRequest(
+                "file already exists or could not be created".into(),
+            ));
+        }
+        self.sync_directory()
+    }
+
+    fn sync_directory(&self) -> Result<(), McpError> {
         if unsafe { libc::fsync(self.fd.as_raw_fd()) } < 0 {
             return Err(McpError::InvalidRequest(
-                "file edit durability sync failed".into(),
+                "directory durability sync failed".into(),
             ));
         }
         Ok(())
+    }
+
+    fn open_or_create_child(&self, name: &OsStr, create: bool) -> Result<Self, McpError> {
+        let name_c = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("directory entry is invalid".into()))?;
+        let mut fd = unsafe {
+            libc::openat(
+                self.fd.as_raw_fd(),
+                name_c.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 && create {
+            let errno = std::io::Error::last_os_error().raw_os_error();
+            if errno == Some(libc::ENOENT) {
+                if unsafe { libc::mkdirat(self.fd.as_raw_fd(), name_c.as_ptr(), 0o755) } < 0 {
+                    return Err(McpError::InvalidRequest(
+                        "parent directory could not be created".into(),
+                    ));
+                }
+                fd = unsafe {
+                    libc::openat(
+                        self.fd.as_raw_fd(),
+                        name_c.as_ptr(),
+                        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                    )
+                };
+            }
+        }
+        if fd < 0 {
+            return Err(McpError::InvalidRequest(
+                "write target parent is inaccessible".into(),
+            ));
+        }
+        Ok(Self {
+            fd: unsafe { OwnedFd::from_raw_fd(fd) },
+        })
+    }
+
+    fn entry_type(&self, name: &OsStr) -> Result<Option<EntryType>, McpError> {
+        let name = CString::new(name.as_bytes())
+            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
+        let mut stat = unsafe { std::mem::zeroed::<libc::stat>() };
+        if unsafe {
+            libc::fstatat(
+                self.fd.as_raw_fd(),
+                name.as_ptr(),
+                &mut stat,
+                libc::AT_SYMLINK_NOFOLLOW,
+            )
+        } < 0
+        {
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT) {
+                return Ok(None);
+            }
+            return Err(McpError::InvalidRequest(
+                "write target is inaccessible".into(),
+            ));
+        }
+        let kind = stat.st_mode & libc::S_IFMT;
+        Ok(Some(EntryType {
+            symlink: kind == libc::S_IFLNK,
+            directory: kind == libc::S_IFDIR,
+            regular: kind == libc::S_IFREG,
+        }))
     }
 
     fn read_entries(
@@ -991,4 +1093,147 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         replacements: if replace_all { matches } else { 1 },
         changed,
     })
+}
+
+pub const MAX_FILE_WRITE_BYTES: usize = 1024 * 1024;
+const MAX_FILE_WRITE_PATH_BYTES: usize = 4_096;
+const MAX_FILE_WRITE_CWD_BYTES: usize = 4_096;
+
+#[derive(Debug, Serialize)]
+pub struct FileWriteResult {
+    path: String,
+    created: bool,
+    overwritten: bool,
+    bytes: usize,
+}
+
+fn normalize_write_path(
+    root: &Path,
+    cwd: &Path,
+    value: &str,
+) -> Result<std::path::PathBuf, McpError> {
+    use std::path::Component;
+    let requested = if Path::new(value).is_absolute() {
+        Path::new(value).to_path_buf()
+    } else {
+        cwd.join(value)
+    };
+    let mut normalized = std::path::PathBuf::new();
+    for component in requested.components() {
+        match component {
+            Component::RootDir => normalized.push(Path::new("/")),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return Err(McpError::InvalidRequest(
+                        "write target escapes execution root".into(),
+                    ));
+                }
+            }
+            Component::Normal(value) => normalized.push(value),
+            Component::Prefix(_) => {
+                return Err(McpError::InvalidRequest("write target is invalid".into()))
+            }
+        }
+    }
+    if !normalized.starts_with(root) || normalized == root {
+        return Err(McpError::InvalidRequest(
+            "write target escapes execution root".into(),
+        ));
+    }
+    Ok(normalized)
+}
+
+fn resolve_write_parent_directory(
+    root: &Path,
+    cwd: Option<&str>,
+    path: &str,
+    create_parents: bool,
+) -> Result<(SecureDirectory, std::ffi::OsString), McpError> {
+    let cwd = resolve_existing_path(root, cwd, ".", EntryKind::Directory)?;
+    let normalized = normalize_write_path(root, &cwd, path)?;
+    let relative = normalized
+        .strip_prefix(root)
+        .map_err(|_| McpError::InvalidRequest("write target escapes execution root".into()))?;
+    let name = relative
+        .file_name()
+        .ok_or_else(|| McpError::InvalidRequest("write target is invalid".into()))?
+        .to_os_string();
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    let mut directory = SecureDirectory::open_relative(root, root)?;
+    for component in parent.components() {
+        let std::path::Component::Normal(component) = component else {
+            return Err(McpError::InvalidRequest(
+                "write target parent is invalid".into(),
+            ));
+        };
+        directory = directory.open_or_create_child(component, create_parents)?;
+    }
+    Ok((directory, name))
+}
+
+pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteResult, McpError> {
+    let path = arguments
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file write path is required".into()))?;
+    let content = arguments
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file write content is required".into()))?;
+    if path.is_empty() || path.len() > MAX_FILE_WRITE_PATH_BYTES {
+        return Err(McpError::InvalidRequest(
+            "file write path exceeds allowed bounds".into(),
+        ));
+    }
+    if content.len() > MAX_FILE_WRITE_BYTES {
+        return Err(McpError::InvalidRequest(
+            "file write content exceeds maximum".into(),
+        ));
+    }
+    let cwd = arguments.get("cwd").and_then(Value::as_str);
+    if cwd.is_some_and(|value| value.len() > MAX_FILE_WRITE_CWD_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "file write cwd exceeds maximum".into(),
+        ));
+    }
+    let create_parents = arguments
+        .get("create_parents")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let overwrite = arguments
+        .get("overwrite")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let (directory, name) = resolve_write_parent_directory(&root, cwd, path, create_parents)?;
+    match directory.entry_type(&name)? {
+        Some(entry) if entry.is_symlink() || entry.is_dir() || !entry.is_file() => Err(
+            McpError::InvalidRequest("write target has an unsupported entry type".into()),
+        ),
+        Some(_) if !overwrite => Err(McpError::InvalidRequest(
+            "file already exists; overwrite is required".into(),
+        )),
+        Some(_) => {
+            let (_file, identity, mode) = directory.open_regular_file(&name)?;
+            directory.atomic_replace_regular_file(&name, identity, content.as_bytes(), mode)?;
+            Ok(FileWriteResult {
+                path: path.to_owned(),
+                created: false,
+                overwritten: true,
+                bytes: content.len(),
+            })
+        }
+        None => {
+            directory.atomic_create_regular_file(&name, content.as_bytes(), 0o644)?;
+            Ok(FileWriteResult {
+                path: path.to_owned(),
+                created: true,
+                overwritten: false,
+                bytes: content.len(),
+            })
+        }
+    }
 }
