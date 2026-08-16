@@ -51,7 +51,7 @@ The publish script fails closed unless:
 - the requested stable tag points exactly at `HEAD`;
 - that tag is already present on `origin`.
 
-It then builds/verifies assets, uploads GitHub Release assets, publishes the multi-architecture web image to GHCR, and only after those steps publishes the GitHub Release.
+It then builds/verifies assets, uploads GitHub Release assets, publishes the `linux/amd64` web image to GHCR, and only after those steps publishes the GitHub Release.
 
 Stable web image tags are:
 
@@ -60,6 +60,8 @@ vX.Y.Z
 X.Y.Z
 latest
 ```
+
+The stable web image is intentionally **linux/amd64-only**. ARM64 publication was removed after the emulated Nuxt/Vite build hit severe host swap thrashing under QEMU; do not re-add `linux/arm64` without a native/remote ARM64 builder and a fresh release-path review.
 
 Default image repository:
 
