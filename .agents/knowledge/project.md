@@ -71,6 +71,7 @@ The remediation also restored application ownership boundaries across API compos
 
 ### Agent/project guidance
 
+- `docs/` — human/operator installation, deployment, ChatGPT, development, and release handbook.
 - `AGENTS.md` — single repository agent entrypoint.
 - `.agents/knowledge/` — stable operating guidance.
 - `.agents/skills/` — shared framework/tool skill discovery.

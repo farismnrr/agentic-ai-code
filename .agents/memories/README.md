@@ -4,6 +4,7 @@
 
 ## Repository policy and verification
 
+- Human/operator documentation now lives under `docs/`; `README.md` is the concise project landing page, while `.agents/` remains agent-only durable context/contracts/history. Keep these roles separate and update `docs/` when installation/deployment behavior changes.
 - The repository intentionally has **no CI workflow** and **no unit-test suite**. Do not add normal test directories/files, package `test` scripts, or Rust `#[cfg(test)]` modules unless the user explicitly changes policy.
 - Every normal local commit must pass the tracked pre-commit gate. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm verify:commit`. Never use `--no-verify` or disable/replace the hook path.
 - `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. A failure means do not claim the commit is verified.
