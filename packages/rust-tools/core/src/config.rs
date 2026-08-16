@@ -108,6 +108,18 @@ pub struct Cli {
     )]
     pub docker_socket: String,
 
+    /// Explicit local-development access to the host Tailscale daemon socket.
+    #[arg(long, env = "RELAY_ALLOW_TAILSCALE", default_value_t = false)]
+    pub allow_tailscale: bool,
+
+    /// Host Tailscale socket to expose when --allow-tailscale is enabled.
+    #[arg(
+        long,
+        env = "RELAY_TAILSCALE_SOCKET",
+        default_value = "/var/run/tailscale/tailscaled.sock"
+    )]
+    pub tailscale_socket: String,
+
     /// Explicit user-owned toolchain directories added to the safe PATH.
     #[arg(
         long = "toolchain-path",
@@ -160,6 +172,8 @@ pub struct ServerConfig {
     pub max_running_jobs: usize,
     pub allow_docker: bool,
     pub docker_socket: String,
+    pub allow_tailscale: bool,
+    pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
 }
 
@@ -185,6 +199,8 @@ impl Default for ServerConfig {
             max_running_jobs: 16,
             allow_docker: false,
             docker_socket: "/var/run/docker.sock".into(),
+            allow_tailscale: false,
+            tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
         }
     }
@@ -414,6 +430,14 @@ impl ServerConfig {
                 ));
             }
         }
+        if self.allow_tailscale {
+            let socket = std::path::Path::new(&self.tailscale_socket);
+            if !socket.is_absolute() {
+                return Err(RelayError::InvalidConfig(
+                    "tailscale-socket must be an absolute path".into(),
+                ));
+            }
+        }
         for path in &self.toolchain_paths {
             let candidate = std::fs::canonicalize(path).map_err(|_| {
                 RelayError::InvalidConfig(
@@ -461,6 +485,8 @@ impl From<&Cli> for ServerConfig {
             max_running_jobs: cli.max_running_jobs,
             allow_docker: cli.allow_docker,
             docker_socket: cli.docker_socket.clone(),
+            allow_tailscale: cli.allow_tailscale,
+            tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
         }
     }
