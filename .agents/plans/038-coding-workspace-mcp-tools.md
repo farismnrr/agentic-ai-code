@@ -1,10 +1,12 @@
 # Plan 038 — Coding Workspace MCP Tools
 
-**Status:** WORKSPACE V1 LOCALLY VERIFIED — LIVE CLIENT REFRESH PENDING
+**Status:** CLOSED / VERIFIED — WORKSPACE V1 COMPLETE
 **Created:** 2026-08-16
 **Predecessor context:** Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 **Goal:** Add a small, secure, high-value set of native workspace tools to the Masih Awam MCP relay so coding assistants can inspect, search, and edit repositories without routing routine filesystem work through `terminal_exec`.
 **Success Criteria:** The relay exposes bounded native workspace tools for directory inspection, file discovery, text search, reading, editing, and writing; every operation respects the existing execution-root boundary; mutation tools prevent path/symlink escape; outputs are context-bounded; MCP schemas/annotations are accurate; and existing terminal/web tools continue working unchanged.
+
+**Closure evidence (2026-08-16):** release build `ai-tools 0.0.10` passed `pnpm verify:commit` and `pnpm build:tools`; the deployed `/home/farismnrr/.local/share/ai-code/bin/ai-tools` SHA-256 matched the reviewed release artifact; `ai-tools-relay.service` restarted `active/running` with `NRestarts=0`, owner-home execution root, and repository working directory. After ChatGPT app refresh, the live authenticated connector exposed all 12 tools and successfully exercised `directory_list`, `file_search`, `text_search`, `file_read`, `file_write`, and `file_edit`; a temporary ignored mutation canary was created, edited, read back, removed, and the Git worktree remained clean. PLAN-10 through PLAN-12 remain deferred follow-up work and are not part of this closure.
 
 ## Scope
 
