@@ -18,7 +18,7 @@ enum Commands {
     /// Fetch a URL and return its response
     Curl(commands::curl::Args),
     /// Run the relay agent
-    Relay(relay_core::config::Cli),
+    Relay(Box<relay_core::config::Cli>),
     /// Search the web using SearxNG
     Searxng(commands::searxng::Args),
     /// Run an executable command within the workspace directory
@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 commands::curl::run(args).await;
                 Ok(())
             }
-            Commands::Relay(args) => commands::relay::run(args).await,
+            Commands::Relay(args) => commands::relay::run(*args).await,
             Commands::Searxng(args) => {
                 commands::searxng::run(args).await;
                 Ok(())

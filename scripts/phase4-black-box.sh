@@ -263,8 +263,8 @@ def run():
             assert response_headers.get("x-request-id")
 
             status, _, body = request(local_url, headers=headers(origin=None), body=valid_discover)
-            assert_status(status, 403, "missing Origin")
-            assert body["error"]["code"] == -32600
+            assert_status(status, 200, "missing Origin for non-browser MCP client")
+            assert body["result"]["supportedVersions"] == [PROTOCOL]
 
             status, _, _ = request(local_url, headers=headers(host="evil.example:9999"), body=valid_discover)
             assert_status(status, 403, "untrusted Host")
