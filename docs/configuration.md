@@ -77,6 +77,7 @@ OAUTH_OWNER_SUBJECT=<stable-owner-sub>
 EXECUTION_ROOT=/home/owner
 RELAY_AGENT_TRUSTED_PROXY=true
 RELAY_AGENT_TRUSTED_PROXY_CIDR=127.0.0.1/32
+RELAY_ALLOWED_HOSTS=mcp.example.com
 ```
 
 Execution policy can be tuned with:
@@ -96,9 +97,13 @@ RELAY_TAILSCALE_SOCKET
 
 `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
 
+`RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories appended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit and prevents unrelated user PATH entries from silently becoming agent capabilities.
+
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
 `RELAY_ALLOW_DOCKER=true` is an explicit local-development escape hatch. It permits the `docker` CLI and bind-mounts the host Docker daemon socket into the terminal sandbox. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Docker daemon access can provide host-level authority, so the default remains disabled and it should only be enabled for a trusted single-owner coding relay.
+
+In local mode, `127.0.0.1:<port>` and `localhost:<port>` are always allowed. Use repeated `--allowed-host` flags or the comma-separated `RELAY_ALLOWED_HOSTS` value for explicitly permitted external Host authorities. Entries may include an exact port; an entry without a port matches only a Host without a port, and never implicitly allows arbitrary ports. Wildcards and URL syntax are rejected.
 
 ## Telemetry
 
