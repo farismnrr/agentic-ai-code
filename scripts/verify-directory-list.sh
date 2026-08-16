@@ -15,6 +15,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import tempfile
 import time
 import urllib.error
@@ -150,6 +151,9 @@ with tempfile.TemporaryDirectory(prefix="relay-directory-list-") as base:
     os.symlink(os.path.join(external, "secret.txt"), os.path.join(workspace, "tree", "y-external-file"))
     os.symlink("loop-b", os.path.join(workspace, "tree", "loop-a"))
     os.symlink("loop-a", os.path.join(workspace, "tree", "loop-b"))
+    invalid_utf8 = os.path.join(os.fsencode(workspace), b"tree/invalid-\xff")
+    with open(invalid_utf8, "wb") as output:
+        output.write(b"invalid")
 
     port = free_port()
     process = subprocess.Popen(
@@ -208,6 +212,7 @@ with tempfile.TemporaryDirectory(prefix="relay-directory-list-") as base:
         assert types["loop-a"] == "symlink"
         assert types["x-external-dir"] == "symlink"
         assert listing["truncated"] is False
+        assert "invalid-" not in json.dumps(listing), "non-UTF-8 names must be omitted, not lossily renamed"
 
         status, response = tool_call(url, {"path": "tree", "depth": 2})
         assert status == 200
@@ -218,6 +223,44 @@ with tempfile.TemporaryDirectory(prefix="relay-directory-list-") as base:
         ]
         assert [entry["path"] for entry in listing["entries"]] == expected_nested, listing
         assert "EXTERNAL-CANARY-038" not in json.dumps(listing)
+
+        # Stress a directory-to-external-symlink swap while recursive listing runs.
+        # Stable no-follow directory descriptors may make the call succeed or fail,
+        # but the external sentinel must never become visible.
+        race_safe = os.path.join(workspace, "race-dir")
+        race_backup = os.path.join(workspace, "race-dir-backup")
+        race_external = os.path.join(external, "race-external")
+        os.makedirs(os.path.join(race_safe, "nested"))
+        os.makedirs(race_external)
+        with open(os.path.join(race_external, "CANARY-RACE-DIR-038"), "w", encoding="utf-8") as output:
+            output.write("external")
+        swapping = True
+
+        def swap_race_path():
+            for _ in range(200):
+                if not swapping:
+                    break
+                try:
+                    os.rename(race_safe, race_backup)
+                    os.symlink(race_external, race_safe)
+                    os.unlink(race_safe)
+                    os.rename(race_backup, race_safe)
+                except FileNotFoundError:
+                    pass
+
+        swap_thread = threading.Thread(target=swap_race_path)
+        swap_thread.start()
+        try:
+            for request_id in range(30, 38):
+                status, response = tool_call(url, {"path": ".", "depth": 3}, request_id)
+                assert status == 200
+                result = response["result"]
+                serialized = json.dumps(result)
+                assert "CANARY-RACE-DIR-038" not in serialized, serialized
+        finally:
+            swapping = False
+            swap_thread.join(timeout=5)
+        assert os.path.isdir(race_safe)
 
         status, response = tool_call(url, {"cwd": "tree", "path": "a-dir", "depth": 1})
         assert status == 200
