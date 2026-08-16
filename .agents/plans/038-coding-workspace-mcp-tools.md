@@ -198,7 +198,7 @@ Prefer structured metadata when it materially helps clients, while retaining com
 - [x] Verify a contained symlink to an external file is rejected by path resolution.
 - [x] Verify write-target resolution rejects an external symlinked parent and canonicalizes a contained symlinked parent.
 - [x] Verify path resolution rejects a recursive symlink loop.
-- [ ] PLAN-02/PLAN-03 traversal acceptance must prove listing/search may report symlink entries without following them recursively; no traversal exists in PLAN-01.
+- [x] PLAN-02/PLAN-03 traversal acceptance proves listing/search may report symlink entries without following them recursively; no traversal exists in PLAN-01.
 
 **Validation:**
 - Resolver escape attempts fail before filesystem access through the escaped target; the acceptance fixture verifies its external sentinel remains unchanged. Operation-time mutation race safety is intentionally deferred to PLAN-06/07 where mutations actually exist.
@@ -298,7 +298,7 @@ file_search(
 - [x] Traverse natively unless implementation evidence strongly favors an already-approved binary.
 - [x] Return paths relative to selected `cwd` where practical.
 - [x] Sort results deterministically.
-- [x] Stop at configured result limits and mark truncation.
+- [x] Stop at configured result limits and mark truncation; selection follows deterministic byte-sorted depth-first traversal, while returned matches are lexically sorted.
 - [x] Prevent symlink loops and root escape.
 
 **Validation:**
@@ -851,7 +851,7 @@ Rollback should be commit/phase-based. Each tool should be independently reviewa
 
 - [x] PLAN-01: Shared workspace path and containment layer
 - [x] PLAN-02: Add `directory_list`
-- [ ] PLAN-03: Add `file_search`
+- [x] PLAN-03: Add `file_search`
 - [ ] PLAN-04: Add `text_search`
 - [ ] PLAN-05: Add `file_read`
 - [ ] PLAN-06: Add guarded `file_edit`

@@ -179,6 +179,15 @@ with tempfile.TemporaryDirectory(prefix="relay-file-search-") as base:
         with open(os.path.join(workspace, "many", f"match-{index:03}.txt"), "w", encoding="utf-8") as output:
             output.write("x")
 
+    # Truncation selection is deterministic traversal order: native entries are
+    # byte-sorted and directories are visited depth-first; returned matches are
+    # then lexically sorted. This deliberately avoids keeping breadth-wide FDs.
+    os.makedirs(os.path.join(workspace, "truncation-order", "a"))
+    with open(os.path.join(workspace, "truncation-order", "a", "x.txt"), "w", encoding="utf-8") as output:
+        output.write("nested")
+    with open(os.path.join(workspace, "truncation-order", "a.txt"), "w", encoding="utf-8") as output:
+        output.write("sibling")
+
     os.makedirs(os.path.join(workspace, "target", "scan-cap"))
     for index in range(4097):
         with open(os.path.join(workspace, "target", "scan-cap", f"entry-{index:04}.dat"), "w", encoding="utf-8") as output:
@@ -284,6 +293,12 @@ with tempfile.TemporaryDirectory(prefix="relay-file-search-") as base:
         _, search = tool_call(url, {"pattern": "match-*.txt", "cwd": "many", "max_results": 5})
         assert search["matches"] == [f"match-{index:03}.txt" for index in range(5)]
         assert search["count"] == 5 and search["truncated"] is True
+
+        _, search = tool_call(
+            url, {"pattern": "**/*.txt", "cwd": "truncation-order", "max_results": 1}
+        )
+        assert search["matches"] == ["a/x.txt"], search
+        assert search["count"] == 1 and search["truncated"] is True
 
         _, search = tool_call(url, {"pattern": "ignored.rs"})
         assert search["matches"] == ["ignored.rs"], ".gitignore must not be silently implemented"

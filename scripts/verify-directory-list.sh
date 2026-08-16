@@ -130,6 +130,14 @@ with tempfile.TemporaryDirectory(prefix="relay-directory-list-") as base:
     os.makedirs(os.path.join(workspace, "empty"))
     os.makedirs(os.path.join(workspace, "huge"))
     os.makedirs(os.path.join(workspace, "scan-cap"))
+    long_output = os.path.join(workspace, "long-output")
+    long_level = long_output
+    for index in range(3):
+        long_level = os.path.join(long_level, f"level-{index}-" + "l" * 220)
+        os.makedirs(long_level)
+    for index in range(100):
+        with open(os.path.join(long_level, f"entry-{index:03}-" + "x" * 220), "w", encoding="utf-8") as output:
+            output.write("x")
     os.makedirs(os.path.join(external, "secret-dir"))
     with open(os.path.join(workspace, "tree", "a-dir", "a.txt"), "w", encoding="utf-8") as f:
         f.write("a\n")
@@ -289,6 +297,12 @@ with tempfile.TemporaryDirectory(prefix="relay-directory-list-") as base:
         assert status == 200
         listing = parse_listing(response)
         assert len(listing["entries"]) == 100 and listing["truncated"] is True
+
+        status, response = tool_call(url, {"path": "long-output", "depth": 4})
+        assert status == 200
+        listing = parse_listing(response)
+        assert len(listing["entries"]) == 100 and listing["truncated"] is True
+        assert len(json.dumps(listing, separators=(",", ":")).encode()) <= 256 * 1024
 
         scan_cap_error = expect_tool_error(
             url, {"path": "scan-cap", "depth": 1}, "directory scan hard cap"
