@@ -20,16 +20,30 @@ struct SharedState {
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, LspError>>>>,
     faulted: AtomicBool,
     diagnostics: Mutex<HashMap<String, Value>>,
-    /// Bounded, generic store of the most recent params per notification
-    /// method. Interpretation of any given method's payload is owned by the
-    /// language-specific integration layer (e.g. `lsp::rust`), not here.
+    /// Bounded store of the most recent params for the small, explicit set
+    /// of notification methods a caller actually needs retained (see
+    /// `RETAINED_NOTIFICATION_METHODS`). Unrelated notifications are not
+    /// cached at all, so an untrusted server cannot grow this state by
+    /// sending arbitrary notification methods.
     notifications: Mutex<HashMap<String, Value>>,
     /// Opaque language-owned settings blob answered back for
     /// `workspace/configuration` pulls.
     configuration: Value,
+    /// Canonical workspace folder this session was initialized with,
+    /// answered back verbatim for `workspace/workspaceFolders` pulls.
+    workspace_folder: Value,
 }
 
-const MAX_LSP_NOTIFICATION_METHODS: usize = 32;
+/// Notification methods retained for later lookup via `latest_notification`.
+/// Only add a method here when a caller actually reads it back; everything
+/// else is observed (e.g. for diagnostics) and discarded, never cached.
+const RETAINED_NOTIFICATION_METHODS: &[&str] = &["experimental/serverStatus"];
+/// Bound on a single retained notification payload. rust-analyzer's
+/// `experimental/serverStatus` payload is a handful of fields; this is
+/// generous headroom while keeping total retained state small and
+/// deterministic (at most `RETAINED_NOTIFICATION_METHODS.len()` entries of
+/// at most this many bytes each).
+const MAX_RETAINED_NOTIFICATION_BYTES: usize = 16 * 1024;
 
 pub struct LspSession {
     identity: WorkspaceIdentity,
@@ -62,6 +76,7 @@ impl LspSession {
         let stdin = child.stdin.take().ok_or(LspError::StartupFailed)?;
         let stdout = child.stdout.take().ok_or(LspError::StartupFailed)?;
         let stderr_pipe = child.stderr.take().ok_or(LspError::StartupFailed)?;
+        let workspace_folder = json!({"uri": root_uri, "name": "workspace"});
         let state = Arc::new(SharedState {
             writer: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
@@ -69,6 +84,7 @@ impl LspSession {
             diagnostics: Mutex::new(HashMap::new()),
             notifications: Mutex::new(HashMap::new()),
             configuration: spec.settings.clone(),
+            workspace_folder: workspace_folder.clone(),
         });
         let stderr = Arc::new(Mutex::new(Vec::new()));
         tokio::spawn(drain_stderr(stderr_pipe, stderr.clone()));
@@ -105,7 +121,7 @@ impl LspSession {
                     "processId": Value::Null,
                     "clientInfo": {"name":"ai-tools","version":env!("CARGO_PKG_VERSION")},
                     "rootUri": root_uri,
-                    "workspaceFolders": [{"uri":root_uri,"name":"workspace"}],
+                    "workspaceFolders": [workspace_folder.clone()],
                     "capabilities": {
                         "workspace": {"workspaceFolders": true, "configuration": true},
                         "textDocument": {"synchronization":{"dynamicRegistration":false}},
@@ -331,10 +347,19 @@ async fn read_loop(
                 }
             }
             if object.get("id").is_none() {
-                let name = method.as_str().unwrap_or_default().to_owned();
-                let mut store = state.notifications.lock().await;
-                if store.contains_key(&name) || store.len() < MAX_LSP_NOTIFICATION_METHODS {
-                    store.insert(name, object.get("params").cloned().unwrap_or(Value::Null));
+                let name = method.as_str().unwrap_or_default();
+                if RETAINED_NOTIFICATION_METHODS.contains(&name) {
+                    let payload = object.get("params").cloned().unwrap_or(Value::Null);
+                    let bounded = serde_json::to_vec(&payload)
+                        .map(|bytes| bytes.len() <= MAX_RETAINED_NOTIFICATION_BYTES)
+                        .unwrap_or(false);
+                    if bounded {
+                        state
+                            .notifications
+                            .lock()
+                            .await
+                            .insert(name.to_owned(), payload);
+                    }
                 }
             }
             if let Some(id) = object.get("id") {
@@ -342,28 +367,39 @@ async fn read_loop(
                     fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                     return;
                 }
-                let result = match method.as_str().unwrap_or_default() {
-                    "workspace/configuration" => object
-                        .get("params")
-                        .and_then(|params| params.get("items"))
-                        .and_then(Value::as_array)
-                        .map(|items| {
-                            Value::Array(
-                                items.iter().map(|_| state.configuration.clone()).collect(),
-                            )
-                        })
-                        .unwrap_or_else(|| Value::Array(Vec::new())),
-                    "workspace/workspaceFolders" => Value::Array(Vec::new()),
+                let known_result = match method.as_str().unwrap_or_default() {
+                    "workspace/configuration" => Some(
+                        object
+                            .get("params")
+                            .and_then(|params| params.get("items"))
+                            .and_then(Value::as_array)
+                            .map(|items| {
+                                Value::Array(
+                                    items.iter().map(|_| state.configuration.clone()).collect(),
+                                )
+                            })
+                            .unwrap_or_else(|| Value::Array(Vec::new())),
+                    ),
+                    "workspace/workspaceFolders" => {
+                        Some(Value::Array(vec![state.workspace_folder.clone()]))
+                    }
                     "window/workDoneProgress/create"
                     | "client/registerCapability"
-                    | "client/unregisterCapability" => Value::Null,
-                    _ => Value::Null,
+                    | "client/unregisterCapability" => Some(Value::Null),
+                    _ => None,
                 };
-                let response = json!({
-                    "jsonrpc":"2.0",
-                    "id":id,
-                    "result": result
-                });
+                let response = match known_result {
+                    Some(result) => json!({
+                        "jsonrpc":"2.0",
+                        "id":id,
+                        "result": result
+                    }),
+                    None => json!({
+                        "jsonrpc":"2.0",
+                        "id":id,
+                        "error": {"code": -32601, "message": "Method not found"}
+                    }),
+                };
                 if write_message(&mut *state.writer.lock().await, &response)
                     .await
                     .is_err()

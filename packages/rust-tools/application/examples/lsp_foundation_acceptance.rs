@@ -17,6 +17,8 @@ const MODES: &[&str] = &[
     "invalid-id",
     "invalid-envelope",
     "notify-broken-pipe",
+    "notification-flood",
+    "server-requests",
 ];
 
 #[tokio::main]
@@ -59,6 +61,13 @@ async fn run() -> Result<(), String> {
         .map_err(display_error)?;
     require(session_a.capabilities().definition, "capability capture")?;
     require(session_a.capabilities().hover, "hover capability capture")?;
+    require(
+        session_a
+            .latest_notification("fixture/unknownNotification")
+            .await
+            .is_none(),
+        "unretained notification method not cached",
+    )?;
     let echoed = session_a
         .request("fixture/echo", json!({"value":"correlated"}))
         .await
@@ -182,6 +191,8 @@ async fn run() -> Result<(), String> {
     )
     .await?;
     assert_notification_write_failure(&manager, &repo_a).await?;
+    assert_notification_retention_bound(&manager, &repo_a).await?;
+    assert_server_request_handling(&manager, &repo_a).await?;
 
     require(
         session_a.retained_stderr_bytes().await <= 64 * 1024,
@@ -243,6 +254,63 @@ async fn assert_notification_write_failure(
         manager.active_session_count().await == 0,
         "faulted notification session cleaned up",
     )
+}
+
+async fn assert_notification_retention_bound(
+    manager: &Arc<LspSessionManager>,
+    repo: &Path,
+) -> Result<(), String> {
+    let session = manager
+        .session_for(Some(&path_text(repo)?), "notification-flood")
+        .await
+        .map_err(display_error)?;
+    session
+        .request("fixture/test", json!({}))
+        .await
+        .map_err(display_error)?;
+    for index in 0..40 {
+        require(
+            session
+                .latest_notification(&format!("flood/method-{index}"))
+                .await
+                .is_none(),
+            "arbitrary notification method not retained under flood",
+        )?;
+    }
+    require(!session.is_faulted(), "session healthy after flood")?;
+    manager.shutdown_all().await;
+    Ok(())
+}
+
+async fn assert_server_request_handling(
+    manager: &Arc<LspSessionManager>,
+    repo: &Path,
+) -> Result<(), String> {
+    let session = manager
+        .session_for(Some(&path_text(repo)?), "server-requests")
+        .await
+        .map_err(display_error)?;
+    let result = session
+        .request("fixture/test", json!({}))
+        .await
+        .map_err(display_error)?;
+    let expected_uri = url::Url::from_directory_path(session.identity().root.clone())
+        .map_err(|_| "expected uri".to_string())?
+        .to_string();
+    require(
+        result["folders"] == json!([{"uri": expected_uri, "name": "workspace"}]),
+        "workspace/workspaceFolders returns canonical root only",
+    )?;
+    require(
+        result["unknown"]["error"]["code"] == json!(-32601),
+        "unknown server request receives Method not found",
+    )?;
+    require(
+        !session.is_faulted(),
+        "session healthy after protocol exchange",
+    )?;
+    manager.shutdown_all().await;
+    Ok(())
 }
 
 async fn assert_mode_error(
@@ -360,6 +428,9 @@ while True:
     if method == "initialize":
         send({"jsonrpc":"2.0","id":message["id"],"result":{"capabilities":{"definitionProvider":True,"hoverProvider":True,"textDocumentSync":{"openClose":True,"change":2}}}})
         send({"jsonrpc":"2.0","method":"fixture/unknownNotification","params":{}})
+        if mode == "notification-flood":
+            for i in range(40):
+                send({"jsonrpc":"2.0","method":f"flood/method-{i}","params":{"blob":"x"*4096}})
     elif method == "shutdown": send({"jsonrpc":"2.0","id":message["id"],"result":None})
     elif method == "exit": sys.exit(0)
     elif method == "initialized":
@@ -383,6 +454,12 @@ while True:
         elif mode == "crash": sys.stderr.write("SECRET=stderr-canary /home/private/path\n"); sys.stderr.flush(); sys.exit(7)
         elif mode == "invalid-id": send({"jsonrpc":"2.0","id":message["id"] + 99,"result":{}})
         elif mode == "invalid-envelope": send({"jsonrpc":"1.0","id":message["id"],"result":{}})
+        elif mode == "server-requests":
+            send({"jsonrpc":"2.0","id":9001,"method":"workspace/workspaceFolders","params":None})
+            folders_response = read_message()
+            send({"jsonrpc":"2.0","id":9002,"method":"fixture/unknownRequest","params":None})
+            unknown_response = read_message()
+            send({"jsonrpc":"2.0","id":message["id"],"result":{"folders":folders_response.get("result"),"unknown":unknown_response}})
         else: send({"jsonrpc":"2.0","id":message["id"],"result":{}})
     elif "id" in message: send({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32601,"message":"unknown"}})
 "#;
