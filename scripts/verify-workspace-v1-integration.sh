@@ -5,7 +5,7 @@ RUSTFLAGS='-D warnings' cargo build --manifest-path "$root/Cargo.toml" --locked 
 exec python3 - "$root/target/debug/ai-tools" "$root" <<'PY'
 import json, os, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-RELAY,ROOT=sys.argv[1:]; P='2026-07-28'; O='http://localhost:3333'
+RELAY,ROOT=sys.argv[1:]; P='2026-07-28'; O='http://localhost:3333'; ALLOW_TERMINAL_NETWORK=os.environ.get('ALLOW_TERMINAL_NETWORK')=='1'
 def free_port():
  s=socket.socket(); s.bind(('127.0.0.1',0)); p=s.getsockname()[1]; s.close(); return p
 class MockHandler(BaseHTTPRequestHandler):
@@ -38,7 +38,7 @@ def req(url,method,name=None,args=None,i=1):
   try:return e.code,json.loads(raw)
   except Exception:return e.code,{'_raw':raw.decode('utf-8','replace')}
 def call(url,name,args,i=1):
- st,b=req(url,'tools/call',name,args,i); assert st==200,(name,st,b); r=b['result']; assert r['resultType']=='complete'; return r
+ st,b=req(url,'tools/call',name,args,i); time.sleep(.14); assert st==200,(name,st,b); r=b['result']; assert r['resultType']=='complete'; return r
 def payload(result):
  assert result['isError'] is False,result
  text=next(x['text'] for x in result['content'] if x.get('type')=='text'); return json.loads(text)
@@ -49,6 +49,12 @@ def expect_error(url,name,args,label):
  elif st==400: assert b['error']['code']==-32602,(label,b)
 with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
  ws=os.path.join(base,'ws'); ext=os.path.join(base,'ext'); os.makedirs(os.path.join(ws,'src')); os.makedirs(ext)
+ os.makedirs(os.path.join(ws,'.ssh')); open(os.path.join(ws,'.ssh','id_test'),'w').write('protected-canary')
+ open(os.path.join(ws,'.npmrc'),'w').write('protected-canary')
+ open(os.path.join(ws,'.ssh-cache'),'w').write('near-miss')
+ open(os.path.join(ws,'.npmrc.bak'),'w').write('near-miss')
+ open(os.path.join(ws,'.env.example'),'w').write('EXAMPLE=ok')
+ os.symlink('.ssh/id_test',os.path.join(ws,'innocent.txt'))
  open(os.path.join(ws,'src','a.rs'),'w').write('needle one\nneedle two\n')
  open(os.path.join(ws,'src','b.rs'),'w').write('needle three\n')
  target=os.path.join(ws,'edit.txt'); open(target,'w').write('alpha beta\n')
@@ -57,10 +63,13 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
  os.symlink(ext,os.path.join(ws,'external-dir-link'))
  os.symlink('loop-b',os.path.join(ws,'loop-a')); os.symlink('loop-a',os.path.join(ws,'loop-b'))
  relay=None
+ mock=ThreadingHTTPServer(('127.0.0.1',0),MockHandler); threading.Thread(target=mock.serve_forever,daemon=True).start()
  try:
-  port=free_port(); relay=subprocess.Popen([RELAY,'relay','--port',str(port),'--dir',ws,'--execution-root',ws,'--origin',O,'--mode','local'],cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True); wait(port,relay); url=f'http://127.0.0.1:{port}/mcp'
+  port=free_port(); relay_args=[RELAY,'relay','--port',str(port),'--dir',ws,'--execution-root',ws,'--origin',O,'--mode','local']
+  if ALLOW_TERMINAL_NETWORK: relay_args.append('--allow-terminal-network')
+  relay=subprocess.Popen(relay_args,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True); wait(port,relay); url=f'http://127.0.0.1:{port}/mcp'
   st,b=req(url,'tools/list'); assert st==200
-  tools={t['name']:t for t in b['result']['tools']}; names=['directory_list','file_search','text_search','file_read','file_edit','file_write']
+  tools={t['name']:t for t in b['result']['tools']}; names=['directory_list','file_search','text_search','file_read','file_edit','file_write','git_show']
   for name in names:
    assert name in tools,name; assert tools[name]['inputSchema']['additionalProperties'] is False; assert tools[name]['securitySchemes']==[{'type':'oauth2','scopes':['relay.coding']}]
   x=payload(call(url,'directory_list',{'path':'.','depth':2,'max_entries':1})); assert x['truncated'] is True and len(x['entries'])==1
@@ -69,9 +78,25 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
   x=payload(call(url,'file_read',{'path':'src/a.rs','limit_lines':1})); assert x['truncated'] is True and x['start_line']==1
   x=payload(call(url,'file_edit',{'path':'edit.txt','old_text':'alpha','new_text':'ALPHA'})); assert x['replacements']==1 and open(target).read()=='ALPHA beta\n'
   x=payload(call(url,'file_write',{'path':'created.txt','content':'created'})); assert x['created'] is True and open(os.path.join(ws,'created.txt')).read()=='created'
+  # Protected-path acceptance: direct reads, contained symlink aliases, and
+  # recursive discovery must fail closed or omit both names and content.
+  for tool,args,label in [
+   ('file_read',{'path':'.ssh/id_test'},'protected direct read'),
+   ('file_read',{'path':'innocent.txt'},'protected symlink alias'),
+   ('directory_list',{'path':'.','depth':2},'protected recursive listing'),
+   ('file_search',{'pattern':'**/*'},'protected recursive search'),
+   ('text_search',{'query':'protected-canary'},'protected text search')]:
+   if tool in ('directory_list','file_search','text_search'):
+    result=payload(call(url,tool,args))
+    rendered=json.dumps(result)
+    assert 'id_test' not in rendered and 'protected-canary' not in rendered and '"path": ".npmrc"' not in rendered,(label,rendered)
+   else:
+    expect_error(url,tool,args,label)
+  listed=payload(call(url,'directory_list',{'path':'.','depth':2}))['entries']
+  assert any(item['path']=='.ssh-cache' for item in listed) and any(item['path']=='.npmrc.bak' for item in listed) and any(item['path']=='.env.example' for item in listed),listed
   # Schema matrix: missing required, unknown, wrong type, oversized, invalid range. Mutating cases prove pre-dispatch by unchanged sentinel/absence.
   expect_error(url,'text_search',{},'missing required query')
-  marker=os.path.join(ws,'schema-marker.txt'); expect_error(url,'file_write',{'path':'schema-marker.txt','content':'x','extra':1},'unknown property'); assert not os.path.exists(marker)
+  marker=os.path.join(ws,'schema-marker.txt'); expect_error(url,'file_write',{'path':'schema-marker.txt','content':'x','extra':1},'unknown property'); assert not os.path.exists(marker),marker
   before=open(target).read(); expect_error(url,'file_edit',{'path':'edit.txt','old_text':'ALPHA','new_text':'x','replace_all':'yes'},'wrong type'); assert open(target).read()==before
   expect_error(url,'file_read',{'path':'x'*65537},'oversized path')
   expect_error(url,'directory_list',{'depth':5},'invalid range')
@@ -93,11 +118,22 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
   r=call(url,'http_fetch',{'url':'http://127.0.0.1:8888/search'}); http_text=json.dumps(r['content']); assert r['isError'] is True and 'SSRF guard blocked request to private/local IP' in http_text,http_text
   r=call(url,'web_search',{'query':'example domain'}); web_text=json.dumps(r['content']); assert r['isError'] is False and 'Error:' not in web_text and 'Search failed' not in web_text
   r=call(url,'terminal_exec',{'command':'docker','args':['version']}); assert r['isError'] is True and 'RELAY_ALLOW_DOCKER=true' in json.dumps(r['content'])
+  terminal_network=call(url,'terminal_exec',{'command':'curl','args':['--max-time','2',f'http://127.0.0.1:{mock.server_port}/fetch']})
+  if ALLOW_TERMINAL_NETWORK:
+   assert terminal_network['isError'] is False and 'http-fetch-ok' in json.dumps(terminal_network['content'])
+  else:
+   assert terminal_network['isError'] is True
+  subprocess.run(['git','-C',ws,'init','-q'],check=True)
+  subprocess.run(['git','-C',ws,'add','.'],check=True)
+  subprocess.run(['git','-C',ws,'-c','user.email=fixture@example.test','-c','user.name=fixture','commit','-qm','fixture'],check=True)
+  expect_error(url,'git_show',{'ref':'HEAD','path':'.ssh/id_test'},'protected git show path')
+  expect_error(url,'git_show',{'ref':'HEAD'},'git output containing protected path')
   print('workspace v1 integration acceptance: PASS')
  finally:
   if relay is not None:
    relay.terminate();
    try: relay.wait(timeout=5)
    except subprocess.TimeoutExpired: relay.kill()
+  mock.shutdown(); mock.server_close()
 
 PY

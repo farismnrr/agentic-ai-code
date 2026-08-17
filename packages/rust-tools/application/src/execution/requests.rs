@@ -4,6 +4,7 @@ use super::now_ms;
 use super::process::{drain_pipe, kill_process_group, OutputBuffer};
 use super::sandbox;
 use super::{InvocationProgram, ToolInvocation};
+use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
@@ -85,6 +86,7 @@ pub(super) fn build_terminal_exec_invocation(
         args,
         cwd: Some(cwd),
         timeout_ms,
+        allow_network: false,
     })
 }
 
@@ -192,6 +194,7 @@ fn build_text_search_invocation(
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
     let cwd = relay_core::terminal_policy::resolve_contained_cwd(&execution_root, cwd_arg)?;
+    reject_protected_target(&execution_root, &cwd)?;
     let mut args = vec![
         "--json".into(),
         "--no-config".into(),
@@ -202,6 +205,20 @@ fn build_text_search_invocation(
         "--sort".into(),
         "path".into(),
     ];
+    for excluded in [
+        ".ssh/**",
+        ".aws/**",
+        ".config/gcloud/**",
+        ".docker/**",
+        ".kube/**",
+        ".npmrc",
+        ".netrc",
+        ".pypirc",
+        ".cargo/credentials",
+        ".cargo/credentials.toml",
+    ] {
+        args.extend(["--glob".into(), format!("!{excluded}")]);
+    }
     if !regex {
         args.push("--fixed-strings".into());
     }
@@ -218,6 +235,7 @@ fn build_text_search_invocation(
             args,
             cwd: Some(cwd),
             timeout_ms: 0,
+            allow_network: false,
         },
         max_results,
     ))
@@ -390,6 +408,7 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         args,
         cwd: None,
         timeout_ms,
+        allow_network: true,
     })
 }
 
@@ -408,5 +427,6 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         ],
         cwd: None,
         timeout_ms: 30_000,
+        allow_network: true,
     }
 }

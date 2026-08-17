@@ -1,5 +1,6 @@
 //! Bounded filename search over the shared secure traversal foundation.
 
+use super::protected::{is_protected_discovered_path, reject_protected_path};
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -55,6 +56,7 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     let search_root = resolve_existing_path(&execution_root, cwd, ".", EntryKind::Directory)?;
+    reject_protected_path(&execution_root, &search_root)?;
     let search_root = SecureDirectory::open_relative(&execution_root, &search_root)?;
     let path_pattern = pattern.contains('/');
     let mut state = FileSearchState {
@@ -131,6 +133,10 @@ fn visit_file_search(
             ));
         }
         let relative = append_search_path(relative_directory, name)?;
+        let child_path = directory.path_for_child(&child.name);
+        if is_protected_discovered_path(directory.root(), &child_path) {
+            continue;
+        }
         let file_type = child.file_type;
         if file_type.is_symlink() {
             continue;

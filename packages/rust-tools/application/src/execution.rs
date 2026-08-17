@@ -32,6 +32,7 @@ struct ToolInvocation {
     args: Vec<String>,
     cwd: Option<PathBuf>,
     timeout_ms: u64,
+    allow_network: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

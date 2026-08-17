@@ -82,7 +82,7 @@ pub(super) fn spawn(
         invocation,
         SandboxProfile {
             workspace_access,
-            network_access: if config.allow_terminal_network {
+            network_access: if invocation.allow_network || config.allow_terminal_network {
                 NetworkAccess::Host
             } else {
                 NetworkAccess::Isolated
@@ -110,6 +110,7 @@ pub(crate) fn spawn_lsp(
         args,
         cwd: Some(cwd.clone()),
         timeout_ms: 0,
+        allow_network: false,
     };
     spawn_with_profile(
         config,

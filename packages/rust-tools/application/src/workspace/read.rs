@@ -1,5 +1,6 @@
 //! Bounded UTF-8 file reads.
 
+use super::protected::reject_protected_path;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_core::workspace_path::{resolve_existing_path, EntryKind};
@@ -88,6 +89,7 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
     let target = resolve_existing_path(&root, cwd, path, EntryKind::File)?;
+    reject_protected_path(&root, &target)?;
     let file = std::fs::File::open(&target)
         .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
     let mut reader = BufReader::new(file);

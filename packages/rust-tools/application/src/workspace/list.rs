@@ -1,5 +1,6 @@
 //! Bounded directory listing over the shared secure traversal foundation.
 
+use super::protected::{is_protected_discovered_path, reject_protected_path};
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -53,6 +54,7 @@ pub fn directory_list(
 
     let directory =
         resolve_existing_path(&execution_root, cwd, requested_path, EntryKind::Directory)?;
+    reject_protected_path(&execution_root, &directory)?;
     let directory = SecureDirectory::open_relative(&execution_root, &directory)?;
     let mut state = TraversalState {
         entries: Vec::new(),
@@ -100,6 +102,10 @@ fn visit_directory(
             continue;
         }
         let child_relative = relative.join(&child.name);
+        let child_path = directory.path_for_child(&child.name);
+        if is_protected_discovered_path(directory.root(), &child_path) {
+            continue;
+        }
         let file_type = child.file_type;
         let kind = if file_type.is_symlink() {
             "symlink"
