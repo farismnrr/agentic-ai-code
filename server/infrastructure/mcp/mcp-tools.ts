@@ -6,6 +6,7 @@ import { tool, jsonSchema, type ToolSet } from 'ai'
 import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
 import { approvalForCapability, capabilityFactsForToolCall } from '#shared/utils/capability-policy'
+import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -44,15 +45,9 @@ type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
   | ((input: unknown) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
 
 /**
- * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/ — MCP tool ids
- * are `${serverId}.${toolName}` (see shared/types/chat.ts McpTool.id), which
- * contains a dot, so the model-facing name is a sanitized, truncated form
- * with a reverse lookup back to the real MCP call.
+ * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/; the shared
+ * identity helper is the reverse-lookup contract used by the approval UI.
  */
-function sanitizeToolName(mcpToolId: string) {
-  return mcpToolId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
-}
-
 /**
  * Builds the `tools` + `toolApproval` options for `streamText`, from a
  * conversation's `enabledToolIds` (`McpTool['id']` values, i.e.
@@ -64,6 +59,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
+  const modelToolOwners = new Map<string, string>()
 
   if (enabledToolIds.length === 0) {
     return { tools, toolApproval, close: async () => {} }
@@ -94,7 +90,13 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       const mcpToolId = `${server.id}.${mcpTool.name}`
       if (!enabledToolIds.includes(mcpToolId)) continue
 
-      const modelName = sanitizeToolName(mcpToolId)
+      const modelName = mcpModelToolName(server.id, mcpTool.name)
+      const previousOwner = modelToolOwners.get(modelName)
+      if (previousOwner && previousOwner !== mcpToolId) {
+        logger.error('[mcp-tools] model tool identity collision; refusing ambiguous tool', { modelName })
+        continue
+      }
+      modelToolOwners.set(modelName, mcpToolId)
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
