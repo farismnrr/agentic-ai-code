@@ -323,7 +323,15 @@ fn git_blame(arguments: &Value, config: &ServerConfig) -> Result<GitBlameResult,
     let range = format!("{start},{end}");
     let out = run_git(
         &repo.root,
-        &["blame", "--line-porcelain", "-L", &range, "--", &path],
+        &[
+            "blame",
+            "--no-textconv",
+            "--line-porcelain",
+            "-L",
+            &range,
+            "--",
+            &path,
+        ],
         MAX_GIT_OUTPUT_BYTES,
     )?;
     let text = std::str::from_utf8(&out).map_err(|_| invalid_git_output())?;
