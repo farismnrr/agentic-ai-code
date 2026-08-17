@@ -17,7 +17,14 @@ pub(super) fn run_git_text_bounded(
     args: &[&str],
     max: usize,
 ) -> Result<(String, bool), McpError> {
-    let (output, truncated) = run_git_bytes_bounded(cwd, args, max)?;
+    let (mut output, truncated) = run_git_bytes_bounded(cwd, args, max)?;
+    if truncated {
+        if let Err(error) = std::str::from_utf8(&output) {
+            if error.error_len().is_none() {
+                output.truncate(error.valid_up_to());
+            }
+        }
+    }
     let text = std::str::from_utf8(&output).map_err(|_| invalid_git_output())?;
     Ok((text.to_owned(), truncated))
 }
