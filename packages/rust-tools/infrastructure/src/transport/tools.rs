@@ -172,6 +172,7 @@ pub(super) async fn handle_tools_call(
         &call.arguments,
         &state.config,
         &state.jobs,
+        &state.lsp,
     )
     .await;
     tracing::info!(
