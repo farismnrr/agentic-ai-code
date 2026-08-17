@@ -180,6 +180,41 @@ impl LspSessionManager {
         self.sessions.lock().await.len()
     }
 
+    /// Refresh an already-running language session after a native committed
+    /// mutation. This is notification-only from the tool lifecycle: it never
+    /// invokes another MCP tool and does nothing when no matching session is
+    /// active.
+    pub async fn refresh_path(
+        &self,
+        cwd: Option<&str>,
+        path: &str,
+    ) -> Result<Option<u64>, LspError> {
+        let language = Path::new(path)
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| match value {
+                "rs" => "rust",
+                "ts" | "tsx" | "js" | "jsx" => "typescript",
+                "vue" => "vue",
+                _ => "",
+            })
+            .unwrap_or("");
+        if language.is_empty() {
+            return Ok(None);
+        }
+        let root = crate::git::resolve_git_workspace(cwd, &self.config)
+            .map_err(|_| LspError::ContainedLocationRejected)?;
+        let key = SessionKey {
+            root,
+            language: language.to_owned(),
+        };
+        let session = self.sessions.lock().await.get(&key).cloned();
+        match session {
+            Some(session) if !session.is_faulted() => session.sync_document(path).await.map(Some),
+            _ => Ok(None),
+        }
+    }
+
     async fn ensure_capacity(&self, root: &PathBuf) -> Result<(), LspError> {
         let sessions = self.sessions.lock().await;
         if sessions.len() >= MAX_LSP_SESSIONS {

@@ -10,13 +10,17 @@ use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{timeout, Duration};
+
+mod policy;
+pub use policy::effect_classes;
+use policy::{canonical_repository_root, contained_config_path, repository_identity};
 
 pub const MAX_CONFIG_BYTES: usize = 64 * 1024;
 pub const MAX_HANDLERS: usize = 32;
@@ -67,7 +71,8 @@ pub struct HookHandler {
     #[serde(default)]
     pub tool: Option<String>,
     #[serde(default)]
-    pub effect: Option<String>,
+    #[serde(alias = "effect")]
+    pub effect_class: Option<String>,
     #[serde(default)]
     pub timeout_ms: u64,
 }
@@ -97,7 +102,7 @@ pub struct HookManager {
     config: Arc<ServerConfig>,
     root: PathBuf,
     handlers: Arc<Vec<HookHandler>>,
-    session_started: Arc<AtomicBool>,
+    session_started: Arc<tokio::sync::Mutex<HashSet<String>>>,
 }
 
 impl HookManager {
@@ -106,7 +111,7 @@ impl HookManager {
             root: PathBuf::new(),
             config,
             handlers: Arc::new(Vec::new()),
-            session_started: Arc::new(AtomicBool::new(false)),
+            session_started: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
         })
     }
 
@@ -114,14 +119,18 @@ impl HookManager {
         if !config.enable_agent_hooks {
             return Ok(Self::disabled(config));
         }
-        let root = config
+        let execution_root = config
             .resolved_execution_root()
             .map_err(|_| McpError::InvalidRequest("hook repository is unavailable".into()))?;
+        let dir = config
+            .resolved_dir()
+            .map_err(|_| McpError::InvalidRequest("hook repository is unavailable".into()))?;
+        let root = canonical_repository_root(&dir, &execution_root)?;
         let relative = config
             .agent_hooks_config
             .as_deref()
             .unwrap_or(".agents/hooks.json");
-        let path = root.join(relative);
+        let path = contained_config_path(&root, relative)?;
         if !path.starts_with(root.join(".agents")) {
             return Err(McpError::InvalidRequest(
                 "hook configuration must be beneath .agents".into(),
@@ -149,7 +158,7 @@ impl HookManager {
             config,
             root,
             handlers: Arc::new(parsed.handlers),
-            session_started: Arc::new(AtomicBool::new(false)),
+            session_started: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
         }))
     }
 
@@ -163,8 +172,17 @@ impl HookManager {
             .flatten()
     }
 
+    pub async fn started_session_count(&self) -> usize {
+        self.session_started.lock().await.len()
+    }
+
     pub async fn start_session(&self, session_id: &str, repository_identity: &str) {
-        if self.session_started.swap(true, Ordering::AcqRel) {
+        if !self
+            .session_started
+            .lock()
+            .await
+            .insert(session_id.to_owned())
+        {
             return;
         }
         let _ = self
@@ -174,6 +192,7 @@ impl HookManager {
                     "hook_event": "session_start",
                     "session_id": bounded_string(session_id, 128),
                     "repository_identity": bounded_string(repository_identity, 512),
+                    "context": { "repository_identity": bounded_string(repository_identity, 512) },
                 }),
             )
             .await;
@@ -214,8 +233,13 @@ impl HookManager {
                     .tool
                     .as_deref()
                     .is_none_or(|tool| payload.get("tool_id").and_then(Value::as_str) == Some(tool))
-                && handler.effect.as_deref().is_none_or(|effect| {
-                    payload.get("effect_class").and_then(Value::as_str) == Some(effect)
+                && handler.effect_class.as_deref().is_none_or(|effect| {
+                    payload
+                        .get("effect_classes")
+                        .and_then(Value::as_array)
+                        .is_some_and(|effects| {
+                            effects.iter().any(|value| value.as_str() == Some(effect))
+                        })
                 })
         });
         for handler in matching {
@@ -252,6 +276,7 @@ impl HookManager {
             executable,
             handler.command[1..].to_vec(),
             self.root.clone(),
+            hook_workspace_access(payload),
         ) {
             Ok(child) => child,
             Err(_) => return failed_result(started),
@@ -315,6 +340,26 @@ impl HookManager {
     }
 }
 
+fn hook_workspace_access(payload: &Value) -> sandbox::WorkspaceAccess {
+    let writable = payload
+        .get("effect_classes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .any(|effect| {
+            matches!(
+                effect,
+                "workspace_write" | "workspace_delete" | "external_mutation"
+            )
+        });
+    if writable {
+        sandbox::WorkspaceAccess::Writable
+    } else {
+        sandbox::WorkspaceAccess::ReadOnly
+    }
+}
+
 fn default_class() -> HookClass {
     HookClass::Cosmetic
 }
@@ -362,7 +407,7 @@ fn validate_handler(handler: &HookHandler, root: &Path) -> Result<(), McpError> 
             .as_deref()
             .is_some_and(|value| value.len() > 128)
         || handler
-            .effect
+            .effect_class
             .as_deref()
             .is_some_and(|value| value.len() > 64)
     {
@@ -413,11 +458,4 @@ fn bounded_payload(mut payload: Value) -> Value {
 
 fn bounded_string(value: &str, limit: usize) -> String {
     value.chars().take(limit).collect()
-}
-
-fn repository_identity(root: &Path) -> Result<String, McpError> {
-    let git = root.join(".git");
-    let git_identity = std::fs::canonicalize(&git)
-        .map_err(|_| McpError::InvalidRequest("repository identity is unavailable".into()))?;
-    Ok(format!("{}|{}", root.display(), git_identity.display()))
 }

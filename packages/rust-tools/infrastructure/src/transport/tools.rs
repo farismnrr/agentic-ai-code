@@ -90,7 +90,19 @@ pub(super) async fn handle_tools_call(
         );
     }
 
-    let session_id = format!("relay-{}", request_id);
+    let session_id = call
+        .arguments
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("relay-{}", request_id));
+    let effects = relay_application::hooks::effect_classes(
+        call.name.as_str(),
+        tool.annotations
+            .as_ref()
+            .is_some_and(|a| a.destructive_hint),
+        tool.annotations.as_ref().is_some_and(|a| a.open_world_hint),
+    );
     state
         .hooks
         .start_session(
@@ -102,33 +114,50 @@ pub(super) async fn handle_tools_call(
                 .unwrap_or("untrusted"),
         )
         .await;
-    let pre = state.hooks.invoke(relay_application::hooks::HookEvent::PreToolUse, json!({
-        "hook_event": "pre_tool_use",
-        "tool_id": call.name.as_str(),
-        "effect_class": if tool.annotations.as_ref().is_some_and(|a| a.destructive_hint) { "write" } else { "read" },
-        "success": true,
-    })).await;
+    let pre = state
+        .hooks
+        .invoke(
+            relay_application::hooks::HookEvent::PreToolUse,
+            json!({
+                "hook_event": "pre_tool_use",
+                "tool_id": call.name.as_str(),
+                "effect_classes": effects.clone(),
+                "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+                "success": true,
+            }),
+        )
+        .await;
     if !matches!(
         pre.decision,
         relay_application::hooks::HookDecision::Continue
     ) {
-        let text = if matches!(
+        let approval_requested = matches!(
             pre.decision,
             relay_application::hooks::HookDecision::RequestApproval
-        ) {
-            "Hook requested approval before this tool call"
+        );
+        let text = if approval_requested {
+            "Approval required before this tool call"
         } else {
             "Hook blocked this tool call"
         };
+        let result = if approval_requested {
+            ToolCallResult::complete(vec![relay_interfaces::mcp::ToolResultContent {
+                kind: "text",
+                text: text.into(),
+            }])
+            .with_meta(json!({
+                "approval_required": true,
+                "approval_reason": "hook_request"
+            }))
+        } else {
+            ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
+                kind: "text",
+                text: text.into(),
+            }])
+        };
         let response = Response::new(
             request.id.clone(),
-            serde_json::to_value(ToolCallResult::error(vec![
-                relay_interfaces::mcp::ToolResultContent {
-                    kind: "text",
-                    text: text.into(),
-                },
-            ]))
-            .unwrap_or(json!({})),
+            serde_json::to_value(result).unwrap_or(json!({})),
         );
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
@@ -246,13 +275,20 @@ pub(super) async fn handle_tools_call(
     } else {
         relay_application::hooks::HookEvent::PostToolUse
     };
-    let _ = state.hooks.invoke(lifecycle_event, json!({
-        "hook_event": lifecycle_event.name(),
-        "tool_id": call.name.as_str(),
-        "effect_class": if tool.annotations.as_ref().is_some_and(|a| a.destructive_hint) { "write" } else { "read" },
-        "success": !result.is_error,
-        "reason": "tool_result",
-    })).await;
+    let _ = state
+        .hooks
+        .invoke(
+            lifecycle_event,
+            json!({
+                "hook_event": lifecycle_event.name(),
+                "tool_id": call.name.as_str(),
+                "effect_classes": effects,
+                "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+                "success": !result.is_error,
+                "reason": "tool_result",
+            }),
+        )
+        .await;
 
     let response = Response::new(
         request.id.clone(),

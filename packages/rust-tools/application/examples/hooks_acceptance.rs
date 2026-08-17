@@ -26,6 +26,36 @@ async fn run() -> Result<(), String> {
     fs::create_dir_all(root.join(".agents")).map_err(io_error)?;
     fs::create_dir_all(root.join(".git")).map_err(io_error)?;
 
+    let nested_parent = root.join("owner");
+    let nested = nested_parent.join("project");
+    fs::create_dir_all(nested.join(".agents")).map_err(io_error)?;
+    fs::create_dir_all(nested.join(".git")).map_err(io_error)?;
+    let nested_identity = identity(&nested)?;
+    let nested_valid = HookConfig {
+        repository_identity: nested_identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec!["true".into()],
+            class: HookClass::Cosmetic,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 100,
+        }],
+    };
+    fs::write(
+        nested.join(".agents/hooks.json"),
+        serde_json::to_vec(&nested_valid).unwrap(),
+    )
+    .map_err(io_error)?;
+    let nested_config = ServerConfig {
+        execution_root: Some(nested_parent.to_string_lossy().into_owned()),
+        dir: Some(nested.to_string_lossy().into_owned()),
+        enable_agent_hooks: true,
+        ..ServerConfig::default()
+    };
+    let nested_manager = HookManager::load(Arc::new(nested_config)).map_err(|e| e.to_string())?;
+    require(nested_manager.repository_identity().as_deref() == Some(nested_identity.as_str()), &format!("nested repository identity uses working repository: expected {nested_identity}, got {:?}", nested_manager.repository_identity()))?;
+
     fs::write(root.join(".agents/hooks.json"), b"not-json").map_err(io_error)?;
     let disabled = config(&root, false);
     require(
@@ -47,7 +77,7 @@ async fn run() -> Result<(), String> {
             command: vec!["true".into()],
             class: HookClass::Security,
             tool: Some("file_write".into()),
-            effect: Some("write".into()),
+            effect_class: Some("workspace_write".into()),
             timeout_ms: 1_000,
         }],
     };
@@ -58,11 +88,78 @@ async fn run() -> Result<(), String> {
     .map_err(io_error)?;
     let manager = HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
     let result = manager.invoke(HookEvent::PreToolUse, json!({
-        "tool_id": "file_write", "effect_class": "write", "raw_output": "secret", "content": "source"
+        "tool_id": "file_write", "effect_classes": ["workspace_write"], "raw_output": "secret", "content": "source"
     })).await;
     require(
         result.decision == HookDecision::Continue,
         "valid direct argv hook continues",
+    )?;
+
+    let canary = root.join("HOOK_CANARY");
+    let read_only = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::PreToolUse,
+            command: vec!["touch".into(), canary.to_string_lossy().into_owned()],
+            class: HookClass::Security,
+            tool: Some("directory_list".into()),
+            effect_class: Some("workspace_read".into()),
+            timeout_ms: 1_000,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&read_only).unwrap(),
+    )
+    .map_err(io_error)?;
+    let read_only_manager =
+        HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
+    let read_only_result = read_only_manager
+        .invoke(
+            HookEvent::PreToolUse,
+            json!({
+                "tool_id": "directory_list", "effect_classes": ["workspace_read"]
+            }),
+        )
+        .await;
+    require(
+        read_only_result.decision == HookDecision::Block && !canary.exists(),
+        "read-only tool cannot mutate through hook",
+    )?;
+
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&valid).unwrap(),
+    )
+    .map_err(io_error)?;
+    let session_manager =
+        HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
+    session_manager.start_session("agent-a", &identity).await;
+    session_manager.start_session("agent-a", &identity).await;
+    session_manager.start_session("agent-b", &identity).await;
+    require(
+        session_manager.started_session_count().await == 2,
+        "session start is per agent session",
+    )?;
+
+    let traversal = ServerConfig {
+        agent_hooks_config: Some(".agents/../hooks.json".into()),
+        ..enabled.clone()
+    };
+    require(
+        HookManager::load(Arc::new(traversal)).is_err(),
+        "lexical hook traversal is rejected",
+    )?;
+    let outside = root.join("outside-hooks.json");
+    fs::write(&outside, serde_json::to_vec(&valid).unwrap()).map_err(io_error)?;
+    std::os::unix::fs::symlink(&outside, root.join(".agents/link.json")).map_err(io_error)?;
+    let symlink = ServerConfig {
+        agent_hooks_config: Some(".agents/link.json".into()),
+        ..enabled.clone()
+    };
+    require(
+        HookManager::load(Arc::new(symlink)).is_err(),
+        "symlink hook escape is rejected",
     )?;
 
     let shell = HookConfig {
@@ -72,7 +169,7 @@ async fn run() -> Result<(), String> {
             command: vec!["sh".into(), "-c".into(), "echo bypass".into()],
             class: HookClass::Security,
             tool: None,
-            effect: None,
+            effect_class: None,
             timeout_ms: 0,
         }],
     };
@@ -107,7 +204,7 @@ async fn run() -> Result<(), String> {
             command: vec!["false".into()],
             class: HookClass::Cosmetic,
             tool: None,
-            effect: None,
+            effect_class: None,
             timeout_ms: 100,
         }],
     };
@@ -120,7 +217,7 @@ async fn run() -> Result<(), String> {
     let continued = manager
         .invoke(
             HookEvent::PreToolUse,
-            json!({"tool_id":"terminal_exec","effect_class":"write"}),
+            json!({"tool_id":"terminal_exec","effect_classes":["process_exec","workspace_write"]}),
         )
         .await;
     require(
@@ -135,7 +232,7 @@ async fn run() -> Result<(), String> {
             command: vec!["false".into()],
             class: HookClass::Security,
             tool: None,
-            effect: None,
+            effect_class: None,
             timeout_ms: 100,
         }],
     };
@@ -148,7 +245,7 @@ async fn run() -> Result<(), String> {
     let blocked = manager
         .invoke(
             HookEvent::PreToolUse,
-            json!({"tool_id":"terminal_exec","effect_class":"write"}),
+            json!({"tool_id":"terminal_exec","effect_classes":["process_exec","workspace_write"]}),
         )
         .await;
     require(
