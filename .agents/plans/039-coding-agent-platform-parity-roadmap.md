@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039C CLOSED / VERIFIED; 039D–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039D CLOSED / VERIFIED; 039E–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -140,7 +140,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
 | **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
-| **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Implemented — awaiting independent verification | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
+| **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | CLOSED / VERIFIED | Hard relay policy and first-party approval policy are explicit, input-aware, testable, non-bypassable, and operationally deployed |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
 | **039G** | Background agents + Git worktree isolation | 039F | Planned | Independent background tasks can run with bounded concurrency and isolated writes without cross-worktree corruption |
@@ -153,7 +153,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039A — maintainability + layered refactor foundation
 - [x] PLAN-039B — Git read intelligence + patch ergonomics
 - [x] PLAN-039C — LSP code intelligence + diagnostics
-- [ ] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
+- [x] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
 - [ ] PLAN-039E — deterministic agent hooks/lifecycle
 - [ ] PLAN-039F — subagents + reusable agent profiles
 - [ ] PLAN-039G — background agents + Git worktree isolation
@@ -191,7 +191,11 @@ Verified handoff facts for 039C:
 
 ## 039C verified closure baseline (2026-08-17, branch `feat/039c-lsp-foundation`)
 
-Plan 039C is **CLOSED / VERIFIED**. Final independent implementation/security/architecture verification was performed at `99aacc4cc0e0ac8a8b420269be43c7e8cba89089`; the final matrix passed LSP foundation, real Rust and TypeScript/Vue acceptance, public MCP code-tool acceptance three consecutive times, rename-preview/post-edit diagnostics, current 25-tool Plan-039C and historical Plan-029/039B contract gates, workspace security, zero-bypass, architecture, maintainability, bridge tests, and `pnpm verify:commit`. The relay exposes 25 tools including the seven read-only/non-destructive `code_*` tools. The reviewed installed `@vue/language-server@3.3.8` already ships `@vue/typescript-plugin@3.3.8`; the bounded sandboxed bridge preserves the exact reviewed `_vue:*` protocol, containment, framing, concurrency, freshness, and lifecycle boundaries. Vue document symbols are real; Vue definition/references/hover/diagnostics remain bounded empty results with this installed stack and are recorded as an explicit non-blocking toolchain capability exception, not falsely marked as working. Plan 039D remains unstarted.
+Plan 039C is **CLOSED / VERIFIED**. Final independent implementation/security/architecture verification was performed at `99aacc4cc0e0ac8a8b420269be43c7e8cba89089`; the final matrix passed LSP foundation, real Rust and TypeScript/Vue acceptance, public MCP code-tool acceptance three consecutive times, rename-preview/post-edit diagnostics, current 25-tool Plan-039C and historical Plan-029/039B contract gates, workspace security, zero-bypass, architecture, maintainability, bridge tests, and `pnpm verify:commit`. The relay exposes 25 tools including the seven read-only/non-destructive `code_*` tools. The reviewed installed `@vue/language-server@3.3.8` already ships `@vue/typescript-plugin@3.3.8`; the bounded sandboxed bridge preserves the exact reviewed `_vue:*` protocol, containment, framing, concurrency, freshness, and lifecycle boundaries. Vue document symbols are real; Vue definition/references/hover/diagnostics remain bounded empty results with this installed stack and are recorded as an explicit non-blocking toolchain capability exception, not falsely marked as working.
+
+## 039D verified operational closure (2026-08-17, branch `feat/039c-lsp-foundation`)
+
+Plan 039D is **CLOSED / VERIFIED**. The exact reviewed HEAD `18bebfa6cdfedbb7a6798839cc9cf7bd7d5d40b2` passed `pnpm release:build v0.0.10`; the release artifact and deployed `/home/farismnrr/.local/share/ai-code/bin/ai-tools` both hash to `8953cd6f718d416ff8ce7fc92bace2bd27953363db5b59d226feb99b919e6281`. The restarted `ai-tools-relay.service` is active/running with the canonical remote OAuth/loopback configuration. Capability-policy behavior, frozen MCP contracts, zero-bypass, workspace/Git safety, phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke all passed. Public authenticated discovery was not attempted without an operator token file, and no ChatGPT/MCP client resync was performed.
 
 ## Explicit non-goals
 
