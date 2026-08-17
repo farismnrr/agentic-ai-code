@@ -25,6 +25,7 @@ export interface CapabilityFacts {
   destructive?: boolean
   external?: boolean
   trustedProvenance?: 'first-party-relay' | 'native' | 'external'
+  requiresConcreteScope?: boolean
 }
 
 export interface CapabilityAssessment extends CapabilityFacts {
@@ -82,7 +83,7 @@ export function approvalForCapability(
     && !assessment.networkRequested
     && !assessment.opaque
   if (containedWorkspaceMutation && (mode === 'workspace' || mode === 'autonomous')) return { outcome: 'approved', assessment }
-  if (remembered === 'always' && assessment.risk === 'low' && trusted && !assessment.opaque) return { outcome: 'approved', assessment }
+  if (remembered === 'always' && assessment.risk === 'low' && trusted && !assessment.opaque && !facts.requiresConcreteScope) return { outcome: 'approved', assessment }
   if (SAFE_READ_TOOLS.has(facts.toolId.split('.').pop() ?? '') && assessment.risk === 'low' && trusted) return { outcome: 'approved', assessment }
   return { outcome: 'user-approval', assessment }
 }

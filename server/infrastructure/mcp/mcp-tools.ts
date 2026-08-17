@@ -111,7 +111,8 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         effects: toolEffects(mcpTool.name, mcpTool.annotations, trustedProvenance),
         destructive: mcpTool.annotations?.destructiveHint,
         external: trustedProvenance === 'external' || mcpTool.annotations?.openWorldHint === true,
-        trustedProvenance
+        trustedProvenance,
+        requiresConcreteScope: true
       }, decision, permissionMode).outcome
     }
   }
