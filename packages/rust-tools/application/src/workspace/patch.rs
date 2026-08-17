@@ -135,15 +135,30 @@ pub fn apply_patch(arguments: &Value, config: &ServerConfig) -> Result<ApplyPatc
                 .directory
                 .atomic_replace_regular_file(&p.name, p.identity, &p.after, p.mode)
             {
+                let mut rollback_incomplete = false;
                 for done in committed.into_iter().rev() {
-                    if let Ok((_f, current, mode)) = done.directory.open_regular_file(&done.name) {
-                        let _ = done.directory.atomic_replace_regular_file(
-                            &done.name,
-                            current,
-                            &done.before,
-                            mode,
-                        );
+                    match done.directory.open_regular_file(&done.name) {
+                        Ok((_f, current, mode)) => {
+                            if done
+                                .directory
+                                .atomic_replace_regular_file(
+                                    &done.name,
+                                    current,
+                                    &done.before,
+                                    mode,
+                                )
+                                .is_err()
+                            {
+                                rollback_incomplete = true;
+                            }
+                        }
+                        Err(_) => rollback_incomplete = true,
                     }
+                }
+                if rollback_incomplete {
+                    return Err(McpError::InvalidRequest(
+                        "patch commit failed and rollback was incomplete; workspace may be partially modified".into(),
+                    ));
                 }
                 return Err(err);
             }
@@ -162,6 +177,7 @@ fn parse_patch(input: &str) -> Result<Vec<FilePatch>, McpError> {
     let lines = input.lines().collect::<Vec<_>>();
     let mut i = 0;
     let mut files = Vec::new();
+    let mut seen_paths = std::collections::HashSet::new();
     let mut hunks_total = 0;
     while i < lines.len() {
         if !lines[i].starts_with("--- ") {
@@ -208,6 +224,11 @@ fn parse_patch(input: &str) -> Result<Vec<FilePatch>, McpError> {
                     "patch hunk count exceeds maximum".into(),
                 ));
             }
+        }
+        if !seen_paths.insert(new.clone()) {
+            return Err(McpError::InvalidRequest(
+                "patch contains duplicate target path".into(),
+            ));
         }
         files.push(FilePatch { path: new, hunks });
         if files.len() > MAX_PATCH_FILES {
