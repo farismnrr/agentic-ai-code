@@ -227,7 +227,7 @@ Deletion support must be a deliberate later phase in this child plan, not an acc
 
 - [x] Implement working/staged/ref modes.
 - [x] Add path filtering and bounded context.
-- [x] Add continuation support shared later with Plan 039H.
+- [ ] Add continuation support shared later with Plan 039H (deferred to Plan 039H; 039B uses hard bounded single-page output).
 - [x] Prove external diff/textconv execution is disabled.
 - [x] Handle binary/truncated diffs truthfully.
 

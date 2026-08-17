@@ -161,7 +161,19 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
 }
 
 fn status_path(record: &str) -> Option<String> {
-    record.rsplit_once(' ').map(|(_, p)| p.to_owned())
+    let fields = if record.starts_with("1 ") {
+        9
+    } else if record.starts_with("2 ") {
+        10
+    } else if record.starts_with("u ") {
+        11
+    } else {
+        return None;
+    };
+    record
+        .splitn(fields, ' ')
+        .nth(fields - 1)
+        .map(str::to_owned)
 }
 fn push_bounded(target: &mut Vec<String>, value: String, truncated: &mut bool) {
     if target.len() < MAX_GIT_RESULTS {
@@ -187,7 +199,6 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         "diff".to_string(),
         "--no-ext-diff".into(),
         "--no-textconv".into(),
-        "--binary=false".into(),
         format!("--unified={context}"),
     ];
     match mode {
