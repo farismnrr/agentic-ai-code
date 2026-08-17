@@ -17,18 +17,11 @@ use tokio::time::timeout;
 
 pub(super) struct SharedState {
     pub(super) writer: Mutex<ChildStdin>,
+    pub(super) primary_child: Arc<Mutex<Child>>,
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, LspError>>>>,
-    /// Shared with `TsServerBridge::faulted` (when a bridge exists for this
-    /// session): a fatal bridge condition (Required fix 6) faults this same
-    /// flag, so `LspSession::is_faulted` and `LspSessionManager` treat the
-    /// whole session as unhealthy exactly the way a primary-child crash
-    /// does, instead of the bridge silently degrading to `null` forever
-    /// while the session keeps reporting healthy.
     faulted: Arc<AtomicBool>,
     diagnostics: Mutex<HashMap<String, Value>>,
-    /// Bounded store of the most recent params for the small, explicit set
-    /// of notification methods a caller actually needs retained (see
-    /// `RETAINED_NOTIFICATION_METHODS`). Unrelated notifications are not
+    /// Bounded store of retained notification params. Unrelated notifications are not
     /// cached at all, so an untrusted server cannot grow this state by
     /// sending arbitrary notification methods.
     notifications: Mutex<HashMap<String, Value>>,
@@ -38,9 +31,6 @@ pub(super) struct SharedState {
     /// Canonical workspace folder this session was initialized with,
     /// answered back verbatim for `workspace/workspaceFolders` pulls.
     workspace_folder: Value,
-    /// Bounded `tsserver/request`/`tsserver/response` bridge this session's
-    /// server needs (currently only `@vue/language-server`); `None` for
-    /// languages that speak LSP semantics natively without it.
     pub(super) tsserver_bridge: Option<Arc<TsServerBridge>>,
 }
 
@@ -86,6 +76,7 @@ impl LspSession {
         let stdin = child.stdin.take().ok_or(LspError::StartupFailed)?;
         let stdout = child.stdout.take().ok_or(LspError::StartupFailed)?;
         let stderr_pipe = child.stderr.take().ok_or(LspError::StartupFailed)?;
+        let primary_child = Arc::new(Mutex::new(child));
         let workspace_folder = json!({"uri": root_uri, "name": "workspace"});
         let faulted = Arc::new(AtomicBool::new(false));
         let tsserver_bridge = match &spec.tsserver_bridge_tsdk {
@@ -96,11 +87,13 @@ impl LspSession {
                     spec.tsserver_bridge_plugin_probe.as_deref(),
                     identity.root.clone(),
                     faulted.clone(),
+                    primary_child.clone(),
                 )
                 .await
                 {
                     Ok(bridge) => Some(bridge),
                     Err(error) => {
+                        let mut child = primary_child.lock().await;
                         crate::execution::kill_process_group(&mut child).await;
                         let _ = child.wait().await;
                         return Err(error);
@@ -111,6 +104,7 @@ impl LspSession {
         };
         let state = Arc::new(SharedState {
             writer: Mutex::new(stdin),
+            primary_child: primary_child.clone(),
             pending: Mutex::new(HashMap::new()),
             faulted,
             diagnostics: Mutex::new(HashMap::new()),
@@ -121,8 +115,7 @@ impl LspSession {
         });
         let stderr = Arc::new(Mutex::new(Vec::new()));
         tokio::spawn(drain_stderr(stderr_pipe, stderr.clone()));
-        let child = Arc::new(Mutex::new(child));
-        tokio::spawn(read_loop(stdout, state.clone(), child.clone()));
+        tokio::spawn(read_loop(stdout, state.clone(), primary_child.clone()));
 
         let placeholder = ServerCapabilities {
             definition: false,
@@ -141,7 +134,7 @@ impl LspSession {
             language: spec.language.clone(),
             capabilities: placeholder,
             state,
-            child,
+            child: primary_child.clone(),
             next_id: AtomicI64::new(1),
             last_used: RwLock::new(Instant::now()),
             stderr,
@@ -323,6 +316,10 @@ impl LspSession {
         self.stderr.lock().await.len()
     }
 
+    pub async fn tsserver_bridge_pid(&self) -> Option<u32> {
+        self.state.tsserver_bridge.as_ref()?.child_id().await
+    }
+
     pub(super) fn documents(&self) -> &Mutex<super::document::DocumentStore> {
         &self.documents
     }
@@ -355,7 +352,7 @@ async fn read_loop(
                 return;
             }
             if method.as_str() == Some("tsserver/request") {
-                super::tsserver_bridge::handle_tsserver_request(&state, object.get("params"));
+                super::tsserver_bridge::handle_tsserver_request(&state, object.get("params")).await;
                 continue;
             }
             if method.as_str() == Some("textDocument/publishDiagnostics") {
@@ -486,7 +483,11 @@ async fn mark_faulted(state: &Arc<SharedState>, error: LspError) {
     }
 }
 
-async fn fault_and_terminate(state: &Arc<SharedState>, child: &Arc<Mutex<Child>>, error: LspError) {
+pub(super) async fn fault_and_terminate(
+    state: &Arc<SharedState>,
+    child: &Arc<Mutex<Child>>,
+    error: LspError,
+) {
     mark_faulted(state, error).await;
     let mut child = child.lock().await;
     crate::execution::kill_process_group(&mut child).await;

@@ -113,8 +113,8 @@ fn allowlist_covers_every_reviewed_bridge_command() {
     for command in ALLOWED_COMMANDS {
         assert!(!command.is_empty());
     }
-    assert!(ALLOWED_COMMANDS.contains(&"projectInfo"));
-    assert!(ALLOWED_COMMANDS.contains(&"quickinfo"));
+    assert!(ALLOWED_COMMANDS.contains(&"_vue:projectInfo"));
+    assert!(ALLOWED_COMMANDS.contains(&"_vue:quickinfo"));
 }
 
 #[test]

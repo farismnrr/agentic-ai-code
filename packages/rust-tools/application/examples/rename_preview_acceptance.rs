@@ -291,6 +291,8 @@ while True:
             "renameProvider": True,
             "textDocumentSync": {"openClose": True, "change": 1},
         }}})
+        send({"jsonrpc": "2.0", "method": "experimental/serverStatus",
+              "params": {"quiescent": True, "health": "ok"}})
     elif method == "shutdown":
         send({"jsonrpc": "2.0", "id": message["id"], "result": None})
     elif method == "exit":
