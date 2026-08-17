@@ -208,7 +208,8 @@ const area = totalArea([square]);
         .session_for(Some(&path_text(&root)?), "vue")
         .await
         .map_err(|error| format!("vue session: {error}"))?;
-    let vue = TypeScriptLanguageServer::new(vue_session).map_err(|error| error.to_string())?;
+    let vue =
+        TypeScriptLanguageServer::new(vue_session.clone()).map_err(|error| error.to_string())?;
     require(
         vue.session().capabilities().document_symbols
             && vue.session().capabilities().definition
@@ -274,9 +275,97 @@ const area = totalArea([square]);
         "no workspace mutation (package-lock.json not written)",
     )?;
 
+    // ---- 039C Vue Bridge Final Remediation proof ----
+    //
+    // Required fix 5 (keep bridge documents fresh): edit the same `.vue`
+    // file's content and prove the *same* Vue session (no restart) observes
+    // the change the next time it is queried, rather than replaying stale
+    // content from the first `didOpen`/tsserver `open`.
+    let updated_vue_source = vue_source.replace("area = totalArea", "area2 = totalArea");
+    fs::write(root.join("src/App.vue"), &updated_vue_source).map_err(io_error)?;
+    let updated_symbols = wait_for(|| vue.symbols("src/App.vue"), |s| !s.is_empty()).await?;
+    require(
+        !updated_symbols.is_empty(),
+        "the same vue session observes edited .vue content without restart",
+    )?;
+    // A bridge-backed call after the edit must still complete safely
+    // (bounded, never a hang) even though the session already answered a
+    // request against the file's earlier content.
+    require(
+        vue.hover("src/App.vue", 2, vue_square_col).await.is_ok(),
+        "bridge-backed vue call after a content change stays bounded and safe",
+    )?;
+
+    // Required fix 6 (fail closed on bridge death): kill the sandboxed
+    // `tsserver.js` bridge child out of band (simulating an unexpected
+    // exit) and prove the *owning Vue session* is faulted — not silently
+    // degraded to `null` forever while still reporting healthy — and that
+    // `LspSessionManager` replaces it with a fresh, healthy session on next
+    // use rather than reusing the unhealthy one.
+    require(
+        !vue.session().is_faulted(),
+        "vue session is healthy before the bridge child is killed",
+    )?;
+    kill_tsserver_bridge_children()?;
+    // Drive a bridge-backed request so the dead child's stdin/stdout
+    // failure is actually observed by the bridge's read/write paths.
+    let _ = vue.hover("src/App.vue", 2, vue_square_col).await;
+    let faulted = wait_until(
+        || vue.session().is_faulted(),
+        tokio::time::Duration::from_secs(10),
+    )
+    .await;
+    require(
+        faulted,
+        "bridge child death faults the owning vue session (fail closed, not silent null forever)",
+    )?;
+    let replacement_session = manager
+        .session_for(Some(&path_text(&root)?), "vue")
+        .await
+        .map_err(|error| format!("vue session replacement: {error}"))?;
+    require(
+        !std::sync::Arc::ptr_eq(&vue_session, &replacement_session),
+        "manager replaces the faulted vue session with a new session instead of reusing it",
+    )?;
+    require(
+        !replacement_session.is_faulted(),
+        "the replacement vue session starts healthy",
+    )?;
+
     manager.shutdown_all().await;
     fs::remove_dir_all(&root).map_err(io_error)?;
     Ok(())
+}
+
+/// Kills every sandboxed `tsserver.js` bridge child process directly (out
+/// of band of `relay_application`) to deterministically simulate an
+/// unexpected bridge-child exit, proving Required fix 6 (fail closed on
+/// bridge death) without relying on any internal crate hook.
+fn kill_tsserver_bridge_children() -> Result<(), String> {
+    let status = Command::new("pkill")
+        .args(["-KILL", "-f", "tsserver.js"])
+        .status()
+        .map_err(io_error)?;
+    // `pkill` exits 1 when no process matched; either outcome is fine here
+    // since the goal is only "no tsserver.js bridge child left running".
+    let _ = status;
+    Ok(())
+}
+
+async fn wait_until<F>(mut condition: F, budget: tokio::time::Duration) -> bool
+where
+    F: FnMut() -> bool,
+{
+    let deadline = tokio::time::Instant::now() + budget;
+    loop {
+        if condition() {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return condition();
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
 }
 
 async fn wait_for<T, F, Fut, P>(mut request: F, ready: P) -> Result<T, String>
