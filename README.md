@@ -40,12 +40,10 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
-- `terminal_exec`
-- `http_fetch`
-- `web_search`
-- `terminal_job_start`
-- `terminal_job_get`
-- `terminal_job_cancel`
+- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
+- Git read intelligence: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`;
+- execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
+- web: `http_fetch`, `web_search`.
 
 The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem.
 
@@ -72,6 +70,6 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - integration branch: **`dev`**
 - release branch: **`main`**
 - no GitHub Actions CI workflow and no unit-test suite by project policy
-- every normal local commit must pass `pnpm verify:commit`
+- every normal local commit must pass `pnpm verify:commit`, including architecture and maintainability-budget enforcement
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.

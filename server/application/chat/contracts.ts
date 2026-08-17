@@ -8,7 +8,7 @@ export type ChatMessageHandle = unknown
 export type ChatToolSet = Record<string, unknown>
 export type ChatToolApproval = Record<string, unknown>
 export type ChatStreamResult = unknown
-export interface ChatConversation { id: string, modelId: string, workspaceId: string | null, mode: 'chat' | 'agent', enabledToolIds: string[], approvals: Record<string, string>, reasoningEffort: string | null, contextSummary: string | null, contextSummaryUpToMessageId: string | null, lastMeasuredTokens: number | null, lastMeasuredMessageId: string | null }
+export interface ChatConversation { id: string, modelId: string, workspaceId: string | null, mode: 'chat' | 'agent', permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual', enabledToolIds: string[], approvals: Record<string, string>, reasoningEffort: string | null, contextSummary: string | null, contextSummaryUpToMessageId: string | null, lastMeasuredTokens: number | null, lastMeasuredMessageId: string | null }
 export interface ChatModelRecord extends ChatModelContext { providerId: string }
 export interface ChatProviderRecord extends ChatProviderContext { baseUrl?: string | null }
 export interface ChatHistoryPort { load(conversation: ChatConversation): Promise<UIMessage[]>, insertUser(conversationId: string, message: UIMessage): Promise<{ id: string }> }
@@ -26,7 +26,7 @@ export interface ChatTurnDependencies {
   getChatModel(provider: ChatProviderContext, modelId: string): ChatModelHandle
   getLanggraphModel(provider: ChatProviderContext, modelId: string, maxOutputTokens?: number): ChatModelHandle
   resolveMessagesForModel(input: { messages: UIMessage[], conv: { id: string, contextSummary: string | null, contextSummaryUpToMessageId: string | null, lastMeasuredTokens: number | null, lastMeasuredMessageId: string | null }, contextWindow: number | null | undefined, maxOutputTokens: number | null | undefined, getSummarizerModel: () => ChatModelHandle }): Promise<UIMessage[]>
-  buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, string>): Promise<{ tools: ChatToolSet, toolApproval?: ChatToolApproval, close: () => Promise<void> }>
+  buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode']): Promise<{ tools: ChatToolSet, toolApproval?: ChatToolApproval, close: () => Promise<void> }>
   convertTurnMessages(messages: UIMessage[], tools: ChatToolSet): ChatMessageHandle
   prepareAiSdkModel(model: ChatModelHandle, thinkingEnabled: boolean): ChatModelHandle
   streamAiSdkAgent(input: Record<string, unknown>): ChatStreamResult

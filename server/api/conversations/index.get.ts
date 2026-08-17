@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     reasoningEffort: c.reasoningEffort,
     enabledToolIds: c.enabledToolIds,
     approvals: c.approvals,
+    permissionMode: c.permissionMode,
     mode: c.mode,
     createdAt: c.createdAt.getTime(),
     updatedAt: c.updatedAt.getTime(),

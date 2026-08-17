@@ -22,6 +22,11 @@ export type McpClientTool = {
   name: string
   description?: string
   inputSchema: Record<string, unknown>
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    openWorldHint?: boolean
+  }
 }
 
 export type McpClientCallResult = {
@@ -31,6 +36,7 @@ export type McpClientCallResult = {
 }
 
 export interface McpClientLike {
+  trustedProvenance?: 'first-party-relay' | 'external'
   listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
   close(): Promise<void>
@@ -141,6 +147,7 @@ function encodeMcpHeaderValue(value: string) {
  * deleted in favor of the official modern client with version negotiation.
  */
 class FirstPartyRelayMcpClient implements McpClientLike {
+  readonly trustedProvenance = 'first-party-relay' as const
   private requestSequence = 0
 
   constructor(
@@ -174,7 +181,14 @@ class FirstPartyRelayMcpClient implements McpClientLike {
         ...tool,
         name: tool.name,
         description: typeof tool.description === 'string' ? tool.description : undefined,
-        inputSchema: tool.inputSchema
+        inputSchema: tool.inputSchema,
+        annotations: isJsonRecord(tool.annotations)
+          ? {
+              readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
+              destructiveHint: typeof tool.annotations.destructiveHint === 'boolean' ? tool.annotations.destructiveHint : undefined,
+              openWorldHint: typeof tool.annotations.openWorldHint === 'boolean' ? tool.annotations.openWorldHint : undefined
+            }
+          : undefined
       } satisfies McpClientTool
     })
 
@@ -312,5 +326,5 @@ export async function createMcpClient(serverConfig: McpServerConfig): Promise<Mc
       })
 
   await client.connect(transport)
-  return client as unknown as McpClientLike
+  return Object.assign(client as unknown as McpClientLike, { trustedProvenance: 'external' as const })
 }

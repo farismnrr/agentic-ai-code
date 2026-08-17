@@ -73,9 +73,21 @@ The relay will fail closed if any of these do not match.
 
 ## 6. Verify tool discovery
 
-A healthy current relay exposes six tools:
+A Plan-039B relay exposes 18 tools (the 12 Plan-038 tools plus five Git readers and `apply_patch`):
 
 ```text
+directory_list
+file_search
+text_search
+file_read
+file_edit
+file_write
+apply_patch
+git_status
+git_diff
+git_log
+git_show
+git_blame
 terminal_exec
 http_fetch
 web_search
@@ -84,9 +96,28 @@ terminal_job_get
 terminal_job_cancel
 ```
 
-`terminal_exec` also supports the current MCP task lifecycle for clients that negotiate it. The `terminal_job_*` tools are the explicit polling/cancellation fallback for first-party or non-Tasks clients.
+The native workspace contracts are:
 
-If ChatGPT shows an older three-tool catalog after the server has been upgraded, refresh/recreate the connection so the client action snapshot is rediscovered.
+```text
+directory_list(path=".", cwd?, depth=2, max_entries=100)
+file_search(pattern, cwd?, max_results=100)
+text_search(query, cwd?, glob?, regex=false, case_sensitive=true, max_results=50)
+file_read(path, cwd?, offset_line=1, limit_lines=200)
+file_edit(path, old_text, new_text, cwd?, replace_all=false)
+file_write(path, content, cwd?, create_parents=false, overwrite=false)
+apply_patch(patch, cwd?, dry_run=false)
+git_status(cwd?, include_untracked=true)
+git_diff(cwd?, mode=working|staged|refs, base_ref?, head_ref?, path?, context_lines?, max_bytes?)
+git_log(cwd?, ref?, path?, max_results?)
+git_show(cwd?, ref, path?, include_patch=true, max_bytes?)
+git_blame(cwd?, path, start_line?, end_line?)
+```
+
+Server hard limits remain authoritative even when a caller supplies its own limit. `directory_list` caps depth at 4 and returned entries at 100; `file_search` and `text_search` cap returned matches at 100; `file_read` caps a request at 1,000 lines and 256 KiB; `file_edit` and `file_write` cap file/payload content at 1 MiB. Mutation defaults are deliberately conservative: an ambiguous `file_edit` fails, and `file_write` never replaces an existing file unless `overwrite=true`.
+
+Use native Git readers for status/diff/history/show/blame and `apply_patch` for bounded multi-hunk existing-file changes. Keep `terminal_exec` for builds, tests, package managers, Git mutation workflows, interpreters, project scripts, and unsupported operations. Terminal arguments use direct argv semantics: values beginning with `-` or `--` are valid child-process arguments (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`). The `command` executable must resolve from the relay safe PATH; invoke repository scripts through an approved interpreter, for example `command="bash", args=["scripts/check.sh"]`, rather than using `./scripts/check.sh` as the command. `terminal_exec` also supports the current MCP task lifecycle for clients that negotiate it; the `terminal_job_*` tools use the same argv contract and are the explicit polling/cancellation fallback for first-party or non-Tasks clients.
+
+If ChatGPT shows an older catalog after the server has been upgraded, refresh/recreate the connection so the client action snapshot is rediscovered.
 
 ## 7. Test in increasing risk order
 

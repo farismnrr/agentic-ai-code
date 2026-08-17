@@ -5,26 +5,12 @@ pub fn resolve_contained_cwd(
     execution_root: &Path,
     cwd: Option<&str>,
 ) -> Result<PathBuf, McpError> {
-    let target = cwd.map_or_else(
-        || execution_root.to_path_buf(),
-        |value| {
-            let path = Path::new(value);
-            if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                execution_root.join(path)
-            }
-        },
-    );
-    let canonical = std::fs::canonicalize(&target).map_err(|_| {
-        McpError::InvalidRequest("cwd path does not exist or is inaccessible".into())
-    })?;
-    if !canonical.starts_with(execution_root) {
-        return Err(McpError::InvalidRequest(
-            "path traversal outside execution root is forbidden".into(),
-        ));
-    }
-    Ok(canonical)
+    crate::workspace_path::resolve_contained_cwd(execution_root, cwd).map_err(|error| match error {
+        McpError::InvalidRequest(message) if message == "path is outside the execution root" => {
+            McpError::InvalidRequest("path traversal outside execution root is forbidden".into())
+        }
+        error => error,
+    })
 }
 
 pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpError> {
@@ -45,7 +31,7 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
     }
     if binary.contains('/') || binary.contains('\\') || binary == ".." {
         return Err(McpError::InvalidRequest(
-            "path traversal or absolute paths in executable name are forbidden".into(),
+            "path traversal or absolute paths in executable name are forbidden; use an executable from the relay safe PATH and pass a repository script path as an argument to an approved interpreter (for example command=bash with args=[\"scripts/check.sh\"])".into(),
         ));
     }
     Ok(())

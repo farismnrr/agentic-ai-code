@@ -101,7 +101,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
-    const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals)
+    const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals, conv.permissionMode)
     tools = mcp.tools
     toolApproval = mcp.toolApproval
     close = mcp.close
@@ -125,7 +125,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     // exist yet, taking down the *entire* chat request (including MCP tools
     // that had nothing to do with this). A hiccup here should degrade to
     // "no local terminal this turn", not break agent mode outright.
-    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, localTerminal: deps.localTerminal, telemetry })
+    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, permissionMode: conv.permissionMode, localTerminal: deps.localTerminal, telemetry })
     if (localTerminalPolicy.paired) {
       // No `execute` here — this makes it a client-executed tool in the AI
       // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /

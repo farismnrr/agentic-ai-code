@@ -77,7 +77,7 @@ const input = ref('')
 
 const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
-const { modelId, mode, reasoningEffort, enabledToolIds } = useConversationConfiguration(conversation, models)
+const { modelId, mode, reasoningEffort, enabledToolIds, permissionMode } = useConversationConfiguration(conversation, models)
 
 async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }) {
   if (remember && toolId && conversation.value) {
@@ -324,6 +324,7 @@ defineShortcuts({
               v-model:mode="mode"
               v-model:reasoning-effort="reasoningEffort"
               v-model:enabled-tool-ids="enabledToolIds"
+              v-model:permission-mode="permissionMode"
               :model-items="modelItems"
               :mode-items="modeItems"
               :effort-items="effortItems"

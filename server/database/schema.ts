@@ -106,6 +106,7 @@ export const conversations = aiCode.table('conversations', {
   title: text('title').notNull(),
   modelId: text('model_id').notNull(),
   mode: text('mode').$type<'chat' | 'agent'>().notNull().default('agent'),
+  permissionMode: text('permission_mode').$type<'plan' | 'workspace' | 'autonomous' | 'manual'>().notNull().default('manual'),
   reasoningEffort: text('reasoning_effort').$type<'low' | 'medium' | 'high' | 'max'>(),
   enabledToolIds: jsonb('enabled_tool_ids').$type<string[]>().notNull().default([]),
   approvals: jsonb('approvals').$type<Record<string, 'always' | 'never'>>().notNull().default({}),

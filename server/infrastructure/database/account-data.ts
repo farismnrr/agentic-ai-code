@@ -41,7 +41,7 @@ export async function deleteApiKey(userId: string, id: string) {
   return useDb().delete(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId))).returning({ id: apiKeys.id })
 }
 
-export async function createConversation(input: { userId: string, workspaceId: string, title: string, modelId: string, mode: 'chat' | 'agent', reasoningEffort?: 'low' | 'medium' | 'high' | 'max' }) {
+export async function createConversation(input: { userId: string, workspaceId: string, title: string, modelId: string, mode: 'chat' | 'agent', permissionMode?: 'plan' | 'workspace' | 'autonomous' | 'manual', reasoningEffort?: 'low' | 'medium' | 'high' | 'max' }) {
   return useDb().insert(conversations).values(input).returning()
 }
 

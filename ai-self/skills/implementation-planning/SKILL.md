@@ -196,3 +196,7 @@ When execution begins:
 3. validate each phase before advancing;
 4. use `github-delivery` for task-owned commit/push behavior;
 5. update persisted plan status/checklists only when the repository uses them.
+
+## Maintainability refactor planning
+
+For structural refactors, treat line/file counts as discovery signals rather than decomposition goals. First map public callers, security/policy owners, and independent reasons-to-change; preserve stable facades where framework or client contracts depend on them; split only cohesive responsibilities; then run a DRY/SOLID/layering/YAGNI/KISS deletion pass. If a framework-owned public directory legitimately crosses a count budget, prefer one narrow exact-path exception with a concrete reason over wrapper spam. Make documentation/agent-guide synchronization an explicit blocking acceptance step whenever module or folder ownership changes.

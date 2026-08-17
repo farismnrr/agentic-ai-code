@@ -46,3 +46,6 @@ docker-compose.override.yml
 .agents/skills/make-repo-contribution/
 .agents/skills/create-implementation-plan/
 .agents/skills/agent-skill-stack/
+
+# Local temporary build/verification artifacts
+.tmp/
