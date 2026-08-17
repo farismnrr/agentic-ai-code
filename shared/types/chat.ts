@@ -45,6 +45,12 @@ export interface McpTool {
   description: string
   /** Example arguments, used by the mock to render a realistic tool call. */
   sampleInput: Record<string, unknown>
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    idempotentHint?: boolean
+    openWorldHint?: boolean
+  }
 }
 
 export interface McpServer {
@@ -63,6 +69,7 @@ export interface McpServer {
 
 /** Remembered answer to an approval prompt, scoped to one conversation. */
 export type ApprovalDecision = 'always' | 'never'
+export type PermissionMode = 'plan' | 'workspace' | 'autonomous' | 'manual'
 
 export interface Workspace {
   id: string
@@ -82,6 +89,7 @@ export interface Conversation {
   messages: UIMessage[]
   modelId: string
   mode: 'chat' | 'agent'
+  permissionMode: PermissionMode
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max'
   /** `McpTool['id']` values the user has switched on for this conversation. */
   enabledToolIds: string[]

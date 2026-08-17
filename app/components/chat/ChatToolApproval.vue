@@ -2,6 +2,7 @@
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
 import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
+import { classifyCapability, toolEffects } from '#shared/utils/capability-policy'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -31,6 +32,7 @@ interface PendingApproval {
   toolName: string
   serverId?: string
   input: unknown
+  toolId?: string
 }
 
 // MCP tools resolve an id via `serverId.toolName`; native tools (e.g.
@@ -124,6 +126,18 @@ const formattedInput = computed(() =>
   pending.value?.input ? JSON.stringify(pending.value.input, null, 2) : undefined
 )
 
+const assessment = computed(() => {
+  const current = pending.value
+  if (!current) return undefined
+  return classifyCapability({
+    toolId: current.toolId ?? current.toolName,
+    effects: toolEffects(current.toolName),
+    command: typeof current.input === 'object' && current.input !== null && 'command' in current.input && typeof current.input.command === 'string' ? current.input.command : undefined,
+    args: typeof current.input === 'object' && current.input !== null && 'args' in current.input && Array.isArray(current.input.args) ? current.input.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
+    path: typeof current.input === 'object' && current.input !== null && 'path' in current.input && typeof current.input.path === 'string' ? current.input.path : undefined
+  })
+})
+
 function answer(approved: boolean, remember: boolean) {
   const current = pending.value
   if (!current) return
@@ -179,6 +193,37 @@ watch(autoAnswerable, (value) => {
           </p>
           <pre class="max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ formattedInput }}</pre>
         </div>
+
+        <div
+          v-if="assessment"
+          class="flex flex-wrap gap-2"
+        >
+          <UBadge
+            :label="`${assessment.risk} risk`"
+            :color="assessment.risk === 'high' ? 'error' : assessment.risk === 'medium' ? 'warning' : 'success'"
+            variant="subtle"
+          />
+          <UBadge
+            v-for="effect in assessment.effects"
+            :key="effect"
+            :label="effect.replaceAll('_', ' ')"
+            color="neutral"
+            variant="subtle"
+          />
+          <UBadge
+            v-if="assessment.networkRequested"
+            label="network requested"
+            color="warning"
+            variant="subtle"
+          />
+        </div>
+
+        <p
+          v-if="assessment"
+          class="text-xs text-dimmed"
+        >
+          {{ assessment.reason }}. Remembered approvals apply only to low-risk, non-opaque calls.
+        </p>
 
         <p class="text-sm text-muted">
           Tools can read and act on data outside this conversation. Only allow

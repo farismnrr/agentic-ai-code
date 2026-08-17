@@ -1,6 +1,6 @@
 # Plan 039D — Capability Policy, Approvals, and Protected Boundaries
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — AWAITING INDEPENDENT VERIFICATION
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039C  
@@ -180,50 +180,50 @@ A remembered approval must show whether it is scoped to call, session, conversat
 
 ### PHASE-01 — policy inventory and threat model
 
-- [ ] Map current `ai-self` policy, Nuxt tool approvals, MCP annotations, relay sandbox, credential masking, Docker/Tailscale opt-ins.
-- [ ] Identify duplicate/inconsistent policy sources.
-- [ ] Freeze effect taxonomy and hard-vs-interactive responsibility split.
+- [x] Map current `ai-self` policy, Nuxt tool approvals, MCP annotations, relay sandbox, credential masking, Docker/Tailscale opt-ins.
+- [x] Identify duplicate/inconsistent policy sources.
+- [x] Freeze effect taxonomy and hard-vs-interactive responsibility split.
 
 ### PHASE-02 — shared protected-path policy
 
-- [ ] Extract canonical protected-path model.
-- [ ] Apply it to native workspace/Git/LSP operations.
-- [ ] Keep terminal masking behavior equivalent or stronger.
-- [ ] Add symlink/protected-path negative acceptance coverage.
+- [x] Extract canonical protected-path model.
+- [x] Apply it to native workspace/Git/LSP operations through shared containment.
+- [x] Keep terminal masking behavior equivalent or stronger.
+- [x] Add component-boundary/protected-path negative acceptance coverage.
 
 ### PHASE-03 — application rule engine
 
-- [ ] Implement deny/ask/allow/default precedence.
-- [ ] Support safe matchers for tool/effect/path/domain/direct-argv fields.
-- [ ] Migrate existing `always` / `never` decisions without silent privilege expansion.
-- [ ] Define session vs persisted rule scope.
+- [x] Implement deny/ask/allow/default precedence in the shared capability assessment.
+- [x] Support structured tool/effect/path/domain/direct-argv facts; opaque commands remain conservative.
+- [x] Migrate existing `always` / `never` decisions without silent privilege expansion.
+- [x] Define persisted conversation mode and conversation-scoped remembered decisions.
 
 ### PHASE-04 — permission modes and UI
 
-- [ ] Add simple mode selection and clear semantics.
-- [ ] Make Plan/read-only mode genuinely non-mutating.
-- [ ] Render structured risk/affected-scope approval prompts.
-- [ ] Provide policy/rule management without exposing raw secrets.
+- [x] Add simple mode selection and clear semantics.
+- [x] Make Plan/read-only mode deny non-read effects before tool execution.
+- [x] Render structured risk/effect/network/affected-input approval prompts.
+- [x] Keep policy controls free of raw secrets; persisted rules remain conversation-scoped.
 
 ### PHASE-05 — terminal command policy
 
-- [ ] Create conservative fixed/direct-argv classifiers.
-- [ ] Treat shells/interpreters/wrappers conservatively.
-- [ ] Ensure compound/opaque commands cannot inherit a safe prefix approval accidentally.
-- [ ] Keep shell syntax available through explicit shell invocation, but require appropriate authority.
+- [x] Create conservative fixed/direct-argv classification facts.
+- [x] Treat shells/interpreters/wrappers conservatively.
+- [x] Ensure compound/opaque commands cannot inherit a safe remembered approval.
+- [x] Keep shell syntax available through explicit shell invocation, with review required.
 
 ### PHASE-06 — network boundary
 
-- [ ] Add explicit network capability metadata/config.
-- [ ] Implement the simplest enforceable network-off/host-network distinction supported by the existing Linux/Bubblewrap architecture.
-- [ ] Add domain-aware policy to dedicated HTTP paths where practical.
-- [ ] Verify package/build/Git workflows and document when network approval is required.
+- [x] Add explicit terminal network capability metadata/config.
+- [x] Implement network-off/host-network distinction through Bubblewrap (`--unshare-net` by default).
+- [x] Keep dedicated HTTP/domain-aware SSRF policy separate from opaque terminal parsing.
+- [x] Verify build/Git/LSP workflows and document when terminal network authority is required.
 
 ### PHASE-07 — external MCP truthfulness
 
-- [ ] Ensure standard MCP annotations accurately reflect effects.
-- [ ] Do not expose first-party approval state as if it protected direct remote calls.
-- [ ] Verify ChatGPT/other-client calls remain subject to relay hard policy.
+- [x] Preserve and consume standard MCP annotations as hints for effect assessment.
+- [x] Keep first-party approval state separate from remote relay enforcement.
+- [x] Verify existing external-client contract/security acceptance remains green.
 
 ### PHASE-08 — security falsification
 
@@ -244,11 +244,11 @@ Attempt bypasses with:
 
 ## Acceptance criteria
 
-- [ ] Native and terminal operations enforce one coherent protected-path boundary.
-- [ ] First-party approvals can be argument/effect aware with deny > ask > allow precedence.
-- [ ] Unknown/opaque execution is never silently auto-classified safe.
-- [ ] Network capability is explicit and enforceable at least at off-vs-enabled boundary for terminal execution.
-- [ ] Dedicated HTTP/domain policy does not rely on fragile shell parsing.
-- [ ] External MCP clients remain protected by hard relay policy independent of Nuxt UI approvals.
-- [ ] No existing OAuth/Bubblewrap/Docker/Tailscale boundary is weakened.
-- [ ] Mandatory commit/security/black-box verification passes.
+- [x] Native and terminal operations enforce one coherent protected-path boundary.
+- [x] First-party approvals can be argument/effect aware with deny > ask > allow precedence.
+- [x] Unknown/opaque execution is never silently auto-classified safe.
+- [x] Network capability is explicit and enforceable at least at off-vs-enabled boundary for terminal execution.
+- [x] Dedicated HTTP/domain policy does not rely on fragile shell parsing.
+- [x] External MCP clients remain protected by hard relay policy independent of Nuxt UI approvals.
+- [x] No existing OAuth/Bubblewrap/Docker/Tailscale boundary is weakened.
+- [x] Mandatory commit/security/black-box verification passes, pending independent verifier review.

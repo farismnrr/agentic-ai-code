@@ -22,6 +22,11 @@ export type McpClientTool = {
   name: string
   description?: string
   inputSchema: Record<string, unknown>
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    openWorldHint?: boolean
+  }
 }
 
 export type McpClientCallResult = {
@@ -174,7 +179,14 @@ class FirstPartyRelayMcpClient implements McpClientLike {
         ...tool,
         name: tool.name,
         description: typeof tool.description === 'string' ? tool.description : undefined,
-        inputSchema: tool.inputSchema
+        inputSchema: tool.inputSchema,
+        annotations: isJsonRecord(tool.annotations)
+          ? {
+              readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
+              destructiveHint: typeof tool.annotations.destructiveHint === 'boolean' ? tool.annotations.destructiveHint : undefined,
+              openWorldHint: typeof tool.annotations.openWorldHint === 'boolean' ? tool.annotations.openWorldHint : undefined
+            }
+          : undefined
       } satisfies McpClientTool
     })
 

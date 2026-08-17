@@ -14,10 +14,25 @@ const mode = defineModel<Conversation['mode']>('mode', { required: true })
 const modelId = defineModel<string | undefined>('modelId', { required: true })
 const reasoningEffort = defineModel<NonNullable<Conversation['reasoningEffort']>>('reasoningEffort', { required: true })
 const enabledToolIds = defineModel<string[]>('enabledToolIds', { default: () => [] })
+const permissionMode = defineModel<Conversation['permissionMode']>('permissionMode', { default: 'manual' })
 const emit = defineEmits<{ updateApprovals: [approvals: Record<string, 'always' | 'never'>] }>()
+
+const permissionItems = [
+  { label: 'Plan / read-only', value: 'plan' },
+  { label: 'Workspace', value: 'workspace' },
+  { label: 'Autonomous sandboxed', value: 'autonomous' },
+  { label: 'Manual approval', value: 'manual' }
+] satisfies Array<{ label: string, value: Conversation['permissionMode'] }>
 </script>
 
 <template>
+  <USelect
+    v-model="permissionMode"
+    :items="permissionItems"
+    icon="i-lucide-shield-check"
+    variant="ghost"
+    size="sm"
+  />
   <USelect
     v-model="mode"
     :items="modeItems"
