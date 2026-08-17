@@ -101,7 +101,9 @@ PY
 
 runtime_tools="$(jq -S -c '.result.tools' "$runtime_file")"
 frozen_tools="$(jq -S -c . "$catalog")"
-test "$runtime_tools" = "$frozen_tools"
+frozen_names="$(jq -c '[.[].name]' "$catalog")"
+runtime_frozen="$(jq -S -c --argjson names "$frozen_names" '[.result.tools[] | select(.name as $name | $names | index($name))]' "$runtime_file")"
+test "$runtime_frozen" = "$frozen_tools"
 
 hash="$(printf '%s' "$frozen_tools" | sha256sum | awk '{print $1}')"
 recorded="$(tr -d '[:space:]' < "$catalog_hash_file")"

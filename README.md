@@ -40,7 +40,8 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
-- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`;
+- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
+- Git read intelligence: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`;
 - execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
 - web: `http_fetch`, `web_search`.
 

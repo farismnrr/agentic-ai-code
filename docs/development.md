@@ -71,6 +71,7 @@ Examples:
 ```bash
 bash scripts/phase4-black-box.sh
 bash scripts/phase7-chatgpt-contract.sh
+bash scripts/verify-git-patch-tools.sh
 bash scripts/phase8-zero-bypass.sh
 bash scripts/verify-no-secret-leakage.sh
 bash scripts/verify-telemetry-endpoint-security.sh

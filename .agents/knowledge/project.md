@@ -65,7 +65,7 @@ The final rules are:
 - `scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
 - Rust relay transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers, while focused auth, validation, admission, and observability modules remain the policy owners; application execution/workspace, MCP catalog, and CLI-vs-validated-config responsibilities are likewise split behind stable facades;
-- native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
+- native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs; Plan 039B adds bounded read-only Git intelligence through fixed Git CLI argv/config and a constrained native `apply_patch` mutation primitive that reuses workspace containment/atomic replacement rather than shelling out to `patch`.
 
 The remediation also restored application ownership boundaries across API composition, identity/settings/conversation/model/workspace use cases, and infrastructure adapters. Provider credential containment, repository-wide API ownership, mixed utility cleanup, strict architecture probes, and JWT pre-validation compatibility remain implemented. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
 

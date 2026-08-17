@@ -6,8 +6,8 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::{
-    directory_list, file_edit, file_read, file_search, file_write, MAX_DIRECTORY_RESULT_BYTES,
-    MAX_FILE_READ_BYTES, MAX_FILE_SEARCH_RESULT_BYTES,
+    apply_patch, directory_list, file_edit, file_read, file_search, file_write,
+    MAX_DIRECTORY_RESULT_BYTES, MAX_FILE_READ_BYTES, MAX_FILE_SEARCH_RESULT_BYTES,
 };
 
 /// Dispatch a native workspace tool while keeping result serialization and
@@ -43,6 +43,14 @@ pub fn dispatch_native_tool(
             &file_edit(arguments, config)?,
             "failed to serialize file edit result",
             None,
+        )?,
+        "apply_patch" => complete_json(
+            &apply_patch(arguments, config)?,
+            "failed to serialize patch result",
+            Some((
+                MAX_FILE_READ_BYTES + 16 * 1024,
+                "patch result exceeds output maximum",
+            )),
         )?,
         "file_read" => complete_json(
             &file_read(arguments, config)?,
