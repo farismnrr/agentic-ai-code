@@ -2,7 +2,7 @@
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
 import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
-import { approvalForCapability, classifyCapability, toolEffects } from '#shared/utils/capability-policy'
+import { capabilityFactsForToolCall, classifyCapability, rememberedApprovalCanAutoAnswer } from '#shared/utils/capability-policy'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -33,6 +33,8 @@ interface PendingApproval {
   serverId?: string
   input: unknown
   toolId?: string
+  annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }
+  trustedProvenance?: 'first-party-relay' | 'external'
 }
 
 // MCP tools resolve an id via `serverId.toolName`; native tools (e.g.
@@ -82,6 +84,8 @@ const candidate = computed<Candidate | undefined>(() => {
         serverId: tool?.serverId,
         input: part.input,
         toolId: resolveToolId(toolName, tool?.serverId),
+        annotations: tool?.annotations,
+        trustedProvenance: tool?.trustedProvenance,
         isAutomatic: part.approval?.isAutomatic === true
       }
     }
@@ -89,15 +93,24 @@ const candidate = computed<Candidate | undefined>(() => {
   return undefined
 })
 
-// What the modal renders: never an automatic resolution (server already
-// decided, no user input needed, ever) and never one with a remembered
-// decision — those get answered programmatically below instead, without
-// ever flashing the modal open first.
+function factsFor(candidate: PendingApproval) {
+  return capabilityFactsForToolCall({
+    toolId: candidate.toolId ?? candidate.toolName,
+    toolName: candidate.toolName,
+    input: candidate.input,
+    annotations: candidate.annotations,
+    trustedProvenance: candidate.serverId ? (candidate.trustedProvenance ?? 'external') : 'native'
+  })
+}
+
+// What the modal renders: automatic resolutions and remembered decisions that
+// the same shared policy can actually honor stay hidden. A narrowed `always`
+// decision remains visible so it can never leave the SDK approval suspended.
 const pending = computed<PendingApproval | undefined>(() => {
   const c = candidate.value
   if (!c || c.isAutomatic) return undefined
   const remembered = c.toolId ? props.conversation?.approvals[c.toolId] : undefined
-  if (remembered === 'always' || remembered === 'never') return undefined
+  if (remembered && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual')) return undefined
   return c
 })
 
@@ -112,18 +125,7 @@ const autoAnswerable = computed<{ toolId: string, decision: 'always' | 'never' }
   if (!c || c.isAutomatic || !c.toolId) return undefined
   const remembered = props.conversation?.approvals[c.toolId]
   if (remembered !== 'always' && remembered !== 'never') return undefined
-  if (remembered === 'always') {
-    const assessment = classifyCapability({
-      toolId: c.toolId,
-      effects: toolEffects(c.toolName, undefined, c.serverId ? 'external' : 'native'),
-      trustedProvenance: c.serverId ? 'external' : 'native',
-      external: Boolean(c.serverId),
-      command: typeof c.input === 'object' && c.input !== null && 'command' in c.input && typeof c.input.command === 'string' ? c.input.command : undefined,
-      args: typeof c.input === 'object' && c.input !== null && 'args' in c.input && Array.isArray(c.input.args) ? c.input.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
-      path: typeof c.input === 'object' && c.input !== null && 'path' in c.input && typeof c.input.path === 'string' ? c.input.path : undefined
-    })
-    if (approvalForCapability({ ...assessment, trustedProvenance: c.serverId ? 'external' : 'native' }, 'always').outcome !== 'approved') return undefined
-  }
+  if (remembered === 'always' && !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual')) return undefined
   return { toolId: c.toolId, decision: remembered }
 })
 
@@ -141,15 +143,7 @@ const formattedInput = computed(() =>
 const assessment = computed(() => {
   const current = pending.value
   if (!current) return undefined
-  return classifyCapability({
-    toolId: current.toolId ?? current.toolName,
-    effects: toolEffects(current.toolName, undefined, current.serverId ? 'external' : 'native'),
-    trustedProvenance: current.serverId ? 'external' : 'native',
-    external: Boolean(current.serverId),
-    command: typeof current.input === 'object' && current.input !== null && 'command' in current.input && typeof current.input.command === 'string' ? current.input.command : undefined,
-    args: typeof current.input === 'object' && current.input !== null && 'args' in current.input && Array.isArray(current.input.args) ? current.input.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
-    path: typeof current.input === 'object' && current.input !== null && 'path' in current.input && typeof current.input.path === 'string' ? current.input.path : undefined
-  })
+  return classifyCapability(factsFor(current))
 })
 
 function answer(approved: boolean, remember: boolean) {
