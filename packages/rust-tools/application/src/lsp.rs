@@ -12,6 +12,9 @@ mod protocol;
 
 pub use manager::LspSessionManager;
 pub use protocol::LspSession;
+pub use rust::RustLanguageServer;
+
+pub mod rust;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -102,6 +105,11 @@ pub(super) struct ApprovedServerSpec {
     pub language: String,
     pub executable: PathBuf,
     pub args: Vec<String>,
+    /// Language-owned `initializationOptions` / `workspace/configuration`
+    /// settings blob. The generic protocol layer treats this as opaque.
+    pub settings: serde_json::Value,
+    /// Language-owned `initialize` `capabilities.experimental` blob.
+    pub experimental_capabilities: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

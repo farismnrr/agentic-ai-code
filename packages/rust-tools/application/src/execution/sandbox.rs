@@ -204,6 +204,14 @@ fn spawn_with_profile(
             .map_err(|_| std::io::Error::other("invalid toolchain path"))?;
         let value = canonical.to_string_lossy().into_owned();
         args.extend(["--ro-bind".into(), value.clone(), value]);
+        if canonical.file_name() == Some(std::ffi::OsStr::new("bin")) {
+            if let Some(toolchain_root) = canonical.parent() {
+                if toolchain_root.join("lib/rustlib").is_dir() {
+                    let value = toolchain_root.to_string_lossy().into_owned();
+                    args.extend(["--ro-bind".into(), value.clone(), value]);
+                }
+            }
+        }
     }
     if profile.expose_optional_sockets {
         add_optional_socket(
@@ -250,6 +258,11 @@ fn spawn_with_profile(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    if profile.workspace_root.is_some() {
+        command
+            .env("CARGO_HOME", "/tmp/lsp-home/.cargo")
+            .env("CARGO_TARGET_DIR", "/tmp/lsp-target");
+    }
     #[cfg(unix)]
     command.process_group(0);
     command.spawn()

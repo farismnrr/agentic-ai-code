@@ -19,7 +19,17 @@ struct SharedState {
     writer: Mutex<ChildStdin>,
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, LspError>>>>,
     faulted: AtomicBool,
+    diagnostics: Mutex<HashMap<String, Value>>,
+    /// Bounded, generic store of the most recent params per notification
+    /// method. Interpretation of any given method's payload is owned by the
+    /// language-specific integration layer (e.g. `lsp::rust`), not here.
+    notifications: Mutex<HashMap<String, Value>>,
+    /// Opaque language-owned settings blob answered back for
+    /// `workspace/configuration` pulls.
+    configuration: Value,
 }
+
+const MAX_LSP_NOTIFICATION_METHODS: usize = 32;
 
 pub struct LspSession {
     identity: WorkspaceIdentity,
@@ -56,6 +66,9 @@ impl LspSession {
             writer: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
             faulted: AtomicBool::new(false),
+            diagnostics: Mutex::new(HashMap::new()),
+            notifications: Mutex::new(HashMap::new()),
+            configuration: spec.settings.clone(),
         });
         let stderr = Arc::new(Mutex::new(Vec::new()));
         tokio::spawn(drain_stderr(stderr_pipe, stderr.clone()));
@@ -94,9 +107,11 @@ impl LspSession {
                     "rootUri": root_uri,
                     "workspaceFolders": [{"uri":root_uri,"name":"workspace"}],
                     "capabilities": {
-                        "workspace": {"workspaceFolders": true},
-                        "textDocument": {"synchronization":{"dynamicRegistration":false}}
-                    }
+                        "workspace": {"workspaceFolders": true, "configuration": true},
+                        "textDocument": {"synchronization":{"dynamicRegistration":false}},
+                        "experimental": spec.experimental_capabilities
+                    },
+                    "initializationOptions": spec.settings
                 }),
                 LSP_STARTUP_TIMEOUT,
             )
@@ -113,6 +128,16 @@ impl LspSession {
             .ok_or(LspError::Internal)?
             .capabilities = capabilities;
         if let Err(error) = session.notify("initialized", json!({})).await {
+            fault_and_terminate(&session.state, &session.child, error).await;
+            return Err(LspError::StartupFailed);
+        }
+        if let Err(error) = session
+            .notify(
+                "workspace/didChangeConfiguration",
+                json!({"settings": session.state.configuration.clone()}),
+            )
+            .await
+        {
             fault_and_terminate(&session.state, &session.child, error).await;
             return Err(LspError::StartupFailed);
         }
@@ -209,6 +234,17 @@ impl LspSession {
         super::document::sync_document(self, path).await
     }
 
+    pub async fn latest_diagnostics(&self, uri: &str) -> Option<Value> {
+        self.state.diagnostics.lock().await.get(uri).cloned()
+    }
+
+    /// Most recent params observed for an arbitrary notification method.
+    /// The generic protocol layer stores these opaquely; interpreting a
+    /// given method's payload is the caller's (language layer's) job.
+    pub async fn latest_notification(&self, method: &str) -> Option<Value> {
+        self.state.notifications.lock().await.get(method).cloned()
+    }
+
     pub async fn shutdown(&self) {
         if !self.is_faulted() {
             let _ = self
@@ -262,15 +298,71 @@ async fn read_loop(
                 fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                 return;
             }
+            if method.as_str() == Some("textDocument/publishDiagnostics") {
+                if let Some(params) = object.get("params") {
+                    let uri = params.get("uri").and_then(Value::as_str);
+                    let diagnostics = params.get("diagnostics").and_then(Value::as_array);
+                    if let (Some(uri), Some(diagnostics)) = (uri, diagnostics) {
+                        let mut stored = state.diagnostics.lock().await;
+                        if !stored.contains_key(uri) && stored.len() >= 16 {
+                            if let Some(oldest) = stored.keys().next().cloned() {
+                                stored.remove(&oldest);
+                            }
+                        }
+                        let bounded = diagnostics
+                            .iter()
+                            .take(128)
+                            .filter(|diagnostic| {
+                                serde_json::to_vec(diagnostic)
+                                    .map(|bytes| bytes.len() <= 16 * 1024)
+                                    .unwrap_or(false)
+                            })
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        stored.insert(
+                            uri.to_owned(),
+                            json!({
+                                "uri": uri,
+                                "version": params.get("version"),
+                                "diagnostics": bounded
+                            }),
+                        );
+                    }
+                }
+            }
+            if object.get("id").is_none() {
+                let name = method.as_str().unwrap_or_default().to_owned();
+                let mut store = state.notifications.lock().await;
+                if store.contains_key(&name) || store.len() < MAX_LSP_NOTIFICATION_METHODS {
+                    store.insert(name, object.get("params").cloned().unwrap_or(Value::Null));
+                }
+            }
             if let Some(id) = object.get("id") {
                 if !id.is_i64() && !id.is_u64() && !id.is_string() {
                     fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                     return;
                 }
+                let result = match method.as_str().unwrap_or_default() {
+                    "workspace/configuration" => object
+                        .get("params")
+                        .and_then(|params| params.get("items"))
+                        .and_then(Value::as_array)
+                        .map(|items| {
+                            Value::Array(
+                                items.iter().map(|_| state.configuration.clone()).collect(),
+                            )
+                        })
+                        .unwrap_or_else(|| Value::Array(Vec::new())),
+                    "workspace/workspaceFolders" => Value::Array(Vec::new()),
+                    "window/workDoneProgress/create"
+                    | "client/registerCapability"
+                    | "client/unregisterCapability" => Value::Null,
+                    _ => Value::Null,
+                };
                 let response = json!({
                     "jsonrpc":"2.0",
                     "id":id,
-                    "error":{"code":-32601,"message":"Method not found"}
+                    "result": result
                 });
                 if write_message(&mut *state.writer.lock().await, &response)
                     .await
