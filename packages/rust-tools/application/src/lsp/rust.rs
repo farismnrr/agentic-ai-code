@@ -105,8 +105,9 @@ impl RustLanguageServer {
         path: &str,
         line: u32,
         utf8_column: usize,
+        include_declaration: bool,
     ) -> Result<Vec<Location>, LspError> {
-        semantic::references(&self.session, path, line, utf8_column, true).await
+        semantic::references(&self.session, path, line, utf8_column, include_declaration).await
     }
 
     pub async fn implementations(

@@ -134,6 +134,21 @@ async fn run() -> Result<(), String> {
         "a WorkspaceEdit targeting a path outside the contained workspace is rejected",
     )?;
 
+    // ---- mixed `changes` + `documentChanges`: rejected as ambiguous, no
+    // partial preview, hidden resource op in the ignored half never drops
+    // silently ----
+    let mixed = dispatch_code_tool(
+        "code_rename_preview",
+        &json!({"cwd": cwd, "path": "src/a.rs", "line": 0, "column": 7, "new_name": "scenario-mixed-both"}),
+        &config,
+        &manager,
+    )
+    .await;
+    require(
+        mixed.is_err(),
+        "a WorkspaceEdit carrying both changes and documentChanges is rejected outright",
+    )?;
+
     // ---- confirm no mutation occurred across every rejected/valid scenario ----
     require(
         fs::read_to_string(root.join("src/a.rs")).map_err(io_error)? == before_a
@@ -309,6 +324,13 @@ while True:
                     {"range": range_at(0, 3, 8), "newText": "y"},
                 ]
             }}
+        elif new_name == "scenario-mixed-both":
+            result = {
+                "changes": {a_uri: [{"range": range_at(0, 7, 8), "newText": "visible_only"}]},
+                "documentChanges": [{
+                    "kind": "rename", "oldUri": b_uri, "newUri": b_uri + ".hidden-op",
+                }],
+            }
         elif new_name == "scenario-outside-root":
             result = {"changes": {"file:///etc/passwd": [{"range": range_at(0, 0, 1), "newText": "x"}]}}
         else:

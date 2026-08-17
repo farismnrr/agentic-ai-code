@@ -85,6 +85,7 @@ pub fn broken() { let _: i32 = "not an integer"; }
             source_line(source, 3)
                 .find("make")
                 .ok_or("fixture make definition")?,
+            true,
         )
         .await
         .map_err(|error| format!("references: {error}"))?;
