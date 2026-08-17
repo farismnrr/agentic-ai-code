@@ -4,6 +4,7 @@ export interface RelayExecResult {
   type: 'exec_result'
   id?: string
   success: boolean
+  approvalRequired?: boolean
   error?: string
   stdout?: string
   stderr?: string
@@ -69,6 +70,7 @@ export function useRelayAgent() {
         error?: { message?: string }
         result?: {
           isError?: boolean
+          _meta?: { control?: { type?: string, reason?: string } }
           content?: Array<{ type?: string, text?: string }>
         }
       }
@@ -98,6 +100,9 @@ export function useRelayAgent() {
           success: false,
           error: friendlyRelayErrorMessage(res.result)
         }
+      }
+      if (res.result?._meta?.control?.type === 'approval_required') {
+        return { type: 'exec_result', success: false, approvalRequired: true, error: 'Approval is required before this action can continue' }
       }
 
       const textContent = res.result?.content?.find(c => c.type === 'text')?.text || ''

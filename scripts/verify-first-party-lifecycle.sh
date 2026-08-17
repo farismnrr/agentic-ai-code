@@ -9,6 +9,7 @@ const dispatch = readFileSync('packages/rust-tools/application/src/dispatcher.rs
 const hooks = readFileSync('packages/rust-tools/application/src/hooks.rs', 'utf8')
 const client = readFileSync('app/composables/useRelayAgent.ts', 'utf8')
 const chat = readFileSync('app/composables/useConversationChat.ts', 'utf8')
+const controller = readFileSync('app/composables/chat/local-tool-controller.ts', 'utf8')
 const required = [
   [dispatch, '"agent/session_start"', 'explicit session-start RPC'],
   [dispatch, '"agent/pre_stop"', 'explicit pre-stop RPC'],
@@ -21,6 +22,7 @@ const required = [
 ]
 for (const [source, needle, label] of required) if (!source.includes(needle)) throw new Error(`missing ${label}`)
 if (rust.includes('session_id') || hooks.includes('session_id')) throw new Error('lifecycle identity leaked into undeclared argument contract')
+if (!client.includes('approvalRequired') || !controller.includes('approval_required')) throw new Error('approval control has no first-party consumer')
 console.log('first-party lifecycle/approval/context acceptance: pass')
 NODE
 bash scripts/verify-hooks.sh >/dev/null
