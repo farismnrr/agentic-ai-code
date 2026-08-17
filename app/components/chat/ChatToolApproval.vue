@@ -3,6 +3,7 @@ import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
 import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 import { capabilityFactsForToolCall, classifyCapability, rememberedApprovalCanAutoAnswer } from '#shared/utils/capability-policy'
+import { resolveMcpToolFromModelName } from '#shared/utils/mcp-tool-identity'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -35,22 +36,10 @@ interface PendingApproval {
   toolId?: string
   annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }
   trustedProvenance?: 'first-party-relay' | 'external'
-}
-
-// MCP tools resolve an id via `serverId.toolName`; native tools (e.g.
-// `terminal`, registered directly in the ToolSet with no MCP server) have no
-// `serverId` at all, so that id would always be undefined for them — meaning
-// "Always allow"/"Always deny" silently never persisted for the terminal
-// tool. Fall back to the native tools registry, matched by its model-facing
-// `toolName`, so the id lines up with what server/api/chat.post.ts reads
-// back from `conversation.approvals`.
-function resolveToolId(toolName: string, serverId: string | undefined) {
-  if (serverId) return `${serverId}.${toolName}`
-  return nativeTools.find(t => t.toolName === toolName)?.id
+  identity: 'native' | 'mcp' | 'unknown'
 }
 
 interface Candidate extends PendingApproval {
-  toolId: string | undefined
   /**
    * The AI SDK always streams a `tool-approval-request` chunk (this
    * state) immediately followed by `tool-approval-response` for any call
@@ -76,16 +65,18 @@ const candidate = computed<Candidate | undefined>(() => {
       if (part.state !== 'approval-requested') continue
 
       const toolName = getToolOrDynamicToolName(part)
-      const tool = Object.values(toolsById.value).find(t => t.name === toolName)
+      const mcpTool = resolveMcpToolFromModelName(toolName, Object.values(toolsById.value))
+      const nativeTool = nativeTools.find(tool => tool.toolName === toolName)
 
       return {
         approvalId: part.approval.id,
         toolName,
-        serverId: tool?.serverId,
+        serverId: mcpTool?.serverId,
         input: part.input,
-        toolId: resolveToolId(toolName, tool?.serverId),
-        annotations: tool?.annotations,
-        trustedProvenance: tool?.trustedProvenance,
+        toolId: mcpTool?.id ?? nativeTool?.id,
+        annotations: mcpTool?.annotations,
+        trustedProvenance: mcpTool?.trustedProvenance,
+        identity: mcpTool ? 'mcp' : nativeTool ? 'native' : 'unknown',
         isAutomatic: part.approval?.isAutomatic === true
       }
     }
@@ -99,7 +90,10 @@ function factsFor(candidate: PendingApproval) {
     toolName: candidate.toolName,
     input: candidate.input,
     annotations: candidate.annotations,
-    trustedProvenance: candidate.serverId ? (candidate.trustedProvenance ?? 'external') : 'native'
+    // Cached MCP provenance is display metadata only. A request that reached
+    // this component is authoritative evidence that the server did not
+    // auto-approve it, so MCP is rendered conservatively as external/high-risk.
+    trustedProvenance: candidate.identity === 'native' ? 'native' : 'external'
   })
 }
 
@@ -110,7 +104,7 @@ const pending = computed<PendingApproval | undefined>(() => {
   const c = candidate.value
   if (!c || c.isAutomatic) return undefined
   const remembered = c.toolId ? props.conversation?.approvals[c.toolId] : undefined
-  if (remembered && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual')) return undefined
+  if (remembered === 'never' || (remembered === 'always' && c.identity !== 'mcp' && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
   return c
 })
 
@@ -125,7 +119,7 @@ const autoAnswerable = computed<{ toolId: string, decision: 'always' | 'never' }
   if (!c || c.isAutomatic || !c.toolId) return undefined
   const remembered = props.conversation?.approvals[c.toolId]
   if (remembered !== 'always' && remembered !== 'never') return undefined
-  if (remembered === 'always' && !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual')) return undefined
+  if (remembered === 'always' && (c.identity === 'mcp' || !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
   return { toolId: c.toolId, decision: remembered }
 })
 

@@ -4,6 +4,7 @@ import {
   classifyCapability,
   rememberedApprovalCanAutoAnswer
 } from '../shared/utils/capability-policy.ts'
+import { mcpModelToolName, resolveMcpToolFromModelName } from '../shared/utils/mcp-tool-identity.ts'
 
 function expect(condition: unknown, message: string) {
   if (!condition) throw new Error(`capability policy acceptance failed: ${message}`)
@@ -55,5 +56,21 @@ const network = capabilityFactsForToolCall({
 })
 expect(network.domain === 'example.test' && network.networkRequested === true, 'structured domain fact')
 expect(approvalForCapability(network, undefined, 'autonomous').outcome === 'user-approval', 'network asks')
+
+const mcpCatalog = [
+  { id: 'server-a.read_file', serverId: 'server-a', name: 'read_file', description: '', sampleInput: {} },
+  { id: 'server-b.read_file', serverId: 'server-b', name: 'read_file', description: '', sampleInput: {} }
+]
+const modelKey = mcpModelToolName('server-a', 'read_file')
+const resolvedMcp = resolveMcpToolFromModelName(modelKey, mcpCatalog)
+expect(resolvedMcp?.id === 'server-a.read_file', 'model key resolves exact MCP identity')
+expect(resolvedMcp?.id === 'server-a.read_file', 'remembered approval uses canonical MCP id')
+expect(resolveMcpToolFromModelName('read_file', mcpCatalog) === undefined, 'raw MCP name does not resolve')
+expect(resolveMcpToolFromModelName('unknown_tool', mcpCatalog) === undefined, 'unknown MCP identity fails safe')
+const staleMcp = capabilityFactsForToolCall({
+  toolId: 'server-a.read_file', toolName: 'read_file', input: { path: '.ssh/id' }, trustedProvenance: 'external'
+})
+expect(classifyCapability(staleMcp).risk === 'high', 'external protected MCP call is high risk')
+expect(!rememberedApprovalCanAutoAnswer(staleMcp, 'always', 'autonomous'), 'stale broad approval cannot suppress narrowed MCP approval')
 
 console.log('capability policy behavioral acceptance: PASS')
