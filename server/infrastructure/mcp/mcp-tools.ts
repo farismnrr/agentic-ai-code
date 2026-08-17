@@ -5,6 +5,7 @@ import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
+import { approvalForCapability, toolEffects } from '#shared/utils/capability-policy'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -59,7 +60,7 @@ function sanitizeToolName(mcpToolId: string) {
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>) {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual') {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
@@ -104,7 +105,12 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       })
 
       const decision = approvals[mcpToolId]
-      toolApproval[modelName] = decision === 'always' ? 'approved' : decision === 'never' ? 'denied' : 'user-approval'
+      toolApproval[modelName] = approvalForCapability({
+        toolId: mcpToolId,
+        effects: toolEffects(mcpTool.name, mcpTool.annotations),
+        destructive: mcpTool.annotations?.destructiveHint,
+        external: mcpTool.annotations?.openWorldHint
+      }, decision, permissionMode).outcome
     }
   }
 

@@ -64,6 +64,8 @@ The relay:
 - owns terminal timeout, cancellation, job concurrency, bounded output retention, and process-tree cleanup;
 - exposes bounded native workspace inspection/search/read/edit/write/patch operations without routing routine filesystem work through a shell;
 - exposes fixed-subcommand Git status/diff/log/show/blame reads with user/repository executable Git helpers neutralized.
+- uses one component-aware protected credential-path policy for native workspace operations and Bubblewrap masking (`.ssh`, cloud/Docker/Kubernetes configuration, and common package-manager credential files); `.env.example` is intentionally not covered by this policy;
+- treats terminal network access as an explicit operator capability (`RELAY_ALLOW_TERMINAL_NETWORK`), isolated by default, while dedicated HTTP/search tools remain separately classified network capabilities.
 
 For the single-owner profile, `--execution-root` may be the canonical non-root home directory while `--dir` points at a particular starting repository. A request may change `cwd` between directories under the execution root without reconnecting the MCP client. Workspace path resolution canonicalizes existing read targets and validates write parents against this boundary. Recursive native traversal does not follow symlink directories; edit/write operations additionally use no-follow directory/file descriptors and same-directory atomic replacement semantics so validation-time containment is not treated as sufficient mutation safety.
 
@@ -100,6 +102,10 @@ external MCP client and the hosted Nuxt application can consume the same public 
 - **Hosted Nuxt** currently uses a private server-side access token only for the configured first-party MCP URL and only for the configured AI Code owner user ID.
 
 Those two owner identities are intentionally different concepts: the Nuxt owner is an `ai_code.users.id`; the relay owner is the Authorization Server's stable `sub` claim.
+
+## Capability policy
+
+The first-party application classifies tool calls using structured effects (workspace read/write/delete, Git read, process execution, network, external mutation, and privileged bridges). Approval precedence is deny > ask > allow > default. MCP annotations remain client-facing hints; they do not replace relay enforcement. Argument-aware assessment treats shell/interpreter indirection and unknown wrappers as opaque, so a remembered tool-level approval cannot silently authorize them.
 
 ## Tailscale boundary
 

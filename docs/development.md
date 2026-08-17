@@ -21,6 +21,8 @@ Do not commit implementation directly to `main` or `dev`.
 
 This repository intentionally has no GitHub Actions CI workflow and no unit-test suite. Normal local commits are protected by the tracked pre-commit hook installed during `pnpm install`.
 
+For capability-boundary changes, run `sh scripts/verify-capability-policy.sh`. It checks the canonical protected-path semantics, the fail-closed terminal network default, and the first-party policy module's lint contract.
+
 Run manually with:
 
 ```bash

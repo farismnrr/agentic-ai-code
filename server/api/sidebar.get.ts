@@ -14,7 +14,7 @@
  */
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const [ws, convs] = await event.context.application.account.listSidebarData(session.user.id) as [{ id: string, name: string, path: string, pathConfirmed: boolean, createdAt: Date, updatedAt: Date }[], { id: string, title: string, workspaceId: string, modelId: string, reasoningEffort: string | null, enabledToolIds: string[] | null, approvals: unknown, mode: string, createdAt: Date, updatedAt: Date }[]]
+  const [ws, convs] = await event.context.application.account.listSidebarData(session.user.id) as [{ id: string, name: string, path: string, pathConfirmed: boolean, createdAt: Date, updatedAt: Date }[], { id: string, title: string, workspaceId: string, modelId: string, reasoningEffort: string | null, enabledToolIds: string[] | null, approvals: unknown, permissionMode: string, mode: string, createdAt: Date, updatedAt: Date }[]]
 
   return {
     workspaces: ws.map(w => ({
@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
       reasoningEffort: c.reasoningEffort,
       enabledToolIds: c.enabledToolIds,
       approvals: c.approvals,
+      permissionMode: c.permissionMode,
       mode: c.mode,
       createdAt: c.createdAt.getTime(),
       updatedAt: c.updatedAt.getTime(),

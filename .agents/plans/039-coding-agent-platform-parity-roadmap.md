@@ -140,7 +140,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
 | **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
-| **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Planned | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
+| **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Implemented — awaiting independent verification | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
 | **039G** | Background agents + Git worktree isolation | 039F | Planned | Independent background tasks can run with bounded concurrency and isolated writes without cross-worktree corruption |

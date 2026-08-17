@@ -36,6 +36,7 @@ export async function listConversationMessages(userId: string, conversationId: s
     reasoningEffort: conversation.reasoningEffort,
     enabledToolIds: conversation.enabledToolIds,
     approvals: conversation.approvals,
+    permissionMode: conversation.permissionMode,
     mode: conversation.mode,
     lastMeasuredTokens: conversation.lastMeasuredTokens,
     createdAt: conversation.createdAt.getTime(),
