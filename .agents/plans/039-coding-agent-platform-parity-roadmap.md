@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C IN PROGRESS (PHASE-01/02 CLOSED/VERIFIED; PHASE-03–PHASE-07 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING); 039D–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039C CLOSED / VERIFIED; 039D–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -139,7 +139,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | --- | --- | --- | --- | --- |
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
-| **039C** | LSP code intelligence + diagnostics | 039B | IN PROGRESS — PHASE-01/02 CLOSED/VERIFIED; PHASE-03–07 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
+| **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Planned | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
@@ -152,7 +152,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 
 - [x] PLAN-039A — maintainability + layered refactor foundation
 - [x] PLAN-039B — Git read intelligence + patch ergonomics
-- [ ] PLAN-039C — LSP code intelligence + diagnostics
+- [x] PLAN-039C — LSP code intelligence + diagnostics
 - [ ] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
 - [ ] PLAN-039E — deterministic agent hooks/lifecycle
 - [ ] PLAN-039F — subagents + reusable agent profiles
@@ -189,9 +189,9 @@ Verified handoff facts for 039C:
 - refreshed external MCP client MCP discovery exposed all 18 tools and live authenticated acceptance exercised the complete catalog, including a disposable Git/patch workflow, schema rejection before dispatch, containment rejection, background-job cancellation, and exact canary cleanup; the primary worktree was clean afterward;
 - continuation/pagination remains intentionally deferred to Plan 039H (039C's `code_*` tools implement a minimal, self-contained offset-based continuation in the interim, not an incompatible scheme).
 
-## 039C implementation-boundary handoff (2026-08-17, branch `feat/039c-lsp-foundation`)
+## 039C verified closure baseline (2026-08-17, branch `feat/039c-lsp-foundation`)
 
-PHASE-01/02 closed/verified per `.agents/plans/039c-lsp-code-intelligence-and-diagnostics.md`. PHASE-03 (Rust proof) through PHASE-07 (post-edit diagnostic contract) are now implemented on top of that foundation, each with deterministic acceptance (`scripts/verify-lsp-foundation.sh`, `verify-lsp-typescript.sh`, `verify-code-mcp.sh`, `verify-rename-preview.sh`, `verify-post-edit-diagnostics.sh`, plus `rust_lsp_acceptance`), all passing, alongside a green `pnpm verify:commit`. The relay now exposes 7 additional public `code_*` MCP tools (`code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`) for a total of 25, all read-only/non-destructive. `.vue` semantic navigation is capability-negotiated but not fully functional standalone in this environment — the installed `@vue/language-server@3.3.8` requires a companion `@vue/typescript-plugin`-equipped `typescript-language-server` (hybrid mode) that is not part of the reviewed toolchain; installing it is an explicit follow-up decision, not made silently. Full independent Plan-039C verification (the exhaustive security/architecture matrix) remains a separate, later boundary — Plan 039C is **not** closed.
+Plan 039C is **CLOSED / VERIFIED**. Final independent implementation/security/architecture verification was performed at `99aacc4cc0e0ac8a8b420269be43c7e8cba89089`; the final matrix passed LSP foundation, real Rust and TypeScript/Vue acceptance, public MCP code-tool acceptance three consecutive times, rename-preview/post-edit diagnostics, current 25-tool Plan-039C and historical Plan-029/039B contract gates, workspace security, zero-bypass, architecture, maintainability, bridge tests, and `pnpm verify:commit`. The relay exposes 25 tools including the seven read-only/non-destructive `code_*` tools. The reviewed installed `@vue/language-server@3.3.8` already ships `@vue/typescript-plugin@3.3.8`; the bounded sandboxed bridge preserves the exact reviewed `_vue:*` protocol, containment, framing, concurrency, freshness, and lifecycle boundaries. Vue document symbols are real; Vue definition/references/hover/diagnostics remain bounded empty results with this installed stack and are recorded as an explicit non-blocking toolchain capability exception, not falsely marked as working. Plan 039D remains unstarted.
 
 ## Explicit non-goals
 
