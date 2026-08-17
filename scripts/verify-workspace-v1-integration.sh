@@ -126,6 +126,19 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
   subprocess.run(['git','-C',ws,'init','-q'],check=True)
   subprocess.run(['git','-C',ws,'add','.'],check=True)
   subprocess.run(['git','-C',ws,'-c','user.email=fixture@example.test','-c','user.name=fixture','commit','-qm','fixture'],check=True)
+  blob=subprocess.check_output(['git','-C',ws,'hash-object','.npmrc'],text=True).strip()
+  tree=subprocess.check_output(['git','-C',ws,'rev-parse','HEAD^{tree}'],text=True).strip()
+  # Git's revision:path and raw object forms must not reach the presentation
+  # command: path exclusions cannot enforce policy after a blob is emitted.
+  for ref,label in [
+   ('HEAD:.npmrc','protected object path'),
+   ('HEAD:.ssh/id_test','protected directory object path'),
+   (blob,'raw protected blob object'),
+   (tree,'raw tree object'),
+   ('HEAD^{tree}','tree-ish expression')]:
+   expect_error(url,'git_show',{'ref':ref},label)
+  normal=payload(call(url,'git_show',{'ref':'HEAD','include_patch':False})); assert 'fixture' in normal['text'],normal
+  near=payload(call(url,'git_show',{'ref':'HEAD','path':'.npmrc.bak','include_patch':False})); assert 'fixture' in near['text'],near
   expect_error(url,'git_show',{'ref':'HEAD','path':'.ssh/id_test'},'protected git show path')
   expect_error(url,'git_show',{'ref':'HEAD'},'git output containing protected path')
   print('workspace v1 integration acceptance: PASS')
