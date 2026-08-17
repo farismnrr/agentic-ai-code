@@ -2,19 +2,25 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/029-tool-catalog-v1.json"
-catalog_hash_file="$root/.agents/contracts/029-tool-catalog-v1.sha256"
+catalog="$root/.agents/contracts/039b-tool-catalog-v2.json"
+catalog_hash_file="$root/.agents/contracts/039b-tool-catalog-v2.sha256"
+legacy_catalog="$root/.agents/contracts/029-tool-catalog-v1.json"
+legacy_hash_file="$root/.agents/contracts/029-tool-catalog-v1.sha256"
 manifest="$root/Cargo.toml"
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
+test -f "$legacy_catalog"
+test -f "$legacy_hash_file"
 command -v jq >/dev/null
 command -v sha256sum >/dev/null
 command -v bwrap >/dev/null
 
 jq -e 'type == "array" and all(.[]; (.name and .description and .inputSchema and .annotations and (.securitySchemes == [{"type":"oauth2","scopes":["relay.coding"]}]) and (has("security") | not)))' "$catalog" >/dev/null
-test "$(jq -r '.[].name' "$catalog" | paste -sd' ' -)" = "terminal_exec http_fetch web_search directory_list file_search file_write file_edit file_read text_search terminal_job_start terminal_job_get terminal_job_cancel"
-test "$(jq -r '.[].title' "$catalog" | paste -sd' ' -)" = "Sandboxed Coding Terminal HTTP Fetch Web Search Directory List File Search File Write File Edit File Read Text Search Start Terminal Job Get Terminal Job Cancel Terminal Job"
+test "$(jq -r '.[].name' "$catalog" | paste -sd' ' -)" = "terminal_exec http_fetch web_search directory_list file_search file_write file_edit file_read text_search git_status git_diff git_log git_show git_blame apply_patch terminal_job_start terminal_job_get terminal_job_cancel"
+legacy_tools="$(jq -S -c . "$legacy_catalog")"
+legacy_hash="$(printf '%s' "$legacy_tools" | sha256sum | awk '{print $1}')"
+test "$legacy_hash" = "$(tr -d '[:space:]' < "$legacy_hash_file")"
 
 RUSTFLAGS='-D warnings' cargo build --manifest-path "$manifest" --locked --bin ai-tools
 
@@ -101,9 +107,7 @@ PY
 
 runtime_tools="$(jq -S -c '.result.tools' "$runtime_file")"
 frozen_tools="$(jq -S -c . "$catalog")"
-frozen_names="$(jq -c '[.[].name]' "$catalog")"
-runtime_frozen="$(jq -S -c --argjson names "$frozen_names" '[.result.tools[] | select(.name as $name | $names | index($name))]' "$runtime_file")"
-test "$runtime_frozen" = "$frozen_tools"
+test "$runtime_tools" = "$frozen_tools"
 
 hash="$(printf '%s' "$frozen_tools" | sha256sum | awk '{print $1}')"
 recorded="$(tr -d '[:space:]' < "$catalog_hash_file")"
