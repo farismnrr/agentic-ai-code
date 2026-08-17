@@ -7,6 +7,7 @@ marker="$tmp/executed"; git config diff.evil.command "sh -c 'touch $marker'"; gi
 rg -q 'core.fsmonitor=false' "$root/packages/rust-tools/application/src/git/process.rs"
 rg -q 'diff.external=' "$root/packages/rust-tools/application/src/git/process.rs"
 rg -q 'GIT_CONFIG_GLOBAL.*dev/null' "$root/packages/rust-tools/application/src/git/process.rs"
+rg -q 'GIT_OPTIONAL_LOCKS.*0' "$root/packages/rust-tools/application/src/git/process.rs"
 ! rg -q 'name: "git_(commit|push|merge|rebase|reset|checkout|switch|clean)"' "$root/packages/rust-tools/interfaces/src/mcp/catalog.rs"
 for name in git_status git_diff git_log git_show git_blame apply_patch; do rg -q "name: \"$name\"" "$root/packages/rust-tools/interfaces/src/mcp/catalog.rs"; done
 # Direct Git flags used by adapter must not execute hostile diff helpers.

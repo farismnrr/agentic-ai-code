@@ -131,10 +131,13 @@ pub fn apply_patch(arguments: &Value, config: &ServerConfig) -> Result<ApplyPatc
         }
         let mut committed: Vec<&PlannedFile> = Vec::new();
         for p in &planned {
-            if let Err(err) = p
+            if let Err((err, current_committed)) = p
                 .directory
-                .atomic_replace_regular_file(&p.name, p.identity, &p.after, p.mode)
+                .atomic_replace_regular_file_state(&p.name, p.identity, &p.after, p.mode)
             {
+                if current_committed {
+                    committed.push(p);
+                }
                 let mut rollback_incomplete = false;
                 for done in committed.into_iter().rev() {
                     match done.directory.open_regular_file(&done.name) {

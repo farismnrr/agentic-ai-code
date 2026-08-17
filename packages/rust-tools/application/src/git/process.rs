@@ -73,6 +73,7 @@ fn git_command(cwd: &Path) -> Command {
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_PAGER", "cat")
         .env("PAGER", "cat")
         .arg("--no-pager");

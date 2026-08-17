@@ -41,6 +41,7 @@ async fn main() {
     let helper = format!("sh -c 'touch {}'", marker.display());
     run(&repo, &["config", "core.fsmonitor", &helper]);
     run(&repo, &["config", "core.pager", &helper]);
+    run(&repo, &["config", "alias.status", &helper]);
     run(&repo, &["config", "diff.evil.command", &helper]);
     run(&repo, &["config", "diff.evil.textconv", &helper]);
     fs::write(repo.join(".gitattributes"), "*.txt diff=evil\n").unwrap();
