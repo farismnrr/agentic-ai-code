@@ -1,5 +1,6 @@
 //! Secure, atomic file edits and writes.
 
+use super::protected::reject_protected_path;
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -61,6 +62,7 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
     let target = resolve_write_target(&root, cwd, path, EntryKind::File)?;
+    reject_protected_path(&root, &target)?;
     let parent = target
         .parent()
         .ok_or_else(|| McpError::InvalidRequest("file edit target is invalid".into()))?;
@@ -228,6 +230,9 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
     let root = config
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let cwd_resolved = resolve_existing_path(&root, cwd, ".", EntryKind::Directory)?;
+    let normalized = normalize_write_path(&root, &cwd_resolved, path)?;
+    reject_protected_path(&root, &normalized)?;
     let (directory, name) = resolve_write_parent_directory(&root, cwd, path, create_parents)?;
     match directory.entry_type(&name)? {
         Some(entry) if entry.is_symlink() || entry.is_dir() || !entry.is_file() => Err(

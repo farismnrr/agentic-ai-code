@@ -371,6 +371,9 @@ pub async fn dispatch_tool_call(
     if let Some(result) = crate::workspace::dispatch_native_tool(tool.name, arguments, config)? {
         return Ok(result);
     }
+    if let Some(result) = crate::git::dispatch_git_tool(tool.name, arguments, config).await? {
+        return Ok(result);
+    }
 
     if tool.name == "text_search" {
         return requests::run_text_search(arguments, config).await;

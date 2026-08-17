@@ -1,6 +1,6 @@
 # Plan 039B — Git Read Intelligence and Patch Ergonomics
 
-**Status:** PLANNED  
+**Status:** IN PROGRESS — source implementation/validation complete; live relay acceptance pending
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039A  
@@ -207,53 +207,53 @@ Deletion support must be a deliberate later phase in this child plan, not an acc
 
 **Goal:** Freeze a safe, reusable read-only Git invocation layer.
 
-- [ ] Inspect Git configuration/executable attack surfaces relevant to read-only commands.
-- [ ] Define fixed environment and config overrides.
-- [ ] Define repository discovery and cwd/worktree semantics.
-- [ ] Define bounds and stable errors.
-- [ ] Create deterministic acceptance script proving a hostile repo config cannot trigger external executable helpers through the new read tools.
+- [x] Inspect Git configuration/executable attack surfaces relevant to read-only commands.
+- [x] Define fixed environment and config overrides.
+- [x] Define repository discovery and cwd/worktree semantics.
+- [x] Define bounds and stable errors.
+- [x] Create deterministic acceptance script proving a hostile repo config cannot trigger external executable helpers through the new read tools.
 
 **Exit:** one reviewed Git adapter contract exists before any public Git tool is exposed.
 
 ### PHASE-02 — `git_status`
 
-- [ ] Add MCP schema/annotations.
-- [ ] Implement structured porcelain parsing.
-- [ ] Bound untracked/change lists.
-- [ ] Cover detached HEAD, no upstream, conflicts, untracked, clean repo, nested cwd.
-- [ ] Prove no mutation occurs.
+- [x] Add MCP schema/annotations.
+- [x] Implement structured porcelain parsing.
+- [x] Bound untracked/change lists.
+- [x] Cover detached HEAD, no upstream, conflicts, untracked, clean repo, nested cwd.
+- [x] Prove no mutation occurs.
 
 ### PHASE-03 — `git_diff`
 
-- [ ] Implement working/staged/ref modes.
-- [ ] Add path filtering and bounded context.
-- [ ] Add continuation support shared later with Plan 039H.
-- [ ] Prove external diff/textconv execution is disabled.
-- [ ] Handle binary/truncated diffs truthfully.
+- [x] Implement working/staged/ref modes.
+- [x] Add path filtering and bounded context.
+- [x] Add continuation support shared later with Plan 039H.
+- [x] Prove external diff/textconv execution is disabled.
+- [x] Handle binary/truncated diffs truthfully.
 
 ### PHASE-04 — `git_log`, `git_show`, `git_blame`
 
-- [ ] Add bounded schemas and parsing.
-- [ ] Validate refs/path ranges.
-- [ ] Reuse common safe Git runner and pagination.
-- [ ] Add hostile-config/large-history negative cases.
+- [x] Add bounded schemas and parsing.
+- [x] Validate refs/path ranges.
+- [x] Reuse common safe Git runner and pagination.
+- [x] Add hostile-config/large-history negative cases.
 
 ### PHASE-05 — `apply_patch` preflight engine
 
-- [ ] Define constrained grammar.
-- [ ] Implement parser with hard limits.
-- [ ] Resolve every path through workspace/protected-path policy.
-- [ ] Apply hunks in memory without mutation.
-- [ ] Produce deterministic preview/hashes.
-- [ ] Reject fuzzy/ambiguous/stale application.
+- [x] Define constrained grammar.
+- [x] Implement parser with hard limits.
+- [x] Resolve every path through workspace/protected-path policy.
+- [x] Apply hunks in memory without mutation.
+- [x] Produce deterministic preview/hashes.
+- [x] Reject fuzzy/ambiguous/stale application.
 
 ### PHASE-06 — safe patch commit
 
-- [ ] Reuse secure atomic file mutation primitives.
-- [ ] Define truthful multi-file failure/rollback behavior.
-- [ ] Ensure permissions are preserved where expected.
-- [ ] Add dry-run and stale-target acceptance cases.
-- [ ] Classify `apply_patch` accurately for approval policy.
+- [x] Reuse secure atomic file mutation primitives.
+- [x] Define truthful multi-file failure/rollback behavior.
+- [x] Ensure permissions are preserved where expected.
+- [x] Add dry-run and stale-target acceptance cases.
+- [x] Classify `apply_patch` accurately for approval policy.
 
 ### PHASE-07 — MCP/live regression
 

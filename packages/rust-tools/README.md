@@ -30,7 +30,7 @@ The `relay` subcommand executes other subcommands relative to its own executable
 
 ### MCP coding tool surface
 
-The relay currently exposes six native workspace tools in addition to terminal/job and web tools:
+The relay exposes native workspace mutation/read tools, bounded Git read intelligence, and terminal/job/web tools:
 
 - `directory_list(path=".", cwd?, depth=2, max_entries=100)` — deterministic bounded structure inspection; hard depth maximum 4 and returned-entry maximum 100; symlink directories are reported but not recursively followed.
 - `file_search(pattern, cwd?, max_results=100)` — deterministic native glob discovery (`*`, `?`, and `**` path segments); hidden files are searchable while `.git`, `node_modules`, `target`, `.nuxt`, and `.output` directories are skipped; hard result maximum 100.
@@ -38,10 +38,12 @@ The relay currently exposes six native workspace tools in addition to terminal/j
 - `file_read(path, cwd?, offset_line=1, limit_lines=200)` — strict UTF-8, 1-based line ranges; hard maximum 1,000 lines and 256 KiB returned text.
 - `file_edit(path, old_text, new_text, cwd?, replace_all=false)` — exact UTF-8 replacement in an existing regular file; without `replace_all`, zero or multiple matches fail; target/update size is capped at 1 MiB and replacement text fields at 256 KiB.
 - `file_write(path, content, cwd?, create_parents=false, overwrite=false)` — atomic create or explicit full replacement; content is capped at 1 MiB, new files use mode `0644`, and overwrite preserves the existing regular-file mode.
+- `apply_patch(patch, cwd?, dry_run=false)` — constrained unified text patches for existing regular files; all files/hunks preflight before mutation, protected paths/symlinks/add-delete-rename/traversal/stale context fail closed, and per-file atomic replacement uses best-effort rollback if a later commit fails.
+- `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame` — bounded read-only Git inspection with a scrubbed environment, fixed subcommands/config overrides, and external diff/textconv/fsmonitor/pager/helper execution neutralized.
 
 Every workspace tool is scoped to the configured execution root. Relative paths resolve from optional `cwd`; contained absolute paths are permitted. Reads may follow only symlinks whose canonical targets stay contained. Recursive traversal does not follow symlink directories. Mutation paths use no-follow descriptor traversal, reject symlinked mutation parents/final targets, and use same-directory temporary files plus atomic commit semantics.
 
-Prefer native workspace tools for structure/search/read/edit/write. Use `terminal_exec` for builds, tests, package managers, Git mutations, interpreters, repository scripts, and operations without a native contract.
+Prefer native workspace/Git tools for structure, search, read, review, history, blame, and multi-hunk patches. Use `terminal_exec` for builds, tests, package managers, Git mutations, interpreters, repository scripts, and operations without a native contract.
 
 ## Relay security/platform contract
 
