@@ -368,11 +368,16 @@ pub async fn dispatch_tool_call(
     arguments: &Value,
     config: &ServerConfig,
     manager: &Arc<JobManager>,
+    lsp: &Arc<crate::lsp::LspSessionManager>,
 ) -> Result<ToolCallResult, McpError> {
     if let Some(result) = crate::workspace::dispatch_native_tool(tool.name, arguments, config)? {
         return Ok(result);
     }
     if let Some(result) = crate::git::dispatch_git_tool(tool.name, arguments, config).await? {
+        return Ok(result);
+    }
+    if let Some(result) = crate::code::dispatch_code_tool(tool.name, arguments, config, lsp).await?
+    {
         return Ok(result);
     }
 

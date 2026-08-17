@@ -83,6 +83,11 @@ pub(super) use relay_interfaces::mcp::CODING_SCOPE;
 pub struct AppState {
     pub config: ServerConfig,
     pub jobs: std::sync::Arc<relay_application::execution::JobManager>,
+    /// Bounded, per-workspace LSP session manager backing the public
+    /// `code_*` code-intelligence tools (Plan 039C). Constructed once per
+    /// router the same way `jobs` is, so all `code_*` calls in a process
+    /// share the same capped session pool.
+    pub lsp: std::sync::Arc<relay_application::lsp::LspSessionManager>,
     /// Coarse request admission is deliberately separate from both the HTTP
     /// concurrency limit and the execution semaphore. It runs before OAuth
     /// validation so unauthenticated floods cannot reach JWKS or execution.
@@ -149,9 +154,22 @@ pub fn create_router_with_jobs(
         .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers(cors_headers);
 
+    // A misconfigured `--lsp-server` mapping (e.g. an executable missing
+    // from the safe PATH) must not prevent the relay from starting — it
+    // should only mean the `code_*` tools report that language as
+    // unavailable. Fall back to an LSP manager with no configured servers
+    // rather than failing router construction.
+    let lsp = relay_application::lsp::LspSessionManager::new(config.clone()).unwrap_or_else(|_| {
+        let mut unconfigured = config.clone();
+        unconfigured.lsp_servers = Vec::new();
+        relay_application::lsp::LspSessionManager::new(unconfigured)
+            .expect("LSP session manager with no configured servers must construct")
+    });
+
     let state = Arc::new(AppState {
         config: config.clone(),
         jobs,
+        lsp,
         request_admission: Arc::new(RequestAdmission::configured()),
         jwks_cache: tokio::sync::RwLock::new(None),
     });
