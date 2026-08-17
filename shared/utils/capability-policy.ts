@@ -190,6 +190,7 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
   if (toolName === 'file_write' || toolName === 'file_edit' || toolName === 'apply_patch') return ['workspace_write']
+  if (SAFE_READ_TOOLS.has(toolName)) return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
   if (trustedProvenance === 'external') {
     if (annotations?.destructiveHint) return ['external_mutation']
     if (annotations?.openWorldHint) return ['network_read', 'external_mutation']
