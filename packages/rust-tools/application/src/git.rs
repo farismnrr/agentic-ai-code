@@ -1,5 +1,6 @@
 //! Bounded, read-only Git intelligence with a fail-closed process contract.
 
+use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_core::workspace_path::{resolve_contained_cwd, resolve_existing_path, EntryKind};
@@ -132,13 +133,17 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
                 }
             }
         } else if let Some(path) = text.strip_prefix("? ") {
-            push_bounded(
-                &mut result.untracked,
-                path.to_owned(),
-                &mut result.truncated,
-            );
+            if !is_protected_git_path(&repo.root, path) {
+                push_bounded(
+                    &mut result.untracked,
+                    path.to_owned(),
+                    &mut result.truncated,
+                );
+            }
         } else if text.starts_with("u ") {
-            if let Some(path) = status_path(text) {
+            if let Some(path) =
+                status_path(text).filter(|path| !is_protected_git_path(&repo.root, path))
+            {
                 push_bounded(&mut result.conflicts, path, &mut result.truncated);
             }
         } else if text.starts_with("1 ") || text.starts_with("2 ") {
@@ -146,7 +151,9 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
             if bytes.len() > 4 {
                 let x = bytes[2] as char;
                 let y = bytes[3] as char;
-                if let Some(path) = status_path(text) {
+                if let Some(path) =
+                    status_path(text).filter(|path| !is_protected_git_path(&repo.root, path))
+                {
                     if x != '.' {
                         push_bounded(&mut result.staged, path.clone(), &mut result.truncated);
                     }
@@ -215,6 +222,8 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path);
+    } else {
+        append_protected_exclusions(&mut owned);
     }
     let refs = owned.iter().map(String::as_str).collect::<Vec<_>>();
     let (text, truncated) = run_git_text_bounded(&repo.root, &refs, max)?;
@@ -240,6 +249,8 @@ fn git_log(arguments: &Value, config: &ServerConfig) -> Result<GitLogResult, Mcp
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path)
+    } else {
+        append_protected_exclusions(&mut owned);
     }
     let refs = owned.iter().map(String::as_str).collect::<Vec<_>>();
     let out = run_git(&repo.root, &refs, MAX_GIT_OUTPUT_BYTES)?;
@@ -294,6 +305,8 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path)
+    } else {
+        append_protected_exclusions(&mut owned);
     }
     let refs = owned.iter().map(String::as_str).collect::<Vec<_>>();
     let (text, truncated) = run_git_text_bounded(&repo.root, &refs, max)?;
@@ -428,3 +441,29 @@ fn resolve_repo(arguments: &Value, config: &ServerConfig) -> Result<RepoContext,
 
 mod process;
 use process::*;
+
+fn append_protected_exclusions(args: &mut Vec<String>) {
+    args.push("--".into());
+    for path in [
+        ".ssh/**",
+        ".aws/**",
+        ".config/gcloud/**",
+        ".docker/**",
+        ".kube/**",
+        ".npmrc",
+        ".netrc",
+        ".pypirc",
+        ".cargo/credentials",
+        ".cargo/credentials.toml",
+    ] {
+        args.push(format!(":(exclude){path}"));
+    }
+}
+
+fn is_protected_git_path(root: &Path, path: &str) -> bool {
+    let target = root.join(path);
+    relay_core::protected_paths::is_protected_path(root, &target)
+        || std::fs::canonicalize(&target)
+            .map(|canonical| relay_core::protected_paths::is_protected_path(root, &canonical))
+            .unwrap_or(false)
+}

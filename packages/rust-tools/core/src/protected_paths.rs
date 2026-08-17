@@ -17,6 +17,13 @@ pub fn is_protected_relative(path: &Path) -> bool {
         || PROTECTED_FILES.iter().any(|entry| path == Path::new(entry))
 }
 
+pub fn is_protected_path(root: &Path, target: &Path) -> bool {
+    let Ok(relative) = target.strip_prefix(root) else {
+        return false;
+    };
+    is_protected_relative(relative)
+}
+
 fn is_same_or_descendant(path: &Path, ancestor: &Path) -> bool {
     path == ancestor || path.strip_prefix(ancestor).is_ok()
 }

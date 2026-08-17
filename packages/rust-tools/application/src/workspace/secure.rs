@@ -20,6 +20,8 @@ use std::os::unix::fs::MetadataExt;
 #[derive(Debug)]
 pub(super) struct SecureDirectory {
     fd: OwnedFd,
+    root: std::path::PathBuf,
+    path: std::path::PathBuf,
 }
 
 #[cfg(target_os = "linux")]
@@ -78,6 +80,8 @@ impl SecureDirectory {
         }
         let mut directory = Self {
             fd: unsafe { OwnedFd::from_raw_fd(root_fd) },
+            root: root.to_path_buf(),
+            path: root.to_path_buf(),
         };
         directory.verify_identity(root_identity)?;
 
@@ -105,6 +109,7 @@ impl SecureDirectory {
         name: &OsStr,
         expected: FileIdentity,
     ) -> Result<Self, McpError> {
+        let child_path = self.path.join(name);
         let name = CString::new(name.as_bytes())
             .map_err(|_| McpError::InvalidRequest("directory entry is invalid".into()))?;
         let fd = unsafe {
@@ -119,9 +124,19 @@ impl SecureDirectory {
         }
         let directory = Self {
             fd: unsafe { OwnedFd::from_raw_fd(fd) },
+            root: self.root.clone(),
+            path: child_path,
         };
         directory.verify_identity(expected)?;
         Ok(directory)
+    }
+
+    pub(super) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(super) fn path_for_child(&self, name: &OsStr) -> std::path::PathBuf {
+        self.path.join(name)
     }
 
     pub(super) fn verify_identity(&self, expected: FileIdentity) -> Result<(), McpError> {
@@ -322,6 +337,7 @@ impl SecureDirectory {
         name: &OsStr,
         create: bool,
     ) -> Result<Self, McpError> {
+        let child_path = self.path.join(name);
         let name_c = CString::new(name.as_bytes())
             .map_err(|_| McpError::InvalidRequest("directory entry is invalid".into()))?;
         let mut fd = unsafe {
@@ -355,6 +371,8 @@ impl SecureDirectory {
         }
         Ok(Self {
             fd: unsafe { OwnedFd::from_raw_fd(fd) },
+            root: self.root.clone(),
+            path: child_path,
         })
     }
 
