@@ -1,6 +1,6 @@
 # Plan 039C — LSP Code Intelligence and Diagnostics
 
-**Status:** IN PROGRESS — PHASE-01/PHASE-02 CLOSED/VERIFIED; PHASE-03 through PHASE-08 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED — implementation/security/architecture verification passed; full Vue definition/references/hover/diagnostics accepted as a documented environment/toolchain limitation, not as a semantic pass
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039B  
@@ -191,7 +191,7 @@ After native file mutations, Plan 039E hooks may notify active LSP sessions. Unt
 - [x] Prevent session cross-talk between repositories.
 - [x] Add deterministic fake/minimal LSP fixture process for protocol/security acceptance; no conventional unit-test suite added.
 
-### PHASE-03 — Rust proof — IMPLEMENTED (FINAL PLAN VERIFICATION PENDING; deferred by design to a later full-plan review)
+### PHASE-03 — Rust proof — CLOSED / VERIFIED
 
 - [x] Configure reviewed `rust-analyzer` invocation.
 - [x] Prove symbols, definition, references, hover, diagnostics on a bounded fixture/current source.
@@ -199,7 +199,7 @@ After native file mutations, Plan 039E hooks may notify active LSP sessions. Unt
 
 Deterministic acceptance: `cargo run -p relay-application --example rust_lsp_acceptance` (see `packages/rust-tools/application/src/lsp/rust.rs`, refactored during PHASE-04 into a thin wrapper over the new shared `lsp/semantic.rs` layer with no behavioral change; the wrapper's public API and the acceptance fixture are unchanged).
 
-### PHASE-04 — TypeScript/Vue proof — IMPLEMENTED
+### PHASE-04 — TypeScript/Vue proof — CLOSED / VERIFIED WITH DOCUMENTED VUE LIMITATION
 
 - [x] Integrate the reviewed language-server setup matching current Nuxt/Vue tooling: `typescript-language-server@5.3.0` for `.ts`/`.tsx`/`.js` and `@vue/language-server@3.3.8` (Volar) for `.vue`, both already installed under the fnm-managed Node toolchain (no install performed by this plan boundary).
 - [x] Prove `.ts` navigation/diagnostics representative of the real app: symbols, definition, references, hover, diagnostics all proven with real `typescript-language-server` semantics against a deterministic fixture.
@@ -211,7 +211,7 @@ Concrete defect found and fixed while integrating TypeScript (in the *generic* s
 
 Deterministic acceptance: `bash scripts/verify-lsp-typescript.sh` (`packages/rust-tools/application/examples/typescript_lsp_acceptance.rs`).
 
-### PHASE-05 — MCP tool surface — IMPLEMENTED
+### PHASE-05 — MCP tool surface — CLOSED / VERIFIED
 
 - [x] Expose `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics` (plus `code_rename_preview`, see PHASE-06) in `packages/rust-tools/interfaces/src/mcp/catalog.rs`, dispatched from a new `relay_application::code` module reusing the existing `tools/call` pipeline, schema validation, and `coding_security_scheme()` — no new admission/security layer.
 - [x] Accurate schemas/annotations: all seven tools are `read_only_hint: true`, `destructive_hint: false`; `code_rename_preview` additionally documents preview-only, non-applying semantics in its description.
@@ -220,7 +220,7 @@ Deterministic acceptance: `bash scripts/verify-lsp-typescript.sh` (`packages/rus
 
 Deterministic acceptance: `bash scripts/verify-code-mcp.sh` (`packages/rust-tools/application/examples/code_mcp_acceptance.rs`) — proves the full dispatch path end-to-end against a real `rust-analyzer` session: catalog presence/annotations, definition/references/hover/diagnostics content, pagination, capability-gated implementations, invalid-request rejection, and workspace-relative (never absolute host) paths in every response.
 
-### PHASE-06 — rename preview — IMPLEMENTED
+### PHASE-06 — rename preview — CLOSED / VERIFIED
 
 - [x] Normalize LSP WorkspaceEdit into a safe preview model: both `changes` and `documentChanges` (text-edit only) forms, in `packages/rust-tools/application/src/lsp/rename.rs` (split out of the shared `lsp/semantic.rs` layer purely to stay under the maintainability line-budget).
 - [x] Reject edits outside the verified workspace/protected policy: every target path is resolved and containment/protected-path-checked through the same `resolve_existing_path`/`reject_protected_target` pipeline `code_definition`/`code_references` already use.
@@ -230,7 +230,7 @@ Deterministic acceptance: `bash scripts/verify-code-mcp.sh` (`packages/rust-tool
 
 Deterministic acceptance: `bash scripts/verify-rename-preview.sh` (`packages/rust-tools/application/examples/rename_preview_acceptance.rs`, using a small scripted fake LSP server to make adversarial `WorkspaceEdit` shapes deterministic — a real language server's exact adversarial output is not practical to force reliably).
 
-### PHASE-07 — post-edit diagnostic integration contract — IMPLEMENTED
+### PHASE-07 — post-edit diagnostic integration contract — CLOSED / VERIFIED
 
 - [x] The narrow Plan 039C integration contract (not the future Plan 039E hooks framework) was already implemented as a property of the existing document-sync substrate: every semantic query (`RustLanguageServer`/`TypeScriptLanguageServer` -> `semantic::sync` -> `LspSession::sync_document`) re-reads the current contained document on disk, compares its content hash, bumps the internal document version, and sends the correct `didOpen`/`didChange` per the negotiated `textDocumentSync` kind before issuing the request — so a native mutation through `file_edit`/`file_write`/`apply_patch` is observed by the very next `code_*` query on the same session, with no restart.
 - [x] Proved diagnostics reflect a fresh edit without restarting the whole relay/server process.
@@ -255,7 +255,7 @@ Explicitly test:
 
 ## Acceptance criteria
 
-- [ ] Semantic navigation must work for Rust and the current TypeScript/Vue stack (original requirement, restored). Rust and TypeScript are fully proven. Vue document symbols are proven real and TypeScript-backed via the now-implemented `tsserver_bridge`; Vue definition/references/hover/diagnostics are proven bounded and public-safe but return empty, not real semantics, in this environment with the currently installed `@vue/language-server@3.3.8` build — see PHASE-04 for the concrete technical evidence (independently reproduced outside this crate). Not yet fully met; flagged for the final verifier.
+- [ ] Semantic navigation must work for Rust and the current TypeScript/Vue stack. **Closure exception accepted 2026-08-17:** Rust and TypeScript fully meet this requirement; Vue document symbols are real and TypeScript-backed, while Vue definition/references/hover/diagnostics remain bounded/public-safe empty results with the reviewed installed `@vue/language-server@3.3.8` / `@vue/typescript-plugin@3.3.8` stack. This checkbox intentionally remains unchecked: the limitation is recorded truthfully rather than relabeled as a semantic pass. The final verifier accepted it as a non-blocking external/toolchain capability limitation after the bridge implementation itself passed independent security, lifecycle, framing, containment, freshness, and protocol verification.
 - [x] No custom parser/index/vector service was introduced.
 - [x] LSP subprocesses are bounded and scoped per verified project (unchanged PHASE-01/02 substrate; TypeScript/Vue reuse the same `LspSessionManager`).
 - [x] Diagnostics are useful immediately after edits (PHASE-07) and expose a `version` field when the server reports one.
@@ -271,7 +271,7 @@ Commits: `feat(lsp): add TypeScript/Vue language-server proof (Plan 039C PHASE-0
 
 The installed `@vue/typescript-plugin@3.3.8` is already shipped under the reviewed `@vue/language-server@3.3.8` package and is explicitly registered by the bounded bridge; no dependency installation was performed.
 
-PHASE-03 through PHASE-07 are **implemented but not yet independently, exhaustively verified** against the plan's full security/architecture matrix — that review is a separate later boundary. This plan is **not closed**.
+PHASE-03 through PHASE-07 subsequently passed independent full-plan security/architecture verification; the historical implementation-boundary wording above is retained only as chronology. See the final closure decision below for the current state.
 ## PHASE-01 / PHASE-02 verified foundation (2026-08-17)
 
 The foundation is implemented without exposing any public `code_*` MCP tools and without integrating a real language server yet. Current machine audit found `rust-analyzer`, `typescript-language-server`, `vue-language-server`, and `tsserver` already installed; nothing was installed by this plan boundary.
@@ -322,4 +322,14 @@ Re-verified real Vue `<script setup lang="ts">` semantics against the installed 
 
 Gates re-run after this remediation: `scripts/verify-lsp-foundation.sh`, `rust_lsp_acceptance`, `verify-lsp-typescript.sh`, `verify-code-mcp.sh` three consecutive times, `verify-rename-preview.sh`, `verify-post-edit-diagnostics.sh`, `phase-039c-contract.sh`, `phase7-chatgpt-contract.sh`, `verify-workspace-path-security.sh`, `phase8-zero-bypass.sh`, `check-architecture.sh`, `node scripts/check-maintainability.mjs`, and (after documentation cleanup) `pnpm verify:commit`. One initial combined run hit a fake-server readiness timeout; the acceptance fixture now emits the same bounded rust-analyzer `experimental/serverStatus` readiness notification and the independent rerun passes.
 
-This plan remains **not closed**; PHASE-08 resolves the one blocker flagged for the final independent verifier, who still owns closing Plan 039C.
+## Final independent verification and closure (2026-08-17)
+
+Final verifier boundary: `99aacc4cc0e0ac8a8b420269be43c7e8cba89089` on `feat/039c-lsp-foundation`, with local and remote identical, 0/0 ahead-behind, and a clean worktree before this documentation-only closure commit.
+
+Independent verification found **no remaining material implementation, security, or architecture findings**. The final matrix passed `scripts/verify-lsp-foundation.sh`, real Rust and TypeScript/Vue LSP acceptance, `scripts/verify-code-mcp.sh` three consecutive times, rename-preview and post-edit-diagnostics acceptance, current Plan-039C and historical Plan-029/039B MCP contract gates, workspace-path security, zero-bypass, architecture, maintainability, the 16 bridge tests, and `pnpm verify:commit`.
+
+The final bridge review independently confirmed exact `_vue:*` forwarding, canonical/protected bridge-file resolution, bounded `Content-Length` framing, bounded pre-spawn concurrency, fresh document synchronization, fatal child/reply lifecycle handling, manager replacement of unhealthy sessions, and fixture-owned PID termination rather than host-wide process killing.
+
+**Closure exception:** full Vue definition/references/hover/diagnostics are not claimed as working. They remain empty with the reviewed installed Vue server/plugin stack even after the bridge itself was corrected and independently verified. Continuing to churn Plan 039C around this environment-specific server capability would not improve the verified relay boundary. The limitation is accepted as an explicit non-blocking capability exception and remains visible in the unchecked acceptance item above. A future tooling/server change may revisit it without reopening the verified 039C security architecture.
+
+**Final state:** Plan 039C is **CLOSED / VERIFIED**. Plan 039D remains **UNSTARTED** until a separate implementation boundary begins.
