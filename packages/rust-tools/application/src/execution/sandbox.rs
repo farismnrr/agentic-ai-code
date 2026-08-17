@@ -82,7 +82,11 @@ pub(super) fn spawn(
         invocation,
         SandboxProfile {
             workspace_access,
-            network_access: NetworkAccess::Host,
+            network_access: if config.allow_terminal_network {
+                NetworkAccess::Host
+            } else {
+                NetworkAccess::Isolated
+            },
             expose_optional_sockets: matches!(workspace_access, WorkspaceAccess::Writable),
             expose_runtime_extras: matches!(workspace_access, WorkspaceAccess::Writable),
             home: "execution_root",
@@ -290,26 +294,18 @@ fn add_optional_socket(
 }
 
 fn add_protected_paths(args: &mut Vec<String>, execution_root: &Path) {
-    for relative in [".ssh", ".aws", ".config/gcloud", ".docker", ".kube"] {
-        let path = execution_root.join(relative);
+    for path in relay_core::protected_paths::protected_paths(execution_root) {
         if path.exists() {
-            args.extend(["--tmpfs".into(), path.to_string_lossy().into_owned()]);
-        }
-    }
-    for relative in [
-        ".npmrc",
-        ".netrc",
-        ".pypirc",
-        ".cargo/credentials",
-        ".cargo/credentials.toml",
-    ] {
-        let path = execution_root.join(relative);
-        if path.exists() {
-            args.extend([
-                "--ro-bind".into(),
-                "/dev/null".into(),
-                path.to_string_lossy().into_owned(),
-            ]);
+            let is_directory = path.is_dir();
+            if is_directory {
+                args.extend(["--tmpfs".into(), path.to_string_lossy().into_owned()]);
+            } else {
+                args.extend([
+                    "--ro-bind".into(),
+                    "/dev/null".into(),
+                    path.to_string_lossy().into_owned(),
+                ]);
+            }
         }
     }
 }
