@@ -16,6 +16,7 @@ const MODES: &[&str] = &[
     "crash",
     "invalid-id",
     "invalid-envelope",
+    "notify-broken-pipe",
 ];
 
 #[tokio::main]
@@ -171,6 +172,7 @@ async fn run() -> Result<(), String> {
         LspError::MalformedResponse,
     )
     .await?;
+    assert_notification_write_failure(&manager, &repo_a).await?;
 
     require(
         session_a.retained_stderr_bytes().await <= 64 * 1024,
@@ -183,6 +185,55 @@ async fn run() -> Result<(), String> {
     manager.shutdown_all().await;
     fs::remove_dir_all(&root).map_err(io_error)?;
     Ok(())
+}
+
+async fn assert_notification_write_failure(
+    manager: &Arc<LspSessionManager>,
+    repo: &Path,
+) -> Result<(), String> {
+    let session = manager
+        .session_for(Some(&path_text(repo)?), "notify-broken-pipe")
+        .await
+        .map_err(display_error)?;
+    let mut result = Ok(());
+    for _ in 0..1_000 {
+        result = session.notify("fixture/notification", json!({})).await;
+        if result.is_err() {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    match result {
+        Err(LspError::Crashed) => {
+            require(
+                session.is_faulted(),
+                "notification write failure faults session",
+            )?;
+        }
+        other => {
+            return Err(format!(
+                "notify-broken-pipe: expected Crashed, got {other:?}"
+            ));
+        }
+    }
+    let replacement = manager
+        .session_for(Some(&path_text(repo)?), "notify-broken-pipe")
+        .await;
+    match replacement {
+        Ok(replacement) => require(
+            !Arc::ptr_eq(&session, &replacement),
+            "faulted notification session replaced",
+        )?,
+        Err(error) => require(
+            error == LspError::StartupFailed,
+            "faulted notification session removed",
+        )?,
+    }
+    manager.shutdown_all().await;
+    require(
+        manager.active_session_count().await == 0,
+        "faulted notification session cleaned up",
+    )
 }
 
 async fn assert_mode_error(
@@ -302,7 +353,11 @@ while True:
         send({"jsonrpc":"2.0","method":"fixture/unknownNotification","params":{}})
     elif method == "shutdown": send({"jsonrpc":"2.0","id":message["id"],"result":None})
     elif method == "exit": sys.exit(0)
-    elif method in ("initialized", "textDocument/didOpen", "textDocument/didChange"): pass
+    elif method == "initialized":
+        if mode == "notify-broken-pipe":
+            os.close(0)
+            sys.exit(0)
+    elif method in ("textDocument/didOpen", "textDocument/didChange"): pass
     elif method == "fixture/echo": send({"jsonrpc":"2.0","id":message["id"],"result":message.get("params")})
     elif method == "fixture/security":
         params = message.get("params", {})

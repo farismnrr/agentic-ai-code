@@ -197,7 +197,12 @@ impl LspSession {
         }
         *self.last_used.write().await = Instant::now();
         let value = json!({"jsonrpc":"2.0","method":method,"params":params});
-        write_message(&mut *self.state.writer.lock().await, &value).await
+        let result = write_message(&mut *self.state.writer.lock().await, &value).await;
+        if let Err(error) = result {
+            fault_and_terminate(&self.state, &self.child, error).await;
+            return Err(error);
+        }
+        Ok(())
     }
 
     pub async fn sync_document(&self, path: &str) -> Result<u64, LspError> {
