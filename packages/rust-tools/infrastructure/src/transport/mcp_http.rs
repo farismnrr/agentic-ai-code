@@ -164,6 +164,12 @@ pub(super) async fn handle_mcp(
             relay_application::dispatcher::Dispatch::TasksCancel => {
                 handle_task_cancel(&request, state).await
             }
+            relay_application::dispatcher::Dispatch::AgentSessionStart => {
+                super::tools::handle_agent_session_start(&request, state).await
+            }
+            relay_application::dispatcher::Dispatch::AgentPreStop => {
+                super::tools::handle_agent_pre_stop(&request, state).await
+            }
             relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
                 StatusCode::NOT_FOUND,
                 Some(request.id.clone()),

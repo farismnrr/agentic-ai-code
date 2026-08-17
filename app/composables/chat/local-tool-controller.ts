@@ -8,7 +8,7 @@ type ChatToolOutput = {
   } & ({ state: 'output-error', errorText: string } | { state?: 'output-available', output: unknown })) => void | PromiseLike<void>
 }
 
-export function createLocalToolController({ chat, relayAgent, ledger }: { chat: ChatToolOutput, relayAgent: { exec: (command: string, args: string[], cwd?: string) => Promise<unknown> }, ledger: ReturnType<typeof import('./attempt-ledger')['createAttemptLedger']> }) {
+export function createLocalToolController({ chat, relayAgent, ledger, agentSession }: { chat: ChatToolOutput, relayAgent: { exec: (command: string, args?: string[], cwd?: string, agentSession?: string) => Promise<unknown> }, ledger: ReturnType<typeof import('./attempt-ledger')['createAttemptLedger']>, agentSession?: string }) {
   const executed = new Set<string>()
   return async function runApproved(part: { toolCallId: string, input: unknown }) {
     if (executed.has(part.toolCallId) || ledger.hasAttempted(part.toolCallId)) return
@@ -16,7 +16,7 @@ export function createLocalToolController({ chat, relayAgent, ledger }: { chat: 
     ledger.markAttempted(part.toolCallId)
     const { command, args, cwd } = part.input as { command: string, args?: string[], cwd?: string }
     try {
-      await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, output: await relayAgent.exec(command, args ?? [], cwd) })
+      await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, output: await relayAgent.exec(command, args ?? [], cwd, agentSession) })
     } catch (err: unknown) {
       await chat.addToolOutput({ tool: 'local_terminal', toolCallId: part.toolCallId, state: 'output-error', errorText: friendlyRelayErrorMessage(err) })
     }

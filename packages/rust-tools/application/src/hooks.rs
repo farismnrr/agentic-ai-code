@@ -26,6 +26,7 @@ pub const MAX_CONFIG_BYTES: usize = 64 * 1024;
 pub const MAX_HANDLERS: usize = 32;
 pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024;
 pub const MAX_CONTEXT_BYTES: usize = 8 * 1024;
+const MAX_TRACKED_SESSIONS: usize = 256;
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
 const MAX_TIMEOUT_MS: u64 = 30_000;
 const BLOCK_EXIT: i32 = 10;
@@ -95,6 +96,7 @@ pub struct HookResult {
     pub decision: HookDecision,
     pub reason: &'static str,
     pub duration_ms: u64,
+    pub context: Option<Value>,
 }
 
 #[derive(Clone)]
@@ -176,38 +178,41 @@ impl HookManager {
         self.session_started.lock().await.len()
     }
 
-    pub async fn start_session(&self, session_id: &str, repository_identity: &str) {
-        if !self
-            .session_started
-            .lock()
-            .await
-            .insert(session_id.to_owned())
-        {
-            return;
+    pub async fn start_session(
+        &self,
+        agent_session: &str,
+        repository_identity: &str,
+    ) -> Option<Value> {
+        let mut started = self.session_started.lock().await;
+        if started.contains(agent_session) || started.len() >= MAX_TRACKED_SESSIONS {
+            return None;
         }
-        let _ = self
+        started.insert(agent_session.to_owned());
+        drop(started);
+        let result = self
             .invoke(
                 HookEvent::SessionStart,
                 json!({
                     "hook_event": "session_start",
-                    "session_id": bounded_string(session_id, 128),
+                    "agentSession": bounded_string(agent_session, 128),
                     "repository_identity": bounded_string(repository_identity, 512),
                     "context": { "repository_identity": bounded_string(repository_identity, 512) },
                 }),
             )
             .await;
+        result.context
     }
 
     /// One bounded stop-gate retry. A stop request never loops indefinitely;
     /// callers may invoke this at most twice before proceeding with shutdown.
-    pub async fn pre_agent_stop(&self, session_id: &str) -> bool {
+    pub async fn pre_agent_stop(&self, agent_session: &str) -> bool {
         for attempt in 0..2 {
             let result = self
                 .invoke(
                     HookEvent::PreAgentStop,
                     json!({
                         "hook_event": "pre_agent_stop",
-                        "session_id": bounded_string(session_id, 128),
+                        "agentSession": bounded_string(agent_session, 128),
                         "attempt": attempt + 1,
                     }),
                 )
@@ -242,11 +247,16 @@ impl HookManager {
                         })
                 })
         });
+        let mut context = None;
         for handler in matching {
             let result = self.run(handler, &payload).await;
+            if result.context.is_some() {
+                context = result.context.clone();
+            }
             if result.decision != HookDecision::Continue {
                 return HookResult {
                     duration_ms: started.elapsed().as_millis() as u64,
+                    context: result.context,
                     ..result
                 };
             }
@@ -255,6 +265,7 @@ impl HookManager {
                     decision: HookDecision::Block,
                     reason: "security_hook_failure",
                     duration_ms: started.elapsed().as_millis() as u64,
+                    context: None,
                 };
             }
         }
@@ -262,6 +273,7 @@ impl HookManager {
             decision: HookDecision::Continue,
             reason: "no_block",
             duration_ms: started.elapsed().as_millis() as u64,
+            context,
         }
     }
 
@@ -315,9 +327,11 @@ impl HookManager {
                 return failed_result(started);
             }
         };
-        if let Some(task) = stdout_task {
-            let _ = task.await;
-        }
+        let stdout = if let Some(task) = stdout_task {
+            task.await.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         if let Some(task) = stderr_task {
             let _ = task.await;
         }
@@ -327,6 +341,9 @@ impl HookManager {
             Some(APPROVAL_EXIT) => HookDecision::RequestApproval,
             _ => return failed_result(started),
         };
+        let context = (handler.event == HookEvent::SessionStart)
+            .then(|| bounded_context(&stdout))
+            .flatten();
         tracing::info!(event = "relay.hook", hook_event = handler.event.name(), decision = ?decision, duration_ms = started.elapsed().as_millis() as u64, reason = "handler_result");
         HookResult {
             decision,
@@ -336,6 +353,7 @@ impl HookManager {
                 "handler_decision"
             },
             duration_ms: started.elapsed().as_millis() as u64,
+            context,
         }
     }
 }
@@ -369,6 +387,7 @@ fn failed_result(started: Instant) -> HookResult {
         decision: HookDecision::Continue,
         reason: "hook_failure",
         duration_ms: started.elapsed().as_millis() as u64,
+        context: None,
     }
 }
 
@@ -423,20 +442,32 @@ fn validate_handler(handler: &HookHandler, root: &Path) -> Result<(), McpError> 
     Ok(())
 }
 
-async fn drain_output<R: AsyncRead + Unpin>(mut stream: R) {
+async fn drain_output<R: AsyncRead + Unpin>(mut stream: R) -> Vec<u8> {
     let mut retained = 0usize;
+    let mut output = Vec::new();
     let mut buffer = [0u8; 4096];
     loop {
         match tokio::io::AsyncReadExt::read(&mut stream, &mut buffer).await {
-            Ok(0) | Err(_) => return,
+            Ok(0) | Err(_) => return output,
             Ok(bytes) => {
-                retained = retained.saturating_add(bytes);
+                let remaining = MAX_CONTEXT_BYTES.saturating_sub(retained);
+                output.extend_from_slice(&buffer[..bytes.min(remaining)]);
+                retained = retained.saturating_add(bytes).min(MAX_CONTEXT_BYTES);
                 if retained >= MAX_CONTEXT_BYTES {
-                    return;
+                    return output;
                 }
             }
         }
     }
+}
+
+fn bounded_context(output: &[u8]) -> Option<Value> {
+    let value: Value = serde_json::from_slice(output).ok()?;
+    let context = value.get("context")?.as_object()?;
+    let repository_identity = context.get("repository_identity")?.as_str()?;
+    Some(json!({
+        "repository_identity": bounded_string(repository_identity, 512)
+    }))
 }
 
 fn bounded_payload(mut payload: Value) -> Value {

@@ -90,11 +90,7 @@ pub(super) async fn handle_tools_call(
         );
     }
 
-    let session_id = call
-        .arguments
-        .get("session_id")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
+    let agent_session = agent_session_from_params(request.params.as_ref())
         .unwrap_or_else(|| format!("relay-{}", request_id));
     let effects = relay_application::hooks::effect_classes(
         call.name.as_str(),
@@ -103,10 +99,10 @@ pub(super) async fn handle_tools_call(
             .is_some_and(|a| a.destructive_hint),
         tool.annotations.as_ref().is_some_and(|a| a.open_world_hint),
     );
-    state
+    let _session_context = state
         .hooks
         .start_session(
-            &session_id,
+            &agent_session,
             state
                 .hooks
                 .repository_identity()
@@ -146,8 +142,7 @@ pub(super) async fn handle_tools_call(
                 text: text.into(),
             }])
             .with_meta(json!({
-                "approval_required": true,
-                "approval_reason": "hook_request"
+                "control": { "type": "approval_required", "reason": "hook_request" }
             }))
         } else {
             ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
@@ -295,6 +290,64 @@ pub(super) async fn handle_tools_call(
         serde_json::to_value(result).unwrap_or(json!({})),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+pub(super) async fn handle_agent_session_start(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("agent session metadata is required".into()),
+        )
+    })?;
+    let identity = state
+        .hooks
+        .repository_identity()
+        .unwrap_or_else(|| "untrusted".into());
+    let context = state.hooks.start_session(&agent_session, &identity).await;
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "context": context.unwrap_or_else(|| json!({})),
+            "bounded": true
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+pub(super) async fn handle_agent_pre_stop(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("agent session metadata is required".into()),
+        )
+    })?;
+    let allowed = state.hooks.pre_agent_stop(&agent_session).await;
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "completion": if allowed { "allowed" } else { "remediation_required" },
+            "max_attempts": 2
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn agent_session_from_params(params: Option<&Value>) -> Option<String> {
+    params?
+        .get("_meta")?
+        .get("io.modelcontextprotocol/agentSession")?
+        .as_str()
+        .map(|value| value.chars().take(128).collect())
 }
 
 fn client_supports_tasks(params: Option<&Value>) -> bool {
