@@ -64,7 +64,7 @@ The final rules are:
 - `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
 - `scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
-- Rust relay transport owns HTTP composition/security ordering while focused auth, validation, admission, and observability modules own their policies;
+- Rust relay transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers, while focused auth, validation, admission, and observability modules remain the policy owners; application execution/workspace, MCP catalog, and CLI-vs-validated-config responsibilities are likewise split behind stable facades;
 - native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs.
 
 The remediation also restored application ownership boundaries across API composition, identity/settings/conversation/model/workspace use cases, and infrastructure adapters. Provider credential containment, repository-wide API ownership, mixed utility cleanup, strict architecture probes, and JWT pre-validation compatibility remain implemented. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
@@ -95,7 +95,7 @@ pnpm verify:commit
 
 The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-`pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`.
+`pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`. Maintainability policy is implemented by `scripts/check-maintainability.mjs`: >500 maintained-source lines and >15 direct maintained implementation files are hard failures unless an exact-path, reasoned exception exists; >400 lines and 13–15 files are explicit review findings.
 
 There is no remote CI safety net. PR descriptions must record local verification performed; GitHub mergeability is not proof of quality.
 

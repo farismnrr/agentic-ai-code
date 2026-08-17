@@ -27,9 +27,23 @@ Run manually with:
 pnpm verify:commit
 ```
 
-The gate includes repository policy, agent-doc integrity, architecture checks, JS/Vue + Rust linting, generated-project Vue typing, and warnings-denied Rust compile checks.
+The gate includes repository policy, agent-doc integrity, architecture checks, deterministic maintainability budgets, JS/Vue + Rust linting, generated-project Vue typing, and warnings-denied Rust compile checks.
 
 Never bypass it with `git commit --no-verify` or by changing `core.hooksPath`.
+
+
+## Maintainability guardrails
+
+`pnpm verify:commit` runs `node scripts/check-maintainability.mjs` before lint/type checks. The checker uses one in-repository policy source and covers maintained TypeScript/JavaScript/Vue/Rust/CSS source under `app/`, `server/`, `shared/`, and `packages/`, while excluding generated/build/vendor/migration/evidence-style output.
+
+Current guardrails:
+
+- target source files should stay around 300 lines where cohesion permits; >400 lines is reported for responsibility review; >500 lines fails unless an exact-path exception has a concrete cohesion reason;
+- cohesive implementation folders target roughly 10–12 direct source files; 13–15 is reported for review; >15 fails unless an exact-path exception has a concrete cohesion reason;
+- function-size decomposition remains a review concern rather than a custom parser rule;
+- never split code solely to satisfy counts. Prefer one clear owner, DRY policy, pragmatic SOLID/layering, YAGNI, and KISS.
+
+Run the checker directly with `node scripts/check-maintainability.mjs`; run its deterministic negative probes with `node scripts/check-maintainability.mjs --self-test`. Architecture/folder/module changes are not complete until relevant operator docs and agent guidance describe the final ownership.
 
 ## Common commands
 

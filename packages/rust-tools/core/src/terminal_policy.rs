@@ -31,7 +31,7 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
     }
     if binary.contains('/') || binary.contains('\\') || binary == ".." {
         return Err(McpError::InvalidRequest(
-            "path traversal or absolute paths in executable name are forbidden".into(),
+            "path traversal or absolute paths in executable name are forbidden; use an executable from the relay safe PATH and pass a repository script path as an argument to an approved interpreter (for example command=bash with args=[\"scripts/check.sh\"])".into(),
         ));
     }
     Ok(())

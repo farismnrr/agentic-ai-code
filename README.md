@@ -69,6 +69,6 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - integration branch: **`dev`**
 - release branch: **`main`**
 - no GitHub Actions CI workflow and no unit-test suite by project policy
-- every normal local commit must pass `pnpm verify:commit`
+- every normal local commit must pass `pnpm verify:commit`, including architecture and maintainability-budget enforcement
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.

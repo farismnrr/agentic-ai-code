@@ -80,8 +80,15 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
    ('file_read',{'path':'../escape'},'parent traversal read'),('file_read',{'path':'../../etc/passwd'},'nested traversal read'),('file_read',{'path':canary},'absolute external read'),('file_read',{'path':'external-file-link'},'external file symlink'),('directory_list',{'path':'external-dir-link'},'external directory symlink'),('directory_list',{'path':'loop-a'},'recursive symlink loop'),('file_write',{'path':'external-dir-link/pwn.txt','content':'pwn','create_parents':True},'write external symlink parent'),('file_write',{'path':'external-dir-link/new/pwn.txt','content':'pwn','create_parents':True},'new path external symlink ancestor')]:
    expect_error(url,tool,args,label)
   assert open(canary).read()=='external' and not os.path.exists(os.path.join(ext,'pwn.txt'))
-  # Existing tool regressions.
-  r=call(url,'terminal_exec',{'command':'printf','args':['terminal-ok']}); assert r['isError'] is False and 'terminal-ok' in json.dumps(r['content'])
+  # Existing tool regressions. Direct argv values beginning with '-' or '--'
+  # must remain ordinary child-process arguments for both sync and job paths.
+  r=call(url,'terminal_exec',{'command':'printf','args':['%s %s','--help','--locked']}); terminal_text=json.dumps(r['content']); assert r['isError'] is False and '--help --locked' in terminal_text,terminal_text
+  flag_job=payload(call(url,'terminal_job_start',{'command':'printf','args':['%s','--job-flag']})); flag_jid=flag_job['taskId']
+  for _ in range(100):
+   flag_snap=payload(call(url,'terminal_job_get',{'taskId':flag_jid}));
+   if flag_snap['status']=='completed': break
+   time.sleep(.02)
+  assert flag_snap['status']=='completed' and flag_snap['output']['stdout']=='--job-flag',flag_snap
   started=payload(call(url,'terminal_job_start',{'command':'sh','args':['-c','sleep 3']})); jid=started['taskId']; snap=payload(call(url,'terminal_job_get',{'taskId':jid})); assert snap['status'] in ('queued','working'); payload(call(url,'terminal_job_cancel',{'taskId':jid}))
   r=call(url,'http_fetch',{'url':'http://127.0.0.1:8888/search'}); http_text=json.dumps(r['content']); assert r['isError'] is True and 'SSRF guard blocked request to private/local IP' in http_text,http_text
   r=call(url,'web_search',{'query':'example domain'}); web_text=json.dumps(r['content']); assert r['isError'] is False and 'Error:' not in web_text and 'Search failed' not in web_text

@@ -14,7 +14,7 @@ If you are setting up a fresh installation, follow the pages in this order:
 Reference pages:
 
 - **[Architecture](architecture.md)** — trust boundaries and request flows.
-- **[Development](development.md)** — repository workflow, local verification, branches, and targeted acceptance scripts.
+- **[Development](development.md)** — repository workflow, maintainability guardrails, local verification, branches, and targeted acceptance scripts.
 - **[Releases](releases.md)** — versioning, artifacts, GHCR, and GitHub Release publication.
 - **[Troubleshooting](troubleshooting.md)** — common setup and runtime failures.
 

@@ -5,10 +5,8 @@ use axum::{
 };
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_interfaces::mcp::{ErrorResponse, Id};
+use relay_interfaces::mcp::{ErrorResponse, Id, CODING_SCOPE};
 use serde_json::json;
-
-pub const CODING_SCOPE: &str = "relay.coding";
 pub const JWKS_TTL_SECS: u64 = 300;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
