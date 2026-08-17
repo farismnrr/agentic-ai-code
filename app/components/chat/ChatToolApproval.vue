@@ -2,7 +2,7 @@
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
 import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
-import { classifyCapability, toolEffects } from '#shared/utils/capability-policy'
+import { approvalForCapability, classifyCapability, toolEffects } from '#shared/utils/capability-policy'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -112,6 +112,18 @@ const autoAnswerable = computed<{ toolId: string, decision: 'always' | 'never' }
   if (!c || c.isAutomatic || !c.toolId) return undefined
   const remembered = props.conversation?.approvals[c.toolId]
   if (remembered !== 'always' && remembered !== 'never') return undefined
+  if (remembered === 'always') {
+    const assessment = classifyCapability({
+      toolId: c.toolId,
+      effects: toolEffects(c.toolName, undefined, c.serverId ? 'external' : 'native'),
+      trustedProvenance: c.serverId ? 'external' : 'native',
+      external: Boolean(c.serverId),
+      command: typeof c.input === 'object' && c.input !== null && 'command' in c.input && typeof c.input.command === 'string' ? c.input.command : undefined,
+      args: typeof c.input === 'object' && c.input !== null && 'args' in c.input && Array.isArray(c.input.args) ? c.input.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
+      path: typeof c.input === 'object' && c.input !== null && 'path' in c.input && typeof c.input.path === 'string' ? c.input.path : undefined
+    })
+    if (approvalForCapability({ ...assessment, trustedProvenance: c.serverId ? 'external' : 'native' }, 'always').outcome !== 'approved') return undefined
+  }
   return { toolId: c.toolId, decision: remembered }
 })
 
@@ -131,7 +143,9 @@ const assessment = computed(() => {
   if (!current) return undefined
   return classifyCapability({
     toolId: current.toolId ?? current.toolName,
-    effects: toolEffects(current.toolName),
+    effects: toolEffects(current.toolName, undefined, current.serverId ? 'external' : 'native'),
+    trustedProvenance: current.serverId ? 'external' : 'native',
+    external: Boolean(current.serverId),
     command: typeof current.input === 'object' && current.input !== null && 'command' in current.input && typeof current.input.command === 'string' ? current.input.command : undefined,
     args: typeof current.input === 'object' && current.input !== null && 'args' in current.input && Array.isArray(current.input.args) ? current.input.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
     path: typeof current.input === 'object' && current.input !== null && 'path' in current.input && typeof current.input.path === 'string' ? current.input.path : undefined
