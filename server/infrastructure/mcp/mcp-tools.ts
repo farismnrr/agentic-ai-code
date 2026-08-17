@@ -105,11 +105,13 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       })
 
       const decision = approvals[mcpToolId]
+      const trustedProvenance = client.trustedProvenance ?? 'external'
       toolApproval[modelName] = approvalForCapability({
         toolId: mcpToolId,
-        effects: toolEffects(mcpTool.name, mcpTool.annotations),
+        effects: toolEffects(mcpTool.name, mcpTool.annotations, trustedProvenance),
         destructive: mcpTool.annotations?.destructiveHint,
-        external: mcpTool.annotations?.openWorldHint
+        external: trustedProvenance === 'external' || mcpTool.annotations?.openWorldHint === true,
+        trustedProvenance
       }, decision, permissionMode).outcome
     }
   }

@@ -36,6 +36,7 @@ export type McpClientCallResult = {
 }
 
 export interface McpClientLike {
+  trustedProvenance?: 'first-party-relay' | 'external'
   listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
   close(): Promise<void>
@@ -146,6 +147,7 @@ function encodeMcpHeaderValue(value: string) {
  * deleted in favor of the official modern client with version negotiation.
  */
 class FirstPartyRelayMcpClient implements McpClientLike {
+  readonly trustedProvenance = 'first-party-relay' as const
   private requestSequence = 0
 
   constructor(
@@ -324,5 +326,5 @@ export async function createMcpClient(serverConfig: McpServerConfig): Promise<Mc
       })
 
   await client.connect(transport)
-  return client as unknown as McpClientLike
+  return Object.assign(client as unknown as McpClientLike, { trustedProvenance: 'external' as const })
 }

@@ -24,6 +24,7 @@ export interface CapabilityFacts {
   networkRequested?: boolean
   destructive?: boolean
   external?: boolean
+  trustedProvenance?: 'first-party-relay' | 'native' | 'external'
 }
 
 export interface CapabilityAssessment extends CapabilityFacts {
@@ -52,8 +53,8 @@ export function classifyCapability(facts: CapabilityFacts): CapabilityAssessment
   const network = facts.networkRequested === true || facts.effects.some(effect => effect === 'network_read' || effect === 'network_write')
   const destructive = facts.destructive === true || facts.effects.some(effect => effect === 'workspace_delete' || effect === 'network_write' || effect === 'external_mutation' || effect === 'privileged_bridge')
   const lowRisk = facts.effects.every(effect => effect === 'workspace_read' || effect === 'git_read') && !network && !destructive && !opaque
-  const risk: RiskLevel = destructive || opaque ? 'high' : network || facts.effects.includes('process_exec') ? 'medium' : 'low'
-  let reason = opaque ? 'opaque shell or wrapper execution requires explicit review' : network ? 'network access is an independent capability' : destructive ? 'the operation can mutate or delete state' : 'bounded read-only capability'
+  const risk: RiskLevel = destructive || opaque || facts.external === true ? 'high' : network || facts.effects.includes('process_exec') || facts.effects.includes('workspace_write') ? 'medium' : 'low'
+  let reason = opaque ? 'opaque shell or wrapper execution requires explicit review' : facts.external === true ? 'external tool provenance is untrusted and requires explicit review' : network ? 'network access is an independent capability' : destructive ? 'the operation can mutate or delete state' : facts.effects.includes('workspace_write') ? 'workspace mutation requires explicit review' : 'bounded read-only capability'
 
   if (command && READ_COMMANDS.has(command as 'cat' | 'head' | 'tail' | 'ls' | 'pwd' | 'rg' | 'grep' | 'find' | 'git') && facts.effects.length === 0) {
     reason = 'reviewed direct-argv read-only command'
@@ -72,12 +73,26 @@ export function approvalForCapability(
   if (mode === 'plan' && assessment.effects.some(effect => effect !== 'workspace_read' && effect !== 'git_read')) {
     return { outcome: 'denied', assessment: { ...assessment, reason: 'Plan mode permits read-only capabilities only' } }
   }
-  if (remembered === 'always' && assessment.risk === 'low') return { outcome: 'approved', assessment }
-  if (SAFE_READ_TOOLS.has(facts.toolId.split('.').pop() ?? '') && assessment.risk === 'low') return { outcome: 'approved', assessment }
+  const trusted = facts.trustedProvenance === 'first-party-relay' || facts.trustedProvenance === 'native'
+  const containedWorkspaceMutation = trusted
+    && facts.path !== undefined
+    && assessment.effects.length === 1
+    && assessment.effects[0] === 'workspace_write'
+    && !assessment.destructive
+    && !assessment.networkRequested
+    && !assessment.opaque
+  if (containedWorkspaceMutation && (mode === 'workspace' || mode === 'autonomous')) return { outcome: 'approved', assessment }
+  if (remembered === 'always' && assessment.risk === 'low' && trusted && !assessment.opaque) return { outcome: 'approved', assessment }
+  if (SAFE_READ_TOOLS.has(facts.toolId.split('.').pop() ?? '') && assessment.risk === 'low' && trusted) return { outcome: 'approved', assessment }
   return { outcome: 'user-approval', assessment }
 }
 
-export function toolEffects(toolName: string, annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }): CapabilityEffect[] {
+export function toolEffects(toolName: string, annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }, trustedProvenance: CapabilityFacts['trustedProvenance'] = 'external'): CapabilityEffect[] {
+  if (trustedProvenance === 'external') {
+    if (annotations?.destructiveHint) return ['external_mutation']
+    if (annotations?.openWorldHint) return ['network_read', 'external_mutation']
+    return ['workspace_read']
+  }
   if (annotations?.readOnlyHint && toolName !== 'web_search') return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
