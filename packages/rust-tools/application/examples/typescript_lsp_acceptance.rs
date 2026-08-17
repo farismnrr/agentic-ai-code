@@ -306,7 +306,11 @@ const area = totalArea([square]);
         !vue.session().is_faulted(),
         "vue session is healthy before the bridge child is killed",
     )?;
-    kill_tsserver_bridge_children()?;
+    let bridge_pid = vue_session
+        .tsserver_bridge_pid()
+        .await
+        .ok_or("vue bridge child PID unavailable")?;
+    kill_tsserver_bridge_child(bridge_pid)?;
     // Drive a bridge-backed request so the dead child's stdin/stdout
     // failure is actually observed by the bridge's read/write paths.
     let _ = vue.hover("src/App.vue", 2, vue_square_col).await;
@@ -337,19 +341,17 @@ const area = totalArea([square]);
     Ok(())
 }
 
-/// Kills every sandboxed `tsserver.js` bridge child process directly (out
-/// of band of `relay_application`) to deterministically simulate an
-/// unexpected bridge-child exit, proving Required fix 6 (fail closed on
-/// bridge death) without relying on any internal crate hook.
-fn kill_tsserver_bridge_children() -> Result<(), String> {
-    let status = Command::new("pkill")
-        .args(["-KILL", "-f", "tsserver.js"])
+/// Kills only the bridge child owned by this fixture's Vue session.
+fn kill_tsserver_bridge_child(pid: u32) -> Result<(), String> {
+    let status = Command::new("kill")
+        .args(["-KILL", &pid.to_string()])
         .status()
         .map_err(io_error)?;
-    // `pkill` exits 1 when no process matched; either outcome is fine here
-    // since the goal is only "no tsserver.js bridge child left running".
-    let _ = status;
-    Ok(())
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("kill bridge child {pid} failed"))
+    }
 }
 
 async fn wait_until<F>(mut condition: F, budget: tokio::time::Duration) -> bool

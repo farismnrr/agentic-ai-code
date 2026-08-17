@@ -88,6 +88,7 @@ impl RustLanguageServer {
     }
 
     pub async fn symbols(&self, path: &str) -> Result<Vec<Symbol>, LspError> {
+        self.wait_ready().await?;
         semantic::symbols(&self.session, path).await
     }
 
@@ -97,6 +98,7 @@ impl RustLanguageServer {
         line: u32,
         utf8_column: usize,
     ) -> Result<Vec<Location>, LspError> {
+        self.wait_ready().await?;
         semantic::definition(&self.session, path, line, utf8_column).await
     }
 
@@ -107,6 +109,7 @@ impl RustLanguageServer {
         utf8_column: usize,
         include_declaration: bool,
     ) -> Result<Vec<Location>, LspError> {
+        self.wait_ready().await?;
         semantic::references(&self.session, path, line, utf8_column, include_declaration).await
     }
 
@@ -116,6 +119,7 @@ impl RustLanguageServer {
         line: u32,
         utf8_column: usize,
     ) -> Result<Vec<Location>, LspError> {
+        self.wait_ready().await?;
         semantic::implementations(&self.session, path, line, utf8_column).await
     }
 
@@ -125,10 +129,12 @@ impl RustLanguageServer {
         line: u32,
         utf8_column: usize,
     ) -> Result<Option<Hover>, LspError> {
+        self.wait_ready().await?;
         semantic::hover(&self.session, path, line, utf8_column).await
     }
 
     pub async fn diagnostics(&self, path: &str) -> Result<Vec<Diagnostic>, LspError> {
+        self.wait_ready().await?;
         semantic::diagnostics(&self.session, path).await
     }
 
@@ -137,6 +143,7 @@ impl RustLanguageServer {
         path: &str,
         min_version: u64,
     ) -> Result<Vec<Diagnostic>, LspError> {
+        self.wait_ready().await?;
         semantic::diagnostics_after_version(&self.session, path, min_version).await
     }
 
@@ -147,6 +154,7 @@ impl RustLanguageServer {
         utf8_column: usize,
         new_name: &str,
     ) -> Result<Vec<RenameFilePreview>, LspError> {
+        self.wait_ready().await?;
         semantic::rename_preview(&self.session, path, line, utf8_column, new_name).await
     }
 }

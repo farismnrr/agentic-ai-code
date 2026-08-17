@@ -5,7 +5,7 @@
 use super::TsServerBridge;
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 
 /// Reads one newline-terminated line from `reader`, bounded to `limit`
 /// bytes, without ever allocating past that bound: unlike
@@ -49,6 +49,37 @@ pub(super) async fn read_bounded_line<R: tokio::io::AsyncBufRead + Unpin>(
     }
 }
 
+async fn read_bounded_message<R: AsyncBufRead + AsyncRead + Unpin>(
+    reader: &mut R,
+    limit: usize,
+) -> Result<Option<Vec<u8>>, ()> {
+    let mut content_length = None;
+    loop {
+        let Some(line) = read_bounded_line(reader, limit).await? else {
+            return if content_length.is_none() {
+                Ok(None)
+            } else {
+                Err(())
+            };
+        };
+        let line = String::from_utf8(line).map_err(|_| ())?;
+        if line.trim().is_empty() {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("Content-Length:") {
+            let length = value.trim().parse::<usize>().map_err(|_| ())?;
+            if length > limit {
+                return Err(());
+            }
+            content_length = Some(length);
+        }
+    }
+    let length = content_length.ok_or(())?;
+    let mut payload = vec![0u8; length];
+    reader.read_exact(&mut payload).await.map_err(|_| ())?;
+    Ok(Some(payload))
+}
+
 /// Drives the sandboxed `tsserver.js` child's stdout: bounded-framed lines
 /// in, matching pending `request()` callers answered out. Any read error,
 /// oversized/mid-line EOF, or clean child exit is a fatal bridge condition
@@ -57,24 +88,16 @@ pub(super) async fn read_bounded_line<R: tokio::io::AsyncBufRead + Unpin>(
 pub(super) async fn read_loop(stdout: tokio::process::ChildStdout, bridge: Arc<TsServerBridge>) {
     let mut reader = BufReader::new(stdout);
     loop {
-        let line = match read_bounded_line(&mut reader, super::MAX_TSSERVER_LINE_BYTES).await {
+        let line = match read_bounded_message(&mut reader, super::MAX_TSSERVER_LINE_BYTES).await {
             Ok(Some(line)) => line,
             Ok(None) | Err(()) => {
                 bridge.mark_fatal().await;
                 return;
             }
         };
-        let Some(start) = line.iter().position(|byte| !byte.is_ascii_whitespace()) else {
-            continue;
-        };
-        let end = line
-            .iter()
-            .rposition(|byte| !byte.is_ascii_whitespace())
-            .map(|index| index + 1)
-            .unwrap_or(line.len());
-        let trimmed = &line[start..end];
-        let Ok(value) = serde_json::from_slice::<Value>(trimmed) else {
-            continue;
+        let Ok(value) = serde_json::from_slice::<Value>(&line) else {
+            bridge.mark_fatal().await;
+            return;
         };
         if value.get("type").and_then(Value::as_str) != Some("response") {
             continue;

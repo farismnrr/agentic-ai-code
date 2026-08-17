@@ -79,6 +79,7 @@ pub(super) struct TsServerBridge {
     pending: Arc<Pending>,
     next_seq: AtomicI64,
     child: Mutex<Child>,
+    primary_child: Arc<Mutex<Child>>,
     workspace_root: PathBuf,
     opened_files: Mutex<HashMap<PathBuf, OpenedFile>>,
     /// Shared with the owning session's `SharedState::faulted`: a fatal
@@ -104,6 +105,7 @@ impl TsServerBridge {
         plugin_probe_location: Option<&Path>,
         workspace_root: PathBuf,
         faulted: Arc<AtomicBool>,
+        primary_child: Arc<Mutex<Child>>,
     ) -> Result<Arc<Self>, LspError> {
         let node = sandbox::resolve_safe_executable(config, "node")
             .map_err(|_| LspError::ServerUnavailable)?;
@@ -155,6 +157,7 @@ impl TsServerBridge {
             pending,
             next_seq: AtomicI64::new(1),
             child: Mutex::new(child),
+            primary_child,
             workspace_root,
             opened_files: Mutex::new(HashMap::new()),
             faulted,
@@ -262,7 +265,7 @@ impl TsServerBridge {
         }
     }
 
-    /// Forwards one allowlisted, `_vue:`-stripped tsserver command and
+    /// Forwards one allowlisted, exact `_vue:` tsserver command and
     /// returns its response `body` (or `Value::Null` on timeout/failure —
     /// the same shape a real `tsserver` "no info available" response has,
     /// so a caller waiting on `tsserver/response` is always unblocked
@@ -332,12 +335,28 @@ impl TsServerBridge {
         let mut child = self.child.lock().await;
         crate::execution::kill_process_group(&mut child).await;
         let _ = child.wait().await;
+        drop(child);
+        if let Ok(mut primary) = self.primary_child.try_lock() {
+            crate::execution::kill_process_group(&mut primary).await;
+            let _ = primary.wait().await;
+        } else {
+            let primary_child = self.primary_child.clone();
+            tokio::spawn(async move {
+                let mut primary = primary_child.lock().await;
+                crate::execution::kill_process_group(&mut primary).await;
+                let _ = primary.wait().await;
+            });
+        }
     }
 
     pub(super) async fn shutdown(&self) {
         let mut child = self.child.lock().await;
         crate::execution::kill_process_group(&mut child).await;
         let _ = child.wait().await;
+    }
+
+    pub(super) async fn child_id(&self) -> Option<u32> {
+        self.child.lock().await.id()
     }
 }
 
@@ -360,16 +379,16 @@ fn content_hash(content: &str) -> u64 {
 }
 
 /// Answers one `@vue/language-server` `tsserver/request` notification
-/// `[requestId, command, args]` by forwarding only allowlisted `_vue:`-
-/// prefixed commands (with the prefix stripped) to the session's bounded
+/// `[requestId, command, args]` by forwarding only allowlisted exact `_vue:`
+/// commands to the session's bounded
 /// `tsserver_bridge`, then always replying with a matching
 /// `tsserver/response` notification `[requestId, body]` so the server's
 /// internal promise is never left hanging — on any validation failure,
 /// missing bridge, unlisted command, or capacity exhaustion the reply body
 /// is `null` and nothing is forwarded to the child process. Concurrency is
-/// bounded *before* any forwarding task is spawned (Required fix 4): at
-/// capacity, only the trivial "reply null" task is spawned.
-pub(super) fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&Value>) {
+/// bounded *before* any forwarding task is spawned (Required fix 2): at
+/// capacity, the null reply is written inline.
+pub(super) async fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&Value>) {
     // LSP notification params are a positional-args array; the actual
     // `[requestId, command, args]` tuple is the first (and only) element,
     // not `params` itself — verified against the installed
@@ -388,18 +407,17 @@ pub(super) fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&
     let Some(request_id) = params[0].as_i64() else {
         return;
     };
-    let Some(command) = params[1].as_str() else {
+    let Some(command) = params[1].as_str().map(str::to_owned) else {
         return;
     };
     let arguments = params[2].clone();
     let forward = state
         .tsserver_bridge
         .clone()
-        .zip(command.strip_prefix("_vue:").map(str::to_owned))
-        .filter(|(_, command)| ALLOWED_COMMANDS.contains(&command.as_str()));
+        .filter(|_| ALLOWED_COMMANDS.contains(&command.as_str()));
     let state = state.clone();
     match forward {
-        Some((bridge, command)) => match bridge.try_acquire() {
+        Some(bridge) => match bridge.try_acquire() {
             Some(permit) => {
                 tokio::spawn(async move {
                     let body = bridge.request(&command, arguments).await;
@@ -408,15 +426,11 @@ pub(super) fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&
                 });
             }
             None => {
-                tokio::spawn(async move {
-                    reply(&state, request_id, Value::Null).await;
-                });
+                reply(&state, request_id, Value::Null).await;
             }
         },
         None => {
-            tokio::spawn(async move {
-                reply(&state, request_id, Value::Null).await;
-            });
+            reply(&state, request_id, Value::Null).await;
         }
     }
 }
@@ -427,7 +441,12 @@ async fn reply(state: &Arc<SharedState>, request_id: i64, body: Value) {
         "method": "tsserver/response",
         "params": [[request_id, body]],
     });
-    let _ = write_message(&mut *state.writer.lock().await, &response).await;
+    if write_message(&mut *state.writer.lock().await, &response)
+        .await
+        .is_err()
+    {
+        super::protocol::fault_and_terminate(state, &state.primary_child, LspError::Crashed).await;
+    }
 }
 
 #[cfg(test)]
