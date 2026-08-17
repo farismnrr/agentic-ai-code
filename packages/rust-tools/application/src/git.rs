@@ -357,6 +357,36 @@ fn git_blame(arguments: &Value, config: &ServerConfig) -> Result<GitBlameResult,
     })
 }
 
+/// Resolve a canonical Git workspace identity for non-MCP application
+/// services such as LSP. The result is always contained by execution_root and
+/// is obtained through the same hardened Git process path used by git_* tools.
+pub(crate) fn resolve_git_workspace(
+    cwd_arg: Option<&str>,
+    config: &ServerConfig,
+) -> Result<PathBuf, McpError> {
+    let execution_root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    if cwd_arg.is_some_and(|value| value.len() > MAX_GIT_PATH_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "workspace cwd exceeds maximum".into(),
+        ));
+    }
+    let cwd = resolve_contained_cwd(&execution_root, cwd_arg)?;
+    let out = run_git(&cwd, &["rev-parse", "--show-toplevel"], 8192)?;
+    let root_text = std::str::from_utf8(&out)
+        .map_err(|_| invalid_git_output())?
+        .trim();
+    let root = std::fs::canonicalize(root_text)
+        .map_err(|_| McpError::InvalidRequest("workspace root is inaccessible".into()))?;
+    if !root.starts_with(&execution_root) {
+        return Err(McpError::InvalidRequest(
+            "workspace root is outside execution root".into(),
+        ));
+    }
+    Ok(root)
+}
+
 struct RepoContext {
     root: PathBuf,
     relative_root: String,

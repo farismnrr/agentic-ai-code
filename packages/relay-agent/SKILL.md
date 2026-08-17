@@ -61,6 +61,7 @@ Important:
 - The process must run as an unprivileged user.
 - Wildcard origins are rejected.
 - User-managed toolchains are opt-in through repeated `--toolchain-path` flags (or `RELAY_TOOLCHAIN_PATH`); the relay never inherits an arbitrary parent `PATH`.
+- Plan 039C LSP executables are operator-approved through repeated `--lsp-server language=executable` (or `RELAY_LSP_SERVER`) entries. The executable is resolved only from the relay safe PATH/toolchain directories; repository files cannot replace it or provide command arguments. The Phase-01/02 substrate does not yet expose public `code_*` MCP tools or integrate real language servers.
 - The owner-home Bubblewrap namespace masks common credential stores (`.ssh`, cloud credentials, Docker/Kubernetes credentials, and common token files). Review the exact deployment policy before relying on a command that needs one of them.
 
 Default port: `47821`.
@@ -108,6 +109,15 @@ bash scripts/phase4-black-box.sh
 bash scripts/phase7-external-mcp-contract.sh
 bash scripts/phase8-zero-bypass.sh
 ```
+
+
+For the Plan 039C protocol/session foundation, also run:
+
+```bash
+bash scripts/verify-lsp-foundation.sh
+```
+
+This deterministic fixture exercises framing, correlation, lifecycle, capability capture, process/sandbox isolation, bounded errors/output, and sibling-workspace isolation without depending on a real language server.
 
 The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
 

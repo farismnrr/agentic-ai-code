@@ -1,4 +1,4 @@
-//! One Bubblewrap construction path for every application process.
+//! One Bubblewrap construction path for application-owned subprocesses.
 
 use super::{InvocationProgram, ToolInvocation};
 use relay_core::config::ServerConfig;
@@ -14,7 +14,22 @@ pub(super) enum WorkspaceAccess {
     Writable,
 }
 
-pub(super) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
+#[derive(Clone, Copy)]
+enum NetworkAccess {
+    Host,
+    Isolated,
+}
+
+struct SandboxProfile<'a> {
+    workspace_access: WorkspaceAccess,
+    network_access: NetworkAccess,
+    expose_optional_sockets: bool,
+    expose_runtime_extras: bool,
+    home: &'a str,
+    workspace_root: Option<&'a Path>,
+}
+
+pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
     let mut entries = [
         "/usr/local/sbin",
         "/usr/local/bin",
@@ -30,7 +45,7 @@ pub(super) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
     entries
 }
 
-pub(super) fn resolve_safe_executable(
+pub(crate) fn resolve_safe_executable(
     config: &ServerConfig,
     binary: &str,
 ) -> Result<PathBuf, McpError> {
@@ -62,6 +77,55 @@ pub(super) fn spawn(
     invocation: &ToolInvocation,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
+    spawn_with_profile(
+        config,
+        invocation,
+        SandboxProfile {
+            workspace_access,
+            network_access: NetworkAccess::Host,
+            expose_optional_sockets: matches!(workspace_access, WorkspaceAccess::Writable),
+            expose_runtime_extras: matches!(workspace_access, WorkspaceAccess::Writable),
+            home: "execution_root",
+            workspace_root: None,
+        },
+    )
+}
+
+/// Spawn an approved language server with a stricter profile than ordinary
+/// terminal execution: read-only workspace, isolated network namespace, no
+/// Docker/Tailscale sockets, a temporary HOME, cleared environment, and only
+/// the relay safe PATH/toolchain mounts.
+pub(crate) fn spawn_lsp(
+    config: &ServerConfig,
+    executable: PathBuf,
+    args: Vec<String>,
+    cwd: PathBuf,
+) -> Result<Child, std::io::Error> {
+    let invocation = ToolInvocation {
+        program: InvocationProgram::Direct(executable),
+        args,
+        cwd: Some(cwd.clone()),
+        timeout_ms: 0,
+    };
+    spawn_with_profile(
+        config,
+        &invocation,
+        SandboxProfile {
+            workspace_access: WorkspaceAccess::ReadOnly,
+            network_access: NetworkAccess::Isolated,
+            expose_optional_sockets: false,
+            expose_runtime_extras: false,
+            home: "/tmp/lsp-home",
+            workspace_root: Some(&cwd),
+        },
+    )
+}
+
+fn spawn_with_profile(
+    config: &ServerConfig,
+    invocation: &ToolInvocation,
+    profile: SandboxProfile<'_>,
+) -> Result<Child, std::io::Error> {
     let current_exe = env::current_exe()?;
     let bin_dir = current_exe
         .parent()
@@ -79,8 +143,9 @@ pub(super) fn spawn(
         .map_err(|_| std::io::Error::other("invalid execution root"))?;
     let bwrap = resolve_safe_executable(config, "bwrap")
         .map_err(|error| std::io::Error::other(error.to_string()))?;
-    let root = execution_root.to_string_lossy().into_owned();
-    let root_bind = match workspace_access {
+    let sandbox_root = profile.workspace_root.unwrap_or(&execution_root);
+    let root = sandbox_root.to_string_lossy().into_owned();
+    let root_bind = match profile.workspace_access {
         WorkspaceAccess::ReadOnly => "--ro-bind",
         WorkspaceAccess::Writable => "--bind",
     };
@@ -118,12 +183,13 @@ pub(super) fn spawn(
     .into_iter()
     .map(String::from)
     .collect::<Vec<_>>();
-    // Keep the restored pre-refactor sandbox surfaces after centralization:
-    // general execution may read /opt and the relay binary directory, while
-    // read-only text search receives neither mount. This distinction prevents
-    // the shared Bubblewrap builder from broadening the search tool's readable
-    // host surface.
-    if matches!(workspace_access, WorkspaceAccess::Writable) {
+    if matches!(profile.network_access, NetworkAccess::Isolated) {
+        args.push("--unshare-net".into());
+    }
+    if profile.home != "execution_root" {
+        args.extend(["--dir".into(), profile.home.into()]);
+    }
+    if profile.expose_runtime_extras {
         args.extend([
             "--ro-bind-try".into(),
             "/opt".into(),
@@ -139,7 +205,7 @@ pub(super) fn spawn(
         let value = canonical.to_string_lossy().into_owned();
         args.extend(["--ro-bind".into(), value.clone(), value]);
     }
-    if matches!(workspace_access, WorkspaceAccess::Writable) {
+    if profile.expose_optional_sockets {
         add_optional_socket(
             &mut args,
             config.allow_docker,
@@ -153,7 +219,10 @@ pub(super) fn spawn(
             "Tailscale",
         )?;
     }
-    add_protected_paths(&mut args, &execution_root);
+    add_protected_paths(&mut args, sandbox_root);
+    if sandbox_root != execution_root {
+        add_protected_paths(&mut args, &execution_root);
+    }
     if let Some(cwd) = &invocation.cwd {
         args.extend(["--chdir".into(), cwd.to_string_lossy().into_owned()]);
     }
@@ -164,13 +233,20 @@ pub(super) fn spawn(
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join(":");
+    let home = if profile.home == "execution_root" {
+        root
+    } else {
+        profile.home.into()
+    };
     let mut command = Command::new(bwrap);
     command
         .args(args)
         .env_clear()
-        .env("HOME", root)
+        .env("HOME", home)
         .env("PATH", safe_path)
         .env("LANG", "C.UTF-8")
+        .env("TMPDIR", "/tmp")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

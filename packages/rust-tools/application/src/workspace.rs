@@ -15,3 +15,10 @@ pub use mutate::*;
 pub use patch::*;
 pub use read::*;
 pub use search::*;
+
+pub(crate) fn reject_protected_target(
+    root: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), relay_core::error::McpError> {
+    protected::reject_protected_path(root, target)
+}
