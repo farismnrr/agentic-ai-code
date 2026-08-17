@@ -94,6 +94,7 @@ impl LspSessionManager {
                 return Ok(session);
             }
             self.sessions.lock().await.remove(&key);
+            session.shutdown().await;
             self.record_restart(&key).await?;
         }
         self.ensure_capacity(&root).await?;
@@ -164,7 +165,7 @@ impl LspSessionManager {
             .collect::<Vec<_>>();
         let mut remove = Vec::new();
         for (key, session) in snapshot {
-            if !session.is_faulted() && session.idle_for().await >= LSP_IDLE_TIMEOUT {
+            if session.is_faulted() || session.idle_for().await >= LSP_IDLE_TIMEOUT {
                 remove.push((key, session));
             }
         }

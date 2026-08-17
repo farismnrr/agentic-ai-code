@@ -26,7 +26,7 @@ pub struct LspSession {
     language: String,
     capabilities: ServerCapabilities,
     state: Arc<SharedState>,
-    child: Mutex<Child>,
+    child: Arc<Mutex<Child>>,
     next_id: AtomicI64,
     last_used: RwLock<Instant>,
     stderr: Arc<Mutex<Vec<u8>>>,
@@ -39,6 +39,9 @@ impl LspSession {
         spec: &ApprovedServerSpec,
         identity: WorkspaceIdentity,
     ) -> Result<Arc<Self>, LspError> {
+        let root_uri = url::Url::from_directory_path(&identity.root)
+            .map_err(|_| LspError::StartupFailed)?
+            .to_string();
         let mut child = sandbox::spawn_lsp(
             config,
             spec.executable.clone(),
@@ -56,7 +59,8 @@ impl LspSession {
         });
         let stderr = Arc::new(Mutex::new(Vec::new()));
         tokio::spawn(drain_stderr(stderr_pipe, stderr.clone()));
-        tokio::spawn(read_loop(stdout, state.clone()));
+        let child = Arc::new(Mutex::new(child));
+        tokio::spawn(read_loop(stdout, state.clone(), child.clone()));
 
         let placeholder = ServerCapabilities {
             definition: false,
@@ -75,18 +79,14 @@ impl LspSession {
             language: spec.language.clone(),
             capabilities: placeholder,
             state,
-            child: Mutex::new(child),
+            child,
             next_id: AtomicI64::new(1),
             last_used: RwLock::new(Instant::now()),
             stderr,
             documents: Mutex::new(super::document::DocumentStore::default()),
         });
-        let root_uri = url::Url::from_directory_path(&session.identity.root)
-            .map_err(|_| LspError::StartupFailed)?
-            .to_string();
-        let initialize = timeout(
-            LSP_STARTUP_TIMEOUT,
-            session.request_with_timeout(
+        let initialize = match session
+            .request_with_timeout(
                 "initialize",
                 json!({
                     "processId": Value::Null,
@@ -99,18 +99,23 @@ impl LspSession {
                     }
                 }),
                 LSP_STARTUP_TIMEOUT,
-            ),
-        )
-        .await
-        .map_err(|_| LspError::Timeout)??;
+            )
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                fault_and_terminate(&session.state, &session.child, error).await;
+                return Err(error);
+            }
+        };
         let capabilities = ServerCapabilities::from_initialize(&initialize);
         Arc::get_mut(&mut session)
             .ok_or(LspError::Internal)?
             .capabilities = capabilities;
-        session
-            .notify("initialized", json!({}))
-            .await
-            .map_err(|_| LspError::StartupFailed)?;
+        if let Err(error) = session.notify("initialized", json!({})).await {
+            fault_and_terminate(&session.state, &session.child, error).await;
+            return Err(LspError::StartupFailed);
+        }
         Ok(session)
     }
 
@@ -172,7 +177,7 @@ impl LspSession {
         let value = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
         if let Err(error) = write_message(&mut *self.state.writer.lock().await, &value).await {
             self.state.pending.lock().await.remove(&id);
-            mark_faulted(&self.state, error).await;
+            fault_and_terminate(&self.state, &self.child, error).await;
             return Err(error);
         }
         match timeout(request_timeout, receiver).await {
@@ -180,6 +185,7 @@ impl LspSession {
             Ok(Err(_)) => Err(LspError::Crashed),
             Err(_) => {
                 self.state.pending.lock().await.remove(&id);
+                fault_and_terminate(&self.state, &self.child, LspError::Timeout).await;
                 Err(LspError::Timeout)
             }
         }
@@ -208,7 +214,10 @@ impl LspSession {
         let mut child = self.child.lock().await;
         match timeout(LSP_SHUTDOWN_TIMEOUT, child.wait()).await {
             Ok(_) => {}
-            Err(_) => sandbox_kill(&mut child).await,
+            Err(_) => {
+                crate::execution::kill_process_group(&mut child).await;
+                let _ = child.wait().await;
+            }
         }
         mark_faulted(&self.state, LspError::Crashed).await;
     }
@@ -222,31 +231,35 @@ impl LspSession {
     }
 }
 
-async fn read_loop(mut stdout: tokio::process::ChildStdout, state: Arc<SharedState>) {
+async fn read_loop(
+    mut stdout: tokio::process::ChildStdout,
+    state: Arc<SharedState>,
+    child: Arc<Mutex<Child>>,
+) {
     loop {
         let message = match read_message(&mut stdout).await {
             Ok(value) => value,
             Err(error) => {
-                mark_faulted(&state, error).await;
+                fault_and_terminate(&state, &child, error).await;
                 return;
             }
         };
         let Some(object) = message.as_object() else {
-            mark_faulted(&state, LspError::MalformedResponse).await;
+            fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
             return;
         };
         if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
-            mark_faulted(&state, LspError::MalformedResponse).await;
+            fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
             return;
         }
         if let Some(method) = object.get("method") {
             if method.as_str().is_none() {
-                mark_faulted(&state, LspError::MalformedResponse).await;
+                fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                 return;
             }
             if let Some(id) = object.get("id") {
                 if !id.is_i64() && !id.is_u64() && !id.is_string() {
-                    mark_faulted(&state, LspError::MalformedResponse).await;
+                    fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                     return;
                 }
                 let response = json!({
@@ -258,23 +271,23 @@ async fn read_loop(mut stdout: tokio::process::ChildStdout, state: Arc<SharedSta
                     .await
                     .is_err()
                 {
-                    mark_faulted(&state, LspError::Crashed).await;
+                    fault_and_terminate(&state, &child, LspError::Crashed).await;
                     return;
                 }
             }
             continue;
         }
         let Some(id) = object.get("id").and_then(Value::as_i64) else {
-            mark_faulted(&state, LspError::MalformedResponse).await;
+            fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
             return;
         };
         if object.contains_key("result") == object.contains_key("error") {
-            mark_faulted(&state, LspError::MalformedResponse).await;
+            fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
             return;
         }
         let sender = state.pending.lock().await.remove(&id);
         let Some(sender) = sender else {
-            mark_faulted(&state, LspError::MalformedResponse).await;
+            fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
             return;
         };
         let result = if let Some(value) = object.get("result") {
@@ -313,12 +326,9 @@ async fn drain_stderr(mut pipe: tokio::process::ChildStderr, buffer: Arc<Mutex<V
     }
 }
 
-async fn sandbox_kill(child: &mut Child) {
-    if let Some(pid) = child.id() {
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(-(pid as i32), libc::SIGKILL);
-        }
-    }
+async fn fault_and_terminate(state: &Arc<SharedState>, child: &Arc<Mutex<Child>>, error: LspError) {
+    mark_faulted(state, error).await;
+    let mut child = child.lock().await;
+    crate::execution::kill_process_group(&mut child).await;
     let _ = child.wait().await;
 }

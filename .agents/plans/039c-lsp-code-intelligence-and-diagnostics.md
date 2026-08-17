@@ -264,3 +264,10 @@ Protocol/session implementation lives under `packages/rust-tools/application/src
 Deterministic acceptance is `bash scripts/verify-lsp-foundation.sh` using `packages/rust-tools/application/examples/lsp_foundation_acceptance.rs`. It proves normal initialize/request/shutdown and capability capture plus malformed framing, malformed JSON, oversized responses, hanging/crashed servers, invalid response IDs/envelopes, concurrent same-key session reuse, sibling-workspace process isolation, repository-local executable replacement resistance, credential-path masking, network isolation, bounded environment, document refresh/versioning, bounded stderr, and public-safe errors.
 
 PHASE-03 through PHASE-07 remain unstarted. This plan is **not closed** at this boundary.
+
+Independent review/remediation evidence for this boundary:
+
+- initial read-only review of `65c791397f5e83d30f64c3300f43363d460c0dd5..62a4d4f20b1f49f6faeecb01e2b048cde83d52f7` identified two material lifecycle gaps: timed-out requests did not invalidate/terminate their server session, and protocol-faulted sessions could remain alive until all retained handles disappeared;
+- remediation makes timeout/protocol faults fail the session closed, terminate and reap the process group immediately, and makes manager replacement/idle cleanup defensively reap faulted sessions;
+- the remediation also reuses the existing execution process-group kill primitive and adds deterministic assertion coverage for invalid JSON-RPC envelopes and post-error fault state;
+- because this remediation materially changes lifecycle behavior, the final committed state requires a fresh independent read-only review before push.

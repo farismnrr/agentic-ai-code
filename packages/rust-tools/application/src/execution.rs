@@ -16,6 +16,7 @@ use uuid::Uuid;
 mod process;
 mod requests;
 pub(crate) mod sandbox;
+pub(crate) use process::kill_process_group;
 
 const MAX_RETAINED_JOBS: usize = 64;
 

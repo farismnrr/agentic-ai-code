@@ -196,7 +196,7 @@ fn effective_timeout(config: &ServerConfig, requested: u64) -> u64 {
     }
 }
 
-pub(super) async fn kill_process_group(child: &mut Child) {
+pub(crate) async fn kill_process_group(child: &mut Child) {
     if let Some(pid) = child.id() {
         #[cfg(unix)]
         unsafe {
