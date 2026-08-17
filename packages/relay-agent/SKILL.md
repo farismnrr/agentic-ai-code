@@ -107,6 +107,7 @@ For security-sensitive relay/MCP changes, also run applicable local checks, typi
 cargo audit
 bash scripts/phase4-black-box.sh
 bash scripts/phase7-external-mcp-contract.sh
+bash scripts/phase-039c-contract.sh
 bash scripts/phase8-zero-bypass.sh
 ```
 
