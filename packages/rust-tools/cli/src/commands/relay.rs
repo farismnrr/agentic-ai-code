@@ -1,6 +1,6 @@
 use relay_core::config::{Command, ServerConfig};
 use relay_infrastructure::pidfile::Pidfile;
-use relay_infrastructure::transport::create_router_with_jobs;
+use relay_infrastructure::transport::create_router_with_jobs_and_hooks;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -70,10 +70,8 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
 
     let jobs = relay_application::execution::JobManager::new(config.clone());
     let hooks = relay_application::hooks::HookManager::load(Arc::new(config.clone()))
-        .unwrap_or_else(|_| {
-            relay_application::hooks::HookManager::disabled(Arc::new(config.clone()))
-        });
-    let router = create_router_with_jobs(config.clone(), jobs.clone());
+        .map_err(|error| format!("agent hook configuration failed closed: {error}"))?;
+    let router = create_router_with_jobs_and_hooks(config.clone(), jobs.clone(), hooks);
 
     let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port)
         .parse()
@@ -108,13 +106,6 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
         tokio::select! {
             _ = ctrl_c => {},
             _ = terminate => {},
-        }
-        if !hooks.pre_agent_stop("relay-session").await {
-            tracing::warn!(
-                event = "relay.hook",
-                hook_event = "pre_agent_stop",
-                outcome = "gate_failed_shutdown_continues"
-            );
         }
         shutdown_jobs.shutdown().await;
         println!("Shutting down gracefully...");

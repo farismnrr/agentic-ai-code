@@ -130,6 +130,16 @@ pub fn create_router_with_jobs(
     config: ServerConfig,
     jobs: Arc<relay_application::execution::JobManager>,
 ) -> Router {
+    let hooks = relay_application::hooks::HookManager::load(Arc::new(config.clone()))
+        .expect("enabled agent hook configuration must be valid before router construction");
+    create_router_with_jobs_and_hooks(config, jobs, hooks)
+}
+
+pub fn create_router_with_jobs_and_hooks(
+    config: ServerConfig,
+    jobs: Arc<relay_application::execution::JobManager>,
+    hooks: Arc<relay_application::hooks::HookManager>,
+) -> Router {
     let cors_origin = match &config.origin {
         Some(origin) if origin != "*" => match origin.parse() {
             Ok(header_val) => AllowOrigin::exact(header_val),
@@ -167,12 +177,6 @@ pub fn create_router_with_jobs(
         relay_application::lsp::LspSessionManager::new(unconfigured)
             .expect("LSP session manager with no configured servers must construct")
     });
-    let hook_config = std::sync::Arc::new(config.clone());
-    let hooks = relay_application::hooks::HookManager::load(hook_config).unwrap_or_else(|error| {
-        tracing::warn!(event = "relay.hook_config", outcome = "disabled", reason = %error);
-        relay_application::hooks::HookManager::disabled(std::sync::Arc::new(config.clone()))
-    });
-
     let state = Arc::new(AppState {
         config: config.clone(),
         jobs,

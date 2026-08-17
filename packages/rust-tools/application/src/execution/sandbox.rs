@@ -9,7 +9,7 @@ use std::process::Stdio;
 use tokio::process::{Child, Command};
 
 #[derive(Clone, Copy)]
-pub(super) enum WorkspaceAccess {
+pub(crate) enum WorkspaceAccess {
     ReadOnly,
     Writable,
 }
@@ -126,13 +126,15 @@ pub(crate) fn spawn_lsp(
     )
 }
 
-/// Hook profile: contained repository cwd, writable workspace for explicitly
-/// configured formatters, isolated network, no optional sockets/runtime extras.
+/// Hook profile: contained repository cwd, with workspace authority capped by
+/// the triggering operation. A read-only lifecycle event is never given a
+/// writable bind merely because a hook is configured.
 pub(crate) fn spawn_hook(
     config: &ServerConfig,
     executable: PathBuf,
     args: Vec<String>,
     cwd: PathBuf,
+    workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
     let invocation = ToolInvocation {
         program: InvocationProgram::Direct(executable),
@@ -145,7 +147,7 @@ pub(crate) fn spawn_hook(
         config,
         &invocation,
         SandboxProfile {
-            workspace_access: WorkspaceAccess::Writable,
+            workspace_access,
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,

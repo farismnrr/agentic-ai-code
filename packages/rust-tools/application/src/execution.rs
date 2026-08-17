@@ -392,13 +392,21 @@ pub async fn dispatch_tool_call(
                 .and_then(|value| value.get("changed_paths").or_else(|| value.get("path")))
                 .cloned()
                 .unwrap_or_else(|| json!([]));
+            let cwd = arguments.get("cwd").and_then(Value::as_str);
+            let paths = changed_paths
+                .as_array()
+                .map(|paths| paths.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                .unwrap_or_else(|| changed_paths.as_str().into_iter().collect());
+            for path in paths {
+                let _ = lsp.refresh_path(cwd, path).await;
+            }
             let _ = hooks
                 .invoke(
                     crate::hooks::HookEvent::AfterFileChange,
                     json!({
                         "hook_event": "after_file_change",
                         "tool_id": tool.name,
-                        "effect_class": "workspace_write",
+                        "effect_classes": ["workspace_write"],
                         "affected_paths": changed_paths,
                         "success": true,
                     }),
