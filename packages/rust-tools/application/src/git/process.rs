@@ -122,15 +122,49 @@ pub(super) fn bounded_results(arguments: &Value) -> usize {
 }
 
 pub(super) fn validate_ref(value: &str) -> Result<String, McpError> {
+    let valid_segment = |segment: &str| {
+        !segment.is_empty()
+            && segment != "."
+            && segment != ".."
+            && !segment.starts_with('.')
+            && !segment.ends_with('.')
+            && !segment.contains("..")
+    };
+    let valid_chars = value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'));
+    let valid_shape =
+        !value.starts_with('/') && !value.ends_with('/') && value.split('/').all(valid_segment);
     if value.is_empty()
         || value.len() > MAX_GIT_REF_BYTES
         || value.starts_with('-')
+        || !valid_chars
+        || !valid_shape
         || value.contains(['\0', '\n', '\r'])
     {
         Err(McpError::InvalidRequest("git ref is invalid".into()))
     } else {
         Ok(value.to_owned())
     }
+}
+
+pub(super) fn resolve_commit_ref(cwd: &Path, value: &str) -> Result<String, McpError> {
+    let reference = validate_ref(value)?;
+    let peel = format!("{reference}^{{commit}}");
+    let output = run_git(
+        cwd,
+        &["rev-parse", "--verify", "--end-of-options", &peel],
+        128,
+    )?;
+    let commit = std::str::from_utf8(&output)
+        .map_err(|_| invalid_git_output())?
+        .trim();
+    if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(McpError::InvalidRequest(
+            "git ref is not a commit reference".into(),
+        ));
+    }
+    Ok(commit.to_owned())
 }
 
 pub(super) fn validated_ref(arguments: &Value, key: &str) -> Result<String, McpError> {

@@ -212,8 +212,8 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         "working" => {}
         "staged" => owned.push("--cached".into()),
         "refs" => {
-            let base = validated_ref(arguments, "base_ref")?;
-            let head = validated_ref(arguments, "head_ref")?;
+            let base = resolve_commit_ref(&repo.root, &validated_ref(arguments, "base_ref")?)?;
+            let head = resolve_commit_ref(&repo.root, &validated_ref(arguments, "head_ref")?)?;
             owned.push(base);
             owned.push(head);
         }
@@ -244,7 +244,7 @@ fn git_log(arguments: &Value, config: &ServerConfig) -> Result<GitLogResult, Mcp
         format!("--max-count={}", max + 1),
     ];
     if let Some(r) = arguments.get("ref").and_then(Value::as_str) {
-        owned.push(validate_ref(r)?)
+        owned.push(resolve_commit_ref(&repo.root, r)?)
     }
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
@@ -301,7 +301,7 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
     if !include_patch {
         owned.push("--no-patch".into())
     }
-    owned.push(reference);
+    owned.push(resolve_commit_ref(&repo.root, &reference)?);
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path)
