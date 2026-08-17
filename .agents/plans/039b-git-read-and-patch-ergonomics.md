@@ -1,6 +1,6 @@
 # Plan 039B — Git Read Intelligence and Patch Ergonomics
 
-**Status:** IN PROGRESS — source implementation/validation complete; live relay acceptance pending
+**Status:** CLOSED / VERIFIED — source, independent review, deployment, and live 18-tool MCP acceptance complete
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039A  
@@ -257,11 +257,21 @@ Deletion support must be a deliberate later phase in this child plan, not an acc
 
 ### PHASE-07 — MCP/live regression
 
-- [ ] Verify all new tools through `tools/list` and authenticated `tools/call`.
-- [ ] Verify malformed schemas fail before dispatch.
-- [ ] Verify OAuth/sandbox/path boundaries remain intact.
-- [ ] Exercise a real clean/change/diff/patch/read-back workflow.
-- [ ] Confirm worktree state is exactly expected after canary cleanup.
+- [x] Verify all new tools through `tools/list` and authenticated `tools/call`.
+- [x] Verify malformed schemas fail before dispatch.
+- [x] Verify OAuth/sandbox/path boundaries remain intact.
+- [x] Exercise a real clean/change/diff/patch/read-back workflow.
+- [x] Confirm worktree state is exactly expected after canary cleanup.
+
+### Phase-07 closure evidence — 2026-08-17
+
+- Final reviewed implementation baseline is `1b7ed8913070f1c4042d0e91fe8bcfc0418ffc4e`; the independent read-only review covered `6943edf3a8fe6a6ea24705873fb7c4ce50d7ccba..1b7ed8913070f1c4042d0e91fe8bcfc0418ffc4e` and returned `VERDICT: NO MATERIAL FINDINGS`.
+- Final source validation passed on that exact implementation state: `git diff --check`, `pnpm verify:commit`, `pnpm build:tools`, `cargo test --workspace --all-targets --all-features --locked`, native Plan-039B acceptance, `scripts/verify-git-patch-tools.sh`, `scripts/phase7-chatgpt-contract.sh`, `scripts/check-architecture.sh`, maintainability, `scripts/verify-workspace-v1-integration.sh`, zero-bypass, workspace-path-security, and MCP error-confidentiality regression gates.
+- Fresh release artifact `ai-tools 0.0.10` from the reviewed source hashed to `03d3ca5cad6add61eee91b02676f4b70dcc96ac1ac0a3632852d5f8e2295aa10`; manual installation produced the same installed hash and `ai-tools-relay.service` restarted `active`.
+- After ChatGPT MCP reconnect, discovery exposed all 18 relay tools: the existing 12 Plan-038 tools plus `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, and `apply_patch`. Authenticated live calls exercised the complete catalog; the pre-existing Plan-038 positive-outbound `http_fetch` `connect_failed` limitation remained unchanged while its SSRF fail-closed behavior remained intact.
+- A disposable nested Git repository under ignored `.tmp/` exercised real status/history/show/blame plus `apply_patch` dry-run and committed patch, followed by `git_diff` and file read-back. Empty `apply_patch.patch` was rejected by schema validation before dispatch; an external `/etc/passwd` read and traversal patch were rejected by execution-root/path validation.
+- Terminal background-job start/get/cancel reached a final `cancelled` state; `web_search`, workspace list/search/read/write/edit, terminal execution, and the Git/patch tools all remained callable through the refreshed authenticated connection.
+- The canary repository was removed after acceptance and the primary `feat/039b-git-read-patch` worktree returned exactly clean with zero staged, unstaged, or untracked paths.
 
 ## Validation
 
@@ -290,10 +300,10 @@ Exact commit structure should follow the final diff, not this illustrative list.
 
 ## Acceptance criteria
 
-- [ ] Git inspection no longer requires shell parsing for standard status/diff/history/blame workflows.
-- [ ] All Git outputs are bounded and structured.
-- [ ] Repository-controlled external diff/textconv/fsmonitor-like execution is prevented or proven harmless for these tools.
-- [ ] `apply_patch` validates all targets before mutation and cannot escape/protected-path bypass.
-- [ ] Patch behavior is deterministic, bounded, and truthfully atomic/rollback-safe according to implementation.
-- [ ] Existing 12 Plan-038 tools have no regression.
-- [ ] Mandatory repository verification passes.
+- [x] Git inspection no longer requires shell parsing for standard status/diff/history/blame workflows.
+- [x] All Git outputs are bounded and structured.
+- [x] Repository-controlled external diff/textconv/fsmonitor-like execution is prevented or proven harmless for these tools.
+- [x] `apply_patch` validates all targets before mutation and cannot escape/protected-path bypass.
+- [x] Patch behavior is deterministic, bounded, and truthfully atomic/rollback-safe according to implementation.
+- [x] Existing 12 Plan-038 tools have no regression.
+- [x] Mandatory repository verification passes.

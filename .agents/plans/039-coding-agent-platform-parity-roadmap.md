@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A CLOSED / VERIFIED; 039B–039J planned and unstarted  
+**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C–039J planned and unstarted
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -138,7 +138,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | Plan | Capability | Depends on | Status | Exit criteria |
 | --- | --- | --- | --- | --- |
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
-| **039B** | Git read intelligence + patch ergonomics | 039A | Planned | Structured bounded Git inspection and safe patch workflow work through MCP |
+| **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
 | **039C** | LSP code intelligence + diagnostics | 039B | Planned | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Planned | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
@@ -151,7 +151,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 ## Master Todo
 
 - [x] PLAN-039A — maintainability + layered refactor foundation
-- [ ] PLAN-039B — Git read intelligence + patch ergonomics
+- [x] PLAN-039B — Git read intelligence + patch ergonomics
 - [ ] PLAN-039C — LSP code intelligence + diagnostics
 - [ ] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
 - [ ] PLAN-039E — deterministic agent hooks/lifecycle
@@ -174,6 +174,20 @@ Verified handoff facts for 039B:
 - sandbox/path/OAuth/security policies remain centralized rather than duplicated across the new modules;
 - terminal direct argv already supports values such as `--help` and `--locked`; deterministic workspace integration now guards that behavior while public MCP catalog compatibility remains frozen;
 - 039B through 039J remain unimplemented at this boundary.
+
+## 039B verified handoff baseline
+
+Plan 039B closed on 2026-08-17 from branch `feat/039b-git-read-patch` with final implementation/reviewer baseline commit `1b7ed8913070f1c4042d0e91fe8bcfc0418ffc4e`.
+
+Verified handoff facts for 039C:
+
+- the relay now exposes 18 MCP tools: the verified Plan-038 twelve plus bounded native `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, and constrained `apply_patch`;
+- fixed direct-argv Git execution neutralizes hostile executable helpers/configuration, uses `GIT_OPTIONAL_LOCKS=0`, preserves execution-root/nested-repository semantics, and returns bounded truthful status/diff/history/blame output;
+- `apply_patch` performs bounded all-target preflight, no-follow/path/protected-entry validation, stale-target detection, atomic replacement, post-rename commit-state tracking, and best-effort rollback with truthful incomplete-rollback reporting;
+- final source validation and an independent read-only security/architecture review are green; the review of the exact committed implementation range returned `NO MATERIAL FINDINGS`;
+- the reviewed `ai-tools 0.0.10` release artifact SHA-256 is `03d3ca5cad6add61eee91b02676f4b70dcc96ac1ac0a3632852d5f8e2295aa10`, matching the manually installed relay binary; the restarted user service reported `active`;
+- refreshed ChatGPT MCP discovery exposed all 18 tools and live authenticated acceptance exercised the complete catalog, including a disposable Git/patch workflow, schema rejection before dispatch, containment rejection, background-job cancellation, and exact canary cleanup; the primary worktree was clean afterward;
+- continuation/pagination remains intentionally deferred to Plan 039H; Plan 039C is still unstarted at this handoff boundary.
 
 ## Explicit non-goals
 
