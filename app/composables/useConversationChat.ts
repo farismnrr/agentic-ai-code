@@ -44,6 +44,13 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   watch(conversationId, () => {
     seedMessages.value = conversation.value?.messages ?? []
   })
+  watch(conversationId, (id) => {
+    if (id && conversation.value?.mode === 'agent') void relayAgent.startSession(id)
+  }, { immediate: true })
+  const stopContinuationUsed = ref(false)
+  watch(conversationId, () => {
+    stopContinuationUsed.value = false
+  })
 
   // `local_terminal` is registered server-side with no `execute` (see
   // server/api/chat.post.ts) precisely so this server never runs the user's
@@ -109,7 +116,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }
   }))
 
-  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger })
+  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger, agentSession: conversationId.value })
 
   // The one place `local_terminal` actually gets executed — see the note
   // above `runApprovedLocalTerminalCall`. Fires on every message mutation
@@ -152,8 +159,16 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     mirror.schedule()
   })
 
-  watch(() => chat.status.value, (status) => {
+  watch(() => chat.status.value, (status, previousStatus) => {
     if (status !== 'streaming') {
+      if (previousStatus === 'streaming' && conversationId.value) {
+        void relayAgent.preAgentStop(conversationId.value).then((decision) => {
+          if (decision.completion === 'remediation_required' && !stopContinuationUsed.value) {
+            stopContinuationUsed.value = true
+            void chat.regenerate()
+          }
+        }).catch(() => {})
+      }
       flushMessages()
       // The mirror-back watcher above only ever patches `messages` — server
       // side fields a turn can also change (lastMeasuredTokens from

@@ -142,6 +142,35 @@ async fn run() -> Result<(), String> {
         "session start is per agent session",
     )?;
 
+    let context_handler = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec![
+                "echo".into(),
+                r#"{"context":{"repository_identity":"bounded-context"}}"#.into(),
+            ],
+            class: HookClass::Cosmetic,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 1_000,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&context_handler).unwrap(),
+    )
+    .map_err(io_error)?;
+    let context_manager =
+        HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
+    let context = context_manager
+        .start_session("agent-context", &identity)
+        .await;
+    require(
+        context == Some(json!({"repository_identity": "bounded-context"})),
+        "session-start returns bounded structured context",
+    )?;
+
     let traversal = ServerConfig {
         agent_hooks_config: Some(".agents/../hooks.json".into()),
         ..enabled.clone()
@@ -251,6 +280,28 @@ async fn run() -> Result<(), String> {
     require(
         blocked.decision == HookDecision::Block,
         "security hook failure blocks without granting authority",
+    )?;
+    let stop_config = HookConfig {
+        repository_identity: security_failure.repository_identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::PreAgentStop,
+            command: vec!["false".into()],
+            class: HookClass::Security,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 100,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&stop_config).unwrap(),
+    )
+    .map_err(io_error)?;
+    let stop_manager =
+        HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
+    require(
+        !stop_manager.pre_agent_stop("agent-stop").await,
+        "stop hook allows only bounded remediation before forced completion",
     )?;
 
     fs::remove_dir_all(&root).map_err(io_error)?;
