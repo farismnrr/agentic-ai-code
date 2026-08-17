@@ -29,6 +29,9 @@ const siteOrigin = useRequestURL().origin
 const relayBinaryName = 'ai-tools-x86_64-unknown-linux-gnu'
 const relayDownloadUrl = `https://github.com/farismnrr/ai-code/releases/latest/download/${relayBinaryName}`
 
+const allowTerminalNetwork = ref(false)
+const networkFlag = computed(() => allowTerminalNetwork.value ? ' \\\n  --allow-terminal-network' : '')
+
 onMounted(() => {
   if (!isConnected.value) {
     void checkConnection()
@@ -174,7 +177,7 @@ async function handleCancel() {
   --mode local \
   --dir /path/to/project \
   --execution-root $HOME \
-  --origin {{ siteOrigin }}</code></pre>
+  --origin {{ siteOrigin }}{{ networkFlag }}</code></pre>
 
           <p class="text-xs text-muted">
             The default port is <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">47821</code>.
@@ -183,6 +186,27 @@ async function handleCancel() {
             <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">Ctrl+C</code>.
           </p>
 
+          <div class="flex items-start gap-2 rounded-lg border border-default bg-elevated/50 p-3">
+            <USwitch
+              v-model="allowTerminalNetwork"
+              size="sm"
+            />
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-highlighted">
+                Allow terminal network access
+              </p>
+              <p class="text-xs text-muted">
+                Off by default. Terminal commands run without network access
+                (<code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--unshare-net</code>).
+                Enabling this adds <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">--allow-terminal-network</code>
+                to the commands below, which lets terminal subprocesses (e.g. <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">git</code>,
+                package managers) reach the host network. The filesystem/Bubblewrap sandbox boundary is
+                otherwise unchanged, and this does not affect the separate <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">http_fetch</code>
+                / <code class="rounded bg-elevated px-1 py-0.5 font-mono text-highlighted">web_search</code> tools, which already have their own network access.
+              </p>
+            </div>
+          </div>
+
           <p class="text-xs text-muted">
             <span class="font-medium text-highlighted">Background example:</span>
           </p>
@@ -190,7 +214,7 @@ async function handleCancel() {
   --mode local \
   --dir /path/to/project \
   --execution-root $HOME \
-  --origin {{ siteOrigin }} \
+  --origin {{ siteOrigin }}{{ networkFlag }} \
   &gt; relay-agent.log 2&gt;&amp;1 &amp; disown</code></pre>
 
           <div class="flex gap-2 mt-4">
