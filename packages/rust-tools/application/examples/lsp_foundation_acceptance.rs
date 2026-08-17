@@ -164,6 +164,13 @@ async fn run() -> Result<(), String> {
     assert_mode_error(&manager, &repo_a, "hang", LspError::Timeout).await?;
     assert_mode_error(&manager, &repo_a, "crash", LspError::Crashed).await?;
     assert_mode_error(&manager, &repo_a, "invalid-id", LspError::MalformedResponse).await?;
+    assert_mode_error(
+        &manager,
+        &repo_a,
+        "invalid-envelope",
+        LspError::MalformedResponse,
+    )
+    .await?;
 
     require(
         session_a.retained_stderr_bytes().await <= 64 * 1024,
@@ -192,7 +199,13 @@ async fn assert_mode_error(
         .request_with_timeout_ms("fixture/test", json!({}), 200)
         .await;
     match result {
-        Err(actual) if actual == expected => Ok(()),
+        Err(actual) if actual == expected => {
+            require(
+                session.is_faulted(),
+                &format!("{mode}: session faulted after error"),
+            )?;
+            Ok(())
+        }
         other => Err(format!("{mode}: expected {expected:?}, got {other:?}")),
     }
 }
