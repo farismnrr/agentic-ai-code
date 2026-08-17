@@ -118,7 +118,16 @@ async fn run() -> Result<(), String> {
     )?;
     require(security["networkReachable"] == false, "network isolated")?;
     require(
-        security["environment"] == json!(["HOME", "LANG", "PATH", "PWD", "TMPDIR"]),
+        security["environment"]
+            == json!([
+                "CARGO_HOME",
+                "CARGO_TARGET_DIR",
+                "HOME",
+                "LANG",
+                "PATH",
+                "PWD",
+                "TMPDIR"
+            ]),
         "bounded environment",
     )?;
 

@@ -31,12 +31,23 @@ impl LspSessionManager {
             let (language, executable) = entry.split_once('=').ok_or(LspError::Internal)?;
             let path = sandbox::resolve_safe_executable(&config, executable)
                 .map_err(|_| LspError::ServerUnavailable)?;
+            let lowercase = language.to_ascii_lowercase();
+            let (settings, experimental_capabilities) = if lowercase == "rust" {
+                (
+                    super::rust::workspace_settings(),
+                    super::rust::experimental_capabilities(),
+                )
+            } else {
+                (serde_json::Value::Null, serde_json::Value::Null)
+            };
             specs.insert(
-                language.to_ascii_lowercase(),
+                lowercase,
                 ApprovedServerSpec {
                     language: language.to_owned(),
                     executable: path,
                     args: Vec::new(),
+                    settings,
+                    experimental_capabilities,
                 },
             );
         }
