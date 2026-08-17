@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C–039J planned and unstarted
+**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C IN PROGRESS (PHASE-01/02 VERIFIED); 039D–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -139,7 +139,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | --- | --- | --- | --- | --- |
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
-| **039C** | LSP code intelligence + diagnostics | 039B | Planned | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
+| **039C** | LSP code intelligence + diagnostics | 039B | IN PROGRESS — PHASE-01/02 VERIFIED | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Planned | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |

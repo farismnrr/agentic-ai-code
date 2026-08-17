@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 mod process;
 mod requests;
-mod sandbox;
+pub(crate) mod sandbox;
 
 const MAX_RETAINED_JOBS: usize = 64;
 

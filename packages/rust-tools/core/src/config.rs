@@ -41,6 +41,8 @@ pub struct ServerConfig {
     pub allow_tailscale: bool,
     pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
+    /// Operator-approved LSP executable mappings (`language=executable`).
+    pub lsp_servers: Vec<String>,
 }
 
 impl Default for ServerConfig {
@@ -69,6 +71,7 @@ impl Default for ServerConfig {
             allow_tailscale: false,
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
+            lsp_servers: Vec::new(),
         }
     }
 }
@@ -312,6 +315,7 @@ impl ServerConfig {
                 ));
             }
         }
+        validate_lsp_server_entries(&self.lsp_servers)?;
         for path in &self.toolchain_paths {
             let candidate = std::fs::canonicalize(path).map_err(|_| {
                 RelayError::InvalidConfig(
@@ -326,6 +330,45 @@ impl ServerConfig {
         }
         Ok(())
     }
+}
+
+fn validate_lsp_server_entries(entries: &[String]) -> Result<(), RelayError> {
+    if entries.len() > 16 {
+        return Err(RelayError::InvalidConfig(
+            "at most 16 lsp-server mappings may be configured".into(),
+        ));
+    }
+    let mut languages = std::collections::HashSet::new();
+    for entry in entries {
+        let Some((language, executable)) = entry.split_once('=') else {
+            return Err(RelayError::InvalidConfig(
+                "lsp-server must use language=executable syntax".into(),
+            ));
+        };
+        let valid_language = !language.is_empty()
+            && language.len() <= 64
+            && language.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
+            });
+        let valid_executable = !executable.is_empty()
+            && executable.len() <= 128
+            && !executable.contains('/')
+            && !executable.contains('\\')
+            && executable.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
+            });
+        if !valid_language || !valid_executable {
+            return Err(RelayError::InvalidConfig(
+                "lsp-server language/executable contains unsupported characters".into(),
+            ));
+        }
+        if !languages.insert(language.to_ascii_lowercase()) {
+            return Err(RelayError::InvalidConfig(
+                "lsp-server language is configured more than once".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn dirs_home() -> Option<std::path::PathBuf> {
@@ -363,6 +406,7 @@ impl From<&Cli> for ServerConfig {
             allow_tailscale: cli.allow_tailscale,
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
+            lsp_servers: cli.lsp_servers.clone(),
         }
     }
 }

@@ -1,6 +1,6 @@
 # Plan 039C — LSP Code Intelligence and Diagnostics
 
-**Status:** PLANNED  
+**Status:** IN PROGRESS — PHASE-01 / PHASE-02 IMPLEMENTED, VERIFIED, AND DELIVERED
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039B  
@@ -177,19 +177,19 @@ After native file mutations, Plan 039E hooks may notify active LSP sessions. Unt
 
 ### PHASE-01 — LSP process/security contract
 
-- [ ] Audit current repo toolchains and installed language servers.
-- [ ] Define approved server configuration contract.
-- [ ] Define sandbox/filesystem/network/environment policy.
-- [ ] Define per-project session identity, limits, idle shutdown, crash handling.
-- [ ] Define public-safe error model and telemetry fields.
+- [x] Audit current repo toolchains and installed language servers.
+- [x] Define approved server configuration contract.
+- [x] Define sandbox/filesystem/network/environment policy.
+- [x] Define per-project session identity, limits, idle shutdown, crash handling.
+- [x] Define public-safe error model, bounded private stderr retention, and low-cardinality telemetry fields.
 
 ### PHASE-02 — protocol/session manager
 
-- [ ] Implement JSON-RPC transport and initialize/shutdown lifecycle.
-- [ ] Support server capability negotiation.
-- [ ] Bound messages and timeouts.
-- [ ] Prevent session cross-talk between repositories.
-- [ ] Add deterministic fake/minimal LSP fixture process if needed for protocol acceptance; do not create a conventional unit-test suite.
+- [x] Implement JSON-RPC transport and initialize/shutdown lifecycle.
+- [x] Support server capability negotiation.
+- [x] Bound messages and timeouts.
+- [x] Prevent session cross-talk between repositories.
+- [x] Add deterministic fake/minimal LSP fixture process for protocol/security acceptance; no conventional unit-test suite added.
 
 ### PHASE-03 — Rust proof
 
@@ -247,3 +247,20 @@ Explicitly test:
 - [ ] Rename remains preview-only until normal mutation policy applies it.
 - [ ] All MCP output is bounded and public-safe.
 - [ ] `pnpm verify:commit`, tool build, deterministic LSP acceptance, and live MCP smoke checks pass.
+## PHASE-01 / PHASE-02 verified foundation (2026-08-17)
+
+The foundation is implemented without exposing any public `code_*` MCP tools and without integrating a real language server yet. Current machine audit found `rust-analyzer`, `typescript-language-server`, `vue-language-server`, and `tsserver` already installed; nothing was installed by this plan boundary.
+
+Security/process contract:
+
+- operator approval is explicit through repeated `--lsp-server language=executable` / `RELAY_LSP_SERVER` entries; values contain no shell command or repository-controlled argv; executable resolution uses the existing relay safe PATH and exact executable basename;
+- LSP subprocesses reuse the authoritative Bubblewrap builder but run under a stricter profile: only the verified Git workspace is mounted read-only, toolchain directories are separate read-only mounts, networking is unshared, Docker/Tailscale sockets are never exposed, common credential stores/token files are hidden, HOME is temporary, and the environment is cleared before setting the bounded runtime variables;
+- workspace identity is the canonical contained Git top-level reached through the existing hardened Git process path. Session keys are `(canonical workspace root, language)`, so sibling repositories never share one process/session merely because they live under one execution root;
+- hard bounds are: 16 configured server mappings, 4 projects, 8 language-server sessions, 64 pending requests per session, 15s startup, 10s request deadline, 3s shutdown deadline, 8KiB framing headers, 4MiB JSON-RPC messages, 64KiB retained stderr, 16 synchronized documents/session, 1MiB/document, 10-minute idle eviction, and at most 2 restart/crash attempts per workspace/language in a 60-second window;
+- public-facing `LspError` values are static normalized categories/messages and never contain raw server stderr or host paths. Raw stderr is retained only as a bounded private process tail and is not emitted through public errors. Any later telemetry may record only bounded low-cardinality fields such as event/outcome, language, error kind, duration, and counts; it must not record stderr, source content, credentials, or absolute workspace paths.
+
+Protocol/session implementation lives under `packages/rust-tools/application/src/lsp*` and remains outside MCP transport routing. It implements strict `Content-Length` framing, duplicate/malformed header rejection, UTF-8/JSON and JSON-RPC 2.0 envelope validation, bounded exact reads, initialize/initialized, shutdown/exit, monotonic request IDs, pending-request correlation, server-notification tolerance, server-request non-confusion, capability capture, timeout/crash wakeup, timer-owned idle eviction, restart limits, concurrent same-key session serialization, and minimum bounded document open/change synchronization.
+
+Deterministic acceptance is `bash scripts/verify-lsp-foundation.sh` using `packages/rust-tools/application/examples/lsp_foundation_acceptance.rs`. It proves normal initialize/request/shutdown and capability capture plus malformed framing, malformed JSON, oversized responses, hanging/crashed servers, invalid response IDs/envelopes, concurrent same-key session reuse, sibling-workspace process isolation, repository-local executable replacement resistance, credential-path masking, network isolation, bounded environment, document refresh/versioning, bounded stderr, and public-safe errors.
+
+PHASE-03 through PHASE-07 remain unstarted. This plan is **not closed** at this boundary.

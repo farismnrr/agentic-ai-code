@@ -2,7 +2,7 @@ use super::*;
 use std::io::Read;
 use std::process::Stdio;
 
-pub(super) fn run_git(cwd: &Path, args: &[&str], max: usize) -> Result<Vec<u8>, McpError> {
+pub(crate) fn run_git(cwd: &Path, args: &[&str], max: usize) -> Result<Vec<u8>, McpError> {
     let (output, truncated) = run_git_bytes_bounded(cwd, args, max)?;
     if truncated {
         return Err(McpError::InvalidRequest(

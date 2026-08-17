@@ -130,6 +130,12 @@ pub struct Cli {
         value_delimiter = ','
     )]
     pub toolchain_paths: Vec<String>,
+
+    /// Operator-approved language-server executable mappings. Values are
+    /// `language=executable`; executable resolution is restricted to the relay
+    /// safe PATH and no repository file can supply command arguments.
+    #[arg(long = "lsp-server", env = "RELAY_LSP_SERVER", value_delimiter = ',')]
+    pub lsp_servers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
