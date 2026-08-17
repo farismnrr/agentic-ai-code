@@ -1,50 +1,61 @@
 //! Bounded tsserver-request/response bridge for `@vue/language-server`
-//! (Plan 039C PHASE-04 remediation).
+//! (Plan 039C PHASE-04, hardened by the 039C Vue Bridge Final Remediation).
 //!
-//! The installed, reviewed `@vue/language-server@3.3.8` build (verified by
-//! reading `@vue/language-server/lib/server.js`) unconditionally routes
-//! every TypeScript-backed operation on `.vue` files through a companion
-//! TypeScript project/service that only the *client* can provide: it sends
-//! a `tsserver/request` LSP notification `[requestId, command, args]` where
-//! `command` is a real `tsserver` command name prefixed with `_vue:`, and
+//! The installed, reviewed `@vue/language-server@3.3.8` build unconditionally
+//! routes every TypeScript-backed operation on `.vue` files through a
+//! companion TypeScript project/service that only the *client* can provide:
+//! it sends a `tsserver/request` LSP notification `[requestId, command,
+//! args]` (`command` a real `tsserver` command prefixed with `_vue:`) and
 //! blocks internally on a matching `tsserver/response` notification
-//! `[requestId, body]`. Without a client that answers this, the server's
-//! own internal promise for that request never resolves and any query
-//! needing it (which, per `server.js`, is effectively all of them, since
-//! `getLanguageService` itself awaits a `_vue:ProjectInfo` request) times
-//! out or hangs.
+//! `[requestId, body]` — `getLanguageService` itself awaits `_vue:projectInfo`
+//! before answering anything, so without an answering client every query
+//! times out or hangs.
 //!
-//! This module is that bridge and nothing more: it starts exactly one
-//! sandboxed `tsserver.js` child process (from the same reviewed TypeScript
-//! `tsdk` directory already passed to both language servers via
-//! `--tsdk=`), narrowly forwards only `_vue:`-prefixed commands with their
-//! `_vue:` prefix stripped, and returns the matching response body. It is
-//! not a general subprocess bridge: unprefixed or malformed bridge
-//! messages are never forwarded, outstanding requests are bounded, and
-//! every request has a hard timeout after which the bridge answers `null`
-//! (matching a real `tsserver` "no info" response) rather than hanging the
-//! caller.
+//! This module is that bridge and nothing more: one sandboxed `tsserver.js`
+//! child (from the reviewed `tsdk` directory already used for `--tsdk=`),
+//! narrowly forwarding only the closed, explicitly reviewed set of
+//! `_vue:`-prefixed commands the installed `@vue/language-server@3.3.8` /
+//! `@vue/typescript-plugin@3.3.8` pair actually sends (verified against
+//! every `sendTsServerRequest(...)` call site in `server.js` and every
+//! `session.addProtocolHandler(...)` registration in the plugin's
+//! `index.js`). Unlisted or malformed bridge messages are never forwarded;
+//! any file-bearing argument is resolved through the same canonical
+//! contained-path + protected-path policy the rest of the native workspace
+//! surface uses before any host read; outstanding requests and spawned
+//! forwarding work are bounded; every request has a hard timeout after
+//! which the bridge answers `null` (a real `tsserver` "no info" shape)
+//! instead of hanging the caller; and a fatal bridge condition
+//! (oversized/malformed child output, stdin/stdout failure, or child exit)
+//! faults the owning session (`SharedState::faulted`) exactly the way a
+//! fatal condition on the primary LSP child does, so the parent Vue session
+//! is never left silently degraded while still reporting healthy.
 
 use super::framing::write_message;
 use super::protocol::SharedState;
 use super::LspError;
 use crate::execution::sandbox;
+use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
+use relay_core::workspace_path::{resolve_existing_path, EntryKind};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex, Semaphore};
 use tokio::time::{timeout, Duration};
+
+mod commands;
+mod framing;
 
 /// Bound on outstanding tsserver requests, mirroring `MAX_LSP_PENDING_REQUESTS`.
 const MAX_TSSERVER_PENDING: usize = 32;
 /// A single tsserver protocol line (request or response) is small JSON;
 /// this is generous headroom while still bounding an untrusted/misbehaving
-/// child process's ability to grow memory.
+/// child process's ability to grow memory before the bound is enforced.
 const MAX_TSSERVER_LINE_BYTES: usize = 1024 * 1024;
 const TSSERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 /// tsserver only answers `_vue:*` commands about a file once that file has
@@ -53,8 +64,14 @@ const TSSERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_TSSERVER_OPEN_FILES: usize = 16;
 const MAX_TSSERVER_OPEN_FILE_BYTES: usize = 1024 * 1024;
 
+use commands::{extract_file_argument, ALLOWED_COMMANDS};
+
 struct Pending {
     responses: Mutex<HashMap<i64, oneshot::Sender<Value>>>,
+}
+
+struct OpenedFile {
+    content_hash: u64,
 }
 
 pub(super) struct TsServerBridge {
@@ -63,7 +80,16 @@ pub(super) struct TsServerBridge {
     next_seq: AtomicI64,
     child: Mutex<Child>,
     workspace_root: PathBuf,
-    opened_files: Mutex<std::collections::HashSet<String>>,
+    opened_files: Mutex<HashMap<PathBuf, OpenedFile>>,
+    /// Shared with the owning session's `SharedState::faulted`: a fatal
+    /// bridge condition faults the whole Vue session, not just this
+    /// component, so a degraded bridge can never masquerade as a healthy
+    /// session that merely answers `null` forever.
+    faulted: Arc<AtomicBool>,
+    /// Bounds concurrently spawned forwarding tasks *before* any task is
+    /// spawned (Required fix 4): a full semaphore means the caller answers
+    /// `null` inline instead of spawning unbounded work.
+    concurrency: Arc<Semaphore>,
 }
 
 impl TsServerBridge {
@@ -77,6 +103,7 @@ impl TsServerBridge {
         tsdk_dir: &Path,
         plugin_probe_location: Option<&Path>,
         workspace_root: PathBuf,
+        faulted: Arc<AtomicBool>,
     ) -> Result<Arc<Self>, LspError> {
         let node = sandbox::resolve_safe_executable(config, "node")
             .map_err(|_| LspError::ServerUnavailable)?;
@@ -106,7 +133,8 @@ impl TsServerBridge {
         let stdout = child.stdout.take().ok_or(LspError::StartupFailed)?;
         // stderr is drained and discarded (not retained/exposed) purely to
         // stop the child from blocking on a full pipe; bridge failures are
-        // observable through request timeouts, not raw child stderr.
+        // observable through request timeouts and session faulting, not
+        // raw child stderr.
         if let Some(mut stderr) = child.stderr.take() {
             tokio::spawn(async move {
                 use tokio::io::AsyncReadExt;
@@ -122,43 +150,76 @@ impl TsServerBridge {
         let pending = Arc::new(Pending {
             responses: Mutex::new(HashMap::new()),
         });
-        tokio::spawn(read_loop(stdout, pending.clone()));
-        Ok(Arc::new(Self {
+        let bridge = Arc::new(Self {
             writer: Mutex::new(stdin),
             pending,
             next_seq: AtomicI64::new(1),
             child: Mutex::new(child),
             workspace_root,
-            opened_files: Mutex::new(std::collections::HashSet::new()),
-        }))
+            opened_files: Mutex::new(HashMap::new()),
+            faulted,
+            concurrency: Arc::new(Semaphore::new(MAX_TSSERVER_PENDING)),
+        });
+        tokio::spawn(framing::read_loop(stdout, bridge.clone()));
+        Ok(bridge)
     }
 
-    /// Ensures tsserver has `open`ed the given file before any `_vue:`
-    /// command about it is forwarded — without this, tsserver answers
-    /// every such command with a "No Project" failure, since it has no
-    /// other way to learn about a file (the `.vue` extension is not one
+    /// Bounds concurrently forwarded requests *before* any forwarding work
+    /// is spawned. Returns `None` at capacity; the caller must answer the
+    /// bridged request with `null` without spawning anything further.
+    pub(super) fn try_acquire(self: &Arc<Self>) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        self.concurrency.clone().try_acquire_owned().ok()
+    }
+
+    fn is_faulted(&self) -> bool {
+        self.faulted.load(Ordering::SeqCst)
+    }
+
+    /// Ensures tsserver has `open`ed the given file (or reopened it with
+    /// fresh content, if changed since the last observed version) before
+    /// any `_vue:` command about it is forwarded — without this, tsserver
+    /// answers every such command with a "No Project" failure, since it has
+    /// no other way to learn about a file (the `.vue` extension is not one
     /// tsserver recognizes on its own; only the `open` command's inline
-    /// `fileContent` makes the file visible to it here). Only files inside
-    /// this session's own workspace root are ever opened; only a bounded
-    /// number of distinct files are tracked at once.
-    async fn ensure_open(&self, file: &str) {
-        let path = PathBuf::from(file);
-        if !path.starts_with(&self.workspace_root) {
-            return;
+    /// `fileContent` makes the file visible to it here).
+    ///
+    /// `file` is resolved through the same canonical contained-path +
+    /// protected-path policy the rest of the native workspace surface uses
+    /// (Required fix 1): lexical `starts_with` checks and unguarded
+    /// `read_to_string` calls are never used here, so `../` traversal,
+    /// outside absolute paths, outside-target symlinks, and protected
+    /// targets (`.ssh`, `.aws`, etc.) are all rejected before any host
+    /// read. Returns the resolved absolute path on success so callers use
+    /// the same canonical form tsserver was told about.
+    async fn ensure_open(&self, file: &str) -> Option<String> {
+        let target = resolve_bridge_file(&self.workspace_root, file)?;
+        let content = tokio::fs::read_to_string(&target).await.ok()?;
+        if content.len() > MAX_TSSERVER_OPEN_FILE_BYTES {
+            return None;
         }
+        let hash = content_hash(&content);
+        let canonical = target.to_string_lossy().into_owned();
         {
             let mut opened = self.opened_files.lock().await;
-            if opened.contains(file) || opened.len() >= MAX_TSSERVER_OPEN_FILES {
-                return;
+            match opened.get(&target) {
+                Some(existing) if existing.content_hash == hash => return Some(canonical),
+                Some(_) => {
+                    // Content changed since this file was last opened:
+                    // close and reopen with fresh content so the same
+                    // Vue session/bridge observes native edits without a
+                    // full restart (Required fix 5).
+                    self.close_file(&canonical).await;
+                }
+                None if opened.len() >= MAX_TSSERVER_OPEN_FILES => return None,
+                None => {}
             }
-            opened.insert(file.to_owned());
+            opened.insert(target.clone(), OpenedFile { content_hash: hash });
         }
-        let Ok(content) = tokio::fs::read_to_string(&path).await else {
-            return;
-        };
-        if content.len() > MAX_TSSERVER_OPEN_FILE_BYTES {
-            return;
-        }
+        self.open_file(&canonical, &content).await;
+        Some(canonical)
+    }
+
+    async fn open_file(&self, file: &str, content: &str) {
         let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
         let open = json!({
             "seq": seq,
@@ -170,15 +231,7 @@ impl TsServerBridge {
                 "projectRootPath": self.workspace_root.to_string_lossy(),
             },
         });
-        let Ok(mut line) = serde_json::to_vec(&open) else {
-            return;
-        };
-        line.push(b'\n');
-        {
-            let mut writer = self.writer.lock().await;
-            let _ = writer.write_all(&line).await;
-            let _ = writer.flush().await;
-        }
+        self.send_line(&open).await;
         // `open` has no matching `response` message in the default
         // (non-verbose) tsserver protocol; a brief settle delay is the
         // simplest bounded way to let tsserver finish processing it before
@@ -186,14 +239,44 @@ impl TsServerBridge {
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
 
-    /// Forwards one `_vue:`-stripped tsserver command and returns its
-    /// response `body` (or `Value::Null` on timeout/failure — the same
-    /// shape a real `tsserver` "no info available" response has, so a
-    /// caller waiting on `tsserver/response` is always unblocked instead
-    /// of hung).
+    async fn close_file(&self, file: &str) {
+        let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
+        let close = json!({
+            "seq": seq,
+            "type": "request",
+            "command": "close",
+            "arguments": {"file": file},
+        });
+        self.send_line(&close).await;
+    }
+
+    async fn send_line(&self, value: &Value) {
+        let Ok(mut line) = serde_json::to_vec(value) else {
+            return;
+        };
+        line.push(b'\n');
+        let mut writer = self.writer.lock().await;
+        if writer.write_all(&line).await.is_err() || writer.flush().await.is_err() {
+            drop(writer);
+            self.mark_fatal().await;
+        }
+    }
+
+    /// Forwards one allowlisted, `_vue:`-stripped tsserver command and
+    /// returns its response `body` (or `Value::Null` on timeout/failure —
+    /// the same shape a real `tsserver` "no info available" response has,
+    /// so a caller waiting on `tsserver/response` is always unblocked
+    /// instead of hung). The caller (`handle_tsserver_request`) has already
+    /// checked the command against `ALLOWED_COMMANDS`; this only re-derives
+    /// and validates any file-bearing argument before forwarding.
     pub(super) async fn request(&self, command: &str, arguments: Value) -> Value {
-        if let Some(file) = arguments.get("file").and_then(Value::as_str) {
-            self.ensure_open(file).await;
+        if self.is_faulted() {
+            return Value::Null;
+        }
+        if let Some(file) = extract_file_argument(command, &arguments) {
+            if self.ensure_open(&file).await.is_none() {
+                return Value::Null;
+            }
         }
         let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
@@ -218,7 +301,9 @@ impl TsServerBridge {
         {
             let mut writer = self.writer.lock().await;
             if writer.write_all(&line).await.is_err() || writer.flush().await.is_err() {
+                drop(writer);
                 self.pending.responses.lock().await.remove(&seq);
+                self.mark_fatal().await;
                 return Value::Null;
             }
         }
@@ -231,6 +316,24 @@ impl TsServerBridge {
         }
     }
 
+    /// Fails the bridge closed (Required fix 6): faults the shared flag the
+    /// owning `LspSession` also checks (so `LspSessionManager` treats the
+    /// whole session as unhealthy and replaces it on next use, preserving
+    /// restart budgets the same way a primary-child crash does), drains any
+    /// outstanding requests with `null` instead of leaving them hanging to
+    /// their own timeout, and reaps the child process.
+    async fn mark_fatal(&self) {
+        self.faulted.store(true, Ordering::SeqCst);
+        let mut responses = self.pending.responses.lock().await;
+        for (_, sender) in responses.drain() {
+            let _ = sender.send(Value::Null);
+        }
+        drop(responses);
+        let mut child = self.child.lock().await;
+        crate::execution::kill_process_group(&mut child).await;
+        let _ = child.wait().await;
+    }
+
     pub(super) async fn shutdown(&self) {
         let mut child = self.child.lock().await;
         crate::execution::kill_process_group(&mut child).await;
@@ -238,51 +341,34 @@ impl TsServerBridge {
     }
 }
 
-async fn read_loop(stdout: tokio::process::ChildStdout, pending: Arc<Pending>) {
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let read = match reader.read_line(&mut line).await {
-            Ok(0) => return,
-            Ok(count) => count,
-            Err(_) => return,
-        };
-        if read > MAX_TSSERVER_LINE_BYTES {
-            return;
-        }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
-            continue;
-        };
-        if value.get("type").and_then(Value::as_str) != Some("response") {
-            continue;
-        }
-        let Some(request_seq) = value.get("request_seq").and_then(Value::as_i64) else {
-            continue;
-        };
-        let body = if value.get("success").and_then(Value::as_bool) == Some(true) {
-            value.get("body").cloned().unwrap_or(Value::Null)
-        } else {
-            Value::Null
-        };
-        if let Some(sender) = pending.responses.lock().await.remove(&request_seq) {
-            let _ = sender.send(body);
-        }
-    }
+/// Resolves a server-supplied bridge file path through the same canonical
+/// contained-path + protected-path policy the rest of the native workspace
+/// surface uses (Required fix 1). Pure/host-read-free except for the
+/// filesystem metadata `resolve_existing_path` itself performs, so this is
+/// directly unit-testable against fixture directories without spawning any
+/// process.
+fn resolve_bridge_file(workspace_root: &Path, file: &str) -> Option<PathBuf> {
+    let target = resolve_existing_path(workspace_root, None, file, EntryKind::File).ok()?;
+    reject_protected_target(workspace_root, &target).ok()?;
+    Some(target)
+}
+
+fn content_hash(content: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Answers one `@vue/language-server` `tsserver/request` notification
-/// `[requestId, command, args]` by forwarding only `_vue:`-prefixed
-/// commands (with the prefix stripped) to the session's bounded
+/// `[requestId, command, args]` by forwarding only allowlisted `_vue:`-
+/// prefixed commands (with the prefix stripped) to the session's bounded
 /// `tsserver_bridge`, then always replying with a matching
 /// `tsserver/response` notification `[requestId, body]` so the server's
 /// internal promise is never left hanging — on any validation failure,
-/// missing bridge, or non-`_vue:` command the reply body is `null` and
-/// nothing is forwarded to the child process.
+/// missing bridge, unlisted command, or capacity exhaustion the reply body
+/// is `null` and nothing is forwarded to the child process. Concurrency is
+/// bounded *before* any forwarding task is spawned (Required fix 4): at
+/// capacity, only the trivial "reply null" task is spawned.
 pub(super) fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&Value>) {
     // LSP notification params are a positional-args array; the actual
     // `[requestId, command, args]` tuple is the first (and only) element,
@@ -309,18 +395,41 @@ pub(super) fn handle_tsserver_request(state: &Arc<SharedState>, params: Option<&
     let forward = state
         .tsserver_bridge
         .clone()
-        .zip(command.strip_prefix("_vue:").map(str::to_owned));
+        .zip(command.strip_prefix("_vue:").map(str::to_owned))
+        .filter(|(_, command)| ALLOWED_COMMANDS.contains(&command.as_str()));
     let state = state.clone();
-    tokio::spawn(async move {
-        let body = match forward {
-            Some((bridge, command)) => bridge.request(&command, arguments).await,
-            None => Value::Null,
-        };
-        let response = json!({
-            "jsonrpc": "2.0",
-            "method": "tsserver/response",
-            "params": [[request_id, body]],
-        });
-        let _ = write_message(&mut *state.writer.lock().await, &response).await;
-    });
+    match forward {
+        Some((bridge, command)) => match bridge.try_acquire() {
+            Some(permit) => {
+                tokio::spawn(async move {
+                    let body = bridge.request(&command, arguments).await;
+                    drop(permit);
+                    reply(&state, request_id, body).await;
+                });
+            }
+            None => {
+                tokio::spawn(async move {
+                    reply(&state, request_id, Value::Null).await;
+                });
+            }
+        },
+        None => {
+            tokio::spawn(async move {
+                reply(&state, request_id, Value::Null).await;
+            });
+        }
+    }
 }
+
+async fn reply(state: &Arc<SharedState>, request_id: i64, body: Value) {
+    let response = json!({
+        "jsonrpc": "2.0",
+        "method": "tsserver/response",
+        "params": [[request_id, body]],
+    });
+    let _ = write_message(&mut *state.writer.lock().await, &response).await;
+}
+
+#[cfg(test)]
+#[path = "tsserver_bridge/tests.rs"]
+mod tests;

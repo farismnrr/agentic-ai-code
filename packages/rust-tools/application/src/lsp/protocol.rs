@@ -18,7 +18,13 @@ use tokio::time::timeout;
 pub(super) struct SharedState {
     pub(super) writer: Mutex<ChildStdin>,
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, LspError>>>>,
-    faulted: AtomicBool,
+    /// Shared with `TsServerBridge::faulted` (when a bridge exists for this
+    /// session): a fatal bridge condition (Required fix 6) faults this same
+    /// flag, so `LspSession::is_faulted` and `LspSessionManager` treat the
+    /// whole session as unhealthy exactly the way a primary-child crash
+    /// does, instead of the bridge silently degrading to `null` forever
+    /// while the session keeps reporting healthy.
+    faulted: Arc<AtomicBool>,
     diagnostics: Mutex<HashMap<String, Value>>,
     /// Bounded store of the most recent params for the small, explicit set
     /// of notification methods a caller actually needs retained (see
@@ -81,6 +87,7 @@ impl LspSession {
         let stdout = child.stdout.take().ok_or(LspError::StartupFailed)?;
         let stderr_pipe = child.stderr.take().ok_or(LspError::StartupFailed)?;
         let workspace_folder = json!({"uri": root_uri, "name": "workspace"});
+        let faulted = Arc::new(AtomicBool::new(false));
         let tsserver_bridge = match &spec.tsserver_bridge_tsdk {
             Some(tsdk_dir) => {
                 match TsServerBridge::spawn(
@@ -88,6 +95,7 @@ impl LspSession {
                     tsdk_dir,
                     spec.tsserver_bridge_plugin_probe.as_deref(),
                     identity.root.clone(),
+                    faulted.clone(),
                 )
                 .await
                 {
@@ -104,7 +112,7 @@ impl LspSession {
         let state = Arc::new(SharedState {
             writer: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
-            faulted: AtomicBool::new(false),
+            faulted,
             diagnostics: Mutex::new(HashMap::new()),
             notifications: Mutex::new(HashMap::new()),
             configuration: spec.settings.clone(),
