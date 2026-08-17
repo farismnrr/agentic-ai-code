@@ -58,7 +58,8 @@ export function useConversations() {
         title: overrides.title || 'New chat',
         modelId: overrides.modelId || settings.value.defaultModelId,
         mode: overrides.mode || 'chat',
-        reasoningEffort: overrides.reasoningEffort
+        reasoningEffort: overrides.reasoningEffort,
+        permissionMode: overrides.permissionMode
       }
     })
     conversations.value = [data, ...conversations.value]

@@ -92,7 +92,7 @@ before debugging external MCP client UI behavior.
 
 ## external MCP client connects but shows an old tool catalog
 
-The client may have cached/discovered an older MCP action snapshot. A current relay exposes six tools, including `terminal_job_start/get/cancel`.
+The client may have cached/discovered an older MCP action snapshot. A current relay exposes 12 tools: six native workspace tools, `terminal_exec`, `http_fetch`, `web_search`, and the three `terminal_job_*` fallback tools.
 
 Refresh or recreate the connection and test from a fresh conversation before concluding the server is stale.
 

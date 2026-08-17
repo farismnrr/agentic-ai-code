@@ -29,7 +29,7 @@ When an agent is operating through the local Masih Awam MCP relay, treat the rel
 - Non-browser MCP clients may omit `Origin`. A missing Origin is valid only when the relay has a configured browser Origin policy; when an Origin is present it must still match the configured `--origin` exactly.
 - The relay does not inherit the operator's full `$PATH`. System tools under the fixed safe PATH are available automatically; user-owned runtimes must be exposed explicitly with repeated `--toolchain-path` / `RELAY_TOOLCHAIN_PATH`. Typical coding directories are `$HOME/.cargo/bin`, `$HOME/.bun/bin`, and the active fnm Node installation `bin` directory. Prefer explicit reviewed directories over inheriting the login-shell PATH.
 - Docker and Tailscale are separate authority expansions. Enable them only when the task needs them with `--allow-docker` and `--allow-tailscale`; the relay binds only their configured Unix sockets. Docker daemon access is substantially more privileged than ordinary sandboxed command execution.
-- `terminal_exec` uses direct executable + argv semantics. Shell operators such as `&&`, `|`, redirects, glob expansion, and command substitution are not interpreted unless the agent explicitly invokes a shell such as `sh -lc` and doing so remains compatible with the execution policy.
+- `terminal_exec` uses direct executable + argv semantics. Argument values are passed verbatim and may begin with `-` or `--`; prefer `command="cargo", args=["--help"]` or `command="cargo", args=["check", "--locked"]` rather than encoding child flags as relay options. The `command` executable itself must resolve from the relay safe PATH: do not use `./script.sh` or another executable path there; run repository scripts through an approved interpreter such as `command="bash", args=["scripts/check.sh"]`. Shell operators such as `&&`, `|`, redirects, glob expansion, and command substitution are not interpreted unless the agent explicitly invokes a shell such as `sh -lc` and doing so remains compatible with the execution policy.
 - For a coding-capable relay, verify the actual runtime after restart instead of assuming configuration worked: a simple command, Node/package manager, Rust toolchain, Tailscale when enabled, and Docker when enabled.
 
 A representative single-owner local coding profile is:
@@ -69,7 +69,7 @@ The hook executes:
 pnpm verify:commit
 ```
 
-That command runs repository policy enforcement, agent-doc integrity, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
+That command runs repository policy enforcement, agent-doc integrity, architecture checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
 
 ## Linting
 
@@ -100,3 +100,7 @@ Do not simplify the type gate back to plain `nuxt typecheck`: this repository pr
 ## Dependency/security verification
 
 `pnpm audit` is not run by the pre-commit hook because it depends on registry/network state. It remains mandatory for dependency changes before merge. Security-sensitive Rust changes may additionally require `cargo audit` and relevant deterministic acceptance/security scripts under `scripts/`.
+
+### Maintainability checker
+
+`node scripts/check-maintainability.mjs` is the authoritative repository-native source/file-folder budget check and is part of `pnpm verify:commit`. It reports >400-line files and 13–15-file folders for review, fails unexplained >500-line files and >15-file folders, excludes generated/vendor/build/migration/evidence-style paths explicitly, and rejects wildcard/broad exceptions. `node scripts/check-maintainability.mjs --self-test` proves representative oversized-file and overfull-folder fixtures fail. Do not create a second threshold configuration elsewhere.

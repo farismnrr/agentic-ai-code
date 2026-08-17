@@ -13,6 +13,9 @@ bash scripts/check-agent-docs.sh
 printf 'commit-gate: checking architecture boundaries...\n'
 bash scripts/check-architecture.sh
 
+printf 'commit-gate: checking maintainability budgets...\n'
+node scripts/check-maintainability.mjs
+
 printf 'commit-gate: running all linters...\n'
 pnpm lint
 

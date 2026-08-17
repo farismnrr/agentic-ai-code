@@ -37,7 +37,7 @@ export function createChatTurnDependencies(): ChatTurnDependencies {
     getChatModel: (provider, modelId) => getChatModel(provider as Parameters<typeof getChatModel>[0], modelId),
     getLanggraphModel: (provider, modelId, maxOutputTokens) => getLanggraphModel(provider as Parameters<typeof getLanggraphModel>[0], modelId, maxOutputTokens),
     resolveMessagesForModel: input => resolveMessagesForModel({ ...input, getSummarizerModel: input.getSummarizerModel as Parameters<typeof resolveMessagesForModel>[0]['getSummarizerModel'] }),
-    buildMcpTools: async (userId, enabledToolIds, approvals) => buildMcpTools(userId, enabledToolIds, approvals as Parameters<typeof buildMcpTools>[2]),
+    buildMcpTools: async (userId, enabledToolIds, approvals, permissionMode) => buildMcpTools(userId, enabledToolIds, approvals as Parameters<typeof buildMcpTools>[2], permissionMode as Parameters<typeof buildMcpTools>[3]),
     convertTurnMessages: (messages, tools) => convertTurnMessages(messages, tools as Parameters<typeof convertTurnMessages>[1]),
     prepareAiSdkModel: (model, thinkingEnabled) => prepareAiSdkModel(model as Parameters<typeof prepareAiSdkModel>[0], thinkingEnabled),
     streamAiSdkAgent: input => streamAiSdkAgent(input as Parameters<typeof streamAiSdkAgent>[0]),

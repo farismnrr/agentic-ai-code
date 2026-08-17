@@ -7,6 +7,7 @@ cd "$root"
 test -f packages/rust-tools/cli/src/main.rs
 test -f packages/rust-tools/infrastructure/src/transport.rs
 test -f scripts/phase7-external-mcp-contract.sh
+test -f scripts/phase-039c-contract.sh
 
 # The canonical MCP surface and the remote security boundary are source-level
 # release invariants. Keep these checks deterministic and independent of tests.

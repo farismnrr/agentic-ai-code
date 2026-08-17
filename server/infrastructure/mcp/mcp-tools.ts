@@ -5,6 +5,8 @@ import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
+import { approvalForCapability, capabilityFactsForToolCall } from '#shared/utils/capability-policy'
+import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -40,18 +42,12 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
 // callers cast to `ToolApprovalConfiguration<ToolSet, never>` only at the
 // `streamText`/`generateText` call site, once nothing further mutates it.
 type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
-  | ((input: never) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
+  | ((input: unknown) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
 
 /**
- * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/ — MCP tool ids
- * are `${serverId}.${toolName}` (see shared/types/chat.ts McpTool.id), which
- * contains a dot, so the model-facing name is a sanitized, truncated form
- * with a reverse lookup back to the real MCP call.
+ * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/; the shared
+ * identity helper is the reverse-lookup contract used by the approval UI.
  */
-function sanitizeToolName(mcpToolId: string) {
-  return mcpToolId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
-}
-
 /**
  * Builds the `tools` + `toolApproval` options for `streamText`, from a
  * conversation's `enabledToolIds` (`McpTool['id']` values, i.e.
@@ -59,10 +55,11 @@ function sanitizeToolName(mcpToolId: string) {
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>) {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual') {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
+  const modelToolOwners = new Map<string, string>()
 
   if (enabledToolIds.length === 0) {
     return { tools, toolApproval, close: async () => {} }
@@ -93,7 +90,13 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       const mcpToolId = `${server.id}.${mcpTool.name}`
       if (!enabledToolIds.includes(mcpToolId)) continue
 
-      const modelName = sanitizeToolName(mcpToolId)
+      const modelName = mcpModelToolName(server.id, mcpTool.name)
+      const previousOwner = modelToolOwners.get(modelName)
+      if (previousOwner && previousOwner !== mcpToolId) {
+        logger.error('[mcp-tools] model tool identity collision; refusing ambiguous tool', { modelName })
+        continue
+      }
+      modelToolOwners.set(modelName, mcpToolId)
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
@@ -103,8 +106,18 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         }
       })
 
-      const decision = approvals[mcpToolId]
-      toolApproval[modelName] = decision === 'always' ? 'approved' : decision === 'never' ? 'denied' : 'user-approval'
+      const trustedProvenance = client.trustedProvenance ?? 'external'
+      toolApproval[modelName] = (input: unknown) => approvalForCapability(
+        capabilityFactsForToolCall({
+          toolId: mcpToolId,
+          toolName: mcpTool.name,
+          input,
+          annotations: mcpTool.annotations,
+          trustedProvenance
+        }),
+        approvals[mcpToolId],
+        permissionMode
+      ).outcome
     }
   }
 

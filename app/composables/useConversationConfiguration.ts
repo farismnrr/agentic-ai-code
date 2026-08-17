@@ -26,5 +26,11 @@ export function useConversationConfiguration(conversation: ComputedRef<Conversat
       if (conversation.value) update(conversation.value.id, { enabledToolIds: value })
     }
   })
-  return { modelId, mode, reasoningEffort, enabledToolIds }
+  const permissionMode = computed({
+    get: () => conversation.value?.permissionMode ?? 'manual',
+    set: (value: Conversation['permissionMode']) => {
+      if (conversation.value) update(conversation.value.id, { permissionMode: value })
+    }
+  })
+  return { modelId, mode, reasoningEffort, enabledToolIds, permissionMode }
 }

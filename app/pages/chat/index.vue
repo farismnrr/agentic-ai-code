@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
+import type { Conversation } from '#shared/types/chat'
 
 useSeoMeta({ title: 'New chat' })
 
@@ -45,6 +46,7 @@ const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
 // fabricating a plausible-sounding answer instead of saying it lacks the
 // capability. Collected here, then applied once the conversation exists.
 const enabledToolIds = ref<string[]>([])
+const permissionMode = ref<Conversation['permissionMode']>('manual')
 
 const modeItems = chatModeItems
 const effortItems = reasoningEffortItems
@@ -68,7 +70,7 @@ const workspaceItems = computed(() =>
   workspaces.value.map(w => ({ label: w.name, value: w.id }))
 )
 
-const { start } = useNewChatController(input, workspaceId, modelId, mode, reasoningEffort, enabledToolIds)
+const { start } = useNewChatController(input, workspaceId, modelId, mode, reasoningEffort, enabledToolIds, permissionMode)
 </script>
 
 <template>
@@ -146,6 +148,7 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
               v-model:mode="mode"
               v-model:reasoning-effort="reasoningEffort"
               v-model:enabled-tool-ids="enabledToolIds"
+              v-model:permission-mode="permissionMode"
               :model-items="modelItems"
               :mode-items="modeItems"
               :effort-items="effortItems"

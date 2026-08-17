@@ -2,6 +2,8 @@
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
 import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
+import { capabilityFactsForToolCall, classifyCapability, rememberedApprovalCanAutoAnswer } from '#shared/utils/capability-policy'
+import { resolveMcpToolFromModelName } from '#shared/utils/mcp-tool-identity'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -31,22 +33,13 @@ interface PendingApproval {
   toolName: string
   serverId?: string
   input: unknown
-}
-
-// MCP tools resolve an id via `serverId.toolName`; native tools (e.g.
-// `terminal`, registered directly in the ToolSet with no MCP server) have no
-// `serverId` at all, so that id would always be undefined for them — meaning
-// "Always allow"/"Always deny" silently never persisted for the terminal
-// tool. Fall back to the native tools registry, matched by its model-facing
-// `toolName`, so the id lines up with what server/api/chat.post.ts reads
-// back from `conversation.approvals`.
-function resolveToolId(toolName: string, serverId: string | undefined) {
-  if (serverId) return `${serverId}.${toolName}`
-  return nativeTools.find(t => t.toolName === toolName)?.id
+  toolId?: string
+  annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }
+  trustedProvenance?: 'first-party-relay' | 'external'
+  identity: 'native' | 'mcp' | 'unknown'
 }
 
 interface Candidate extends PendingApproval {
-  toolId: string | undefined
   /**
    * The AI SDK always streams a `tool-approval-request` chunk (this
    * state) immediately followed by `tool-approval-response` for any call
@@ -72,14 +65,18 @@ const candidate = computed<Candidate | undefined>(() => {
       if (part.state !== 'approval-requested') continue
 
       const toolName = getToolOrDynamicToolName(part)
-      const tool = Object.values(toolsById.value).find(t => t.name === toolName)
+      const mcpTool = resolveMcpToolFromModelName(toolName, Object.values(toolsById.value))
+      const nativeTool = nativeTools.find(tool => tool.toolName === toolName)
 
       return {
         approvalId: part.approval.id,
         toolName,
-        serverId: tool?.serverId,
+        serverId: mcpTool?.serverId,
         input: part.input,
-        toolId: resolveToolId(toolName, tool?.serverId),
+        toolId: mcpTool?.id ?? nativeTool?.id,
+        annotations: mcpTool?.annotations,
+        trustedProvenance: mcpTool?.trustedProvenance,
+        identity: mcpTool ? 'mcp' : nativeTool ? 'native' : 'unknown',
         isAutomatic: part.approval?.isAutomatic === true
       }
     }
@@ -87,15 +84,27 @@ const candidate = computed<Candidate | undefined>(() => {
   return undefined
 })
 
-// What the modal renders: never an automatic resolution (server already
-// decided, no user input needed, ever) and never one with a remembered
-// decision — those get answered programmatically below instead, without
-// ever flashing the modal open first.
+function factsFor(candidate: PendingApproval) {
+  return capabilityFactsForToolCall({
+    toolId: candidate.toolId ?? candidate.toolName,
+    toolName: candidate.toolName,
+    input: candidate.input,
+    annotations: candidate.annotations,
+    // Cached MCP provenance is display metadata only. A request that reached
+    // this component is authoritative evidence that the server did not
+    // auto-approve it, so MCP is rendered conservatively as external/high-risk.
+    trustedProvenance: candidate.identity === 'native' ? 'native' : 'external'
+  })
+}
+
+// What the modal renders: automatic resolutions and remembered decisions that
+// the same shared policy can actually honor stay hidden. A narrowed `always`
+// decision remains visible so it can never leave the SDK approval suspended.
 const pending = computed<PendingApproval | undefined>(() => {
   const c = candidate.value
   if (!c || c.isAutomatic) return undefined
   const remembered = c.toolId ? props.conversation?.approvals[c.toolId] : undefined
-  if (remembered === 'always' || remembered === 'never') return undefined
+  if (remembered === 'never' || (remembered === 'always' && c.identity !== 'mcp' && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
   return c
 })
 
@@ -110,6 +119,7 @@ const autoAnswerable = computed<{ toolId: string, decision: 'always' | 'never' }
   if (!c || c.isAutomatic || !c.toolId) return undefined
   const remembered = props.conversation?.approvals[c.toolId]
   if (remembered !== 'always' && remembered !== 'never') return undefined
+  if (remembered === 'always' && (c.identity === 'mcp' || !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
   return { toolId: c.toolId, decision: remembered }
 })
 
@@ -123,6 +133,12 @@ const open = computed({
 const formattedInput = computed(() =>
   pending.value?.input ? JSON.stringify(pending.value.input, null, 2) : undefined
 )
+
+const assessment = computed(() => {
+  const current = pending.value
+  if (!current) return undefined
+  return classifyCapability(factsFor(current))
+})
 
 function answer(approved: boolean, remember: boolean) {
   const current = pending.value
@@ -179,6 +195,37 @@ watch(autoAnswerable, (value) => {
           </p>
           <pre class="max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ formattedInput }}</pre>
         </div>
+
+        <div
+          v-if="assessment"
+          class="flex flex-wrap gap-2"
+        >
+          <UBadge
+            :label="`${assessment.risk} risk`"
+            :color="assessment.risk === 'high' ? 'error' : assessment.risk === 'medium' ? 'warning' : 'success'"
+            variant="subtle"
+          />
+          <UBadge
+            v-for="effect in assessment.effects"
+            :key="effect"
+            :label="effect.replaceAll('_', ' ')"
+            color="neutral"
+            variant="subtle"
+          />
+          <UBadge
+            v-if="assessment.networkRequested"
+            label="network requested"
+            color="warning"
+            variant="subtle"
+          />
+        </div>
+
+        <p
+          v-if="assessment"
+          class="text-xs text-dimmed"
+        >
+          {{ assessment.reason }}. Remembered approvals apply only to low-risk, non-opaque calls.
+        </p>
 
         <p class="text-sm text-muted">
           Tools can read and act on data outside this conversation. Only allow

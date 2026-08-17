@@ -88,6 +88,7 @@ RELAY_MAX_TERMINAL_TIMEOUT_MS
 RELAY_COMPLETED_JOB_TTL_MS
 RELAY_MAX_RETAINED_OUTPUT_BYTES
 RELAY_MAX_RUNNING_JOBS
+RELAY_ALLOW_TERMINAL_NETWORK
 RELAY_TOOLCHAIN_PATH
 RELAY_ALLOW_DOCKER
 RELAY_DOCKER_SOCKET
@@ -96,6 +97,10 @@ RELAY_TAILSCALE_SOCKET
 ```
 
 `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
+
+Terminal subprocesses use an isolated network namespace by default. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for a trusted workflow that needs network-capable commands such as package installation or remote Git. Dedicated `http_fetch` and `web_search` remain separate network capabilities and are not enabled by this flag.
+
+Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories appended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
