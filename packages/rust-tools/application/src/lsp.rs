@@ -9,12 +9,16 @@ mod document;
 mod framing;
 mod manager;
 mod protocol;
+mod rename;
+pub mod semantic;
 
 pub use manager::LspSessionManager;
 pub use protocol::LspSession;
 pub use rust::RustLanguageServer;
+pub use typescript::TypeScriptLanguageServer;
 
 pub mod rust;
+pub mod typescript;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -145,14 +149,26 @@ impl ServerCapabilities {
             _ => false,
         };
         let (text_sync, open_close) = match capabilities.get("textDocumentSync") {
-            Some(serde_json::Value::Number(value)) => (
-                match value.as_u64().unwrap_or(0) {
+            Some(serde_json::Value::Number(value)) => {
+                let kind = match value.as_u64().unwrap_or(0) {
                     1 => TextDocumentSyncKind::Full,
                     2 => TextDocumentSyncKind::Incremental,
                     _ => TextDocumentSyncKind::None,
-                },
-                false,
-            ),
+                };
+                // The numeric `textDocumentSync` form (as opposed to the
+                // structured object form) carries no `openClose` field at
+                // all — per the LSP spec this is not "openClose disabled",
+                // it is simply the compact legacy shape. Any server
+                // advertising Full/Incremental sync here still expects
+                // didOpen/didChange/didClose; only `None` genuinely means
+                // no document sync is wanted. Concrete defect found while
+                // integrating `typescript-language-server` (Plan 039C
+                // PHASE-04), which reports `"textDocumentSync": 2` and
+                // returns empty results for any query issued without a
+                // prior didOpen — the previous unconditional `false` here
+                // silently starved every TypeScript/Vue query.
+                (kind, kind != TextDocumentSyncKind::None)
+            }
             Some(serde_json::Value::Object(object)) => {
                 let kind = match object
                     .get("change")

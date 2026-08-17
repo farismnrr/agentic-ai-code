@@ -32,20 +32,33 @@ impl LspSessionManager {
             let path = sandbox::resolve_safe_executable(&config, executable)
                 .map_err(|_| LspError::ServerUnavailable)?;
             let lowercase = language.to_ascii_lowercase();
-            let (settings, experimental_capabilities) = if lowercase == "rust" {
-                (
+            let (settings, experimental_capabilities, args) = match lowercase.as_str() {
+                "rust" => (
                     super::rust::workspace_settings(),
                     super::rust::experimental_capabilities(),
-                )
-            } else {
-                (serde_json::Value::Null, serde_json::Value::Null)
+                    Vec::new(),
+                ),
+                "typescript" => (
+                    super::typescript::typescript_workspace_settings(&config),
+                    serde_json::Value::Null,
+                    vec!["--stdio".to_owned()],
+                ),
+                "vue" => (
+                    super::typescript::vue_workspace_settings(&config),
+                    serde_json::Value::Null,
+                    match super::typescript::tsdk_arg(&config) {
+                        Some(arg) => vec!["--stdio".to_owned(), arg],
+                        None => vec!["--stdio".to_owned()],
+                    },
+                ),
+                _ => (serde_json::Value::Null, serde_json::Value::Null, Vec::new()),
             };
             specs.insert(
                 lowercase,
                 ApprovedServerSpec {
                     language: language.to_owned(),
                     executable: path,
-                    args: Vec::new(),
+                    args,
                     settings,
                     experimental_capabilities,
                 },

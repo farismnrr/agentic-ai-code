@@ -124,7 +124,10 @@ impl LspSession {
                     "workspaceFolders": [workspace_folder.clone()],
                     "capabilities": {
                         "workspace": {"workspaceFolders": true, "configuration": true},
-                        "textDocument": {"synchronization":{"dynamicRegistration":false}},
+                        "textDocument": {
+                            "synchronization":{"dynamicRegistration":false},
+                            "publishDiagnostics":{"relatedInformation":false,"versionSupport":true}
+                        },
                         "experimental": spec.experimental_capabilities
                     },
                     "initializationOptions": spec.settings
