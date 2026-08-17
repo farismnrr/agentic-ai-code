@@ -5,4 +5,5 @@ pub mod workspace;
 
 pub mod code;
 pub mod git;
+pub mod hooks;
 pub mod lsp;
