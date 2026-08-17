@@ -32,6 +32,7 @@ export function totalArea(shapes: Shape[]): number {
   return shapes.reduce((sum, shape) => sum + shape.area(), 0);
 }
 export function broken(): number { const value: number = "not a number"; return value; }
+// no symbol on this comment line
 "#;
     fs::write(root.join("src/math.ts"), math_source).map_err(io_error)?;
     let vue_source = r#"<script setup lang="ts">
@@ -91,6 +92,21 @@ const area = totalArea([square]);
         "Square return type resolves to class declaration",
     )?;
 
+    // A position with no resolvable symbol (inside a comment) makes a real
+    // tsserver return a valid `null` definition result, which must
+    // normalize to an empty list rather than a malformed-response error.
+    let comment_col = source_line(math_source, 10)
+        .find("no symbol")
+        .ok_or("fixture comment line")?;
+    let null_definitions = ts
+        .definition("src/math.ts", 10, comment_col)
+        .await
+        .map_err(|error| format!("ts null definition: {error}"))?;
+    require(
+        null_definitions.is_empty(),
+        "a valid null definition response normalizes to an empty result, not an error",
+    )?;
+
     let references = ts
         .references(
             "src/math.ts",
@@ -98,10 +114,27 @@ const area = totalArea([square]);
             source_line(math_source, 5)
                 .find("makeSquare")
                 .ok_or("fixture makeSquare decl")?,
+            true,
         )
         .await
         .map_err(|error| format!("ts references: {error}"))?;
     require(!references.is_empty(), "makeSquare has references")?;
+
+    let references_excl_decl = ts
+        .references(
+            "src/math.ts",
+            5,
+            source_line(math_source, 5)
+                .find("makeSquare")
+                .ok_or("fixture makeSquare decl")?,
+            false,
+        )
+        .await
+        .map_err(|error| format!("ts references (exclude declaration): {error}"))?;
+    require(
+        references_excl_decl.len() < references.len(),
+        "include_declaration=false excludes the declaration site",
+    )?;
 
     let hover = ts
         .hover(

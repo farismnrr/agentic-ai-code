@@ -337,7 +337,12 @@ async fn request_locations(
         params.as_object_mut().unwrap().extend(extra);
     }
     let value = session.request(method, params).await?;
-    let values = value.as_array().cloned().unwrap_or_else(|| vec![value]);
+    let values = match value {
+        Value::Null => Vec::new(),
+        Value::Array(items) => items,
+        Value::Object(_) => vec![value],
+        _ => return Err(LspError::MalformedResponse),
+    };
     values
         .iter()
         .map(|value| normalize_location(session, value))

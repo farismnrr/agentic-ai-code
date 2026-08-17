@@ -43,6 +43,17 @@ pub async fn rename_preview(
     }
     let mut by_uri: HashMap<String, Vec<RenameEdit>> = HashMap::new();
 
+    let has_changes = value.get("changes").is_some();
+    let has_document_changes = value.get("documentChanges").is_some();
+    if has_changes && has_document_changes {
+        // A WorkspaceEdit MUST NOT carry both fields per the LSP spec, and a
+        // server that returns both is ambiguous about which one is
+        // authoritative. Normalizing only one side could silently drop a
+        // resource operation or edit encoded only in the other, so the whole
+        // preview fails closed rather than partially representing the edit.
+        return Err(LspError::MalformedResponse);
+    }
+
     if let Some(changes) = value.get("changes").and_then(Value::as_object) {
         for (uri, edits) in changes {
             let edits = edits.as_array().ok_or(LspError::MalformedResponse)?;

@@ -62,10 +62,19 @@ impl Adapter {
         path: &str,
         line: u32,
         column: usize,
+        include_declaration: bool,
     ) -> Result<Vec<Location>, LspError> {
         match self {
-            Self::Rust(server) => server.references(path, line, column).await,
-            Self::TypeScript(server) => server.references(path, line, column).await,
+            Self::Rust(server) => {
+                server
+                    .references(path, line, column, include_declaration)
+                    .await
+            }
+            Self::TypeScript(server) => {
+                server
+                    .references(path, line, column, include_declaration)
+                    .await
+            }
         }
     }
 
@@ -196,9 +205,10 @@ async fn code_references(
     lsp: &Arc<LspSessionManager>,
 ) -> Result<ToolCallResult, McpError> {
     let (path, line, column, cwd) = position_args(arguments)?;
+    let include_declaration = bool_arg(arguments, "include_declaration")?.unwrap_or(true);
     let (adapter, _) = adapter_for_path(&path, cwd.as_deref(), lsp).await?;
     let locations = adapter
-        .references(&path, line, column)
+        .references(&path, line, column, include_declaration)
         .await
         .map_err(lsp_error)?;
     let root = workspace_root(cwd.as_deref(), config)?;
@@ -338,6 +348,14 @@ fn string_arg(arguments: &Value, key: &str) -> Result<Option<String>, McpError> 
         }
         Some(Value::String(_)) => Err(McpError::InvalidRequest(format!("{key} is invalid"))),
         _ => Err(McpError::InvalidRequest(format!("{key} must be a string"))),
+    }
+}
+
+fn bool_arg(arguments: &Value, key: &str) -> Result<Option<bool>, McpError> {
+    match arguments.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(value)) => Ok(Some(*value)),
+        _ => Err(McpError::InvalidRequest(format!("{key} must be a boolean"))),
     }
 }
 
