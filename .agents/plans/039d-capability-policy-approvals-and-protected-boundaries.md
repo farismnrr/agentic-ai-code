@@ -1,6 +1,6 @@
 # Plan 039D — Capability Policy, Approvals, and Protected Boundaries
 
-**Status:** IMPLEMENTED — AWAITING INDEPENDENT VERIFICATION
+**Status:** CLOSED / VERIFIED
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039C  
@@ -242,6 +242,14 @@ Attempt bypasses with:
 - tool-name sanitization collisions;
 - malformed policy config.
 
+## Operational closure evidence (2026-08-17)
+
+- Reviewed source HEAD: `18bebfa6cdfedbb7a6798839cc9cf7bd7d5d40b2` on `feat/039c-lsp-foundation`.
+- `pnpm release:build v0.0.10` passed the mandatory commit gate, Nuxt production build, locked x86_64 Rust release build, version check, and release checksum verification.
+- Exact release binary was staged at `/home/farismnrr/.local/share/ai-code/bin/ai-tools`; release/deployed SHA-256 is `8953cd6f718d416ff8ce7fc92bace2bd27953363db5b59d226feb99b919e6281`.
+- `ai-tools-relay.service` restarted and remained active/running with the canonical remote OAuth, loopback trusted-proxy, repository working directory, home execution root, and port `47821` configuration.
+- Acceptance passed: capability policy boundary/behavior, Plan-039B/039C MCP contracts, zero-bypass, protected workspace paths, Git/patch safety, full phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke. The public authenticated smoke was not attempted because no access-token file was provided; no external MCP client/MCP client resync was performed.
+
 ## Acceptance criteria
 
 - [x] Native and terminal operations enforce one coherent protected-path boundary.
@@ -251,4 +259,4 @@ Attempt bypasses with:
 - [x] Dedicated HTTP/domain policy does not rely on fragile shell parsing.
 - [x] External MCP clients remain protected by hard relay policy independent of Nuxt UI approvals.
 - [x] No existing OAuth/Bubblewrap/Docker/Tailscale boundary is weakened.
-- [x] Mandatory commit/security/black-box verification passes, pending independent verifier review.
+- [x] Mandatory commit/security/black-box verification passes, including release build and deployed-binary/service closure checks.
