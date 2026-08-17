@@ -20,7 +20,7 @@ async fn run() -> Result<(), String> {
     let source = r#"pub trait Render { fn render(&self) -> String; }
 pub struct Café { pub value: i32 }
 impl Render for Café { fn render(&self) -> String { self.value.to_string() } }
-pub fn make(value: i32) -> Café { Café { value } }
+/* café */ pub fn make(value: i32) -> Café { Café { value } }
 pub fn call() -> String { make(7).render() }
 pub fn broken() { let _: i32 = "not an integer"; }
 "#;
