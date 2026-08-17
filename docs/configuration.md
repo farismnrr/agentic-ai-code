@@ -130,3 +130,21 @@ Telemetry is designed to remain useful without carrying secrets/PII. Do not weak
 The workspace directory is mounted at the same absolute path inside the container. Keep `NUXT_WORKSPACES_ROOT` consistent with that mount.
 
 The Docker Compose stack is for the web application/observability topology. It does not grant Docker access to the Rust coding relay.
+
+# Deterministic lifecycle hooks
+
+The relay keeps repository hook configuration disabled by default. An operator
+may explicitly enable the vendor-neutral `.agents/hooks.json` file with
+`--enable-agent-hooks` (or `RELAY_ENABLE_AGENT_HOOKS=true`). The file must carry
+the canonical repository identity and each handler must use a direct executable
+from the relay safe PATH. Shell indirection, absolute executable paths, network
+access, optional host sockets, credentials, and raw tool payloads are not
+available to hooks.
+
+Hook failures are fail-closed for `security` handlers and explicitly fail-open
+for `cosmetic` handlers. `pre_tool_use` can only block or request approval;
+there is no hook result that grants authority. `after_file_change` runs only
+after a committed native mutation. Stop gates are attempted at most twice.
+
+Hook telemetry records only bounded event, decision, duration, and reason class.
+The `subagent_stop` event remains dependency-gated by Plan 039F.

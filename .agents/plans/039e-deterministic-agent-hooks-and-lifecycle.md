@@ -1,6 +1,6 @@
 # Plan 039E — Deterministic Agent Hooks and Lifecycle
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — AWAITING INDEPENDENT VERIFICATION
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039D  
@@ -109,41 +109,41 @@ Only lifecycle points where decisions make sense may block. Post hooks cannot re
 
 ### PHASE-01 — event/security contract
 
-- [ ] Define event enum, payloads, decisions, ordering, recursion policy, timeout/output limits.
-- [ ] Integrate Plan-039D deny/ask/allow precedence so hooks cannot widen authority.
-- [ ] Define trusted-repository enablement semantics.
+- [x] Define event enum, payloads, decisions, ordering, recursion policy, timeout/output limits.
+- [x] Integrate Plan-039D deny/ask/allow precedence so hooks cannot widen authority.
+- [x] Define trusted-repository enablement semantics.
 
 ### PHASE-02 — command-hook runner
 
-- [ ] Direct argv only; no implicit shell.
-- [ ] Reuse Bubblewrap/process execution primitives with stricter defaults where possible.
-- [ ] Bound duration/output/process tree.
-- [ ] Clear environment; expose only approved minimal variables.
-- [ ] Cancel cleanly with parent session.
+- [x] Direct argv only; no implicit shell.
+- [x] Reuse Bubblewrap/process execution primitives with stricter defaults where possible.
+- [x] Bound duration/output/process tree.
+- [x] Clear environment; expose only approved minimal variables.
+- [x] Cancel cleanly with parent session.
 
 ### PHASE-03 — `pre_tool_use` / `post_tool_use` / `tool_error`
 
-- [ ] Match by canonical tool/effect class using structured fields.
-- [ ] Allow pre-hook block/request-approval only within hard-policy ceiling.
-- [ ] Keep post/error payloads sanitized.
-- [ ] Prove hook failure semantics.
+- [x] Match by canonical tool/effect class using structured fields.
+- [x] Allow pre-hook block/request-approval only within hard-policy ceiling.
+- [x] Keep post/error payloads sanitized.
+- [x] Prove hook failure semantics.
 
 ### PHASE-04 — file-change/LSP integration
 
-- [ ] Fire `after_file_change` only after successful committed mutation.
-- [ ] Include bounded changed-path metadata.
-- [ ] Refresh LSP state from Plan 039C.
-- [ ] Prove formatter/check hook can run without recursive tool loops.
+- [x] Fire `after_file_change` only after successful committed mutation.
+- [x] Include bounded changed-path metadata.
+- [x] Refresh LSP state from Plan 039C.
+- [x] Prove formatter/check hook can run without recursive tool loops.
 
 ### PHASE-05 — session/stop lifecycle
 
-- [ ] Add `session_start` and `pre_agent_stop`.
-- [ ] Keep injected context bounded.
-- [ ] Allow deterministic repository completion gates without infinite stop loops.
+- [x] Add `session_start` and `pre_agent_stop`.
+- [x] Keep injected context bounded.
+- [x] Allow deterministic repository completion gates without infinite stop loops.
 
 ### PHASE-06 — subagent lifecycle
 
-- [ ] Add `subagent_stop` after 039F exists.
+- [ ] Add `subagent_stop` after 039F exists (dependency-gated; not started).
 - [ ] Ensure child identity/policy is represented without leaking child context.
 - [ ] Parent remains responsible for accepting/rejecting child result.
 
@@ -162,10 +162,10 @@ Test malformed configs, external executable targets, shell indirection, huge out
 
 ## Acceptance criteria
 
-- [ ] Hook events are deterministic, bounded, and documented.
-- [ ] Hook config is vendor-neutral and trust-scoped by repository identity.
-- [ ] Hooks cannot widen hard policy or access protected credentials by default.
-- [ ] File-change hooks integrate with LSP/format/validation safely.
-- [ ] Stop hooks cannot create unbounded loops.
-- [ ] Sanitized hook telemetry exists without raw payload leakage.
-- [ ] Mandatory repository and adversarial acceptance checks pass.
+- [x] Hook events are deterministic, bounded, and documented.
+- [x] Hook config is vendor-neutral and trust-scoped by repository identity.
+- [x] Hooks cannot widen hard policy or access protected credentials by default.
+- [x] File-change hooks integrate with LSP/format/validation safely.
+- [x] Stop hooks cannot create unbounded loops.
+- [x] Sanitized hook telemetry exists without raw payload leakage.
+- [x] Mandatory repository and adversarial acceptance checks pass locally; independent verification remains pending.
