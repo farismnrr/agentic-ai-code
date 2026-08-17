@@ -88,6 +88,8 @@ pub struct AppState {
     /// router the same way `jobs` is, so all `code_*` calls in a process
     /// share the same capped session pool.
     pub lsp: std::sync::Arc<relay_application::lsp::LspSessionManager>,
+    /// Inert unless explicitly enabled and identity-validated at startup.
+    pub hooks: std::sync::Arc<relay_application::hooks::HookManager>,
     /// Coarse request admission is deliberately separate from both the HTTP
     /// concurrency limit and the execution semaphore. It runs before OAuth
     /// validation so unauthenticated floods cannot reach JWKS or execution.
@@ -165,11 +167,17 @@ pub fn create_router_with_jobs(
         relay_application::lsp::LspSessionManager::new(unconfigured)
             .expect("LSP session manager with no configured servers must construct")
     });
+    let hook_config = std::sync::Arc::new(config.clone());
+    let hooks = relay_application::hooks::HookManager::load(hook_config).unwrap_or_else(|error| {
+        tracing::warn!(event = "relay.hook_config", outcome = "disabled", reason = %error);
+        relay_application::hooks::HookManager::disabled(std::sync::Arc::new(config.clone()))
+    });
 
     let state = Arc::new(AppState {
         config: config.clone(),
         jobs,
         lsp,
+        hooks,
         request_admission: Arc::new(RequestAdmission::configured()),
         jwks_cache: tokio::sync::RwLock::new(None),
     });

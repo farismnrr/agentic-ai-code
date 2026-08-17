@@ -126,6 +126,35 @@ pub(crate) fn spawn_lsp(
     )
 }
 
+/// Hook profile: contained repository cwd, writable workspace for explicitly
+/// configured formatters, isolated network, no optional sockets/runtime extras.
+pub(crate) fn spawn_hook(
+    config: &ServerConfig,
+    executable: PathBuf,
+    args: Vec<String>,
+    cwd: PathBuf,
+) -> Result<Child, std::io::Error> {
+    let invocation = ToolInvocation {
+        program: InvocationProgram::Direct(executable),
+        args,
+        cwd: Some(cwd.clone()),
+        timeout_ms: 0,
+        allow_network: false,
+    };
+    spawn_with_profile(
+        config,
+        &invocation,
+        SandboxProfile {
+            workspace_access: WorkspaceAccess::Writable,
+            network_access: NetworkAccess::Isolated,
+            expose_optional_sockets: false,
+            expose_runtime_extras: false,
+            home: "/tmp/agent-hook-home",
+            workspace_root: Some(&cwd),
+        },
+    )
+}
+
 fn spawn_with_profile(
     config: &ServerConfig,
     invocation: &ToolInvocation,

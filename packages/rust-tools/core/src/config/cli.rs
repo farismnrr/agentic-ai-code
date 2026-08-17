@@ -141,6 +141,15 @@ pub struct Cli {
     /// safe PATH and no repository file can supply command arguments.
     #[arg(long = "lsp-server", env = "RELAY_LSP_SERVER", value_delimiter = ',')]
     pub lsp_servers: Vec<String>,
+
+    /// Explicitly enable the repository-owned deterministic lifecycle hooks.
+    /// Hook configuration is never trusted merely because it exists.
+    #[arg(long, env = "RELAY_ENABLE_AGENT_HOOKS", default_value_t = false)]
+    pub enable_agent_hooks: bool,
+
+    /// Optional contained path to the repository-owned hook configuration.
+    #[arg(long, env = "RELAY_AGENT_HOOKS_CONFIG")]
+    pub agent_hooks_config: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]

@@ -90,6 +90,49 @@ pub(super) async fn handle_tools_call(
         );
     }
 
+    let session_id = format!("relay-{}", request_id);
+    state
+        .hooks
+        .start_session(
+            &session_id,
+            state
+                .hooks
+                .repository_identity()
+                .as_deref()
+                .unwrap_or("untrusted"),
+        )
+        .await;
+    let pre = state.hooks.invoke(relay_application::hooks::HookEvent::PreToolUse, json!({
+        "hook_event": "pre_tool_use",
+        "tool_id": call.name.as_str(),
+        "effect_class": if tool.annotations.as_ref().is_some_and(|a| a.destructive_hint) { "write" } else { "read" },
+        "success": true,
+    })).await;
+    if !matches!(
+        pre.decision,
+        relay_application::hooks::HookDecision::Continue
+    ) {
+        let text = if matches!(
+            pre.decision,
+            relay_application::hooks::HookDecision::RequestApproval
+        ) {
+            "Hook requested approval before this tool call"
+        } else {
+            "Hook blocked this tool call"
+        };
+        let response = Response::new(
+            request.id.clone(),
+            serde_json::to_value(ToolCallResult::error(vec![
+                relay_interfaces::mcp::ToolResultContent {
+                    kind: "text",
+                    text: text.into(),
+                },
+            ]))
+            .unwrap_or(json!({})),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+
     if call.name == "terminal_job_start" {
         let task_id = relay_application::execution::start_terminal_job(
             &call.arguments,
@@ -173,6 +216,7 @@ pub(super) async fn handle_tools_call(
         &state.config,
         &state.jobs,
         &state.lsp,
+        &state.hooks,
     )
     .await;
     tracing::info!(
@@ -197,6 +241,18 @@ pub(super) async fn handle_tools_call(
             text,
         }])
     });
+    let lifecycle_event = if result.is_error {
+        relay_application::hooks::HookEvent::ToolError
+    } else {
+        relay_application::hooks::HookEvent::PostToolUse
+    };
+    let _ = state.hooks.invoke(lifecycle_event, json!({
+        "hook_event": lifecycle_event.name(),
+        "tool_id": call.name.as_str(),
+        "effect_class": if tool.annotations.as_ref().is_some_and(|a| a.destructive_hint) { "write" } else { "read" },
+        "success": !result.is_error,
+        "reason": "tool_result",
+    })).await;
 
     let response = Response::new(
         request.id.clone(),
