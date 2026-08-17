@@ -112,3 +112,7 @@ The GitHub Release publishes the direct `ai-tools-x86_64-unknown-linux-gnu` asse
 Package-level TypeScript tool factories under sibling `packages/*/` are still application APIs, but the standalone executable CLI is the single Rust binary (`ai-tools`) in this workspace. Package skill docs must not advertise removed `npx @ai-code/*` bin mappings.
 
 Use each binary's `--help` as the command-line source of truth.
+
+## Internal ownership after Plan 039A
+
+The crate boundaries are unchanged. Within them, large implementation surfaces are grouped by responsibility behind stable facades: application execution/workspace submodules, infrastructure transport access/MCP/tool handlers, interface protocol vs catalog/schema ownership, and core validated config vs CLI declaration. Do not collapse those responsibilities back into giant facade files when adding capabilities; extend the cohesive owner that already represents the reason to change.

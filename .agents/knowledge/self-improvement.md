@@ -10,7 +10,8 @@
 4. If new multi-step work needs a durable handoff and no plan exists, create the next unused numbered plan file. After the historical compaction, numbering starts at **031** and continues upward without reuse.
 5. Remove or amend guidance that became false because of the task.
 6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing memory text just to satisfy process.
-7. Run `pnpm verify:commit` and do not finish with a failing local gate.
+7. Re-check maintainability/ownership after structural changes: no metric-only splits, unexplained hard-budget violations, or stale architecture paths.
+8. Run `pnpm verify:commit` and do not finish with a failing local gate.
 
 A task is not documentation-complete when implementation and `.agents/` tell different stories.
 
@@ -60,7 +61,8 @@ The repository intentionally avoids agent-client-specific hooks/settings. There 
 The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
 
 - [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
-- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + `pnpm lint` + `pnpm typecheck`;
+- [`../../scripts/check-maintainability.mjs`](../../scripts/check-maintainability.mjs) enforces maintained-source/folder budgets and exact reasoned exceptions;
+- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + architecture + maintainability + `pnpm lint` + `pnpm typecheck`;
 - [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
 - [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
 

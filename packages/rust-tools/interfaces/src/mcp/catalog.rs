@@ -1,0 +1,361 @@
+//! Canonical MCP tool catalog, annotations, schemas, and argument validation.
+
+use relay_core::error::McpError;
+use serde::Serialize;
+use serde_json::{json, Value};
+
+/// A single MCP tool definition: stable name, human description, and a
+/// JSON Schema 2020-12-compatible `inputSchema`.
+#[derive(Debug, Clone, Serialize)]
+pub struct Tool {
+    pub name: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'static str>,
+    pub description: &'static str,
+    #[serde(rename = "inputSchema")]
+    pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
+    #[serde(rename = "securitySchemes")]
+    pub security_schemes: Vec<ToolSecurityScheme>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSecurityScheme {
+    #[serde(rename = "type")]
+    pub scheme_type: &'static str,
+    pub scopes: Vec<&'static str>,
+}
+
+/// OAuth scope required by the coding MCP surface.
+pub const CODING_SCOPE: &str = "relay.coding";
+
+fn coding_security_scheme() -> Vec<ToolSecurityScheme> {
+    vec![ToolSecurityScheme {
+        scheme_type: "oauth2",
+        scopes: vec![CODING_SCOPE],
+    }]
+}
+
+/// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
+/// binaries. Execution is deliberately not wired here (Phase 3) — this only
+/// describes the surface a client can discover and validate calls against.
+pub fn tool_catalog() -> Vec<Tool> {
+    vec![
+        Tool {
+            name: "terminal_exec",
+            title: Some("Sandboxed Coding Terminal"),
+            description: "Run a sandboxed executable in the workspace using direct argv semantics. Shell operators such as ;, |, &&, globbing, and redirection are not implicit; use command=sh with args=[\"-lc\", \"...\"] when shell syntax is required. Supports scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
+                    "args": {
+                        "type": "array",
+                        "items": { "type": "string", "maxLength": 65536 },
+                        "maxItems": 100,
+                        "default": []
+                    },
+                    "cwd": { "type": "string" },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 30000
+                    }
+                },
+                "required": ["command"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: Some(json!({ "taskSupport": "optional" })),
+        },
+        Tool {
+            name: "http_fetch",
+            title: Some("HTTP Fetch"),
+            description: "Make an HTTP(S) request and return the response; methods may mutate remote state.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "format": "uri", "maxLength": 65536 },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+                        "default": "GET"
+                    },
+                    "headers": {
+                        "type": "object",
+                        "maxProperties": 100,
+                        "additionalProperties": { "type": "string", "maxLength": 65536 }
+                    },
+                    "data": { "type": "string", "maxLength": 65536 },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 300000,
+                        "default": 30000
+                    }
+                },
+                "required": ["url"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "web_search",
+            title: Some("Web Search"),
+            description: "Search the web through the configured SearxNG backend and return matching results.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: true,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "directory_list",
+            title: Some("Directory List"),
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "maxLength": 65536, "default": "." },
+                    "cwd": { "type": "string", "maxLength": 65536 },
+                    "depth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 },
+                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "file_search",
+            title: Some("File Search"),
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 }
+                },
+                "required": ["pattern"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "file_write",
+            title: Some("File Write"),
+            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "content": { "type": "string", "maxLength": 1048576 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "create_parents": { "type": "boolean", "default": false },
+                    "overwrite": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "content"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "file_edit",
+            title: Some("File Edit"),
+            description: "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "old_text": { "type": "string", "minLength": 1, "maxLength": 262144 },
+                    "new_text": { "type": "string", "maxLength": 262144 },
+                    "replace_all": { "type": "boolean", "default": false }
+                },
+                "required": ["path", "old_text", "new_text"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "file_read",
+            title: Some("File Read"),
+            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1 },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "text_search",
+            title: Some("Text Search"),
+            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "cwd": { "type": "string", "maxLength": 4096 },
+                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "regex": { "type": "boolean", "default": false },
+                    "case_sensitive": { "type": "boolean", "default": true },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_start",
+            title: Some("Start Terminal Job"),
+            description: "Start a bounded sandboxed terminal job and return its task ID for polling.",
+            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 } }, "required": ["command"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: false,
+                open_world_hint: true,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_get",
+            title: Some("Get Terminal Job"),
+            description: "Get bounded state and retained output for a terminal job.",
+            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "terminal_job_cancel",
+            title: Some("Cancel Terminal Job"),
+            description: "Cancel a running terminal job and its process group.",
+            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: true,
+                idempotent_hint: true,
+                open_world_hint: true,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+    ]
+}
+
+pub fn find_tool(name: &str) -> Option<Tool> {
+    tool_catalog().into_iter().find(|t| t.name == name)
+}
+
+/// Validate `arguments` against a tool's declared `inputSchema` (JSON
+/// Schema 2020-12) — the enforcement boundary required before execution:
+/// `tools/call` validates argument *shape*, not just that a tool with this
+/// name exists. Validation diagnostics are deliberately not returned: schema
+/// errors can echo request values, property names, or other attacker-
+/// controlled text through `Display`.
+pub fn validate_tool_arguments(tool: &Tool, arguments: &Value) -> Result<(), McpError> {
+    let validator = jsonschema::validator_for(&tool.input_schema)
+        .map_err(|_| McpError::Internal("invalid tool schema".to_string()))?;
+
+    if validator.iter_errors(arguments).next().is_some() {
+        return Err(McpError::InvalidParams(
+            "tool arguments do not match the required schema".to_string(),
+        ));
+    }
+
+    Ok(())
+}

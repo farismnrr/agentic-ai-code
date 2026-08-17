@@ -107,3 +107,17 @@ The coding relay does not expose the host Tailscale local API socket by default.
 ## Docker boundary
 
 The coding relay does **not** expose the host Docker socket by default. For trusted single-owner local development, an operator may explicitly opt in with `RELAY_ALLOW_DOCKER=true`; that escape hatch permits the `docker` CLI and bind-mounts the daemon socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`) into the Bubblewrap sandbox. Docker daemon access is effectively host-level authority and therefore weakens the filesystem boundary. Production/remote deployments should keep it disabled unless the operator deliberately accepts that trust expansion.
+
+## Internal module ownership and maintainability
+
+The runtime trust boundaries above are unchanged by the maintainability refactor. Internally, the Rust relay now keeps stable crate facades while grouping implementation by responsibility:
+
+- `application::execution` owns job lifecycle/result state and delegates process execution, request translation, and Bubblewrap construction to cohesive submodules;
+- `application::workspace` owns the workspace capability facade and delegates secure path/no-follow primitives, listing, searching, reading, and atomic mutation to focused submodules;
+- infrastructure transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers;
+- the MCP interface keeps protocol/result types separate from the canonical tool catalog and schemas;
+- core configuration keeps validated server configuration separate from the CLI declaration surface.
+
+These splits are responsibility boundaries, not extension frameworks. Existing auth, sandbox, workspace-containment, cancellation, output-retention, Docker/Tailscale opt-in, and public MCP contracts remain authoritative in their existing policy owners.
+
+Repository maintainability guardrails are enforced locally by `scripts/check-maintainability.mjs` through `pnpm verify:commit`: maintained production source has a hard 500-line threshold and cohesive implementation folders have a hard 15-direct-file threshold. Files above 400 lines and folders with 13–15 direct maintained files are review findings rather than automatic failures. Narrow exceptions require an exact path and concrete cohesion reason; broad/wildcard exceptions are rejected. The thresholds are signals for responsibility review, not permission to create meaningless helper files or wrapper folders.

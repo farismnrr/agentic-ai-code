@@ -10,7 +10,7 @@ This repository intentionally has **no CI** and **no unit-test suite**. Quality 
 pnpm verify:commit
 ```
 
-A tracked pre-commit hook runs that command automatically after `pnpm install`. Never bypass it with `git commit --no-verify`, and never commit while lint or typecheck is failing.
+A tracked pre-commit hook runs that command automatically after `pnpm install`. The gate includes architecture and maintainability-budget checks in addition to lint/type verification. Never bypass it with `git commit --no-verify`, and never commit while any gate is failing. Architecture/folder/module changes must synchronize relevant `docs/` and `.agents/` guidance before closure.
 
 Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files.
 
