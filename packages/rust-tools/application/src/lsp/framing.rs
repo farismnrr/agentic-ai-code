@@ -1,6 +1,32 @@
-use super::{LspError, MAX_LSP_HEADER_BYTES, MAX_LSP_MESSAGE_BYTES};
+use super::{LspError, MAX_LSP_HEADER_BYTES, MAX_LSP_MESSAGE_BYTES, MAX_LSP_STDERR_BYTES};
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::sync::Mutex;
+
+/// Drains a child process's stderr pipe into a bounded ring-style buffer
+/// (oldest bytes dropped once `MAX_LSP_STDERR_BYTES` is exceeded) purely to
+/// stop the child from blocking on a full pipe; retained only as a private
+/// process tail, never exposed through public errors.
+pub(super) async fn drain_stderr(
+    mut pipe: tokio::process::ChildStderr,
+    buffer: Arc<Mutex<Vec<u8>>>,
+) {
+    let mut chunk = [0u8; 4096];
+    loop {
+        match pipe.read(&mut chunk).await {
+            Ok(0) | Err(_) => return,
+            Ok(count) => {
+                let mut output = buffer.lock().await;
+                output.extend_from_slice(&chunk[..count]);
+                if output.len() > MAX_LSP_STDERR_BYTES {
+                    let excess = output.len() - MAX_LSP_STDERR_BYTES;
+                    output.drain(..excess);
+                }
+            }
+        }
+    }
+}
 
 pub(super) async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Value, LspError> {
     let mut header = Vec::with_capacity(256);

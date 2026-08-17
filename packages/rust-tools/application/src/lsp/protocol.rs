@@ -1,7 +1,8 @@
-use super::framing::{read_message, write_message};
+use super::framing::{drain_stderr, read_message, write_message};
+use super::tsserver_bridge::TsServerBridge;
 use super::{
     ApprovedServerSpec, LspError, ServerCapabilities, WorkspaceIdentity, LSP_REQUEST_TIMEOUT,
-    LSP_SHUTDOWN_TIMEOUT, LSP_STARTUP_TIMEOUT, MAX_LSP_PENDING_REQUESTS, MAX_LSP_STDERR_BYTES,
+    LSP_SHUTDOWN_TIMEOUT, LSP_STARTUP_TIMEOUT, MAX_LSP_PENDING_REQUESTS,
 };
 use crate::execution::sandbox;
 use relay_core::config::ServerConfig;
@@ -10,13 +11,12 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::io::AsyncReadExt;
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::time::timeout;
 
-struct SharedState {
-    writer: Mutex<ChildStdin>,
+pub(super) struct SharedState {
+    pub(super) writer: Mutex<ChildStdin>,
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, LspError>>>>,
     faulted: AtomicBool,
     diagnostics: Mutex<HashMap<String, Value>>,
@@ -32,6 +32,10 @@ struct SharedState {
     /// Canonical workspace folder this session was initialized with,
     /// answered back verbatim for `workspace/workspaceFolders` pulls.
     workspace_folder: Value,
+    /// Bounded `tsserver/request`/`tsserver/response` bridge this session's
+    /// server needs (currently only `@vue/language-server`); `None` for
+    /// languages that speak LSP semantics natively without it.
+    pub(super) tsserver_bridge: Option<Arc<TsServerBridge>>,
 }
 
 /// Notification methods retained for later lookup via `latest_notification`.
@@ -77,6 +81,26 @@ impl LspSession {
         let stdout = child.stdout.take().ok_or(LspError::StartupFailed)?;
         let stderr_pipe = child.stderr.take().ok_or(LspError::StartupFailed)?;
         let workspace_folder = json!({"uri": root_uri, "name": "workspace"});
+        let tsserver_bridge = match &spec.tsserver_bridge_tsdk {
+            Some(tsdk_dir) => {
+                match TsServerBridge::spawn(
+                    config,
+                    tsdk_dir,
+                    spec.tsserver_bridge_plugin_probe.as_deref(),
+                    identity.root.clone(),
+                )
+                .await
+                {
+                    Ok(bridge) => Some(bridge),
+                    Err(error) => {
+                        crate::execution::kill_process_group(&mut child).await;
+                        let _ = child.wait().await;
+                        return Err(error);
+                    }
+                }
+            }
+            None => None,
+        };
         let state = Arc::new(SharedState {
             writer: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
@@ -85,6 +109,7 @@ impl LspSession {
             notifications: Mutex::new(HashMap::new()),
             configuration: spec.settings.clone(),
             workspace_folder: workspace_folder.clone(),
+            tsserver_bridge,
         });
         let stderr = Arc::new(Mutex::new(Vec::new()));
         tokio::spawn(drain_stderr(stderr_pipe, stderr.clone()));
@@ -279,6 +304,10 @@ impl LspSession {
                 let _ = child.wait().await;
             }
         }
+        drop(child);
+        if let Some(bridge) = &self.state.tsserver_bridge {
+            bridge.shutdown().await;
+        }
         mark_faulted(&self.state, LspError::Crashed).await;
     }
 
@@ -316,6 +345,10 @@ async fn read_loop(
             if method.as_str().is_none() {
                 fault_and_terminate(&state, &child, LspError::MalformedResponse).await;
                 return;
+            }
+            if method.as_str() == Some("tsserver/request") {
+                super::tsserver_bridge::handle_tsserver_request(&state, object.get("params"));
+                continue;
             }
             if method.as_str() == Some("textDocument/publishDiagnostics") {
                 if let Some(params) = object.get("params") {
@@ -445,26 +478,13 @@ async fn mark_faulted(state: &Arc<SharedState>, error: LspError) {
     }
 }
 
-async fn drain_stderr(mut pipe: tokio::process::ChildStderr, buffer: Arc<Mutex<Vec<u8>>>) {
-    let mut chunk = [0u8; 4096];
-    loop {
-        match pipe.read(&mut chunk).await {
-            Ok(0) | Err(_) => return,
-            Ok(count) => {
-                let mut output = buffer.lock().await;
-                output.extend_from_slice(&chunk[..count]);
-                if output.len() > MAX_LSP_STDERR_BYTES {
-                    let excess = output.len() - MAX_LSP_STDERR_BYTES;
-                    output.drain(..excess);
-                }
-            }
-        }
-    }
-}
-
 async fn fault_and_terminate(state: &Arc<SharedState>, child: &Arc<Mutex<Child>>, error: LspError) {
     mark_faulted(state, error).await;
     let mut child = child.lock().await;
     crate::execution::kill_process_group(&mut child).await;
     let _ = child.wait().await;
+    drop(child);
+    if let Some(bridge) = &state.tsserver_bridge {
+        bridge.shutdown().await;
+    }
 }

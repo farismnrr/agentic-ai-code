@@ -11,6 +11,7 @@ mod manager;
 mod protocol;
 mod rename;
 pub mod semantic;
+mod tsserver_bridge;
 
 pub use manager::LspSessionManager;
 pub use protocol::LspSession;
@@ -114,6 +115,23 @@ pub(super) struct ApprovedServerSpec {
     pub settings: serde_json::Value,
     /// Language-owned `initialize` `capabilities.experimental` blob.
     pub experimental_capabilities: serde_json::Value,
+    /// The reviewed `tsdk` directory to bridge `tsserver/request` against
+    /// for this language, when that language's server needs it (currently
+    /// only `vue`; see `tsserver_bridge`). `None` means no bridge is
+    /// started for this language's sessions.
+    pub tsserver_bridge_tsdk: Option<PathBuf>,
+    /// The `@vue/language-server` package directory (containing
+    /// `node_modules/@vue/typescript-plugin`), derived from the resolved
+    /// `vue-language-server` executable's real (symlink-resolved) path.
+    /// Passed to the bridged `tsserver.js` as `--pluginProbeLocations` with
+    /// `--globalPlugins=@vue/typescript-plugin` so tsserver recognizes
+    /// `.vue` as a project file extension and resolves the real
+    /// `tsconfig.json`-backed project instead of an isolated inferred one
+    /// (verified: without this, `_vue:projectInfo` resolves every `.vue`
+    /// file into a `/dev/null` inferred project with no cross-file
+    /// semantics). `None` when this language's server does not use the
+    /// bridge at all.
+    pub tsserver_bridge_plugin_probe: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

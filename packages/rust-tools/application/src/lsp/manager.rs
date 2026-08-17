@@ -5,7 +5,7 @@ use super::{
 use crate::execution::sandbox;
 use relay_core::config::ServerConfig;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
@@ -53,6 +53,19 @@ impl LspSessionManager {
                 ),
                 _ => (serde_json::Value::Null, serde_json::Value::Null, Vec::new()),
             };
+            let tsserver_bridge_tsdk = (lowercase == "vue")
+                .then(|| super::typescript::tsdk_path(&config))
+                .flatten()
+                .map(PathBuf::from);
+            let tsserver_bridge_plugin_probe = (lowercase == "vue")
+                .then(|| {
+                    std::fs::canonicalize(&path)
+                        .ok()?
+                        .parent()?
+                        .parent()
+                        .map(Path::to_path_buf)
+                })
+                .flatten();
             specs.insert(
                 lowercase,
                 ApprovedServerSpec {
@@ -61,6 +74,8 @@ impl LspSessionManager {
                     args,
                     settings,
                     experimental_capabilities,
+                    tsserver_bridge_tsdk,
+                    tsserver_bridge_plugin_probe,
                 },
             );
         }
