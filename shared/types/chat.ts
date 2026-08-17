@@ -51,6 +51,8 @@ export interface McpTool {
     idempotentHint?: boolean
     openWorldHint?: boolean
   }
+  /** Bounded trust provenance, never a credential or remote endpoint detail. */
+  trustedProvenance?: 'first-party-relay' | 'external'
 }
 
 export interface McpServer {

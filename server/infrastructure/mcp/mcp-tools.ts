@@ -5,7 +5,7 @@ import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
-import { approvalForCapability, toolEffects } from '#shared/utils/capability-policy'
+import { approvalForCapability, capabilityFactsForToolCall } from '#shared/utils/capability-policy'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -41,7 +41,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
 // callers cast to `ToolApprovalConfiguration<ToolSet, never>` only at the
 // `streamText`/`generateText` call site, once nothing further mutates it.
 type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
-  | ((input: never) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
+  | ((input: unknown) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
 
 /**
  * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/ — MCP tool ids
@@ -104,16 +104,18 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         }
       })
 
-      const decision = approvals[mcpToolId]
       const trustedProvenance = client.trustedProvenance ?? 'external'
-      toolApproval[modelName] = approvalForCapability({
-        toolId: mcpToolId,
-        effects: toolEffects(mcpTool.name, mcpTool.annotations, trustedProvenance),
-        destructive: mcpTool.annotations?.destructiveHint,
-        external: trustedProvenance === 'external' || mcpTool.annotations?.openWorldHint === true,
-        trustedProvenance,
-        requiresConcreteScope: true
-      }, decision, permissionMode).outcome
+      toolApproval[modelName] = (input: unknown) => approvalForCapability(
+        capabilityFactsForToolCall({
+          toolId: mcpToolId,
+          toolName: mcpTool.name,
+          input,
+          annotations: mcpTool.annotations,
+          trustedProvenance
+        }),
+        approvals[mcpToolId],
+        permissionMode
+      ).outcome
     }
   }
 

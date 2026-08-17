@@ -11,13 +11,14 @@ export async function testMcpServer(userId: string, id: string) {
   if (!server) return null
   try {
     const client = await createMcpClient(server)
+    const trustedProvenance = client.trustedProvenance ?? 'external'
     let listed
     try {
       listed = await client.listTools()
     } finally {
       await client.close().catch((err: unknown) => logger.error('[mcp test] error closing client', err))
     }
-    const tools: McpTool[] = listed.tools.map(t => ({ id: `${server.id}.${t.name}`, serverId: server.id, name: t.name, description: t.description ?? '', sampleInput: {}, annotations: t.annotations }))
+    const tools: McpTool[] = listed.tools.map(t => ({ id: `${server.id}.${t.name}`, serverId: server.id, name: t.name, description: t.description ?? '', sampleInput: {}, annotations: t.annotations, trustedProvenance }))
     const [updated] = await db.update(mcpServers).set({ status: 'connected', tools, updatedAt: new Date() }).where(and(eq(mcpServers.id, id), eq(mcpServers.userId, userId))).returning()
     return { id: updated!.id, status: updated!.status, tools }
   } catch (err: unknown) {
