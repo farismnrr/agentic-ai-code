@@ -1,6 +1,6 @@
 # Plan 039C — LSP Code Intelligence and Diagnostics
 
-**Status:** IN PROGRESS — PHASE-01 / PHASE-02 IMPLEMENTED AND VERIFIED
+**Status:** IN PROGRESS — PHASE-01/PHASE-02 CLOSED/VERIFIED; PHASE-03 through PHASE-07 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039B  
@@ -191,36 +191,50 @@ After native file mutations, Plan 039E hooks may notify active LSP sessions. Unt
 - [x] Prevent session cross-talk between repositories.
 - [x] Add deterministic fake/minimal LSP fixture process for protocol/security acceptance; no conventional unit-test suite added.
 
-### PHASE-03 — Rust proof
+### PHASE-03 — Rust proof — IMPLEMENTED (FINAL PLAN VERIFICATION PENDING; deferred by design to a later full-plan review)
 
-- [ ] Configure reviewed `rust-analyzer` invocation.
-- [ ] Prove symbols, definition, references, hover, diagnostics on a bounded fixture/current source.
-- [ ] Verify no protected-path/network escape.
+- [x] Configure reviewed `rust-analyzer` invocation.
+- [x] Prove symbols, definition, references, hover, diagnostics on a bounded fixture/current source.
+- [x] Verify no protected-path/network escape.
 
-### PHASE-04 — TypeScript/Vue proof
+Deterministic acceptance: `cargo run -p relay-application --example rust_lsp_acceptance` (see `packages/rust-tools/application/src/lsp/rust.rs`, refactored during PHASE-04 into a thin wrapper over the new shared `lsp/semantic.rs` layer with no behavioral change; the wrapper's public API and the acceptance fixture are unchanged).
 
-- [ ] Integrate the reviewed language-server setup matching current Nuxt/Vue tooling.
-- [ ] Prove `.ts` and `.vue` navigation/diagnostics representative of the real app.
-- [ ] Avoid conflicting duplicate TypeScript/Vue servers.
+### PHASE-04 — TypeScript/Vue proof — IMPLEMENTED
 
-### PHASE-05 — MCP tool surface
+- [x] Integrate the reviewed language-server setup matching current Nuxt/Vue tooling: `typescript-language-server@5.3.0` for `.ts`/`.tsx`/`.js` and `@vue/language-server@3.3.8` (Volar) for `.vue`, both already installed under the fnm-managed Node toolchain (no install performed by this plan boundary).
+- [x] Prove `.ts` navigation/diagnostics representative of the real app: symbols, definition, references, hover, diagnostics all proven with real `typescript-language-server` semantics against a deterministic fixture.
+- [x] Avoid conflicting duplicate TypeScript/Vue servers: one `typescript` session and one `vue` session, keyed exactly like Rust by `(canonical workspace root, language)` in the existing `LspSessionManager`; no second daemon.
+- [x] `.vue` proof, scoped to what the installed server build actually supports: real capability negotiation is proven (`renameProvider`/`definitionProvider`/`hoverProvider`/`documentSymbolProvider` all true), and a real `.vue` document query is proven to fail *safely and boundedly* (`language_server_timeout` or `language_server_crashed`, session faulted closed, no hang, no false-empty success) rather than claiming semantic navigation this server cannot actually perform standalone. Root cause (read directly from `@vue/language-server@3.3.8`'s `lib/server.js`): this build only implements hybrid mode — every document-level request forwards a `_vue:<Command>` request to a companion `typescript-language-server` process running the `@vue/typescript-plugin` tsserver plugin. That plugin package is not part of this machine's reviewed toolchain (`typescript-language-server`, `@vue/language-server`, `typescript` are installed; `@vue/typescript-plugin` is not). Installing it was out of scope for this run (no silent tooling installs per the plan's non-goals) — flagged for the final verifier / a follow-up plan boundary to explicitly review and approve.
 
-- [ ] Expose `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`.
-- [ ] Add accurate schemas/annotations and server-side caps.
-- [ ] Add continuation support shared with Plan 039H.
-- [ ] Return capability-not-supported distinctly from server failure.
+Concrete defect found and fixed while integrating TypeScript (in the *generic* substrate, not a rust-analyzer-only code path — PHASE-03 never hit it because rust-analyzer happens to report the structured `textDocumentSync` object form): `ServerCapabilities::from_initialize` treated the LSP spec's numeric `textDocumentSync` form (`typescript-language-server` reports `"textDocumentSync": 2`) as `openClose = false` unconditionally, silently starving every TypeScript/Vue query of `didOpen`. Also added the `textDocument.publishDiagnostics` client capability declaration, without which `typescript-language-server` never pushes diagnostics. Both fixes are covered by the deterministic acceptance below and by the unchanged PHASE-01/02/03 acceptance (`scripts/verify-lsp-foundation.sh`, `rust_lsp_acceptance`), which still pass unmodified.
 
-### PHASE-06 — rename preview
+Deterministic acceptance: `bash scripts/verify-lsp-typescript.sh` (`packages/rust-tools/application/examples/typescript_lsp_acceptance.rs`).
 
-- [ ] Normalize LSP WorkspaceEdit into a safe preview model.
-- [ ] Reject edits outside the verified workspace/protected policy.
-- [ ] Never auto-apply edits from LSP.
-- [ ] Prove preview can be translated to Plan-039B patch semantics without loss.
+### PHASE-05 — MCP tool surface — IMPLEMENTED
 
-### PHASE-07 — post-edit diagnostic integration contract
+- [x] Expose `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics` (plus `code_rename_preview`, see PHASE-06) in `packages/rust-tools/interfaces/src/mcp/catalog.rs`, dispatched from a new `relay_application::code` module reusing the existing `tools/call` pipeline, schema validation, and `coding_security_scheme()` — no new admission/security layer.
+- [x] Accurate schemas/annotations: all seven tools are `read_only_hint: true`, `destructive_hint: false`; `code_rename_preview` additionally documents preview-only, non-applying semantics in its description.
+- [x] Continuation: a bounded offset-based `max_results`/`continuation` token on `code_symbols`/`code_references`/`code_implementations`/`code_diagnostics`. Plan 039H (task/output management) does not exist yet in this repository, so no incompatible pagination scheme was invented — this is a minimal, self-contained mechanism a future 039H continuation framework can subsume.
+- [x] Capability-not-supported is returned distinctly from server failure via the existing `LspError` category system (`unsupported_lsp_capability` vs. `language_server_crashed`/`language_server_timeout`/etc.), never collapsed into one generic error.
 
-- [ ] Define how Plan 039E hooks notify/refresh active LSP sessions after `file_edit`, `file_write`, and `apply_patch`.
-- [ ] Prove diagnostics reflect a fresh edit without restarting the whole relay.
+Deterministic acceptance: `bash scripts/verify-code-mcp.sh` (`packages/rust-tools/application/examples/code_mcp_acceptance.rs`) — proves the full dispatch path end-to-end against a real `rust-analyzer` session: catalog presence/annotations, definition/references/hover/diagnostics content, pagination, capability-gated implementations, invalid-request rejection, and workspace-relative (never absolute host) paths in every response.
+
+### PHASE-06 — rename preview — IMPLEMENTED
+
+- [x] Normalize LSP WorkspaceEdit into a safe preview model: both `changes` and `documentChanges` (text-edit only) forms, in `packages/rust-tools/application/src/lsp/rename.rs` (split out of the shared `lsp/semantic.rs` layer purely to stay under the maintainability line-budget).
+- [x] Reject edits outside the verified workspace/protected policy: every target path is resolved and containment/protected-path-checked through the same `resolve_existing_path`/`reject_protected_target` pipeline `code_definition`/`code_references` already use.
+- [x] Never auto-apply edits from LSP: `code_rename_preview` only normalizes and returns; `applied: false` is always present in the response; proven never to mutate disk across five scenarios (valid multi-file, valid single-file, unsupported resource operation, overlapping edits, outside-root).
+- [x] Unsupported resource operations (`documentChanges` entries with a `kind`, i.e. file create/rename/delete) fail the whole preview closed rather than silently dropping them. Overlapping edits within one file are rejected as ambiguous rather than guessed at.
+- [x] Proved preview can be translated to Plan-039B patch semantics without loss: a preview edit is mechanically translated into a unified-diff string and applied through the existing `apply_patch` tool (dry-run, then commit), producing byte-for-byte the same renamed content — while the preview call itself remains non-mutating.
+
+Deterministic acceptance: `bash scripts/verify-rename-preview.sh` (`packages/rust-tools/application/examples/rename_preview_acceptance.rs`, using a small scripted fake LSP server to make adversarial `WorkspaceEdit` shapes deterministic — a real language server's exact adversarial output is not practical to force reliably).
+
+### PHASE-07 — post-edit diagnostic integration contract — IMPLEMENTED
+
+- [x] The narrow Plan 039C integration contract (not the future Plan 039E hooks framework) was already implemented as a property of the existing document-sync substrate: every semantic query (`RustLanguageServer`/`TypeScriptLanguageServer` -> `semantic::sync` -> `LspSession::sync_document`) re-reads the current contained document on disk, compares its content hash, bumps the internal document version, and sends the correct `didOpen`/`didChange` per the negotiated `textDocumentSync` kind before issuing the request — so a native mutation through `file_edit`/`file_write`/`apply_patch` is observed by the very next `code_*` query on the same session, with no restart.
+- [x] Proved diagnostics reflect a fresh edit without restarting the whole relay/server process.
+
+Deterministic acceptance: `bash scripts/verify-post-edit-diagnostics.sh` (`packages/rust-tools/application/examples/post_edit_diagnostics_acceptance.rs`) — creates a contained rust-analyzer fixture, queries `code_diagnostics` on the active session, mutates through the native `file_write` path, queries `code_diagnostics` again through the *same* cached session (`Arc::ptr_eq` proves no restart), and observes the new diagnostic; bounded polling never silently returns the stale pre-edit result as current.
 
 ## Security cases
 
@@ -240,13 +254,23 @@ Explicitly test:
 
 ## Acceptance criteria
 
-- [ ] Semantic navigation works for Rust and the current TS/Vue stack.
-- [ ] No custom parser/index/vector service was introduced.
-- [ ] LSP subprocesses are bounded and scoped per verified project.
-- [ ] Diagnostics are useful immediately after edits and are version/staleness aware.
-- [ ] Rename remains preview-only until normal mutation policy applies it.
-- [ ] All MCP output is bounded and public-safe.
-- [ ] `pnpm verify:commit`, tool build, deterministic LSP acceptance, and live MCP smoke checks pass.
+- [x] Semantic navigation works for Rust and TypeScript. `.vue` is capability-negotiated and fails safely/boundedly rather than claiming navigation the installed server build cannot standalone-perform (see PHASE-04; needs a follow-up decision on installing `@vue/typescript-plugin`).
+- [x] No custom parser/index/vector service was introduced.
+- [x] LSP subprocesses are bounded and scoped per verified project (unchanged PHASE-01/02 substrate; TypeScript/Vue reuse the same `LspSessionManager`).
+- [x] Diagnostics are useful immediately after edits (PHASE-07) and expose a `version` field when the server reports one.
+- [x] Rename remains preview-only; `code_rename_preview` never applies edits (PHASE-06).
+- [x] All MCP output is bounded and public-safe (workspace-relative paths, bounded text/result counts, classified `LspError` categories, no raw stderr/host paths).
+- [x] Tool build, deterministic LSP acceptance (`verify-lsp-foundation.sh`, `verify-lsp-typescript.sh`, `verify-code-mcp.sh`, `verify-rename-preview.sh`, `verify-post-edit-diagnostics.sh`, `rust_lsp_acceptance`) and `pnpm verify:commit` all pass at this boundary. Live deployed MCP smoke checks were intentionally not run (no relay restart/deploy performed this run) — deferred to final independent verification.
+
+## PHASE-04 through PHASE-07 implementation boundary (2026-08-17)
+
+Implemented sequentially on top of the PHASE-01/02 verified foundation and the PHASE-03 (unverified-but-working) Rust proof, without redoing PHASE-01/02/03 except for the one concrete generic-substrate defect fixed during PHASE-04 (documented above under PHASE-04). No public behavior bypasses the existing workspace mutation policy: `code_rename_preview` is strictly read-only/preview, and no `code_*` tool can write to disk.
+
+Commits: `feat(lsp): add TypeScript/Vue language-server proof (Plan 039C PHASE-04)`, `feat(mcp): expose public code intelligence tools (Plan 039C PHASE-05/06)`, `test(lsp): add rename-preview adversarial and patch-interop acceptance (Plan 039C PHASE-06)`, `test(lsp): add post-edit diagnostic freshness acceptance (Plan 039C PHASE-07)`.
+
+Known open item for the final independent verifier: whether to install/approve `@vue/typescript-plugin` (enabling full `.vue` TS-backed semantics via the hybrid-mode bridge) is an explicit follow-up decision, not made silently in this run.
+
+PHASE-03 through PHASE-07 are **implemented but not yet independently, exhaustively verified** against the plan's full security/architecture matrix — that review is a separate later boundary. This plan is **not closed**.
 ## PHASE-01 / PHASE-02 verified foundation (2026-08-17)
 
 The foundation is implemented without exposing any public `code_*` MCP tools and without integrating a real language server yet. Current machine audit found `rust-analyzer`, `typescript-language-server`, `vue-language-server`, and `tsserver` already installed; nothing was installed by this plan boundary.

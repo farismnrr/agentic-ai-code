@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C IN PROGRESS (PHASE-01/02 VERIFIED); 039D–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039B CLOSED / VERIFIED; 039C IN PROGRESS (PHASE-01/02 CLOSED/VERIFIED; PHASE-03–PHASE-07 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING); 039D–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -139,7 +139,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | --- | --- | --- | --- | --- |
 | **039A** | Maintainability + layered refactor foundation | 038 | CLOSED / VERIFIED | DRY/SOLID/layering/YAGNI/KISS, folder/file budgets, enforcement, docs and agent guides are verified |
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
-| **039C** | LSP code intelligence + diagnostics | 039B | IN PROGRESS — PHASE-01/02 VERIFIED | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
+| **039C** | LSP code intelligence + diagnostics | 039B | IN PROGRESS — PHASE-01/02 CLOSED/VERIFIED; PHASE-03–07 IMPLEMENTED, FINAL PLAN VERIFICATION PENDING | Definitions/references/symbols/hover/diagnostics work through bounded language-server adapters |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | Planned | Hard relay policy and first-party approval policy are explicit, input-aware, testable, and non-bypassable |
 | **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
@@ -187,7 +187,11 @@ Verified handoff facts for 039C:
 - final source validation and an independent read-only security/architecture review are green; the review of the exact committed implementation range returned `NO MATERIAL FINDINGS`;
 - the reviewed `ai-tools 0.0.10` release artifact SHA-256 is `03d3ca5cad6add61eee91b02676f4b70dcc96ac1ac0a3632852d5f8e2295aa10`, matching the manually installed relay binary; the restarted user service reported `active`;
 - refreshed external MCP client MCP discovery exposed all 18 tools and live authenticated acceptance exercised the complete catalog, including a disposable Git/patch workflow, schema rejection before dispatch, containment rejection, background-job cancellation, and exact canary cleanup; the primary worktree was clean afterward;
-- continuation/pagination remains intentionally deferred to Plan 039H; Plan 039C is still unstarted at this handoff boundary.
+- continuation/pagination remains intentionally deferred to Plan 039H (039C's `code_*` tools implement a minimal, self-contained offset-based continuation in the interim, not an incompatible scheme).
+
+## 039C implementation-boundary handoff (2026-08-17, branch `feat/039c-lsp-foundation`)
+
+PHASE-01/02 closed/verified per `.agents/plans/039c-lsp-code-intelligence-and-diagnostics.md`. PHASE-03 (Rust proof) through PHASE-07 (post-edit diagnostic contract) are now implemented on top of that foundation, each with deterministic acceptance (`scripts/verify-lsp-foundation.sh`, `verify-lsp-typescript.sh`, `verify-code-mcp.sh`, `verify-rename-preview.sh`, `verify-post-edit-diagnostics.sh`, plus `rust_lsp_acceptance`), all passing, alongside a green `pnpm verify:commit`. The relay now exposes 7 additional public `code_*` MCP tools (`code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`) for a total of 25, all read-only/non-destructive. `.vue` semantic navigation is capability-negotiated but not fully functional standalone in this environment — the installed `@vue/language-server@3.3.8` requires a companion `@vue/typescript-plugin`-equipped `typescript-language-server` (hybrid mode) that is not part of the reviewed toolchain; installing it is an explicit follow-up decision, not made silently. Full independent Plan-039C verification (the exhaustive security/architecture matrix) remains a separate, later boundary — Plan 039C is **not** closed.
 
 ## Explicit non-goals
 
