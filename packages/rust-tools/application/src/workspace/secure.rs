@@ -236,13 +236,31 @@ impl SecureDirectory {
         content: &[u8],
         mode: u32,
     ) -> Result<(), McpError> {
-        self.verify_regular_entry(name, expected)?;
-        let target = CString::new(name.as_bytes())
-            .map_err(|_| McpError::InvalidRequest("file name is invalid".into()))?;
-        let temp = self.create_temp_file(content, mode)?;
+        self.atomic_replace_regular_file_state(name, expected, content, mode)
+            .map_err(|(error, _committed)| error)
+    }
+
+    pub(super) fn atomic_replace_regular_file_state(
+        &self,
+        name: &OsStr,
+        expected: FileIdentity,
+        content: &[u8],
+        mode: u32,
+    ) -> Result<(), (McpError, bool)> {
+        self.verify_regular_entry(name, expected)
+            .map_err(|error| (error, false))?;
+        let target = CString::new(name.as_bytes()).map_err(|_| {
+            (
+                McpError::InvalidRequest("file name is invalid".into()),
+                false,
+            )
+        })?;
+        let temp = self
+            .create_temp_file(content, mode)
+            .map_err(|error| (error, false))?;
         if let Err(error) = self.verify_regular_entry(name, expected) {
             unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
-            return Err(error);
+            return Err((error, false));
         }
         if unsafe {
             libc::renameat(
@@ -254,11 +272,12 @@ impl SecureDirectory {
         } < 0
         {
             unsafe { libc::unlinkat(self.fd.as_raw_fd(), temp.as_ptr(), 0) };
-            return Err(McpError::InvalidRequest(
-                "file replacement could not be committed".into(),
+            return Err((
+                McpError::InvalidRequest("file replacement could not be committed".into()),
+                false,
             ));
         }
-        self.sync_directory()
+        self.sync_directory().map_err(|error| (error, true))
     }
 
     pub(super) fn atomic_create_regular_file(
