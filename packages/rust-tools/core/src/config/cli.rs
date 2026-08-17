@@ -98,6 +98,11 @@ pub struct Cli {
     #[arg(long, env = "RELAY_MAX_RUNNING_JOBS", default_value_t = 16)]
     pub max_running_jobs: usize,
 
+    /// Allow terminal subprocesses to use the host network namespace.
+    /// Disabled by default; dedicated HTTP/search tools remain separate capabilities.
+    #[arg(long, env = "RELAY_ALLOW_TERMINAL_NETWORK", default_value_t = false)]
+    pub allow_terminal_network: bool,
+
     /// Explicit local-development access to a host Docker daemon socket.
     /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
