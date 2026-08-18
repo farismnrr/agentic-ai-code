@@ -12,6 +12,7 @@ import { rateLimit } from '../network/rate-limit'
 import { badRequest, badGateway } from '#server/core/errors/http'
 import * as account from '../database/account-data'
 import * as messages from '../database/messages'
+import { findUserConversation } from '../database/chat'
 import * as settings from '../database/settings'
 import * as workspaces from '../database/workspaces'
 import { findUserModel, listUserModels, insertUserModel, updateUserModel, deleteUserModel } from '../database/models'
@@ -35,6 +36,7 @@ import type { AccountDataUseCases } from '../../application/account-data'
 import type { McpUseCases } from '../../application/mcp'
 
 const conversationPort: ConversationPort = {
+  find: findUserConversation as ConversationPort['find'],
   list: account.listConversationSummaries as ConversationPort['list'],
   create: async input => (await account.createConversation(input as never))[0] as never,
   update: async (userId, id, input) => (await account.updateConversation(userId, id, input))[0] as never,

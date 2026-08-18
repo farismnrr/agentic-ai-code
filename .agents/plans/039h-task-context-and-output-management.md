@@ -1,6 +1,6 @@
 # Plan 039H — Task, Context, and Output Management
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING  
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039G  
@@ -48,6 +48,8 @@ task_update(...)
 
 The model may use it to keep the UI synchronized, but task completion cannot bypass deterministic validation or Plan-039E stop hooks.
 
+Implementation: `server/application/task-context-output.ts` provides the bounded owner-scoped ledger and `task_update` operation; conversation task APIs and `ChatTaskLedger.vue` expose the compact progress view. Completed is explicitly progress state, never validation or delivery proof.
+
 ## Part B — context inspector/budget
 
 Expose a first-party context view showing bounded estimates such as:
@@ -61,6 +63,8 @@ Expose a first-party context view showing bounded estimates such as:
 - whether another compaction is approaching.
 
 Do not pretend token estimates are exact when provider accounting is unavailable.
+
+Implementation: `ChatContextUsage.vue` labels measured values as accounted and otherwise keeps the view informational; `/api/conversations/:id/context` exposes only bounded metadata.
 
 The model may receive compact budget metadata to encourage efficient tool use, but user-facing context state remains separate from hidden reasoning.
 
@@ -78,6 +82,14 @@ Requirements:
 
 - token binds to canonical tool, query parameters, cwd/repository identity, and pagination position;
 - token is opaque to the model/user;
+
+Implementation: the shared continuation core uses HMAC-bound claims with bounded page/total budgets, expiry, ownership, scope, query, limit, and snapshot checks. Existing LSP offset pagination now emits and validates bound v1 claims; workspace/Git first-page contracts remain intentionally bounded until immutable snapshot plumbing is available in the relay.
+
+## Implementation notes
+
+- Result references are short-lived, owner-scoped, cardinality/byte/item bounded, and deterministically evicted. They are convenience context only and are not used as authorization or repository truth.
+- Output classification is centralized as inline-small, paginated-medium, summarized-large, or retained-failure metadata; raw content is never telemetry.
+- No new database, durable memory, vector store, RAG index, hidden reasoning store, or provider accounting source was introduced.
 - bounded lifetime or stateless signed encoding; choose the simplest design consistent with security;
 - stale underlying state is detected where correctness matters (Git/object refs, file identity/hash, LSP document version);
 - caller cannot edit token fields to escape scope or increase limits;

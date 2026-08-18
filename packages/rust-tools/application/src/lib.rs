@@ -4,6 +4,7 @@ pub mod execution;
 pub mod workspace;
 
 pub mod code;
+pub mod continuation;
 pub mod git;
 pub mod hooks;
 pub mod lsp;

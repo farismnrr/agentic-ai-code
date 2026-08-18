@@ -103,3 +103,6 @@ export interface Conversation {
   lastMeasuredTokens?: number | null
   lastMeasuredMessageId?: string | null
 }
+
+export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled'
+export interface AgentTask { id: string, title: string, status: TaskStatus, depends_on: string[], short_note?: string, updated_at: number }

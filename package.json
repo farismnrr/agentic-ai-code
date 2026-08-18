@@ -15,6 +15,7 @@
     "verify:commit": "bash scripts/verify-commit.sh",
     "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.ts",
     "verify:background-agents": "node --experimental-strip-types scripts/verify-background-agents.ts",
+    "verify:task-context-output": "node --experimental-strip-types scripts/verify-task-context-output.ts",
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
