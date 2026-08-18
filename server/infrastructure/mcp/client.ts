@@ -40,6 +40,7 @@ export interface McpClientLike {
   listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
   close(): Promise<void>
+  subagentStop?(parentSessionId: string, childSessionId: string, status: string): Promise<boolean>
 }
 
 function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
@@ -216,14 +217,26 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     return Promise.resolve()
   }
 
-  private async request(method: 'server/discover' | 'tools/list' | 'tools/call', params: Record<string, unknown>) {
+  async subagentStop(parentSessionId: string, childSessionId: string, status: string) {
+    const result = await this.request('agent/subagent_stop', {
+      _meta: {
+        'io.modelcontextprotocol/agentSession': childSessionId,
+        'io.modelcontextprotocol/parentAgentSession': parentSessionId
+      },
+      status
+    })
+    return isJsonRecord(result) && result.allowed === true
+  }
+
+  private async request(method: 'server/discover' | 'tools/list' | 'tools/call' | 'agent/subagent_stop', params: Record<string, unknown>) {
     const id = `ai-code-${++this.requestSequence}`
     const requestParams = {
       ...params,
       _meta: {
         'io.modelcontextprotocol/protocolVersion': MODERN_MCP_VERSION,
         'io.modelcontextprotocol/clientCapabilities': {},
-        'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO
+        'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO,
+        ...(isJsonRecord(params._meta) ? params._meta : {})
       }
     }
     const headers = new Headers({

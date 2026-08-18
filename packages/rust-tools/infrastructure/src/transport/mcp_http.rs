@@ -170,6 +170,9 @@ pub(super) async fn handle_mcp(
             relay_application::dispatcher::Dispatch::AgentPreStop => {
                 super::tools::handle_agent_pre_stop(&request, state).await
             }
+            relay_application::dispatcher::Dispatch::AgentSubagentStop => {
+                super::subagent_lifecycle::handle_subagent_stop(&request, state).await
+            }
             relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
                 StatusCode::NOT_FOUND,
                 Some(request.id.clone()),

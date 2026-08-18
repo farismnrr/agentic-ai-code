@@ -11,18 +11,33 @@ import { logger } from '../observability/logger'
 
 const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
+  readSkill: (name) => {
+    const candidates = [join(process.cwd(), 'ai-self', 'skills', name, 'SKILL.md'), join(process.cwd(), '.agents', 'skills', name, 'SKILL.md')]
+    for (const candidate of candidates) {
+      try {
+        return readFileSync(candidate, 'utf8')
+      } catch {
+        // Try the next approved repository location.
+      }
+    }
+    return undefined
+  },
   lifecycle: {
     event: (name, payload) => logger.info(`chat.subagent.${name}`, { operation: `chat.subagent.${name}`, outcome: payload.status ?? 'started', profile: payload.profile, depth: payload.depth })
   },
+  // The parent-resolved model is the only model available at this composition
+  // edge. Profile fast/default/strong values therefore remain vendor-neutral,
+  // advisory hints; they never claim a provider/model switch that was not
+  // resolved from the user's configured model set.
   execution: {
-    async execute({ userId, profile, authority, context, budget, abortSignal, sessionId, model, approvals, permissionMode }) {
-      const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'))
+    async execute({ userId, parentSessionId, profile, authority, context, budget, abortSignal, sessionId, model, approvals, permissionMode }) {
+      const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'), { allowedEffects: authority.effects, maxToolCalls: budget.max_tool_calls })
       const tools = Object.fromEntries(Object.entries(mcp.tools).filter(([name]) => toolMatchesProfile(name, profile))) as ToolSet
       try {
         const response = await generateText({
           model: model as LanguageModel,
-          system: `${profile.instructions}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
-          prompt: JSON.stringify(context),
+          system: `${profile.instructions}\n${(context.skill_instructions ?? []).join('\n')}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
+          prompt: JSON.stringify({ ...context, skill_instructions: undefined }),
           tools,
           toolChoice: 'auto',
           stopWhen: stepCountIs(budget.max_turns),
@@ -30,8 +45,11 @@ const runtime = new SubagentRuntime({
           timeout: { totalMs: budget.max_wall_time_ms },
           abortSignal
         })
-        const result = parseResult(response.text, sessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0)
-        return result
+        const result = parseResult(response.text, sessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0, mcp.toolCallCount(), response.usage)
+        return { ...result, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'subagent tool-call budget exhausted') return { status: 'budget_exhausted', summary: 'Child tool-call budget exhausted.', usage: { tool_calls: mcp.toolCallCount() }, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
+        return { status: abortSignal.aborted ? 'cancelled' : 'failed', summary: abortSignal.aborted ? 'Child execution was cancelled.' : 'Child execution failed.', usage: { tool_calls: mcp.toolCallCount() }, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
       } finally {
         await mcp.close()
       }
@@ -53,7 +71,7 @@ export function buildSubagentTool(input: Parameters<SubagentToolPort['build']>[0
   })
 }
 
-function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number): SubagentResult {
+function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }): SubagentResult {
   const value = (() => {
     try {
       return JSON.parse(text) as Partial<SubagentResult>
@@ -70,6 +88,6 @@ function parseResult(text: string, sessionId: string, profile: SubagentResult['p
     remaining_risks: Array.isArray(value.remaining_risks) ? value.remaining_risks : [],
     session_id: sessionId,
     profile,
-    usage: { turns: steps, tool_calls: 0, output_tokens: budget.max_output_tokens, context_tokens: budget.max_context_tokens, wall_time_ms: 0, depth: 0 }
+    usage: { turns: Math.min(steps, budget.max_turns), tool_calls: Math.min(toolCalls, budget.max_tool_calls), output_tokens: Math.min(providerUsage?.outputTokens ?? 0, budget.max_output_tokens), context_tokens: Math.min(providerUsage?.inputTokens ?? 0, budget.max_context_tokens), wall_time_ms: 0, depth: 0 }
   }
 }
