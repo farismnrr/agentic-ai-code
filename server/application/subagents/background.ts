@@ -63,8 +63,8 @@ export class BackgroundTaskManager {
       entry.result = result; entry.state = result.status === 'completed' ? 'completed' : result.status === 'cancelled' ? 'cancelled' : result.status === 'budget_exhausted' ? 'budget_exhausted' : result.status === 'blocked' ? 'blocked' : 'failed'
       entry.progress_summary = result.summary
       if (entry.owner) entry.cleanup = 'preserved'
-    } catch (error) {
-      entry.state = entry.controller.signal.aborted ? 'cancelled' : 'failed'; entry.progress_summary = error instanceof Error ? error.message.slice(0, 512) : 'Background task failed.'
+    } catch {
+      entry.state = entry.controller.signal.aborted ? 'cancelled' : 'failed'; entry.progress_summary = entry.controller.signal.aborted ? 'Background task was cancelled.' : 'Background task failed.'
     } finally {
       entry.completed_at = this.now()
       // Terminal retention is a transition invariant, not a side effect of a

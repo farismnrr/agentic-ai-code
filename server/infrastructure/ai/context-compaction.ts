@@ -170,7 +170,7 @@ export async function resolveMessagesForModel({
 
   const tail = messages.slice(newCutoffIdx + 1)
 
-  logger.info('[compaction] Triggering conversation summary', { conversationId: conv.id, currentTokens, budget })
+  logger.info('chat.context.compaction', { 'operation': 'chat.context.compaction', 'outcome': 'ok', 'context.pressure': currentTokens > budget ? 'over-budget' : 'near-budget' })
 
   // This prompt runs again on every subsequent compaction, each time fed
   // the previous summary as input — explicitly instructing it to carry
@@ -233,13 +233,13 @@ export async function resolveMessagesForModel({
       // an over-budget request.
       const safeTail = truncatePartsIfNeeded(tail, newSummaryMessage, budget)
       if (safeTail !== tail && estimateTokens([newSummaryMessage, ...safeTail]) > budget) {
-        logger.warn('[compaction] Still over budget after summarize + truncate safety net', { conversationId: conv.id, budget })
+        logger.warn('chat.context.compaction', { 'operation': 'chat.context.compaction', 'outcome': 'error', 'context.pressure': 'still-over-budget' })
       }
 
       return [newSummaryMessage, ...safeTail]
     }
   } catch (err) {
-    logger.error('[compaction] Failed to generate summary', err)
+    logger.error('chat.context.compaction', err, { 'operation': 'chat.context.compaction', 'outcome': 'error', 'context.pressure': 'compaction-failed' })
   }
 
   return candidate

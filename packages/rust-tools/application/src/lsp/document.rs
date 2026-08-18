@@ -2,6 +2,7 @@ use super::{
     LspError, LspSession, TextDocumentSyncKind, MAX_LSP_DOCUMENTS_PER_SESSION,
     MAX_LSP_DOCUMENT_BYTES,
 };
+use crate::workspace::reject_protected_target;
 use relay_core::workspace_path::{resolve_existing_path, EntryKind};
 use serde_json::json;
 use std::collections::HashMap;
@@ -25,6 +26,8 @@ pub(super) async fn sync_document(session: &LspSession, path: &str) -> Result<u6
         return Err(LspError::ContainedLocationRejected);
     }
     let target = resolve_existing_path(&session.identity().root, None, path, EntryKind::File)
+        .map_err(|_| LspError::ContainedLocationRejected)?;
+    reject_protected_target(&session.identity().root, &target)
         .map_err(|_| LspError::ContainedLocationRejected)?;
     let metadata = std::fs::metadata(&target).map_err(|_| LspError::ContainedLocationRejected)?;
     if metadata.len() as usize > MAX_LSP_DOCUMENT_BYTES {

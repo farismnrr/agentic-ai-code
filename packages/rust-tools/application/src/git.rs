@@ -105,6 +105,7 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
         args.push("--untracked-files=no");
     }
     let output = run_git(&repo.root, &args, MAX_GIT_OUTPUT_BYTES)?;
+    let hidden_staged_paths = protected_staged_rename_copy_paths(&repo.root)?;
     let mut result = GitStatusResult {
         repository_root: repo.relative_root,
         branch: None,
@@ -118,7 +119,8 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
         conflicts: vec![],
         truncated: false,
     };
-    for record in output.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+    let mut records = output.split(|b| *b == 0).filter(|r| !r.is_empty());
+    while let Some(record) = records.next() {
         let text = std::str::from_utf8(record).map_err(|_| invalid_git_output())?;
         if let Some(v) = text.strip_prefix("# branch.head ") {
             if v == "(detached)" {
@@ -145,9 +147,9 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
                 );
             }
         } else if text.starts_with("u ") {
-            if let Some(path) =
-                status_path(text).filter(|path| !is_protected_git_path(&repo.root, path))
-            {
+            if let Some(path) = status_path(text).filter(|path| {
+                !is_protected_git_path(&repo.root, path) && !hidden_staged_paths.contains(path)
+            }) {
                 push_bounded(&mut result.conflicts, path, &mut result.truncated);
             }
         } else if text.starts_with("1 ") || text.starts_with("2 ") {
@@ -155,9 +157,18 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
             if bytes.len() > 4 {
                 let x = bytes[2] as char;
                 let y = bytes[3] as char;
-                if let Some(path) =
-                    status_path(text).filter(|path| !is_protected_git_path(&repo.root, path))
-                {
+                let renamed_from = if text.starts_with("2 ") {
+                    let original = records.next().ok_or_else(invalid_git_output)?;
+                    Some(std::str::from_utf8(original).map_err(|_| invalid_git_output())?)
+                } else {
+                    None
+                };
+                if let Some(path) = status_path(text).filter(|path| {
+                    !is_protected_git_path(&repo.root, path)
+                        && !hidden_staged_paths.contains(path)
+                        && !renamed_from
+                            .is_some_and(|original| is_protected_git_path(&repo.root, original))
+                }) {
                     if x != '.' {
                         push_bounded(&mut result.staged, path.clone(), &mut result.truncated);
                     }
@@ -169,29 +180,6 @@ fn git_status(arguments: &Value, config: &ServerConfig) -> Result<GitStatusResul
         }
     }
     Ok(result)
-}
-
-fn status_path(record: &str) -> Option<String> {
-    let fields = if record.starts_with("1 ") {
-        9
-    } else if record.starts_with("2 ") {
-        10
-    } else if record.starts_with("u ") {
-        11
-    } else {
-        return None;
-    };
-    record
-        .splitn(fields, ' ')
-        .nth(fields - 1)
-        .map(str::to_owned)
-}
-fn push_bounded(target: &mut Vec<String>, value: String, truncated: &mut bool) {
-    if target.len() < MAX_GIT_RESULTS {
-        target.push(value)
-    } else {
-        *truncated = true
-    }
 }
 
 fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, McpError> {
@@ -222,8 +210,14 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         }
         _ => return Err(McpError::InvalidRequest("git diff mode is invalid".into())),
     }
+    let requested_path = validated_optional_path(arguments, &repo, "path")?;
+    if requested_path.is_some() {
+        reject_protected_diff_renames(&repo.root, mode, &owned)?;
+    } else {
+        reject_protected_diff_changes(&repo.root, mode, &owned)?;
+    }
     let snapshot = git_snapshot(&repo.root, mode, &owned)?;
-    if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
+    if let Some(path) = requested_path {
         owned.push("--".into());
         owned.push(path);
     } else {
@@ -328,8 +322,16 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         owned.push("--no-patch".into())
     }
     let resolved_reference = resolve_commit_ref(&repo.root, &reference)?;
+    let requested_path = validated_optional_path(arguments, &repo, "path")?;
+    if include_patch {
+        if requested_path.is_some() {
+            reject_protected_commit_renames(&repo.root, &resolved_reference)?;
+        } else {
+            reject_protected_commit_changes(&repo.root, &resolved_reference)?;
+        }
+    }
     owned.push(resolved_reference.clone());
-    if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
+    if let Some(path) = requested_path {
         owned.push("--".into());
         owned.push(path)
     } else {
@@ -422,6 +424,7 @@ pub(crate) fn resolve_git_workspace(
         ));
     }
     let cwd = resolve_contained_cwd(&execution_root, cwd_arg)?;
+    validate_git_metadata_paths(&cwd, &execution_root)?;
     let out = run_git(&cwd, &["rev-parse", "--show-toplevel"], 8192)?;
     let root_text = std::str::from_utf8(&out)
         .map_err(|_| invalid_git_output())?
@@ -450,6 +453,7 @@ fn resolve_repo(arguments: &Value, config: &ServerConfig) -> Result<RepoContext,
         return Err(McpError::InvalidRequest("git cwd exceeds maximum".into()));
     }
     let cwd = resolve_contained_cwd(&execution_root, cwd_arg)?;
+    validate_git_metadata_paths(&cwd, &execution_root)?;
     let out = run_git(&cwd, &["rev-parse", "--show-toplevel"], 8192)?;
     let root_text = std::str::from_utf8(&out)
         .map_err(|_| invalid_git_output())?
@@ -475,23 +479,14 @@ fn resolve_repo(arguments: &Value, config: &ServerConfig) -> Result<RepoContext,
     })
 }
 
+mod parse;
+use parse::*;
+mod security;
+use security::*;
 mod process;
 use process::*;
 
 fn append_protected_exclusions(args: &mut Vec<String>) {
     args.push("--".into());
-    for path in [
-        ".ssh/**",
-        ".aws/**",
-        ".config/gcloud/**",
-        ".docker/**",
-        ".kube/**",
-        ".npmrc",
-        ".netrc",
-        ".pypirc",
-        ".cargo/credentials",
-        ".cargo/credentials.toml",
-    ] {
-        args.push(format!(":(exclude){path}"));
-    }
+    args.extend(relay_core::protected_paths::git_exclusion_pathspecs());
 }

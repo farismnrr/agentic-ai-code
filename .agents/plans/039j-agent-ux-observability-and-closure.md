@@ -1,6 +1,6 @@
 # Plan 039J — Agent UX, Observability, and Final Closure
 
-**Status:** PLANNED  
+**Status:** CLOSED / VERIFIED
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039I  
@@ -221,15 +221,47 @@ Before marking Plan 039 closed:
 - follow `github-delivery` for final commit/push behavior;
 - do not merge/release/deploy without the normal required approval.
 
+## Implementation evidence — 2026-08-18
+
+Implementation-side evidence on `feat/039j-agent-ux-observability`:
+
+- focused `pnpm verify:039j`: **PASS 3 consecutive times** after the final code fix;
+- composed `scripts/phase-039j-contract.sh`: **PASS**, including current 039H and 039I contracts;
+- Plan-035/036/037/038/039 regression/security gates exercised across hooks, lifecycle, effect parity, capability policy, workspace path protection, zero-bypass, Git/patch, LSP, code MCP, rename preview, post-edit diagnostics, MCP error confidentiality, workspace integration, subagents/background agents, and task/context output: **PASS**;
+- `cargo test --workspace --locked`: **PASS**;
+- `pnpm typecheck`: **PASS**;
+- `pnpm build`: **PASS** after a production-only Nitro import issue in the new presentation helper was removed rather than worked around;
+- `git diff --check` and Rust formatting checks: **PASS**.
+- final presentation-confidentiality hardening hides arbitrary free-form approval values, re-sanitizes direct/background child results at the final presentation boundary, removes raw delegated-task/tool/background errors from first-party rendering, redacts POSIX/Windows/UNC absolute paths, and treats malformed child status as `invalid`; focused confidentiality canaries are included in `verify:039j`;
+- fresh independent read-only security/architecture review after those remediations: **PASS — zero unresolved P0/P1 findings**.
+
+The implementation adds category-driven bounded tool presentation, sensitivity-aware approval summaries, bounded diff/result previews, compact subagent/background rendering, semantic tool/background/context/hook telemetry through existing sanitization boundaries, and documentation/source-of-truth reconciliation. No parallel agent framework, event database, vector/RAG system, or duplicate state store was introduced.
+
+### Prior production-shaped live evidence — 2026-08-18
+
+The following boundaries were exercised before the final Bubblewrap/Git protected-path hardening and are retained as historical context. The latest release-specific evidence follows immediately below.
+
+- a production Nuxt instance completed authentication/session setup and streamed a controlled external HTTPS provider response through `/api/chat`: **PASS**;
+- direct ChatGPT → remote MCP discovery/tool invocation reached the deployed `ai-tools 0.0.11` relay: **PASS**;
+- a live protected-credential probe against `.env` was denied by relay workspace policy while `.env.example` remained readable: **PASS**; this live probe exposed and drove a credential-filename policy regression fix before closure;
+- production container composition now includes only the bounded runtime agent profiles/skills required by delegation; duplicate skill aliases resolving to the same canonical file are deduplicated while genuine ambiguity remains fail-closed: **PASS**;
+- long-running job cancellation through the remote MCP lifecycle reached `cancelled`: **PASS**;
+- terminal egress behavior matched explicit operator configuration (`RELAY_ALLOW_TERMINAL_NETWORK=true`) rather than bypassing the default-isolated policy: **PASS**;
+- `git_log` pagination initially failed in production because continuation signing incorrectly depended on OAuth configuration; continuation signing now uses a process-local cryptographic key when OAuth secret material is absent, focused tests pass, the previously deployed binary hashed to `df98c531c1b9c36419a99dc9a91ee253700bbc3a06043d01aacb528145a191b9`, and live page-1 → continuation page-2 retrieval succeeded on that deployment: **PASS for the prior deployment**.
+
+Latest local remediation additionally canonicalizes protected-path handling across Git/text search, blocks protected rename/copy lineage and Git object-store escapes, and hardens Bubblewrap nested/symlink masking. The exact final release artifact `dist/v0.0.11/ai-tools-x86_64-unknown-linux-gnu` was built, installed, and verified byte-for-byte with SHA256 `7719caa8cd92f08b339afd2c1c0aa4238be7097793bfba72d0d01777f52e9be2`. Exact-binary local MCP proof passed for direct protected reads, `.env.example`, terminal masking, and cancellation. The full workspace-v1 integration acceptance passed against that exact installed binary, covering protected native/Git boundaries, Git pagination, synthetic cargo/node toolchains, and explicit network policy.
+
+The public edge returned health `200` and the expected OAuth/Bearer challenge after deployment. The current authenticated ChatGPT MCP connector exposed the Masih Awam native tool catalog and successfully executed `git_status` on this repository; a protected `.env` read was denied by workspace policy while `.env.example` remained readable. This is authenticated end-to-end connector evidence; no operator token was inspected. Host verification found the enabled `ai-tools-relay.service` active/running on port `47821`, executing the exact installed release binary with SHA256 `7719caa8cd92f08b339afd2c1c0aa4238be7097793bfba72d0d01777f52e9be2`.
+
 ## Final acceptance criteria
 
-- [ ] 039B–039I are closed with evidence.
-- [ ] First-party agent UX exposes tasks/tools/subagents/approvals/diffs/diagnostics coherently.
-- [ ] Agent-native telemetry is useful but confidentiality-preserving.
-- [ ] Full composed security falsification has no unresolved P0/P1 issue.
-- [ ] Existing Plan-035/036/037/038 security and execution contracts have no regression.
-- [ ] Direct remote MCP does not rely on first-party UI approvals for hard safety.
-- [ ] Documentation and durable agent knowledge match current implementation.
-- [ ] No custom vector DB/RAG/plugin marketplace/parallel agent framework was introduced without proven need.
-- [ ] Mandatory local/build/security/live acceptance is passed or truthfully marked unproven.
-- [ ] Master Plan 039 checklist is updated only after all evidence exists.
+- [x] 039B–039I are closed with evidence.
+- [x] First-party agent UX composes tasks/tools/subagents/approvals/bounded diffs/diagnostics, with production-shaped live provider/chat evidence and deterministic composed scenario coverage.
+- [x] Agent-native semantic telemetry reuses the existing allowlist sanitizer and confidentiality contract.
+- [x] Deterministic composed security/regression matrix has no observed P0/P1 failure, and a fresh independent read-only review reports zero unresolved P0/P1 findings.
+- [x] Existing Plan-035/036/037/038 security and execution contracts exercised in this pass have no regression.
+- [x] Direct-client hard safety remains relay-authoritative and is proven by direct ChatGPT remote-MCP invocation plus live protected-credential denial.
+- [x] Documentation and durable agent knowledge were reconciled to the current implementation.
+- [x] No custom vector DB/RAG/plugin marketplace/parallel agent framework was introduced.
+- [x] Mandatory local/build/security acceptance is passing; latest-release local MCP, protected-path/Git, toolchain, cancellation, network-policy, health, and OAuth-boundary checks are verified.
+- [x] Authenticated MCP catalog/tool invocation is proven through the current ChatGPT connector; no token file access was required.

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { generateText, stepCountIs, tool, type LanguageModel, type ToolSet } from 'ai'
 import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
@@ -10,24 +8,26 @@ import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
+import { parsePresentationSafeSubagentResult, presentationSafeBackgroundTask } from './subagent-result'
+import { readRuntimeInstruction } from './runtime-instructions'
 
 const runtime = new SubagentRuntime({
-  readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
+  readProfile: (name) => {
+    const loaded = readRuntimeInstruction(process.cwd(), ['.agents', 'agents'], [`${name}.md`])
+    if (!loaded) throw new Error('configured profile is unavailable')
+    return loaded.text
+  },
   readSkill: (name) => {
-    const candidates = [join(process.cwd(), 'ai-self', 'skills', name, 'SKILL.md'), join(process.cwd(), '.agents', 'skills', name, 'SKILL.md')]
-    const found: string[] = []
-    for (const candidate of candidates) {
-      try {
-        found.push(readFileSync(candidate, 'utf8'))
-      } catch {
-        // Missing approved roots are ignored; ambiguity is rejected below.
-      }
+    const found = new Map<string, string>()
+    for (const root of [['ai-self', 'skills'], ['.agents', 'skills']]) {
+      const loaded = readRuntimeInstruction(process.cwd(), root, [name, 'SKILL.md'], { optional: true })
+      if (loaded && !found.has(loaded.canonical)) found.set(loaded.canonical, loaded.text)
     }
-    if (found.length > 1) throw new Error('configured profile skill is ambiguous across approved roots')
-    return found[0]
+    if (found.size > 1) throw new Error('configured profile skill is ambiguous across approved roots')
+    return found.values().next().value
   },
   lifecycle: {
-    event: (name, payload) => logger.info(`chat.subagent.${name}`, { operation: `chat.subagent.${name}`, outcome: payload.status ?? 'started', profile: payload.profile, depth: payload.depth })
+    event: (name, payload) => logger.info(`chat.subagent.${name}`, { 'operation': `chat.subagent.${name}`, 'outcome': payload.status ?? 'started', 'agent.profile': payload.profile, 'agent.state': payload.status ?? 'started', 'agent.depth': payload.depth })
   },
   // The parent-resolved model is the only model available at this composition
   // edge. Profile fast/default/strong values therefore remain vendor-neutral,
@@ -86,38 +86,45 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
     agent_task_start: tool({
       description: 'Start a bounded parent-managed background agent. Read-only tasks use shared_read; writers require a dedicated worktree.',
       inputSchema: z.object({ agent: z.enum(['explore', 'review', 'plan', 'general-purpose']), task: z.string().min(1).max(8192), isolation: z.enum(['shared_read', 'worktree']), context_refs: z.array(z.string().max(512)).max(32).optional() }),
-      execute: async ({ agent, task, isolation, context_refs }) => backgroundTasks.start({ ...common, profile: agent, task, isolation, context_refs, repositoryRoot: input.authority.workspace_root, worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
+      execute: async ({ agent, task, isolation, context_refs }) => {
+        const result = backgroundTasks.start({ ...common, profile: agent, task, isolation, context_refs, repositoryRoot: input.authority.workspace_root, worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
+        logger.info('chat.background.start', { 'operation': 'chat.background.start', 'outcome': result.state === 'rejected' ? 'denied' : 'ok', 'agent.profile': agent, 'background.isolation': isolation, 'background.state': result.state })
+        return result
+      }
     }),
     agent_task_get: tool({
       description: 'Get bounded status and result for a parent-owned background agent task.',
       inputSchema: z.object({ task_id: z.string().uuid() }),
-      execute: async ({ task_id }) => backgroundTasks.get(task_id, input.userId, input.parentSessionId) ?? { state: 'not_found' }
+      execute: async ({ task_id }) => {
+        const raw = backgroundTasks.get(task_id, input.userId, input.parentSessionId)
+        const result = raw ? presentationSafeBackgroundTask(raw) : { state: 'not_found' as const }
+        logger.info('chat.background.get', { 'operation': 'chat.background.get', 'outcome': result.state === 'not_found' ? 'error' : 'ok', 'background.state': result.state })
+        return result
+      }
     }),
     agent_task_cancel: tool({
       description: 'Cancel a parent-owned background agent task. Dirty writer worktrees remain available for inspection.',
       inputSchema: z.object({ task_id: z.string().uuid() }),
-      execute: async ({ task_id }) => ({ task_id, cancelled: backgroundTasks.cancel(task_id, input.userId, input.parentSessionId) })
+      execute: async ({ task_id }) => {
+        const cancelled = backgroundTasks.cancel(task_id, input.userId, input.parentSessionId)
+        logger.info('chat.background.cancel', { 'operation': 'chat.background.cancel', 'outcome': cancelled ? 'cancelled' : 'error', 'background.state': cancelled ? 'cancelling' : 'not_found', 'cancel.reason': cancelled ? 'user-request' : 'not-found' })
+        return { task_id, cancelled }
+      }
     })
   }
 }
 
 function parseResult(text: string, sessionId: string, owner: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {
-  const value = (() => {
-    try {
-      return JSON.parse(text) as Partial<SubagentResult>
-    } catch {
-      return { summary: text }
-    }
-  })()
-  const summary = approvalPending ? 'Child tool call requires approval before execution.' : typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.'
+  const value = parsePresentationSafeSubagentResult(text)
+  const summary = approvalPending ? 'Child tool call requires approval before execution.' : value?.summary ?? 'Child returned an invalid structured summary.'
   const summaryRef = classifyOutput(Buffer.byteLength(summary, 'utf8')) === 'summarized_large' ? putResultRef(owner, summary.slice(0, 32 * 1024)) : undefined
   return {
-    status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value.status && ['completed', 'blocked', 'cancelled', 'budget_exhausted', 'failed', 'invalid'].includes(value.status) ? value.status : 'completed',
+    status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value?.status ?? 'invalid',
     summary: summaryRef ? `${summary.slice(0, 512)} …[full bounded summary in result_ref]` : summary,
-    findings: Array.isArray(value.findings) ? value.findings : [],
-    evidence: Array.isArray(value.evidence) ? value.evidence : [],
-    validation: Array.isArray(value.validation) ? value.validation : [],
-    remaining_risks: Array.isArray(value.remaining_risks) ? value.remaining_risks : [],
+    findings: value?.findings ?? [],
+    evidence: value?.evidence ?? [],
+    validation: value?.validation ?? [],
+    remaining_risks: value?.remaining_risks ?? [],
     session_id: sessionId,
     profile,
     usage: { turns: Math.min(steps, budget.max_turns), tool_calls: Math.min(toolCalls, budget.max_tool_calls), output_tokens: Math.min(providerUsage?.outputTokens ?? 0, budget.max_output_tokens), context_tokens: Math.min(providerUsage?.inputTokens ?? 0, budget.max_context_tokens), wall_time_ms: 0, depth: 0 },
