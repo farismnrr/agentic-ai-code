@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039D CLOSED / VERIFIED; 039E–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039D CLOSED / VERIFIED; 039E IMPLEMENTED / PENDING INDEPENDENT VERIFICATION; 039F–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -141,7 +141,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
 | **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | CLOSED / VERIFIED | Hard relay policy and first-party approval policy are explicit, input-aware, testable, non-bypassable, and operationally deployed |
-| **039E** | Deterministic hooks/lifecycle | 039D | Planned | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
+| **039E** | Deterministic hooks/lifecycle | 039D | Implemented — pending independent verification | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
 | **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
 | **039G** | Background agents + Git worktree isolation | 039F | Planned | Independent background tasks can run with bounded concurrency and isolated writes without cross-worktree corruption |
 | **039H** | Task/context/output management | 039G | Planned | Structured task ledger, context visibility, continuation tokens/pagination, and output budgets are integrated |
@@ -154,7 +154,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039B — Git read intelligence + patch ergonomics
 - [x] PLAN-039C — LSP code intelligence + diagnostics
 - [x] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
-- [ ] PLAN-039E — deterministic agent hooks/lifecycle
+- [x] PLAN-039E — deterministic agent hooks/lifecycle (implementation pending independent verification)
 - [ ] PLAN-039F — subagents + reusable agent profiles
 - [ ] PLAN-039G — background agents + Git worktree isolation
 - [ ] PLAN-039H — task/context/output management

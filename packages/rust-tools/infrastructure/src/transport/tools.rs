@@ -90,6 +90,141 @@ pub(super) async fn handle_tools_call(
         );
     }
 
+    let agent_session = agent_session_from_params(request.params.as_ref());
+    let effects = relay_application::hooks::effect_classes(
+        call.name.as_str(),
+        tool.annotations
+            .as_ref()
+            .is_some_and(|a| a.destructive_hint),
+        tool.annotations.as_ref().is_some_and(|a| a.open_world_hint),
+    );
+    let hook_payload = json!({
+        "hook_event": "pre_tool_use",
+        "tool_id": call.name.as_str(),
+        "effect_classes": effects.clone(),
+        "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+        "arguments": call.arguments.clone(),
+        "success": true,
+    });
+    let hook_approval_token = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("_meta"))
+        .and_then(|meta| meta.get("io.modelcontextprotocol/hookApprovalToken"))
+        .and_then(Value::as_str);
+    let approval_resume = match hook_approval_token {
+        Some(token) => {
+            let Some(agent_session) = agent_session.as_deref() else {
+                return bounded_tool_error(
+                    &request.id,
+                    "approval requires stable agent session metadata",
+                );
+            };
+            match state
+                .hooks
+                .consume_approval(token, agent_session, &call.name, &hook_payload)
+                .await
+            {
+                Some(index) => Some(index),
+                None => {
+                    return bounded_tool_error(&request.id, "approval token is invalid or expired")
+                }
+            }
+        }
+        None => None,
+    };
+    if let Some(agent_session) = agent_session.as_deref() {
+        let session_outcome = state
+            .hooks
+            .start_session(
+                agent_session,
+                state
+                    .hooks
+                    .repository_identity()
+                    .as_deref()
+                    .unwrap_or("untrusted"),
+            )
+            .await;
+        if matches!(
+            session_outcome,
+            relay_application::hooks::SessionStartOutcome::Blocked
+                | relay_application::hooks::SessionStartOutcome::SecurityFailure
+                | relay_application::hooks::SessionStartOutcome::CapacityExhausted
+        ) {
+            return bounded_tool_error(
+                &request.id,
+                "agent session security lifecycle did not start",
+            );
+        }
+    }
+    let pre = if let Some(resume_index) = approval_resume {
+        state
+            .hooks
+            .invoke_from(
+                relay_application::hooks::HookEvent::PreToolUse,
+                hook_payload.clone(),
+                resume_index,
+            )
+            .await
+    } else {
+        state
+            .hooks
+            .invoke(
+                relay_application::hooks::HookEvent::PreToolUse,
+                hook_payload.clone(),
+            )
+            .await
+    };
+    if !matches!(
+        pre.decision,
+        relay_application::hooks::HookDecision::Continue
+    ) {
+        let approval_requested = matches!(
+            pre.decision,
+            relay_application::hooks::HookDecision::RequestApproval
+        );
+        let text = if approval_requested {
+            "Approval required before this tool call"
+        } else {
+            "Hook blocked this tool call"
+        };
+        let result = if approval_requested {
+            let Some(agent_session) = agent_session.as_deref() else {
+                return bounded_tool_error(
+                    &request.id,
+                    "approval requires stable agent session metadata",
+                );
+            };
+            let Some(resume_index) = pre.approval_checkpoint else {
+                return bounded_tool_error(&request.id, "approval checkpoint is unavailable");
+            };
+            let Some(approval_token) = state
+                .hooks
+                .issue_approval(agent_session, &call.name, &hook_payload, resume_index)
+                .await
+            else {
+                return bounded_tool_error(&request.id, "approval capacity is exhausted");
+            };
+            ToolCallResult::complete(vec![relay_interfaces::mcp::ToolResultContent {
+                kind: "text",
+                text: text.into(),
+            }])
+            .with_meta(json!({
+                "control": { "type": "approval_required", "reason": "hook_request", "token": approval_token }
+            }))
+        } else {
+            ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
+                kind: "text",
+                text: text.into(),
+            }])
+        };
+        let response = Response::new(
+            request.id.clone(),
+            serde_json::to_value(result).unwrap_or(json!({})),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+
     if call.name == "terminal_job_start" {
         let task_id = relay_application::execution::start_terminal_job(
             &call.arguments,
@@ -173,6 +308,7 @@ pub(super) async fn handle_tools_call(
         &state.config,
         &state.jobs,
         &state.lsp,
+        &state.hooks,
     )
     .await;
     tracing::info!(
@@ -197,12 +333,129 @@ pub(super) async fn handle_tools_call(
             text,
         }])
     });
+    let lifecycle_event = if result.is_error {
+        relay_application::hooks::HookEvent::ToolError
+    } else {
+        relay_application::hooks::HookEvent::PostToolUse
+    };
+    let _ = state
+        .hooks
+        .invoke(
+            lifecycle_event,
+            json!({
+                "hook_event": lifecycle_event.name(),
+                "tool_id": call.name.as_str(),
+                "effect_classes": effects,
+                "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+                "success": !result.is_error,
+                "reason": "tool_result",
+            }),
+        )
+        .await;
 
     let response = Response::new(
         request.id.clone(),
         serde_json::to_value(result).unwrap_or(json!({})),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+pub(super) async fn handle_agent_session_start(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("agent session metadata is required".into()),
+        )
+    })?;
+    let identity = state
+        .hooks
+        .repository_identity()
+        .unwrap_or_else(|| "untrusted".into());
+    let outcome = state.hooks.start_session(&agent_session, &identity).await;
+    let (context, failure) = match outcome {
+        relay_application::hooks::SessionStartOutcome::Started { context } => (context, None),
+        relay_application::hooks::SessionStartOutcome::AlreadyStarted => (None, None),
+        relay_application::hooks::SessionStartOutcome::Blocked => {
+            (None, Some("session start was blocked"))
+        }
+        relay_application::hooks::SessionStartOutcome::SecurityFailure => {
+            (None, Some("session start security check failed"))
+        }
+        relay_application::hooks::SessionStartOutcome::CapacityExhausted => {
+            (None, Some("session start capacity is exhausted"))
+        }
+    };
+    if let Some(message) = failure {
+        let response = Response::new(
+            request.id.clone(),
+            serde_json::to_value(ToolCallResult::error(vec![
+                relay_interfaces::mcp::ToolResultContent {
+                    kind: "text",
+                    text: message.into(),
+                },
+            ]))
+            .unwrap_or(json!({})),
+        );
+        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+    }
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "context": context.unwrap_or_else(|| json!({})),
+            "bounded": true
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn bounded_tool_error(id: &mcp::Id, message: &str) -> JsonErr2 {
+    let response = Response::new(
+        id.clone(),
+        serde_json::to_value(ToolCallResult::error(vec![
+            relay_interfaces::mcp::ToolResultContent {
+                kind: "text",
+                text: message.into(),
+            },
+        ]))
+        .unwrap_or(json!({})),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+pub(super) async fn handle_agent_pre_stop(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            Some(request.id.clone()),
+            &McpError::InvalidParams("agent session metadata is required".into()),
+        )
+    })?;
+    let allowed = state.hooks.pre_agent_stop(&agent_session).await;
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete",
+            "completion": if allowed { "allowed" } else { "remediation_required" },
+            "max_attempts": 2
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn agent_session_from_params(params: Option<&Value>) -> Option<String> {
+    params?
+        .get("_meta")?
+        .get("io.modelcontextprotocol/agentSession")?
+        .as_str()
+        .map(|value| value.chars().take(128).collect())
 }
 
 fn client_supports_tasks(params: Option<&Value>) -> bool {

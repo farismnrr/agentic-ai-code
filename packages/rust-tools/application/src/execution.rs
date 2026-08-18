@@ -370,8 +370,49 @@ pub async fn dispatch_tool_call(
     config: &ServerConfig,
     manager: &Arc<JobManager>,
     lsp: &Arc<crate::lsp::LspSessionManager>,
+    hooks: &Arc<crate::hooks::HookManager>,
 ) -> Result<ToolCallResult, McpError> {
     if let Some(result) = crate::workspace::dispatch_native_tool(tool.name, arguments, config)? {
+        if matches!(tool.name, "file_write" | "file_edit" | "apply_patch") && !result.is_error {
+            let changed = serde_json::from_str::<Value>(&result.content[0].text).ok();
+            let committed = changed.as_ref().is_some_and(|value| {
+                value.get("dry_run").and_then(Value::as_bool) != Some(true)
+                    && (tool.name == "file_write"
+                        || value.get("changed").and_then(Value::as_bool) == Some(true)
+                        || value
+                            .get("changed_paths")
+                            .and_then(Value::as_array)
+                            .is_some_and(|paths| !paths.is_empty()))
+            });
+            if !committed {
+                return Ok(result);
+            }
+            let changed_paths = changed
+                .as_ref()
+                .and_then(|value| value.get("changed_paths").or_else(|| value.get("path")))
+                .cloned()
+                .unwrap_or_else(|| json!([]));
+            let cwd = arguments.get("cwd").and_then(Value::as_str);
+            let paths = changed_paths
+                .as_array()
+                .map(|paths| paths.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                .unwrap_or_else(|| changed_paths.as_str().into_iter().collect());
+            for path in paths {
+                let _ = lsp.refresh_path(cwd, path).await;
+            }
+            let _ = hooks
+                .invoke(
+                    crate::hooks::HookEvent::AfterFileChange,
+                    json!({
+                        "hook_event": "after_file_change",
+                        "tool_id": tool.name,
+                        "effect_classes": ["workspace_write"],
+                        "affected_paths": changed_paths,
+                        "success": true,
+                    }),
+                )
+                .await;
+        }
         return Ok(result);
     }
     if let Some(result) = crate::git::dispatch_git_tool(tool.name, arguments, config).await? {
