@@ -8,6 +8,7 @@ import { SubagentRuntime } from '../../application/subagents/runtime'
 import { toolMatchesProfile } from '../../application/subagents/profiles'
 import { buildMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
+import { BackgroundTaskManager } from '../../application/subagents/background'
 
 const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
@@ -59,6 +60,8 @@ const runtime = new SubagentRuntime({
   }
 })
 
+const backgroundTasks = new BackgroundTaskManager(runtime)
+
 export function buildSubagentTool(input: Parameters<SubagentToolPort['build']>[0]) {
   return tool({
     description: 'Delegate one focused task to a named, bounded child profile. Parent-only; sequential; returns a structured evidence summary.',
@@ -71,6 +74,27 @@ export function buildSubagentTool(input: Parameters<SubagentToolPort['build']>[0
     }),
     execute: async ({ agent, task, cwd, context_refs, budget }) => runtime.run({ user_id: input.userId, parent_session_id: input.parentSessionId, parent_authority: input.authority, profile: agent, task, cwd, context_refs, budget, depth: 0, abort_signal: input.abortSignal, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
   })
+}
+
+export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['build']>[0]) {
+  const common = { user_id: input.userId, parent_session_id: input.parentSessionId, parent_authority: input.authority, profile: 'explore' as const, task: 'background task', isolation: 'shared_read' as const }
+  return {
+    agent_task_start: tool({
+      description: 'Start a bounded parent-managed background agent. Read-only tasks use shared_read; writers require a dedicated worktree.',
+      inputSchema: z.object({ agent: z.enum(['explore', 'review', 'plan', 'general-purpose']), task: z.string().min(1).max(8192), isolation: z.enum(['shared_read', 'worktree']), context_refs: z.array(z.string().max(512)).max(32).optional() }),
+      execute: async ({ agent, task, isolation, context_refs }) => backgroundTasks.start({ ...common, profile: agent, task, isolation, context_refs, repositoryRoot: input.authority.workspace_root, worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
+    }),
+    agent_task_get: tool({
+      description: 'Get bounded status and result for a parent-owned background agent task.',
+      inputSchema: z.object({ task_id: z.string().uuid() }),
+      execute: async ({ task_id }) => backgroundTasks.get(task_id, input.userId, input.parentSessionId) ?? { state: 'not_found' }
+    }),
+    agent_task_cancel: tool({
+      description: 'Cancel a parent-owned background agent task. Dirty writer worktrees remain available for inspection.',
+      inputSchema: z.object({ task_id: z.string().uuid() }),
+      execute: async ({ task_id }) => ({ task_id, cancelled: backgroundTasks.cancel(task_id, input.userId, input.parentSessionId) })
+    })
+  }
 }
 
 function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {

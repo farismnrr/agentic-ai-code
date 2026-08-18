@@ -36,9 +36,9 @@ export class SubagentRuntime {
     const sessionId = randomUUID()
     const usage: SubagentUsage = { turns: 0, tool_calls: 0, output_tokens: 0, context_tokens: 0, wall_time_ms: 0, depth: request.depth ?? 0 }
     const invalid = (summary: string): SubagentResult => ({ status: 'invalid', summary, findings: [], evidence: [], validation: [], remaining_risks: [], session_id: sessionId, profile: request.profile, usage })
-    if (!request.parent_session_id || ((request.depth !== 0) && (request.depth !== undefined)) || this.activeParents.has(request.parent_session_id)) return invalid('Child delegation is unavailable for this parent state.')
+    if (!request.parent_session_id || ((request.depth !== 0) && (request.depth !== undefined)) || (!request.allow_concurrent_parent && this.activeParents.has(request.parent_session_id))) return invalid('Child delegation is unavailable for this parent state.')
     if (request.task.length === 0 || request.task.length > MAX_TASK) return invalid('Child task exceeds the bounded request limit.')
-    this.activeParents.add(request.parent_session_id)
+    if (!request.allow_concurrent_parent) this.activeParents.add(request.parent_session_id)
     const started = this.options.now?.() ?? Date.now()
     let profile: SubagentProfile | undefined
     try {
@@ -79,7 +79,7 @@ export class SubagentRuntime {
       this.options.lifecycle?.event('subagent_stop', { session_id: sessionId, parent_session_id: request.parent_session_id, profile: profile?.name ?? request.profile, status: request.abort_signal?.aborted ? 'cancelled' : 'failed', depth: request.depth ?? 0 })
       return { ...invalid(request.abort_signal?.aborted ? 'Child execution was cancelled.' : 'Child execution failed.'), status: request.abort_signal?.aborted ? 'cancelled' : 'failed' }
     } finally {
-      this.activeParents.delete(request.parent_session_id)
+      if (!request.allow_concurrent_parent) this.activeParents.delete(request.parent_session_id)
     }
   }
 }

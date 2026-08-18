@@ -1,6 +1,6 @@
 # Plan 039G — Background Agents and Git Worktree Isolation
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039F  
@@ -111,42 +111,42 @@ Do not make peer-to-peer teams a prerequisite for ordinary coding-agent usefulne
 
 ### PHASE-01 — background task lifecycle
 
-- [ ] Define state machine, polling/result/cancel semantics, retention, budgets.
+- [x] Define state machine, polling/result/cancel semantics, retention, budgets.
 - [ ] Reuse terminal-job lifecycle lessons where applicable without coupling agent tasks to process jobs.
 
 ### PHASE-02 — read-only background agents
 
-- [ ] Run explore/review children asynchronously with shared-read isolation.
-- [ ] Prove parent continues independently and can poll/cancel.
-- [ ] Bound output/context retention.
+- [x] Run explore/review children asynchronously with shared-read isolation.
+- [x] Prove parent continues independently and can poll/cancel.
+- [x] Bound output/context retention.
 
 ### PHASE-03 — worktree allocator
 
-- [ ] Safe canonical repo/worktree discovery.
-- [ ] Task-owned branch naming and collision handling.
-- [ ] Contained worktree root.
-- [ ] Ownership lock/metadata.
-- [ ] Refuse unsafe dirty/conflicting conditions rather than guessing.
+- [x] Safe canonical repo/worktree discovery.
+- [x] Task-owned branch naming and collision handling.
+- [x] Contained worktree root.
+- [x] Ownership lock/metadata.
+- [x] Refuse unsafe dirty/conflicting conditions rather than guessing.
 
 ### PHASE-04 — writer background agents
 
-- [ ] Restrict writer cwd/tools to allocated worktree.
-- [ ] Run normal hooks/policy/LSP inside child worktree.
-- [ ] Return status/diff/validation evidence to parent.
-- [ ] Never auto-integrate.
+- [x] Restrict writer cwd/tools to allocated worktree.
+- [x] Run normal hooks/policy/LSP inside child worktree.
+- [x] Return status/diff/validation evidence to parent.
+- [x] Never auto-integrate.
 
 ### PHASE-05 — cleanup/recovery
 
-- [ ] Safe cancel process tree and child session.
-- [ ] Preserve dirty/unmerged worktrees for inspection.
-- [ ] Remove only clean, task-owned disposable worktrees with explicit safe criteria.
-- [ ] Recover stale task metadata after process restart where feasible.
+- [x] Safe cancel process tree and child session.
+- [x] Preserve dirty/unmerged worktrees for inspection.
+- [x] Remove only clean, task-owned disposable worktrees with explicit safe criteria.
+- [ ] Recover stale task metadata after process restart (intentionally deferred; process-local metadata is never reused for cleanup).
 
 ### PHASE-06 — bounded multi-agent coordination evaluation
 
-- [ ] Prove at least one genuinely independent multi-agent scenario.
+- [x] Prove at least one genuinely independent multi-agent scenario.
 - [ ] Measure overhead vs sequential subagents.
-- [ ] Implement minimal team messaging/shared task list only if evidence justifies it; otherwise document parent-coordinated background agents as the intentional simpler standard.
+- [x] Team messaging/shared task list intentionally deferred; parent coordination is sufficient for 039G.
 
 ## Acceptance criteria
 

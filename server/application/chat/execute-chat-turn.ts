@@ -171,6 +171,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
         abortSignal
       })
       telemetry?.event('chat.subagent.dispatch', 'ok')
+      Object.assign(tools, deps.subagent.buildBackground({ userId, parentSessionId: conv.id, authority: { tools: conv.enabledToolIds, effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation'], working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace', model_policy: 'default', workspace_root: workspacePath }, model: deps.getChatModel(provider, modelInfo.modelId), enabledToolIds: conv.enabledToolIds, approvals: conv.approvals, permissionMode: conv.permissionMode, abortSignal }))
     }
   }
 
