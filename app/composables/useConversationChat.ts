@@ -42,19 +42,26 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   const conversationId = computed(() => conversation.value?.id)
   const seedMessages = shallowRef<UIMessage[]>(conversation.value?.messages ?? [])
   const agentContext = shallowRef<{ repository_identity?: string } | undefined>()
+  const agentSessionReady = ref(conversation.value?.mode !== 'agent')
   watch(conversationId, () => {
     seedMessages.value = conversation.value?.messages ?? []
     agentContext.value = undefined
+    agentSessionReady.value = conversation.value?.mode !== 'agent'
   })
   watch(conversationId, (id) => {
     if (!id || conversation.value?.mode !== 'agent') return
+    agentSessionReady.value = false
     void relayAgent.startSession(id).then((result) => {
       const context = result?.context
       if (context && typeof context === 'object' && 'repository_identity' in context && typeof context.repository_identity === 'string') {
         agentContext.value = { repository_identity: context.repository_identity.slice(0, 512) }
       }
+      agentSessionReady.value = true
     }).catch(() => {})
   }, { immediate: true })
+  // Scoped to one completion cycle: the boundary that follows a remediation
+  // continuation closes the cycle and gives the next independent run a fresh
+  // single-continuation budget.
   const stopContinuationUsed = ref(false)
   const completionGateInFlight = ref(false)
   watch(conversationId, () => {
@@ -112,7 +119,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // reload — a real duplicate command run is the worse failure mode here).
 
   const chat = useChat(() => ({
-    transport: createConversationTransport(agentContext),
+    transport: createConversationTransport(agentContext, agentSessionReady),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
     // Without this, `addToolApprovalResponse` only marks the pending part as
@@ -189,9 +196,11 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
             void chat.regenerate()
             return
           }
+          stopContinuationUsed.value = false
           flushMessages()
           if (conversation.value) loadOne(conversation.value.id)
         }).catch(() => {
+          stopContinuationUsed.value = false
           flushMessages()
           if (conversation.value) loadOne(conversation.value.id)
         }).finally(() => {
