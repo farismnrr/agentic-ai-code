@@ -142,7 +142,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | CLOSED / VERIFIED | Hard relay policy and first-party approval policy are explicit, input-aware, testable, non-bypassable, and operationally deployed |
 | **039E** | Deterministic hooks/lifecycle | 039D | Implemented — pending independent verification | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
-| **039F** | Subagents + reusable agent profiles | 039E | Planned | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
+| **039F** | Subagents + reusable agent profiles | 039E | Implemented — pending independent verification | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
 | **039G** | Background agents + Git worktree isolation | 039F | Planned | Independent background tasks can run with bounded concurrency and isolated writes without cross-worktree corruption |
 | **039H** | Task/context/output management | 039G | Planned | Structured task ledger, context visibility, continuation tokens/pagination, and output budgets are integrated |
 | **039I** | Standards-based extension interoperability + MCP resources | 039H | Planned | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
@@ -155,7 +155,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039C — LSP code intelligence + diagnostics
 - [x] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
 - [x] PLAN-039E — deterministic agent hooks/lifecycle (implementation pending independent verification)
-- [ ] PLAN-039F — subagents + reusable agent profiles
+- [x] PLAN-039F — subagents + reusable agent profiles (implementation pending independent verification)
 - [ ] PLAN-039G — background agents + Git worktree isolation
 - [ ] PLAN-039H — task/context/output management
 - [ ] PLAN-039I — standards-based extension interoperability + MCP resources
