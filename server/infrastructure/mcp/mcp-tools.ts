@@ -56,7 +56,7 @@ type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number } = {}) {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number, abortSignal?: AbortSignal } = {}) {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
@@ -109,7 +109,10 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         execute: async (input: unknown) => {
           if (options.maxToolCalls !== undefined && toolCalls >= options.maxToolCalls) throw new Error('subagent tool-call budget exhausted')
           toolCalls++
-          const result = await withMcpSpan('mcp.tools_call', {}, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
+          const call = { name: mcpTool.name, arguments: input as Record<string, unknown> }
+          const result = client.trustedProvenance === 'first-party-relay'
+            ? await withMcpSpan('mcp.tools_call', {}, () => client.callTool(call, options.abortSignal))
+            : await withMcpSpan('mcp.tools_call', {}, () => client.callTool(call))
           return result.content
         }
       })
