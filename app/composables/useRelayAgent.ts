@@ -5,10 +5,16 @@ export interface RelayExecResult {
   id?: string
   success: boolean
   approvalRequired?: boolean
+  approvalToken?: string
   error?: string
   stdout?: string
   stderr?: string
   exitCode?: number
+}
+
+export interface RelaySessionStartResult {
+  context?: { repository_identity?: string }
+  bounded?: boolean
 }
 
 export interface RelayJobSnapshot {
@@ -40,7 +46,7 @@ export function useRelayAgent() {
     }
   }
 
-  async function exec(command: string, args: string[] = [], cwd?: string, agentSession?: string): Promise<RelayExecResult> {
+  async function exec(command: string, args: string[] = [], cwd?: string, agentSession?: string, hookApprovalToken?: string): Promise<RelayExecResult> {
     const connected = await checkConnection()
     if (!connected) {
       throw new Error('Local relay agent is not connected')
@@ -61,7 +67,8 @@ export function useRelayAgent() {
           _meta: {
             'io.modelcontextprotocol/protocolVersion': '2026-07-28',
             'io.modelcontextprotocol/clientCapabilities': {},
-            ...(agentSession ? { 'io.modelcontextprotocol/agentSession': agentSession } : {})
+            ...(agentSession ? { 'io.modelcontextprotocol/agentSession': agentSession } : {}),
+            ...(hookApprovalToken ? { 'io.modelcontextprotocol/hookApprovalToken': hookApprovalToken } : {})
           }
         }
       }
@@ -70,7 +77,7 @@ export function useRelayAgent() {
         error?: { message?: string }
         result?: {
           isError?: boolean
-          _meta?: { control?: { type?: string, reason?: string } }
+          _meta?: { control?: { type?: string, reason?: string, token?: string } }
           content?: Array<{ type?: string, text?: string }>
         }
       }
@@ -102,7 +109,7 @@ export function useRelayAgent() {
         }
       }
       if (res.result?._meta?.control?.type === 'approval_required') {
-        return { type: 'exec_result', success: false, approvalRequired: true, error: 'Approval is required before this action can continue' }
+        return { type: 'exec_result', success: false, approvalRequired: true, approvalToken: res.result._meta.control.token, error: 'Approval is required before this action can continue' }
       }
 
       const textContent = res.result?.content?.find(c => c.type === 'text')?.text || ''
@@ -130,8 +137,8 @@ export function useRelayAgent() {
     }
   }
 
-  async function startSession(agentSession: string): Promise<unknown> {
-    return mcpRequest('agent/session_start', '', {}, agentSession)
+  async function startSession(agentSession: string): Promise<RelaySessionStartResult> {
+    return mcpRequest<RelaySessionStartResult>('agent/session_start', '', {}, agentSession)
   }
 
   async function preAgentStop(agentSession: string): Promise<{ completion?: string }> {

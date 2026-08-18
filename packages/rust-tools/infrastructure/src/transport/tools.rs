@@ -92,6 +92,21 @@ pub(super) async fn handle_tools_call(
 
     let agent_session = agent_session_from_params(request.params.as_ref())
         .unwrap_or_else(|| format!("relay-{}", request_id));
+    let hook_approval_token = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("_meta"))
+        .and_then(|meta| meta.get("io.modelcontextprotocol/hookApprovalToken"))
+        .and_then(Value::as_str);
+    let hook_approved = match hook_approval_token {
+        Some(token) => {
+            state
+                .hooks
+                .consume_approval(token, &agent_session, &call.name)
+                .await
+        }
+        None => false,
+    };
     let effects = relay_application::hooks::effect_classes(
         call.name.as_str(),
         tool.annotations
@@ -110,19 +125,28 @@ pub(super) async fn handle_tools_call(
                 .unwrap_or("untrusted"),
         )
         .await;
-    let pre = state
-        .hooks
-        .invoke(
-            relay_application::hooks::HookEvent::PreToolUse,
-            json!({
-                "hook_event": "pre_tool_use",
-                "tool_id": call.name.as_str(),
-                "effect_classes": effects.clone(),
-                "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
-                "success": true,
-            }),
-        )
-        .await;
+    let pre = if hook_approved {
+        relay_application::hooks::HookResult {
+            decision: relay_application::hooks::HookDecision::Continue,
+            reason: "approved_hook",
+            duration_ms: 0,
+            context: None,
+        }
+    } else {
+        state
+            .hooks
+            .invoke(
+                relay_application::hooks::HookEvent::PreToolUse,
+                json!({
+                    "hook_event": "pre_tool_use",
+                    "tool_id": call.name.as_str(),
+                    "effect_classes": effects.clone(),
+                    "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+                    "success": true,
+                }),
+            )
+            .await
+    };
     if !matches!(
         pre.decision,
         relay_application::hooks::HookDecision::Continue
@@ -137,12 +161,13 @@ pub(super) async fn handle_tools_call(
             "Hook blocked this tool call"
         };
         let result = if approval_requested {
+            let approval_token = state.hooks.issue_approval(&agent_session, &call.name).await;
             ToolCallResult::complete(vec![relay_interfaces::mcp::ToolResultContent {
                 kind: "text",
                 text: text.into(),
             }])
             .with_meta(json!({
-                "control": { "type": "approval_required", "reason": "hook_request" }
+                "control": { "type": "approval_required", "reason": "hook_request", "token": approval_token }
             }))
         } else {
             ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
