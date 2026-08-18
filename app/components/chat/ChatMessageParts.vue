@@ -26,6 +26,12 @@ defineProps<{ message: UIMessage }>()
       }"
     />
 
+    <ChatSubagentCall
+      v-else-if="isToolUIPart(part) && getToolName(part) === 'delegate_task'"
+      :part="part"
+      :streaming="isToolStreaming(part)"
+    />
+
     <ChatToolCall
       v-else-if="isToolUIPart(part)"
       :part="part"

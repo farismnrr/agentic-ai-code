@@ -10,6 +10,7 @@ pub enum Dispatch {
     TasksCancel,
     AgentSessionStart,
     AgentPreStop,
+    AgentSubagentStop,
     Unknown(String),
 }
 
@@ -23,6 +24,7 @@ pub fn dispatch(request: &mcp::Request) -> Dispatch {
         "tasks/cancel" => Dispatch::TasksCancel,
         "agent/session_start" => Dispatch::AgentSessionStart,
         "agent/pre_stop" => Dispatch::AgentPreStop,
+        "agent/subagent_stop" => Dispatch::AgentSubagentStop,
         other => Dispatch::Unknown(other.to_owned()),
     }
 }

@@ -147,4 +147,21 @@ there is no hook result that grants authority. `after_file_change` runs only
 after a committed native mutation. Stop gates are attempted at most twice.
 
 Hook telemetry records only bounded event, decision, duration, and reason class.
-The `subagent_stop` event remains dependency-gated by Plan 039F.
+## Parent-managed subagents and profiles
+
+First-party agent-mode conversations expose a parent-only `delegate_task`
+capability. Profiles are vendor-neutral Markdown files with YAML frontmatter
+under `.agents/agents/`; the built-ins are `explore`, `plan`, `review`,
+`verify`, and `general-purpose`. Profile instructions are not authority: the
+effective tools, effects, working mode, model hint, and workspace are always
+an intersection with the current parent/session and operator policy.
+
+Child context is explicit and bounded to a task plus path references. Results
+contain only a bounded status, summary, findings, evidence, validation, risks,
+and budget usage; hidden reasoning and full child transcripts are not
+persisted. Budgets cap turns, tool calls, output/context, wall time, and
+depth. Parent cancellation reaches the child, and only one child may run for
+one parent at a time. The existing stop control cancels a running child.
+
+Plan 039F is sequential-first: background agents, concurrent children,
+worktree isolation, and peer-to-peer delegation remain deferred to Plan 039G.

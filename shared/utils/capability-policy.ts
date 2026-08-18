@@ -194,8 +194,13 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (trustedProvenance === 'external') {
     if (annotations?.destructiveHint) return ['external_mutation']
     if (annotations?.openWorldHint) return ['network_read', 'external_mutation']
+    if (!REVIEWED_STRUCTURED_TOOLS.has(toolName) && annotations?.readOnlyHint !== true) return ['privileged_bridge']
     return ['workspace_read']
   }
   if (annotations?.readOnlyHint && toolName !== 'web_search') return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
-  return annotations?.destructiveHint ? ['workspace_write'] : ['workspace_read']
+  return annotations?.destructiveHint ? ['workspace_write'] : ['privileged_bridge']
+}
+
+export function toolRequiresEffects(toolName: string, annotations?: CapabilityAnnotations, trustedProvenance: CapabilityFacts['trustedProvenance'] = 'external') {
+  return toolEffects(toolName, annotations, trustedProvenance)
 }
