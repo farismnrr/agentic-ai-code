@@ -5,8 +5,8 @@ import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
 import type { SubagentBudget, SubagentResult } from '#shared/types/subagents'
 import { SubagentRuntime } from '../../application/subagents/runtime'
-import { toolMatchesProfile } from '../../application/subagents/profiles'
-import { buildMcpTools } from '../mcp/mcp-tools'
+import { nativeToolMatchesProfile } from '../../application/subagents/profiles'
+import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
@@ -36,14 +36,15 @@ const runtime = new SubagentRuntime({
   execution: {
     async execute({ userId, parentSessionId, profile, authority, context, budget, abortSignal, sessionId, model, approvals, permissionMode }) {
       const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'), { allowedEffects: authority.effects, maxToolCalls: budget.max_tool_calls, abortSignal })
-      const tools = Object.fromEntries(Object.entries(mcp.tools).filter(([name]) => toolMatchesProfile(name, profile))) as ToolSet
+      const scopedMcp = scopeMcpTools(mcp, new Set(authority.tools))
+      const tools = Object.fromEntries(Object.entries(scopedMcp.tools).filter(([name]) => scopedMcp.toolOwners.has(name) || nativeToolMatchesProfile(name, profile))) as ToolSet
       try {
         const response = await generateText({
           model: model as LanguageModel,
           system: `${profile.instructions}\n${(context.skill_instructions ?? []).join('\n')}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
           prompt: JSON.stringify({ ...context, skill_instructions: undefined }),
           tools,
-          toolApproval: mcp.toolApproval,
+          toolApproval: scopedMcp.toolApproval,
           toolChoice: 'auto',
           stopWhen: stepCountIs(budget.max_turns),
           maxOutputTokens: budget.max_output_tokens,
