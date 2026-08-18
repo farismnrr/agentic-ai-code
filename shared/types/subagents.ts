@@ -24,6 +24,8 @@ export interface SubagentProfile {
   max_depth: number
   working_mode: SubagentWorkingMode
   skills: string[]
+  /** Explicit stable `${serverId}.${toolName}` selections for external MCP. */
+  mcp_tools: string[]
   instructions: string
 }
 

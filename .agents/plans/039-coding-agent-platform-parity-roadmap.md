@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039G CLOSED / VERIFIED; 039H IMPLEMENTED / FINAL INDEPENDENT VERIFICATION PENDING; 039I–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039G CLOSED / VERIFIED; 039H–039I IMPLEMENTED / FINAL INDEPENDENT VERIFICATION PENDING; 039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -145,7 +145,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039F** | Subagents + reusable agent profiles | 039E | CLOSED / VERIFIED | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
 | **039G** | Background agents + Git worktree isolation | 039F | CLOSED / VERIFIED | Independent background tasks run with bounded concurrency and isolated writes without cross-worktree corruption |
 | **039H** | Task/context/output management | 039G | IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING | Structured task ledger, context visibility, continuation policy, and output budgets are integrated |
-| **039I** | Standards-based extension interoperability + MCP resources | 039H | Planned | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
+| **039I** | Standards-based extension interoperability + MCP resources | 039H | IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
 | **039J** | Agent UX, observability, security regression, docs, closure | 039I | Planned | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
 
 ## Master Todo
@@ -158,7 +158,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039F — subagents + reusable agent profiles (CLOSED / VERIFIED)
 - [x] PLAN-039G — background agents + Git worktree isolation (CLOSED / VERIFIED)
 - [ ] PLAN-039H — task/context/output management (implementation pending independent verification)
-- [ ] PLAN-039I — standards-based extension interoperability + MCP resources
+- [x] PLAN-039I — standards-based extension interoperability + MCP resources (implementation pending independent verification)
 - [ ] PLAN-039J — integrated UX, observability, regression validation, documentation, closure
 
 ## 039A verified handoff baseline

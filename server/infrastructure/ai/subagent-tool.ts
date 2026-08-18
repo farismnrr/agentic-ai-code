@@ -15,14 +15,16 @@ const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
   readSkill: (name) => {
     const candidates = [join(process.cwd(), 'ai-self', 'skills', name, 'SKILL.md'), join(process.cwd(), '.agents', 'skills', name, 'SKILL.md')]
+    const found: string[] = []
     for (const candidate of candidates) {
       try {
-        return readFileSync(candidate, 'utf8')
+        found.push(readFileSync(candidate, 'utf8'))
       } catch {
-        // Try the next approved repository location.
+        // Missing approved roots are ignored; ambiguity is rejected below.
       }
     }
-    return undefined
+    if (found.length > 1) throw new Error('configured profile skill is ambiguous across approved roots')
+    return found[0]
   },
   lifecycle: {
     event: (name, payload) => logger.info(`chat.subagent.${name}`, { operation: `chat.subagent.${name}`, outcome: payload.status ?? 'started', profile: payload.profile, depth: payload.depth })

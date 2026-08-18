@@ -1,0 +1,1 @@
+{"capabilities":{"resources":{}},"methods":{"resources/list":{"cacheScope":"private","ttlMs":300000},"resources/read":{"cacheScope":"private","ttlMs":0}},"protocolVersion":"2026-07-28","resourceUris":["workspace://<repo-name>/manifest","workspace://<repo-name>/agent-guidance","workspace://<repo-name>/status","workspace://<repo-name>/head"],"templates":false,"subscriptions":false}

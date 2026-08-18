@@ -207,7 +207,7 @@ impl DiscoverResult {
         Self {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
-            capabilities: json!({ "tools": { "listChanged": false }, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
+            capabilities: json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
             instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
             ttl_ms: 0,
             cache_scope: "private",
@@ -226,6 +226,27 @@ pub struct ToolsCallParams {
     pub name: String,
     #[serde(default)]
     pub arguments: Value,
+}
+
+pub mod resources {
+    use serde::Serialize;
+
+    #[derive(Debug, Clone, Serialize)]
+    pub struct Resource {
+        pub uri: String,
+        pub name: String,
+        pub description: String,
+        #[serde(rename = "mimeType")]
+        pub mime_type: &'static str,
+    }
+
+    #[derive(Debug, Clone, Serialize)]
+    pub struct ResourceContent {
+        pub uri: String,
+        pub text: String,
+        #[serde(rename = "mimeType")]
+        pub mime_type: &'static str,
+    }
 }
 
 /// `tools/call` result content block (MCP text-content convention).

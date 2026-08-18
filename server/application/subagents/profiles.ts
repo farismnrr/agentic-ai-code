@@ -7,6 +7,8 @@ const MAX_LIST = 32
 const TOOL_NAMES = new Set(['directory_list', 'file_search', 'text_search', 'file_read', 'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'code_symbols', 'code_definition', 'code_references', 'code_hover', 'code_diagnostics', 'code_rename_preview', 'web_search', 'http_fetch', 'terminal_exec', 'local_terminal', 'file_write', 'file_edit', 'apply_patch'])
 const EFFECT_NAMES = new Set<SubagentEffect>(['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge'])
 const NAME_RE = /^[a-z][a-z0-9-]{0,31}$/
+const SKILL_RE = /^[a-z][a-z0-9-]{0,63}$/
+const MCP_TOOL_RE = /^[a-zA-Z0-9_-]{1,64}\.[a-zA-Z0-9_-]{1,64}$/
 
 function assertBoundedString(value: unknown, field: string, max: number): asserts value is string {
   if (typeof value !== 'string' || value.length === 0 || value.length > max) throw new Error(`invalid profile ${field}`)
@@ -28,12 +30,15 @@ export function parseAgentProfile(source: string): SubagentProfile {
   const tools = parseLists(raw.tools, 'tools', TOOL_NAMES)
   const effects = parseLists(raw.effects, 'effects', EFFECT_NAMES)
   const skills = parseStringList(raw.skills, 'skills')
+  if (skills.some(item => !SKILL_RE.test(item))) throw new Error('invalid profile skills')
+  const mcp_tools = parseStringList(raw.mcp_tools, 'mcp_tools')
+  if (mcp_tools.some(item => !MCP_TOOL_RE.test(item))) throw new Error('invalid profile mcp_tools')
   const budget = (field: keyof typeof SUBAGENT_BUDGET_LIMITS) => {
     const value = raw[field]
     if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > SUBAGENT_BUDGET_LIMITS[field]) throw new Error(`invalid profile ${field}`)
     return value as number
   }
-  return { name: raw.name as SubagentProfileName, description: raw.description as string, model_policy: raw.model_policy as SubagentProfile['model_policy'], tools, effects, max_turns: budget('max_turns'), max_tool_calls: budget('max_tool_calls'), max_output_tokens: budget('max_output_tokens'), max_context_tokens: budget('max_context_tokens'), max_wall_time_ms: budget('max_wall_time_ms'), max_depth: budget('max_depth'), working_mode: raw.working_mode as SubagentProfile['working_mode'], skills, instructions }
+  return { name: raw.name as SubagentProfileName, description: raw.description as string, model_policy: raw.model_policy as SubagentProfile['model_policy'], tools, effects, max_turns: budget('max_turns'), max_tool_calls: budget('max_tool_calls'), max_output_tokens: budget('max_output_tokens'), max_context_tokens: budget('max_context_tokens'), max_wall_time_ms: budget('max_wall_time_ms'), max_depth: budget('max_depth'), working_mode: raw.working_mode as SubagentProfile['working_mode'], skills, mcp_tools, instructions }
 }
 
 function parseStringList(value: unknown, field: string): string[] {
@@ -59,5 +64,6 @@ export function loadAgentProfile(name: string, readFile: (name: string) => strin
 
 export function toolMatchesProfile(toolName: string, profile: SubagentProfile): boolean {
   const canonical = toolName.includes('.') ? toolName.split('.').at(-1) ?? toolName : toolName
+  if (toolName.includes('.')) return profile.mcp_tools.includes(toolName)
   return profile.tools.allow.includes(canonical) && !profile.tools.deny.includes(canonical)
 }

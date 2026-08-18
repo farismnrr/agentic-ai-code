@@ -28,6 +28,7 @@ printf 'commit-gate: checking task/context/output bounds...\n'
 pnpm verify:task-context-output
 printf 'commit-gate: checking current MCP contract...\n'
 bash scripts/phase-039h-contract.sh
+bash scripts/phase-039i-contract.sh
 
 printf 'commit-gate: running all linters...\n'
 pnpm lint
