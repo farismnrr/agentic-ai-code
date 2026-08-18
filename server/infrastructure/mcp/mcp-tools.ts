@@ -7,6 +7,7 @@ import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
 import { approvalForCapability, capabilityFactsForToolCall, toolRequiresEffects } from '#shared/utils/capability-policy'
 import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
+import { enforceSubagentStop } from '../../application/subagents/lifecycle'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -64,7 +65,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   let toolCalls = 0
 
   if (enabledToolIds.length === 0) {
-    return { tools, toolApproval, close: async () => {} }
+    return { tools, toolApproval, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
@@ -136,12 +137,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     toolCallCount: () => toolCalls,
     subagentStop: async (parentSessionId: string, childSessionId: string, status: string) => {
       const relay = clients.find(client => client.trustedProvenance === 'first-party-relay' && client.subagentStop)
-      if (!relay?.subagentStop) return true
-      try {
-        return await relay.subagentStop(parentSessionId, childSessionId, status)
-      } catch {
-        return false
-      }
+      return enforceSubagentStop(relay, parentSessionId, childSessionId, status)
     }
   }
 }

@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { generateText, stepCountIs, tool } from 'ai'
+import { MockLanguageModelV4 } from 'ai/test'
+import { z } from 'zod'
 import { intersectSubagentAuthority, narrowBudget } from '../server/application/subagents/policy.ts'
 import { parseAgentProfile } from '../server/application/subagents/profiles.ts'
 import { SubagentRuntime } from '../server/application/subagents/runtime.ts'
 import type { SubagentAuthority } from '../shared/types/subagents.ts'
-import { toolRequiresEffects } from '../shared/utils/capability-policy.ts'
+import { approvalForCapability, toolRequiresEffects } from '../shared/utils/capability-policy.ts'
+import { enforceSubagentStop } from '../server/application/subagents/lifecycle.ts'
 
 const root = process.cwd()
 const parent: SubagentAuthority = { tools: ['file_read', 'file_write', 'local_terminal', 'terminal_exec'], effects: ['workspace_read', 'workspace_write', 'process_exec', 'network_read', 'external_mutation'], working_mode: 'workspace', model_policy: 'default', workspace_root: root }
@@ -36,6 +40,38 @@ if (!verifyAuthority.tools.includes('terminal_exec')) throw new Error('verify te
 if (verifyAuthority.tools.some(tool => tool === 'file_write' || tool === 'file_edit' || tool === 'apply_patch')) throw new Error('verify gained source mutation tools')
 const plan = parseAgentProfile(readFileSync(join(root, '.agents/agents/plan.md'), 'utf8'))
 if (plan.skills.length !== 1 || plan.skills[0] !== 'implementation-planning') throw new Error('plan skill contract changed')
+
+const approvalModel = new MockLanguageModelV4({ doGenerate: async () => ({
+  content: [{ type: 'tool-call', toolCallId: 'approval-fixture', toolName: 'fixture', input: '{"value":"ok"}' }],
+  finishReason: { unified: 'stop', raw: undefined }, usage: { inputTokens: { total: 1, noCache: 1 }, outputTokens: { total: 1, text: 1 } }, warnings: []
+}) })
+async function runApprovalFixture(approval: 'user-approval' | 'denied' | 'approved') {
+  let executions = 0
+  const result = await generateText({ model: approvalModel, tools: { fixture: tool({ inputSchema: z.object({ value: z.string() }), execute: async () => {
+    executions++
+    return 'executed'
+  } }) }, toolApproval: { fixture: approval }, stopWhen: stepCountIs(1), prompt: 'invoke fixture' })
+  return { executions, content: result.content }
+}
+const terminalApproval = approvalForCapability({ toolId: 'relay.terminal_exec', effects: ['process_exec', 'workspace_write', 'network_read', 'external_mutation'], trustedProvenance: 'first-party-relay' }, undefined, 'manual').outcome
+const highRisk = await runApprovalFixture(terminalApproval)
+if (terminalApproval !== 'user-approval' || highRisk.executions !== 0 || !highRisk.content.some(part => part.type === 'tool-approval-request')) throw new Error('high-risk child call bypassed approval')
+if ((await runApprovalFixture(approvalForCapability({ toolId: 'relay.terminal_exec', effects: ['process_exec'], trustedProvenance: 'first-party-relay' }, 'never', 'manual').outcome)).executions !== 0) throw new Error('explicit denial executed child tool')
+if ((await runApprovalFixture(approvalForCapability({ toolId: 'relay.file_read', effects: ['workspace_read'], trustedProvenance: 'first-party-relay' }, undefined, 'manual').outcome)).executions !== 1) throw new Error('approved read fixture did not execute')
+
+const lifecycleArgs: string[] = []
+const lifecycleClient = { subagentStop: async (parent: string, child: string, status: string) => {
+  lifecycleArgs.push(parent, child, status)
+  return true
+} }
+if (!await enforceSubagentStop(lifecycleClient, 'parent-session', 'child-session', 'completed')) throw new Error('allowed lifecycle decision was rejected')
+if (lifecycleArgs.join('|') !== 'parent-session|child-session|completed') throw new Error('lifecycle session identity was altered')
+if (await enforceSubagentStop({ subagentStop: async () => false }, 'parent', 'child', 'failed')) throw new Error('blocked lifecycle decision was allowed')
+if (await enforceSubagentStop({ subagentStop: async () => {
+  throw new Error('transport')
+} }, 'parent', 'child', 'cancelled')) throw new Error('lifecycle transport failure was allowed')
+if (await enforceSubagentStop({ subagentStop: async () => undefined as unknown as boolean }, 'parent', 'child', 'budget_exhausted')) throw new Error('malformed lifecycle response was allowed')
+if (await enforceSubagentStop(undefined, 'parent', 'child', 'completed')) throw new Error('missing lifecycle bridge was allowed')
 
 let active = 0
 let stopCalls = 0
