@@ -11,11 +11,7 @@ const displayName = computed(() => tool.value?.name ?? props.toolName)
 const category = computed(() => toolCategory(displayName.value))
 const input = computed(() => safeInputSummary(props.part.input))
 const output = computed(() => presentToolOutput('output' in props.part ? props.part.output : undefined))
-const errorText = computed(() => {
-  const value = 'errorText' in props.part ? props.part.errorText : undefined
-  if (!value) return undefined
-  return value.length > 1000 ? `${value.slice(0, 1000)}…` : value
-})
+const failed = computed(() => props.part.state === 'output-error')
 </script>
 
 <template>
@@ -69,14 +65,14 @@ const errorText = computed(() => {
       </p>
 
       <div
-        v-if="errorText"
+        v-if="failed"
         class="rounded-md bg-elevated p-2"
       >
         <p class="font-mono text-[11px] uppercase tracking-wider text-error">
           Failed
         </p>
         <p class="mt-1 text-xs text-error">
-          {{ errorText }}
+          Tool execution failed.
         </p>
       </div>
       <div

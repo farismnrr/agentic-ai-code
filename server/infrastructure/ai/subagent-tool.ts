@@ -10,6 +10,7 @@ import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
+import { parsePresentationSafeSubagentResult, presentationSafeBackgroundTask } from './subagent-result'
 
 const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
@@ -96,7 +97,8 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
       description: 'Get bounded status and result for a parent-owned background agent task.',
       inputSchema: z.object({ task_id: z.string().uuid() }),
       execute: async ({ task_id }) => {
-        const result = backgroundTasks.get(task_id, input.userId, input.parentSessionId) ?? { state: 'not_found' as const }
+        const raw = backgroundTasks.get(task_id, input.userId, input.parentSessionId)
+        const result = raw ? presentationSafeBackgroundTask(raw) : { state: 'not_found' as const }
         logger.info('chat.background.get', { 'operation': 'chat.background.get', 'outcome': result.state === 'not_found' ? 'error' : 'ok', 'background.state': result.state })
         return result
       }
@@ -114,22 +116,16 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
 }
 
 function parseResult(text: string, sessionId: string, owner: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {
-  const value = (() => {
-    try {
-      return JSON.parse(text) as Partial<SubagentResult>
-    } catch {
-      return { summary: text }
-    }
-  })()
-  const summary = approvalPending ? 'Child tool call requires approval before execution.' : typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.'
+  const value = parsePresentationSafeSubagentResult(text)
+  const summary = approvalPending ? 'Child tool call requires approval before execution.' : value?.summary ?? 'Child returned an invalid structured summary.'
   const summaryRef = classifyOutput(Buffer.byteLength(summary, 'utf8')) === 'summarized_large' ? putResultRef(owner, summary.slice(0, 32 * 1024)) : undefined
   return {
-    status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value.status && ['completed', 'blocked', 'cancelled', 'budget_exhausted', 'failed', 'invalid'].includes(value.status) ? value.status : 'completed',
+    status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value?.status ?? 'invalid',
     summary: summaryRef ? `${summary.slice(0, 512)} …[full bounded summary in result_ref]` : summary,
-    findings: Array.isArray(value.findings) ? value.findings : [],
-    evidence: Array.isArray(value.evidence) ? value.evidence : [],
-    validation: Array.isArray(value.validation) ? value.validation : [],
-    remaining_risks: Array.isArray(value.remaining_risks) ? value.remaining_risks : [],
+    findings: value?.findings ?? [],
+    evidence: value?.evidence ?? [],
+    validation: value?.validation ?? [],
+    remaining_risks: value?.remaining_risks ?? [],
     session_id: sessionId,
     profile,
     usage: { turns: Math.min(steps, budget.max_turns), tool_calls: Math.min(toolCalls, budget.max_tool_calls), output_tokens: Math.min(providerUsage?.outputTokens ?? 0, budget.max_output_tokens), context_tokens: Math.min(providerUsage?.inputTokens ?? 0, budget.max_context_tokens), wall_time_ms: 0, depth: 0 },

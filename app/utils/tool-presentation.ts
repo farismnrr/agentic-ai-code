@@ -2,7 +2,8 @@ export type ToolRenderCategory = 'read' | 'git' | 'mutation' | 'execution' | 'ne
 
 const MAX_PREVIEW_CHARS = 6000
 const MAX_SUMMARY_ITEMS = 12
-const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?)/i
+const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
+const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column)$/i
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
@@ -11,7 +12,11 @@ function record(value: unknown): Record<string, unknown> | undefined {
 function safePath(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length === 0) return undefined
   const normalized = value.replaceAll('\\', '/')
-  if (normalized.startsWith('/')) return normalized.split('/').filter(Boolean).slice(-3).join('/') || '/'
+  const absolute = normalized.startsWith('/') || normalized.startsWith('//') || /^[A-Za-z]:\//.test(normalized)
+  if (absolute) {
+    const tail = normalized.replace(/^[A-Za-z]:/, '').split('/').filter(Boolean).slice(-2).join('/')
+    return tail ? `…/${tail}` : '…'
+  }
   return normalized.replace(/^\.\//, '').slice(0, 256)
 }
 
@@ -78,7 +83,7 @@ export function safeInputSummary(input: unknown): SafeInputSummary {
     else if (/^(command|executable)$/i.test(key)) shown = safeExecutable(raw)
     else if (Array.isArray(raw)) shown = `${raw.length} item${raw.length === 1 ? '' : 's'}`
     else if (record(raw)) shown = `${Object.keys(raw as Record<string, unknown>).length} fields`
-    else shown = scalar(raw)
+    else if (SAFE_SCALAR_KEY.test(key)) shown = scalar(raw)
     if (shown === undefined) {
       hiddenFields += 1
       continue

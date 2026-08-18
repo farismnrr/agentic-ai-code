@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039I CLOSED / VERIFIED; 039J IMPLEMENTED / FINAL INDEPENDENT VERIFICATION PENDING
+**Status:** IN PROGRESS — 039A–039I CLOSED / VERIFIED; 039J IMPLEMENTED / INDEPENDENT REVIEW PASSED / LIVE VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -146,7 +146,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039G** | Background agents + Git worktree isolation | 039F | CLOSED / VERIFIED | Independent background tasks run with bounded concurrency and isolated writes without cross-worktree corruption |
 | **039H** | Task/context/output management | 039G | CLOSED / VERIFIED | Structured task ledger, context visibility, continuation policy, and output budgets are integrated |
 | **039I** | Standards-based extension interoperability + MCP resources | 039H | CLOSED / VERIFIED | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
-| **039J** | Agent UX, observability, security regression, docs, closure | 039I | IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
+| **039J** | Agent UX, observability, security regression, docs, closure | 039I | IMPLEMENTED — INDEPENDENT REVIEW PASSED; LIVE VERIFICATION PENDING | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
 
 ## Master Todo
 

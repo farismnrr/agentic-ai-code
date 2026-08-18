@@ -60,13 +60,7 @@ const stateColor = computed(() => state.value === 'completed' ? 'success' : stat
       </div>
 
       <p
-        v-if="input.task"
-        class="text-muted"
-      >
-        {{ input.task }}
-      </p>
-      <p
-        v-else-if="output?.progress_summary"
+        v-if="output?.progress_summary"
         class="text-muted"
       >
         {{ output.progress_summary }}
