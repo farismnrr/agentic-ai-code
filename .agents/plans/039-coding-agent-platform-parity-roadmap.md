@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039D CLOSED / VERIFIED; 039E IMPLEMENTED / PENDING INDEPENDENT VERIFICATION; 039F–039J UNSTARTED
+**Status:** IN PROGRESS — 039A–039G CLOSED / VERIFIED; 039H IMPLEMENTED / FINAL INDEPENDENT VERIFICATION PENDING; 039I–039J UNSTARTED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -141,10 +141,10 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039B** | Git read intelligence + patch ergonomics | 039A | CLOSED / VERIFIED | Structured bounded Git inspection and safe patch workflow work through MCP |
 | **039C** | LSP code intelligence + diagnostics | 039B | CLOSED / VERIFIED | Bounded LSP adapters and 25-tool MCP contract verified; full Vue definition/references/hover/diagnostics retained as an explicit documented toolchain limitation rather than claimed as working |
 | **039D** | Capability policy, approvals, protected paths, network/exec controls | 039C | CLOSED / VERIFIED | Hard relay policy and first-party approval policy are explicit, input-aware, testable, non-bypassable, and operationally deployed |
-| **039E** | Deterministic hooks/lifecycle | 039D | Implemented — pending independent verification | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
-| **039F** | Subagents + reusable agent profiles | 039E | Implemented — pending independent verification | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
-| **039G** | Background agents + Git worktree isolation | 039F | Planned | Independent background tasks can run with bounded concurrency and isolated writes without cross-worktree corruption |
-| **039H** | Task/context/output management | 039G | Planned | Structured task ledger, context visibility, continuation tokens/pagination, and output budgets are integrated |
+| **039E** | Deterministic hooks/lifecycle | 039D | CLOSED / VERIFIED | Trusted bounded hooks run at defined lifecycle events and can only preserve/narrow authority |
+| **039F** | Subagents + reusable agent profiles | 039E | CLOSED / VERIFIED | Parent can delegate to isolated scoped agents and receive bounded evidence-backed summaries |
+| **039G** | Background agents + Git worktree isolation | 039F | CLOSED / VERIFIED | Independent background tasks run with bounded concurrency and isolated writes without cross-worktree corruption |
+| **039H** | Task/context/output management | 039G | IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING | Structured task ledger, context visibility, continuation policy, and output budgets are integrated |
 | **039I** | Standards-based extension interoperability + MCP resources | 039H | Planned | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
 | **039J** | Agent UX, observability, security regression, docs, closure | 039I | Planned | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
 
@@ -154,10 +154,10 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039B — Git read intelligence + patch ergonomics
 - [x] PLAN-039C — LSP code intelligence + diagnostics
 - [x] PLAN-039D — capability policy, approvals, protected paths, network/exec controls
-- [x] PLAN-039E — deterministic agent hooks/lifecycle (implementation pending independent verification)
-- [x] PLAN-039F — subagents + reusable agent profiles (implementation pending independent verification)
-- [ ] PLAN-039G — background agents + Git worktree isolation
-- [ ] PLAN-039H — task/context/output management
+- [x] PLAN-039E — deterministic agent hooks/lifecycle (CLOSED / VERIFIED)
+- [x] PLAN-039F — subagents + reusable agent profiles (CLOSED / VERIFIED)
+- [x] PLAN-039G — background agents + Git worktree isolation (CLOSED / VERIFIED)
+- [ ] PLAN-039H — task/context/output management (implementation pending independent verification)
 - [ ] PLAN-039I — standards-based extension interoperability + MCP resources
 - [ ] PLAN-039J — integrated UX, observability, regression validation, documentation, closure
 

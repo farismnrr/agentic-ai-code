@@ -74,6 +74,7 @@ export interface SubagentResult {
   session_id: string
   profile: SubagentProfileName
   usage: SubagentUsage
+  summary_ref?: string
 }
 
 export interface SubagentRequest {

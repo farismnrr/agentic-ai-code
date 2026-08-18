@@ -95,6 +95,8 @@ struct TextSearchResult {
     matches: Vec<TextSearchMatch>,
     count: usize,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -285,7 +287,7 @@ pub(super) async fn run_text_search(
         if event.get("type").and_then(Value::as_str) != Some("match") {
             continue;
         }
-        if matches.len() >= max_results {
+        if matches.len() >= crate::continuation::MAX_TOTAL_ENTRIES {
             truncated = true;
             kill_process_group(&mut child).await;
             break;
@@ -334,10 +336,25 @@ pub(super) async fn run_text_search(
         }
     }
 
+    let scope = invocation
+        .cwd
+        .as_ref()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let (matches, continuation) = crate::continuation::paginate(
+        arguments,
+        matches,
+        max_results,
+        config,
+        "text_search",
+        &scope,
+        None,
+    )?;
     let mut result = TextSearchResult {
         count: matches.len(),
         matches,
-        truncated,
+        truncated: continuation.is_some() || truncated,
+        continuation,
     };
     while !result.matches.is_empty()
         && serde_json::to_vec(&result)
