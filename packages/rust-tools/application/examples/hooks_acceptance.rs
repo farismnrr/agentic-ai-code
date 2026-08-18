@@ -94,6 +94,16 @@ async fn run() -> Result<(), String> {
         result.decision == HookDecision::Continue,
         "valid direct argv hook continues",
     )?;
+    let approval_token = manager.issue_approval("agent-a", "file_write").await;
+    require(
+        manager
+            .consume_approval(&approval_token, "agent-a", "file_write")
+            .await
+            && !manager
+                .consume_approval(&approval_token, "agent-a", "file_write")
+                .await,
+        "hook approval is one-use and scoped to the agent/tool",
+    )?;
 
     let canary = root.join("HOOK_CANARY");
     let read_only = HookConfig {
@@ -301,7 +311,11 @@ async fn run() -> Result<(), String> {
         HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
     require(
         !stop_manager.pre_agent_stop("agent-stop").await,
-        "stop hook allows only bounded remediation before forced completion",
+        "first stop boundary blocks for remediation",
+    )?;
+    require(
+        stop_manager.pre_agent_stop("agent-stop").await,
+        "second stop boundary forces completion after one remediation turn",
     )?;
 
     fs::remove_dir_all(&root).map_err(io_error)?;

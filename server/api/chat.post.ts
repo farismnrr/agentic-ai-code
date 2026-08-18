@@ -11,7 +11,7 @@ import { executeChatTurn } from '../application/chat/execute-chat-turn'
  */
 export default defineEventHandler(async (event) => {
   const session = await requireUserSession(event)
-  const { message, trigger, id: conversationId } = await readBody(event)
+  const { message, trigger, id: conversationId, agentContext } = await readBody(event)
 
   const abortController = new AbortController()
   event.node.req.on('close', () => abortController.abort())
@@ -22,6 +22,9 @@ export default defineEventHandler(async (event) => {
     trigger,
     message,
     abortSignal: abortController.signal,
+    agentContext: typeof agentContext === 'object' && agentContext !== null && !Array.isArray(agentContext)
+      ? { repository_identity: typeof agentContext.repository_identity === 'string' ? agentContext.repository_identity.slice(0, 512) : undefined }
+      : undefined,
     deps: event.context.application.chat(),
     telemetry: event.context.application.observability.request
   })
