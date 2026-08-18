@@ -1,6 +1,6 @@
 # Plan 039I — Extension Interoperability and MCP Resources
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039H  
@@ -176,9 +176,16 @@ If component directories are already sufficient, intentionally skip the manifest
 
 ## Acceptance criteria
 
-- [ ] Skills, agent profiles, hooks, LSP, and MCP have clear non-overlapping responsibilities.
-- [ ] Profiles can compose reviewed skills without gaining authority.
-- [ ] MCP resources add useful bounded read-only context without broadening filesystem access.
-- [ ] External MCP tools are scoped per agent/session and treated as untrusted capability providers.
-- [ ] Repository remains vendor-neutral and does not gain a proprietary marketplace/framework.
-- [ ] Current ChatGPT/public MCP tool behavior has no regression.
+- [x] Skills, agent profiles, hooks, LSP, and MCP have clear non-overlapping responsibilities.
+- [x] Profiles can compose reviewed skills without gaining authority.
+- [x] MCP resources add useful bounded read-only context without broadening filesystem access.
+- [x] External MCP tools are scoped per agent/session and treated as untrusted capability providers.
+- [x] Repository remains vendor-neutral and does not gain a proprietary marketplace/framework.
+- [ ] Current ChatGPT/public MCP tool behavior has no live regression claim; static/local compatibility remains covered by the existing gates.
+
+## Implementation record
+
+- MCP `2026-07-28` facts used: every request is self-describing; HTTP requests carry `MCP-Protocol-Version` and `Mcp-Method`; list and resource-read results carry `ttlMs` and `cacheScope`; resource capability advertisement is separate from tools; `resources/read` is a read-only protocol method. Evidence: the official specification release notes and transport/schema documentation reviewed during implementation.
+- Resources are static server-owned URIs only: `workspace://<repo-name>/manifest`, `/agent-guidance`, `/status`, and `/head`. Templates, subscriptions, and `listChanged` notifications are intentionally skipped because the initial resources are static and no concrete watcher/use case justifies them.
+- The tiny bundle manifest was evaluated and skipped. Existing `.agents/skills/`, `.agents/agents/`, `.agents/hooks.json`, operator LSP mappings, and the resource index already form a sufficient portable convention; another manifest would duplicate registries without adding authority or installation semantics.
+- LSP needed discoverability documentation only: the existing operator-approved safe-PATH mapping and sandbox checks already provide the required reviewed executable boundary.

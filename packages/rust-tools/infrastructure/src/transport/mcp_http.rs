@@ -155,6 +155,12 @@ pub(super) async fn handle_mcp(
                 )
                 .await
             }
+            relay_application::dispatcher::Dispatch::ResourcesList => {
+                handle_resources_list(&request, &state)
+            }
+            relay_application::dispatcher::Dispatch::ResourcesRead => {
+                handle_resources_read(&request, &state)
+            }
             relay_application::dispatcher::Dispatch::TasksGet => {
                 handle_task_get(&request, state).await
             }
@@ -226,7 +232,7 @@ fn handle_initialize(request: &mcp::Request) -> JsonErr2 {
         request.id.clone(),
         json!({
             "protocolVersion": requested,
-            "capabilities": { "tools": { "listChanged": false }, "extensions": { "io.modelcontextprotocol/tasks": {} } },
+            "capabilities": { "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } },
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
         }),
@@ -243,6 +249,42 @@ fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
             "ttlMs": TOOLS_LIST_TTL_MS,
             "cacheScope": "public",
             "tools": tools
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn handle_resources_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+    let resources = relay_application::resources::list(&state.config)
+        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete", "ttlMs": TOOLS_LIST_TTL_MS, "cacheScope": "private", "resources": resources
+        }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn handle_resources_read(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+    let uri = request
+        .params
+        .as_ref()
+        .and_then(|v| v.get("uri"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidParams("uri is required".into()),
+            )
+        })?;
+    let content = relay_application::resources::read(&state.config, uri)
+        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
+    let response = Response::new(
+        request.id.clone(),
+        json!({
+            "resultType": "complete", "ttlMs": 0, "cacheScope": "private", "contents": [content]
         }),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))

@@ -5,8 +5,8 @@ import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
 import type { SubagentBudget, SubagentResult } from '#shared/types/subagents'
 import { SubagentRuntime } from '../../application/subagents/runtime'
-import { toolMatchesProfile } from '../../application/subagents/profiles'
-import { buildMcpTools } from '../mcp/mcp-tools'
+import { nativeToolMatchesProfile } from '../../application/subagents/profiles'
+import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
@@ -15,14 +15,16 @@ const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
   readSkill: (name) => {
     const candidates = [join(process.cwd(), 'ai-self', 'skills', name, 'SKILL.md'), join(process.cwd(), '.agents', 'skills', name, 'SKILL.md')]
+    const found: string[] = []
     for (const candidate of candidates) {
       try {
-        return readFileSync(candidate, 'utf8')
+        found.push(readFileSync(candidate, 'utf8'))
       } catch {
-        // Try the next approved repository location.
+        // Missing approved roots are ignored; ambiguity is rejected below.
       }
     }
-    return undefined
+    if (found.length > 1) throw new Error('configured profile skill is ambiguous across approved roots')
+    return found[0]
   },
   lifecycle: {
     event: (name, payload) => logger.info(`chat.subagent.${name}`, { operation: `chat.subagent.${name}`, outcome: payload.status ?? 'started', profile: payload.profile, depth: payload.depth })
@@ -34,14 +36,15 @@ const runtime = new SubagentRuntime({
   execution: {
     async execute({ userId, parentSessionId, profile, authority, context, budget, abortSignal, sessionId, model, approvals, permissionMode }) {
       const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'), { allowedEffects: authority.effects, maxToolCalls: budget.max_tool_calls, abortSignal })
-      const tools = Object.fromEntries(Object.entries(mcp.tools).filter(([name]) => toolMatchesProfile(name, profile))) as ToolSet
+      const scopedMcp = scopeMcpTools(mcp, new Set(authority.tools))
+      const tools = Object.fromEntries(Object.entries(scopedMcp.tools).filter(([name]) => scopedMcp.toolOwners.has(name) || nativeToolMatchesProfile(name, profile))) as ToolSet
       try {
         const response = await generateText({
           model: model as LanguageModel,
           system: `${profile.instructions}\n${(context.skill_instructions ?? []).join('\n')}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
           prompt: JSON.stringify({ ...context, skill_instructions: undefined }),
           tools,
-          toolApproval: mcp.toolApproval,
+          toolApproval: scopedMcp.toolApproval,
           toolChoice: 'auto',
           stopWhen: stepCountIs(budget.max_turns),
           maxOutputTokens: budget.max_output_tokens,
