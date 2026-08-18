@@ -13,6 +13,7 @@ export interface RelayExecResult {
 }
 
 export interface RelaySessionStartResult {
+  isError?: boolean
   context?: { repository_identity?: string }
   bounded?: boolean
 }
@@ -138,7 +139,9 @@ export function useRelayAgent() {
   }
 
   async function startSession(agentSession: string): Promise<RelaySessionStartResult> {
-    return mcpRequest<RelaySessionStartResult>('agent/session_start', '', {}, agentSession)
+    const result = await mcpRequest<RelaySessionStartResult>('agent/session_start', '', {}, agentSession)
+    if (result.isError) throw new Error('Relay security session start failed')
+    return result
   }
 
   async function preAgentStop(agentSession: string): Promise<{ completion?: string }> {
