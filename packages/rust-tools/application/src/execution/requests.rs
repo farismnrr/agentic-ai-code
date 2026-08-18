@@ -57,6 +57,7 @@ pub(super) fn build_terminal_exec_invocation(
         &execution_root,
         arguments.get("cwd").and_then(Value::as_str),
     )?;
+    reject_protected_target(&execution_root, &cwd)?;
     let parts = shell_words::split(command)
         .map_err(|_| McpError::InvalidRequest("command could not be parsed".into()))?;
     let Some(binary) = parts.first() else {
@@ -207,20 +208,12 @@ fn build_text_search_invocation(
         "--sort".into(),
         "path".into(),
     ];
-    for excluded in [
-        ".ssh/**",
-        ".aws/**",
-        ".config/gcloud/**",
-        ".docker/**",
-        ".kube/**",
-        ".npmrc",
-        ".netrc",
-        ".pypirc",
-        ".cargo/credentials",
-        ".cargo/credentials.toml",
-    ] {
-        args.extend(["--glob".into(), format!("!{excluded}")]);
+    for excluded in relay_core::protected_paths::ripgrep_exclusion_globs() {
+        args.extend(["--glob".into(), excluded]);
     }
+    // Arbitrary `.env.*` variants are filtered again from parsed match paths
+    // below. Keeping `.env.example` searchable avoids an unsafe positive-glob
+    // re-include that would otherwise narrow the entire ripgrep search set.
     if !regex {
         args.push("--fixed-strings".into());
     }
@@ -287,15 +280,19 @@ pub(super) async fn run_text_search(
         if event.get("type").and_then(Value::as_str) != Some("match") {
             continue;
         }
+        let data = &event["data"];
+        let path = data["path"]["text"]
+            .as_str()
+            .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
+        let relative_path = path.strip_prefix("./").unwrap_or(path);
+        if relay_core::protected_paths::is_protected_relative(std::path::Path::new(relative_path)) {
+            continue;
+        }
         if matches.len() >= crate::continuation::MAX_TOTAL_ENTRIES {
             truncated = true;
             kill_process_group(&mut child).await;
             break;
         }
-        let data = &event["data"];
-        let path = data["path"]["text"]
-            .as_str()
-            .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
         let line_number = data["line_number"]
             .as_u64()
             .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
@@ -309,7 +306,7 @@ pub(super) async fn run_text_search(
             .as_str()
             .ok_or_else(|| McpError::InvalidRequest("text search output is invalid".into()))?;
         matches.push(TextSearchMatch {
-            path: path.strip_prefix("./").unwrap_or(path).to_owned(),
+            path: relative_path.to_owned(),
             line: line_number,
             column,
             preview: truncate_utf8(

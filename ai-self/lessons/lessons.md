@@ -50,3 +50,15 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: Treat canonical path containment as validation-time evidence, not mutation safety. For security-sensitive traversal and writes, keep one shared path contract, then use stable directory descriptors with no-follow opens, revalidate final entry identity at operation time, and commit writes through same-directory temporary files with explicit atomic/no-clobber semantics. When a broad regression check fails outside the changed surface, compare the same behavior against the baseline branch before expanding scope; unchanged baseline failures should be reported as unproven/pre-existing rather than silently “fixed” or falsely marked green.
 - Applies to: Sandboxed coding relays, filesystem MCP tools, local agents, and any service performing contained native filesystem mutation.
 - Action taken: Workspace v1 now shares one execution-root containment foundation, uses descriptor-based traversal and atomic mutation guards, includes adversarial MCP verification, and records the pre-existing outbound `http_fetch` limitation separately from Plan 038 regression results.
+
+- Date: 2026-08-18
+- Context: Adding action-level agent/tool observability on top of the existing Plan-035 OpenTelemetry and structured-logging pipeline.
+- Lesson: A logger sanitizer is not automatically an OpenTelemetry span sanitizer. Any code that calls `startActiveSpan(..., { attributes })` directly can bypass the logger chokepoint unless it explicitly passes the same allowlist sanitizer first. Keep semantic telemetry low-cardinality and content-free, and reuse one sanitizer contract across logs and direct span attributes instead of creating a second observability policy.
+- Applies to: Masih Awam server observability, MCP/tool instrumentation, and future direct OpenTelemetry spans.
+- Action taken: Routed MCP span attributes through `sanitizeAttributes`, extended the existing allowlist only with reviewed semantic agent/tool fields, and added deterministic confidentiality acceptance for the new vocabulary.
+
+- Date: 2026-08-18
+- Context: Hardening first-party agent approval/subagent/background presentation during Plan 039J independent closure review.
+- Lesson: Presentation confidentiality must fail closed at the final presentation boundary. Prompt instructions and broad key-name allowlists are insufficient for model-controlled or user-controlled free-form text; hide arbitrary free-form approval values by default, re-sanitize child/background results after later enrichment such as Git evidence, never surface raw dynamic errors, and treat POSIX, Windows-drive, UNC, and embedded absolute paths as sensitive presentation data.
+- Applies to: Agent/tool approval cards, subagent/background result cards, MCP-derived UI summaries, and any future model-controlled presentation surface.
+- Action taken: Narrowed approval scalar rendering, added final-boundary structured child/background sanitization with size limits and secret/path redaction, removed raw delegated-task/error rendering, and added cross-platform confidentiality canaries to the deterministic 039J verifier.

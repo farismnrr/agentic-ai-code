@@ -2,13 +2,18 @@
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use relay_core::{config::ServerConfig, error::McpError};
-use ring::hmac;
+use ring::{
+    hmac,
+    rand::{SecureRandom, SystemRandom},
+};
 use serde_json::{Map, Value};
+use std::sync::OnceLock;
 
 const MAX_TOTAL: usize = 1000;
 pub(crate) const MAX_TOTAL_ENTRIES: usize = MAX_TOTAL;
 const MAX_TOKEN_BYTES: usize = 4096;
 const TTL_MS: u64 = 5 * 60 * 1000;
+static PROCESS_CONTINUATION_KEY: OnceLock<[u8; 32]> = OnceLock::new();
 
 pub(crate) fn paginate<T>(
     arguments: &Value,
@@ -205,20 +210,28 @@ fn sign(config: &ServerConfig, body: &[u8]) -> Result<Vec<u8>, McpError> {
         .oauth_secret
         .as_deref()
         .filter(|value| !value.is_empty());
+    let process_key;
     let secret = match configured {
-        Some(value) => value,
-        None if cfg!(debug_assertions) => "039h-debug-only-continuation-key",
+        Some(value) => value.as_bytes(),
         None => {
-            return Err(McpError::Internal(
-                "continuation signing key is not configured".into(),
-            ))
+            process_key = process_continuation_key()?;
+            process_key.as_slice()
         }
     };
-    Ok(
-        hmac::sign(&hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes()), body)
-            .as_ref()
-            .to_vec(),
-    )
+    Ok(hmac::sign(&hmac::Key::new(hmac::HMAC_SHA256, secret), body)
+        .as_ref()
+        .to_vec())
+}
+
+fn process_continuation_key() -> Result<&'static [u8; 32], McpError> {
+    if let Some(key) = PROCESS_CONTINUATION_KEY.get() {
+        return Ok(key);
+    }
+    let mut generated = [0_u8; 32];
+    SystemRandom::new()
+        .fill(&mut generated)
+        .map_err(|_| McpError::Internal("failed to initialize continuation signing key".into()))?;
+    Ok(PROCESS_CONTINUATION_KEY.get_or_init(|| generated))
 }
 fn constant_time_equal(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len()
@@ -249,6 +262,37 @@ mod tests {
             oauth_secret: Some("test-continuation-key".into()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn continuation_works_without_oauth_secret() {
+        let config = ServerConfig::default();
+        let first = json!({"query":"needle","cwd":"/repo","max_results":1});
+        let (page, token) = paginate(
+            &first,
+            vec![1, 2],
+            1,
+            &config,
+            "text_search",
+            "/repo",
+            Some("snapshot"),
+        )
+        .unwrap();
+        assert_eq!(page, vec![1]);
+        let mut next = first;
+        next["continuation"] = Value::String(token.unwrap());
+        let (page, token) = paginate(
+            &next,
+            vec![1, 2],
+            1,
+            &config,
+            "text_search",
+            "/repo",
+            Some("snapshot"),
+        )
+        .unwrap();
+        assert_eq!(page, vec![2]);
+        assert!(token.is_none());
     }
 
     #[test]

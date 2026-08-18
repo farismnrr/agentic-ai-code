@@ -26,15 +26,7 @@ pub(super) fn run_git_text_bounded(
         }
     }
     let text = std::str::from_utf8(&output).map_err(|_| invalid_git_output())?;
-    if text.lines().any(|line| {
-        [".ssh/", ".aws/", ".config/gcloud/", ".docker/", ".kube/"]
-            .iter()
-            .any(|prefix| line.contains(prefix))
-            || [".npmrc", ".netrc", ".pypirc"].iter().any(|name| {
-                line.split(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '_')
-                    .any(|token| token == *name)
-            })
-    }) {
+    if text.lines().any(is_protected_git_metadata_line) {
         return Err(McpError::InvalidRequest(
             "git output contains a protected path".into(),
         ));
@@ -290,12 +282,4 @@ pub(super) fn git_snapshot(root: &Path, mode: &str, args: &[String]) -> Result<S
     head.hash(&mut hasher);
     status.hash(&mut hasher);
     Ok(format!("{:016x}", hasher.finish()))
-}
-
-pub(super) fn is_protected_git_path(root: &Path, path: &str) -> bool {
-    let target = root.join(path);
-    relay_core::protected_paths::is_protected_path(root, &target)
-        || std::fs::canonicalize(&target)
-            .map(|canonical| relay_core::protected_paths::is_protected_path(root, &canonical))
-            .unwrap_or(false)
 }

@@ -17,6 +17,7 @@
     "verify:background-agents": "node --experimental-strip-types scripts/verify-background-agents.ts",
     "verify:task-context-output": "node --experimental-strip-types scripts/verify-task-context-output.ts",
     "verify:039i": "node --experimental-strip-types scripts/verify-039i-extension-interoperability.ts",
+    "verify:039j": "node --experimental-strip-types scripts/verify-039j-agent-ux-observability.ts",
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",

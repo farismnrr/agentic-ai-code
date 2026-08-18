@@ -8,3 +8,9 @@ dist
 .env.*
 !.env.example
 .agents
+!.agents/
+.agents/*
+!.agents/agents/
+!.agents/agents/**
+!.agents/skills/
+!.agents/skills/**

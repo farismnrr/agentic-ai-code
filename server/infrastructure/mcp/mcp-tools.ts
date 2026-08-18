@@ -1,5 +1,6 @@
 import { SpanStatusCode } from '@opentelemetry/api'
 import { logger } from '../observability/logger'
+import { sanitizeAttributes } from '../observability/sanitize'
 import { getTracer } from '../observability/otel'
 import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
@@ -22,7 +23,7 @@ const TRACER_NAME = 'ai-code-server'
 // shape directly against the tracer, matching Plan 035 Phase 6 item 5.
 async function withMcpSpan<T>(operation: string, attributes: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
   const tracer = getTracer(TRACER_NAME)
-  return tracer.startActiveSpan(operation, { attributes: attributes as Record<string, string | number | boolean> }, async (span) => {
+  return tracer.startActiveSpan(operation, { attributes: sanitizeAttributes(attributes) }, async (span) => {
     try {
       const result = await fn()
       span.end()
@@ -102,31 +103,50 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         logger.error('[mcp-tools] model tool identity collision; refusing ambiguous tool', { modelName })
         continue
       }
+      const factsFor = (input: unknown) => capabilityFactsForToolCall({
+        toolId: mcpToolId,
+        toolName: mcpTool.name,
+        input,
+        annotations: mcpTool.annotations,
+        trustedProvenance
+      })
+      const telemetryFacts = (input: unknown) => {
+        const assessment = approvalForCapability(factsFor(input), approvals[mcpToolId], permissionMode)
+        return {
+          assessment,
+          attributes: {
+            'tool.name': mcpTool.name,
+            'tool.id': mcpToolId,
+            'tool.effects': assessment.assessment.effects.join(','),
+            'policy.outcome': assessment.outcome,
+            'policy.source': approvals[mcpToolId] === 'never' ? 'remembered-deny' : approvals[mcpToolId] === 'always' ? 'remembered-allow' : 'runtime-policy'
+          }
+        }
+      }
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
         execute: async (input: unknown) => {
           if (options.maxToolCalls !== undefined && toolCalls >= options.maxToolCalls) throw new Error('subagent tool-call budget exhausted')
           toolCalls++
+          const started = Date.now()
+          const { attributes } = telemetryFacts(input)
           const call = { name: mcpTool.name, arguments: input as Record<string, unknown> }
-          const result = client.trustedProvenance === 'first-party-relay'
-            ? await withMcpSpan('mcp.tools_call', {}, () => client.callTool(call, options.abortSignal))
-            : await withMcpSpan('mcp.tools_call', {}, () => client.callTool(call))
-          return result.content
+          try {
+            const result = client.trustedProvenance === 'first-party-relay'
+              ? await withMcpSpan('mcp.tools_call', attributes, () => client.callTool(call, options.abortSignal))
+              : await withMcpSpan('mcp.tools_call', attributes, () => client.callTool(call))
+            const resultText = Array.isArray(result.content) ? result.content.map(part => typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' ? part.text.length : 0).reduce((sum, n) => sum + n, 0) : 0
+            logger.info('chat.tool.action', { 'operation': 'chat.tool.action', 'outcome': 'ok', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': resultText > 65_536 ? 'large' : resultText > 0 ? 'bounded' : 'structured', 'result.truncated': resultText > 65_536 })
+            return result.content
+          } catch (err) {
+            logger.error('chat.tool.action', err, { 'operation': 'chat.tool.action', 'outcome': options.abortSignal?.aborted ? 'cancelled' : 'error', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': 'error' })
+            throw err
+          }
         }
       })
 
-      toolApproval[modelName] = (input: unknown) => approvalForCapability(
-        capabilityFactsForToolCall({
-          toolId: mcpToolId,
-          toolName: mcpTool.name,
-          input,
-          annotations: mcpTool.annotations,
-          trustedProvenance
-        }),
-        approvals[mcpToolId],
-        permissionMode
-      ).outcome
+      toolApproval[modelName] = (input: unknown) => telemetryFacts(input).assessment.outcome
     }
   }
 

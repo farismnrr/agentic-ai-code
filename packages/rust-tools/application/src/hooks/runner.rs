@@ -17,7 +17,7 @@ pub(super) async fn run(
     let started = Instant::now();
     let executable = match sandbox::resolve_safe_executable(&manager.config, &handler.command[0]) {
         Ok(path) => path,
-        Err(_) => return failed(started),
+        Err(_) => return failed(started, handler.event),
     };
     let writable = payload
         .get("effect_classes")
@@ -43,7 +43,7 @@ pub(super) async fn run(
         },
     ) {
         Ok(child) => child,
-        Err(_) => return failed(started),
+        Err(_) => return failed(started, handler.event),
     };
     let stdout_task = child
         .stdout
@@ -55,7 +55,7 @@ pub(super) async fn run(
         .map(|stream| tokio::spawn(drain_output(stream)));
     let input = serde_json::to_vec(payload).unwrap_or_default();
     if input.len() > MAX_PAYLOAD_BYTES {
-        return failed(started);
+        return failed(started, handler.event);
     }
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(&input).await;
@@ -76,7 +76,7 @@ pub(super) async fn run(
             if let Some(task) = stderr_task {
                 let _ = task.await;
             }
-            return failed(started);
+            return failed(started, handler.event);
         }
     };
     let stdout = if let Some(task) = stdout_task {
@@ -91,7 +91,7 @@ pub(super) async fn run(
         Some(0) => HookDecision::Continue,
         Some(BLOCK_EXIT) => HookDecision::Block,
         Some(APPROVAL_EXIT) => HookDecision::RequestApproval,
-        _ => return failed(started),
+        _ => return failed(started, handler.event),
     };
     let context = (handler.event == HookEvent::SessionStart)
         .then(|| bounded_context(&stdout))
@@ -110,7 +110,14 @@ pub(super) async fn run(
     }
 }
 
-fn failed(started: Instant) -> HookResult {
+fn failed(started: Instant, event: HookEvent) -> HookResult {
+    tracing::info!(
+        event = "relay.hook",
+        hook_event = event.name(),
+        decision = "failure",
+        duration_ms = started.elapsed().as_millis() as u64,
+        reason = "hook_failure"
+    );
     HookResult {
         decision: HookDecision::Continue,
         reason: "hook_failure",

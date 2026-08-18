@@ -1,6 +1,6 @@
 # Plan 039I — Extension Interoperability and MCP Resources
 
-**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED / MERGED
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039H  

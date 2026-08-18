@@ -22,7 +22,7 @@ protocol="$root/packages/rust-tools/interfaces/src/mcp.rs"
 # compatibility may still exist in code, but the canonical protocol constant
 # and modern route must stay present.
 rg -q 'PROTOCOL_VERSION: &str = "2026-07-28"' "$protocol"
-rg -q 'route\("/mcp", post\(handle_mcp\)\)' "$transport"
+rg -q 'route\("/mcp", post\(mcp_http::handle_mcp\)\)' "$transport"
 rg -q 'oauth-protected-resource' "$transport"
 
 if [[ -n "${PHASE6_MCP_URL:-}" ]]; then

@@ -4,6 +4,7 @@ import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 import { capabilityFactsForToolCall, classifyCapability, rememberedApprovalCanAutoAnswer } from '#shared/utils/capability-policy'
 import { resolveMcpToolFromModelName } from '#shared/utils/mcp-tool-identity'
+import { safeInputSummary } from '../../utils/tool-presentation'
 
 /**
  * Approval prompt for a pending MCP tool call.
@@ -132,9 +133,8 @@ const open = computed({
   set: () => { /* closing is only ever a side effect of answering */ }
 })
 
-const formattedInput = computed(() =>
-  pending.value?.input ? JSON.stringify(pending.value.input, null, 2) : undefined
-)
+const formattedInput = computed(() => safeInputSummary(pending.value?.input))
+const hookInput = computed(() => safeInputSummary(props.hookApproval?.input))
 
 const assessment = computed(() => {
   const current = pending.value
@@ -191,11 +191,38 @@ watch(autoAnswerable, (value) => {
           <code class="text-sm font-medium text-highlighted">{{ pending.toolName }}</code>
         </div>
 
-        <div v-if="formattedInput">
-          <p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-dimmed">
-            Arguments
+        <div
+          v-if="formattedInput.rows.length || formattedInput.hiddenFields"
+          class="space-y-2"
+        >
+          <p class="font-mono text-[11px] uppercase tracking-wider text-dimmed">
+            Scope
           </p>
-          <pre class="max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs">{{ formattedInput }}</pre>
+          <dl
+            v-if="formattedInput.rows.length"
+            class="grid gap-1.5 text-xs sm:grid-cols-2"
+          >
+            <div
+              v-for="row in formattedInput.rows"
+              :key="row.label"
+            >
+              <dt class="text-dimmed">
+                {{ row.label }}
+              </dt>
+              <dd
+                class="truncate font-mono"
+                :title="row.value"
+              >
+                {{ row.value }}
+              </dd>
+            </div>
+          </dl>
+          <p
+            v-if="formattedInput.hiddenFields"
+            class="text-xs text-dimmed"
+          >
+            {{ formattedInput.hiddenFields }} sensitive/noisy field{{ formattedInput.hiddenFields === 1 ? '' : 's' }} hidden.
+          </p>
         </div>
 
         <div
@@ -274,10 +301,36 @@ watch(autoAnswerable, (value) => {
       <p class="text-sm text-muted">
         A repository security hook requested approval before this already-approved tool call continues.
       </p>
-      <pre
+      <div
         v-if="props.hookApproval"
-        class="mt-3 max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs"
-      >{{ JSON.stringify(props.hookApproval.input, null, 2) }}</pre>
+        class="mt-3 space-y-2 rounded-md bg-elevated p-2 text-xs"
+      >
+        <dl
+          v-if="hookInput.rows.length"
+          class="grid gap-1.5 sm:grid-cols-2"
+        >
+          <div
+            v-for="row in hookInput.rows"
+            :key="row.label"
+          >
+            <dt class="text-dimmed">
+              {{ row.label }}
+            </dt>
+            <dd
+              class="truncate font-mono"
+              :title="row.value"
+            >
+              {{ row.value }}
+            </dd>
+          </div>
+        </dl>
+        <p
+          v-if="hookInput.hiddenFields"
+          class="text-dimmed"
+        >
+          {{ hookInput.hiddenFields }} sensitive/noisy field{{ hookInput.hiddenFields === 1 ? '' : 's' }} hidden.
+        </p>
+      </div>
     </template>
     <template #footer>
       <div class="flex w-full justify-end gap-2">

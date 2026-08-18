@@ -66,7 +66,10 @@ fn repository(config: &ServerConfig) -> Result<(PathBuf, String), McpError> {
         .map_err(|_| McpError::InvalidRequest("repository is unavailable".into()))?;
     let root = fs::canonicalize(root)
         .map_err(|_| McpError::InvalidRequest("repository is unavailable".into()))?;
-    if !root.join(".git").exists() {
+    let root_text = root.to_string_lossy();
+    let verified = crate::git::resolve_git_workspace(Some(root_text.as_ref()), config)
+        .map_err(|_| McpError::InvalidRequest("verified repository is unavailable".into()))?;
+    if verified != root {
         return Err(McpError::InvalidRequest(
             "verified repository is unavailable".into(),
         ));
@@ -114,7 +117,10 @@ fn guidance(root: &Path) -> Result<String, McpError> {
             continue;
         }
         let canonical = fs::canonicalize(&path).map_err(|_| unknown())?;
-        if !canonical.starts_with(root) || canonical.is_dir() {
+        if !canonical.starts_with(root)
+            || canonical.is_dir()
+            || relay_core::protected_paths::is_protected_path(root, &canonical)
+        {
             return Err(unknown());
         }
         let bytes = fs::read(&canonical).map_err(|_| unknown())?;
@@ -143,10 +149,28 @@ fn git_text(root: &Path, args: &[&str], limit: usize) -> Result<String, McpError
     if !output.status.success() {
         return Err(unknown());
     }
-    bounded(
-        String::from_utf8(output.stdout).map_err(|_| unknown())?,
-        limit,
-    )
+    let text = String::from_utf8(output.stdout).map_err(|_| unknown())?;
+    let text = if args.starts_with(&["status"]) {
+        filter_status_text(&text)
+    } else {
+        text
+    };
+    bounded(text, limit)
+}
+
+fn filter_status_text(text: &str) -> String {
+    let mut filtered = text
+        .lines()
+        .filter(|line| {
+            line.starts_with("##")
+                || !relay_core::protected_paths::contains_protected_path_reference(line)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if text.ends_with('\n') && !filtered.is_empty() {
+        filtered.push('\n');
+    }
+    filtered
 }
 
 fn bounded(text: String, limit: usize) -> Result<String, McpError> {
@@ -169,6 +193,32 @@ mod tests {
         assert!(read(&config, "workspace://ai-code/../../.env").is_err());
         assert!(read(&config, "workspace://other/status").is_err());
         assert!(read(&config, "file:///home/.env").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn guidance_rejects_symlink_to_protected_target() {
+        use std::os::unix::fs::symlink;
+        let root =
+            std::env::temp_dir().join(format!("relay-resource-guidance-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(".env"), "RESOURCE_SECRET_CANARY").unwrap();
+        symlink(".env", root.join("AGENTS.md")).unwrap();
+        assert!(guidance(&root).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn status_resource_filters_protected_paths() {
+        let text = "## main\n M src/lib.rs\n M .env.local\n?? nested/.env.production\n?? .config/gh/hosts.yml\n?? .git-credentials\n?? .env.example\n";
+        let filtered = filter_status_text(text);
+        assert!(filtered.contains("## main"));
+        assert!(filtered.contains("src/lib.rs"));
+        assert!(filtered.contains(".env.example"));
+        assert!(!filtered.contains(".env.local"));
+        assert!(!filtered.contains(".env.production"));
+        assert!(!filtered.contains(".config/gh"));
+        assert!(!filtered.contains(".git-credentials"));
     }
 
     #[test]

@@ -42,8 +42,11 @@ The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-
 
 - workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
 - Git read intelligence: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`;
+- LSP code intelligence: `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`;
 - execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
 - web: `http_fetch`, `web_search`.
+
+The relay also exposes bounded read-only repository resources for manifest, approved agent guidance, Git status, and HEAD metadata. The first-party agent UI renders tool calls by capability category, keeps approval inputs bounded/sensitivity-aware, and surfaces task/context/subagent/background state without exposing hidden reasoning.
 
 The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem.
 

@@ -14,6 +14,8 @@ The Rust relay exposes optional, authenticated, read-only MCP resources for the 
 
 The implementation targets MCP `2026-07-28`: self-describing request metadata, `MCP-Protocol-Version`/`Mcp-Method` routing validation, deterministic list results, and `ttlMs`/`cacheScope` on list/read results. Resource templates, subscriptions, and list-change notifications are intentionally not implemented; no watcher is required.
 
+First-party agent UX may summarize resource/tool capability state, but external MCP descriptions/results remain untrusted input. Stable MCP identity and approval ownership are resolved from server/tool IDs; UI labels or resource text never widen authority.
+
 ## Shared skills under `.agents/skills/`
 
 Current entries:
