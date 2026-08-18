@@ -64,7 +64,7 @@ Expose a first-party context view showing bounded estimates such as:
 
 Do not pretend token estimates are exact when provider accounting is unavailable.
 
-Implementation: `ChatContextUsage.vue` labels measured values as accounted and otherwise keeps the view informational; `/api/conversations/:id/context` exposes only bounded metadata.
+Implementation: `ChatContextUsage.vue` consumes `/api/conversations/:id/context`, distinguishes provider-measured boundaries from estimates, and renders unknown values as unavailable; the endpoint exposes only bounded metadata.
 
 The model may receive compact budget metadata to encourage efficient tool use, but user-facing context state remains separate from hidden reasoning.
 
@@ -94,6 +94,10 @@ Implementation: the shared continuation core uses signed opaque claims with boun
 - stale underlying state is detected where correctness matters (Git/object refs, file identity/hash, LSP document version);
 - caller cannot edit token fields to escape scope or increase limits;
 - pagination is not an excuse for unlimited total retrieval—per-session/context budgets remain.
+
+### MCP contract lineage
+
+The Plan-029 v1, Plan-039B v2, and Plan-039C v3 MCP catalogs remain frozen historical evidence. Plan 039H intentionally adds signed continuation fields to the public workspace/search/Git/LSP schemas, so the current runtime is frozen as `.agents/contracts/039h-tool-catalog-v4.json` with hash `ee7b369df33d95e5c799e5f2d8a5efc7774f4c3c1221bf511f3680c981852c0d` and verified by `scripts/phase-039h-contract.sh`. Plan 039H remains `IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING`.
 
 For simple stable operations, an explicit offset may be superior to a stateful cursor. Use cursors only where they materially improve integrity/ergonomics.
 
