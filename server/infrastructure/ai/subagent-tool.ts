@@ -39,13 +39,15 @@ const runtime = new SubagentRuntime({
           system: `${profile.instructions}\n${(context.skill_instructions ?? []).join('\n')}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
           prompt: JSON.stringify({ ...context, skill_instructions: undefined }),
           tools,
+          toolApproval: mcp.toolApproval,
           toolChoice: 'auto',
           stopWhen: stepCountIs(budget.max_turns),
           maxOutputTokens: budget.max_output_tokens,
           timeout: { totalMs: budget.max_wall_time_ms },
           abortSignal
         })
-        const result = parseResult(response.text, sessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0, mcp.toolCallCount(), response.usage)
+        const approvalPending = Array.isArray(response.content) && response.content.some(part => typeof part === 'object' && part !== null && ['tool-approval-request', 'tool-output-denied'].includes((part as { type?: unknown }).type as string))
+        const result = parseResult(response.text, sessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0, mcp.toolCallCount(), response.usage, approvalPending)
         return { ...result, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
       } catch (error) {
         if (error instanceof Error && error.message === 'subagent tool-call budget exhausted') return { status: 'budget_exhausted', summary: 'Child tool-call budget exhausted.', usage: { tool_calls: mcp.toolCallCount() }, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
@@ -71,7 +73,7 @@ export function buildSubagentTool(input: Parameters<SubagentToolPort['build']>[0
   })
 }
 
-function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }): SubagentResult {
+function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {
   const value = (() => {
     try {
       return JSON.parse(text) as Partial<SubagentResult>
@@ -80,8 +82,8 @@ function parseResult(text: string, sessionId: string, profile: SubagentResult['p
     }
   })()
   return {
-    status: cancelled ? 'cancelled' : steps >= budget.max_turns ? 'budget_exhausted' : value.status && ['completed', 'blocked', 'cancelled', 'budget_exhausted', 'failed', 'invalid'].includes(value.status) ? value.status : 'completed',
-    summary: typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.',
+    status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value.status && ['completed', 'blocked', 'cancelled', 'budget_exhausted', 'failed', 'invalid'].includes(value.status) ? value.status : 'completed',
+    summary: approvalPending ? 'Child tool call requires approval before execution.' : typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.',
     findings: Array.isArray(value.findings) ? value.findings : [],
     evidence: Array.isArray(value.evidence) ? value.evidence : [],
     validation: Array.isArray(value.validation) ? value.validation : [],
