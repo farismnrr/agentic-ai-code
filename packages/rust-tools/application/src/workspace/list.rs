@@ -21,6 +21,8 @@ pub struct DirectoryListResult {
     path: String,
     entries: Vec<DirectoryListEntry>,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,18 +57,29 @@ pub fn directory_list(
     let directory =
         resolve_existing_path(&execution_root, cwd, requested_path, EntryKind::Directory)?;
     reject_protected_path(&execution_root, &directory)?;
+    let scope = directory.to_string_lossy().into_owned();
     let directory = SecureDirectory::open_relative(&execution_root, &directory)?;
     let mut state = TraversalState {
         entries: Vec::new(),
-        max_entries,
+        max_entries: MAX_DIRECTORY_SCAN_ENTRIES.min(crate::continuation::MAX_TOTAL_ENTRIES),
         truncated: false,
     };
     visit_directory(&directory, Path::new(""), depth, &mut state)?;
 
+    let (entries, continuation) = crate::continuation::paginate(
+        arguments,
+        state.entries,
+        max_entries,
+        config,
+        "directory_list",
+        &scope,
+        None,
+    )?;
     Ok(DirectoryListResult {
         path: requested_path.to_owned(),
-        entries: state.entries,
-        truncated: state.truncated,
+        entries,
+        truncated: continuation.is_some() || state.truncated,
+        continuation,
     })
 }
 

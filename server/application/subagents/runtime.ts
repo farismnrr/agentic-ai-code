@@ -3,6 +3,7 @@ import { relative, resolve } from 'node:path'
 import type { SubagentAuthority, SubagentBudget, SubagentContextPackage, SubagentProfile, SubagentRequest, SubagentResult, SubagentUsage } from '../../../shared/types/subagents.ts'
 import { assertContainedChildPath, intersectSubagentAuthority, narrowBudget } from './policy.ts'
 import { loadAgentProfile } from './profiles.ts'
+import { getResultRef } from '../task-context-output.ts'
 
 const MAX_TASK = 8192
 const MAX_REFS = 32
@@ -64,7 +65,7 @@ export class SubagentRuntime {
         usage.context_tokens = clampUsage(observed.context_tokens, budget.max_context_tokens)
         usage.depth = Math.min(Math.max(0, request.depth ?? 0), budget.max_depth)
         const status = localAbort.signal.aborted ? 'cancelled' : (raw.status ?? 'completed')
-        const result: SubagentResult = { status, summary: bound(raw.summary ?? 'Child completed without a summary.'), findings: boundList(raw.findings), evidence: boundEvidence(raw.evidence), validation: boundList(raw.validation), remaining_risks: boundList(raw.remaining_risks), session_id: sessionId, profile: profile.name, usage }
+        const result: SubagentResult = { status, summary: bound(raw.summary ?? 'Child completed without a summary.'), findings: boundList(raw.findings), evidence: boundEvidence(raw.evidence), validation: boundList(raw.validation), remaining_risks: boundList(raw.remaining_risks), session_id: sessionId, profile: profile.name, usage, summary_ref: typeof raw.summary_ref === 'string' ? raw.summary_ref : undefined }
         const lifecycleAllowed = raw.allowStop ? await raw.allowStop(result.status) : true
         const policyAllowed = this.options.lifecycle?.allowStop ? await this.options.lifecycle.allowStop({ session_id: sessionId, parent_session_id: request.parent_session_id, status: result.status }) : true
         if (!lifecycleAllowed || !policyAllowed) return { ...result, status: 'blocked', summary: 'Child completion was blocked by lifecycle policy.' }
@@ -89,7 +90,8 @@ function makeContext(request: SubagentRequest, cwd: string, budget: SubagentBudg
   if (references.length > MAX_REFS || references.some(ref => ref.length > MAX_REF)) throw new Error('child context references exceed bounds')
   const root = resolve(request.parent_authority.workspace_root)
   if (relative(root, cwd).startsWith('..')) throw new Error('invalid child scope')
-  const context = { task: request.task.slice(0, MAX_TASK), repository_identity: root, workspace_root: root, cwd, references, parent_summary: undefined, skill_instructions: skillInstructions }
+  const resolvedReferences = references.map(reference => getResultRef(request.parent_session_id, reference) ? `${reference}: ${getResultRef(request.parent_session_id, reference)?.slice(0, 4096)}` : reference)
+  const context = { task: request.task.slice(0, MAX_TASK), repository_identity: root, workspace_root: root, cwd, references: resolvedReferences, parent_summary: undefined, skill_instructions: skillInstructions }
   const encoded = JSON.stringify(context)
   if (Buffer.byteLength(encoded, 'utf8') > budget.max_context_tokens * 4) throw new Error('child context exceeds effective token bound')
   return context

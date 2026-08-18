@@ -29,6 +29,8 @@ pub struct FileSearchResult {
     matches: Vec<String>,
     count: usize,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation: Option<String>,
 }
 
 pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearchResult, McpError> {
@@ -62,7 +64,7 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
     let mut state = FileSearchState {
         pattern,
         path_pattern,
-        max_results,
+        max_results: crate::continuation::MAX_TOTAL_ENTRIES,
         matches: Vec::new(),
         visited_entries: 0,
         truncated: false,
@@ -78,12 +80,23 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
         matches.pop();
         truncated = true;
     }
+    let scope = search_root.root().to_string_lossy().into_owned();
+    let (matches, continuation) = crate::continuation::paginate(
+        arguments,
+        matches,
+        max_results.min(crate::continuation::MAX_TOTAL_ENTRIES),
+        config,
+        "file_search",
+        &scope,
+        None,
+    )?;
     let count = matches.len();
     Ok(FileSearchResult {
         pattern: pattern.to_owned(),
         matches,
         count,
-        truncated,
+        truncated: continuation.is_some() || truncated,
+        continuation,
     })
 }
 
@@ -221,6 +234,7 @@ fn file_search_result_size(
         matches: matches.to_vec(),
         count: matches.len(),
         truncated,
+        continuation: None,
     };
     serde_json::to_vec(&result)
         .map(|value| value.len())

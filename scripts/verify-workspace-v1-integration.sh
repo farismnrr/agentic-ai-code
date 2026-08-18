@@ -73,8 +73,12 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
   for name in names:
    assert name in tools,name; assert tools[name]['inputSchema']['additionalProperties'] is False; assert tools[name]['securitySchemes']==[{'type':'oauth2','scopes':['relay.coding']}]
   x=payload(call(url,'directory_list',{'path':'.','depth':2,'max_entries':1})); assert x['truncated'] is True and len(x['entries'])==1
+  directory_next=x.get('continuation'); assert directory_next; x2=payload(call(url,'directory_list',{'path':'.','depth':2,'max_entries':1,'continuation':directory_next})); assert x2['entries'] and x2['entries'][0]['path'] != x['entries'][0]['path']
   x=payload(call(url,'file_search',{'pattern':'**/*.rs','max_results':1})); assert x['truncated'] is True and x['count']==1
+  file_next=x.get('continuation'); assert file_next; x2=payload(call(url,'file_search',{'pattern':'**/*.rs','max_results':1,'continuation':file_next})); assert x2['matches'] and x2['matches'][0] != x['matches'][0]
   x=payload(call(url,'text_search',{'query':'needle','max_results':1})); assert x['truncated'] is True and x['count']==1
+  text_next=x.get('continuation'); assert text_next; x2=payload(call(url,'text_search',{'query':'needle','max_results':1,'continuation':text_next})); assert x2['matches'] and x2['matches'][0]['path'] == x['matches'][0]['path']
+  expect_error(url,'text_search',{'query':'needle','max_results':2,'continuation':text_next},'tampered continuation limit')
   x=payload(call(url,'file_read',{'path':'src/a.rs','limit_lines':1})); assert x['truncated'] is True and x['start_line']==1
   x=payload(call(url,'file_edit',{'path':'edit.txt','old_text':'alpha','new_text':'ALPHA'})); assert x['replacements']==1 and open(target).read()=='ALPHA beta\n'
   x=payload(call(url,'file_write',{'path':'created.txt','content':'created'})); assert x['created'] is True and open(os.path.join(ws,'created.txt')).read()=='created'
