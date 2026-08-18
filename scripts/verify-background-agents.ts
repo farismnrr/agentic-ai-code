@@ -1,5 +1,5 @@
 /* eslint-disable @stylistic/max-statements-per-line */
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFile } from 'node:child_process'
@@ -40,7 +40,11 @@ await writeFile(join(root, 'dirty.txt'), 'do not transfer\n')
 try { await allocator.allocate({ ...ownerInput, taskId: 'dirty-parent' }); throw new Error('dirty parent was accepted') } catch (error) { if (!(error instanceof Error) || !error.message.includes('clean parent')) throw error }
 
 const authority: SubagentAuthority = { tools: ['file_read', 'file_write', 'apply_patch', 'terminal_exec'], effects: ['workspace_read', 'workspace_write', 'process_exec'], working_mode: 'workspace', model_policy: 'default', workspace_root: root }
-const fakeRuntime = { run: async (request: { abort_signal: AbortSignal, profile: string }) => { await new Promise(resolve => setTimeout(resolve, 25)); return { status: request.abort_signal.aborted ? 'cancelled' : 'completed', summary: 'fixture complete', findings: [], evidence: [], validation: [], remaining_risks: [], session_id: 'fixture', profile: request.profile, usage: { turns: 1, tool_calls: 1, output_tokens: 1, context_tokens: 1, wall_time_ms: 25, depth: 0 } } } }
+const fakeRuntime = { run: async (request: { abort_signal: AbortSignal, profile: string, task?: string }) => {
+  if (request.task === 'hold') await new Promise<void>(resolve => request.abort_signal.addEventListener('abort', () => resolve(), { once: true }))
+  else await new Promise(resolve => setTimeout(resolve, 5))
+  return { status: request.abort_signal.aborted ? 'cancelled' : 'completed', summary: 'fixture complete', findings: [], evidence: [], validation: [], remaining_risks: [], session_id: 'fixture', profile: request.profile, usage: { turns: 1, tool_calls: 1, output_tokens: 1, context_tokens: 1, wall_time_ms: 5, depth: 0 } }
+} }
 const manager = new BackgroundTaskManager(fakeRuntime as unknown as ConstructorParameters<typeof BackgroundTaskManager>[0], allocator)
 const base = { user_id: 'user-one', parent_session_id: 'parent-one', parent_authority: authority, profile: 'explore' as const, task: 'read', isolation: 'shared_read' as const }
 const a = manager.start(base); const b = manager.start({ ...base, task: 'read two' })
@@ -52,4 +56,44 @@ await new Promise(resolve => setTimeout(resolve, 45))
 if (manager.get(a.task_id, 'user-one', 'parent-one')?.state !== 'cancelled') throw new Error('cancellation was not retained')
 if (manager.get(b.task_id, 'user-one', 'parent-one')?.state === 'cancelled') throw new Error('cancellation reset sibling task')
 if (BACKGROUND_CAPS.global !== 4 || BACKGROUND_CAPS.perParent !== 2) throw new Error('unexpected bounded caps')
+
+const waitForState = async (taskManager: BackgroundTaskManager, taskId: string, parentSessionId: string, state: string) => {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (taskManager.get(taskId, 'user-one', parentSessionId)?.state === state) return
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  throw new Error(`task ${taskId} did not reach ${state}`)
+}
+
+// Keep one active entry alive while repeatedly filling the terminal set. This
+// proves cardinality eviction never satisfies the cap by evicting active work.
+const held = manager.start({ ...base, parent_session_id: 'active-parent', task: 'hold' })
+if (!held.task_id) throw new Error('active retention fixture did not start')
+const completedIds: string[] = []
+for (let wave = 0; wave < 13; wave++) {
+  const waveIds = [0, 1, 2].map(index => manager.start({ ...base, parent_session_id: `wave-${wave}-${index}`, task: `wave-${wave}-${index}` }).task_id)
+  if (waveIds.some(id => !id)) throw new Error(`terminal wave ${wave} was rejected unexpectedly`)
+  completedIds.push(...waveIds)
+  await Promise.all(waveIds.map(id => waitForState(manager, id, `wave-${wave}-${waveIds.indexOf(id)}`, 'completed')))
+  if (!manager.get(held.task_id, 'user-one', 'active-parent') || manager.get(held.task_id, 'user-one', 'active-parent')?.state === 'cancelled') throw new Error('active entry was evicted by terminal retention')
+}
+const retainedCount = completedIds.filter((id, index) => manager.get(id, 'user-one', `wave-${Math.floor(index / 3)}-${index % 3}`)).length
+if (retainedCount > BACKGROUND_CAPS.retainedTerminal) throw new Error(`terminal retention exceeded cap: ${retainedCount}`)
+if (manager.get(held.task_id, 'user-one', 'active-parent')?.state !== 'running') throw new Error('active task was not retained during terminal eviction')
+
+// Deterministic TTL enforcement remains active independently of cardinality.
+const clock = { value: Date.now() }
+const ttlManager = new BackgroundTaskManager(fakeRuntime as unknown as ConstructorParameters<typeof BackgroundTaskManager>[0], allocator, () => clock.value)
+const ttlTask = ttlManager.start({ ...base, parent_session_id: 'ttl-parent', task: 'ttl' })
+await waitForState(ttlManager, ttlTask.task_id, 'ttl-parent', 'completed')
+if (!ttlManager.get(ttlTask.task_id, 'user-one', 'ttl-parent')) throw new Error('fresh terminal task was not retained')
+clock.value += BACKGROUND_CAPS.terminalTtlMs + 1
+const ttlTrigger = ttlManager.start({ ...base, parent_session_id: 'ttl-trigger', task: 'ttl-trigger' })
+if (ttlManager.get(ttlTask.task_id, 'user-one', 'ttl-parent')) throw new Error('stale terminal task survived TTL eviction')
+await waitForState(ttlManager, ttlTrigger.task_id, 'ttl-trigger', 'completed')
+
+await manager.cancel(held.task_id, 'user-one', 'active-parent')
+await waitForState(manager, held.task_id, 'active-parent', 'cancelled')
+await rm(outside, { recursive: true, force: true })
+await rm(root, { recursive: true, force: true })
 console.log('background/worktree behavioral acceptance: PASS')

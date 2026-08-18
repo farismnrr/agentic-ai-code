@@ -65,7 +65,13 @@ export class BackgroundTaskManager {
       if (entry.owner) entry.cleanup = 'preserved'
     } catch (error) {
       entry.state = entry.controller.signal.aborted ? 'cancelled' : 'failed'; entry.progress_summary = error instanceof Error ? error.message.slice(0, 512) : 'Background task failed.'
-    } finally { entry.completed_at = this.now() }
+    } finally {
+      entry.completed_at = this.now()
+      // Terminal retention is a transition invariant, not a side effect of a
+      // later task start. Keep active entries untouched while enforcing both
+      // TTL and cardinality as soon as this child settles.
+      this.evictTerminal()
+    }
   }
 
   private evictTerminal() {

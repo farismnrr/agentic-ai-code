@@ -38,7 +38,7 @@ export type McpClientCallResult = {
 export interface McpClientLike {
   trustedProvenance?: 'first-party-relay' | 'external'
   listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
-  callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult>
+  callTool(params: { name: string, arguments?: Record<string, unknown> }, signal?: AbortSignal): Promise<McpClientCallResult>
   close(): Promise<void>
   subagentStop?(parentSessionId: string, childSessionId: string, status: string): Promise<boolean>
 }
@@ -196,12 +196,18 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     return { ...result, tools }
   }
 
-  async callTool(params: { name: string, arguments?: Record<string, unknown> }): Promise<McpClientCallResult> {
+  async callTool(params: { name: string, arguments?: Record<string, unknown> }, signal?: AbortSignal): Promise<McpClientCallResult> {
+    // First-party terminal_exec is task-aware. Do not abort the initial call
+    // itself: the task id must be received so cancellation can target exactly
+    // this relay job rather than merely abandoning the HTTP request.
     const result = await this.request('tools/call', {
       name: params.name,
       arguments: params.arguments ?? {}
     })
     if (!isJsonRecord(result) || !Array.isArray(result.content)) {
+      if (params.name === 'terminal_exec' && isJsonRecord(result) && result.resultType === 'task' && typeof result.taskId === 'string') {
+        return this.awaitTask(result.taskId, signal)
+      }
       throw new Error('Remote MCP server returned an invalid tools/call result')
     }
     return {
@@ -209,6 +215,33 @@ class FirstPartyRelayMcpClient implements McpClientLike {
       content: result.content,
       ...(typeof result.isError === 'boolean' && { isError: result.isError })
     }
+  }
+
+  private async awaitTask(taskId: string, signal?: AbortSignal): Promise<McpClientCallResult> {
+    for (;;) {
+      if (signal?.aborted) {
+        const current = await this.request('tasks/get', { taskId })
+        if (!isJsonRecord(current)) throw new Error('Remote MCP task returned an invalid result')
+        if (current.status !== 'working') return taskResult(current)
+        await this.cancelTask(taskId)
+        throw new Error('First-party relay task was cancelled')
+      }
+      const task = await this.request('tasks/get', { taskId })
+      if (!isJsonRecord(task)) throw new Error('Remote MCP task returned an invalid result')
+      const status = typeof task.status === 'string' ? task.status : ''
+      if (status !== 'working') return taskResult(task)
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
+
+  private async cancelTask(taskId: string) {
+    await this.request('tasks/cancel', { taskId })
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const task = await this.request('tasks/get', { taskId })
+      if (isJsonRecord(task) && task.status !== 'working') return
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+    throw new Error('First-party relay task cancellation did not settle')
   }
 
   close() {
@@ -228,13 +261,15 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     return isJsonRecord(result) && result.allowed === true
   }
 
-  private async request(method: 'server/discover' | 'tools/list' | 'tools/call' | 'agent/subagent_stop', params: Record<string, unknown>) {
+  private async request(method: 'server/discover' | 'tools/list' | 'tools/call' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
     const id = `ai-code-${++this.requestSequence}`
     const requestParams = {
       ...params,
       _meta: {
         'io.modelcontextprotocol/protocolVersion': MODERN_MCP_VERSION,
-        'io.modelcontextprotocol/clientCapabilities': {},
+        'io.modelcontextprotocol/clientCapabilities': {
+          extensions: { 'io.modelcontextprotocol/tasks': {} }
+        },
         'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO,
         ...(isJsonRecord(params._meta) ? params._meta : {})
       }
@@ -287,6 +322,14 @@ class FirstPartyRelayMcpClient implements McpClientLike {
       throw new Error('Remote MCP response is missing a result')
     }
     return payload.result
+  }
+}
+
+function taskResult(task: Record<string, unknown>): McpClientCallResult {
+  const result = isJsonRecord(task.result) ? task.result : undefined
+  return {
+    content: Array.isArray(result?.content) ? result.content : [],
+    ...(typeof result?.isError === 'boolean' && { isError: result.isError })
   }
 }
 
