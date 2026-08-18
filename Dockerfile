@@ -47,6 +47,12 @@ COPY --from=build /app/.output ./.output
 # imports. Copy the full node_modules from the build stage instead, so both
 # the preload script and the app resolve everything the normal Node way.
 COPY --from=build /app/node_modules ./node_modules
+# Agent profiles and approved skill instructions are runtime inputs for the
+# bounded subagent executor. Keep only these reviewed instruction roots in the
+# production image; plans/contracts/history remain build-time repository data.
+COPY --from=build /app/.agents/agents ./.agents/agents
+COPY --from=build /app/.agents/skills ./.agents/skills
+COPY --from=build /app/ai-self/skills ./ai-self/skills
 COPY otel-preload.mjs ./otel-preload.mjs
 EXPOSE 3333
 ENV HOST=0.0.0.0

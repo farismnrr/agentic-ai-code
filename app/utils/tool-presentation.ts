@@ -2,6 +2,15 @@ export type ToolRenderCategory = 'read' | 'git' | 'mutation' | 'execution' | 'ne
 
 const MAX_PREVIEW_CHARS = 6000
 const MAX_SUMMARY_ITEMS = 12
+const PRESENTATION_REDACTIONS: ReadonlyArray<[RegExp, string]> = [
+  [/\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g, '[REDACTED-PATH]'],
+  [/\\\\[^\\\s/]+(?:\\[^\\\s/]+){2,}/g, '[REDACTED-PATH]'],
+  [/[A-Za-z]:\\(?:[^\\\s]+\\){2,}[^\\\s]*/g, '[REDACTED-PATH]'],
+  [/\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]'],
+  [/\bBasic\s+[A-Za-z0-9+/]+=*/gi, 'Basic [REDACTED]'],
+  [/\b(x-api-key|api[-_]?key|apikey|cookie|session|password|passwd|token|secret|access[-_]?key|client[-_]?secret|key)['"]?\s*[:=]\s*['"]?[^\s'",;}]+/gi, '$1=[REDACTED]'],
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED-JWT]']
+]
 const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
 const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column)$/i
 
@@ -33,6 +42,12 @@ function safeExecutable(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const first = value.trim().split(/\s+/)[0]
   return first?.split(/[\\/]/).pop()?.slice(0, 128)
+}
+
+function redactPresentationText(value: string): string {
+  let result = value
+  for (const [pattern, replacement] of PRESENTATION_REDACTIONS) result = result.replace(pattern, replacement)
+  return result.replaceAll(/\p{Cc}/gu, ' ')
 }
 
 function scalar(value: unknown): string | number | boolean | undefined {
@@ -94,11 +109,11 @@ export function safeInputSummary(input: unknown): SafeInputSummary {
 }
 
 function previewCandidate(output: unknown): { label: string, text: string } | undefined {
-  if (typeof output === 'string') return { label: 'Result preview', text: output }
+  if (typeof output === 'string') return { label: 'Result preview', text: redactPresentationText(output) }
   const value = record(output)
   if (!value) return undefined
   for (const key of ['diff', 'patch', 'text', 'content', 'summary']) {
-    if (typeof value[key] === 'string') return { label: key === 'diff' || key === 'patch' ? 'Diff preview' : 'Result preview', text: value[key] as string }
+    if (typeof value[key] === 'string') return { label: key === 'diff' || key === 'patch' ? 'Diff preview' : 'Result preview', text: redactPresentationText(value[key] as string) }
   }
   return undefined
 }
@@ -132,5 +147,5 @@ export function presentToolOutput(output: unknown): OutputPresentation | undefin
     const keys = Object.keys(value).filter(key => !HIDDEN_KEY.test(key)).slice(0, 8)
     return { summary: `${Object.keys(value).length} result fields${keys.length ? ` · ${keys.join(', ')}` : ''}${continuation ? ' · continuation available' : ''}`, truncated: declaredTruncated, continuation }
   }
-  return { summary: String(output).slice(0, 256), truncated: false, continuation: false }
+  return { summary: redactPresentationText(String(output)).slice(0, 256), truncated: false, continuation: false }
 }

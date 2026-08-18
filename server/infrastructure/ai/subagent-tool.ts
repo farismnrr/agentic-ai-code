@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { generateText, stepCountIs, tool, type LanguageModel, type ToolSet } from 'ai'
 import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
@@ -11,21 +9,22 @@ import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
 import { parsePresentationSafeSubagentResult, presentationSafeBackgroundTask } from './subagent-result'
+import { readRuntimeInstruction } from './runtime-instructions'
 
 const runtime = new SubagentRuntime({
-  readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
+  readProfile: (name) => {
+    const loaded = readRuntimeInstruction(process.cwd(), ['.agents', 'agents'], [`${name}.md`])
+    if (!loaded) throw new Error('configured profile is unavailable')
+    return loaded.text
+  },
   readSkill: (name) => {
-    const candidates = [join(process.cwd(), 'ai-self', 'skills', name, 'SKILL.md'), join(process.cwd(), '.agents', 'skills', name, 'SKILL.md')]
-    const found: string[] = []
-    for (const candidate of candidates) {
-      try {
-        found.push(readFileSync(candidate, 'utf8'))
-      } catch {
-        // Missing approved roots are ignored; ambiguity is rejected below.
-      }
+    const found = new Map<string, string>()
+    for (const root of [['ai-self', 'skills'], ['.agents', 'skills']]) {
+      const loaded = readRuntimeInstruction(process.cwd(), root, [name, 'SKILL.md'], { optional: true })
+      if (loaded && !found.has(loaded.canonical)) found.set(loaded.canonical, loaded.text)
     }
-    if (found.length > 1) throw new Error('configured profile skill is ambiguous across approved roots')
-    return found[0]
+    if (found.size > 1) throw new Error('configured profile skill is ambiguous across approved roots')
+    return found.values().next().value
   },
   lifecycle: {
     event: (name, payload) => logger.info(`chat.subagent.${name}`, { 'operation': `chat.subagent.${name}`, 'outcome': payload.status ?? 'started', 'agent.profile': payload.profile, 'agent.state': payload.status ?? 'started', 'agent.depth': payload.depth })

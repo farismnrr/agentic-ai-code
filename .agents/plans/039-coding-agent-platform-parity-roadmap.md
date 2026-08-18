@@ -1,6 +1,6 @@
 # Plan 039 — Coding Agent Platform Parity Roadmap
 
-**Status:** IN PROGRESS — 039A–039I CLOSED / VERIFIED; 039J IMPLEMENTED / INDEPENDENT REVIEW PASSED / LIVE VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED — 039A–039J CLOSED / VERIFIED
 **Created:** 2026-08-16  
 **Predecessor:** Plan 038 — Coding Workspace MCP Tools (CLOSED / VERIFIED)  
 **Plan family:** 039A through 039J  
@@ -146,7 +146,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 | **039G** | Background agents + Git worktree isolation | 039F | CLOSED / VERIFIED | Independent background tasks run with bounded concurrency and isolated writes without cross-worktree corruption |
 | **039H** | Task/context/output management | 039G | CLOSED / VERIFIED | Structured task ledger, context visibility, continuation policy, and output budgets are integrated |
 | **039I** | Standards-based extension interoperability + MCP resources | 039H | CLOSED / VERIFIED | Skills/agents/hooks/LSP/MCP compose cleanly; read-only resources are exposed where useful without a proprietary marketplace |
-| **039J** | Agent UX, observability, security regression, docs, closure | 039I | IMPLEMENTED — INDEPENDENT REVIEW PASSED; LIVE VERIFICATION PENDING | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
+| **039J** | Agent UX, observability, security regression, docs, closure | 039I | CLOSED / VERIFIED | Full first-party and remote-MCP agent workflows are proven with truthful bounded evidence |
 
 ## Master Todo
 
@@ -159,7 +159,7 @@ Unknown/opaque shell wrappers, interpreters, protected paths, malformed policies
 - [x] PLAN-039G — background agents + Git worktree isolation (CLOSED / VERIFIED)
 - [x] PLAN-039H — task/context/output management (CLOSED / VERIFIED)
 - [x] PLAN-039I — standards-based extension interoperability + MCP resources (CLOSED / VERIFIED)
-- [ ] PLAN-039J — integrated UX, observability, regression validation, documentation, closure
+- [x] PLAN-039J — integrated UX, observability, regression validation, documentation, closure (CLOSED / VERIFIED)
 
 ## 039A verified handoff baseline
 
@@ -272,3 +272,5 @@ A child plan may use focused subagents for inspection or independent review of t
 ## Final initiative acceptance
 
 Plan 039 closes only when Plans 039A through 039J close and a fresh end-to-end review finds no unresolved P0/P1 issue in the new agent-capability surfaces. The final state must remain simpler than a parallel custom agent platform: standards and existing primitives should do most of the work.
+
+**Latest closure status — 2026-08-18:** Plans 039A–039J are CLOSED / VERIFIED. The exact final release is deployed under the enabled host user service and release-live verified for authenticated MCP catalog/tool use, local MCP protected paths, Git, toolchains, network policy, cancellation, health, and OAuth challenge.

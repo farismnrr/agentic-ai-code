@@ -77,6 +77,12 @@ assert.equal(output.truncated, true)
 assert.equal(output.continuation, true)
 assert(!JSON.stringify(output).includes('opaque-token'))
 
+const sensitiveOutput = presentToolOutput({
+  content: 'token=client-secret Bearer abc.def /etc/passwd /home/alice/private/repo/src/file.ts C:\\Users\\alice\\private\\file.ts \\\\server\\share\\secret\\file.ts'
+})
+assert(sensitiveOutput)
+for (const forbidden of ['client-secret', 'abc.def', '/etc/passwd', '/home/alice/private/repo', 'C:\\Users\\alice\\private\\file.ts', '\\\\server\\share\\secret\\file.ts']) assert(!JSON.stringify(sensitiveOutput).includes(forbidden), `tool output leaked ${forbidden}`)
+
 const safeTelemetry = sanitizeAttributes({
   'operation': 'chat.tool.action', 'outcome': 'ok', 'tool.name': 'file_read', 'tool.id': 'relay.file_read',
   'tool.effects': 'workspace_read', 'policy.outcome': 'approved', 'policy.source': 'runtime-policy',
