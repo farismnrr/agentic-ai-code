@@ -10,7 +10,7 @@ const MAX_REF = 512
 const MAX_SUMMARY = 4096
 
 export interface SubagentExecutionPort {
-  execute(input: { userId: string, sessionId: string, profile: SubagentProfile, authority: SubagentAuthority, context: SubagentContextPackage, budget: SubagentBudget, abortSignal: AbortSignal, model?: unknown, approvals?: Record<string, string>, permissionMode?: SubagentRequest['permission_mode'] }): Promise<Partial<SubagentResult> & { usage?: Partial<SubagentUsage> }>
+  execute(input: { userId: string, sessionId: string, parentSessionId: string, profile: SubagentProfile, authority: SubagentAuthority, context: SubagentContextPackage, budget: SubagentBudget, abortSignal: AbortSignal, model?: unknown, approvals?: Record<string, string>, permissionMode?: SubagentRequest['permission_mode'] }): Promise<Partial<SubagentResult> & { usage?: Partial<SubagentUsage>, allowStop?: (status: string) => Promise<boolean> }>
 }
 
 export interface SubagentLifecyclePort {
@@ -20,6 +20,7 @@ export interface SubagentLifecyclePort {
 
 export interface SubagentRuntimeOptions {
   readProfile: (name: string) => string
+  readSkill?: (name: string) => string | undefined
   execution: SubagentExecutionPort
   lifecycle?: SubagentLifecyclePort
   now?: () => number
@@ -45,7 +46,8 @@ export class SubagentRuntime {
       const budget = narrowBudget(profile, request.budget)
       if (request.depth !== undefined && request.depth >= budget.max_depth) return invalid('Child recursion depth is denied.')
       const cwd = assertContainedChildPath(request.parent_authority.workspace_root, request.cwd ?? request.parent_authority.workspace_root)
-      const context = makeContext(request, cwd, budget)
+      const skillInstructions = loadSkills(profile.skills, this.options.readSkill)
+      const context = makeContext(request, cwd, budget, skillInstructions)
       const authority = intersectSubagentAuthority(request.parent_authority, profile)
       this.options.lifecycle?.event('subagent_start', { session_id: sessionId, parent_session_id: request.parent_session_id, profile: profile.name, depth: request.depth ?? 0 })
       const localAbort = new AbortController()
@@ -53,12 +55,19 @@ export class SubagentRuntime {
       request.abort_signal?.addEventListener('abort', forwardAbort, { once: true })
       const timeout = setTimeout(() => localAbort.abort(), budget.max_wall_time_ms)
       try {
-        const raw = await this.options.execution.execute({ userId: request.user_id, sessionId, profile, authority, context, budget, abortSignal: localAbort.signal, model: request.model, approvals: request.approvals, permissionMode: request.permission_mode })
+        const raw = await this.options.execution.execute({ userId: request.user_id, sessionId, parentSessionId: request.parent_session_id, profile, authority, context, budget, abortSignal: localAbort.signal, model: request.model, approvals: request.approvals, permissionMode: request.permission_mode })
         usage.wall_time_ms = Math.min(Date.now() - started, budget.max_wall_time_ms)
-        Object.assign(usage, raw.usage ?? {})
+        const observed = raw.usage ?? {}
+        usage.turns = clampUsage(observed.turns, budget.max_turns)
+        usage.tool_calls = clampUsage(observed.tool_calls, budget.max_tool_calls)
+        usage.output_tokens = clampUsage(observed.output_tokens, budget.max_output_tokens)
+        usage.context_tokens = clampUsage(observed.context_tokens, budget.max_context_tokens)
+        usage.depth = Math.min(Math.max(0, request.depth ?? 0), budget.max_depth)
         const status = localAbort.signal.aborted ? 'cancelled' : (raw.status ?? 'completed')
         const result: SubagentResult = { status, summary: bound(raw.summary ?? 'Child completed without a summary.'), findings: boundList(raw.findings), evidence: boundEvidence(raw.evidence), validation: boundList(raw.validation), remaining_risks: boundList(raw.remaining_risks), session_id: sessionId, profile: profile.name, usage }
-        if (this.options.lifecycle?.allowStop && !(await this.options.lifecycle.allowStop({ session_id: sessionId, parent_session_id: request.parent_session_id, status: result.status }))) return { ...result, status: 'blocked', summary: 'Child completion was blocked by lifecycle policy.' }
+        const lifecycleAllowed = raw.allowStop ? await raw.allowStop(result.status) : true
+        const policyAllowed = this.options.lifecycle?.allowStop ? await this.options.lifecycle.allowStop({ session_id: sessionId, parent_session_id: request.parent_session_id, status: result.status }) : true
+        if (!lifecycleAllowed || !policyAllowed) return { ...result, status: 'blocked', summary: 'Child completion was blocked by lifecycle policy.' }
         this.options.lifecycle?.event('subagent_stop', { session_id: sessionId, parent_session_id: request.parent_session_id, profile: profile.name, status: result.status, depth: request.depth ?? 0 })
         return result
       } finally {
@@ -75,12 +84,29 @@ export class SubagentRuntime {
   }
 }
 
-function makeContext(request: SubagentRequest, cwd: string, _budget: SubagentBudget): SubagentContextPackage {
+function makeContext(request: SubagentRequest, cwd: string, budget: SubagentBudget, skillInstructions: string[]): SubagentContextPackage {
   const references = [...new Set((request.context_refs ?? []).map(ref => ref.trim()).filter(Boolean))]
   if (references.length > MAX_REFS || references.some(ref => ref.length > MAX_REF)) throw new Error('child context references exceed bounds')
   const root = resolve(request.parent_authority.workspace_root)
   if (relative(root, cwd).startsWith('..')) throw new Error('invalid child scope')
-  return { task: request.task.slice(0, MAX_TASK), repository_identity: root, workspace_root: root, cwd, references, parent_summary: undefined }
+  const context = { task: request.task.slice(0, MAX_TASK), repository_identity: root, workspace_root: root, cwd, references, parent_summary: undefined, skill_instructions: skillInstructions }
+  const encoded = JSON.stringify(context)
+  if (Buffer.byteLength(encoded, 'utf8') > budget.max_context_tokens * 4) throw new Error('child context exceeds effective token bound')
+  return context
+}
+
+function loadSkills(names: string[], readSkill?: (name: string) => string | undefined) {
+  if (names.length === 0) return []
+  if (!readSkill) throw new Error('profile skills are unavailable')
+  return names.map((name) => {
+    const text = readSkill(name)
+    if (!text) throw new Error('configured profile skill is unavailable')
+    return text.replaceAll(/\p{Cc}/gu, ' ').slice(0, 8192)
+  })
+}
+
+function clampUsage(value: unknown, limit: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), limit) : 0
 }
 
 function bound(value: string): string {

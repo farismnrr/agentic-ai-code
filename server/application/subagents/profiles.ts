@@ -4,7 +4,7 @@ import { SUBAGENT_BUDGET_LIMITS } from './policy.ts'
 
 const MAX_PROFILE_BYTES = 64 * 1024
 const MAX_LIST = 32
-const TOOL_NAMES = new Set(['directory_list', 'file_search', 'text_search', 'file_read', 'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'code_symbols', 'code_definition', 'code_references', 'code_hover', 'code_diagnostics', 'code_rename_preview', 'web_search', 'http_fetch', 'local_terminal', 'file_write', 'file_edit', 'apply_patch'])
+const TOOL_NAMES = new Set(['directory_list', 'file_search', 'text_search', 'file_read', 'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'code_symbols', 'code_definition', 'code_references', 'code_hover', 'code_diagnostics', 'code_rename_preview', 'web_search', 'http_fetch', 'terminal_exec', 'local_terminal', 'file_write', 'file_edit', 'apply_patch'])
 const EFFECT_NAMES = new Set<SubagentEffect>(['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge'])
 const NAME_RE = /^[a-z][a-z0-9-]{0,31}$/
 

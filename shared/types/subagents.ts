@@ -58,6 +58,7 @@ export interface SubagentContextPackage {
   cwd: string
   references: string[]
   parent_summary?: string
+  skill_instructions?: string[]
 }
 
 export interface SubagentEvidence { reference: string, detail: string }

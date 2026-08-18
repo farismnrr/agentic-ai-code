@@ -1,6 +1,7 @@
 import { resolve, relative, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import type { SubagentAuthority, SubagentBudget, SubagentProfile, SubagentWorkingMode, SubagentEffect } from '../../../shared/types/subagents.ts'
+import { toolRequiresEffects } from '../../../shared/utils/capability-policy.ts'
 
 const EFFECTS: SubagentEffect[] = ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
 const MODES: SubagentWorkingMode[] = ['read-only', 'workspace']
@@ -25,7 +26,9 @@ export function intersectSubagentAuthority(parent: SubagentAuthority, profile: S
   const operatorTools = new Set(operator.tools ?? parent.tools)
   const tools = [...parentTools].filter((tool) => {
     const canonical = tool.includes('.') ? tool.split('.').at(-1) ?? tool : tool
+    const requiredEffects = toolRequiresEffects(canonical, undefined, canonical === 'terminal_exec' || canonical === 'local_terminal' ? 'first-party-relay' : 'external')
     return operatorTools.has(tool) && profile.tools.allow.includes(canonical) && !profile.tools.deny.includes(canonical)
+      && requiredEffects.length > 0 && requiredEffects.every(effect => effects.includes(effect))
   })
   const working_mode = parent.working_mode === 'read-only' || profile.working_mode === 'read-only' || operator.working_mode === 'read-only' ? 'read-only' : 'workspace'
   const model_policy = parent.model_policy === 'fast' || operator.model_policy === 'fast' ? 'fast' : profile.model_policy === 'strong' && parent.model_policy === 'strong' ? 'strong' : 'default'
@@ -44,7 +47,7 @@ export function narrowBudget(profile: SubagentProfile, requested: Partial<Subage
   return Object.fromEntries(Object.keys(configured).map((key) => {
     const name = key as keyof SubagentBudget
     const value = requested[name]
-    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) throw new Error('invalid subagent budget')
+    if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) throw new Error('invalid subagent budget')
     return [name, Math.min(configured[name], SUBAGENT_BUDGET_LIMITS[name], value ?? configured[name])]
   })) as SubagentBudget
 }
