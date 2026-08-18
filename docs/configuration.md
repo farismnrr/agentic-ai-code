@@ -163,5 +163,33 @@ persisted. Budgets cap turns, tool calls, output/context, wall time, and
 depth. Parent cancellation reaches the child, and only one child may run for
 one parent at a time. The existing stop control cancels a running child.
 
-Plan 039F is sequential-first: background agents, concurrent children,
-worktree isolation, and peer-to-peer delegation remain deferred to Plan 039G.
+Plan 039F remains the sequential delegation path; background execution is
+provided by the bounded Plan 039G task surface below.
+
+### Background agents (Plan 039G)
+
+Agent mode also exposes parent-managed `agent_task_start`, `agent_task_get`,
+and `agent_task_cancel` tools. Background execution is opt-in and bounded to
+four active tasks per process and two per parent session. Terminal task
+metadata is retained only in a bounded in-memory registry; polling returns
+structured summaries and evidence, never hidden reasoning or child
+transcripts.
+
+`shared_read` tasks are mechanically narrowed to read-only workspace and Git
+effects, even when the parent is in workspace mode. A `worktree` task is only
+available to `general-purpose`; it refuses a dirty parent checkout, creates a
+task-owned branch and worktree below `.agents/worktrees`, and runs with that
+path as its workspace root. Writer results include bounded Git status, diff
+stat, commit, and validation evidence. The parent must review and integrate
+changes explicitly; children do not merge, cherry-pick, push, force-push, or
+rewrite history. Dirty, unowned, ambiguous, or uniquely committed worktrees
+are preserved.
+
+Parent-coordinated background tasks are the intentional 039G coordination
+model. Peer-to-peer teams and shared task lists remain deferred because the
+independent concurrent scenario is covered without introducing another
+mutable coordination state or agent framework.
+
+Task metadata is intentionally process-local in 039G. After a restart, an
+existing worktree is not automatically adopted, cleaned, or reused because
+ownership cannot be proven without introducing a persistence system.

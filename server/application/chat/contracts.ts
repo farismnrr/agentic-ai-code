@@ -16,7 +16,8 @@ export interface ChatHistoryPort { load(conversation: ChatConversation): Promise
 export interface ChatPersistencePort { findLast(conversationId: string): Promise<{ id: string, role: string } | undefined>, updateAssistant(messageId: string, parts: UIMessage['parts'], totalTokens?: number | null): Promise<void>, insertAssistant(conversationId: string, parts: UIMessage['parts'], totalTokens?: number | null): Promise<{ id: string }>, cacheTokens(conversationId: string, messageId: string, totalTokens: number): Promise<void> }
 export interface ChatOwnershipPort { findConversation(userId: string, conversationId: string): Promise<ChatConversation | undefined>, findModel(userId: string, modelId: string): Promise<ChatModelRecord>, findProvider(userId: string, providerId: string): Promise<ChatProviderRecord>, findWorkspace(userId: string, workspaceId: string): Promise<{ name: string, path: string }> }
 export interface LocalTerminalPort { hasPairedDevice(userId: string): Promise<boolean>, buildTool(): unknown }
-export interface SubagentToolPort { build(input: { userId: string, parentSessionId: string, authority: SubagentAuthority, model: ChatModelHandle, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode'], abortSignal: AbortSignal }): unknown }
+export interface SubagentToolInput { userId: string, parentSessionId: string, authority: SubagentAuthority, model: ChatModelHandle, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode'], abortSignal: AbortSignal }
+export interface SubagentToolPort { build(input: SubagentToolInput): unknown, buildBackground(input: SubagentToolInput): Record<string, unknown> }
 
 export interface ChatTurnDependencies {
   ownership: ChatOwnershipPort
