@@ -32,7 +32,7 @@ const runtime = new SubagentRuntime({
   // resolved from the user's configured model set.
   execution: {
     async execute({ userId, parentSessionId, profile, authority, context, budget, abortSignal, sessionId, model, approvals, permissionMode }) {
-      const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'), { allowedEffects: authority.effects, maxToolCalls: budget.max_tool_calls })
+      const mcp = await buildMcpTools(userId, authority.tools, approvals ?? {}, permissionMode ?? (authority.working_mode === 'read-only' ? 'plan' : 'manual'), { allowedEffects: authority.effects, maxToolCalls: budget.max_tool_calls, abortSignal })
       const tools = Object.fromEntries(Object.entries(mcp.tools).filter(([name]) => toolMatchesProfile(name, profile))) as ToolSet
       try {
         const response = await generateText({
