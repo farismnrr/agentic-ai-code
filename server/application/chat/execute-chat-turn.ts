@@ -153,6 +153,23 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
       toolApproval['local_terminal'] = localTerminalPolicy.approval
       telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
     }
+    tools['delegate_task'] = deps.subagent.build({
+      userId,
+      parentSessionId: conv.id,
+      authority: {
+        tools: conv.enabledToolIds,
+        effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation'],
+        working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace',
+        model_policy: 'default',
+        workspace_root: workspacePath ?? process.cwd()
+      },
+      model: deps.getChatModel(provider, modelInfo.modelId),
+      enabledToolIds: conv.enabledToolIds,
+      approvals: conv.approvals,
+      permissionMode: conv.permissionMode,
+      abortSignal
+    })
+    telemetry?.event('chat.subagent.dispatch', 'ok')
   }
 
   const assistantLifecycle = createAssistantPersister({ conversationId: conv.id, modelId: modelInfo.modelId, providerType: provider.type, close, persistence: deps.persistence, telemetry })
