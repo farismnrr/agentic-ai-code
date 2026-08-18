@@ -1,7 +1,7 @@
 use super::MAX_PAYLOAD_BYTES;
 use serde_json::{json, Value};
 
-pub(super) fn bounded_context(output: &[u8]) -> Option<Value> {
+pub(crate) fn bounded_context(output: &[u8]) -> Option<Value> {
     let value: Value = serde_json::from_slice(output).ok()?;
     let context = value.get("context")?.as_object()?;
     let repository_identity = context.get("repository_identity")?.as_str()?;

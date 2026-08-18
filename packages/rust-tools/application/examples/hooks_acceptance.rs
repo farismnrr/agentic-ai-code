@@ -94,16 +94,147 @@ async fn run() -> Result<(), String> {
         result.decision == HookDecision::Continue,
         "valid direct argv hook continues",
     )?;
-    let approval_token = manager.issue_approval("agent-a", "file_write").await;
+    let approval_payload = json!({"tool_id":"file_write","effect_classes":["workspace_write"],"arguments":{"path":"a"}});
+    let approval_token = manager
+        .issue_approval("agent-a", "file_write", &approval_payload, 1)
+        .await
+        .ok_or_else(|| "approval token issued".to_string())?;
     require(
         manager
-            .consume_approval(&approval_token, "agent-a", "file_write")
+            .consume_approval(&approval_token, "agent-a", "file_write", &approval_payload)
             .await
-            && !manager
-                .consume_approval(&approval_token, "agent-a", "file_write")
-                .await,
-        "hook approval is one-use and scoped to the agent/tool",
+            == Some(1)
+            && manager
+                .consume_approval(&approval_token, "agent-a", "file_write", &approval_payload)
+                .await
+                .is_none(),
+        "hook approval is one-use and scoped to the exact invocation",
     )?;
+
+    let chain = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![
+            HookHandler {
+                event: HookEvent::PreToolUse,
+                command: vec!["perl".into(), "-e".into(), "exit 11".into()],
+                class: HookClass::Security,
+                tool: Some("terminal_exec".into()),
+                effect_class: None,
+                timeout_ms: 1_000,
+            },
+            HookHandler {
+                event: HookEvent::PreToolUse,
+                command: vec!["perl".into(), "-e".into(), "exit 10".into()],
+                class: HookClass::Security,
+                tool: Some("terminal_exec".into()),
+                effect_class: None,
+                timeout_ms: 1_000,
+            },
+        ],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&chain).unwrap(),
+    )
+    .map_err(io_error)?;
+    let chain_manager = HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
+    let chain_payload = json!({"tool_id":"terminal_exec","effect_classes":["process_exec"],"arguments":{"command":"true","args":[]}});
+    let requested = chain_manager
+        .invoke(HookEvent::PreToolUse, chain_payload.clone())
+        .await;
+    require(
+        requested.decision == HookDecision::RequestApproval
+            && requested.approval_checkpoint == Some(1),
+        "approval records an explicit resume checkpoint",
+    )?;
+    let resumed = chain_manager
+        .invoke_from(
+            HookEvent::PreToolUse,
+            chain_payload.clone(),
+            requested.approval_checkpoint.unwrap(),
+        )
+        .await;
+    require(
+        resumed.decision == HookDecision::Block,
+        "later blocking hook wins after approval",
+    )?;
+
+    let chain_continue = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![
+            HookHandler {
+                event: HookEvent::PreToolUse,
+                command: vec!["perl".into(), "-e".into(), "exit 0".into()],
+                class: HookClass::Security,
+                tool: Some("terminal_exec".into()),
+                effect_class: None,
+                timeout_ms: 1_000,
+            },
+            HookHandler {
+                event: HookEvent::PreToolUse,
+                command: vec!["perl".into(), "-e".into(), "exit 11".into()],
+                class: HookClass::Security,
+                tool: Some("terminal_exec".into()),
+                effect_class: None,
+                timeout_ms: 1_000,
+            },
+            HookHandler {
+                event: HookEvent::PreToolUse,
+                command: vec!["perl".into(), "-e".into(), "exit 0".into()],
+                class: HookClass::Security,
+                tool: Some("terminal_exec".into()),
+                effect_class: None,
+                timeout_ms: 1_000,
+            },
+        ],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&chain_continue).unwrap(),
+    )
+    .map_err(io_error)?;
+    let chain_continue_manager =
+        HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
+    let first = chain_continue_manager
+        .invoke(HookEvent::PreToolUse, chain_payload.clone())
+        .await;
+    require(
+        first.decision == HookDecision::RequestApproval && first.approval_checkpoint == Some(2),
+        "approval checkpoint excludes completed hooks",
+    )?;
+    let final_result = chain_continue_manager
+        .invoke_from(
+            HookEvent::PreToolUse,
+            chain_payload.clone(),
+            first.approval_checkpoint.unwrap(),
+        )
+        .await;
+    require(
+        final_result.decision == HookDecision::Continue,
+        "approved continuation executes remaining hooks exactly once",
+    )?;
+
+    for (session, tool, payload) in [
+        ("agent-b", "terminal_exec", chain_payload.clone()),
+        ("agent-a", "file_write", chain_payload.clone()),
+        (
+            "agent-a",
+            "terminal_exec",
+            json!({"tool_id":"terminal_exec","arguments":{"command":"touch","args":["changed"]}}),
+        ),
+    ] {
+        let token = chain_continue_manager
+            .issue_approval(session, tool, &payload, 1)
+            .await
+            .ok_or_else(|| "approval capacity unexpectedly exhausted".to_string())?;
+        require(
+            chain_continue_manager
+                .consume_approval(&token, "agent-a", "terminal_exec", &chain_payload)
+                .await
+                .is_none(),
+            "approval rejects wrong identity and invocation",
+        )?;
+    }
 
     let canary = root.join("HOOK_CANARY");
     let read_only = HookConfig {
@@ -152,6 +283,83 @@ async fn run() -> Result<(), String> {
         "session start is per agent session",
     )?;
 
+    for index in 0..256 {
+        let _ = session_manager
+            .start_session(&format!("capacity-{index}"), &identity)
+            .await;
+    }
+    require(
+        matches!(
+            session_manager
+                .start_session("capacity-overflow", &identity)
+                .await,
+            relay_application::hooks::SessionStartOutcome::CapacityExhausted
+        ),
+        "session capacity fails closed instead of skipping lifecycle",
+    )?;
+    require(
+        matches!(
+            session_manager.start_session("capacity-0", &identity).await,
+            relay_application::hooks::SessionStartOutcome::AlreadyStarted
+        ),
+        "active stable session remains exactly once",
+    )?;
+
+    let security_start = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec!["false".into()],
+            class: HookClass::Security,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 100,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&security_start).unwrap(),
+    )
+    .map_err(io_error)?;
+    let security_start_manager =
+        HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
+    require(
+        matches!(
+            security_start_manager
+                .start_session("failed-start", &identity)
+                .await,
+            relay_application::hooks::SessionStartOutcome::SecurityFailure
+        ),
+        "security session-start failure fails closed",
+    )?;
+    let cosmetic_start = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec!["false".into()],
+            class: HookClass::Cosmetic,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 100,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&cosmetic_start).unwrap(),
+    )
+    .map_err(io_error)?;
+    let cosmetic_start_manager =
+        HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
+    require(
+        matches!(
+            cosmetic_start_manager
+                .start_session("cosmetic-start", &identity)
+                .await,
+            relay_application::hooks::SessionStartOutcome::Started { context: None }
+        ),
+        "cosmetic session-start failure follows fail-open classification",
+    )?;
+
     let context_handler = HookConfig {
         repository_identity: identity.clone(),
         handlers: vec![HookHandler {
@@ -173,9 +381,13 @@ async fn run() -> Result<(), String> {
     .map_err(io_error)?;
     let context_manager =
         HookManager::load(Arc::new(enabled.clone())).map_err(|e| e.to_string())?;
-    let context = context_manager
+    let context = match context_manager
         .start_session("agent-context", &identity)
-        .await;
+        .await
+    {
+        relay_application::hooks::SessionStartOutcome::Started { context } => context,
+        _ => None,
+    };
     require(
         context == Some(json!({"repository_identity": "bounded-context"})),
         "session-start returns bounded structured context",
@@ -316,6 +528,11 @@ async fn run() -> Result<(), String> {
     require(
         stop_manager.pre_agent_stop("agent-stop").await,
         "second stop boundary forces completion after one remediation turn",
+    )?;
+    require(
+        !stop_manager.pre_agent_stop("agent-stop").await
+            && stop_manager.pre_agent_stop("agent-stop").await,
+        "a later completion cycle receives a fresh remediation budget",
     )?;
 
     fs::remove_dir_all(&root).map_err(io_error)?;
