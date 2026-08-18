@@ -35,10 +35,15 @@ export type McpClientCallResult = {
   [key: string]: unknown
 }
 
+export type McpClientResource = { uri: string, name: string, description?: string, mimeType?: string }
+export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, mimeType?: string }>, [key: string]: unknown }
+
 export interface McpClientLike {
   trustedProvenance?: 'first-party-relay' | 'external'
   listTools(): Promise<{ tools: McpClientTool[], [key: string]: unknown }>
   callTool(params: { name: string, arguments?: Record<string, unknown> }, signal?: AbortSignal): Promise<McpClientCallResult>
+  listResources?(): Promise<{ resources: McpClientResource[], [key: string]: unknown }>
+  readResource?(uri: string): Promise<McpClientResourceReadResult>
   close(): Promise<void>
   subagentStop?(parentSessionId: string, childSessionId: string, status: string): Promise<boolean>
 }
@@ -140,7 +145,8 @@ function encodeMcpHeaderValue(value: string) {
  * third-party integrations and the legacy inbound Nuxt MCP endpoint. Rather
  * than weaken the Rust relay or make its modern path depend on a legacy SDK
  * lifecycle, this adapter speaks only the three RPCs ai-code needs against its
- * own relay: `server/discover`, `tools/list`, and `tools/call`.
+ * own relay: `server/discover`, `tools/list`, `tools/call`, and optional
+ * explicit resource list/read calls. Resources are never fetched implicitly.
  *
  * It is intentionally not a generic replacement for the MCP SDK. When the
  * repository can migrate the outbound client to `@modelcontextprotocol/client`
@@ -194,6 +200,25 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     })
 
     return { ...result, tools }
+  }
+
+  async listResources() {
+    const result = await this.request('resources/list', {})
+    if (!isJsonRecord(result) || !Array.isArray(result.resources)) throw new Error('Remote MCP server returned an invalid resources/list result')
+    const resources = result.resources.filter(isJsonRecord).flatMap(resource => typeof resource.uri === 'string' && typeof resource.name === 'string'
+      ? [{ uri: resource.uri, name: resource.name, description: typeof resource.description === 'string' ? resource.description : undefined, mimeType: typeof resource.mimeType === 'string' ? resource.mimeType : undefined }]
+      : [])
+    return { ...result, resources }
+  }
+
+  async readResource(uri: string) {
+    if (uri.length === 0 || uri.length > 4096) throw new Error('Resource URI is invalid')
+    const result = await this.request('resources/read', { uri })
+    if (!isJsonRecord(result) || !Array.isArray(result.contents)) throw new Error('Remote MCP server returned an invalid resources/read result')
+    const contents = result.contents.filter(isJsonRecord).flatMap(content => typeof content.uri === 'string' && (typeof content.text === 'string' || content.text === undefined)
+      ? [{ uri: content.uri, text: content.text, mimeType: typeof content.mimeType === 'string' ? content.mimeType : undefined }]
+      : [])
+    return { ...result, contents }
   }
 
   async callTool(params: { name: string, arguments?: Record<string, unknown> }, signal?: AbortSignal): Promise<McpClientCallResult> {
@@ -261,7 +286,7 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     return isJsonRecord(result) && result.allowed === true
   }
 
-  private async request(method: 'server/discover' | 'tools/list' | 'tools/call' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
+  private async request(method: 'server/discover' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
     const id = `ai-code-${++this.requestSequence}`
     const requestParams = {
       ...params,

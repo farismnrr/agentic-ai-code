@@ -8,6 +8,10 @@ import { createMcpClient, type McpClientLike } from './client'
 import { approvalForCapability, capabilityFactsForToolCall, toolRequiresEffects } from '#shared/utils/capability-policy'
 import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
 import { enforceSubagentStop } from '../../application/subagents/lifecycle'
+import { claimMcpToolOwner, type McpToolApprovalMap, type McpToolComposition } from './scoping'
+
+export { claimMcpToolOwner, scopeMcpTools } from './scoping'
+export type { McpToolApprovalMap, McpToolComposition } from './scoping'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -42,9 +46,6 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
 // that union. Every real value ever stored here is one of these two shapes;
 // callers cast to `ToolApprovalConfiguration<ToolSet, never>` only at the
 // `streamText`/`generateText` call site, once nothing further mutates it.
-type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
-  | ((input: unknown) => 'approved' | 'denied' | 'user-approval' | Promise<'approved' | 'denied' | 'user-approval'>)
-
 /**
  * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/; the shared
  * identity helper is the reverse-lookup contract used by the approval UI.
@@ -56,16 +57,16 @@ type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number, abortSignal?: AbortSignal } = {}) {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number, abortSignal?: AbortSignal } = {}): Promise<McpToolComposition & { close: () => Promise<void>, toolCallCount: () => number, subagentStop: (parentSessionId: string, childSessionId: string, status: string) => Promise<boolean> }> {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
-  const toolApproval: Record<string, ToolApprovalValue> = {}
+  const toolApproval: McpToolApprovalMap = {}
   const modelToolOwners = new Map<string, string>()
   const allowedEffects = new Set(options.allowedEffects)
   let toolCalls = 0
 
   if (enabledToolIds.length === 0) {
-    return { tools, toolApproval, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
+    return { tools, toolApproval, toolOwners: modelToolOwners, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
@@ -97,12 +98,10 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       const trustedProvenance = client.trustedProvenance ?? 'external'
       const requiredEffects = toolRequiresEffects(mcpTool.name, mcpTool.annotations, trustedProvenance)
       if (requiredEffects.length === 0 || (options.allowedEffects && requiredEffects.some(effect => !allowedEffects.has(effect)))) continue
-      const previousOwner = modelToolOwners.get(modelName)
-      if (previousOwner && previousOwner !== mcpToolId) {
+      if (!claimMcpToolOwner(modelToolOwners, modelName, mcpToolId)) {
         logger.error('[mcp-tools] model tool identity collision; refusing ambiguous tool', { modelName })
         continue
       }
-      modelToolOwners.set(modelName, mcpToolId)
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
@@ -134,6 +133,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   return {
     tools,
     toolApproval,
+    toolOwners: modelToolOwners,
     close: async () => {
       await Promise.all(clients.map(c => c.close().catch((err: unknown) => logger.error('[mcp-tools] error closing client', err))))
     },

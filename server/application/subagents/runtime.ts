@@ -9,6 +9,8 @@ const MAX_TASK = 8192
 const MAX_REFS = 32
 const MAX_REF = 512
 const MAX_SUMMARY = 4096
+const MAX_SKILL_BYTES = 8192
+const MAX_SKILLS = 16
 
 export interface SubagentExecutionPort {
   execute(input: { userId: string, sessionId: string, parentSessionId: string, profile: SubagentProfile, authority: SubagentAuthority, context: SubagentContextPackage, budget: SubagentBudget, abortSignal: AbortSignal, model?: unknown, approvals?: Record<string, string>, permissionMode?: SubagentRequest['permission_mode'] }): Promise<Partial<SubagentResult> & { usage?: Partial<SubagentUsage>, allowStop?: (status: string) => Promise<boolean> }>
@@ -99,12 +101,16 @@ function makeContext(request: SubagentRequest, cwd: string, budget: SubagentBudg
 
 function loadSkills(names: string[], readSkill?: (name: string) => string | undefined) {
   if (names.length === 0) return []
+  if (names.length > MAX_SKILLS || names.some(name => !/^[a-z][a-z0-9-]{0,63}$/.test(name))) throw new Error('invalid profile skill reference')
   if (!readSkill) throw new Error('profile skills are unavailable')
-  return names.map((name) => {
+  const loaded = names.map((name) => {
     const text = readSkill(name)
     if (!text) throw new Error('configured profile skill is unavailable')
-    return text.replaceAll(/\p{Cc}/gu, ' ').slice(0, 8192)
+    if (Buffer.byteLength(text, 'utf8') > MAX_SKILL_BYTES) throw new Error('configured profile skill exceeds size limit')
+    return text.replaceAll(/\p{Cc}/gu, ' ')
   })
+  if (loaded.reduce((total, text) => total + Buffer.byteLength(text, 'utf8'), 0) > MAX_SKILLS * MAX_SKILL_BYTES) throw new Error('configured profile skills exceed size limit')
+  return loaded
 }
 
 function clampUsage(value: unknown, limit: number) {
