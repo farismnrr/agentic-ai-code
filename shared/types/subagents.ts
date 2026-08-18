@@ -6,6 +6,8 @@ export type SubagentStatus = typeof SUBAGENT_STATUSES[number]
 
 export type SubagentModelPolicy = 'fast' | 'default' | 'strong'
 export type SubagentWorkingMode = 'read-only' | 'workspace'
+export type BackgroundIsolation = 'shared_read' | 'worktree'
+export type BackgroundTaskState = 'queued' | 'starting' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'blocked' | 'rejected' | 'budget_exhausted'
 export type SubagentEffect = 'workspace_read' | 'workspace_write' | 'workspace_delete' | 'git_read' | 'process_exec' | 'network_read' | 'network_write' | 'external_mutation' | 'privileged_bridge'
 
 export interface SubagentProfile {
@@ -88,4 +90,23 @@ export interface SubagentRequest {
   model?: unknown
   approvals?: Record<string, string>
   permission_mode?: 'plan' | 'workspace' | 'autonomous' | 'manual'
+  /** Internal background orchestration escape hatch; never exposed as a user permission. */
+  allow_concurrent_parent?: boolean
+}
+
+export interface BackgroundTaskMetadata {
+  task_id: string
+  parent_session_id: string
+  user_id: string
+  agent_profile: SubagentProfileName
+  repository_identity: string
+  isolation: BackgroundIsolation
+  state: BackgroundTaskState
+  started_at?: number
+  completed_at?: number
+  progress_summary: string
+  branch?: string
+  worktree_path?: string
+  result?: SubagentResult
+  cleanup: 'not_applicable' | 'preserved' | 'safe_to_dispose'
 }

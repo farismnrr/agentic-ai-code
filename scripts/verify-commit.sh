@@ -18,6 +18,7 @@ node scripts/check-maintainability.mjs
 
 printf 'commit-gate: checking subagent policy and lifecycle behavior...\n'
 pnpm verify:subagents
+pnpm verify:background-agents
 
 printf 'commit-gate: running all linters...\n'
 pnpm lint
