@@ -20,7 +20,7 @@ for (const mode of ['plan', 'workspace', 'autonomous', 'manual'] as const) {
 expect(approvalForCapability(trustedRead, 'never', 'workspace').outcome === 'denied', 'never is fail-closed')
 
 const write = capabilityFactsForToolCall({
-  toolId: 'relay.file_write', toolName: 'file_write', input: { path: 'src/new.ts' }, trustedProvenance: 'first-party-relay'
+  toolId: 'relay.file_write', toolName: 'file_write', input: { path: 'src/new.ts', content: 'new' }, trustedProvenance: 'first-party-relay'
 })
 expect(approvalForCapability(write, undefined, 'workspace').outcome === 'approved', 'contained workspace mutation')
 expect(approvalForCapability(write, undefined, 'plan').outcome === 'denied', 'plan denies mutation')
@@ -46,10 +46,58 @@ expect(classifyCapability(externalSafeName).risk === 'high', 'external safe-look
 expect(approvalForCapability(externalSafeName, 'always', 'autonomous').outcome === 'user-approval', 'external tool never auto-approves')
 
 const structured = (path: string) => approvalForCapability(capabilityFactsForToolCall({
-  toolId: 'relay.file_write', toolName: 'file_write', input: { path }, trustedProvenance: 'first-party-relay'
+  toolId: 'relay.file_write', toolName: 'file_write', input: { path, content: 'new' }, trustedProvenance: 'first-party-relay'
 }), undefined, 'workspace').outcome
 expect(structured('src/new.ts') === 'approved', 'safe structured mutation')
 expect(structured('.npmrc') === 'denied', 'protected structured mutation')
+
+const protectedPaths = [
+  '.env', '.env.local', '.env.production', 'nested/.env.production',
+  '.npmrc', '.netrc', '.pypirc', '.git-credentials',
+  '.cargo/credentials', '.cargo/credentials.toml', '.ssh/id',
+  '.config/gh/hosts.yml', '.config/gcloud/application_default_credentials.json'
+]
+for (const path of protectedPaths) {
+  const facts = capabilityFactsForToolCall({
+    toolId: 'relay.file_read', toolName: 'file_read', input: { path }, trustedProvenance: 'first-party-relay'
+  })
+  expect(facts.protectedBoundary === true, `protected path parity: ${path}`)
+  expect(approvalForCapability(facts, undefined, 'manual').outcome === 'denied', `protected path denied: ${path}`)
+}
+for (const input of [
+  { path: '.env.example' },
+  { path: 'nested/.env.example' },
+  { path: '.npmrc.bak' },
+  { cwd: 'nested', path: '.env.example' },
+  { cwd: '.config', path: 'gh.example/hosts.yml' }
+]) {
+  const facts = capabilityFactsForToolCall({
+    toolId: 'relay.file_read', toolName: 'file_read', input, trustedProvenance: 'first-party-relay'
+  })
+  expect(facts.protectedBoundary !== true, `safe near-miss remains safe: ${JSON.stringify(input)}`)
+}
+const malformed = capabilityFactsForToolCall({
+  toolId: 'relay.file_read', toolName: 'file_read', input: { path: { nested: '.env' } }, trustedProvenance: 'first-party-relay'
+})
+expect(malformed.invalidInput === true && classifyCapability(malformed).risk === 'high' && approvalForCapability(malformed, 'always').outcome === 'denied', 'malformed path fails closed')
+const missingPath = capabilityFactsForToolCall({
+  toolId: 'relay.file_read', toolName: 'file_read', input: {}, trustedProvenance: 'first-party-relay'
+})
+expect(missingPath.invalidInput === true && approvalForCapability(missingPath, 'always').outcome === 'denied', 'missing required path fails closed')
+for (const [toolName, input] of [
+  ['file_write', { path: 'src/new.ts' }],
+  ['file_edit', { path: 'src/main.ts', old_text: 'old' }],
+  ['apply_patch', {}]
+] as const) {
+  const malformedMutation = capabilityFactsForToolCall({
+    toolId: `relay.${toolName}`, toolName, input, trustedProvenance: 'first-party-relay'
+  })
+  expect(malformedMutation.invalidInput === true && approvalForCapability(malformedMutation, undefined, 'workspace').outcome === 'denied', `malformed ${toolName} fails closed`)
+}
+const cwdProtected = capabilityFactsForToolCall({
+  toolId: 'relay.file_read', toolName: 'file_read', input: { cwd: '.config', path: 'gh/hosts.yml' }, trustedProvenance: 'first-party-relay'
+})
+expect(cwdProtected.protectedBoundary === true, 'cwd plus relative protected path parity')
 
 const network = capabilityFactsForToolCall({
   toolId: 'relay.http_fetch', toolName: 'http_fetch', input: { url: 'https://example.test/a' }, trustedProvenance: 'first-party-relay'

@@ -187,6 +187,9 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
   subprocess.run(['git','-C',ws,'init','-q'],check=True)
   subprocess.run(['git','-C',ws,'add','.'],check=True)
   subprocess.run(['git','-C',ws,'-c','user.email=fixture@example.test','-c','user.name=fixture','commit','-qm','fixture'],check=True)
+  open(os.path.join(ws,'.env.example'),'a').write('EXAMPLE_CHANGED=ok\n')
+  example_diff=payload(call(url,'git_diff',{'mode':'working'})); assert '.env.example' in example_diff['text'] and 'EXAMPLE_CHANGED=ok' in example_diff['text'],example_diff
+  subprocess.run(['git','-C',ws,'reset','--hard','-q','HEAD'],check=True)
   # Create the external-metadata adversarial repo only after the parent fixture
   # commit, otherwise Git correctly refuses to index an unborn nested repo.
   evil_repo=os.path.join(ws,'external-git-metadata')
