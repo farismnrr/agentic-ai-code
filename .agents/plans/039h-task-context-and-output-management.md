@@ -83,7 +83,7 @@ Requirements:
 - token binds to canonical tool, query parameters, cwd/repository identity, and pagination position;
 - token is opaque to the model/user;
 
-Implementation: the shared continuation core uses HMAC-bound claims with bounded page/total budgets, expiry, ownership, scope, query, limit, and snapshot checks. Existing LSP offset pagination now emits and validates bound v1 claims; workspace/Git first-page contracts remain intentionally bounded until immutable snapshot plumbing is available in the relay.
+Implementation: the shared continuation core uses signed opaque claims with bounded page/total budgets, expiry, scope, canonical query, limit, and snapshot checks. LSP, workspace, text-search, and Git pagination use the same contract; Git object/ref and working-tree snapshots reject stale resumes. Transport/session ownership is added by the application layer where an owner identity is available.
 
 ## Implementation notes
 

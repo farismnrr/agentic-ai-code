@@ -5,7 +5,9 @@ import type { AgentTask } from '#shared/types/chat'
 const props = defineProps<{ conversationId: string, visible: boolean }>()
 const tasks = ref<AgentTask[]>([])
 const load = async () => { if (!props.visible) return; try { const result = await $fetch<{ tasks: AgentTask[] }>(`/api/conversations/${props.conversationId}/tasks`); tasks.value = result.tasks } catch { tasks.value = [] } }
-watch(() => [props.conversationId, props.visible], load, { immediate: true })
+let timer: ReturnType<typeof setInterval> | undefined
+watch(() => [props.conversationId, props.visible], () => { if (timer) clearInterval(timer); void load(); if (props.visible) timer = setInterval(load, 1000) }, { immediate: true })
+onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 const color = (status: AgentTask['status']) => status === 'completed' ? 'success' : status === 'blocked' ? 'error' : status === 'in_progress' ? 'primary' : 'neutral'
 </script>
 

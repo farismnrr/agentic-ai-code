@@ -3,7 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { tool } from 'ai'
 import { z } from 'zod'
 
-export const TASK_CAPS = { count: 32, title: 160, note: 512, dependencies: 16, ttlMs: 30 * 60 * 1000 } as const
+export const TASK_CAPS = { count: 32, title: 160, note: 512, dependencies: 16, ttlMs: 30 * 60 * 1000, ledgers: 256 } as const
 export const RESULT_REF_CAPS = { entries: 64, bytes: 512 * 1024, itemBytes: 32 * 1024, ttlMs: 15 * 60 * 1000 } as const
 export const CONTINUATION_CAPS = { page: 100, total: 1_000, ttlMs: 5 * 60 * 1000 } as const
 
@@ -17,6 +17,7 @@ const bounded = (value: unknown, max: number) => typeof value === 'string' ? val
 const statusValues = new Set<TaskStatus>(['pending', 'in_progress', 'blocked', 'completed', 'cancelled'])
 
 export function taskLedgerFor(userId: string, conversationId: string, sessionId: string, now = Date.now()): TaskLedger {
+  evictTaskLedgers(now)
   const key = keyFor(userId, conversationId, sessionId)
   const existing = taskStores.get(key)
   if (existing && now - existing.updatedAt <= TASK_CAPS.ttlMs) return structuredClone(existing)
@@ -27,6 +28,7 @@ export function taskLedgerFor(userId: string, conversationId: string, sessionId:
 
 export function updateTaskLedger(input: { userId: string, conversationId: string, sessionId: string, tasks: unknown, now?: number }): TaskLedger {
   const now = input.now ?? Date.now()
+  evictTaskLedgers(now)
   if (!Array.isArray(input.tasks) || input.tasks.length > TASK_CAPS.count) throw new Error('task update exceeds bounded task count')
   const ids = new Set<string>()
   const tasks: TaskItem[] = input.tasks.map((raw, index) => {
@@ -57,23 +59,35 @@ export function updateTaskLedger(input: { userId: string, conversationId: string
   return structuredClone(ledger)
 }
 
-const continuationSecret = process.env.AI_CODE_CONTINUATION_SECRET ?? 'development-only-continuation-secret'
-const sign = (body: string) => createHmac('sha256', continuationSecret).update(body).digest('base64url')
+const continuationSecret = process.env.AI_CODE_CONTINUATION_SECRET
+const signingSecret = () => {
+  if (continuationSecret) return continuationSecret
+  if (process.env.NODE_ENV === 'production') throw new Error('continuation signing secret is not configured')
+  return '039h-development-test-only-continuation-secret'
+}
+const sign = (body: string) => createHmac('sha256', signingSecret()).update(body).digest('base64url')
 export interface ContinuationClaims { tool: string, query: string, scope: string, limit: number, offset: number, retrieved: number, expiresAt: number, owner?: string, snapshot?: string }
 export function issueContinuation(claims: Omit<ContinuationClaims, 'expiresAt'> & { expiresAt?: number }): string {
-  if (!Number.isInteger(claims.limit) || claims.limit < 1 || claims.limit > CONTINUATION_CAPS.page || claims.offset < 0 || claims.retrieved < 0 || claims.retrieved > CONTINUATION_CAPS.total) throw new Error('invalid continuation claims')
-  const body = Buffer.from(JSON.stringify({ ...claims, expiresAt: claims.expiresAt ?? Date.now() + CONTINUATION_CAPS.ttlMs })).toString('base64url')
+  if (!Number.isSafeInteger(claims.limit) || claims.limit < 1 || claims.limit > CONTINUATION_CAPS.page || !Number.isSafeInteger(claims.offset) || claims.offset < 0 || !Number.isSafeInteger(claims.retrieved) || claims.retrieved < 0 || claims.retrieved > CONTINUATION_CAPS.total) throw new Error('invalid continuation claims')
+  const expiresAt = claims.expiresAt ?? Date.now() + CONTINUATION_CAPS.ttlMs
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) throw new Error('invalid continuation claims')
+  const body = Buffer.from(JSON.stringify({ v: 1, ...claims, expiresAt })).toString('base64url')
   return `${body}.${sign(body)}`
 }
 export function consumeContinuation(token: unknown, expected: Omit<ContinuationClaims, 'offset' | 'retrieved' | 'expiresAt' | 'snapshot'> & { owner?: string, snapshot?: string }, now = Date.now()): ContinuationClaims {
-  if (typeof token !== 'string' || token.length > 4096) throw new Error('invalid continuation')
+  if (typeof token !== 'string' || token.length > 4096 || token.split('.').length !== 2) throw new Error('invalid continuation')
   const [body, mac] = token.split('.')
   if (!body || !mac) throw new Error('invalid continuation')
   const expectedMac = sign(body)
   if (mac.length !== expectedMac.length || !timingSafeEqual(Buffer.from(mac), Buffer.from(expectedMac))) throw new Error('invalid continuation')
   let claims: ContinuationClaims
-  try { claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as ContinuationClaims } catch { throw new Error('invalid continuation') }
-  if (claims.tool !== expected.tool || claims.query !== expected.query || claims.scope !== expected.scope || claims.limit !== expected.limit || claims.owner !== expected.owner || claims.snapshot !== expected.snapshot || claims.expiresAt <= now || claims.offset < 0 || claims.retrieved + claims.limit > CONTINUATION_CAPS.total) throw new Error('stale continuation')
+  try {
+    const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Record<string, unknown>
+    const allowed = new Set(['v', 'tool', 'query', 'scope', 'limit', 'offset', 'retrieved', 'expiresAt', 'owner', 'snapshot'])
+    if (Object.keys(parsed).some(key => !allowed.has(key)) || parsed.v !== 1) throw new Error()
+    claims = parsed as unknown as ContinuationClaims
+  } catch { throw new Error('invalid continuation') }
+  if (claims.tool !== expected.tool || claims.query !== expected.query || claims.scope !== expected.scope || claims.limit !== expected.limit || claims.owner !== expected.owner || claims.snapshot !== expected.snapshot || !Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= now || !Number.isSafeInteger(claims.offset) || claims.offset < 0 || !Number.isSafeInteger(claims.retrieved) || claims.retrieved < 0 || claims.retrieved + claims.limit > CONTINUATION_CAPS.total) throw new Error('stale continuation')
   return claims
 }
 
@@ -89,14 +103,21 @@ export function putResultRef(owner: string, value: string, now = Date.now()): st
 }
 export function getResultRef(owner: string, id: string, now = Date.now()): string | undefined { evictResultRefs(now); const entry = refs.get(id); return entry?.owner === owner ? entry.value : undefined }
 export function evictResultRefs(now = Date.now(), forceOldest = false) { for (const [id, entry] of refs) if (entry.expiresAt <= now) { refs.delete(id); refBytes -= entry.bytes }; if (forceOldest && refs.size) { const oldest = [...refs.entries()].sort((a, b) => a[1].sequence - b[1].sequence)[0]; if (oldest) { refs.delete(oldest[0]); refBytes -= oldest[1].bytes } } }
+function evictTaskLedgers(now: number) {
+  for (const [key, ledger] of taskStores) if (now - ledger.updatedAt > TASK_CAPS.ttlMs) taskStores.delete(key)
+  if (taskStores.size > TASK_CAPS.ledgers) {
+    const oldest = [...taskStores.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt).slice(0, taskStores.size - TASK_CAPS.ledgers)
+    for (const [key] of oldest) taskStores.delete(key)
+  }
+}
 
 export type OutputClass = 'inline_small' | 'paginated_medium' | 'summarized_large' | 'retained_failure'
 export const classifyOutput = (bytes: number, failed = false): OutputClass => failed ? 'retained_failure' : bytes <= 16 * 1024 ? 'inline_small' : bytes <= 128 * 1024 ? 'paginated_medium' : 'summarized_large'
-export function inspectContext(input: { contextWindow?: number | null, usedTokens?: number | null, maxOutputTokens?: number | null, summary?: string | null, summaryAgeMs?: number | null, childCount?: number, backgroundCount?: number }) {
-  const exact = input.usedTokens != null
+export function inspectContext(input: { contextWindow?: number | null, usedTokens?: number | null, measuredAtBoundary?: boolean, maxOutputTokens?: number | null, summary?: string | null, summaryAgeMs?: number | null, childCount?: number, backgroundCount?: number }) {
+  const exact = input.usedTokens != null && input.measuredAtBoundary === true
   const reserved = input.maxOutputTokens ?? null
   const headroom = input.contextWindow != null && input.usedTokens != null ? Math.max(0, input.contextWindow - input.usedTokens - (reserved ?? 0)) : null
-  return { contextWindow: input.contextWindow ?? null, usedTokens: input.usedTokens ?? null, usedTokensKind: exact ? 'exact_provider_accounted' : 'estimated', reservedOutputTokens: reserved, headroom, summaryPresent: Boolean(input.summary), summaryAgeMs: input.summary ? input.summaryAgeMs ?? null : null, activeChildren: Math.min(32, Math.max(0, input.childCount ?? 0)), activeBackgroundTasks: Math.min(32, Math.max(0, input.backgroundCount ?? 0)), pressure: headroom != null && input.contextWindow ? headroom / input.contextWindow < 0.15 : 'unknown' as const }
+  return { contextWindow: input.contextWindow ?? null, usedTokens: input.usedTokens ?? null, usedTokensKind: exact ? 'provider_measured_boundary' : input.usedTokens != null ? 'estimated_from_provider_boundary' : 'unknown', reservedOutputTokens: reserved, headroom, summaryPresent: Boolean(input.summary), summaryAgeMs: input.summary ? input.summaryAgeMs ?? null : null, activeChildren: Math.min(32, Math.max(0, input.childCount ?? 0)), activeBackgroundTasks: Math.min(32, Math.max(0, input.backgroundCount ?? 0)), pressure: headroom != null && input.contextWindow ? headroom / input.contextWindow < 0.15 : 'unknown' as const }
 }
 
 export function resetTaskContextStoresForTests() { taskStores.clear(); refs.clear(); refBytes = 0; sequence = 0 }
