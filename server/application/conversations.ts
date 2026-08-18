@@ -12,6 +12,7 @@ export interface ConversationRecord {
 }
 
 export interface ConversationPort {
+  find(userId: string, id: string): Promise<ConversationRecord | undefined>
   list(userId: string, workspaceId?: string): Promise<ConversationRecord[]>
   create(input: Omit<ConversationRecord, 'id' | 'userId'> & { userId: string }): Promise<ConversationRecord | undefined>
   update(userId: string, id: string, input: Record<string, unknown>): Promise<ConversationRecord | undefined>
@@ -24,6 +25,7 @@ export interface ConversationPort {
 export function createConversationUseCases(port: ConversationPort, telemetry?: RequestTelemetryContext) {
   const span = <T>(operation: string, fn: () => Promise<T>) => telemetry ? telemetry.withSpan(operation, {}, fn) : fn()
   return {
+    find: (userId: string, id: string) => span('conversation.find', () => port.find(userId, id)),
     list: (userId: string, workspaceId?: string) => span('conversation.list', () => port.list(userId, workspaceId)),
     create: async (input: Omit<ConversationRecord, 'id'> & { userId: string }) => span('conversation.create', async () => {
       await port.assertModelOwnership(input.userId, input.modelId)

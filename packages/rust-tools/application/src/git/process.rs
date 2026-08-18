@@ -104,14 +104,6 @@ fn git_command(cwd: &Path) -> Command {
     c
 }
 
-pub(super) fn bounded_bytes(arguments: &Value) -> usize {
-    arguments
-        .get("max_bytes")
-        .and_then(Value::as_u64)
-        .unwrap_or(64 * 1024)
-        .min(MAX_GIT_OUTPUT_BYTES as u64) as usize
-}
-
 pub(super) fn bounded_results(arguments: &Value) -> usize {
     arguments
         .get("max_results")
@@ -221,4 +213,89 @@ pub(super) fn validated_required_path(
 
 pub(super) fn invalid_git_output() -> McpError {
     McpError::InvalidRequest("git output is invalid".into())
+}
+
+pub(super) fn paginate_git_text(
+    arguments: &Value,
+    config: &ServerConfig,
+    tool: &str,
+    scope: &Path,
+    text: String,
+    snapshot: Option<&str>,
+) -> Result<(String, Option<String>), McpError> {
+    let mut page_arguments = arguments.clone();
+    page_arguments
+        .as_object_mut()
+        .ok_or_else(|| McpError::InvalidRequest("git arguments must be an object".into()))?
+        .insert("max_results".into(), Value::from(1));
+    let max_bytes = arguments
+        .get("max_bytes")
+        .and_then(Value::as_u64)
+        .unwrap_or(64 * 1024)
+        .clamp(1, super::MAX_GIT_OUTPUT_BYTES as u64) as usize;
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        let additional = line.len().saturating_add(usize::from(!current.is_empty()));
+        if !current.is_empty() && current.len().saturating_add(additional) > max_bytes {
+            chunks.push(std::mem::take(&mut current));
+        }
+        if line.len() > max_bytes {
+            let end = line
+                .char_indices()
+                .take_while(|(index, _)| *index < max_bytes)
+                .last()
+                .map(|(index, ch)| index + ch.len_utf8())
+                .unwrap_or(0);
+            current.push_str(&line[..end]);
+        } else {
+            if !current.is_empty() {
+                current.push('\n');
+            }
+            current.push_str(line);
+        }
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    let (page, continuation) = crate::continuation::paginate(
+        &page_arguments,
+        chunks,
+        1,
+        config,
+        tool,
+        &scope.to_string_lossy(),
+        snapshot,
+    )?;
+    Ok((page.into_iter().next().unwrap_or_default(), continuation))
+}
+
+pub(super) fn git_snapshot(root: &Path, mode: &str, args: &[String]) -> Result<String, McpError> {
+    if mode == "refs" {
+        return Ok(args
+            .iter()
+            .filter(|arg| arg.len() == 40)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(":"));
+    }
+    let head = run_git(root, &["rev-parse", "HEAD"], 128)?;
+    let status = run_git(
+        root,
+        &["status", "--porcelain=v2", "-z"],
+        super::MAX_GIT_OUTPUT_BYTES,
+    )?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    use std::hash::{Hash, Hasher};
+    head.hash(&mut hasher);
+    status.hash(&mut hasher);
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+pub(super) fn is_protected_git_path(root: &Path, path: &str) -> bool {
+    let target = root.join(path);
+    relay_core::protected_paths::is_protected_path(root, &target)
+        || std::fs::canonicalize(&target)
+            .map(|canonical| relay_core::protected_paths::is_protected_path(root, &canonical))
+            .unwrap_or(false)
 }

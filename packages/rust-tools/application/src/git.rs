@@ -37,12 +37,16 @@ struct GitTextResult {
     repository_root: String,
     text: String,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation: Option<String>,
 }
 #[derive(Debug, Serialize)]
 struct GitLogResult {
     repository_root: String,
     commits: Vec<GitCommit>,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation: Option<String>,
 }
 #[derive(Debug, Serialize)]
 struct GitCommit {
@@ -201,7 +205,6 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         .and_then(Value::as_u64)
         .unwrap_or(3)
         .min(MAX_DIFF_CONTEXT);
-    let max = bounded_bytes(arguments);
     let mut owned = vec![
         "diff".to_string(),
         "--no-ext-diff".into(),
@@ -219,6 +222,7 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         }
         _ => return Err(McpError::InvalidRequest("git diff mode is invalid".into())),
     }
+    let snapshot = git_snapshot(&repo.root, mode, &owned)?;
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path);
@@ -226,11 +230,20 @@ fn git_diff(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         append_protected_exclusions(&mut owned);
     }
     let refs = owned.iter().map(String::as_str).collect::<Vec<_>>();
-    let (text, truncated) = run_git_text_bounded(&repo.root, &refs, max)?;
+    let (text, source_truncated) = run_git_text_bounded(&repo.root, &refs, MAX_GIT_OUTPUT_BYTES)?;
+    let (text, continuation) = paginate_git_text(
+        arguments,
+        config,
+        "git_diff",
+        &repo.root,
+        text,
+        Some(&snapshot),
+    )?;
     Ok(GitTextResult {
         repository_root: repo.relative_root,
         text,
-        truncated,
+        truncated: continuation.is_some() || source_truncated,
+        continuation,
     })
 }
 
@@ -241,11 +254,14 @@ fn git_log(arguments: &Value, config: &ServerConfig) -> Result<GitLogResult, Mcp
         "log".to_string(),
         "--no-show-signature".into(),
         "--format=%H%x1f%P%x1f%ct%x1f%s%x1e".into(),
-        format!("--max-count={}", max + 1),
+        format!("--max-count={}", crate::continuation::MAX_TOTAL_ENTRIES + 1),
     ];
-    if let Some(r) = arguments.get("ref").and_then(Value::as_str) {
-        owned.push(resolve_commit_ref(&repo.root, r)?)
-    }
+    let log_ref = arguments
+        .get("ref")
+        .and_then(Value::as_str)
+        .unwrap_or("HEAD");
+    let resolved_log_ref = resolve_commit_ref(&repo.root, log_ref)?;
+    owned.push(resolved_log_ref.clone());
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path)
@@ -259,7 +275,7 @@ fn git_log(arguments: &Value, config: &ServerConfig) -> Result<GitLogResult, Mcp
     for rec in text
         .split('\x1e')
         .filter(|r| !r.trim().is_empty())
-        .take(max + 1)
+        .take(crate::continuation::MAX_TOTAL_ENTRIES + 1)
     {
         let mut f = rec.trim_start_matches('\n').splitn(4, '\x1f');
         commits.push(GitCommit {
@@ -274,12 +290,23 @@ fn git_log(arguments: &Value, config: &ServerConfig) -> Result<GitLogResult, Mcp
             subject: f.next().unwrap_or("").trim_end().to_owned(),
         });
     }
-    let truncated = commits.len() > max;
-    commits.truncate(max);
+    let truncated = commits.len() > crate::continuation::MAX_TOTAL_ENTRIES;
+    commits.truncate(crate::continuation::MAX_TOTAL_ENTRIES);
+    let root_scope = repo.root.to_string_lossy().into_owned();
+    let (commits, continuation) = crate::continuation::paginate(
+        arguments,
+        commits,
+        max,
+        config,
+        "git_log",
+        &root_scope,
+        Some(&resolved_log_ref),
+    )?;
     Ok(GitLogResult {
         repository_root: repo.relative_root,
         commits,
-        truncated,
+        truncated: continuation.is_some() || truncated,
+        continuation,
     })
 }
 
@@ -290,7 +317,6 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         .get("include_patch")
         .and_then(Value::as_bool)
         .unwrap_or(true);
-    let max = bounded_bytes(arguments);
     let mut owned = vec![
         "show".to_string(),
         "--no-ext-diff".into(),
@@ -301,7 +327,8 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
     if !include_patch {
         owned.push("--no-patch".into())
     }
-    owned.push(resolve_commit_ref(&repo.root, &reference)?);
+    let resolved_reference = resolve_commit_ref(&repo.root, &reference)?;
+    owned.push(resolved_reference.clone());
     if let Some(path) = validated_optional_path(arguments, &repo, "path")? {
         owned.push("--".into());
         owned.push(path)
@@ -309,11 +336,20 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
         append_protected_exclusions(&mut owned);
     }
     let refs = owned.iter().map(String::as_str).collect::<Vec<_>>();
-    let (text, truncated) = run_git_text_bounded(&repo.root, &refs, max)?;
+    let (text, source_truncated) = run_git_text_bounded(&repo.root, &refs, MAX_GIT_OUTPUT_BYTES)?;
+    let (text, continuation) = paginate_git_text(
+        arguments,
+        config,
+        "git_show",
+        &repo.root,
+        text,
+        Some(&resolved_reference),
+    )?;
     Ok(GitTextResult {
         repository_root: repo.relative_root,
         text,
-        truncated,
+        truncated: continuation.is_some() || source_truncated,
+        continuation,
     })
 }
 
@@ -458,12 +494,4 @@ fn append_protected_exclusions(args: &mut Vec<String>) {
     ] {
         args.push(format!(":(exclude){path}"));
     }
-}
-
-fn is_protected_git_path(root: &Path, path: &str) -> bool {
-    let target = root.join(path);
-    relay_core::protected_paths::is_protected_path(root, &target)
-        || std::fs::canonicalize(&target)
-            .map(|canonical| relay_core::protected_paths::is_protected_path(root, &canonical))
-            .unwrap_or(false)
 }

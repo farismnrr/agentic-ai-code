@@ -9,6 +9,7 @@ import { toolMatchesProfile } from '../../application/subagents/profiles'
 import { buildMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
+import { classifyOutput, putResultRef } from '../../application/task-context-output'
 
 const runtime = new SubagentRuntime({
   readProfile: name => readFileSync(join(process.cwd(), '.agents', 'agents', `${name}.md`), 'utf8'),
@@ -48,7 +49,7 @@ const runtime = new SubagentRuntime({
           abortSignal
         })
         const approvalPending = Array.isArray(response.content) && response.content.some(part => typeof part === 'object' && part !== null && ['tool-approval-request', 'tool-output-denied'].includes((part as { type?: unknown }).type as string))
-        const result = parseResult(response.text, sessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0, mcp.toolCallCount(), response.usage, approvalPending)
+        const result = parseResult(response.text, sessionId, parentSessionId, profile.name, budget, abortSignal.aborted, response.steps?.length ?? 0, mcp.toolCallCount(), response.usage, approvalPending)
         return { ...result, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
       } catch (error) {
         if (error instanceof Error && error.message === 'subagent tool-call budget exhausted') return { status: 'budget_exhausted', summary: 'Child tool-call budget exhausted.', usage: { tool_calls: mcp.toolCallCount() }, allowStop: (status: string) => mcp.subagentStop(parentSessionId, sessionId, status) }
@@ -97,7 +98,7 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
   }
 }
 
-function parseResult(text: string, sessionId: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {
+function parseResult(text: string, sessionId: string, owner: string, profile: SubagentResult['profile'], budget: SubagentBudget, cancelled: boolean, steps: number, toolCalls: number, providerUsage?: { inputTokens?: number, outputTokens?: number, totalTokens?: number }, approvalPending = false): SubagentResult {
   const value = (() => {
     try {
       return JSON.parse(text) as Partial<SubagentResult>
@@ -105,15 +106,18 @@ function parseResult(text: string, sessionId: string, profile: SubagentResult['p
       return { summary: text }
     }
   })()
+  const summary = approvalPending ? 'Child tool call requires approval before execution.' : typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.'
+  const summaryRef = classifyOutput(Buffer.byteLength(summary, 'utf8')) === 'summarized_large' ? putResultRef(owner, summary.slice(0, 32 * 1024)) : undefined
   return {
     status: cancelled ? 'cancelled' : approvalPending ? 'blocked' : steps >= budget.max_turns ? 'budget_exhausted' : value.status && ['completed', 'blocked', 'cancelled', 'budget_exhausted', 'failed', 'invalid'].includes(value.status) ? value.status : 'completed',
-    summary: approvalPending ? 'Child tool call requires approval before execution.' : typeof value.summary === 'string' ? value.summary : 'Child completed without a summary.',
+    summary: summaryRef ? `${summary.slice(0, 512)} …[full bounded summary in result_ref]` : summary,
     findings: Array.isArray(value.findings) ? value.findings : [],
     evidence: Array.isArray(value.evidence) ? value.evidence : [],
     validation: Array.isArray(value.validation) ? value.validation : [],
     remaining_risks: Array.isArray(value.remaining_risks) ? value.remaining_risks : [],
     session_id: sessionId,
     profile,
-    usage: { turns: Math.min(steps, budget.max_turns), tool_calls: Math.min(toolCalls, budget.max_tool_calls), output_tokens: Math.min(providerUsage?.outputTokens ?? 0, budget.max_output_tokens), context_tokens: Math.min(providerUsage?.inputTokens ?? 0, budget.max_context_tokens), wall_time_ms: 0, depth: 0 }
+    usage: { turns: Math.min(steps, budget.max_turns), tool_calls: Math.min(toolCalls, budget.max_tool_calls), output_tokens: Math.min(providerUsage?.outputTokens ?? 0, budget.max_output_tokens), context_tokens: Math.min(providerUsage?.inputTokens ?? 0, budget.max_context_tokens), wall_time_ms: 0, depth: 0 },
+    summary_ref: summaryRef
   }
 }

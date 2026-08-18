@@ -1,6 +1,6 @@
 # Plan 039H — Task, Context, and Output Management
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING  
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039G  
@@ -48,6 +48,8 @@ task_update(...)
 
 The model may use it to keep the UI synchronized, but task completion cannot bypass deterministic validation or Plan-039E stop hooks.
 
+Implementation: `server/application/task-context-output.ts` provides the bounded owner-scoped ledger and `task_update` operation; conversation task APIs and `ChatTaskLedger.vue` expose the compact progress view. Completed is explicitly progress state, never validation or delivery proof.
+
 ## Part B — context inspector/budget
 
 Expose a first-party context view showing bounded estimates such as:
@@ -61,6 +63,8 @@ Expose a first-party context view showing bounded estimates such as:
 - whether another compaction is approaching.
 
 Do not pretend token estimates are exact when provider accounting is unavailable.
+
+Implementation: `ChatContextUsage.vue` consumes `/api/conversations/:id/context`, distinguishes provider-measured boundaries from estimates, and renders unknown values as unavailable; the endpoint exposes only bounded metadata.
 
 The model may receive compact budget metadata to encourage efficient tool use, but user-facing context state remains separate from hidden reasoning.
 
@@ -78,10 +82,22 @@ Requirements:
 
 - token binds to canonical tool, query parameters, cwd/repository identity, and pagination position;
 - token is opaque to the model/user;
+
+Implementation: the shared continuation core uses signed opaque claims with bounded page/total budgets, expiry, scope, canonical query, limit, and snapshot checks. LSP, workspace, text-search, and Git pagination use the same contract; Git object/ref and working-tree snapshots reject stale resumes. Transport/session ownership is added by the application layer where an owner identity is available.
+
+## Implementation notes
+
+- Result references are short-lived, owner-scoped, cardinality/byte/item bounded, and deterministically evicted. They are convenience context only and are not used as authorization or repository truth.
+- Output classification is centralized as inline-small, paginated-medium, summarized-large, or retained-failure metadata; raw content is never telemetry.
+- No new database, durable memory, vector store, RAG index, hidden reasoning store, or provider accounting source was introduced.
 - bounded lifetime or stateless signed encoding; choose the simplest design consistent with security;
 - stale underlying state is detected where correctness matters (Git/object refs, file identity/hash, LSP document version);
 - caller cannot edit token fields to escape scope or increase limits;
 - pagination is not an excuse for unlimited total retrieval—per-session/context budgets remain.
+
+### MCP contract lineage
+
+The Plan-029 v1, Plan-039B v2, and Plan-039C v3 MCP catalogs remain frozen historical evidence. Plan 039H intentionally adds signed continuation fields to the public workspace/search/Git/LSP schemas, so the current runtime is frozen as `.agents/contracts/039h-tool-catalog-v4.json` with hash `ee7b369df33d95e5c799e5f2d8a5efc7774f4c3c1221bf511f3680c981852c0d` and verified by `scripts/phase-039h-contract.sh`. Plan 039H remains `IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING`.
 
 For simple stable operations, an explicit offset may be superior to a stateful cursor. Use cursors only where they materially improve integrity/ergonomics.
 

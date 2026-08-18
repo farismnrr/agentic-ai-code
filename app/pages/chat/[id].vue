@@ -215,6 +215,10 @@ defineShortcuts({
       </div>
 
       <UContainer v-else>
+        <ChatTaskLedger
+          :conversation-id="conversationId"
+          :visible="mode === 'agent'"
+        />
         <div
           v-if="!messages.length && status === 'ready'"
           class="flex flex-1 items-center justify-center py-16"
@@ -338,8 +342,8 @@ defineShortcuts({
               @update-approvals="updateApprovals"
             />
             <ChatContextUsage
+              :conversation-id="conversationId"
               :conversation="conversation"
-              :model-id="modelId"
             />
           </template>
         </UChatPrompt>

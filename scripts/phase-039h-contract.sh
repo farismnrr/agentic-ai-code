@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Current Plan-039H MCP contract gate.
+#
+# The v4 snapshot is captured from the live relay tools/list path. Historical
+# v1/v2/v3 artifacts are checked by phase7 and phase-039c and remain immutable.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+catalog="$root/.agents/contracts/039h-tool-catalog-v4.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v4.sha256"
+historical_v3="$root/.agents/contracts/039c-tool-catalog-v3.json"
+historical_v3_hash="$root/.agents/contracts/039c-tool-catalog-v3.sha256"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+test -f "$catalog"
+test -f "$catalog_hash_file"
+test -f "$historical_v3"
+test -f "$historical_v3_hash"
+command -v jq >/dev/null
+command -v sha256sum >/dev/null
+
+validate_snapshot() {
+  local snapshot="$1" hash_file="$2" runtime="$3"
+  jq -e 'type == "array" and all(.[]; (.name and .description and .inputSchema and .annotations and (.securitySchemes == [{"type":"oauth2","scopes":["relay.coding"]}]) and (has("security") | not)))' "$snapshot" >/dev/null
+  local expected actual
+  expected="$(jq -S -c . "$snapshot")"
+  actual="$(printf '%s' "$expected" | sha256sum | awk '{print $1}')"
+  if [[ "$actual" != "$(tr -d '[:space:]' < "$hash_file")" ]]; then return 1; fi
+  if [[ "$expected" != "$(jq -S -c . "$runtime")" ]]; then return 1; fi
+}
+
+# Historical v3 integrity is checked independently of the live runtime.
+v3_normalized="$(jq -S -c . "$historical_v3")"
+v3_hash="$(printf '%s' "$v3_normalized" | sha256sum | awk '{print $1}')"
+test "$v3_hash" = "$(tr -d '[:space:]' < "$historical_v3_hash")"
+
+RUSTFLAGS='-D warnings' cargo build --manifest-path "$root/Cargo.toml" --locked --bin ai-tools >/dev/null
+python3 - "$root/target/debug/ai-tools" "$tmp/runtime.json" "$root" <<'PY'
+import json, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+relay, output_path, root = sys.argv[1:]
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0)); return sock.getsockname()[1]
+with tempfile.TemporaryDirectory(prefix='relay-phase039h-') as workspace:
+    port = free_port()
+    process = subprocess.Popen([relay, 'relay', '--port', str(port), '--dir', workspace,
+                                '--execution-root', workspace, '--origin', 'http://localhost:3333', '--mode', 'local'],
+                               cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        for _ in range(100):
+            if process.poll() is not None: raise RuntimeError(process.stderr.read().strip())
+            try:
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=1) as response:
+                    if response.status == 200: break
+            except (urllib.error.URLError, ConnectionError): time.sleep(.1)
+        else: raise RuntimeError('relay did not become healthy')
+        body = {'jsonrpc':'2.0','id':1,'method':'tools/list','params':{'_meta':{
+            'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientCapabilities':{}}}}
+        request = urllib.request.Request(f'http://127.0.0.1:{port}/mcp', data=json.dumps(body).encode(),
+            headers={'Content-Type':'application/json','Origin':'http://localhost:3333',
+                     'MCP-Protocol-Version':'2026-07-28','Mcp-Method':'tools/list'}, method='POST')
+        with urllib.request.urlopen(request, timeout=5) as response:
+            result = json.loads(response.read())
+        if not isinstance(result.get('result', {}).get('tools'), list): raise AssertionError(result)
+        with open(output_path, 'w', encoding='utf-8') as output:
+            json.dump(result['result']['tools'], output, separators=(',', ':'))
+    finally:
+        process.terminate()
+        try: process.wait(timeout=5)
+        except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
+PY
+
+validate_snapshot "$catalog" "$catalog_hash_file" "$tmp/runtime.json"
+
+# Prove both checked-in current-contract artifacts fail closed when mutated,
+# without modifying tracked files.
+jq '.[0].title = "mutation"' "$catalog" > "$tmp/mutated-catalog.json"
+if validate_snapshot "$tmp/mutated-catalog.json" "$catalog_hash_file" "$tmp/runtime.json"; then
+  echo 'phase-039h: mutated catalog unexpectedly passed' >&2; exit 1
+fi
+printf '0%s\n' "$(tr -d '[:space:]' < "$catalog_hash_file" | cut -c2-)" > "$tmp/mutated-hash"
+if validate_snapshot "$catalog" "$tmp/mutated-hash" "$tmp/runtime.json"; then
+  echo 'phase-039h: mutated hash unexpectedly passed' >&2; exit 1
+fi
+
+for tool in directory_list file_search text_search git_diff git_log git_show code_symbols code_references code_implementations code_diagnostics; do
+  jq -e --arg tool "$tool" 'any(.[]; .name == $tool and (.inputSchema.properties.continuation.type == "string"))' "$catalog" >/dev/null
+done
+
+echo "phase-039h current contract acceptance: pass ($(tr -d '[:space:]' < "$catalog_hash_file"))"

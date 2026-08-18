@@ -7,8 +7,8 @@
 # catalog against the live runtime tool list any more — the runtime catalog
 # has grown past both historical snapshots (Plan-039C added code_* tools),
 # so that comparison would fail by design, not by regression. The current
-# runtime catalog is verified separately by
-# scripts/phase-039c-contract.sh against the Plan-039C v3 frozen catalog.
+# runtime catalog is verified separately by scripts/phase-039h-contract.sh;
+# Plan-039C v3 is retained as historical evidence by phase-039c-contract.sh.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

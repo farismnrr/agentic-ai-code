@@ -7,6 +7,8 @@ import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './w
 import { buildTurnMessages } from './history'
 import { createAssistantPersister } from './persistence'
 import { createLocalTerminalPolicy } from './local-terminal-policy'
+import { buildTaskUpdateTool } from '../task-context-output'
+import { composeAgentTools } from './tool-composition'
 
 export interface ExecuteChatTurnInput {
   userId: string
@@ -111,8 +113,9 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
+    const internalTools = { task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }) }
     const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals, conv.permissionMode)
-    tools = mcp.tools
+    tools = composeAgentTools(internalTools, mcp.tools)
     toolApproval = mcp.toolApproval
     close = mcp.close
     if (conv.enabledToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
