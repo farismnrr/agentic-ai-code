@@ -25,6 +25,7 @@ export interface CapabilityFacts {
   destructive?: boolean
   external?: boolean
   protectedBoundary?: boolean
+  invalidInput?: boolean
   trustedProvenance?: 'first-party-relay' | 'native' | 'external'
   requiresConcreteScope?: boolean
 }
@@ -86,18 +87,23 @@ function inputDomain(input: Record<string, unknown>) {
   }
 }
 
-function isProtectedPath(path: string | undefined) {
+function hasString(input: Record<string, unknown>, key: string) {
+  return typeof input[key] === 'string' && input[key] !== ''
+}
+
+function hasRequiredStrings(input: Record<string, unknown>, keys: string[]) {
+  return keys.every(key => hasString(input, key))
+}
+
+function isProtectedPath(path: string | undefined, cwd?: string) {
   if (!path) return false
-  const normalized = path.replaceAll('\\', '/').replace(/^\.\//, '')
-  const segments = normalized.split('/')
+  const normalized = [cwd, path].filter(Boolean).join('/').replaceAll('\\', '/')
+  const segments = normalized.split('/').filter(Boolean)
   return segments.some(segment => ['.ssh', '.aws', '.docker', '.kube'].includes(segment))
-    || (segments.includes('.config') && segments.includes('gcloud'))
-    || ['.npmrc', '.netrc', '.pypirc'].includes(normalized)
-    || normalized.endsWith('/.npmrc')
-    || normalized.endsWith('/.netrc')
-    || normalized.endsWith('/.pypirc')
-    || normalized.endsWith('/.cargo/credentials')
-    || normalized.endsWith('/.cargo/credentials.toml')
+    || segments.some((segment, index) => segment === '.config' && ['gcloud', 'gh'].includes(segments[index + 1] ?? ''))
+    || segments.some(segment => ['.npmrc', '.netrc', '.pypirc', '.git-credentials'].includes(segment))
+    || segments.some((segment, index) => segment === '.cargo' && ['credentials', 'credentials.toml'].includes(segments[index + 1] ?? ''))
+    || segments.some(segment => segment === '.env' || (segment.startsWith('.env.') && segment !== '.env.example'))
 }
 
 /** Extract only reviewed, top-level call facts. Arbitrary shell syntax is
@@ -116,7 +122,19 @@ export function capabilityFactsForToolCall({
   trustedProvenance?: CapabilityFacts['trustedProvenance']
 }): CapabilityFacts {
   const values = inputRecord(input)
+  const malformedInput = typeof input !== 'object' || input === null || Array.isArray(input)
+    || ('path' in values && typeof values.path !== 'string')
+    || ('cwd' in values && typeof values.cwd !== 'string')
+    || (['file_read', 'file_write', 'file_edit', 'git_blame'].includes(toolName) && !hasString(values, 'path'))
+    || (toolName === 'file_write' && !hasRequiredStrings(values, ['path', 'content']))
+    || (toolName === 'file_edit' && !hasRequiredStrings(values, ['path', 'old_text', 'new_text']))
+    || (toolName === 'apply_patch' && !hasString(values, 'patch'))
+    || (toolName === 'git_show' && !hasString(values, 'ref'))
+    || (toolName === 'http_fetch' && !hasString(values, 'url'))
+    || (toolName === 'web_search' && !hasString(values, 'query'))
+    || (['local_terminal', 'terminal_exec'].includes(toolName) && !hasString(values, 'command'))
   const path = inputString(values, 'path')
+  const cwd = inputString(values, 'cwd')
   const effects = toolEffects(toolName, annotations, trustedProvenance)
   return {
     toolId,
@@ -130,7 +148,8 @@ export function capabilityFactsForToolCall({
       : undefined,
     destructive: annotations?.destructiveHint,
     external: trustedProvenance === 'external',
-    protectedBoundary: isProtectedPath(path),
+    protectedBoundary: isProtectedPath(path, cwd),
+    invalidInput: malformedInput,
     trustedProvenance,
     requiresConcreteScope: !REVIEWED_STRUCTURED_TOOLS.has(toolName)
   }
@@ -141,9 +160,9 @@ export function classifyCapability(facts: CapabilityFacts): CapabilityAssessment
   const opaque = Boolean(command && OPAQUE_COMMANDS.has(command))
   const network = facts.networkRequested === true || facts.effects.some(effect => effect === 'network_read' || effect === 'network_write')
   const destructive = facts.destructive === true || facts.effects.some(effect => effect === 'workspace_delete' || effect === 'network_write' || effect === 'external_mutation' || effect === 'privileged_bridge')
-  const lowRisk = facts.effects.every(effect => effect === 'workspace_read' || effect === 'git_read') && !network && !destructive && !opaque && facts.external !== true && facts.protectedBoundary !== true
-  const risk: RiskLevel = destructive || opaque || facts.external === true || facts.protectedBoundary === true ? 'high' : network || facts.effects.includes('process_exec') || facts.effects.includes('workspace_write') ? 'medium' : 'low'
-  let reason = facts.protectedBoundary ? 'protected credential boundary requires explicit review' : opaque ? 'opaque shell or wrapper execution requires explicit review' : facts.external === true ? 'external tool provenance is untrusted and requires explicit review' : network ? 'network access is an independent capability' : destructive ? 'the operation can mutate or delete state' : facts.effects.includes('workspace_write') ? 'workspace mutation requires explicit review' : 'bounded read-only capability'
+  const lowRisk = facts.effects.every(effect => effect === 'workspace_read' || effect === 'git_read') && !network && !destructive && !opaque && facts.external !== true && facts.protectedBoundary !== true && facts.invalidInput !== true
+  const risk: RiskLevel = facts.invalidInput === true || destructive || opaque || facts.external === true || facts.protectedBoundary === true ? 'high' : network || facts.effects.includes('process_exec') || facts.effects.includes('workspace_write') ? 'medium' : 'low'
+  let reason = facts.invalidInput ? 'malformed capability input requires explicit review' : facts.protectedBoundary ? 'protected credential boundary requires explicit review' : opaque ? 'opaque shell or wrapper execution requires explicit review' : facts.external === true ? 'external tool provenance is untrusted and requires explicit review' : network ? 'network access is an independent capability' : destructive ? 'the operation can mutate or delete state' : facts.effects.includes('workspace_write') ? 'workspace mutation requires explicit review' : 'bounded read-only capability'
 
   if (command && READ_COMMANDS.has(command as 'cat' | 'head' | 'tail' | 'ls' | 'pwd' | 'rg' | 'grep' | 'find' | 'git') && facts.effects.length === 0) {
     reason = 'reviewed direct-argv read-only command'
@@ -159,6 +178,7 @@ export function approvalForCapability(
 ): { outcome: ApprovalOutcome, assessment: CapabilityAssessment } {
   const assessment = classifyCapability(facts)
   if (remembered === 'never') return { outcome: 'denied', assessment }
+  if (assessment.invalidInput) return { outcome: 'denied', assessment }
   if (assessment.protectedBoundary) return { outcome: 'denied', assessment }
   if (mode === 'plan' && assessment.effects.some(effect => effect !== 'workspace_read' && effect !== 'git_read')) {
     return { outcome: 'denied', assessment: { ...assessment, reason: 'Plan mode permits read-only capabilities only' } }

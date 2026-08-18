@@ -119,19 +119,17 @@ pub fn protected_paths(root: &Path) -> impl Iterator<Item = PathBuf> + '_ {
         .map(|entry| root.join(entry))
 }
 
-/// Git whole-repository operations must exclude every protected path without
-/// relying on output filtering alone. `.env.*` is intentionally excluded as a
-/// broad family here, including `.env.example`; callers may still allow an
-/// explicit `.env.example` path after `is_protected_relative` validation.
+/// Git whole-repository operations exclude exact static protected roots.
+/// Dynamic `.env.*` changes are rejected by Git change/rename preflight;
+/// omitting the broad family here preserves safe `.env.example` visibility.
 pub fn git_exclusion_pathspecs() -> Vec<String> {
-    let mut pathspecs = Vec::with_capacity(PROTECTED_DIRECTORIES.len() + PROTECTED_FILES.len() + 1);
+    let mut pathspecs = Vec::with_capacity(PROTECTED_DIRECTORIES.len() + PROTECTED_FILES.len());
     for directory in PROTECTED_DIRECTORIES {
         pathspecs.push(format!(":(glob,exclude)**/{directory}/**"));
     }
     for file in PROTECTED_FILES {
         pathspecs.push(format!(":(glob,exclude)**/{file}"));
     }
-    pathspecs.push(":(glob,exclude)**/.env.*".into());
     pathspecs
 }
 
@@ -164,12 +162,12 @@ mod tests {
     }
 
     #[test]
-    fn git_exclusions_cover_dynamic_env_variants() {
+    fn git_exclusions_cover_static_protected_files() {
         let exclusions = git_exclusion_pathspecs();
         assert!(exclusions
             .iter()
             .any(|item| item == ":(glob,exclude)**/.env"));
-        assert!(exclusions
+        assert!(!exclusions
             .iter()
             .any(|item| item == ":(glob,exclude)**/.env.*"));
     }
