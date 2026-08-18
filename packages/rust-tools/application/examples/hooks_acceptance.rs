@@ -9,6 +9,7 @@ use serde_json::json;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[tokio::main]
 async fn main() {
@@ -332,6 +333,97 @@ async fn run() -> Result<(), String> {
         ),
         "security session-start failure fails closed",
     )?;
+
+    let slow_failure = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec![
+                "perl".into(),
+                "-e".into(),
+                "select undef, undef, undef, 0.2; exit 1".into(),
+            ],
+            class: HookClass::Security,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 1_000,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&slow_failure).unwrap(),
+    )
+    .map_err(io_error)?;
+    let slow_failure_manager =
+        HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
+    let first_started = Instant::now();
+    let (first_failure, second_failure) = tokio::join!(
+        slow_failure_manager.start_session("race-failure", &identity),
+        slow_failure_manager.start_session("race-failure", &identity),
+    );
+    require(
+        first_failure == relay_application::hooks::SessionStartOutcome::SecurityFailure
+            && second_failure == relay_application::hooks::SessionStartOutcome::SecurityFailure
+            && slow_failure_manager.started_session_count().await == 0
+            && slow_failure_manager.session_start_invocation_count() == 1
+            && first_started.elapsed() >= Duration::from_millis(150),
+        "concurrent slow security failure is shared and fails closed",
+    )?;
+    require(
+        slow_failure_manager
+            .start_session("race-failure", &identity)
+            .await
+            == relay_application::hooks::SessionStartOutcome::SecurityFailure
+            && slow_failure_manager.session_start_invocation_count() == 2,
+        "failed session initialization is cleaned up for retry",
+    )?;
+
+    let slow_success = HookConfig {
+        repository_identity: identity.clone(),
+        handlers: vec![HookHandler {
+            event: HookEvent::SessionStart,
+            command: vec![
+                "perl".into(),
+                "-e".into(),
+                "select undef, undef, undef, 0.2; exit 0".into(),
+            ],
+            class: HookClass::Security,
+            tool: None,
+            effect_class: None,
+            timeout_ms: 1_000,
+        }],
+    };
+    fs::write(
+        root.join(".agents/hooks.json"),
+        serde_json::to_vec(&slow_success).unwrap(),
+    )
+    .map_err(io_error)?;
+    let slow_success_manager =
+        HookManager::load(Arc::new(config(&root, true))).map_err(|e| e.to_string())?;
+    let first_started = Instant::now();
+    let (first_success, second_success) = tokio::join!(
+        slow_success_manager.start_session("race-success", &identity),
+        slow_success_manager.start_session("race-success", &identity),
+    );
+    require(
+        matches!(
+            first_success,
+            relay_application::hooks::SessionStartOutcome::Started { .. }
+        ) && matches!(
+            second_success,
+            relay_application::hooks::SessionStartOutcome::Started { .. }
+        ) && slow_success_manager.started_session_count().await == 1
+            && slow_success_manager.session_start_invocation_count() == 1
+            && first_started.elapsed() >= Duration::from_millis(150),
+        "concurrent slow security success is shared and completes after initialization",
+    )?;
+    require(
+        slow_success_manager
+            .start_session("race-success", &identity)
+            .await
+            == relay_application::hooks::SessionStartOutcome::AlreadyStarted,
+        "successful shared initialization remains started exactly once",
+    )?;
     let cosmetic_start = HookConfig {
         repository_identity: identity.clone(),
         handlers: vec![HookHandler {
@@ -534,6 +626,38 @@ async fn run() -> Result<(), String> {
             && stop_manager.pre_agent_stop("agent-stop").await,
         "a later completion cycle receives a fresh remediation budget",
     )?;
+
+    require(
+        !stop_manager.pre_agent_stop("victim").await,
+        "victim first stop boundary requires remediation",
+    )?;
+    for index in 0..256 {
+        let _ = stop_manager
+            .pre_agent_stop(&format!("unrelated-{index}"))
+            .await;
+    }
+    require(
+        stop_manager.pre_agent_stop("victim").await,
+        "stop-state capacity churn cannot reset the victim budget",
+    )?;
+    for cycle in 0..4 {
+        let _ = stop_manager
+            .pre_agent_stop(&format!("unrelated-followup-{cycle}"))
+            .await;
+        require(
+            stop_manager.pre_agent_stop("victim").await,
+            "a saturated stop-state map forces untracked sessions through bounded completion",
+        )?;
+        for index in 0..256 {
+            let _ = stop_manager
+                .pre_agent_stop(&format!("unrelated-repeat-{cycle}-{index}"))
+                .await;
+        }
+        require(
+            stop_manager.pre_agent_stop("victim").await,
+            "repeated unrelated churn cannot reset the victim into an unbounded loop",
+        )?;
+    }
 
     fs::remove_dir_all(&root).map_err(io_error)?;
     Ok(())

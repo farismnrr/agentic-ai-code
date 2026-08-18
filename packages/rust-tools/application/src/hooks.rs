@@ -17,6 +17,7 @@ use std::time::{Duration as StdDuration, Instant};
 mod payload;
 mod policy;
 mod runner;
+mod session;
 pub(crate) use payload::bounded_context;
 use payload::{bounded_payload, bounded_string};
 pub use policy::effect_classes;
@@ -28,7 +29,6 @@ pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024;
 pub const MAX_CONTEXT_BYTES: usize = 8 * 1024;
 pub const MAX_TRACKED_SESSIONS: usize = 256;
 const MAX_PENDING_APPROVALS: usize = 256;
-const SESSION_TTL: StdDuration = StdDuration::from_secs(30 * 60);
 const APPROVAL_TTL: StdDuration = StdDuration::from_secs(5 * 60);
 const MAX_STOP_STATES: usize = 256;
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
@@ -129,9 +129,10 @@ pub struct HookManager {
     config: Arc<ServerConfig>,
     root: PathBuf,
     handlers: Arc<Vec<HookHandler>>,
-    session_started: Arc<tokio::sync::Mutex<HashMap<String, Instant>>>,
+    pub(crate) session_started: Arc<tokio::sync::Mutex<HashMap<String, session::SessionState>>>,
     stop_attempts: Arc<tokio::sync::Mutex<HashMap<String, u8>>>,
     approval_tokens: Arc<tokio::sync::Mutex<HashMap<String, ApprovalArtifact>>>,
+    pub(crate) session_start_invocations: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl HookManager {
@@ -143,6 +144,7 @@ impl HookManager {
             session_started: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             stop_attempts: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             approval_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            session_start_invocations: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         })
     }
 
@@ -192,6 +194,7 @@ impl HookManager {
             session_started: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             stop_attempts: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             approval_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            session_start_invocations: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }))
     }
 
@@ -249,7 +252,17 @@ impl HookManager {
     }
 
     pub async fn started_session_count(&self) -> usize {
-        self.session_started.lock().await.len()
+        self.session_started
+            .lock()
+            .await
+            .values()
+            .filter(|state| matches!(state, session::SessionState::Started(_)))
+            .count()
+    }
+
+    pub fn session_start_invocation_count(&self) -> usize {
+        self.session_start_invocations
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn start_session(
@@ -257,41 +270,7 @@ impl HookManager {
         agent_session: &str,
         repository_identity: &str,
     ) -> SessionStartOutcome {
-        let mut started = self.session_started.lock().await;
-        let now = Instant::now();
-        started.retain(|_, seen| now.duration_since(*seen) <= SESSION_TTL);
-        if let Some(seen) = started.get_mut(agent_session) {
-            *seen = now;
-            return SessionStartOutcome::AlreadyStarted;
-        }
-        if started.len() >= MAX_TRACKED_SESSIONS {
-            return SessionStartOutcome::CapacityExhausted;
-        }
-        started.insert(agent_session.to_owned(), now);
-        drop(started);
-        let result = self
-            .invoke(
-                HookEvent::SessionStart,
-                json!({
-                    "hook_event": "session_start",
-                    "agentSession": bounded_string(agent_session, 128),
-                    "repository_identity": bounded_string(repository_identity, 512),
-                    "context": { "repository_identity": bounded_string(repository_identity, 512) },
-                }),
-            )
-            .await;
-        if result.decision != HookDecision::Continue {
-            self.session_started.lock().await.remove(agent_session);
-            if result.reason == "security_hook_failure" {
-                SessionStartOutcome::SecurityFailure
-            } else {
-                SessionStartOutcome::Blocked
-            }
-        } else {
-            SessionStartOutcome::Started {
-                context: result.context,
-            }
-        }
+        session::start(self, agent_session, repository_identity).await
     }
 
     /// Evaluate one stop boundary. A blocked first attempt gives the agent a
@@ -300,7 +279,12 @@ impl HookManager {
     pub async fn pre_agent_stop(&self, agent_session: &str) -> bool {
         let mut attempts = self.stop_attempts.lock().await;
         if attempts.len() >= MAX_STOP_STATES && !attempts.contains_key(agent_session) {
-            attempts.clear();
+            tracing::warn!(
+                event = "relay.hook",
+                hook_event = "pre_agent_stop",
+                outcome = "proceed_after_stop_budget_capacity"
+            );
+            return true;
         }
         let attempt = attempts.entry(agent_session.to_owned()).or_insert(0);
         *attempt = attempt.saturating_add(1);
