@@ -107,6 +107,8 @@ Those two owner identities are intentionally different concepts: the Nuxt owner 
 
 The first-party application classifies tool calls using structured effects (workspace read/write/delete, Git read, process execution, network, external mutation, and privileged bridges). Approval precedence is deny > ask > allow > default. MCP annotations remain client-facing hints; they do not replace relay enforcement. Argument-aware assessment treats shell/interpreter indirection and unknown wrappers as opaque, so a remembered tool-level approval cannot silently authorize them.
 
+The first-party chat UI presents those same capability facts through category-driven tool cards and bounded approval summaries rather than raw tool JSON. Diff/result previews are capped, subagent/background state is compact, and hidden reasoning is never required for progress UX. Action observability reuses the Plan-035 OpenTelemetry/logger pipeline and its single allowlist sanitizer; semantic attributes may include stable tool/category/effect/policy/result/agent state, but never tool arguments/results, prompts, credentials, private absolute paths, or raw provider/tool errors. The relay remains the hard authority even when the UI shows an approval or risk classification.
+
 ## Tailscale boundary
 
 The coding relay does not expose the host Tailscale local API socket by default. A local operator may opt in with `RELAY_ALLOW_TAILSCALE=true`, which bind-mounts only `RELAY_TAILSCALE_SOCKET` (default `/var/run/tailscale/tailscaled.sock`) into the Bubblewrap sandbox so commands such as `tailscale ip -4` can query the host daemon.

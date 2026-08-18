@@ -11,7 +11,8 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
 - **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
-- **Tools:** sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), and read-only Git tools (`git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`).
+- **Tools:** 25 total — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), read-only Git tools (`git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`), and bounded LSP-backed code tools (`code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`).
+- **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
 
 The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
@@ -61,7 +62,7 @@ Important:
 - The process must run as an unprivileged user.
 - Wildcard origins are rejected.
 - User-managed toolchains are opt-in through repeated `--toolchain-path` flags (or `RELAY_TOOLCHAIN_PATH`); the relay never inherits an arbitrary parent `PATH`.
-- Plan 039C LSP executables are operator-approved through repeated `--lsp-server language=executable` (or `RELAY_LSP_SERVER`) entries. The executable is resolved only from the relay safe PATH/toolchain directories; repository files cannot replace it or provide command arguments. The Phase-01/02 substrate does not yet expose public `code_*` MCP tools or integrate real language servers.
+- LSP executables are operator-approved through repeated `--lsp-server language=executable` (or `RELAY_LSP_SERVER`) entries. The executable is resolved only from the relay safe PATH/toolchain directories; repository files cannot replace it or provide command arguments. The public `code_*` MCP tools use that bounded substrate; unsupported server capabilities fail distinctly rather than being fabricated.
 - The owner-home Bubblewrap namespace masks common credential stores (`.ssh`, cloud credentials, Docker/Kubernetes credentials, and common token files). Review the exact deployment policy before relying on a command that needs one of them.
 
 Default port: `47821`.

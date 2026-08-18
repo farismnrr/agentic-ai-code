@@ -27,7 +27,7 @@ const runtime = new SubagentRuntime({
     return found[0]
   },
   lifecycle: {
-    event: (name, payload) => logger.info(`chat.subagent.${name}`, { operation: `chat.subagent.${name}`, outcome: payload.status ?? 'started', profile: payload.profile, depth: payload.depth })
+    event: (name, payload) => logger.info(`chat.subagent.${name}`, { 'operation': `chat.subagent.${name}`, 'outcome': payload.status ?? 'started', 'agent.profile': payload.profile, 'agent.state': payload.status ?? 'started', 'agent.depth': payload.depth })
   },
   // The parent-resolved model is the only model available at this composition
   // edge. Profile fast/default/strong values therefore remain vendor-neutral,
@@ -86,17 +86,29 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
     agent_task_start: tool({
       description: 'Start a bounded parent-managed background agent. Read-only tasks use shared_read; writers require a dedicated worktree.',
       inputSchema: z.object({ agent: z.enum(['explore', 'review', 'plan', 'general-purpose']), task: z.string().min(1).max(8192), isolation: z.enum(['shared_read', 'worktree']), context_refs: z.array(z.string().max(512)).max(32).optional() }),
-      execute: async ({ agent, task, isolation, context_refs }) => backgroundTasks.start({ ...common, profile: agent, task, isolation, context_refs, repositoryRoot: input.authority.workspace_root, worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
+      execute: async ({ agent, task, isolation, context_refs }) => {
+        const result = backgroundTasks.start({ ...common, profile: agent, task, isolation, context_refs, repositoryRoot: input.authority.workspace_root, worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`, model: input.model, approvals: input.approvals, permission_mode: input.permissionMode })
+        logger.info('chat.background.start', { 'operation': 'chat.background.start', 'outcome': result.state === 'rejected' ? 'denied' : 'ok', 'agent.profile': agent, 'background.isolation': isolation, 'background.state': result.state })
+        return result
+      }
     }),
     agent_task_get: tool({
       description: 'Get bounded status and result for a parent-owned background agent task.',
       inputSchema: z.object({ task_id: z.string().uuid() }),
-      execute: async ({ task_id }) => backgroundTasks.get(task_id, input.userId, input.parentSessionId) ?? { state: 'not_found' }
+      execute: async ({ task_id }) => {
+        const result = backgroundTasks.get(task_id, input.userId, input.parentSessionId) ?? { state: 'not_found' as const }
+        logger.info('chat.background.get', { 'operation': 'chat.background.get', 'outcome': result.state === 'not_found' ? 'error' : 'ok', 'background.state': result.state })
+        return result
+      }
     }),
     agent_task_cancel: tool({
       description: 'Cancel a parent-owned background agent task. Dirty writer worktrees remain available for inspection.',
       inputSchema: z.object({ task_id: z.string().uuid() }),
-      execute: async ({ task_id }) => ({ task_id, cancelled: backgroundTasks.cancel(task_id, input.userId, input.parentSessionId) })
+      execute: async ({ task_id }) => {
+        const cancelled = backgroundTasks.cancel(task_id, input.userId, input.parentSessionId)
+        logger.info('chat.background.cancel', { 'operation': 'chat.background.cancel', 'outcome': cancelled ? 'cancelled' : 'error', 'background.state': cancelled ? 'cancelling' : 'not_found', 'cancel.reason': cancelled ? 'user-request' : 'not-found' })
+        return { task_id, cancelled }
+      }
     })
   }
 }

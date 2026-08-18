@@ -71,6 +71,8 @@ pnpm verify:commit
 
 That command runs repository policy enforcement, agent-doc integrity, architecture checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
 
+For Plan-039 composed agent UX/observability changes, `pnpm verify:039j` is the deterministic focused gate and `scripts/phase-039j-contract.sh` composes it with the current 039H/039I MCP contracts. Focused closure evidence requires three consecutive passes before broader regression gates.
+
 ## Linting
 
 `pnpm lint` is the repository-wide linter gate:

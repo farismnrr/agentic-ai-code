@@ -1,6 +1,6 @@
 # Plan 039J — Agent UX, Observability, and Final Closure
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039I  
@@ -221,15 +221,40 @@ Before marking Plan 039 closed:
 - follow `github-delivery` for final commit/push behavior;
 - do not merge/release/deploy without the normal required approval.
 
+## Implementation evidence — 2026-08-18
+
+Implementation-side evidence on `feat/039j-agent-ux-observability`:
+
+- focused `pnpm verify:039j`: **PASS 3 consecutive times** after the final code fix;
+- composed `scripts/phase-039j-contract.sh`: **PASS**, including current 039H and 039I contracts;
+- Plan-035/036/037/038/039 regression/security gates exercised across hooks, lifecycle, effect parity, capability policy, workspace path protection, zero-bypass, Git/patch, LSP, code MCP, rename preview, post-edit diagnostics, MCP error confidentiality, workspace integration, subagents/background agents, and task/context output: **PASS**;
+- `cargo test --workspace --locked`: **PASS**;
+- `pnpm typecheck`: **PASS**;
+- `pnpm build`: **PASS** after a production-only Nitro import issue in the new presentation helper was removed rather than worked around;
+- `git diff --check` and Rust formatting checks: **PASS**.
+
+The implementation adds category-driven bounded tool presentation, sensitivity-aware approval summaries, bounded diff/result previews, compact subagent/background rendering, semantic tool/background/context/hook telemetry through existing sanitization boundaries, and documentation/source-of-truth reconciliation. No parallel agent framework, event database, vector/RAG system, or duplicate state store was introduced.
+
+### Explicitly unproven in this implementation pass
+
+The following require a separate/live verification environment and are therefore **UNPROVEN**, not claimed as passed:
+
+- full interactive first-party-app execution of all eleven end-to-end scenarios above as a single composed workflow suite;
+- live external provider behavior beyond deterministic repository contracts;
+- live ChatGPT remote-MCP OAuth/tool/resource discovery and invocation against a deployed relay;
+- fresh independent security/architecture review by a verifier separate from the implementation author.
+
+Deterministic relay/security contracts cover the underlying hard boundaries, including direct-client fail-closed policy behavior and MCP confidentiality, but they are not substituted for the live/independent proofs above. Consequently this plan and master Plan 039 must not be marked `CLOSED / VERIFIED` by this implementation pass.
+
 ## Final acceptance criteria
 
-- [ ] 039B–039I are closed with evidence.
-- [ ] First-party agent UX exposes tasks/tools/subagents/approvals/diffs/diagnostics coherently.
-- [ ] Agent-native telemetry is useful but confidentiality-preserving.
-- [ ] Full composed security falsification has no unresolved P0/P1 issue.
-- [ ] Existing Plan-035/036/037/038 security and execution contracts have no regression.
-- [ ] Direct remote MCP does not rely on first-party UI approvals for hard safety.
-- [ ] Documentation and durable agent knowledge match current implementation.
-- [ ] No custom vector DB/RAG/plugin marketplace/parallel agent framework was introduced without proven need.
-- [ ] Mandatory local/build/security/live acceptance is passed or truthfully marked unproven.
-- [ ] Master Plan 039 checklist is updated only after all evidence exists.
+- [x] 039B–039I are closed with evidence.
+- [x] First-party agent UX composes tasks/tools/subagents/approvals/bounded diffs/diagnostics in the current UI implementation; full interactive scenario proof remains UNPROVEN.
+- [x] Agent-native semantic telemetry reuses the existing allowlist sanitizer and confidentiality contract.
+- [x] Implementation-side deterministic composed security/regression matrix has no observed P0/P1 failure; independent review remains pending.
+- [x] Existing Plan-035/036/037/038 security and execution contracts exercised in this pass have no regression.
+- [x] Direct-client hard safety remains relay-authoritative by deterministic MCP/capability contracts; live ChatGPT remote-MCP proof remains UNPROVEN.
+- [x] Documentation and durable agent knowledge were reconciled to the current implementation.
+- [x] No custom vector DB/RAG/plugin marketplace/parallel agent framework was introduced.
+- [x] Mandatory local/build/security acceptance executed here is passed; unavailable live/independent acceptance is explicitly marked UNPROVEN.
+- [ ] Master Plan 039 remains open pending live/independent evidence; only implementation status is updated.
