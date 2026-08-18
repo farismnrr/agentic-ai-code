@@ -212,7 +212,7 @@ async fn code_references(
         .await
         .map_err(lsp_error)?;
     let root = workspace_root(cwd.as_deref(), config)?;
-    let (page, next) = paginate(arguments, locations)?;
+    let (page, next) = crate::continuation::paginate(arguments, locations, DEFAULT_MAX_RESULTS)?;
     json_result_with(&locations_json(&root, &page), next)
 }
 
@@ -228,7 +228,7 @@ async fn code_implementations(
         .await
         .map_err(lsp_error)?;
     let root = workspace_root(cwd.as_deref(), config)?;
-    let (page, next) = paginate(arguments, locations)?;
+    let (page, next) = crate::continuation::paginate(arguments, locations, DEFAULT_MAX_RESULTS)?;
     json_result_with(&locations_json(&root, &page), next)
 }
 
@@ -265,7 +265,7 @@ async fn code_diagnostics(
         .filter(|diagnostic| severity.is_none_or(|s| diagnostic.severity == Some(s)))
         .collect();
     let root = workspace_root(cwd.as_deref(), config)?;
-    let (page, next) = paginate(arguments, diagnostics)?;
+    let (page, next) = crate::continuation::paginate(arguments, diagnostics, DEFAULT_MAX_RESULTS)?;
     let items: Vec<Value> = page
         .into_iter()
         .map(|diagnostic| {
@@ -419,41 +419,11 @@ fn lsp_error(error: LspError) -> McpError {
     ))
 }
 
-fn paginate<T>(arguments: &Value, mut items: Vec<T>) -> Result<(Vec<T>, Option<String>), McpError> {
-    let max_results = arguments
-        .get("max_results")
-        .and_then(Value::as_u64)
-        .map(|value| value as usize)
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_MAX_RESULTS)
-        .min(128);
-    let offset = match arguments.get("continuation").and_then(Value::as_str) {
-        Some(token) => token
-            .parse::<usize>()
-            .map_err(|_| McpError::InvalidRequest("invalid continuation token".into()))?,
-        None => 0,
-    };
-    if offset > items.len() {
-        return Err(McpError::InvalidRequest(
-            "invalid continuation token".into(),
-        ));
-    }
-    let total = items.len();
-    let page: Vec<T> = items.drain(offset..).take(max_results).collect();
-    let next_offset = offset + page.len();
-    let next = if next_offset < total {
-        Some(next_offset.to_string())
-    } else {
-        None
-    };
-    Ok((page, next))
-}
-
 fn paginated_result<T: Serialize>(
     arguments: &Value,
     items: Vec<T>,
 ) -> Result<ToolCallResult, McpError> {
-    let (page, next) = paginate(arguments, items)?;
+    let (page, next) = crate::continuation::paginate(arguments, items, DEFAULT_MAX_RESULTS)?;
     json_result_with(&json!({ "symbols": page }), next)
 }
 

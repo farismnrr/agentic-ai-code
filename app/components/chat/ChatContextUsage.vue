@@ -15,6 +15,7 @@ const budget = computed(() => {
 })
 
 const used = computed(() => props.conversation?.lastMeasuredTokens ?? 0)
+const exact = computed(() => props.conversation?.lastMeasuredTokens != null)
 
 const percent = computed(() => {
   if (budget.value <= 0) return 0
@@ -33,6 +34,6 @@ const percent = computed(() => {
       :color="percent > 85 ? 'error' : 'neutral'"
       class="w-16"
     />
-    <span class="text-[11px] text-muted whitespace-nowrap font-mono">{{ percent }}% context</span>
+    <span class="text-[11px] text-muted whitespace-nowrap font-mono">{{ percent }}% {{ exact ? 'accounted' : 'estimated' }} context</span>
   </div>
 </template>
