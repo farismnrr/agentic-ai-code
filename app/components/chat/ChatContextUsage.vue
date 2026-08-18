@@ -1,39 +1,70 @@
 <script setup lang="ts">
 import type { Conversation } from '#shared/types/chat'
+import type { ContextInspectorData } from '../../utils/context-usage'
+import { presentContextUsage } from '../../utils/context-usage'
 
 const props = defineProps<{
+  conversationId: string | undefined
   conversation: Conversation | undefined
-  modelId: string | undefined
 }>()
 
-const { models } = useModels()
-const currentModel = computed(() => models.value.find(m => m.id === props.modelId))
+const context = ref<ContextInspectorData | null>(null)
+const requestFailed = ref(false)
+let requestSerial = 0
 
-const budget = computed(() => {
-  if (!currentModel.value?.contextWindow) return 0
-  return currentModel.value.contextWindow - (currentModel.value.maxOutputTokens ?? 0)
-})
+const presentation = computed(() => presentContextUsage(context.value))
 
-const used = computed(() => props.conversation?.lastMeasuredTokens ?? 0)
-const exact = computed(() => props.conversation?.lastMeasuredTokens != null)
+async function loadContext() {
+  const id = props.conversationId
+  const serial = ++requestSerial
+  if (!id) {
+    context.value = null
+    requestFailed.value = false
+    return
+  }
 
-const percent = computed(() => {
-  if (budget.value <= 0) return 0
-  return Math.min(100, Math.round((used.value / budget.value) * 100))
-})
+  try {
+    const fetchContext = import.meta.server ? useRequestFetch() : $fetch
+    const data = await fetchContext<ContextInspectorData>(`/api/conversations/${encodeURIComponent(id)}/context`)
+    if (serial === requestSerial) {
+      context.value = data
+      requestFailed.value = false
+    }
+  } catch {
+    if (serial === requestSerial) {
+      context.value = null
+      requestFailed.value = true
+    }
+  }
+}
+
+// Conversation metadata is refreshed once after each completed turn by the
+// chat composable. Watching its identity/timestamp/length refreshes the
+// inspector at those lifecycle points without polling every token or second.
+watch(
+  () => [props.conversationId, props.conversation?.updatedAt, props.conversation?.messages.length],
+  () => { void loadContext() },
+  { immediate: true }
+)
 </script>
 
 <template>
   <div
-    v-if="currentModel?.contextWindow"
     class="flex items-center gap-1.5 px-1"
+    :title="presentation.detail ?? undefined"
   >
-    <UProgress
-      :model-value="percent"
-      size="xs"
-      :color="percent > 85 ? 'error' : 'neutral'"
-      class="w-16"
-    />
-    <span class="text-[11px] text-muted whitespace-nowrap font-mono">{{ percent }}% {{ exact ? 'accounted' : 'estimated' }} context</span>
+    <template v-if="presentation.percent != null">
+      <UProgress
+        :model-value="presentation.percent"
+        size="xs"
+        :color="presentation.percent > 85 ? 'error' : 'neutral'"
+        class="w-16"
+      />
+      <span class="text-[11px] text-muted whitespace-nowrap font-mono">{{ presentation.label }}</span>
+    </template>
+    <span
+      v-else-if="requestFailed || props.conversationId"
+      class="text-[11px] text-muted whitespace-nowrap"
+    >{{ presentation.label }}</span>
   </div>
 </template>

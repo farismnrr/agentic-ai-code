@@ -113,11 +113,12 @@ function evictTaskLedgers(now: number) {
 
 export type OutputClass = 'inline_small' | 'paginated_medium' | 'summarized_large' | 'retained_failure'
 export const classifyOutput = (bytes: number, failed = false): OutputClass => failed ? 'retained_failure' : bytes <= 16 * 1024 ? 'inline_small' : bytes <= 128 * 1024 ? 'paginated_medium' : 'summarized_large'
-export function inspectContext(input: { contextWindow?: number | null, usedTokens?: number | null, measuredAtBoundary?: boolean, maxOutputTokens?: number | null, summary?: string | null, summaryAgeMs?: number | null, childCount?: number, backgroundCount?: number }) {
+export function inspectContext(input: { contextWindow?: number | null, usedTokens?: number | null, measuredAtBoundary?: boolean, maxOutputTokens?: number | null, summary?: string | null, summaryAgeMs?: number | null, childCount?: number | null, backgroundCount?: number | null }) {
   const exact = input.usedTokens != null && input.measuredAtBoundary === true
   const reserved = input.maxOutputTokens ?? null
   const headroom = input.contextWindow != null && input.usedTokens != null ? Math.max(0, input.contextWindow - input.usedTokens - (reserved ?? 0)) : null
-  return { contextWindow: input.contextWindow ?? null, usedTokens: input.usedTokens ?? null, usedTokensKind: exact ? 'provider_measured_boundary' : input.usedTokens != null ? 'estimated_from_provider_boundary' : 'unknown', reservedOutputTokens: reserved, headroom, summaryPresent: Boolean(input.summary), summaryAgeMs: input.summary ? input.summaryAgeMs ?? null : null, activeChildren: Math.min(32, Math.max(0, input.childCount ?? 0)), activeBackgroundTasks: Math.min(32, Math.max(0, input.backgroundCount ?? 0)), pressure: headroom != null && input.contextWindow ? headroom / input.contextWindow < 0.15 : 'unknown' as const }
+  const boundedCount = (value: number | null | undefined) => value == null ? null : Math.min(32, Math.max(0, value))
+  return { contextWindow: input.contextWindow ?? null, usedTokens: input.usedTokens ?? null, usedTokensKind: exact ? 'provider_measured_boundary' : input.usedTokens != null ? 'estimated_from_provider_boundary' : 'unknown', reservedOutputTokens: reserved, headroom, summaryPresent: Boolean(input.summary), summaryAgeMs: input.summary ? input.summaryAgeMs ?? null : null, activeChildren: boundedCount(input.childCount), activeBackgroundTasks: boundedCount(input.backgroundCount), pressure: headroom != null && input.contextWindow ? headroom / input.contextWindow < 0.15 : 'unknown' as const }
 }
 
 export function resetTaskContextStoresForTests() { taskStores.clear(); refs.clear(); refBytes = 0; sequence = 0 }

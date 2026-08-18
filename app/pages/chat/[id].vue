@@ -342,8 +342,8 @@ defineShortcuts({
               @update-approvals="updateApprovals"
             />
             <ChatContextUsage
+              :conversation-id="conversationId"
               :conversation="conversation"
-              :model-id="modelId"
             />
           </template>
         </UChatPrompt>

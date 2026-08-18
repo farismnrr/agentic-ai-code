@@ -2,6 +2,9 @@
 import { strict as assert } from 'node:assert'
 import { classifyOutput, consumeContinuation, inspectContext, issueContinuation, putResultRef, getResultRef, resetTaskContextStoresForTests, taskLedgerFor, updateTaskLedger, TASK_CAPS } from '../server/application/task-context-output.ts'
 import { composeAgentTools } from '../server/application/chat/tool-composition.ts'
+import { presentContextUsage, type ContextInspectorData } from '../app/utils/context-usage.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 resetTaskContextStoresForTests()
 const base = { userId: 'u1', conversationId: 'c1', sessionId: 's1' }
@@ -31,4 +34,35 @@ const context = inspectContext({ contextWindow: 1000, usedTokens: 600, measuredA
 assert.equal(context.usedTokensKind, 'estimated_from_provider_boundary'); assert.equal(context.headroom, 200); assert.equal(context.summaryPresent, true); assert.equal(context.activeChildren, 32)
 assert.equal(inspectContext({ usedTokens: null }).usedTokensKind, 'unknown')
 assert.equal(inspectContext({ usedTokens: 600, measuredAtBoundary: true }).usedTokensKind, 'provider_measured_boundary')
+assert.equal(inspectContext({ usedTokens: 600 }).activeChildren, null)
+assert.equal(inspectContext({ usedTokens: 600 }).activeBackgroundTasks, null)
+assert.equal(inspectContext({ usedTokens: 600, backgroundCount: 4 }).activeBackgroundTasks, 4)
+
+const inspectorData = (overrides: Partial<ContextInspectorData> = {}): ContextInspectorData => ({
+  contextWindow: 1000,
+  usedTokens: 600,
+  usedTokensKind: 'estimated_from_provider_boundary',
+  reservedOutputTokens: 200,
+  headroom: 200,
+  summaryPresent: true,
+  summaryAgeMs: 10,
+  activeChildren: null,
+  activeBackgroundTasks: null,
+  pressure: false,
+  ...overrides
+})
+assert.deepEqual(presentContextUsage(inspectorData()), { state: 'estimated', percent: 75, label: '75% estimated', detail: '200 tokens available' })
+assert.equal(presentContextUsage(inspectorData({ usedTokensKind: 'provider_measured_boundary' })).label, '75% measured boundary')
+assert.equal(presentContextUsage(inspectorData({ usedTokens: null })).label, 'Context unavailable')
+assert.equal(presentContextUsage(inspectorData({ usedTokensKind: 'unknown' })).percent, null)
+assert.equal(presentContextUsage(inspectorData({ reservedOutputTokens: 0 })).percent, 60)
+
+const contextUiSource = readFileSync(resolve(import.meta.dirname, '../app/components/chat/ChatContextUsage.vue'), 'utf8')
+assert.match(contextUiSource, /\/api\/conversations\/\$\{encodeURIComponent\(id\)\}\/context/)
+assert.match(contextUiSource, /presentContextUsage\(context\.value\)/)
+assert.doesNotMatch(contextUiSource, /lastMeasuredTokens/)
+assert.doesNotMatch(contextUiSource, /contextSummary/)
+assert.match(contextUiSource, /catch \{/)
+assert.match(contextUiSource, /context\.value = null/)
+assert.match(readFileSync(resolve(import.meta.dirname, '../server/api/conversations/[id]/context.get.ts'), 'utf8'), /requireUserSession/)
 console.log('task/context/output behavioral acceptance: PASS')
