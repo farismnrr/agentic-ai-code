@@ -5,8 +5,9 @@ import { recordSanitizedException } from '../observability/exception'
 import { tool, jsonSchema, type ToolSet } from 'ai'
 import { loadEnabledMcpServers } from './server-config'
 import { createMcpClient, type McpClientLike } from './client'
-import { approvalForCapability, capabilityFactsForToolCall } from '#shared/utils/capability-policy'
+import { approvalForCapability, capabilityFactsForToolCall, toolRequiresEffects } from '#shared/utils/capability-policy'
 import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
+import { enforceSubagentStop } from '../../application/subagents/lifecycle'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -55,14 +56,16 @@ type ToolApprovalValue = 'approved' | 'denied' | 'user-approval'
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual') {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number } = {}) {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: Record<string, ToolApprovalValue> = {}
   const modelToolOwners = new Map<string, string>()
+  const allowedEffects = new Set(options.allowedEffects)
+  let toolCalls = 0
 
   if (enabledToolIds.length === 0) {
-    return { tools, toolApproval, close: async () => {} }
+    return { tools, toolApproval, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
@@ -91,6 +94,9 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       if (!enabledToolIds.includes(mcpToolId)) continue
 
       const modelName = mcpModelToolName(server.id, mcpTool.name)
+      const trustedProvenance = client.trustedProvenance ?? 'external'
+      const requiredEffects = toolRequiresEffects(mcpTool.name, mcpTool.annotations, trustedProvenance)
+      if (requiredEffects.length === 0 || (options.allowedEffects && requiredEffects.some(effect => !allowedEffects.has(effect)))) continue
       const previousOwner = modelToolOwners.get(modelName)
       if (previousOwner && previousOwner !== mcpToolId) {
         logger.error('[mcp-tools] model tool identity collision; refusing ambiguous tool', { modelName })
@@ -101,12 +107,13 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
         execute: async (input: unknown) => {
+          if (options.maxToolCalls !== undefined && toolCalls >= options.maxToolCalls) throw new Error('subagent tool-call budget exhausted')
+          toolCalls++
           const result = await withMcpSpan('mcp.tools_call', {}, () => client.callTool({ name: mcpTool.name, arguments: input as Record<string, unknown> }))
           return result.content
         }
       })
 
-      const trustedProvenance = client.trustedProvenance ?? 'external'
       toolApproval[modelName] = (input: unknown) => approvalForCapability(
         capabilityFactsForToolCall({
           toolId: mcpToolId,
@@ -126,6 +133,11 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     toolApproval,
     close: async () => {
       await Promise.all(clients.map(c => c.close().catch((err: unknown) => logger.error('[mcp-tools] error closing client', err))))
+    },
+    toolCallCount: () => toolCalls,
+    subagentStop: async (parentSessionId: string, childSessionId: string, status: string) => {
+      const relay = clients.find(client => client.trustedProvenance === 'first-party-relay' && client.subagentStop)
+      return enforceSubagentStop(relay, parentSessionId, childSessionId, status)
     }
   }
 }

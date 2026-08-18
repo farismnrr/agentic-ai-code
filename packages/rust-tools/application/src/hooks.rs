@@ -45,6 +45,7 @@ pub enum HookEvent {
     ToolError,
     AfterFileChange,
     PreAgentStop,
+    SubagentStop,
 }
 
 impl HookEvent {
@@ -56,6 +57,7 @@ impl HookEvent {
             Self::ToolError => "tool_error",
             Self::AfterFileChange => "after_file_change",
             Self::PreAgentStop => "pre_agent_stop",
+            Self::SubagentStop => "subagent_stop",
         }
     }
 }
@@ -315,6 +317,29 @@ impl HookManager {
             return true;
         }
         false
+    }
+
+    /// Evaluate the bounded child completion boundary. A child may be
+    /// observed or blocked, but this hook never grants child authority and
+    /// does not recurse into another child.
+    pub async fn subagent_stop(
+        &self,
+        parent_session: &str,
+        child_session: &str,
+        status: &str,
+    ) -> bool {
+        let result = self
+            .invoke(
+                HookEvent::SubagentStop,
+                json!({
+                    "hook_event": "subagent_stop",
+                    "parentSession": bounded_string(parent_session, 128),
+                    "childSession": bounded_string(child_session, 128),
+                    "status": bounded_string(status, 32),
+                }),
+            )
+            .await;
+        result.decision != HookDecision::Block
     }
 
     pub async fn invoke(&self, event: HookEvent, payload: Value) -> HookResult {

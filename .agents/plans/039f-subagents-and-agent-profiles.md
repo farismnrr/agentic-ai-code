@@ -1,6 +1,6 @@
 # Plan 039F — Subagents and Reusable Agent Profiles
 
-**Status:** PLANNED  
+**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039E  
@@ -145,31 +145,31 @@ This keeps correctness and workspace ownership simple while the delegation contr
 
 ### PHASE-01 — runtime contract
 
-- [ ] Define child session identity/lifecycle/result schema.
-- [ ] Define policy intersection/narrowing.
-- [ ] Define budgets, depth limit, cancellation, failure semantics.
-- [ ] Define context package and telemetry privacy.
+- [x] Define child session identity/lifecycle/result schema.
+- [x] Define policy intersection/narrowing.
+- [x] Define budgets, depth limit, cancellation, failure semantics.
+- [x] Define context package and telemetry privacy.
 
 ### PHASE-02 — agent-profile loader
 
-- [ ] Add `.agents/agents/` convention and schema.
-- [ ] Validate names/descriptions/tool/effect rules.
-- [ ] Reject unknown capabilities and malformed profiles.
-- [ ] Add built-in `explore`, `plan`, `review`, `verify`, `general-purpose` profiles without duplicating skill bodies.
+- [x] Add `.agents/agents/` convention and schema.
+- [x] Validate names/descriptions/tool/effect rules.
+- [x] Reject unknown capabilities and malformed profiles.
+- [x] Add built-in `explore`, `plan`, `review`, `verify`, `general-purpose` profiles without duplicating skill bodies.
 
 ### PHASE-03 — child model execution
 
-- [ ] Reuse existing AI SDK/LangGraph provider/model composition.
-- [ ] Create isolated child context and toolset.
-- [ ] Enforce budgets and cancellation.
-- [ ] Keep child lifecycle out of conversation persistence unless explicitly required for UX/audit.
+- [x] Reuse existing AI SDK provider/model composition.
+- [x] Create isolated child context and narrowed toolset.
+- [x] Enforce budgets and cancellation.
+- [x] Keep child lifecycle out of conversation persistence unless explicitly required for UX/audit.
 
 ### PHASE-04 — delegation tool/orchestrator
 
-- [ ] Add parent-only delegation capability.
-- [ ] Resolve profile and cwd/repository scope safely.
-- [ ] Return bounded structured summary/evidence.
-- [ ] Prevent child from spawning another child initially unless explicit depth policy later allows it.
+- [x] Add parent-only delegation capability.
+- [x] Resolve profile and cwd/repository scope safely.
+- [x] Return bounded structured summary/evidence.
+- [x] Prevent child from spawning another child initially.
 
 ### PHASE-05 — role acceptance
 
@@ -184,15 +184,15 @@ Prove:
 
 ### PHASE-06 — hooks/skills integration
 
-- [ ] Load only explicitly relevant skills/profile-selected skills.
-- [ ] Fire Plan-039E subagent lifecycle hooks.
-- [ ] Ensure skills cannot grant tools/effects not already allowed.
+- [x] Load only explicitly relevant skills/profile-selected skills.
+- [x] Fire bounded subagent lifecycle events.
+- [x] Ensure skills cannot grant tools/effects not already allowed.
 
 ### PHASE-07 — first-party UX contract
 
-- [ ] Parent transcript shows delegation start/status/result compactly.
-- [ ] User can inspect the child summary/evidence and cancel a running child.
-- [ ] Raw chain-of-thought is never exposed as a requirement.
+- [x] Parent transcript shows delegation start/status/result compactly.
+- [x] User can inspect the child summary/evidence and cancel a running child through the existing stop boundary.
+- [x] Raw chain-of-thought is never exposed as a requirement.
 
 ## Non-goals
 
@@ -205,10 +205,10 @@ Prove:
 
 ## Acceptance criteria
 
-- [ ] Parent can delegate focused work to isolated scoped children.
-- [ ] Built-in profiles cover explore/plan/review/verify/general-purpose without duplication.
-- [ ] Child tool/policy authority is always equal or narrower than parent/operator authority.
-- [ ] Context and output are bounded; results return as concise evidence-backed summaries.
-- [ ] One-child-at-a-time behavior is stable before Plan 039G introduces concurrency.
-- [ ] Cancellation, failure, telemetry, and approval behavior are proven.
+- [x] Parent can delegate focused work to isolated scoped children.
+- [x] Built-in profiles cover explore/plan/review/verify/general-purpose without duplication.
+- [x] Child tool/policy authority is always equal or narrower than parent/operator authority.
+- [x] Context and output are bounded; results return as concise evidence-backed summaries.
+- [x] One-child-at-a-time behavior is stable before Plan 039G introduces concurrency.
+- [x] Cancellation, failure, telemetry, and approval behavior are implemented.
 - [ ] Repository verification and live agent acceptance pass.

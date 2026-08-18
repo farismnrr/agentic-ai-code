@@ -16,6 +16,9 @@ bash scripts/check-architecture.sh
 printf 'commit-gate: checking maintainability budgets...\n'
 node scripts/check-maintainability.mjs
 
+printf 'commit-gate: checking subagent policy and lifecycle behavior...\n'
+pnpm verify:subagents
+
 printf 'commit-gate: running all linters...\n'
 pnpm lint
 
