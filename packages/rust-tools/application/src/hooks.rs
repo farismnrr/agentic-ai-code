@@ -10,7 +10,7 @@ use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,7 +18,9 @@ use tokio::io::AsyncRead;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{timeout, Duration};
 
+mod payload;
 mod policy;
+use payload::{bounded_context, bounded_payload, bounded_string};
 pub use policy::effect_classes;
 use policy::{canonical_repository_root, contained_config_path, repository_identity};
 
@@ -105,6 +107,8 @@ pub struct HookManager {
     root: PathBuf,
     handlers: Arc<Vec<HookHandler>>,
     session_started: Arc<tokio::sync::Mutex<HashSet<String>>>,
+    stop_attempts: Arc<tokio::sync::Mutex<HashMap<String, u8>>>,
+    approval_tokens: Arc<tokio::sync::Mutex<HashMap<String, (String, String)>>>,
 }
 
 impl HookManager {
@@ -114,6 +118,8 @@ impl HookManager {
             config,
             handlers: Arc::new(Vec::new()),
             session_started: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
+            stop_attempts: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            approval_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         })
     }
 
@@ -161,6 +167,8 @@ impl HookManager {
             root,
             handlers: Arc::new(parsed.handlers),
             session_started: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
+            stop_attempts: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            approval_tokens: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }))
     }
 
@@ -172,6 +180,26 @@ impl HookManager {
         self.is_enabled()
             .then(|| repository_identity(&self.root).ok())
             .flatten()
+    }
+
+    pub async fn issue_approval(&self, agent_session: &str, tool_id: &str) -> String {
+        let token = uuid::Uuid::new_v4().to_string();
+        self.approval_tokens.lock().await.insert(
+            token.clone(),
+            (
+                bounded_string(agent_session, 128),
+                bounded_string(tool_id, 128),
+            ),
+        );
+        token
+    }
+
+    pub async fn consume_approval(&self, token: &str, agent_session: &str, tool_id: &str) -> bool {
+        let mut tokens = self.approval_tokens.lock().await;
+        let Some((session, tool)) = tokens.remove(token) else {
+            return false;
+        };
+        session == bounded_string(agent_session, 128) && tool == bounded_string(tool_id, 128)
     }
 
     pub async fn started_session_count(&self) -> usize {
@@ -203,29 +231,39 @@ impl HookManager {
         result.context
     }
 
-    /// One bounded stop-gate retry. A stop request never loops indefinitely;
-    /// callers may invoke this at most twice before proceeding with shutdown.
+    /// Evaluate one stop boundary. A blocked first attempt gives the agent a
+    /// real continuation opportunity; the next boundary is forced through so
+    /// a hook cannot create an immediate self-loop or an unbounded stop loop.
     pub async fn pre_agent_stop(&self, agent_session: &str) -> bool {
-        for attempt in 0..2 {
-            let result = self
-                .invoke(
-                    HookEvent::PreAgentStop,
-                    json!({
-                        "hook_event": "pre_agent_stop",
-                        "agentSession": bounded_string(agent_session, 128),
-                        "attempt": attempt + 1,
-                    }),
-                )
-                .await;
-            if result.decision == HookDecision::Continue {
-                return true;
-            }
+        let mut attempts = self.stop_attempts.lock().await;
+        let attempt = attempts.entry(agent_session.to_owned()).or_insert(0);
+        *attempt = attempt.saturating_add(1);
+        let current_attempt = *attempt;
+        drop(attempts);
+        if current_attempt > 2 {
+            return true;
         }
-        tracing::warn!(
-            event = "relay.hook",
-            hook_event = "pre_agent_stop",
-            outcome = "proceed_after_bounded_retry"
-        );
+        let result = self
+            .invoke(
+                HookEvent::PreAgentStop,
+                json!({
+                    "hook_event": "pre_agent_stop",
+                    "agentSession": bounded_string(agent_session, 128),
+                    "attempt": current_attempt,
+                }),
+            )
+            .await;
+        if result.decision == HookDecision::Continue || current_attempt == 2 {
+            self.stop_attempts.lock().await.remove(agent_session);
+            if result.decision != HookDecision::Continue {
+                tracing::warn!(
+                    event = "relay.hook",
+                    hook_event = "pre_agent_stop",
+                    outcome = "proceed_after_bounded_retry"
+                );
+            }
+            return true;
+        }
         false
     }
 
@@ -459,34 +497,4 @@ async fn drain_output<R: AsyncRead + Unpin>(mut stream: R) -> Vec<u8> {
             }
         }
     }
-}
-
-fn bounded_context(output: &[u8]) -> Option<Value> {
-    let value: Value = serde_json::from_slice(output).ok()?;
-    let context = value.get("context")?.as_object()?;
-    let repository_identity = context.get("repository_identity")?.as_str()?;
-    Some(json!({
-        "repository_identity": bounded_string(repository_identity, 512)
-    }))
-}
-
-fn bounded_payload(mut payload: Value) -> Value {
-    if let Some(object) = payload.as_object_mut() {
-        object.remove("raw_output");
-        object.remove("content");
-        object.remove("prompt");
-        object.remove("secrets");
-        object.remove("environment");
-        object.remove("command_output");
-    }
-    let encoded = serde_json::to_vec(&payload).unwrap_or_default();
-    if encoded.len() <= MAX_PAYLOAD_BYTES {
-        payload
-    } else {
-        json!({ "hook_payload_truncated": true })
-    }
-}
-
-fn bounded_string(value: &str, limit: usize) -> String {
-    value.chars().take(limit).collect()
 }
