@@ -62,8 +62,6 @@ export function loadAgentProfile(name: string, readFile: (name: string) => strin
   return parseAgentProfile(readFile(name))
 }
 
-export function toolMatchesProfile(toolName: string, profile: SubagentProfile): boolean {
-  const canonical = toolName.includes('.') ? toolName.split('.').at(-1) ?? toolName : toolName
-  if (toolName.includes('.')) return profile.mcp_tools.includes(toolName)
-  return profile.tools.allow.includes(canonical) && !profile.tools.deny.includes(canonical)
+export function nativeToolMatchesProfile(toolName: string, profile: SubagentProfile): boolean {
+  return profile.tools.allow.includes(toolName) && !profile.tools.deny.includes(toolName)
 }
