@@ -44,6 +44,8 @@ pub struct ServerConfig {
     pub toolchain_paths: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
+    pub enable_agent_hooks: bool,
+    pub agent_hooks_config: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -74,6 +76,8 @@ impl Default for ServerConfig {
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
             lsp_servers: Vec::new(),
+            enable_agent_hooks: false,
+            agent_hooks_config: None,
         }
     }
 }
@@ -318,6 +322,18 @@ impl ServerConfig {
             }
         }
         validate_lsp_server_entries(&self.lsp_servers)?;
+        if let Some(path) = &self.agent_hooks_config {
+            if !self.enable_agent_hooks {
+                return Err(RelayError::InvalidConfig(
+                    "agent-hooks-config requires --enable-agent-hooks".into(),
+                ));
+            }
+            if path.contains('\0') || !std::path::Path::new(path).is_relative() {
+                return Err(RelayError::InvalidConfig(
+                    "agent-hooks-config must be a relative repository path".into(),
+                ));
+            }
+        }
         for path in &self.toolchain_paths {
             let candidate = std::fs::canonicalize(path).map_err(|_| {
                 RelayError::InvalidConfig(
@@ -410,6 +426,8 @@ impl From<&Cli> for ServerConfig {
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
             lsp_servers: cli.lsp_servers.clone(),
+            enable_agent_hooks: cli.enable_agent_hooks,
+            agent_hooks_config: cli.agent_hooks_config.clone(),
         }
     }
 }

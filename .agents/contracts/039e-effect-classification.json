@@ -1,0 +1,9 @@
+[
+  {"tool":"directory_list","destructive":false,"open_world":false,"effects":["workspace_read"]},
+  {"tool":"file_write","destructive":false,"open_world":false,"effects":["workspace_write"]},
+  {"tool":"git_diff","destructive":false,"open_world":false,"effects":["git_read"]},
+  {"tool":"terminal_exec","destructive":false,"open_world":false,"effects":["process_exec","workspace_write","network_read","external_mutation"]},
+  {"tool":"http_fetch","destructive":false,"open_world":false,"effects":["network_read","network_write","external_mutation"]},
+  {"tool":"external_tool","destructive":true,"open_world":false,"effects":["external_mutation"]},
+  {"tool":"external_search","destructive":false,"open_world":true,"effects":["network_read","external_mutation"]}
+]

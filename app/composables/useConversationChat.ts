@@ -41,8 +41,31 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // `seedMessages` is a snapshot only re-taken when that id changes.
   const conversationId = computed(() => conversation.value?.id)
   const seedMessages = shallowRef<UIMessage[]>(conversation.value?.messages ?? [])
+  const agentContext = shallowRef<{ repository_identity?: string } | undefined>()
+  const agentSessionReady = ref(conversation.value?.mode !== 'agent')
   watch(conversationId, () => {
     seedMessages.value = conversation.value?.messages ?? []
+    agentContext.value = undefined
+    agentSessionReady.value = conversation.value?.mode !== 'agent'
+  })
+  watch(conversationId, (id) => {
+    if (!id || conversation.value?.mode !== 'agent') return
+    agentSessionReady.value = false
+    void relayAgent.startSession(id).then((result) => {
+      const context = result?.context
+      if (context && typeof context === 'object' && 'repository_identity' in context && typeof context.repository_identity === 'string') {
+        agentContext.value = { repository_identity: context.repository_identity.slice(0, 512) }
+      }
+      agentSessionReady.value = true
+    }).catch(() => {})
+  }, { immediate: true })
+  // Scoped to one completion cycle: the boundary that follows a remediation
+  // continuation closes the cycle and gives the next independent run a fresh
+  // single-continuation budget.
+  const stopContinuationUsed = ref(false)
+  const completionGateInFlight = ref(false)
+  watch(conversationId, () => {
+    stopContinuationUsed.value = false
   })
 
   // `local_terminal` is registered server-side with no `execute` (see
@@ -66,6 +89,17 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // handling here — the SDK resolves `output-denied` on its own without
   // ever invoking a client tool.
   const ledger = createAttemptLedger()
+  const hookApproval = ref<{ input: unknown, token: string }>()
+  let resolveHookApproval: ((approved: boolean) => void) | undefined
+  const requestHookApproval = (input: unknown, token: string) => new Promise<boolean>((resolve) => {
+    resolveHookApproval = resolve
+    hookApproval.value = { input, token }
+  })
+  const answerHookApproval = (approved: boolean) => {
+    resolveHookApproval?.(approved)
+    resolveHookApproval = undefined
+    hookApproval.value = undefined
+  }
 
   // `executedLocalTerminalCalls` alone only guards within one page
   // session — the `{ immediate: true }` watcher below is what makes
@@ -85,7 +119,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // reload — a real duplicate command run is the worse failure mode here).
 
   const chat = useChat(() => ({
-    transport: createConversationTransport(),
+    transport: createConversationTransport(agentContext, agentSessionReady),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
     // Without this, `addToolApprovalResponse` only marks the pending part as
@@ -109,7 +143,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }
   }))
 
-  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger })
+  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger, agentSession: conversationId.value, requestApproval: requestHookApproval })
 
   // The one place `local_terminal` actually gets executed — see the note
   // above `runApprovedLocalTerminalCall`. Fires on every message mutation
@@ -152,9 +186,30 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     mirror.schedule()
   })
 
-  watch(() => chat.status.value, (status) => {
+  watch(() => chat.status.value, (status, previousStatus) => {
     if (status !== 'streaming') {
-      flushMessages()
+      if (previousStatus === 'streaming' && conversationId.value && conversation.value?.mode === 'agent' && !completionGateInFlight.value) {
+        completionGateInFlight.value = true
+        void relayAgent.preAgentStop(conversationId.value).then((decision) => {
+          if (decision.completion === 'remediation_required' && !stopContinuationUsed.value) {
+            stopContinuationUsed.value = true
+            void chat.regenerate()
+            return
+          }
+          stopContinuationUsed.value = false
+          flushMessages()
+          if (conversation.value) loadOne(conversation.value.id)
+        }).catch(() => {
+          stopContinuationUsed.value = false
+          flushMessages()
+          if (conversation.value) loadOne(conversation.value.id)
+        }).finally(() => {
+          completionGateInFlight.value = false
+        })
+      } else if (previousStatus !== 'streaming' || conversation.value?.mode !== 'agent') {
+        flushMessages()
+        if (conversation.value) loadOne(conversation.value.id)
+      }
       // The mirror-back watcher above only ever patches `messages` — server
       // side fields a turn can also change (lastMeasuredTokens from
       // compaction's usage tracking, contextSummary, approvals persisted
@@ -162,9 +217,8 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       // indicator stayed frozen at whatever it showed on page load. Refetch
       // once per turn, not per chunk — this fires at most as often as
       // `flushMessages` already does.
-      if (conversation.value) loadOne(conversation.value.id)
     }
   })
 
-  return chat
+  return { ...chat, hookApproval, answerHookApproval }
 }

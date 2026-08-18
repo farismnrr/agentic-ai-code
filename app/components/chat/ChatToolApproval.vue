@@ -20,10 +20,12 @@ import { resolveMcpToolFromModelName } from '#shared/utils/mcp-tool-identity'
 const props = defineProps<{
   messages: UIMessage[]
   conversation: Conversation | undefined
+  hookApproval?: { input: unknown, token: string }
 }>()
 
 const emit = defineEmits<{
   answer: [{ id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }]
+  hookAnswer: [approved: boolean]
 }>()
 
 const { toolsById } = useMcpServers()
@@ -258,6 +260,37 @@ watch(autoAnswerable, (value) => {
           label="Always allow"
           color="primary"
           @click="answer(true, true)"
+        />
+      </div>
+    </template>
+  </UModal>
+  <UModal
+    :open="Boolean(props.hookApproval)"
+    title="Allow repository hook continuation?"
+    :dismissible="false"
+    :close="false"
+  >
+    <template #body>
+      <p class="text-sm text-muted">
+        A repository security hook requested approval before this already-approved tool call continues.
+      </p>
+      <pre
+        v-if="props.hookApproval"
+        class="mt-3 max-h-56 overflow-auto rounded-md bg-elevated p-2 font-mono text-xs"
+      >{{ JSON.stringify(props.hookApproval.input, null, 2) }}</pre>
+    </template>
+    <template #footer>
+      <div class="flex w-full justify-end gap-2">
+        <UButton
+          label="Deny"
+          color="neutral"
+          variant="ghost"
+          @click="emit('hookAnswer', false)"
+        />
+        <UButton
+          label="Allow once"
+          color="primary"
+          @click="emit('hookAnswer', true)"
         />
       </div>
     </template>

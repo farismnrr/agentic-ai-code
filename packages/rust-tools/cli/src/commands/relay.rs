@@ -1,7 +1,8 @@
 use relay_core::config::{Command, ServerConfig};
 use relay_infrastructure::pidfile::Pidfile;
-use relay_infrastructure::transport::create_router_with_jobs;
+use relay_infrastructure::transport::create_router_with_jobs_and_hooks;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::signal;
 
 // Bubblewrap (bwrap) is a Linux-only tool. Sandboxed execution is not supported
@@ -68,7 +69,9 @@ pub async fn run(cli: relay_core::config::Cli) -> Result<(), Box<dyn std::error:
     }
 
     let jobs = relay_application::execution::JobManager::new(config.clone());
-    let router = create_router_with_jobs(config.clone(), jobs.clone());
+    let hooks = relay_application::hooks::HookManager::load(Arc::new(config.clone()))
+        .map_err(|error| format!("agent hook configuration failed closed: {error}"))?;
+    let router = create_router_with_jobs_and_hooks(config.clone(), jobs.clone(), hooks);
 
     let addr: SocketAddr = format!("{}:{}", config.bind_host, config.port)
         .parse()

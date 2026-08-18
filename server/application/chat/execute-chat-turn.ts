@@ -31,6 +31,8 @@ export interface ExecuteChatTurnInput {
   deps: ChatTurnDependencies
   /** Request-scoped telemetry context (Plan 035 Phase 6). Optional so this use case stays callable without a live request (tests/tools). */
   telemetry?: RequestTelemetryContext
+  /** Bounded structured context returned by the first-party relay session hook. */
+  agentContext?: { repository_identity?: string }
 }
 
 /**
@@ -56,7 +58,7 @@ export async function executeChatTurn(input: ExecuteChatTurnInput) {
   return telemetry.withSpan('chat.execute', {}, () => executeChatTurnInner(input))
 }
 
-async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry }: ExecuteChatTurnInput) {
+async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry, agentContext }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
 
   // Bound the query with the compaction cutoff (once one exists) instead of
@@ -86,7 +88,15 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   // now just location context, not a capability description — the model
   // learns what tools it actually has (if any) from the tools/approvals the
   // SDK gives it directly, not from this prompt.
-  const buildWorkspaceSystemPrompt = () => buildChatWorkspaceSystemPrompt(workspacePath, workspaceName)
+  const boundedAgentContext = agentContext?.repository_identity
+    ? { repository_identity: agentContext.repository_identity.slice(0, 512) }
+    : undefined
+  const buildWorkspaceSystemPrompt = () => {
+    const workspacePrompt = buildChatWorkspaceSystemPrompt(workspacePath, workspaceName)
+    if (!boundedAgentContext || conv.mode !== 'agent') return workspacePrompt
+    const contextPrompt = `Bounded repository hook context: ${JSON.stringify(boundedAgentContext)}`
+    return workspacePrompt ? `${workspacePrompt}\n${contextPrompt}` : contextPrompt
+  }
 
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
   // against the user's stored mcp_servers rows into real ai@7 tools, and
