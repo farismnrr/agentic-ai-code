@@ -7,7 +7,7 @@
 use crate::error::RelayError;
 use serde::{Deserialize, Serialize};
 mod cli;
-pub use cli::{Cli, Command, SecurityMode, DEFAULT_PORT};
+pub use cli::{Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
 /// tests, or otherwise). `ServerConfig::default()` is intentionally *not*
 /// "production ready" — `origin: None` fails closed in the transport layer's
@@ -42,6 +42,7 @@ pub struct ServerConfig {
     pub lsp_servers: Vec<String>,
     pub enable_agent_hooks: bool,
     pub agent_hooks_config: Option<String>,
+    pub tool_profile: ToolProfile,
     #[serde(skip, default = "default_workspaces")]
     pub workspaces: std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>>,
 }
@@ -81,6 +82,7 @@ impl Default for ServerConfig {
             lsp_servers: Vec::new(),
             enable_agent_hooks: false,
             agent_hooks_config: None,
+            tool_profile: ToolProfile::Full,
             workspaces: default_workspaces(),
         }
     }
@@ -465,6 +467,7 @@ impl From<&Cli> for ServerConfig {
             lsp_servers: cli.lsp_servers.clone(),
             enable_agent_hooks: cli.enable_agent_hooks,
             agent_hooks_config: cli.agent_hooks_config.clone(),
+            tool_profile: cli.tool_profile,
             workspaces: default_workspaces(),
         }
     }

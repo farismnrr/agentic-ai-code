@@ -410,6 +410,59 @@ pub fn tool_catalog() -> Vec<Tool> {
     tools
 }
 
+pub const PRIMARY_TOOL_NAMES: &[&str] = &[
+    "terminal_exec",
+    "terminal_job_start",
+    "terminal_job_get",
+    "terminal_job_cancel",
+    "directory_list",
+    "file_search",
+    "text_search",
+    "file_read",
+    "file_edit",
+    "file_write",
+    "apply_patch",
+    "git_status",
+    "git_diff",
+    "git_log",
+    "git_show",
+    "git_blame",
+    "git_branch_list",
+    "git_stage",
+    "git_unstage",
+    "git_commit",
+    "git_fetch",
+    "git_push",
+    "git_remote_list",
+    "change_request_list",
+    "change_request_get",
+    "change_request_checks",
+    "code_symbols",
+    "code_definition",
+    "code_references",
+    "code_hover",
+    "code_diagnostics",
+];
+
+pub fn tool_catalog_for_profile(profile: relay_core::config::ToolProfile) -> Vec<Tool> {
+    match profile {
+        relay_core::config::ToolProfile::Full => tool_catalog(),
+        relay_core::config::ToolProfile::Primary => {
+            let all = tool_catalog();
+            PRIMARY_TOOL_NAMES
+                .iter()
+                .filter_map(|name| all.iter().find(|t| t.name == *name).cloned())
+                .collect()
+        }
+    }
+}
+
+pub fn find_tool_for_profile(name: &str, profile: relay_core::config::ToolProfile) -> Option<Tool> {
+    tool_catalog_for_profile(profile)
+        .into_iter()
+        .find(|t| t.name == name)
+}
+
 pub fn find_tool(name: &str) -> Option<Tool> {
     tool_catalog().into_iter().find(|t| t.name == name)
 }
