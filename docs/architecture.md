@@ -63,7 +63,9 @@ The relay:
 - supports both local and OAuth-protected remote modes;
 - owns terminal timeout, cancellation, job concurrency, bounded output retention, and process-tree cleanup;
 - exposes bounded native workspace inspection/search/read/edit/write/patch operations without routing routine filesystem work through a shell;
-- exposes fixed-subcommand Git status/diff/log/show/blame reads with user/repository executable Git helpers neutralized.
+- exposes fixed-subcommand Git inspection plus bounded branch/stage/commit/merge/rebase/conflict operations with protected paths and executable Git config/helpers fail-closed;
+- keeps ordinary terminal credentials/network isolated while a narrow remote-Git bridge validates GitHub repository/ref identity, obtains Git credentials only through fixed `gh auth git-credential`, forbids force/arbitrary refspecs, and independently verifies fetch/push/delete results;
+- exposes provider-neutral `change_request_*` contracts whose initial GitHub adapter uses fixed `gh pr` templates; arbitrary `gh api`, admin/auto merge, implicit push/fork, and raw provider errors are not model-facing capabilities;
 - uses one component-aware protected credential-path policy for native workspace operations and Bubblewrap masking (`.ssh`, cloud/Docker/Kubernetes configuration, and common package-manager credential files); `.env.example` is intentionally not covered by this policy;
 - treats terminal network access as an explicit operator capability (`RELAY_ALLOW_TERMINAL_NETWORK`), isolated by default, while dedicated HTTP/search tools remain separately classified network capabilities.
 

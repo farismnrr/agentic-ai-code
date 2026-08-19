@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Current Plan-039H MCP contract gate.
 #
-# The v6 snapshot is captured from the live relay tools/list path. Historical
-# v1/v2/v3/v4/v5 artifacts remain immutable; v6 records Plan 040B bounded local
-# Git mutation tools without rewriting Plan 039/040A evidence.
+# The v7 snapshot is captured from the live relay tools/list path. Historical
+# v1-v6 artifacts remain immutable; v7 records Plan 040 local/remote Git and
+# forge-neutral change-request tools without rewriting prior closure evidence.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/039h-tool-catalog-v6.json"
-catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v6.sha256"
+catalog="$root/.agents/contracts/039h-tool-catalog-v7.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v7.sha256"
+historical_v6="$root/.agents/contracts/039h-tool-catalog-v6.json"
+historical_v6_hash="$root/.agents/contracts/039h-tool-catalog-v6.sha256"
 historical_v5="$root/.agents/contracts/039h-tool-catalog-v5.json"
 historical_v5_hash="$root/.agents/contracts/039h-tool-catalog-v5.sha256"
 historical_v4="$root/.agents/contracts/039h-tool-catalog-v4.json"
@@ -20,6 +22,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
+test -f "$historical_v6"
+test -f "$historical_v6_hash"
 test -f "$historical_v5"
 test -f "$historical_v5_hash"
 test -f "$historical_v4"
@@ -39,7 +43,10 @@ validate_snapshot() {
   if [[ "$expected" != "$(jq -S -c . "$runtime")" ]]; then return 1; fi
 }
 
-# Historical v3/v4/v5 integrity is checked independently of the live runtime.
+# Historical v3/v4/v5/v6 integrity is checked independently of the live runtime.
+v6_normalized="$(jq -S -c . "$historical_v6")"
+v6_hash="$(printf '%s' "$v6_normalized" | sha256sum | awk '{print $1}')"
+test "$v6_hash" = "$(tr -d '[:space:]' < "$historical_v6_hash")"
 v5_normalized="$(jq -S -c . "$historical_v5")"
 v5_hash="$(printf '%s' "$v5_normalized" | sha256sum | awk '{print $1}')"
 test "$v5_hash" = "$(tr -d '[:space:]' < "$historical_v5_hash")"
@@ -94,7 +101,11 @@ jq '.[0].title = "mutation"' "$catalog" > "$tmp/mutated-catalog.json"
 if validate_snapshot "$tmp/mutated-catalog.json" "$catalog_hash_file" "$tmp/runtime.json"; then
   echo 'phase-039h: mutated catalog unexpectedly passed' >&2; exit 1
 fi
-printf '0%s\n' "$(tr -d '[:space:]' < "$catalog_hash_file" | cut -c2-)" > "$tmp/mutated-hash"
+current_hash="$(tr -d '[:space:]' < "$catalog_hash_file")"
+first="${current_hash:0:1}"
+replacement=0
+if [[ "$first" == 0 ]]; then replacement=1; fi
+printf '%s%s\n' "$replacement" "${current_hash:1}" > "$tmp/mutated-hash"
 if validate_snapshot "$catalog" "$tmp/mutated-hash" "$tmp/runtime.json"; then
   echo 'phase-039h: mutated hash unexpectedly passed' >&2; exit 1
 fi
