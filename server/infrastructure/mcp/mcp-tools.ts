@@ -9,6 +9,7 @@ import { createMcpClient, type McpClientLike } from './client'
 import { approvalForCapability, capabilityFactsForToolCall, toolRequiresEffects } from '#shared/utils/capability-policy'
 import { mcpModelToolName } from '#shared/utils/mcp-tool-identity'
 import { enforceSubagentStop } from '../../application/subagents/lifecycle'
+import { classifyRawCause } from '../../core/errors/classify'
 import { claimMcpToolOwner, type McpToolApprovalMap, type McpToolComposition } from './scoping'
 
 export { claimMcpToolOwner, scopeMcpTools } from './scoping'
@@ -140,13 +141,17 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
             logger.info('chat.tool.action', { 'operation': 'chat.tool.action', 'outcome': 'ok', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': resultText > 65_536 ? 'large' : resultText > 0 ? 'bounded' : 'structured', 'result.truncated': resultText > 65_536 })
             return result.content
           } catch (err) {
-            logger.error('chat.tool.action', err, { 'operation': 'chat.tool.action', 'outcome': options.abortSignal?.aborted ? 'cancelled' : 'error', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': 'error' })
+            logger.error('chat.tool.action', err, { 'operation': 'chat.tool.action', 'outcome': options.abortSignal?.aborted ? 'cancelled' : 'error', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': options.abortSignal?.aborted ? 'cancelled' : classifyRawCause(err) })
             throw err
           }
         }
       })
 
-      toolApproval[modelName] = (input: unknown) => telemetryFacts(input).assessment.outcome
+      toolApproval[modelName] = (input: unknown) => {
+        const { assessment, attributes } = telemetryFacts(input)
+        logger.info('chat.tool.policy', { operation: 'chat.tool.policy', outcome: assessment.outcome, ...attributes })
+        return assessment.outcome
+      }
     }
   }
 
