@@ -1,8 +1,8 @@
 # Plan 040E — Pull Request Lifecycle, Checks, Reviews, and Merge
 
-**Status:** IMPLEMENTED — LIVE GITHUB VERIFICATION / FINAL CLOSURE PENDING
+**Status:** CLOSED / VERIFIED / MERGED (2026-08-19)
 **Parent:** [Plan 040](040-git-github-delivery-roadmap.md)
-**Depends on:** Plan 040D source boundary implemented; final closure remains batched
+**Depends on:** Plan 040D CLOSED / VERIFIED / MERGED
 
 ## Goal
 
