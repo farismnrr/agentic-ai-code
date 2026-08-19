@@ -3,7 +3,7 @@ use super::protected::reject_protected_path;
 use super::secure::{FileIdentity, SecureDirectory};
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_contained_cwd, resolve_write_target, EntryKind};
+use relay_core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
 use std::io::Read;
@@ -62,22 +62,27 @@ pub fn apply_patch(arguments: &Value, config: &ServerConfig) -> Result<ApplyPatc
         .get("dry_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let cwd = resolve_contained_cwd(&root, arguments.get("cwd").and_then(Value::as_str))?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let cwd_arg = arguments.get("cwd").and_then(Value::as_str);
     let parsed = parse_patch(patch)?;
     let mut planned = Vec::new();
     let mut total_hunks = 0;
     for file_patch in parsed {
         total_hunks += file_patch.hunks.len();
-        let target = resolve_write_target(
-            &root,
-            Some(cwd.to_string_lossy().as_ref()),
+        let target = relay_core::workspace_path::resolve_write_target_in_allowlist(
+            &guard,
+            cwd_arg,
             &file_patch.path,
             EntryKind::File,
         )?;
-        reject_protected_path(&root, &target)?;
+        let root = guard.containing_root(&target).ok_or_else(|| {
+            McpError::InvalidRequest("patch target is outside authorized workspace roots".into())
+        })?;
+        reject_protected_path(root, &target)?;
         let parent = target
             .parent()
             .ok_or_else(|| McpError::InvalidRequest("patch target is invalid".into()))?
@@ -86,7 +91,7 @@ pub fn apply_patch(arguments: &Value, config: &ServerConfig) -> Result<ApplyPatc
             .file_name()
             .ok_or_else(|| McpError::InvalidRequest("patch target is invalid".into()))?
             .to_os_string();
-        let directory = SecureDirectory::open_relative(&root, &parent)?;
+        let directory = SecureDirectory::open_relative(root, &parent)?;
         let (mut file, identity, mode) = directory.open_regular_file(&name)?;
         let mut before = Vec::new();
         Read::by_ref(&mut file)

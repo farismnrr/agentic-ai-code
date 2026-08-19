@@ -3,7 +3,7 @@
 use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_contained_cwd, resolve_existing_path, EntryKind};
+use relay_core::workspace_path::{resolve_existing_path, EntryKind};
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::Serialize;
 use serde_json::Value;
@@ -55,17 +55,6 @@ struct GitCommit {
     timestamp: i64,
     subject: String,
 }
-#[derive(Debug, Serialize)]
-struct GitBlameResult {
-    repository_root: String,
-    lines: Vec<GitBlameLine>,
-    truncated: bool,
-}
-#[derive(Debug, Serialize)]
-struct GitBlameLine {
-    line: u64,
-    sha: String,
-}
 
 pub async fn dispatch_git_tool(
     name: &str,
@@ -77,13 +66,14 @@ pub async fn dispatch_git_tool(
         "git_diff" => serde_json::to_value(git_diff(arguments, config)?),
         "git_log" => serde_json::to_value(git_log(arguments, config)?),
         "git_show" => serde_json::to_value(git_show(arguments, config)?),
-        "git_blame" => serde_json::to_value(git_blame(arguments, config)?),
+        "git_blame" => serde_json::to_value(parse::git_blame(arguments, config)?),
         "git_branch_list" => serde_json::to_value(branch::git_branch_list(arguments, config)?),
         "git_branch_create" => serde_json::to_value(branch::git_branch_create(arguments, config)?),
         "git_branch_switch" => serde_json::to_value(branch::git_branch_switch(arguments, config)?),
         "git_stage" => serde_json::to_value(mutation::git_stage(arguments, config)?),
         "git_unstage" => serde_json::to_value(mutation::git_unstage(arguments, config)?),
         "git_commit" => serde_json::to_value(mutation::git_commit(arguments, config)?),
+        "git_commit_amend" => serde_json::to_value(mutation::git_commit_amend(arguments, config)?),
         "git_operation_status" => {
             serde_json::to_value(mutation::git_operation_status(arguments, config)?)
         }
@@ -109,6 +99,40 @@ pub async fn dispatch_git_tool(
         "git_remote_branch_delete" => {
             serde_json::to_value(remote::git_remote_branch_delete(arguments, config).await?)
         }
+        "git_remote_add" => serde_json::to_value(advanced::git_remote_add(arguments, config)?),
+        "git_remote_remove" => {
+            serde_json::to_value(advanced::git_remote_remove(arguments, config)?)
+        }
+        "git_remote_set_url" => {
+            serde_json::to_value(advanced::git_remote_set_url(arguments, config)?)
+        }
+        "git_worktree_list" => {
+            serde_json::to_value(worktree::git_worktree_list(arguments, config)?)
+        }
+        "git_worktree_get" => serde_json::to_value(worktree::git_worktree_get(arguments, config)?),
+        "git_worktree_add" => serde_json::to_value(worktree::git_worktree_add(arguments, config)?),
+        "git_worktree_remove" => {
+            serde_json::to_value(worktree::git_worktree_remove(arguments, config)?)
+        }
+        "git_worktree_prune" => {
+            serde_json::to_value(worktree::git_worktree_prune(arguments, config)?)
+        }
+        "git_stash_list" => serde_json::to_value(stash::git_stash_list(arguments, config)?),
+        "git_stash_push" => serde_json::to_value(stash::git_stash_push(arguments, config)?),
+        "git_stash_pop" => serde_json::to_value(stash::git_stash_pop(arguments, config)?),
+        "git_stash_apply" => serde_json::to_value(stash::git_stash_apply(arguments, config)?),
+        "git_stash_drop" => serde_json::to_value(stash::git_stash_drop(arguments, config)?),
+        "git_tag_list" => serde_json::to_value(tag::git_tag_list(arguments, config)?),
+        "git_tag_create" => serde_json::to_value(tag::git_tag_create(arguments, config)?),
+        "git_tag_delete" => serde_json::to_value(tag::git_tag_delete(arguments, config)?),
+        "git_branch_rename" => {
+            serde_json::to_value(advanced::git_branch_rename(arguments, config)?)
+        }
+        "git_restore" => serde_json::to_value(advanced::git_restore(arguments, config)?),
+        "git_clean" => serde_json::to_value(advanced::git_clean(arguments, config)?),
+        "git_cherry_pick" => serde_json::to_value(advanced::git_cherry_pick(arguments, config)?),
+        "git_revert" => serde_json::to_value(advanced::git_revert(arguments, config)?),
+        "git_reset" => serde_json::to_value(advanced::git_reset(arguments, config)?),
         "change_request_list" => {
             serde_json::to_value(forge::change_request_list(arguments, config).await?)
         }
@@ -404,59 +428,6 @@ fn git_show(arguments: &Value, config: &ServerConfig) -> Result<GitTextResult, M
     })
 }
 
-fn git_blame(arguments: &Value, config: &ServerConfig) -> Result<GitBlameResult, McpError> {
-    let repo = resolve_repo(arguments, config)?;
-    let path = validated_required_path(arguments, &repo, "path")?;
-    let start = arguments
-        .get("start_line")
-        .and_then(Value::as_u64)
-        .unwrap_or(1);
-    let end = arguments
-        .get("end_line")
-        .and_then(Value::as_u64)
-        .unwrap_or(start.saturating_add(199));
-    if end < start || end.saturating_sub(start) as usize >= MAX_BLAME_LINES {
-        return Err(McpError::InvalidRequest(
-            "git blame line range exceeds maximum".into(),
-        ));
-    }
-    let range = format!("{start},{end}");
-    let out = run_git(
-        &repo.root,
-        &[
-            "blame",
-            "--no-textconv",
-            "--line-porcelain",
-            "-L",
-            &range,
-            "--",
-            &path,
-        ],
-        MAX_GIT_OUTPUT_BYTES,
-    )?;
-    let text = std::str::from_utf8(&out).map_err(|_| invalid_git_output())?;
-    let mut lines = Vec::new();
-    for line in text.lines() {
-        let mut p = line.split_whitespace();
-        let sha = p.next().unwrap_or("");
-        let _orig = p.next();
-        let final_line = p.next();
-        if sha.len() >= 40 && sha.bytes().all(|b| b.is_ascii_hexdigit()) {
-            if let Ok(n) = final_line.unwrap_or("0").parse() {
-                lines.push(GitBlameLine {
-                    line: n,
-                    sha: sha.to_owned(),
-                })
-            }
-        }
-    }
-    Ok(GitBlameResult {
-        repository_root: repo.relative_root,
-        lines,
-        truncated: false,
-    })
-}
-
 mod context;
 pub(crate) use context::resolve_git_workspace;
 use context::*;
@@ -466,12 +437,16 @@ mod security;
 use security::*;
 mod process;
 use process::*;
+mod advanced;
 mod branch;
 mod forge;
 mod forge_process;
 mod mutation;
 mod remote;
 mod remote_process;
+mod stash;
+mod tag;
+mod worktree;
 
 fn append_protected_exclusions(args: &mut Vec<String>) {
     args.push("--".into());

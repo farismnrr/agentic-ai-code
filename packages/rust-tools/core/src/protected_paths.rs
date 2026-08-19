@@ -2,8 +2,9 @@
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
-pub const PROTECTED_DIRECTORIES: [&str; 6] = [
+pub const PROTECTED_DIRECTORIES: [&str; 7] = [
     ".ssh",
+    ".gnupg",
     ".aws",
     ".config/gcloud",
     ".config/gh",
@@ -32,7 +33,7 @@ pub fn is_protected_relative(path: &Path) -> bool {
     components.iter().any(|component| {
         matches!(
             component.to_str(),
-            Some(".ssh" | ".aws" | ".docker" | ".kube")
+            Some(".ssh" | ".gnupg" | ".aws" | ".docker" | ".kube")
         )
     }) || components.windows(2).any(|pair| {
         pair[0] == OsStr::new(".config") && matches!(pair[1].to_str(), Some("gcloud" | "gh"))
@@ -69,6 +70,7 @@ pub fn contains_protected_path_reference(value: &str) -> bool {
         if matches!(
             component,
             ".ssh"
+                | ".gnupg"
                 | ".aws"
                 | ".docker"
                 | ".kube"
@@ -133,6 +135,27 @@ pub fn git_exclusion_pathspecs() -> Vec<String> {
     pathspecs
 }
 
+/// Mutation pathspec exclusions are intentionally stricter than read presentation:
+/// broad mutations also skip every `.env.*` variant, including `.env.example`.
+pub fn git_mutation_exclusion_pathspecs() -> Vec<String> {
+    let mut pathspecs = git_exclusion_pathspecs();
+    pathspecs.push(":(glob,exclude)**/.env.*".into());
+    pathspecs
+}
+
+/// `git clean -e` patterns protecting credential-shaped paths from broad cleanup.
+pub fn git_clean_exclusion_patterns() -> Vec<String> {
+    let mut patterns = Vec::with_capacity(PROTECTED_DIRECTORIES.len() + PROTECTED_FILES.len() + 1);
+    for directory in PROTECTED_DIRECTORIES {
+        patterns.push(format!("**/{directory}/**"));
+    }
+    for file in PROTECTED_FILES {
+        patterns.push(format!("**/{file}"));
+    }
+    patterns.push("**/.env.*".into());
+    patterns
+}
+
 /// Ripgrep receives exact protected roots/files from the canonical policy.
 /// Dynamic `.env.*` variants are additionally protected by Bubblewrap masking
 /// and parsed-result path validation, preserving `.env.example` searchability.
@@ -167,8 +190,17 @@ mod tests {
         assert!(exclusions
             .iter()
             .any(|item| item == ":(glob,exclude)**/.env"));
+        assert!(exclusions
+            .iter()
+            .any(|item| item == ":(glob,exclude)**/.gnupg/**"));
         assert!(!exclusions
             .iter()
             .any(|item| item == ":(glob,exclude)**/.env.*"));
+        assert!(git_mutation_exclusion_pathspecs()
+            .iter()
+            .any(|item| item == ":(glob,exclude)**/.env.*"));
+        assert!(git_clean_exclusion_patterns()
+            .iter()
+            .any(|item| item == "**/.env.*"));
     }
 }

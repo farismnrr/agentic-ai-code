@@ -37,27 +37,30 @@ fn runtime_home() -> Result<PathBuf, std::io::Error> {
     if !home.is_absolute() {
         return Err(std::io::Error::other("HOME must be an absolute path"));
     }
-    std::fs::canonicalize(&home).map_err(|_| std::io::Error::other("HOME is unavailable"))
+    std::fs::canonicalize(home).map_err(|_| std::io::Error::other("HOME is unavailable"))
 }
 
 pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
-    let mut entries = [
+    const DEFAULT_PATHS: &[&str] = &[
         "/usr/local/sbin",
         "/usr/local/bin",
         "/usr/sbin",
         "/usr/bin",
         "/sbin",
         "/bin",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .collect::<Vec<_>>();
-    entries.extend(
-        config
-            .toolchain_paths
-            .iter()
-            .map(|path| std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))),
-    );
+    ];
+    let mut entries: Vec<PathBuf> = DEFAULT_PATHS.iter().map(PathBuf::from).collect();
+    if let Ok(home) = runtime_home() {
+        for sub in [".cargo/bin", ".local/bin"] {
+            let dir = home.join(sub);
+            if dir.is_dir() {
+                entries.push(dir);
+            }
+        }
+    }
+    for p in &config.toolchain_paths {
+        entries.push(std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p)));
+    }
     entries
 }
 
@@ -67,10 +70,17 @@ pub(crate) fn resolve_safe_executable(
 ) -> Result<PathBuf, McpError> {
     relay_core::terminal_policy::validate_executable(binary, config.allow_docker)?;
     let safe_entries = safe_path_entries(config);
-    let canonical_safe_entries = safe_entries
+    let mut canonical_safe_entries = safe_entries
         .iter()
         .filter_map(|directory| std::fs::canonicalize(directory).ok())
         .collect::<Vec<_>>();
+    for path in &config.toolchain_paths {
+        if let Ok(canonical) = std::fs::canonicalize(path) {
+            if let Some(root) = super::toolchain::reviewed_root(&canonical) {
+                canonical_safe_entries.push(root.to_path_buf());
+            }
+        }
+    }
 
     for directory in safe_entries {
         let candidate = directory.join(binary);
@@ -99,17 +109,18 @@ pub(crate) fn resolve_safe_executable(
     ))
 }
 
-#[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    path.metadata()
-        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
 }
 
 pub(super) fn spawn(
@@ -117,18 +128,20 @@ pub(super) fn spawn(
     invocation: &ToolInvocation,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
+    let network_access = if invocation.allow_network || config.allow_terminal_network {
+        NetworkAccess::Host
+    } else {
+        NetworkAccess::Isolated
+    };
+    let writable = matches!(workspace_access, WorkspaceAccess::Writable);
     spawn_with_profile(
         config,
         invocation,
         SandboxProfile {
             workspace_access,
-            network_access: if invocation.allow_network || config.allow_terminal_network {
-                NetworkAccess::Host
-            } else {
-                NetworkAccess::Isolated
-            },
-            expose_optional_sockets: matches!(workspace_access, WorkspaceAccess::Writable),
-            expose_runtime_extras: matches!(workspace_access, WorkspaceAccess::Writable),
+            network_access,
+            expose_optional_sockets: writable,
+            expose_runtime_extras: writable,
             workspace_root: None,
         },
     )
@@ -144,16 +157,15 @@ pub(crate) fn spawn_lsp(
     args: Vec<String>,
     cwd: PathBuf,
 ) -> Result<Child, std::io::Error> {
-    let invocation = ToolInvocation {
-        program: InvocationProgram::Direct(executable),
-        args,
-        cwd: Some(cwd.clone()),
-        timeout_ms: 0,
-        allow_network: false,
-    };
     spawn_with_profile(
         config,
-        &invocation,
+        &ToolInvocation {
+            program: InvocationProgram::Direct(executable),
+            args,
+            cwd: Some(cwd.clone()),
+            timeout_ms: 0,
+            allow_network: false,
+        },
         SandboxProfile {
             workspace_access: WorkspaceAccess::ReadOnly,
             network_access: NetworkAccess::Isolated,
@@ -174,16 +186,15 @@ pub(crate) fn spawn_hook(
     cwd: PathBuf,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
-    let invocation = ToolInvocation {
-        program: InvocationProgram::Direct(executable),
-        args,
-        cwd: Some(cwd.clone()),
-        timeout_ms: 0,
-        allow_network: false,
-    };
     spawn_with_profile(
         config,
-        &invocation,
+        &ToolInvocation {
+            program: InvocationProgram::Direct(executable),
+            args,
+            cwd: Some(cwd.clone()),
+            timeout_ms: 0,
+            allow_network: false,
+        },
         SandboxProfile {
             workspace_access,
             network_access: NetworkAccess::Isolated,
@@ -226,12 +237,8 @@ fn spawn_with_profile(
     } else {
         None
     };
-    let configured_workspace = std::fs::canonicalize(
-        config
-            .resolved_dir()
-            .map_err(|_| std::io::Error::other("invalid workspace directory"))?,
-    )
-    .map_err(|_| std::io::Error::other("invalid workspace directory"))?;
+    let configured_workspace = std::fs::canonicalize(config.resolved_dir().unwrap_or_default())
+        .map_err(|_| std::io::Error::other("invalid workspace directory"))?;
     let sandbox_root = profile
         .workspace_root
         .or(discovered_workspace.as_deref())
@@ -251,54 +258,16 @@ fn spawn_with_profile(
         WorkspaceAccess::ReadOnly => "--ro-bind",
         WorkspaceAccess::Writable => "--bind",
     };
-    let mut args = vec![
-        "--ro-bind",
-        "/usr",
-        "/usr",
-        "--ro-bind",
-        "/lib",
-        "/lib",
-        "--ro-bind-try",
-        "/lib64",
-        "/lib64",
-        "--ro-bind-try",
-        "/etc",
-        "/etc",
-        "--ro-bind-try",
-        "/bin",
-        "/bin",
-        "--ro-bind-try",
-        "/sbin",
-        "/sbin",
-        "--dev",
-        "/dev",
-        "--proc",
-        "/proc",
-        "--tmpfs",
-        "/tmp",
-        "--dir",
-        home.as_str(),
-        root_bind,
-        root.as_str(),
-        root.as_str(),
-        "--unshare-pid",
-        "--die-with-parent",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect::<Vec<_>>();
+    let mut args = base_bwrap_args(&home, root_bind, &root);
     if matches!(profile.network_access, NetworkAccess::Isolated) {
         args.push("--unshare-net".into());
     }
     if profile.expose_runtime_extras {
-        args.extend([
-            "--ro-bind-try".into(),
-            "/opt".into(),
-            "/opt".into(),
-            "--ro-bind".into(),
-            bin_dir.to_string_lossy().into_owned(),
-            bin_dir.to_string_lossy().into_owned(),
-        ]);
+        args.extend(["--ro-bind-try".into(), "/opt".into(), "/opt".into()]);
+        if !bin_dir.starts_with(sandbox_root) {
+            let bin = bin_dir.to_string_lossy().into_owned();
+            args.extend(["--ro-bind".into(), bin.clone(), bin]);
+        }
     }
     let mut cargo_home = None;
     let mut rustup_home = None;
@@ -310,24 +279,18 @@ fn spawn_with_profile(
             .map_err(|_| std::io::Error::other("invalid toolchain path"))?;
         let value = canonical.to_string_lossy().into_owned();
         args.extend(["--ro-bind".into(), value.clone(), value]);
-        if canonical.file_name() == Some(std::ffi::OsStr::new("bin")) {
-            if let Some(toolchain_root) = canonical.parent() {
-                let rust_toolchain = toolchain_root.join("lib/rustlib").is_dir();
-                let node_toolchain = toolchain_root.join("lib/node_modules").is_dir()
-                    && toolchain_root.join("bin/node").is_file();
-                if rust_toolchain || node_toolchain {
-                    let value = toolchain_root.to_string_lossy().into_owned();
-                    args.extend(["--ro-bind".into(), value.clone(), value]);
-                }
-            }
+        if let Some(toolchain_root) = super::toolchain::reviewed_root(&canonical) {
+            let value = toolchain_root.to_string_lossy().into_owned();
+            args.extend(["--ro-bind".into(), value.clone(), value]);
         }
         if canonical_home_cargo_bin.as_ref() == Some(&canonical) {
             let candidate = host_home.join(".cargo");
             if candidate.is_dir() {
                 let value = candidate.to_string_lossy().into_owned();
                 args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                mask_protected_file(&mut args, &candidate.join("credentials"))?;
-                mask_protected_file(&mut args, &candidate.join("credentials.toml"))?;
+                for file in ["credentials", "credentials.toml"] {
+                    mask_protected_file(&mut args, &candidate.join(file))?;
+                }
                 cargo_home = Some(value);
             }
             let candidate = host_home.join(".rustup");
@@ -339,22 +302,33 @@ fn spawn_with_profile(
         }
     }
     if profile.expose_optional_sockets {
-        add_optional_socket(
-            &mut args,
-            config.allow_docker,
-            &config.docker_socket,
-            "Docker",
-        )?;
-        add_optional_socket(
-            &mut args,
-            config.allow_tailscale,
-            &config.tailscale_socket,
-            "Tailscale",
-        )?;
+        for (enabled, socket, name) in [
+            (config.allow_docker, &config.docker_socket, "Docker"),
+            (
+                config.allow_tailscale,
+                &config.tailscale_socket,
+                "Tailscale",
+            ),
+        ] {
+            add_optional_socket(&mut args, enabled, socket, name)?;
+        }
     }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false)?;
+    }
+    let _ = config.ensure_workspaces_initialized();
+    if let Ok(guard) = config.workspaces.read() {
+        for ws in guard.all_roots() {
+            if ws != sandbox_root
+                && ws != host_home
+                && !relay_core::protected_paths::is_protected_path(&execution_root, &ws)
+            {
+                let val = ws.to_string_lossy().into_owned();
+                args.extend([root_bind.into(), val.clone(), val]);
+                add_protected_paths(&mut args, &ws, false)?;
+            }
+        }
     }
     if let Some(cwd) = &invocation.cwd {
         args.extend(["--chdir".into(), cwd.to_string_lossy().into_owned()]);
@@ -381,12 +355,16 @@ fn spawn_with_profile(
     if let Some(rustup_home) = rustup_home {
         command.env("RUSTUP_HOME", rustup_home);
     }
-    if profile.workspace_root.is_some() {
-        command
-            .env("CARGO_HOME", "/tmp/lsp-home/.cargo")
-            .env("CARGO_TARGET_DIR", "/tmp/lsp-target");
-    } else if let Some(cargo_home) = cargo_home {
-        command.env("CARGO_HOME", cargo_home);
+    match (profile.workspace_root.is_some(), cargo_home) {
+        (true, _) => {
+            command
+                .env("CARGO_HOME", "/tmp/lsp-home/.cargo")
+                .env("CARGO_TARGET_DIR", "/tmp/lsp-target");
+        }
+        (false, Some(cargo_home)) => {
+            command.env("CARGO_HOME", cargo_home);
+        }
+        _ => {}
     }
     #[cfg(unix)]
     command.process_group(0);
@@ -447,9 +425,6 @@ fn add_protected_paths(
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
             continue;
         };
-        // Never ask Bubblewrap to mount over a credential-named symlink. The
-        // destination path could otherwise be resolved through the alias during
-        // sandbox setup. Refusing to spawn is the fail-closed behavior.
         if metadata.file_type().is_symlink() {
             return Err(std::io::Error::other(
                 "protected sandbox path is a symbolic link",
@@ -487,14 +462,33 @@ fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error>
                 .map_err(|_| std::io::Error::other("protected-path scan escaped workspace"))?;
             if relay_core::protected_paths::is_protected_relative(relative) {
                 protected.push(path);
-                continue;
-            }
-            // DirEntry::file_type does not follow symlinks. Never recurse through
-            // an alias while discovering paths that will become Bubblewrap mounts.
-            if entry.file_type()?.is_dir() {
+            } else if entry.file_type()?.is_dir() {
                 stack.push(path);
             }
         }
     }
     Ok(protected)
+}
+
+fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<String> {
+    let mut args = Vec::with_capacity(32);
+    for p in ["/usr", "/lib"] {
+        args.extend(["--ro-bind".into(), p.into(), p.into()]);
+    }
+    for p in ["/lib64", "/etc", "/bin", "/sbin"] {
+        args.extend(["--ro-bind-try".into(), p.into(), p.into()]);
+    }
+    for (flag, p) in [("--dev", "/dev"), ("--proc", "/proc"), ("--tmpfs", "/tmp")] {
+        args.extend([flag.into(), p.into()]);
+    }
+    args.extend([
+        "--dir".into(),
+        home.into(),
+        root_bind.into(),
+        root.into(),
+        root.into(),
+        "--unshare-pid".into(),
+        "--die-with-parent".into(),
+    ]);
+    args
 }
