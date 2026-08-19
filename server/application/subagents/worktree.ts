@@ -71,6 +71,14 @@ export class WorktreeAllocator {
     return { status, diff, commits }
   }
 
+  async identity(owner: WorktreeOwner) {
+    const inspection = await this.inspect(owner)
+    if (!inspection.owned) throw new Error('writer worktree ownership changed')
+    const headCommit = bound(await this.runGit(['rev-parse', '--verify', 'HEAD'], owner.worktree_path)).trim()
+    if (!/^[0-9a-f]{40}$/i.test(headCommit)) throw new Error('writer head identity is invalid')
+    return { branch: owner.branch, base_commit: owner.base_commit, head_commit: headCommit, dirty: !inspection.clean }
+  }
+
   async dispose(owner: WorktreeOwner): Promise<boolean> {
     const inspection = await this.inspect(owner)
     if (!inspection.owned || !inspection.clean || inspection.uniqueCommits) return false

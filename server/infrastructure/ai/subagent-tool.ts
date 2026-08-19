@@ -7,6 +7,7 @@ import { loadAgentProfile, nativeToolMatchesProfile } from '../../application/su
 import { intersectSubagentAuthority } from '../../application/subagents/policy'
 import { OrchestratorScheduler, ORCHESTRATOR_BUDGETS, ORCHESTRATOR_ROLE_PROFILE, requirementsFitAuthority } from '../../application/orchestration/scheduler'
 import { getOrchestratorGraph } from '../../application/orchestration/task-graph'
+import { advanceWriter, markDelivered, reconcileChildren } from '../../application/orchestration/reconciliation'
 import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
@@ -193,6 +194,33 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
         logger.info('chat.orchestrator.cancel', { 'operation': 'chat.orchestrator.cancel', 'outcome': 'cancelled', 'cancel.reason': scope, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
         return graph
       }
+    }),
+    orchestrator_reconcile: tool({
+      description: 'Collect terminal child evidence into a bounded parent-owned reconciliation ledger. Duplicate findings are deduplicated; disagreements and P0/P1 findings block delivery.',
+      inputSchema: z.object({ generation: z.string().uuid(), task_ids: z.array(z.string().uuid()).min(1).max(24) }),
+      execute: async ({ generation, task_ids }) => {
+        const unique = [...new Set(task_ids)]
+        if (unique.length !== task_ids.length) throw new Error('duplicate reconciliation task id')
+        const children = []
+        for (const taskId of unique) {
+          const child = await backgroundTasks.reconciliation(taskId, input.userId, input.parentSessionId)
+          if (!child) throw new Error('reconciliation child is unavailable')
+          children.push(child)
+        }
+        const result = reconcileChildren({ userId: input.userId, conversationId: input.parentSessionId, generation, children })
+        logger.info('chat.orchestrator.reconcile', { 'operation': 'chat.orchestrator.reconcile', 'outcome': result.blockers.length ? 'blocked' : 'ok', 'orchestration.issue.count': result.issues.length, 'orchestration.blocker.count': result.blockers.length })
+        return result
+      }
+    }),
+    orchestrator_writer_transition: tool({
+      description: 'Advance one writer through reviewed, accepted, then integrated states only when its bounded worktree HEAD evidence still matches.',
+      inputSchema: z.object({ generation: z.string().uuid(), task_id: z.string().uuid(), expected_head: z.string().regex(/^[0-9a-f]{40}$/i), action: z.enum(['review', 'accept', 'integrate']) }),
+      execute: async ({ generation, task_id, expected_head, action }) => advanceWriter({ userId: input.userId, conversationId: input.parentSessionId, generation, taskId: task_id, expectedHead: expected_head, action })
+    }),
+    orchestrator_mark_delivered: tool({
+      description: 'Mark reconciliation delivered only after all writer work is integrated and no high-severity finding or reviewer disagreement remains. Actual delivery must already use Plan-040 Git/forge tools.',
+      inputSchema: z.object({ generation: z.string().uuid() }),
+      execute: async ({ generation }) => markDelivered({ userId: input.userId, conversationId: input.parentSessionId, generation })
     })
   }
 }
