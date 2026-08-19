@@ -1,6 +1,6 @@
 # Plan 042D — Multi-Agent UX, Observability, Adversarial Acceptance, and Closure
 
-**Status:** IMPLEMENTED / SOURCE VERIFIED / LIVE CLOSURE PENDING
+**Status:** CLOSED / VERIFIED / MERGED
 **Parent:** [Plan 042](042-multi-agent-orchestration-roadmap.md)
 **Depends on:** 042C CLOSED / VERIFIED
 
@@ -31,16 +31,16 @@ Integrate the multi-agent task graph, bounded concurrency, role routing, evidenc
 - delivery cannot advance from unreviewed/unintegrated/stale writer state;
 - direct delivery remains separately constrained by Plan-040 Git/forge policy.
 
-## Remaining closure evidence
+## Final closure evidence
 
-Before changing this status to CLOSED / VERIFIED / MERGED:
-
-- run the exact final composed deterministic matrix on the candidate;
-- perform fresh adversarial P0/P1 review on the merged candidate;
-- prove one live first-party orchestration workflow with real child dispatch, dependency ordering, evidence collection/reconciliation and cancellation/cleanup behavior;
-- deploy/restart only if the live first-party runtime is not already running the merged candidate;
-- reconcile final docs and master Plan 042 status;
-- leave zero unresolved P0/P1 and no stale implementation branches/worktrees.
+- PR #153 merged with merge commit `407e95e56695d64bf6bc8d4da7daf396cb7f2aee`.
+- Independent adversarial verification found and remediated stale writer-identity validation before merge; regression coverage was added and the final review left zero unresolved P0/P1.
+- Final deterministic/source gates passed, including `pnpm verify:042d`, lint, typecheck, commit gate, Rust workspace tests, Nuxt production build and release build.
+- The exact merged revision was deployed in production image `ai-code-app:042-final` and promoted to the active app container. OCI revision is `407e95e56695d64bf6bc8d4da7daf396cb7f2aee`; active server entry SHA256 is `7adbd0f14d02b56a71c583bdf58f50731a6bd0e41b1c6d5829034217059805a3`; local HTTP returned 200 after startup.
+- Relay candidate/installed SHA256 both equal `69e4e3cfb0619615db1862ec3ccb4f98d473733a816fcc5fdf6bc34ff3e1ab64`, and the user service is active.
+- Live production-image smoke used the real merged task graph, scheduler, background manager, subagent runtime and reconciliation modules inside the active container. Initial fan-out started two children, the dependent child remained gated until its prerequisite completed, cancellation reached terminal `cancelled`, and reconciliation produced zero issues/blockers.
+- The child execution port in that smoke was deterministic and synthetic so no user/provider secret or session was accessed. This proves orchestration lifecycle/runtime composition without claiming a live provider-model call.
+- Implementation branch/worktree cleanup from PR #153 completed before closeout; final closeout branch is docs-only.
 
 ## Exit criteria
 
