@@ -37,10 +37,10 @@ export function getReconciliation(userId: string, conversationId: string, genera
   return entry?.generation === generation ? publicEntry(entry) : undefined
 }
 
-export function advanceWriter(input: { userId: string, conversationId: string, generation: string, taskId: string, expectedHead: string, action: 'review' | 'accept' | 'integrate', now?: number }): ReconciliationSnapshot {
+export function advanceWriter(input: { userId: string, conversationId: string, generation: string, taskId: string, expectedHead: string, action: 'review' | 'accept' | 'integrate', currentWriter?: WriterIdentity, now?: number }): ReconciliationSnapshot {
   const entry = requireEntry(input.userId, input.conversationId, input.generation)
   const writer = entry.writers.find(item => item.task_id === input.taskId)
-  if (!writer || writer.head_commit !== input.expectedHead || writer.dirty) throw new Error('stale or dirty writer evidence')
+  if (!writer || writer.head_commit !== input.expectedHead || writer.dirty || (input.currentWriter && !sameWriterIdentity(writer, input.currentWriter))) throw new Error('stale or dirty writer evidence')
   if (input.action === 'review' && writer.state !== 'produced') throw new Error('writer transition is invalid')
   if (input.action === 'accept' && writer.state !== 'reviewed') throw new Error('writer transition is invalid')
   if (input.action === 'integrate' && writer.state !== 'accepted') throw new Error('writer transition is invalid')
@@ -48,6 +48,10 @@ export function advanceWriter(input: { userId: string, conversationId: string, g
   entry.updated_at = input.now ?? Date.now()
   recompute(entry)
   return publicEntry(entry)
+}
+
+function sameWriterIdentity(expected: ReconciliationWriter, actual: WriterIdentity) {
+  return expected.branch === actual.branch && expected.base_commit === actual.base_commit && expected.head_commit === actual.head_commit && expected.dirty === actual.dirty
 }
 
 export function markDelivered(input: { userId: string, conversationId: string, generation: string, now?: number }): ReconciliationSnapshot {
