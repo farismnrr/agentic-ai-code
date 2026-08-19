@@ -40,3 +40,8 @@ required-features = ["test-gh-provider"]
 name = "plan044a_issue_transitions_acceptance"
 path = "examples/plan044a/issue_transitions_acceptance.rs"
 required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044b_actions_acceptance"
+path = "examples/plan044b_actions_acceptance.rs"
+required-features = ["test-gh-provider"]

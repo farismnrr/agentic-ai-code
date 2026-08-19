@@ -158,6 +158,19 @@ pub async fn dispatch_git_tool(
         "issue_comment" => serde_json::to_value(forge::issue_comment(arguments, config).await?),
         "issue_close" => serde_json::to_value(forge::issue_close(arguments, config).await?),
         "issue_reopen" => serde_json::to_value(forge::issue_reopen(arguments, config).await?),
+        "workflow_list" => serde_json::to_value(forge::workflow_list(arguments, config).await?),
+        "workflow_run_list" => {
+            serde_json::to_value(forge::workflow_run_list(arguments, config).await?)
+        }
+        "workflow_run_get" => {
+            serde_json::to_value(forge::workflow_run_get(arguments, config).await?)
+        }
+        "workflow_job_get" => {
+            serde_json::to_value(forge::workflow_job_get(arguments, config).await?)
+        }
+        "workflow_run_job_log" => {
+            serde_json::to_value(forge::workflow_run_job_log(arguments, config).await?)
+        }
         _ => return Ok(None),
     }
     .map_err(|_| McpError::Internal("failed to serialize git result".into()))?;
