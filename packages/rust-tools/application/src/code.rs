@@ -161,17 +161,23 @@ async fn code_symbols(
                         .into(),
                 )
             })?;
-            if language == "rust" {
-                return Err(McpError::InvalidRequest(
-                    "workspace symbol search is not supported for rust in this build".into(),
-                ));
-            }
             let session = lsp
                 .session_for(cwd.as_deref(), language)
                 .await
                 .map_err(lsp_error)?;
-            let ts = TypeScriptLanguageServer::new(session).map_err(lsp_error)?;
-            let symbols = ts.workspace_symbols(&query).await.map_err(lsp_error)?;
+            let symbols = if language == "rust" {
+                RustLanguageServer::new(session)
+                    .map_err(lsp_error)?
+                    .workspace_symbols(&query)
+                    .await
+                    .map_err(lsp_error)?
+            } else {
+                TypeScriptLanguageServer::new(session)
+                    .map_err(lsp_error)?
+                    .workspace_symbols(&query)
+                    .await
+                    .map_err(lsp_error)?
+            };
             paginated_result(arguments, symbols, config, "code_symbols", &root)
         }
         (Some(_), Some(_)) => Err(McpError::InvalidRequest(
