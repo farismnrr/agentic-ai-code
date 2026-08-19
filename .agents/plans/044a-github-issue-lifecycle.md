@@ -80,11 +80,11 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify only if shared helper extraction is necessary: `packages/rust-tools/application/src/git/forge_process.rs`
 
 **Steps:**
-- [ ] Move existing PR/change-request DTOs and operations into `forge/change_requests.rs` while preserving public dispatch signatures.
-- [ ] Move genuinely shared bounded text/JSON/repository identity helpers into `forge/common.rs`; do not create generic abstractions that only wrap one call.
-- [ ] Keep credential execution in the existing `forge_process` boundary.
-- [ ] Preserve all existing change-request validation, merge preconditions, output caps, static error behavior, and URL/repository identity checks.
-- [ ] Confirm `application/src/git/` remains within the direct-file budget; nested `git/forge/` owns the new responsibility growth.
+- [x] Move existing PR/change-request DTOs and operations into `forge/change_requests.rs` while preserving public dispatch signatures.
+- [x] Move genuinely shared bounded text/JSON/repository identity helpers into `forge/common.rs`; do not create generic abstractions that only wrap one call.
+- [x] Keep credential execution in the existing `forge_process` boundary.
+- [x] Preserve all existing change-request validation, merge preconditions, output caps, static error behavior, and URL/repository identity checks.
+- [x] Confirm `application/src/git/` remains within the direct-file budget; nested `git/forge/` owns the new responsibility growth.
 
 **Validation:**
 - `bash scripts/verify-040de-forge-contract.sh` → existing change-request contract still passes.
@@ -94,8 +94,8 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 **Commit boundary:** `refactor(forge): split github domain adapters`
 
 **Phase exit criteria:**
-- [ ] No change to existing PR/change-request MCP schemas or behavior.
-- [ ] No maintained source file/folder budget regression.
+- [x] No change to existing PR/change-request MCP schemas or behavior.
+- [x] No maintained source file/folder budget regression.
 
 ## PHASE-02 — Bounded issue read contract
 
