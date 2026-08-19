@@ -8,7 +8,7 @@ const MAX_CHECKS: usize = 100;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ChangeRequestSummary {
+pub(in crate::git) struct ChangeRequestSummary {
     number: u64,
     title: String,
     url: String,
@@ -24,7 +24,7 @@ pub(crate) struct ChangeRequestSummary {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ChangeRequestListResult {
+pub(in crate::git) struct ChangeRequestListResult {
     repository_root: String,
     forge: ForgeRepository,
     change_requests: Vec<ChangeRequestSummary>,
@@ -32,7 +32,7 @@ pub(crate) struct ChangeRequestListResult {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ChangeRequestResult {
+pub(in crate::git) struct ChangeRequestResult {
     repository_root: String,
     forge: ForgeRepository,
     change_request: ChangeRequestSummary,
@@ -40,7 +40,7 @@ pub(crate) struct ChangeRequestResult {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CheckSummary {
+pub(in crate::git) struct CheckSummary {
     bucket: String,
     name: String,
     state: String,
@@ -49,7 +49,7 @@ pub(crate) struct CheckSummary {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ChangeRequestChecksResult {
+pub(in crate::git) struct ChangeRequestChecksResult {
     repository_root: String,
     forge: ForgeRepository,
     number: u64,
@@ -62,7 +62,7 @@ pub(crate) struct ChangeRequestChecksResult {
     truncated: bool,
 }
 
-pub(crate) async fn change_request_list(
+pub(in crate::git) async fn change_request_list(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestListResult, McpError> {
@@ -105,7 +105,7 @@ pub(crate) async fn change_request_list(
     })
 }
 
-pub(crate) async fn change_request_get(
+pub(in crate::git) async fn change_request_get(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestResult, McpError> {
@@ -120,7 +120,7 @@ pub(crate) async fn change_request_get(
     })
 }
 
-pub(crate) async fn change_request_create(
+pub(in crate::git) async fn change_request_create(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestResult, McpError> {
@@ -180,7 +180,7 @@ pub(crate) async fn change_request_create(
     })
 }
 
-pub(crate) async fn change_request_update(
+pub(in crate::git) async fn change_request_update(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestResult, McpError> {
@@ -233,7 +233,7 @@ pub(crate) async fn change_request_update(
     })
 }
 
-pub(crate) async fn change_request_checks(
+pub(in crate::git) async fn change_request_checks(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestChecksResult, McpError> {
@@ -243,7 +243,7 @@ pub(crate) async fn change_request_checks(
     checks_result(repo, remote, number).await
 }
 
-pub(crate) async fn change_request_merge(
+pub(in crate::git) async fn change_request_merge(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<ChangeRequestResult, McpError> {

@@ -2,17 +2,17 @@ use super::super::*;
 use serde::Serialize;
 use serde_json::Value;
 
-pub(crate) const MAX_TITLE_BYTES: usize = 256;
-pub(crate) const MAX_BODY_BYTES: usize = 64 * 1024;
+pub(in crate::git) const MAX_TITLE_BYTES: usize = 256;
+pub(in crate::git) const MAX_BODY_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct ForgeRepository {
-    pub(crate) provider: &'static str,
-    pub(crate) owner: String,
-    pub(crate) repository: String,
+pub(in crate::git) struct ForgeRepository {
+    pub(in crate::git) provider: &'static str,
+    pub(in crate::git) owner: String,
+    pub(in crate::git) repository: String,
 }
 
-pub(crate) fn forge_identity(remote: &remote::GitRemoteIdentity) -> ForgeRepository {
+pub(in crate::git) fn forge_identity(remote: &remote::GitRemoteIdentity) -> ForgeRepository {
     ForgeRepository {
         provider: remote.provider,
         owner: remote.owner.clone(),
@@ -20,16 +20,18 @@ pub(crate) fn forge_identity(remote: &remote::GitRemoteIdentity) -> ForgeReposit
     }
 }
 
-pub(crate) fn repo_spec(remote: &remote::GitRemoteIdentity) -> String {
+pub(in crate::git) fn repo_spec(remote: &remote::GitRemoteIdentity) -> String {
     format!("{}/{}", remote.owner, remote.repository)
 }
 
-pub(crate) fn parse_json<T: serde::de::DeserializeOwned>(output: &[u8]) -> Result<T, McpError> {
+pub(in crate::git) fn parse_json<T: serde::de::DeserializeOwned>(
+    output: &[u8],
+) -> Result<T, McpError> {
     serde_json::from_slice(output)
         .map_err(|_| McpError::InvalidRequest("forge output is invalid".into()))
 }
 
-pub(crate) fn bounded_text(
+pub(in crate::git) fn bounded_text(
     arguments: &Value,
     key: &str,
     max: usize,
@@ -45,7 +47,10 @@ pub(crate) fn bounded_text(
     Ok(value.to_owned())
 }
 
-pub(crate) fn requested_number(arguments: &Value, entity_name: &str) -> Result<u64, McpError> {
+pub(in crate::git) fn requested_number(
+    arguments: &Value,
+    entity_name: &str,
+) -> Result<u64, McpError> {
     arguments
         .get("number")
         .and_then(Value::as_u64)
