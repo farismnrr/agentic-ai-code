@@ -46,10 +46,19 @@ pub fn effect_classes(
             "external_mutation",
             "privileged_bridge",
         ],
-        "change_request_list" | "change_request_get" | "change_request_checks" => {
-            vec!["network_read", "privileged_bridge"]
-        }
-        "change_request_create" | "change_request_update" | "change_request_merge" => vec![
+        "change_request_list"
+        | "change_request_get"
+        | "change_request_checks"
+        | "issue_list"
+        | "issue_get" => vec!["network_read", "privileged_bridge"],
+        "change_request_create"
+        | "change_request_update"
+        | "change_request_merge"
+        | "issue_create"
+        | "issue_update"
+        | "issue_comment"
+        | "issue_close"
+        | "issue_reopen" => vec![
             "network_read",
             "network_write",
             "external_mutation",

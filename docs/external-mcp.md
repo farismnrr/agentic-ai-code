@@ -115,6 +115,13 @@ change_request_create
 change_request_update
 change_request_checks
 change_request_merge
+issue_list
+issue_get
+issue_create
+issue_update
+issue_comment
+issue_close
+issue_reopen
 apply_patch
 code_symbols
 code_definition
@@ -168,6 +175,13 @@ change_request_create(cwd?, remote="origin", head_branch, base_branch, title, bo
 change_request_update(cwd?, remote="origin", number, title?, body?, base_branch?)
 change_request_checks(cwd?, remote="origin", number)
 change_request_merge(cwd?, remote="origin", number, expected_head_sha, strategy="squash")
+issue_list(cwd?, remote="origin", state="open", labels=[])
+issue_get(cwd?, remote="origin", number)
+issue_create(cwd?, remote="origin", title, body="", labels=[])
+issue_update(cwd?, remote="origin", number, title?, body?, add_labels=[], remove_labels=[])
+issue_comment(cwd?, remote="origin", number, body)
+issue_close(cwd?, remote="origin", number, reason="completed"|"not_planned"|"duplicate", duplicate_of?, comment?)
+issue_reopen(cwd?, remote="origin", number, comment?)
 code_symbols(path=..., cwd?, max_results?) or code_symbols(query=..., cwd?, max_results?)
 code_definition(...)
 code_references(...)
