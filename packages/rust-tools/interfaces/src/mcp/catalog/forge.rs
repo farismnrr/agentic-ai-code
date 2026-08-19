@@ -235,6 +235,54 @@ pub(super) fn action_tools() -> Vec<Tool> {
     ]
 }
 
+pub(super) fn security_tools() -> Vec<Tool> {
+    let get = || json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"alert_number":{"type":"integer","minimum":1}},"required":["alert_number"],"additionalProperties":false});
+    vec![
+        read_tool(
+            "dependabot_alert_list",
+            "Dependabot Alert List",
+            "List bounded repository Dependabot alerts.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"state":{"type":"string","enum":["auto_dismissed","dismissed","fixed","open"]},"severity":{"type":"string","enum":["low","medium","high","critical"]}},"additionalProperties":false}),
+        ),
+        read_tool(
+            "dependabot_alert_get",
+            "Dependabot Alert Get",
+            "Read one bounded Dependabot alert.",
+            get(),
+        ),
+        read_tool(
+            "code_scanning_alert_list",
+            "Code Scanning Alert List",
+            "List bounded repository code-scanning alerts.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"state":{"type":"string","enum":["open","closed","dismissed","fixed"]},"severity":{"type":"string","enum":["none","note","warning","error"]}},"additionalProperties":false}),
+        ),
+        read_tool(
+            "code_scanning_alert_get",
+            "Code Scanning Alert Get",
+            "Read one bounded code-scanning alert.",
+            get(),
+        ),
+        read_tool(
+            "secret_scanning_alert_list",
+            "Secret Scanning Alert List",
+            "List bounded secret-scanning alerts without literal secret values.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"state":{"type":"string","enum":["open","resolved"]},"validity":{"type":"string","enum":["active","inactive","unknown"]}},"additionalProperties":false}),
+        ),
+        read_tool(
+            "secret_scanning_alert_get",
+            "Secret Scanning Alert Get",
+            "Read one secret-scanning alert without literal secret values.",
+            get(),
+        ),
+        read_tool(
+            "secret_scanning_alert_locations",
+            "Secret Scanning Alert Locations",
+            "List bounded repository locations for one secret-scanning alert.",
+            get(),
+        ),
+    ]
+}
+
 fn read_tool(
     name: &'static str,
     title: &'static str,

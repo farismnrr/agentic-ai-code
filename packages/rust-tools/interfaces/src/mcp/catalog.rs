@@ -405,6 +405,7 @@ pub fn tool_catalog() -> Vec<Tool> {
     ];
     tools.extend(forge::issue_tools());
     tools.extend(forge::action_tools());
+    tools.extend(forge::security_tools());
     tools
 }
 
