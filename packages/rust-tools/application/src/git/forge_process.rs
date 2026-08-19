@@ -8,6 +8,13 @@ use tokio::time::timeout;
 
 const MAX_FORGE_OUTPUT_BYTES: usize = 256 * 1024;
 const FORGE_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_FORGE_LOG_PROVIDER_BYTES: usize = 128 * 1024;
+const FORGE_LOG_TIMEOUT: Duration = Duration::from_secs(20);
+
+pub(super) struct ForgeLogCapture {
+    pub(super) output: Vec<u8>,
+    pub(super) truncated: bool,
+}
 
 pub(super) async fn run_gh(
     root: &Path,
@@ -77,6 +84,75 @@ pub(super) async fn run_gh(
         }
     }
     Ok(output)
+}
+
+pub(super) async fn run_gh_log_preview(
+    root: &Path,
+    args: &[String],
+) -> Result<ForgeLogCapture, McpError> {
+    let home = runtime_home()?;
+    let program = resolve_gh_program()?;
+    let mut command = Command::new(program);
+    command
+        .current_dir(root)
+        .env_clear()
+        .env("PATH", "/usr/local/bin:/usr/bin:/usr/sbin:/bin")
+        .env("HOME", &home)
+        .env("GH_CONFIG_DIR", home.join(".config/gh"))
+        .env("GH_PAGER", "cat")
+        .env("PAGER", "cat")
+        .env("NO_COLOR", "1")
+        .env("LC_ALL", "C")
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
+    forward_secret_env(&mut command, "GH_TOKEN");
+    forward_secret_env(&mut command, "GITHUB_TOKEN");
+    let mut child = command
+        .spawn()
+        .map_err(|_| McpError::Internal("failed to start forge operation".into()))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| McpError::Internal("failed to capture forge output".into()))?;
+    let mut output = Vec::with_capacity(8192);
+    let result = timeout(FORGE_LOG_TIMEOUT, async {
+        let mut limited = (&mut stdout).take((MAX_FORGE_LOG_PROVIDER_BYTES + 1) as u64);
+        limited
+            .read_to_end(&mut output)
+            .await
+            .map_err(|_| McpError::InvalidRequest("forge log output could not be read".into()))?;
+        if output.len() > MAX_FORGE_LOG_PROVIDER_BYTES {
+            output.truncate(MAX_FORGE_LOG_PROVIDER_BYTES);
+            crate::execution::kill_process_group(&mut child).await;
+            let _ = child.wait().await;
+            return Ok::<bool, McpError>(true);
+        }
+        let status = child
+            .wait()
+            .await
+            .map_err(|_| McpError::Internal("failed to wait for forge operation".into()))?;
+        if !status.success() {
+            return Err(McpError::InvalidRequest("forge operation failed".into()));
+        }
+        Ok(false)
+    })
+    .await;
+    match result {
+        Ok(inner) => Ok(ForgeLogCapture {
+            output,
+            truncated: inner?,
+        }),
+        Err(_) => {
+            crate::execution::kill_process_group(&mut child).await;
+            let _ = child.wait().await;
+            Err(McpError::InvalidRequest("forge operation timed out".into()))
+        }
+    }
 }
 
 // RELAY_TEST_GH_PATH is honoured only when the non-default `test-gh-provider`

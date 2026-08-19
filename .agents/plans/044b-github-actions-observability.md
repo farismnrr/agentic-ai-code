@@ -1,6 +1,6 @@
 # Plan 044B — GitHub Actions Observability
 
-**Status:** PLANNED
+**Status:** SOURCE COMPLETE / REMEDIATION VERIFYING
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 044A source merged / live verification pending
 

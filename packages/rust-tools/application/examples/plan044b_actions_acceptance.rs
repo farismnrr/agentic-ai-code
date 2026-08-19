@@ -62,53 +62,54 @@ async fn main() {
         .unwrap()
         .unwrap();
     assert!(out.content[0].text.contains("CI"));
-    assert_eq!(
-        argv(&base)[0..4],
-        ["workflow", "list", "--repo", "farismnrr/ai-code"]
-    );
     response(
         &base,
-        r#"[{"databaseId":42,"name":"CI","workflowName":"CI","displayTitle":"test","event":"push","headBranch":"main","headSha":"aaaaaaaa","status":"completed","conclusion":"success","createdAt":"x","startedAt":"x","updatedAt":"x","url":"https://github.com/farismnrr/ai-code/actions/runs/42","attempt":1,"number":7}]"#,
+        r#"{"id":1,"name":"CI","path":".github/workflows/ci.yml","state":"active","html_url":"https://github.com/farismnrr/ai-code/actions/workflows/ci.yml"}"#,
     );
     let out = dispatch_git_tool(
-        "workflow_run_list",
-        &json!({"cwd":repo,"branch":"main"}),
+        "workflow_get",
+        &json!({"cwd":repo,"workflow_id":1}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(out.content[0].text.contains("CI"));
+    assert_eq!(argv(&base)[0], "api");
+    assert!(argv(&base)[1].ends_with("/actions/workflows/1"));
+    let run_json = r#"{"databaseId":42,"name":"CI","workflowName":"CI","workflowDatabaseId":1,"displayTitle":"test","event":"push","headBranch":"main","headSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"completed","conclusion":"failure","createdAt":"x","startedAt":"x","updatedAt":"x","url":"https://github.com/farismnrr/ai-code/actions/runs/42","attempt":1,"number":7}"#;
+    response(&base, &format!("[{run_json}]"));
+    let out=dispatch_git_tool("workflow_run_list",&json!({"cwd":repo,"workflow_id":1,"branch":"main","commit_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"failure"}),&config).await.unwrap().unwrap();
+    assert!(out.content[0].text.contains("42"));
+    let a = argv(&base);
+    assert!(a.contains(&"--workflow".into()) && a.contains(&"--commit".into()));
+    response(&base, run_json);
+    let out = dispatch_git_tool(
+        "workflow_run_get",
+        &json!({"cwd":repo,"run_id":42}),
         &config,
     )
     .await
     .unwrap()
     .unwrap();
     assert!(out.content[0].text.contains("42"));
-    assert!(argv(&base).contains(&"--branch".into()));
-    response(
-        &base,
-        r#"{"databaseId":42,"name":"CI","workflowName":"CI","displayTitle":"test","event":"push","headBranch":"main","headSha":"aaaaaaaa","status":"completed","conclusion":"failure","createdAt":"x","startedAt":"x","updatedAt":"x","url":"https://github.com/farismnrr/ai-code/actions/runs/42","attempt":1,"number":7,"jobs":[{"databaseId":99,"name":"test","status":"completed","conclusion":"failure","startedAt":"x","completedAt":"x","url":"https://github.com/farismnrr/ai-code/actions/runs/42/job/99"}]}"#,
-    );
+    assert!(!out.content[0].text.contains("steps"));
+    let jobs_json = run_json.trim_end_matches('}').to_owned()
+        + r#", "jobs":[{"databaseId":99,"name":"test","status":"completed","conclusion":"failure","startedAt":"x","completedAt":"x","url":"https://github.com/farismnrr/ai-code/actions/runs/42/job/99","steps":[{"number":1,"name":"compile","status":"completed","conclusion":"failure","startedAt":"x","completedAt":"x"}]}]}"#;
+    response(&base, &jobs_json);
     let out = dispatch_git_tool(
-        "workflow_run_get",
-        &json!({"cwd":repo,"number":42}),
+        "workflow_run_jobs",
+        &json!({"cwd":repo,"run_id":42}),
         &config,
     )
     .await
     .unwrap()
     .unwrap();
-    assert!(out.content[0].text.contains("99"));
+    assert!(out.content[0].text.contains("compile"));
+    response(&base,"failure\tstep\tAuthorization: Bearer ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456\nnormal compiler failure\n");
     let out = dispatch_git_tool(
-        "workflow_job_get",
-        &json!({"cwd":repo,"number":99}),
-        &config,
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert!(out.content[0].text.contains("test"));
-    response(
-        &base,
-        "failure\tstep\tAuthorization: Bearer ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456\nnormal line\n",
-    );
-    let out = dispatch_git_tool(
-        "workflow_run_job_log",
-        &json!({"cwd":repo,"number":42,"job_id":99,"max_lines":10}),
+        "workflow_job_log_preview",
+        &json!({"cwd":repo,"job_id":99,"max_lines":10}),
         &config,
     )
     .await
@@ -117,16 +118,22 @@ async fn main() {
     let text = &out.content[0].text;
     assert!(!text.contains("ghp_"));
     assert!(text.contains("[REDACTED]"));
-    assert!(argv(&base).contains(&"--log-failed".into()));
-    response(
-        &base,
-        r#"[{"databaseId":1,"name":"CI","url":"https://github.com/evil/repo/actions/runs/1"}]"#,
-    );
-    assert!(
-        dispatch_git_tool("workflow_run_list", &json!({"cwd":repo}), &config)
-            .await
-            .is_err()
-    );
+    let a = argv(&base);
+    assert!(a.contains(&"--job".into()) && a.contains(&"--log-failed".into()));
+    assert!(dispatch_git_tool(
+        "workflow_run_list",
+        &json!({"cwd":repo,"commit_sha":"bad"}),
+        &config
+    )
+    .await
+    .is_err());
+    assert!(dispatch_git_tool(
+        "workflow_get",
+        &json!({"cwd":repo,"workflow_id":0}),
+        &config
+    )
+    .await
+    .is_err());
     let _ = fs::remove_dir_all(&base);
     println!("044B actions acceptance: PASS");
 }
