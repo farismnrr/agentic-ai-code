@@ -92,6 +92,11 @@ impl RustLanguageServer {
         semantic::symbols(&self.session, path).await
     }
 
+    pub async fn workspace_symbols(&self, query: &str) -> Result<Vec<Symbol>, LspError> {
+        self.wait_ready().await?;
+        semantic::workspace_symbols(&self.session, query).await
+    }
+
     pub async fn definition(
         &self,
         path: &str,

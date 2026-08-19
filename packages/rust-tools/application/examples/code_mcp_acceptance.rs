@@ -86,6 +86,30 @@ pub fn broken() -> i32 { \"not an integer\" }\n";
         "code_symbols returns add()",
     )?;
 
+    // ---- code_symbols (workspace query / rust-analyzer) ----
+    let workspace_symbols = call_until(
+        "code_symbols",
+        json!({"cwd": cwd, "query": "add", "max_results": 8}),
+        &config,
+        &manager,
+        |value| {
+            value["symbols"]
+                .as_array()
+                .is_some_and(|list| list.iter().any(|s| s["name"] == "add"))
+        },
+    )
+    .await?;
+    require(
+        workspace_symbols["symbols"]
+            .as_array()
+            .is_some_and(|list| list.iter().any(|s| s["name"] == "add")),
+        "Rust workspace-symbol search is backed by rust-analyzer and returns add()",
+    )?;
+    require(
+        workspace_symbols.to_string().find("/home/").is_none(),
+        "Rust workspace-symbol results do not expose absolute host paths",
+    )?;
+
     // ---- code_definition ----
     let add_call_col = source
         .lines()
