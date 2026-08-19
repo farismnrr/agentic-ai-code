@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Current Plan-039H MCP contract gate.
 #
-# The v5 snapshot is captured from the live relay tools/list path. Historical
-# v1/v2/v3/v4 artifacts remain immutable; v5 records Plan 040A task eligibility
-# for the existing network tools without rewriting Plan 039 evidence.
+# The v6 snapshot is captured from the live relay tools/list path. Historical
+# v1/v2/v3/v4/v5 artifacts remain immutable; v6 records Plan 040B bounded local
+# Git mutation tools without rewriting Plan 039/040A evidence.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/039h-tool-catalog-v5.json"
-catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v5.sha256"
+catalog="$root/.agents/contracts/039h-tool-catalog-v6.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v6.sha256"
+historical_v5="$root/.agents/contracts/039h-tool-catalog-v5.json"
+historical_v5_hash="$root/.agents/contracts/039h-tool-catalog-v5.sha256"
 historical_v4="$root/.agents/contracts/039h-tool-catalog-v4.json"
 historical_v4_hash="$root/.agents/contracts/039h-tool-catalog-v4.sha256"
 historical_v3="$root/.agents/contracts/039c-tool-catalog-v3.json"
@@ -18,6 +20,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
+test -f "$historical_v5"
+test -f "$historical_v5_hash"
 test -f "$historical_v4"
 test -f "$historical_v4_hash"
 test -f "$historical_v3"
@@ -35,7 +39,10 @@ validate_snapshot() {
   if [[ "$expected" != "$(jq -S -c . "$runtime")" ]]; then return 1; fi
 }
 
-# Historical v3/v4 integrity is checked independently of the live runtime.
+# Historical v3/v4/v5 integrity is checked independently of the live runtime.
+v5_normalized="$(jq -S -c . "$historical_v5")"
+v5_hash="$(printf '%s' "$v5_normalized" | sha256sum | awk '{print $1}')"
+test "$v5_hash" = "$(tr -d '[:space:]' < "$historical_v5_hash")"
 v4_normalized="$(jq -S -c . "$historical_v4")"
 v4_hash="$(printf '%s' "$v4_normalized" | sha256sum | awk '{print $1}')"
 test "$v4_hash" = "$(tr -d '[:space:]' < "$historical_v4_hash")"

@@ -44,7 +44,7 @@ export interface CapabilityAssessment extends CapabilityFacts {
 
 const SAFE_READ_TOOLS = new Set([
   'directory_list', 'file_search', 'text_search', 'file_read',
-  'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame',
+  'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'git_branch_list', 'git_operation_status',
   'code_symbols', 'code_definition', 'code_references', 'code_hover',
   'code_diagnostics', 'code_rename_preview', 'web_search'
 ])
@@ -58,7 +58,10 @@ const READ_COMMANDS = new Map([
 
 const REVIEWED_STRUCTURED_TOOLS = new Set([
   ...SAFE_READ_TOOLS,
-  'file_write', 'file_edit', 'apply_patch', 'http_fetch', 'local_terminal'
+  'file_write', 'file_edit', 'apply_patch',
+  'git_branch_create', 'git_branch_switch', 'git_stage', 'git_unstage', 'git_commit',
+  'git_merge_start', 'git_merge_continue', 'git_merge_abort', 'git_rebase_start', 'git_rebase_continue', 'git_rebase_abort', 'git_branch_delete',
+  'http_fetch', 'local_terminal'
 ])
 
 function inputRecord(input: unknown): Record<string, unknown> {
@@ -130,6 +133,11 @@ export function capabilityFactsForToolCall({
     || (toolName === 'file_edit' && !hasRequiredStrings(values, ['path', 'old_text', 'new_text']))
     || (toolName === 'apply_patch' && !hasString(values, 'patch'))
     || (toolName === 'git_show' && !hasString(values, 'ref'))
+    || (['git_branch_create', 'git_branch_switch', 'git_branch_delete'].includes(toolName) && !hasString(values, 'name'))
+    || (toolName === 'git_branch_create' && 'start_point' in values && !hasString(values, 'start_point'))
+    || (['git_stage', 'git_unstage'].includes(toolName) && (!Array.isArray(values.paths) || values.paths.length === 0 || values.paths.some(path => typeof path !== 'string' || path === '')))
+    || (toolName === 'git_commit' && !hasString(values, 'message'))
+    || (['git_merge_start', 'git_rebase_start'].includes(toolName) && !hasString(values, 'ref'))
     || (toolName === 'http_fetch' && !hasString(values, 'url'))
     || (toolName === 'web_search' && !hasString(values, 'query'))
     || (['local_terminal', 'terminal_exec'].includes(toolName) && !hasString(values, 'command'))
@@ -210,6 +218,8 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
   if (toolName === 'file_write' || toolName === 'file_edit' || toolName === 'apply_patch') return ['workspace_write']
+  if (['git_branch_create', 'git_branch_switch', 'git_stage', 'git_unstage', 'git_commit', 'git_merge_start', 'git_merge_continue'].includes(toolName)) return ['workspace_write']
+  if (['git_merge_abort', 'git_rebase_start', 'git_rebase_continue', 'git_rebase_abort', 'git_branch_delete'].includes(toolName)) return ['workspace_write', 'workspace_delete']
   if (SAFE_READ_TOOLS.has(toolName)) return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
   if (trustedProvenance === 'external') {
     if (annotations?.destructiveHint) return ['external_mutation']
