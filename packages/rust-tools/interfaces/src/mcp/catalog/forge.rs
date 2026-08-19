@@ -283,6 +283,51 @@ pub(super) fn security_tools() -> Vec<Tool> {
     ]
 }
 
+pub(super) fn action_mutation_tools() -> Vec<Tool> {
+    vec![
+        mutation_tool(
+            "workflow_dispatch",
+            "Workflow Dispatch",
+            "Dispatch one workflow by numeric ID on an explicit ref with bounded string inputs.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"workflow_id":{"type":"integer","minimum":1},"ref":{"type":"string","minLength":1,"maxLength":256},"inputs":{"type":"object","maxProperties":20,"additionalProperties":{"type":"string","maxLength":1024}}},"required":["workflow_id","ref"],"additionalProperties":false}),
+        ),
+        mutation_tool(
+            "workflow_run_rerun",
+            "Workflow Run Rerun",
+            "Rerun one workflow run by numeric ID.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"run_id":{"type":"integer","minimum":1}},"required":["run_id"],"additionalProperties":false}),
+        ),
+        mutation_tool(
+            "workflow_run_cancel",
+            "Workflow Run Cancel",
+            "Cancel one workflow run by numeric ID.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"run_id":{"type":"integer","minimum":1}},"required":["run_id"],"additionalProperties":false}),
+        ),
+    ]
+}
+
+fn mutation_tool(
+    name: &'static str,
+    title: &'static str,
+    description: &'static str,
+    input_schema: serde_json::Value,
+) -> Tool {
+    Tool {
+        name,
+        title: Some(title),
+        description,
+        input_schema,
+        annotations: Some(ToolAnnotations {
+            read_only_hint: false,
+            destructive_hint: true,
+            idempotent_hint: false,
+            open_world_hint: true,
+        }),
+        security_schemes: coding_security_scheme(),
+        execution: None,
+    }
+}
+
 fn read_tool(
     name: &'static str,
     title: &'static str,

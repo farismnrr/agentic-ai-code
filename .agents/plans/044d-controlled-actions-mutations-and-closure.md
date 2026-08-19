@@ -1,6 +1,6 @@
 # Plan 044D — Controlled GitHub Actions Mutations and Plan 044 Closure
 
-**Status:** PLANNED
+**Status:** SOURCE COMPLETE / V9 CONTRACT FROZEN / LIVE VERIFICATION PENDING
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plans 044A, 044B and 044C source merged / live verification pending
 
