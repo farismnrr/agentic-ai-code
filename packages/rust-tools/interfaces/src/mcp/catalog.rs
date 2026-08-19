@@ -125,7 +125,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: None,
+            execution: Some(json!({ "taskSupport": "optional" })),
         },
         Tool {
             name: "web_search",
@@ -147,7 +147,7 @@ pub fn tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: None,
+            execution: Some(json!({ "taskSupport": "optional" })),
         },
         Tool {
             name: "directory_list",

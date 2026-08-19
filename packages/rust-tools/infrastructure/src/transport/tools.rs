@@ -278,8 +278,11 @@ pub(super) async fn handle_tools_call(
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
 
-    if call.name == "terminal_exec" && client_supports_tasks(request.params.as_ref()) {
-        let task_id = relay_application::execution::start_terminal_job(
+    if client_supports_tasks(request.params.as_ref())
+        && relay_application::execution::tool_call_supports_tasks(&tool, &call.arguments)
+    {
+        let task_id = relay_application::execution::start_tool_task(
+            &tool,
             &call.arguments,
             &state.config,
             &state.jobs,
@@ -293,6 +296,13 @@ pub(super) async fn handle_tools_call(
                 &McpError::Internal("task creation failed".into()),
             )
         })?;
+        super::task_lifecycle::observe(
+            state.clone(),
+            task_id,
+            call.name.clone(),
+            effects.clone(),
+            call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
+        );
         let response = Response::new(request.id.clone(), task.create_task_json());
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }

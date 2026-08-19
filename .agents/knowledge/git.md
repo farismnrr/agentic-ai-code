@@ -1,26 +1,25 @@
 # Git workflow
 
-Documentation/planning edits and implementation changes intentionally use different workflows.
+Documentation/planning edits and implementation changes intentionally use different workflows, but the repository currently has a single long-lived branch: `main` (`origin/HEAD -> origin/main`; no `dev` branch exists).
 
-- **Docs/plans:** documentation-only and planning-only edits may be committed directly to `dev`. Do **not** create a branch or pull request for these by default.
-- **Implementation:** source/runtime/config/dependency/script changes must use a short-lived branch and pull request targeting `dev`.
-- **Release:** never commit directly to `main`; `dev` → `main` promotion always requires an explicit user request and a PR.
+- **Docs/plans:** documentation-only and planning-only edits may be committed directly to `main` when the operator requests or accepts that direct-docs workflow. Do **not** create a branch or pull request for docs-only work by default.
+- **Implementation:** source/runtime/config/dependency/script changes must use a short-lived branch based on current `main` and a pull request targeting `main`.
+- **Release/deployment:** merging implementation to `main` is not itself authorization to tag, publish, deploy, restart services, or mutate production/runtime state.
 
 A docs/plan edit must stay docs-only. If the same task starts changing executable code, runtime config, dependencies, migrations, scripts, or other implementation surfaces, switch to an implementation branch before making those changes.
 
-## Long-lived branches
+## Long-lived branch
 
 ```text
-docs / plans ───────────────▶ dev
-implementation branch ──PR──▶ dev ──PR──▶ main
+docs / plans ───────────────▶ main
+implementation branch ──PR──▶ main
 ```
 
 | Branch | Role | How it moves |
 | --- | --- | --- |
-| `dev` | Integration branch | Direct docs/plans; implementation via PRs from short-lived branches |
-| `main` | Release branch | PR from `dev`, only when the user explicitly asks |
+| `main` | Canonical integration/release branch | Direct docs/plans where appropriate; implementation via PRs from short-lived branches |
 
-Implementation branches base from current `dev`, never `main`.
+Implementation branches base from current `main`. If a future integration branch is introduced, verify it from current Git refs and repository policy before changing this workflow; never resurrect a historical `dev` assumption from memory alone.
 
 ## Repository verification policy
 
@@ -50,7 +49,7 @@ Do not introduce a unit-test framework or unit-test suite unless the user explic
 
 When the requested change is only documentation, memories, agent knowledge, or a numbered plan:
 
-1. Edit the canonical file directly on current `dev`.
+1. Edit the canonical file directly on current `main` when using the accepted direct-docs workflow.
 2. Keep the change docs-only.
 3. Do not create a branch or PR just for the documentation/plan edit.
 4. If using a connector/API, state truthfully that the local pre-commit hook did not run there.
@@ -60,18 +59,16 @@ When the requested change is only documentation, memories, agent knowledge, or a
 
 When implementation starts:
 
-1. Branch from current `dev` before changing implementation files.
+1. Branch from current `main` before changing implementation files.
 2. Implement the bounded change.
 3. Run relevant subsystem verification.
 4. Run `pnpm verify:commit` until it passes.
 5. Review `git status`; stage only intended files.
 6. Commit only after the local gate is green.
-7. Push/open a PR targeting `dev` when requested/appropriate.
+7. Push/open a PR targeting `main` when requested/appropriate.
 8. Record exact local verification in the PR body.
 
 Do not merge merely because GitHub says a PR is mergeable. There is no CI. Merge only when the user has authorized it and required verification is recorded.
-
-`dev` → `main` promotion always requires an explicit user request.
 
 ## Plans
 
@@ -79,7 +76,7 @@ Plan history through 029b was compacted once into [`../plans/030-previous-plans-
 
 Future plans are separate files starting at **031**. Use `NNN-kebab-case.md`, never reuse a number, and do not fold post-030 plans back into Plan 030 automatically.
 
-Creating or editing a plan is a documentation-only operation and therefore happens directly on `dev`. **Implementation of that plan** happens on one or more short-lived branches/PRs as appropriate.
+Creating or editing a plan is a documentation-only operation and therefore may happen directly on `main` under the accepted direct-docs workflow. **Implementation of that plan** happens on one or more short-lived branches/PRs as appropriate.
 
 ## Branch names
 
@@ -93,7 +90,7 @@ Recommended types: `feat/`, `fix/`, `chore/`, `refactor/`, `build/`, `perf/`, `s
 
 For plan implementation, include the current plan/phase when useful, for example `refactor/031-p2-app-shell`.
 
-Keep branches short-lived and base/rebase them on `dev` rather than merging `dev` into the branch.
+Keep branches short-lived and base/rebase them on current `main` rather than merging `main` into the branch.
 
 ## Commits
 
@@ -111,7 +108,7 @@ Rules: imperative lowercase subject, no trailing period, ≤ 72 chars; explain *
 
 PRs are for implementation/integration work, not ordinary docs/plan edits.
 
-- Base implementation PRs on `dev`.
+- Base implementation PRs on `main`.
 - Title follows Conventional Commit style.
 - Body states why, what changed, and **exact local verification performed**.
 - Do not write “CI passed”; CI does not exist.
@@ -136,9 +133,9 @@ Do not create a unit-test suite as a substitute for these explicit local checks 
 
 ## Rules for agents
 
-- For user-requested docs/plans, edit directly on `dev`; do not waste time creating a branch or PR.
-- Never commit implementation/runtime/config/dependency/script changes directly to `dev`.
-- Never commit directly to `main`.
+- For user-requested docs/plans, edit directly on `main` when the accepted direct-docs workflow applies; do not waste time creating a branch or PR.
+- Never commit implementation/runtime/config/dependency/script changes directly to `main`; use a short-lived implementation branch and PR.
+- Direct `main` commits are documentation/planning-only, never an implementation shortcut.
 - Before **every normal local implementation commit**, ensure `pnpm verify:commit` passed; the hook must not be bypassed.
 - Never claim connector/API docs commits passed a local hook that did not run.
 - Never use `git push --force` on a shared branch.

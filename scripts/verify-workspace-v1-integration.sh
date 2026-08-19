@@ -32,23 +32,30 @@ def req(url,method,name=None,args=None,i=1):
  params={} if method=='tools/list' else {'name':name,'arguments':args or {}}
  r=urllib.request.Request(url,data=json.dumps(mcp(method,params,i)).encode(),headers=h,method='POST')
  try:
-  with urllib.request.urlopen(r,timeout=10) as x: raw=x.read(); return x.status,json.loads(raw)
+  with urllib.request.urlopen(r,timeout=10) as x: raw=x.read(); result=(x.status,json.loads(raw))
  except urllib.error.HTTPError as e:
   raw=e.read();
-  try:return e.code,json.loads(raw)
-  except Exception:return e.code,{'_raw':raw.decode('utf-8','replace')}
+  try:result=(e.code,json.loads(raw))
+  except Exception:result=(e.code,{'_raw':raw.decode('utf-8','replace')})
+ time.sleep(.14)
+ return result
+WORKSPACE_CWD_TOOLS={'directory_list','file_search','text_search','file_read','file_edit','file_write','git_status','git_diff','git_show','git_log','git_blame','git_rename','git_copy','terminal_exec','terminal_job_start'}
+def scoped_args(name,args):
+ args=dict(args)
+ if name in WORKSPACE_CWD_TOOLS and 'cwd' not in args: args['cwd']='ws'
+ return args
 def call(url,name,args,i=1):
- st,b=req(url,'tools/call',name,args,i); time.sleep(.14); assert st==200,(name,st,b); r=b['result']; assert r['resultType']=='complete'; return r
+ st,b=req(url,'tools/call',name,scoped_args(name,args),i); assert st==200,(name,st,b); r=b['result']; assert r['resultType']=='complete'; return r
 def payload(result):
  assert result['isError'] is False,result
  text=next(x['text'] for x in result['content'] if x.get('type')=='text'); return json.loads(text)
 def expect_error(url,name,args,label):
- st,b=req(url,'tools/call',name,args,90)
+ st,b=req(url,'tools/call',name,scoped_args(name,args),90)
  assert st in (200,400,413),(label,st,b)
  if st==200: assert b['result']['isError'] is True,(label,b)
  elif st==400: assert b['error']['code']==-32602,(label,b)
-with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
- ws=os.path.join(base,'ws'); ext=os.path.join(base,'ext'); os.makedirs(os.path.join(ws,'src')); os.makedirs(ext)
+with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base, tempfile.TemporaryDirectory(prefix='relay-workspace-v1-external-') as external:
+ ws=os.path.join(base,'ws'); ext=external; os.makedirs(os.path.join(ws,'src'))
  os.makedirs(os.path.join(ws,'.ssh')); open(os.path.join(ws,'.ssh','id_test'),'w').write('protected-canary')
  open(os.path.join(ws,'.npmrc'),'w').write('protected-canary')
  open(os.path.join(ws,'.git-credentials'),'w').write('protected-git-credentials-canary')
@@ -73,22 +80,27 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
  os.symlink('loop-b',os.path.join(ws,'loop-a')); os.symlink('loop-a',os.path.join(ws,'loop-b'))
  # Synthetic operator-approved toolchains prove Bubblewrap can expose the
  # minimum read-only runtime state without rebinding the owner's whole home.
- toolhome=os.path.join(ws,'.synthetic-toolhome'); cargo_bin=os.path.join(toolhome,'.cargo','bin'); rustup_home=os.path.join(toolhome,'.rustup')
+ toolhome=os.path.join(base,'synthetic-home'); cargo_bin=os.path.join(toolhome,'.cargo','bin'); rustup_home=os.path.join(toolhome,'.rustup')
  os.makedirs(cargo_bin); os.makedirs(rustup_home)
+ open(os.path.join(toolhome,'host-home-canary.txt'),'w').write('must-not-be-visible')
  open(os.path.join(toolhome,'.cargo','credentials'),'w').write('synthetic-cargo-secret')
  open(os.path.join(rustup_home,'marker'),'w').write('synthetic-rustup-ok')
  rustup=os.path.join(cargo_bin,'rustup')
- open(rustup,'w').write(f'''#!/bin/sh\n[ "${{RUSTUP_HOME:-}}" = "{rustup_home}" ] || exit 41\n[ -r "{rustup_home}/marker" ] || exit 42\n[ ! -s "{os.path.join(toolhome,'.cargo','credentials')}" ] || exit 43\nprintf 'synthetic-cargo-ok\\n'\n''')
+ open(rustup,'w').write(f'''#!/bin/sh\n[ "${{0##*/}}" = "cargo" ] || exit 40\n[ "${{RUSTUP_HOME:-}}" = "{rustup_home}" ] || exit 41\n[ -r "{rustup_home}/marker" ] || exit 42\n[ ! -s "{os.path.join(toolhome,'.cargo','credentials')}" ] || exit 43\nprintf 'synthetic-cargo-ok\\n'\n''')
  os.chmod(rustup,0o755); os.symlink('rustup',os.path.join(cargo_bin,'cargo'))
  node_root=os.path.join(ws,'.synthetic-node-v1'); node_bin=os.path.join(node_root,'bin'); os.makedirs(node_bin); os.makedirs(os.path.join(node_root,'lib','node_modules'))
  node=os.path.join(node_bin,'node'); open(node,'w').write("#!/bin/sh\nprintf 'synthetic-node-ok\\n'\n"); os.chmod(node,0o755)
  fnm_alias=os.path.join(ws,'.synthetic-fnm','aliases'); os.makedirs(fnm_alias); os.symlink(node_root,os.path.join(fnm_alias,'default'))
+ shim_bin=os.path.join(base,'safe-shim-bin'); target_bin=os.path.join(base,'safe-target-bin'); os.makedirs(shim_bin); os.makedirs(target_bin)
+ shim_target=os.path.join(target_bin,'cross-safe-target'); open(shim_target,'w').write("#!/bin/sh\nprintf 'cross-safe-shim-ok\\n'\n"); os.chmod(shim_target,0o755); os.symlink(shim_target,os.path.join(shim_bin,'cross-safe-shim'))
+ unsafe_target=os.path.join(ext,'unsafe-shim-target'); open(unsafe_target,'w').write("#!/bin/sh\nprintf 'must-not-run\\n'\n"); os.chmod(unsafe_target,0o755); os.symlink(unsafe_target,os.path.join(shim_bin,'escaping-safe-shim'))
  relay=None
  mock=ThreadingHTTPServer(('127.0.0.1',0),MockHandler); threading.Thread(target=mock.serve_forever,daemon=True).start()
  try:
-  port=free_port(); relay_args=[RELAY,'relay','--port',str(port),'--dir',ws,'--execution-root',ws,'--origin',O,'--mode','local','--toolchain-path',cargo_bin,'--toolchain-path',os.path.join(fnm_alias,'default','bin')]
+  port=free_port(); relay_args=[RELAY,'relay','--port',str(port),'--dir',ws,'--execution-root',base,'--origin',O,'--mode','local','--toolchain-path',cargo_bin,'--toolchain-path',os.path.join(fnm_alias,'default','bin'),'--toolchain-path',shim_bin,'--toolchain-path',target_bin]
   if ALLOW_TERMINAL_NETWORK: relay_args.append('--allow-terminal-network')
-  relay=subprocess.Popen(relay_args,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True); wait(port,relay); url=f'http://127.0.0.1:{port}/mcp'
+  relay_env=os.environ.copy(); relay_env['HOME']=toolhome
+  relay=subprocess.Popen(relay_args,cwd=ROOT,env=relay_env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True); wait(port,relay); url=f'http://127.0.0.1:{port}/mcp'
   st,b=req(url,'tools/list'); assert st==200
   tools={t['name']:t for t in b['result']['tools']}; names=['directory_list','file_search','text_search','file_read','file_edit','file_write','git_show']
   for name in names:
@@ -162,10 +174,15 @@ with tempfile.TemporaryDirectory(prefix='relay-workspace-v1-') as base:
    expect_error(url,tool,args,label)
   assert open(canary).read()=='external' and not os.path.exists(os.path.join(ext,'pwn.txt'))
   # Operator-approved user toolchains remain usable without exposing the
-  # owner's broader home or credential files. Cover both a rustup-style shim
-  # and an fnm-style symlinked Node alias.
+  # owner's broader home or credential files. HOME is the runtime-resolved
+  # operator home path, but the host home itself is not bound wholesale.
+  r=call(url,'terminal_exec',{'command':'sh','args':['-c','printf "%s\\n" "$HOME"; test ! -e "$HOME/host-home-canary.txt"']}); home_text=json.dumps(r['content']); assert r['isError'] is False and toolhome in home_text,home_text
+  # Cover a rustup-style shim, an fnm-style symlinked Node alias, and a shim
+  # whose target lives in a different explicitly reviewed safe PATH root.
   r=call(url,'terminal_exec',{'command':'cargo','args':[]}); toolchain_text=json.dumps(r['content']); assert r['isError'] is False and 'synthetic-cargo-ok' in toolchain_text,toolchain_text
   r=call(url,'terminal_exec',{'command':'node','args':[]}); node_text=json.dumps(r['content']); assert r['isError'] is False and 'synthetic-node-ok' in node_text,node_text
+  r=call(url,'terminal_exec',{'command':'cross-safe-shim','args':[]}); shim_text=json.dumps(r['content']); assert r['isError'] is False and 'cross-safe-shim-ok' in shim_text,shim_text
+  expect_error(url,'terminal_exec',{'command':'escaping-safe-shim','args':[]},'toolchain shim escaping all reviewed safe PATH roots')
   # Existing tool regressions. Direct argv values beginning with '-' or '--'
   # must remain ordinary child-process arguments for both sync and job paths.
   r=call(url,'terminal_exec',{'command':'printf','args':['%s %s','--help','--locked']}); terminal_text=json.dumps(r['content']); assert r['isError'] is False and '--help --locked' in terminal_text,terminal_text
