@@ -1,6 +1,6 @@
 # Plan 041 — Code Intelligence and Platform Polish Roadmap
 
-**Status:** IN PROGRESS
+**Status:** CLOSED / VERIFIED / MERGED (2026-08-19)
 **Created:** 2026-08-19
 **Predecessor:** Plan 040 — Git + GitHub Delivery Workflow
 **Plan family:** 041A–041C
@@ -13,28 +13,35 @@ Plan 041 intentionally starts only after Plan 040 is CLOSED / VERIFIED so capabi
 
 ## Execution guide — sequential only
 
-Do not implement 041A–041C together.
-
-1. Begin 041A only after Plan 040 is CLOSED / VERIFIED.
-2. Close/merge 041A before starting 041B.
-3. Close/merge 041B before starting 041C.
-4. Re-read current `main` before each child plan; previously observed gaps may have changed through dependency upgrades or Plan 040 work.
-5. Start Plan 042 only after 041 is CLOSED / VERIFIED.
-6. Follow [Plans 040–042 execution guide](../roadmap-execution-guide-040-042.md): do not restart/redeploy the relay per child/phase. Runtime restart and external MCP client connector/action resync are operator-owned and occur only at a genuine live-runtime checkpoint after the largest safe implementation batch.
+1. 041A closed/merged before 041B began.
+2. 041B closed/merged before 041C began.
+3. Each child re-read current `main` before implementation.
+4. Plan 042 starts only after this Plan 041 closure is landed.
+5. Runtime restart/resync remains operator-owned and is required only when a genuine live-runtime checkpoint needs it.
 
 ## Child plans
 
 | Plan | Capability | Depends on | Status | Exit criterion |
 | --- | --- | --- | --- | --- |
-| 041A | LSP capability completion | 040 | CLOSED / VERIFIED / MERGED (2026-08-19) | Rust workspace-symbol and practical TS/Vue code-intelligence gaps are re-investigated and improved where upstream capabilities allow, with truthful unsupported results otherwise |
-| 041B | Dependency/toolchain hygiene | 041A | CLOSED / VERIFIED / MERGED (2026-08-19) | Actionable deprecated/security/toolchain debt is reduced through safe owner-level upgrades without forced transitive overrides |
-| 041C | Observability/debugging polish | 041B | IMPLEMENTED / VERIFIED — MERGE PENDING | Only measured observability gaps are closed using existing telemetry/logging architecture without a parallel event system |
+| 041A | LSP capability completion | 040 | CLOSED / VERIFIED / MERGED (2026-08-19) | Rust workspace-symbol and practical TS/Vue code-intelligence gaps were re-investigated and improved where upstream capabilities allowed, with truthful unsupported results otherwise |
+| 041B | Dependency/toolchain hygiene | 041A | CLOSED / VERIFIED / MERGED (2026-08-19) | Actionable deprecated/security/toolchain debt was reduced through safe owner-level upgrades without forced transitive overrides |
+| 041C | Observability/debugging polish | 041B | CLOSED / VERIFIED / MERGED (2026-08-19) | Measured observability gaps were closed using the existing telemetry/logging architecture without a parallel event system |
 
 ## Master todo
 
 - [x] 041A — LSP capability completion
 - [x] 041B — dependency/toolchain hygiene
-- [ ] 041C — observability/debugging polish
+- [x] 041C — observability/debugging polish
+
+## Closure evidence
+
+- 041A implementation and closeout merged through PRs #145 and #146.
+- 041B security/toolchain remediation merged through PR #147; JavaScript audit and fresh RustSec audit were clean after the `h2` lockfile remediation.
+- 041C observability/debugging implementation merged through PR #148 at remote `main` commit `8a02ccb46e7587b6ff3d31bf4ec98e7af0125a82`.
+- 041C focused confidentiality/observability acceptance, Plan-039J regression, full typecheck, lint/fmt/clippy, architecture, maintainability, subagent/background/task-context gates, and current Plan-039H contract passed in the isolated task worktree.
+- Existing Rust OTel instrumentation and W3C trace propagation were reviewed; no duplicate log-to-OTel bridge was introduced.
+- Final internal adversarial review found zero unresolved P0/P1 across Plan 041 scope.
+- No relay restart/resync is required for this docs-only closeout.
 
 ## Non-goals
 
@@ -46,9 +53,11 @@ Do not implement 041A–041C together.
 
 ## Closure criteria
 
-- every child plan independently verified and merged;
-- no regression to Plan-039 security or Plan-040 delivery boundaries;
-- code intelligence reports real server capabilities truthfully;
-- dependency changes are justified by owner-level upgrades and full regression evidence;
-- observability remains bounded and secret-safe;
-- independent final review finds zero unresolved P0/P1.
+- [x] every child plan verified and merged;
+- [x] no regression to Plan-039 security or Plan-040 delivery boundaries;
+- [x] code intelligence reports real server capabilities truthfully;
+- [x] dependency changes are justified by owner-level upgrades and regression evidence;
+- [x] observability remains bounded and secret-safe;
+- [x] final review finds zero unresolved P0/P1.
+
+**PLAN 041 CLOSED / VERIFIED / MERGED — NEXT: PLAN 042**
