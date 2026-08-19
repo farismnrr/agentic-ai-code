@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # Current Plan-039H MCP contract gate.
 #
-# The v8 snapshot is captured from the candidate relay tools/list path. Historical
-# v1-v7 artifacts remain immutable; v8 records Plan 043 workspace/worktree,
-# broader structured Git, and timing-era catalog changes without rewriting history.
-# Composed v9 canonical freeze is deferred to Plan 044D.
+# The v9 snapshot is captured from the candidate relay tools/list path. Historical
+# v1-v7 artifacts remain immutable; v9 records the composed Plan 044 GitHub operations surface while preserving historical snapshots.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/039h-tool-catalog-v8.json"
-catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v8.sha256"
+catalog="$root/.agents/contracts/039h-tool-catalog-v9.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v9.sha256"
 historical_v7="$root/.agents/contracts/039h-tool-catalog-v7.json"
 historical_v7_hash="$root/.agents/contracts/039h-tool-catalog-v7.sha256"
 historical_v6="$root/.agents/contracts/039h-tool-catalog-v6.json"
@@ -100,15 +98,17 @@ with tempfile.TemporaryDirectory(prefix='relay-phase039h-') as workspace:
         except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
 PY
 
-# Verify canonical v8 baseline tools are preserved identically in candidate runtime
+# Verify canonical v9 catalog matches candidate runtime exactly
 python3 - "$catalog" "$tmp/runtime.json" <<'PY'
 import json, sys
 catalog_file, runtime_file = sys.argv[1:]
-catalog = {t['name']: t for t in json.load(open(catalog_file))}
-runtime = {t['name']: t for t in json.load(open(runtime_file))}
-for name, tool in catalog.items():
-    assert name in runtime, f"Baseline tool {name} missing from candidate runtime"
-    assert tool == runtime[name], f"Baseline tool {name} modified in candidate runtime: {tool} vs {runtime[name]}"
+catalog_list = json.load(open(catalog_file))
+runtime_list = json.load(open(runtime_file))
+catalog = {t['name']: t for t in catalog_list}
+runtime = {t['name']: t for t in runtime_list}
+assert len(catalog_list) == 100, f"expected 100 v9 tools, got {len(catalog_list)}"
+assert catalog_list == runtime_list, "candidate runtime differs from canonical v9 catalog"
+assert len(runtime_list) == len(runtime), "duplicate tool names in candidate runtime"
 PY
 
 validate_snapshot_integrity "$catalog" "$catalog_hash_file"

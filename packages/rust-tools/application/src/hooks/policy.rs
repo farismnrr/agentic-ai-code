@@ -64,6 +64,12 @@ pub fn effect_classes(
         | "secret_scanning_alert_list"
         | "secret_scanning_alert_get"
         | "secret_scanning_alert_locations" => vec!["network_read", "privileged_bridge"],
+        "workflow_dispatch" | "workflow_run_rerun" | "workflow_run_cancel" => vec![
+            "network_read",
+            "network_write",
+            "external_mutation",
+            "privileged_bridge",
+        ],
         "change_request_create"
         | "change_request_update"
         | "change_request_merge"
