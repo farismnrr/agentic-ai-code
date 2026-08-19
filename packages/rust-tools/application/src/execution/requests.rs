@@ -225,7 +225,12 @@ fn build_text_search_invocation(
                 relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd_str))?
             }
         }
-        None => execution_root.clone(),
+        None => std::fs::canonicalize(
+            config
+                .resolved_dir()
+                .map_err(|_| McpError::Internal("failed to resolve workspace directory".into()))?,
+        )
+        .map_err(|_| McpError::InvalidRequest("workspace directory is inaccessible".into()))?,
     };
     if !config.is_path_contained(&cwd) {
         return Err(McpError::InvalidRequest(
