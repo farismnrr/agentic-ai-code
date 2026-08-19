@@ -2,6 +2,7 @@ mod actions;
 mod change_requests;
 mod common;
 mod issues;
+mod security;
 
 pub(super) use actions::{
     workflow_get, workflow_job_log_preview, workflow_list, workflow_run_get, workflow_run_jobs,
@@ -13,4 +14,8 @@ pub(super) use change_requests::{
 };
 pub(super) use issues::{
     issue_close, issue_comment, issue_create, issue_get, issue_list, issue_reopen, issue_update,
+};
+pub(super) use security::{
+    code_scanning_alert_get, code_scanning_alert_list, dependabot_alert_get, dependabot_alert_list,
+    secret_scanning_alert_get, secret_scanning_alert_list, secret_scanning_alert_locations,
 };

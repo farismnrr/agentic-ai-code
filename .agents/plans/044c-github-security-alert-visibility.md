@@ -1,6 +1,6 @@
 # Plan 044C — GitHub Security Alert Visibility
 
-**Status:** PLANNED
+**Status:** SOURCE IMPLEMENTED / DETERMINISTIC VERIFICATION PASS / MERGE PENDING
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 044B source merged / live verification pending
 
