@@ -26,6 +26,7 @@
     "verify:040f": "pnpm verify:040b && pnpm verify:040c && pnpm verify:040d && node --experimental-strip-types scripts/verify-040f-delivery-integration.ts && bash scripts/phase-039h-contract.sh",
     "verify:041a": "bash scripts/verify-lsp-foundation.sh && bash scripts/verify-lsp-typescript.sh && bash scripts/verify-code-mcp.sh",
     "verify:041c": "node --experimental-strip-types scripts/verify-041c-observability-debugging.ts",
+    "verify:042a": "node --experimental-strip-types scripts/verify-042a-orchestrator-state-machine.ts",
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",

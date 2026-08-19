@@ -8,6 +8,8 @@ import { buildTurnMessages } from './history'
 import { createAssistantPersister } from './persistence'
 import { createLocalTerminalPolicy } from './local-terminal-policy'
 import { buildTaskUpdateTool } from '../task-context-output'
+import { buildOrchestratorPlanTool } from '../orchestration/tool'
+import { cancelCurrentOrchestratorGraph } from '../orchestration/task-graph'
 import { composeAgentTools } from './tool-composition'
 
 export interface ExecuteChatTurnInput {
@@ -113,7 +115,15 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
-    const internalTools = { task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }) }
+    const cancelOrchestration = () => {
+      cancelCurrentOrchestratorGraph(userId, conv.id)
+    }
+    if (abortSignal.aborted) cancelOrchestration()
+    else abortSignal.addEventListener('abort', cancelOrchestration, { once: true })
+    const internalTools = {
+      task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }),
+      orchestrator_plan: buildOrchestratorPlanTool({ userId, conversationId: conv.id, parentSessionId: conv.id })
+    }
     const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals, conv.permissionMode)
     tools = composeAgentTools(internalTools, mcp.tools)
     toolApproval = mcp.toolApproval
