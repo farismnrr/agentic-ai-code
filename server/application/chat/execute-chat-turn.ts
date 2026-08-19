@@ -1,6 +1,6 @@
 import type { UIMessage } from '#shared/types/chat'
 import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
-import type { ChatTurnDependencies } from './contracts'
+import type { ChatTurnDependencies, SubagentToolInput } from './contracts'
 import type { RequestTelemetryContext } from '../observability/contracts'
 import { loadAuthorizedChatContext } from './ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './workspace-context'
@@ -9,7 +9,6 @@ import { createAssistantPersister } from './persistence'
 import { createLocalTerminalPolicy } from './local-terminal-policy'
 import { buildTaskUpdateTool } from '../task-context-output'
 import { buildOrchestratorPlanTool } from '../orchestration/tool'
-import { cancelCurrentOrchestratorGraph } from '../orchestration/task-graph'
 import { composeAgentTools } from './tool-composition'
 
 export interface ExecuteChatTurnInput {
@@ -115,11 +114,6 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let close: () => Promise<void> = async () => {}
 
   if (conv.mode === 'agent') {
-    const cancelOrchestration = () => {
-      cancelCurrentOrchestratorGraph(userId, conv.id)
-    }
-    if (abortSignal.aborted) cancelOrchestration()
-    else abortSignal.addEventListener('abort', cancelOrchestration, { once: true })
     const internalTools = {
       task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }),
       orchestrator_plan: buildOrchestratorPlanTool({ userId, conversationId: conv.id, parentSessionId: conv.id })
@@ -167,7 +161,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
       telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
     }
     if (workspacePath) {
-      tools['delegate_task'] = deps.subagent.build({
+      const subagentInput: SubagentToolInput = {
         userId,
         parentSessionId: conv.id,
         authority: {
@@ -182,9 +176,11 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
         approvals: conv.approvals,
         permissionMode: conv.permissionMode,
         abortSignal
-      })
+      }
+      tools['delegate_task'] = deps.subagent.build(subagentInput)
       telemetry?.event('chat.subagent.dispatch', 'ok')
-      Object.assign(tools, deps.subagent.buildBackground({ userId, parentSessionId: conv.id, authority: { tools: conv.enabledToolIds, effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation'], working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace', model_policy: 'default', workspace_root: workspacePath }, model: deps.getChatModel(provider, modelInfo.modelId), enabledToolIds: conv.enabledToolIds, approvals: conv.approvals, permissionMode: conv.permissionMode, abortSignal }))
+      Object.assign(tools, deps.subagent.buildBackground(subagentInput))
+      Object.assign(tools, deps.subagent.buildOrchestration(subagentInput))
     }
   }
 

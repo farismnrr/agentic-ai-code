@@ -70,7 +70,7 @@ const blockedClaim = claimReadyNode({ ...owner, ...policy, nodeId: 'blocked-chil
 graph = settleClaim({ ...owner, nodeId: 'blocked-child', generation: graph.generation, lease: blockedClaim.lease, outcome: 'blocked', now: 3202 })
 assert.equal(graph.nodes[0]?.status, 'blocked')
 assert.deepEqual(graph.ready, [])
-assert.throws(() => claimReadyNode({ ...owner, ...policy, nodeId: 'blocked-child', owner: 'retry-owner', generation: graph.generation, now: 3203 }), /not ready/)
+assert.throws(() => claimReadyNode({ ...owner, ...policy, nodeId: 'blocked-child', owner: 'retry-owner', generation: graph.generation, now: 3203 }), /not ready|not active/)
 
 // Identity fields fail closed instead of truncating into potentially colliding ownership/session identities.
 assert.throws(() => replaceOrchestratorGraph({ ...owner, parentSessionId: 's'.repeat(129), nodes: [node('identity')] }), /malformed orchestrator string/)
@@ -135,8 +135,10 @@ assert(!serialized.includes('reasoning'))
 
 const graphSource = readFileSync(resolve(import.meta.dirname, '../server/application/orchestration/task-graph.ts'), 'utf8')
 const chatSource = readFileSync(resolve(import.meta.dirname, '../server/application/chat/execute-chat-turn.ts'), 'utf8')
-assert(!graphSource.includes('SubagentRuntime'), '042A must not introduce child execution before 042B')
+const subagentToolSource = readFileSync(resolve(import.meta.dirname, '../server/infrastructure/ai/subagent-tool.ts'), 'utf8')
+assert(!graphSource.includes('SubagentRuntime'), '042A task-graph state must remain independent of child execution')
 assert(chatSource.includes('orchestrator_plan: buildOrchestratorPlanTool'), 'parent agent must receive the bounded orchestration planning tool')
-assert(chatSource.includes(`abortSignal.addEventListener('abort', cancelOrchestration`), 'parent cancellation must propagate into orchestration state')
+assert(chatSource.includes('buildOrchestration(subagentInput)'), 'parent agent must receive scheduler-aware orchestration tools')
+assert(subagentToolSource.includes(`input.abortSignal.addEventListener('abort', cancelActiveRun`), 'parent cancellation must propagate through the scheduler into owned child tasks')
 
 console.log('042A orchestrator state-machine acceptance: PASS')

@@ -17,7 +17,7 @@ export interface ChatPersistencePort { findLast(conversationId: string): Promise
 export interface ChatOwnershipPort { findConversation(userId: string, conversationId: string): Promise<ChatConversation | undefined>, findModel(userId: string, modelId: string): Promise<ChatModelRecord>, findProvider(userId: string, providerId: string): Promise<ChatProviderRecord>, findWorkspace(userId: string, workspaceId: string): Promise<{ name: string, path: string }> }
 export interface LocalTerminalPort { hasPairedDevice(userId: string): Promise<boolean>, buildTool(): unknown }
 export interface SubagentToolInput { userId: string, parentSessionId: string, authority: SubagentAuthority, model: ChatModelHandle, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode'], abortSignal: AbortSignal }
-export interface SubagentToolPort { build(input: SubagentToolInput): unknown, buildBackground(input: SubagentToolInput): Record<string, unknown> }
+export interface SubagentToolPort { build(input: SubagentToolInput): unknown, buildBackground(input: SubagentToolInput): Record<string, unknown>, buildOrchestration(input: SubagentToolInput): Record<string, unknown> }
 
 export interface ChatTurnDependencies {
   ownership: ChatOwnershipPort

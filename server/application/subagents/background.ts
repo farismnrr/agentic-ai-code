@@ -15,14 +15,24 @@ export class BackgroundTaskManager {
   private readonly now: () => number
   constructor(runtime: SubagentRuntime, worktrees = new WorktreeAllocator(), now = () => Date.now()) { this.runtime = runtime; this.worktrees = worktrees; this.now = now }
 
-  start(input: Omit<SubagentRequest, 'abort_signal'> & { isolation: BackgroundIsolation, repositoryRoot?: string, worktreeRoot?: string, baseRef?: string }): { task_id: string, state: BackgroundTaskState } {
+  capacity(parentSessionId: string) {
     this.evictTerminal()
     const active = [...this.tasks.values()].filter(task => !isTerminal(task.state))
-    const parentActive = active.filter(task => task.parent_session_id === input.parent_session_id)
-    if (active.length >= BACKGROUND_CAPS.global || parentActive.length >= BACKGROUND_CAPS.perParent) return { task_id: '', state: 'rejected' }
+    const parentActive = active.filter(task => task.parent_session_id === parentSessionId)
+    return {
+      global: Math.max(0, BACKGROUND_CAPS.global - active.length),
+      parent: Math.max(0, BACKGROUND_CAPS.perParent - parentActive.length)
+    }
+  }
+
+  start(input: Omit<SubagentRequest, 'abort_signal'> & { isolation: BackgroundIsolation, repositoryRoot?: string, worktreeRoot?: string, baseRef?: string, taskId?: string }): { task_id: string, state: BackgroundTaskState } {
+    this.evictTerminal()
+    const capacity = this.capacity(input.parent_session_id)
+    if (capacity.global === 0 || capacity.parent === 0) return { task_id: '', state: 'rejected' }
     if (input.isolation === 'worktree' && input.profile !== 'general-purpose') return { task_id: '', state: 'rejected' }
     if (input.isolation === 'shared_read' && input.profile === 'general-purpose') return { task_id: '', state: 'rejected' }
-    const task_id = randomUUID()
+    const task_id = input.taskId ?? randomUUID()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(task_id) || this.tasks.has(task_id)) return { task_id: '', state: 'rejected' }
     const entry: Entry = { task_id, parent_session_id: input.parent_session_id, user_id: input.user_id, agent_profile: input.profile, repository_identity: resolve(input.parent_authority.workspace_root), isolation: input.isolation, state: 'queued', progress_summary: 'Queued.', cleanup: input.isolation === 'worktree' ? 'preserved' : 'not_applicable', controller: new AbortController() }
     this.tasks.set(task_id, entry)
     void this.run(entry, input)
