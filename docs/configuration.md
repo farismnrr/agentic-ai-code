@@ -126,6 +126,17 @@ NUXT_OTEL_LOKI_PUSH_URL
 
 Telemetry is designed to remain useful without carrying secrets/PII. Do not weaken sanitization to make debugging easier; use bounded classifications and request/trace IDs instead.
 
+### Debugging one agent/tool action
+
+Use `request.id` / trace correlation rather than raw payload logging. For one failed or blocked tool action:
+
+1. find `chat.tool.policy` to see the bounded `tool.name`, effect set, policy outcome, and policy source; a denied action is observable even though tool execution never starts;
+2. if execution was allowed, follow `chat.tool.action` for duration and bounded result classification (`cancelled`, `timeout`, a reviewed runtime/provider code, `unclassified`, or the normal success size class);
+3. follow `chat.subagent.*` / `chat.background.*` only when the same turn delegated work; and
+4. correlate provider/request spans by trace/request ID instead of enabling raw arguments, provider responses, source, paths, credentials, or exception text.
+
+All direct application request spans and structured logs use the same allowlist sanitizer. Unknown semantic fields are dropped, and exception text remains reduced to secret-safe static classifications.
+
 ## Docker Compose
 
 `docker-compose.yml` expects external networks named `masihawam-net` and `shared-network` and can override the database URL with `NUXT_DATABASE_URL_DOCKER` so a container does not incorrectly resolve host `localhost` as itself.

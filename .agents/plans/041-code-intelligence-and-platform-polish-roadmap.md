@@ -27,13 +27,13 @@ Do not implement 041A–041C together.
 | Plan | Capability | Depends on | Status | Exit criterion |
 | --- | --- | --- | --- | --- |
 | 041A | LSP capability completion | 040 | CLOSED / VERIFIED / MERGED (2026-08-19) | Rust workspace-symbol and practical TS/Vue code-intelligence gaps are re-investigated and improved where upstream capabilities allow, with truthful unsupported results otherwise |
-| 041B | Dependency/toolchain hygiene | 041A | IMPLEMENTED / VERIFIED — MERGE PENDING | Actionable deprecated/security/toolchain debt is reduced through safe owner-level upgrades without forced transitive overrides |
-| 041C | Observability/debugging polish | 041B | PLANNED | Only measured observability gaps are closed using existing telemetry/logging architecture without a parallel event system |
+| 041B | Dependency/toolchain hygiene | 041A | CLOSED / VERIFIED / MERGED (2026-08-19) | Actionable deprecated/security/toolchain debt is reduced through safe owner-level upgrades without forced transitive overrides |
+| 041C | Observability/debugging polish | 041B | IMPLEMENTED / VERIFIED — MERGE PENDING | Only measured observability gaps are closed using existing telemetry/logging architecture without a parallel event system |
 
 ## Master todo
 
 - [x] 041A — LSP capability completion
-- [ ] 041B — dependency/toolchain hygiene
+- [x] 041B — dependency/toolchain hygiene
 - [ ] 041C — observability/debugging polish
 
 ## Non-goals

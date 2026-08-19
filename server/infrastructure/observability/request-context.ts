@@ -3,6 +3,7 @@ import type { RequestTelemetryContext, Outcome } from '../../application/observa
 import { getTracer } from './otel'
 import { logger } from './logger'
 import { recordSanitizedException } from './exception'
+import { sanitizeAttributes } from './sanitize'
 
 const TRACER_NAME = 'ai-code-server'
 
@@ -22,7 +23,7 @@ export function createRequestTelemetryContext(requestId: string): RequestTelemet
     },
     withSpan<T>(operation: string, safeAttributes: Record<string, unknown>, fn: () => T | Promise<T>): T | Promise<T> {
       const tracer = getTracer(TRACER_NAME)
-      return tracer.startActiveSpan(operation, { attributes: { 'request.id': requestId, ...safeAttributes } }, (span) => {
+      return tracer.startActiveSpan(operation, { attributes: sanitizeAttributes({ 'request.id': requestId, ...safeAttributes }) }, (span) => {
         const onError = (err: unknown) => {
           recordSanitizedException(span, err)
           span.setStatus({ code: SpanStatusCode.ERROR })
