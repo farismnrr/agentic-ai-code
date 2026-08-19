@@ -28,6 +28,7 @@
     "verify:041c": "node --experimental-strip-types scripts/verify-041c-observability-debugging.ts",
     "verify:042a": "node --experimental-strip-types scripts/verify-042a-orchestrator-state-machine.ts",
     "verify:042b": "pnpm verify:042a && node --experimental-strip-types scripts/verify-042b-orchestrator-scheduler.ts && pnpm verify:subagents && pnpm verify:background-agents && pnpm verify:task-context-output",
+    "verify:042c": "pnpm verify:042b && node --experimental-strip-types scripts/verify-042c-reconciliation.ts",
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",
