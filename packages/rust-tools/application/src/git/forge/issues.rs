@@ -42,10 +42,6 @@ struct ProviderIssue {
     #[serde(default)]
     closed_at: Option<String>,
     #[serde(default)]
-    comments: Vec<serde_json::Value>,
-    #[serde(default)]
-    is_pull_request: bool,
-    #[serde(default)]
     body: Option<String>,
 }
 
@@ -64,7 +60,6 @@ pub(in crate::git) struct IssueSummary {
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closed_at: Option<String>,
-    pub comment_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,7 +163,7 @@ fn validate_issue_summary(
     item: &ProviderIssue,
     remote: &remote::GitRemoteIdentity,
 ) -> Result<IssueSummary, McpError> {
-    if item.is_pull_request {
+    if item.url.contains("/pull/") {
         return Err(McpError::InvalidRequest(
             "pull request cannot be accessed as an issue".into(),
         ));
@@ -184,7 +179,7 @@ fn validate_issue_summary(
         "https://github.com/{}/{}/issues/{}",
         remote.owner, remote.repository, item.number
     );
-    if item.url != expected_url || item.url.contains("/pull/") {
+    if item.url != expected_url {
         return Err(McpError::InvalidRequest(
             "issue repository identity mismatch".into(),
         ));
@@ -217,7 +212,6 @@ fn validate_issue_summary(
         created_at: item.created_at.clone(),
         updated_at: item.updated_at.clone(),
         closed_at: item.closed_at.clone().filter(|s| !s.is_empty()),
-        comment_count: item.comments.len(),
     })
 }
 
@@ -273,9 +267,9 @@ fn parse_label_filters(arguments: &Value) -> Result<Vec<String>, McpError> {
 }
 
 fn summary_fields() -> &'static str {
-    "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt,comments,isPullRequest"
+    "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt"
 }
 
 fn detail_fields() -> &'static str {
-    "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt,comments,isPullRequest,body"
+    "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt,body"
 }
