@@ -79,7 +79,13 @@ pub(super) async fn run_gh(
     Ok(output)
 }
 
-#[cfg(debug_assertions)]
+// RELAY_TEST_GH_PATH is honoured only when the non-default `test-gh-provider`
+// Cargo feature is explicitly enabled (e.g. via --features relay-application/test-gh-provider
+// in scripts/verify-044a-issue-reads.sh). Ordinary debug builds, cargo test, and all
+// release builds do NOT enable this feature and therefore always use the fixed "gh" binary.
+// DO NOT replace this gate with #[cfg(debug_assertions)] — that would expose the override
+// in every normal debug relay and allow credential-forwarding to arbitrary executables.
+#[cfg(feature = "test-gh-provider")]
 fn resolve_gh_program() -> Result<PathBuf, McpError> {
     if let Some(override_var) = std::env::var_os("RELAY_TEST_GH_PATH").filter(|v| !v.is_empty()) {
         let path = PathBuf::from(override_var);
@@ -93,7 +99,7 @@ fn resolve_gh_program() -> Result<PathBuf, McpError> {
     Ok(PathBuf::from("gh"))
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(feature = "test-gh-provider"))]
 fn resolve_gh_program() -> Result<PathBuf, McpError> {
     Ok(PathBuf::from("gh"))
 }

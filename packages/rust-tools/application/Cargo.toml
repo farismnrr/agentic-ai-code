@@ -4,6 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[features]
+# Non-default feature: enables RELAY_TEST_GH_PATH override in forge_process::run_gh
+# solely for the deterministic Plan-044A provider-fixture acceptance binary.
+# Must never appear in [features] default = [...].
+# Ordinary cargo build / cargo test / release builds must NOT enable this feature.
+test-gh-provider = []
+
 [dependencies]
 relay-core.workspace = true
 relay-interfaces.workspace = true
@@ -18,3 +25,7 @@ tracing.workspace = true
 uuid.workspace = true
 time.workspace = true
 url.workspace = true
+
+[[example]]
+name = "plan044a_issue_reads_acceptance"
+required-features = ["test-gh-provider"]
