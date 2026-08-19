@@ -139,12 +139,12 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify: `packages/rust-tools/application/src/git/forge/issues.rs`
 
 **Steps:**
-- [ ] `issue_create`: require bounded non-empty title; bounded body defaults to empty; allow only bounded label names as optional metadata.
-- [ ] Parse the created issue URL/number and immediately re-read it through the normalized issue-get path before reporting success.
-- [ ] `issue_update`: support only explicit title, body, add-labels, and remove-labels; reject empty update objects.
-- [ ] Verify issue still exists in the validated repository after update and return normalized post-state.
-- [ ] `issue_comment`: require bounded non-empty body; parse/validate returned comment identity when available; return bounded mutation evidence rather than raw command output.
-- [ ] Mark create/update/comment as non-idempotent external mutations where appropriate; no internal auto-retry after uncertain completion.
+- [x] `issue_create`: require bounded non-empty title; bounded body defaults to empty; allow only bounded label names as optional metadata.
+- [x] Parse the created issue URL/number and immediately re-read it through the normalized issue-get path before reporting success.
+- [x] `issue_update`: support only explicit title, body, add-labels, and remove-labels; reject empty update objects.
+- [x] Verify issue still exists in the validated repository after update and return normalized post-state.
+- [x] `issue_comment`: require bounded non-empty body; parse/validate returned comment identity when available; return bounded mutation evidence rather than raw command output.
+- [x] Mark create/update/comment as non-idempotent external mutations where appropriate; no internal auto-retry after uncertain completion.
 
 **Validation:**
 - deterministic fake/fixture `gh` acceptance proves direct argv shape, repository binding, bounded content, static error mapping, and no arbitrary flags.
