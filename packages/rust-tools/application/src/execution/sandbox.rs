@@ -2,12 +2,11 @@
 
 use super::{InvocationProgram, ToolInvocation};
 use relay_core::config::ServerConfig;
-use relay_core::error::McpError;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-const MAX_PROTECTED_SCAN_ENTRIES: usize = 200_000;
+const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
 use tokio::process::{Child, Command};
 
 #[derive(Clone, Copy)]
@@ -30,7 +29,9 @@ struct SandboxProfile<'a> {
     workspace_root: Option<&'a Path>,
 }
 
-fn runtime_home() -> Result<PathBuf, std::io::Error> {
+pub(crate) use super::toolchain::{resolve_safe_executable, safe_path_entries};
+
+pub(crate) fn runtime_home() -> Result<PathBuf, std::io::Error> {
     let home = env::var_os("HOME")
         .map(PathBuf::from)
         .ok_or_else(|| std::io::Error::other("HOME is unavailable"))?;
@@ -38,89 +39,6 @@ fn runtime_home() -> Result<PathBuf, std::io::Error> {
         return Err(std::io::Error::other("HOME must be an absolute path"));
     }
     std::fs::canonicalize(home).map_err(|_| std::io::Error::other("HOME is unavailable"))
-}
-
-pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
-    const DEFAULT_PATHS: &[&str] = &[
-        "/usr/local/sbin",
-        "/usr/local/bin",
-        "/usr/sbin",
-        "/usr/bin",
-        "/sbin",
-        "/bin",
-    ];
-    let mut entries: Vec<PathBuf> = DEFAULT_PATHS.iter().map(PathBuf::from).collect();
-    if let Ok(home) = runtime_home() {
-        for sub in [".cargo/bin", ".local/bin"] {
-            let dir = home.join(sub);
-            if dir.is_dir() {
-                entries.push(dir);
-            }
-        }
-    }
-    for p in &config.toolchain_paths {
-        entries.push(std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p)));
-    }
-    entries
-}
-
-pub(crate) fn resolve_safe_executable(
-    config: &ServerConfig,
-    binary: &str,
-) -> Result<PathBuf, McpError> {
-    relay_core::terminal_policy::validate_executable(binary, config.allow_docker)?;
-    let safe_entries = safe_path_entries(config);
-    let mut canonical_safe_entries = safe_entries
-        .iter()
-        .filter_map(|directory| std::fs::canonicalize(directory).ok())
-        .collect::<Vec<_>>();
-    for path in &config.toolchain_paths {
-        if let Ok(canonical) = std::fs::canonicalize(path) {
-            if let Some(root) = super::toolchain::reviewed_root(&canonical) {
-                canonical_safe_entries.push(root.to_path_buf());
-            }
-        }
-    }
-
-    for directory in safe_entries {
-        let candidate = directory.join(binary);
-        if !candidate.is_file() || !is_executable(&candidate) {
-            continue;
-        }
-        let canonical_target = std::fs::canonicalize(&candidate).map_err(|_| {
-            McpError::InvalidRequest("configured executable target is unavailable".into())
-        })?;
-        if !canonical_safe_entries
-            .iter()
-            .any(|safe_root| canonical_target.starts_with(safe_root))
-        {
-            return Err(McpError::InvalidRequest(
-                "configured executable symlink escapes the reviewed safe PATH roots".into(),
-            ));
-        }
-        // Preserve the reviewed executable path instead of replacing it with
-        // the canonical target. Multi-call shims such as rustup dispatch from
-        // argv[0] (`cargo`, `rustc`, ...); canonicalizing the final symlink to
-        // `rustup` changes program semantics even though the target is safe.
-        return Ok(candidate);
-    }
-    Err(McpError::InvalidRequest(
-        "command is not available in the configured safe PATH".into(),
-    ))
-}
-
-fn is_executable(path: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
-    }
-    #[cfg(not(unix))]
-    {
-        path.is_file()
-    }
 }
 
 pub(super) fn spawn(
@@ -443,6 +361,26 @@ fn add_protected_paths(
     Ok(())
 }
 
+const UNSCANNED_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    "target",
+    ".output",
+    ".nuxt",
+    ".cache",
+    ".turbo",
+    ".pnpm-store",
+    ".next",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+];
+
+fn is_unscanned_dir_name(name: &std::ffi::OsStr) -> bool {
+    name.to_str().is_some_and(|s| UNSCANNED_DIRS.contains(&s))
+}
+
 fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
     let mut protected = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -462,7 +400,7 @@ fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error>
                 .map_err(|_| std::io::Error::other("protected-path scan escaped workspace"))?;
             if relay_core::protected_paths::is_protected_relative(relative) {
                 protected.push(path);
-            } else if entry.file_type()?.is_dir() {
+            } else if entry.file_type()?.is_dir() && !is_unscanned_dir_name(&entry.file_name()) {
                 stack.push(path);
             }
         }
