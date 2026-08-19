@@ -50,7 +50,12 @@ pub fn effect_classes(
         | "change_request_get"
         | "change_request_checks"
         | "issue_list"
-        | "issue_get" => vec!["network_read", "privileged_bridge"],
+        | "issue_get"
+        | "workflow_list"
+        | "workflow_run_list"
+        | "workflow_run_get"
+        | "workflow_job_get"
+        | "workflow_run_job_log" => vec!["network_read", "privileged_bridge"],
         "change_request_create"
         | "change_request_update"
         | "change_request_merge"
