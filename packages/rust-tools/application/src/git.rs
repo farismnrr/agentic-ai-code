@@ -1,4 +1,4 @@
-//! Bounded, read-only Git intelligence with a fail-closed process contract.
+//! Bounded Git intelligence and mutation primitives with a fail-closed process contract.
 
 use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
@@ -78,6 +78,55 @@ pub async fn dispatch_git_tool(
         "git_log" => serde_json::to_value(git_log(arguments, config)?),
         "git_show" => serde_json::to_value(git_show(arguments, config)?),
         "git_blame" => serde_json::to_value(git_blame(arguments, config)?),
+        "git_branch_list" => serde_json::to_value(branch::git_branch_list(arguments, config)?),
+        "git_branch_create" => serde_json::to_value(branch::git_branch_create(arguments, config)?),
+        "git_branch_switch" => serde_json::to_value(branch::git_branch_switch(arguments, config)?),
+        "git_stage" => serde_json::to_value(mutation::git_stage(arguments, config)?),
+        "git_unstage" => serde_json::to_value(mutation::git_unstage(arguments, config)?),
+        "git_commit" => serde_json::to_value(mutation::git_commit(arguments, config)?),
+        "git_operation_status" => {
+            serde_json::to_value(mutation::git_operation_status(arguments, config)?)
+        }
+        "git_merge_start" => serde_json::to_value(mutation::git_merge_start(arguments, config)?),
+        "git_merge_continue" => {
+            serde_json::to_value(mutation::git_merge_continue(arguments, config)?)
+        }
+        "git_merge_abort" => serde_json::to_value(mutation::git_merge_abort(arguments, config)?),
+        "git_rebase_start" => serde_json::to_value(mutation::git_rebase_start(arguments, config)?),
+        "git_rebase_continue" => {
+            serde_json::to_value(mutation::git_rebase_continue(arguments, config)?)
+        }
+        "git_rebase_abort" => serde_json::to_value(mutation::git_rebase_abort(arguments, config)?),
+        "git_branch_delete" => {
+            serde_json::to_value(mutation::git_branch_delete(arguments, config)?)
+        }
+        "git_remote_list" => serde_json::to_value(remote::git_remote_list(arguments, config)?),
+        "git_remote_branch_get" => {
+            serde_json::to_value(remote::git_remote_branch_get(arguments, config).await?)
+        }
+        "git_fetch" => serde_json::to_value(remote::git_fetch(arguments, config).await?),
+        "git_push" => serde_json::to_value(remote::git_push(arguments, config).await?),
+        "git_remote_branch_delete" => {
+            serde_json::to_value(remote::git_remote_branch_delete(arguments, config).await?)
+        }
+        "change_request_list" => {
+            serde_json::to_value(forge::change_request_list(arguments, config).await?)
+        }
+        "change_request_get" => {
+            serde_json::to_value(forge::change_request_get(arguments, config).await?)
+        }
+        "change_request_create" => {
+            serde_json::to_value(forge::change_request_create(arguments, config).await?)
+        }
+        "change_request_update" => {
+            serde_json::to_value(forge::change_request_update(arguments, config).await?)
+        }
+        "change_request_checks" => {
+            serde_json::to_value(forge::change_request_checks(arguments, config).await?)
+        }
+        "change_request_merge" => {
+            serde_json::to_value(forge::change_request_merge(arguments, config).await?)
+        }
         _ => return Ok(None),
     }
     .map_err(|_| McpError::Internal("failed to serialize git result".into()))?;
@@ -408,83 +457,21 @@ fn git_blame(arguments: &Value, config: &ServerConfig) -> Result<GitBlameResult,
     })
 }
 
-/// Resolve a canonical Git workspace identity for non-MCP application
-/// services such as LSP. The result is always contained by execution_root and
-/// is obtained through the same hardened Git process path used by git_* tools.
-pub(crate) fn resolve_git_workspace(
-    cwd_arg: Option<&str>,
-    config: &ServerConfig,
-) -> Result<PathBuf, McpError> {
-    let execution_root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    if cwd_arg.is_some_and(|value| value.len() > MAX_GIT_PATH_BYTES) {
-        return Err(McpError::InvalidRequest(
-            "workspace cwd exceeds maximum".into(),
-        ));
-    }
-    let cwd = resolve_contained_cwd(&execution_root, cwd_arg)?;
-    validate_git_metadata_paths(&cwd, &execution_root)?;
-    let out = run_git(&cwd, &["rev-parse", "--show-toplevel"], 8192)?;
-    let root_text = std::str::from_utf8(&out)
-        .map_err(|_| invalid_git_output())?
-        .trim();
-    let root = std::fs::canonicalize(root_text)
-        .map_err(|_| McpError::InvalidRequest("workspace root is inaccessible".into()))?;
-    if !root.starts_with(&execution_root) {
-        return Err(McpError::InvalidRequest(
-            "workspace root is outside execution root".into(),
-        ));
-    }
-    Ok(root)
-}
-
-struct RepoContext {
-    root: PathBuf,
-    relative_root: String,
-    execution_root: PathBuf,
-}
-fn resolve_repo(arguments: &Value, config: &ServerConfig) -> Result<RepoContext, McpError> {
-    let execution_root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let cwd_arg = arguments.get("cwd").and_then(Value::as_str);
-    if cwd_arg.is_some_and(|v| v.len() > MAX_GIT_PATH_BYTES) {
-        return Err(McpError::InvalidRequest("git cwd exceeds maximum".into()));
-    }
-    let cwd = resolve_contained_cwd(&execution_root, cwd_arg)?;
-    validate_git_metadata_paths(&cwd, &execution_root)?;
-    let out = run_git(&cwd, &["rev-parse", "--show-toplevel"], 8192)?;
-    let root_text = std::str::from_utf8(&out)
-        .map_err(|_| invalid_git_output())?
-        .trim();
-    let root = std::fs::canonicalize(root_text)
-        .map_err(|_| McpError::InvalidRequest("git repository root is inaccessible".into()))?;
-    if !root.starts_with(&execution_root) {
-        return Err(McpError::InvalidRequest(
-            "git repository is outside execution root".into(),
-        ));
-    }
-    let relative_root = root
-        .strip_prefix(&execution_root)
-        .ok()
-        .and_then(Path::to_str)
-        .unwrap_or("")
-        .trim_start_matches('/')
-        .to_owned();
-    Ok(RepoContext {
-        root,
-        relative_root,
-        execution_root,
-    })
-}
-
+mod context;
+pub(crate) use context::resolve_git_workspace;
+use context::*;
 mod parse;
 use parse::*;
 mod security;
 use security::*;
 mod process;
 use process::*;
+mod branch;
+mod forge;
+mod forge_process;
+mod mutation;
+mod remote;
+mod remote_process;
 
 fn append_protected_exclusions(args: &mut Vec<String>) {
     args.push("--".into());

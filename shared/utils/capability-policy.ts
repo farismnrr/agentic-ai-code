@@ -44,7 +44,8 @@ export interface CapabilityAssessment extends CapabilityFacts {
 
 const SAFE_READ_TOOLS = new Set([
   'directory_list', 'file_search', 'text_search', 'file_read',
-  'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame',
+  'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'git_branch_list', 'git_operation_status', 'git_remote_list',
+  'change_request_list', 'change_request_get', 'change_request_checks',
   'code_symbols', 'code_definition', 'code_references', 'code_hover',
   'code_diagnostics', 'code_rename_preview', 'web_search'
 ])
@@ -58,7 +59,12 @@ const READ_COMMANDS = new Map([
 
 const REVIEWED_STRUCTURED_TOOLS = new Set([
   ...SAFE_READ_TOOLS,
-  'file_write', 'file_edit', 'apply_patch', 'http_fetch', 'local_terminal'
+  'file_write', 'file_edit', 'apply_patch',
+  'git_branch_create', 'git_branch_switch', 'git_stage', 'git_unstage', 'git_commit',
+  'git_merge_start', 'git_merge_continue', 'git_merge_abort', 'git_rebase_start', 'git_rebase_continue', 'git_rebase_abort', 'git_branch_delete',
+  'git_remote_branch_get', 'git_fetch', 'git_push', 'git_remote_branch_delete',
+  'change_request_create', 'change_request_update', 'change_request_merge',
+  'http_fetch', 'local_terminal'
 ])
 
 function inputRecord(input: unknown): Record<string, unknown> {
@@ -130,6 +136,18 @@ export function capabilityFactsForToolCall({
     || (toolName === 'file_edit' && !hasRequiredStrings(values, ['path', 'old_text', 'new_text']))
     || (toolName === 'apply_patch' && !hasString(values, 'patch'))
     || (toolName === 'git_show' && !hasString(values, 'ref'))
+    || (['git_branch_create', 'git_branch_switch', 'git_branch_delete'].includes(toolName) && !hasString(values, 'name'))
+    || (toolName === 'git_branch_create' && 'start_point' in values && !hasString(values, 'start_point'))
+    || (['git_stage', 'git_unstage'].includes(toolName) && (!Array.isArray(values.paths) || values.paths.length === 0 || values.paths.some(path => typeof path !== 'string' || path === '')))
+    || (toolName === 'git_commit' && !hasString(values, 'message'))
+    || (['git_merge_start', 'git_rebase_start'].includes(toolName) && !hasString(values, 'ref'))
+    || (['git_remote_branch_get', 'git_fetch', 'git_push', 'git_remote_branch_delete'].includes(toolName) && !hasString(values, 'branch'))
+    || (toolName === 'git_remote_branch_delete' && !hasString(values, 'expected_sha'))
+    || (['git_remote_branch_get', 'git_fetch', 'git_push', 'git_remote_branch_delete'].includes(toolName) && 'remote' in values && !hasString(values, 'remote'))
+    || (['change_request_get', 'change_request_update', 'change_request_checks', 'change_request_merge'].includes(toolName) && (!Number.isInteger(values.number) || Number(values.number) <= 0))
+    || (toolName === 'change_request_create' && !hasRequiredStrings(values, ['head_branch', 'base_branch', 'title', 'body']))
+    || (toolName === 'change_request_merge' && !hasString(values, 'expected_head_sha'))
+    || (['change_request_list', 'change_request_get', 'change_request_create', 'change_request_update', 'change_request_checks', 'change_request_merge'].includes(toolName) && 'remote' in values && !hasString(values, 'remote'))
     || (toolName === 'http_fetch' && !hasString(values, 'url'))
     || (toolName === 'web_search' && !hasString(values, 'query'))
     || (['local_terminal', 'terminal_exec'].includes(toolName) && !hasString(values, 'command'))
@@ -143,7 +161,7 @@ export function capabilityFactsForToolCall({
     domain: inputDomain(values),
     command: inputString(values, 'command'),
     args: inputArgs(values),
-    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'local_terminal'
+    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'local_terminal' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_')
       ? toolName !== 'local_terminal' || effects.includes('network_read')
       : undefined,
     destructive: annotations?.destructiveHint,
@@ -210,6 +228,14 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
   if (toolName === 'file_write' || toolName === 'file_edit' || toolName === 'apply_patch') return ['workspace_write']
+  if (['git_branch_create', 'git_branch_switch', 'git_stage', 'git_unstage', 'git_commit', 'git_merge_start', 'git_merge_continue'].includes(toolName)) return ['workspace_write']
+  if (['git_merge_abort', 'git_rebase_start', 'git_rebase_continue', 'git_rebase_abort', 'git_branch_delete'].includes(toolName)) return ['workspace_write', 'workspace_delete']
+  if (toolName === 'git_remote_branch_get') return ['git_read', 'network_read']
+  if (toolName === 'git_fetch') return ['git_read', 'workspace_write', 'network_read']
+  if (toolName === 'git_push') return ['git_read', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
+  if (toolName === 'git_remote_branch_delete') return ['git_read', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
+  if (['change_request_list', 'change_request_get', 'change_request_checks'].includes(toolName)) return ['network_read', 'privileged_bridge']
+  if (['change_request_create', 'change_request_update', 'change_request_merge'].includes(toolName)) return ['network_read', 'network_write', 'external_mutation', 'privileged_bridge']
   if (SAFE_READ_TOOLS.has(toolName)) return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
   if (trustedProvenance === 'external') {
     if (annotations?.destructiveHint) return ['external_mutation']

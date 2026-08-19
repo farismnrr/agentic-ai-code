@@ -68,7 +68,7 @@ fn run_git_bytes_bounded(
     Ok((output, truncated))
 }
 
-fn git_command(cwd: &Path) -> Command {
+pub(super) fn git_command(cwd: &Path) -> Command {
     let mut c = Command::new("git");
     c.current_dir(cwd)
         .env_clear()
