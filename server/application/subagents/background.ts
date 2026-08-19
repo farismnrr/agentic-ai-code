@@ -45,6 +45,13 @@ export class BackgroundTaskManager {
     return publicTask(task)
   }
 
+  async reconciliation(taskId: string, userId: string, parentSessionId: string) {
+    const task = this.tasks.get(taskId)
+    if (!task || task.user_id !== userId || task.parent_session_id !== parentSessionId || !isTerminal(task.state) || !task.result) return undefined
+    const writer = task.owner ? await this.worktrees.identity(task.owner) : undefined
+    return { task: publicTask(task), writer }
+  }
+
   cancel(taskId: string, userId: string, parentSessionId: string): boolean {
     const task = this.tasks.get(taskId)
     if (!task || task.user_id !== userId || task.parent_session_id !== parentSessionId || isTerminal(task.state)) return false
