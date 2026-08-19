@@ -77,7 +77,13 @@ pub(super) async fn run_job(
             )
             .await
         }
-        Err(_) => {
+        Err(error) => {
+            tracing::warn!(
+                event = "relay.process.spawn_failed",
+                job_id = %id,
+                error = %error,
+                "process spawn or execution failed"
+            );
             finish(
                 &manager,
                 &id,
