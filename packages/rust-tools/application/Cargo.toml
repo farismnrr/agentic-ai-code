@@ -28,12 +28,15 @@ url.workspace = true
 
 [[example]]
 name = "plan044a_issue_reads_acceptance"
+path = "examples/plan044a/issue_reads_acceptance.rs"
 required-features = ["test-gh-provider"]
 
 [[example]]
 name = "plan044a_issue_mutations_acceptance"
+path = "examples/plan044a/issue_mutations_acceptance.rs"
 required-features = ["test-gh-provider"]
 
 [[example]]
 name = "plan044a_issue_transitions_acceptance"
+path = "examples/plan044a/issue_transitions_acceptance.rs"
 required-features = ["test-gh-provider"]
