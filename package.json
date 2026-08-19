@@ -18,6 +18,7 @@
     "verify:task-context-output": "node --experimental-strip-types scripts/verify-task-context-output.ts",
     "verify:039i": "node --experimental-strip-types scripts/verify-039i-extension-interoperability.ts",
     "verify:039j": "node --experimental-strip-types scripts/verify-039j-agent-ux-observability.ts",
+    "verify:040a": "node --experimental-strip-types scripts/verify-040a-mcp-task-reliability.ts && bash scripts/verify-040a-mcp-task-transport.sh",
     "check:architecture": "bash scripts/check-architecture.sh",
     "audit": "pnpm audit",
     "db:generate": "drizzle-kit generate",

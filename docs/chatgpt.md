@@ -155,16 +155,19 @@ For a long-lived ChatGPT app, configure the Authorization Server to support refr
 
 This does not change the relay's authorization requirement: tool tokens must still include `relay.coding`. Treat `offline_access` as Authorization Server/client-session behavior, not a relay tool permission.
 
-## Long-running commands
+## Long-running and slow MCP operations
 
-The relay no longer has an unconditional five-minute terminal ceiling.
+The relay no longer has an unconditional five-minute terminal ceiling. It also avoids requiring one HTTP request to remain open for work whose latency is legitimately unpredictable.
 
-- `timeout_ms: 0` means no command deadline unless the operator configured `RELAY_MAX_TERMINAL_TIMEOUT_MS`.
-- Tasks-capable MCP clients can use the standard task lifecycle.
-- Other clients can use `terminal_job_start`, poll with `terminal_job_get`, and stop work with `terminal_job_cancel`.
-- cancellation, timeout, and relay shutdown terminate the sandbox process tree through the same job manager.
+- `timeout_ms: 0` means no terminal command deadline unless the operator configured `RELAY_MAX_TERMINAL_TIMEOUT_MS`.
+- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. A Tasks-capable client may receive a task handle and retrieve the final result through `tasks/get`; bounded native reads remain synchronous.
+- The first-party Nuxt MCP client applies a separate per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds). That deadline is not the durable task lifetime.
+- Task polling honors the relay's `pollIntervalMs` hint and uses bounded backoff rather than a hot fixed polling loop.
+- A dropped/timed-out HTTP round trip is not treated as implicit task cancellation. Explicit task cancellation still targets the authoritative relay job and process tree.
+- Clients that do not negotiate Tasks can still use `terminal_job_start`, poll with `terminal_job_get`, and stop terminal work with `terminal_job_cancel`.
+- Task input handoff is not currently used by these relay tools. If a future task reports `input_required`, the current first-party client fails explicitly rather than waiting indefinitely until a reviewed input contract exists.
 
-ChatGPT controls how progress/tool cards are rendered. The relay can provide protocol state and results, but it cannot force ChatGPT to render raw terminal output like a native terminal UI.
+ChatGPT controls how progress/tool cards are rendered. The relay can provide protocol task state and results, but it cannot force ChatGPT to render raw terminal output like a native terminal UI.
 
 ## What a successful connection proves
 

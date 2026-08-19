@@ -40,7 +40,10 @@ export default defineNuxtConfig({
     remoteMcp: {
       url: '',
       ownerUserId: '',
-      accessToken: ''
+      accessToken: '',
+      // Per HTTP round-trip deadline only. Durable task execution may outlive
+      // this budget and is retrieved through the MCP task lifecycle.
+      requestTimeoutMs: 45_000
     },
     // nuxt-auth-utils sealed-cookie session key — NUXT_SESSION_PASSWORD must
     // be ≥ 32 characters. Generated once per environment, never reused.

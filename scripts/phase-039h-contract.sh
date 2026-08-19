@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Current Plan-039H MCP contract gate.
 #
-# The v4 snapshot is captured from the live relay tools/list path. Historical
-# v1/v2/v3 artifacts are checked by phase7 and phase-039c and remain immutable.
+# The v5 snapshot is captured from the live relay tools/list path. Historical
+# v1/v2/v3/v4 artifacts remain immutable; v5 records Plan 040A task eligibility
+# for the existing network tools without rewriting Plan 039 evidence.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/039h-tool-catalog-v4.json"
-catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v4.sha256"
+catalog="$root/.agents/contracts/039h-tool-catalog-v5.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v5.sha256"
+historical_v4="$root/.agents/contracts/039h-tool-catalog-v4.json"
+historical_v4_hash="$root/.agents/contracts/039h-tool-catalog-v4.sha256"
 historical_v3="$root/.agents/contracts/039c-tool-catalog-v3.json"
 historical_v3_hash="$root/.agents/contracts/039c-tool-catalog-v3.sha256"
 tmp="$(mktemp -d)"
@@ -15,6 +18,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
+test -f "$historical_v4"
+test -f "$historical_v4_hash"
 test -f "$historical_v3"
 test -f "$historical_v3_hash"
 command -v jq >/dev/null
@@ -30,7 +35,10 @@ validate_snapshot() {
   if [[ "$expected" != "$(jq -S -c . "$runtime")" ]]; then return 1; fi
 }
 
-# Historical v3 integrity is checked independently of the live runtime.
+# Historical v3/v4 integrity is checked independently of the live runtime.
+v4_normalized="$(jq -S -c . "$historical_v4")"
+v4_hash="$(printf '%s' "$v4_normalized" | sha256sum | awk '{print $1}')"
+test "$v4_hash" = "$(tr -d '[:space:]' < "$historical_v4_hash")"
 v3_normalized="$(jq -S -c . "$historical_v3")"
 v3_hash="$(printf '%s' "$v3_normalized" | sha256sum | awk '{print $1}')"
 test "$v3_hash" = "$(tr -d '[:space:]' < "$historical_v3_hash")"

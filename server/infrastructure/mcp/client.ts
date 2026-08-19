@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
+import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, resolveMcpRequestTimeoutMs, taskPollDelayMs } from './task-reliability'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { mcpServers } from '../../database/schema'
 
@@ -13,6 +14,7 @@ type RemoteMcpRuntimeConfig = {
   url?: string
   ownerUserId?: string
   accessToken?: string
+  requestTimeoutMs?: number | string
 }
 
 const MODERN_MCP_VERSION = '2026-07-28'
@@ -99,7 +101,10 @@ function resolveFirstPartyRemote(url: URL, serverConfig: McpServerConfig) {
     throw new Error(`Server "${serverConfig.name}" matches the configured remote MCP resource but no access token is configured`)
   }
 
-  return { accessToken }
+  return {
+    accessToken,
+    requestTimeoutMs: resolveMcpRequestTimeoutMs(configured.requestTimeoutMs)
+  }
 }
 
 /**
@@ -160,7 +165,8 @@ class FirstPartyRelayMcpClient implements McpClientLike {
   constructor(
     private readonly url: URL,
     private readonly accessToken: string,
-    private readonly fetchImpl: typeof fetch
+    private readonly fetchImpl: typeof fetch,
+    private readonly requestTimeoutMs: number
   ) {}
 
   async connect() {
@@ -222,17 +228,17 @@ class FirstPartyRelayMcpClient implements McpClientLike {
   }
 
   async callTool(params: { name: string, arguments?: Record<string, unknown> }, signal?: AbortSignal): Promise<McpClientCallResult> {
-    // First-party terminal_exec is task-aware. Do not abort the initial call
-    // itself: the task id must be received so cancellation can target exactly
-    // this relay job rather than merely abandoning the HTTP request.
+    if (signal?.aborted) throw new Error('Remote MCP tool call was cancelled')
+    // Do not bind caller cancellation to the initial HTTP round trip. A task
+    // id must be received before cancellation can target durable relay work
+    // rather than merely abandoning a request whose outcome is unknown.
     const result = await this.request('tools/call', {
       name: params.name,
       arguments: params.arguments ?? {}
     })
     if (!isJsonRecord(result) || !Array.isArray(result.content)) {
-      if (params.name === 'terminal_exec' && isJsonRecord(result) && result.resultType === 'task' && typeof result.taskId === 'string') {
-        return this.awaitTask(result.taskId, signal)
-      }
+      const task = asMcpTaskEnvelope(result)
+      if (task) return this.awaitTask(task, signal)
       throw new Error('Remote MCP server returned an invalid tools/call result')
     }
     return {
@@ -242,7 +248,9 @@ class FirstPartyRelayMcpClient implements McpClientLike {
     }
   }
 
-  private async awaitTask(taskId: string, signal?: AbortSignal): Promise<McpClientCallResult> {
+  private async awaitTask(initialTask: Record<string, unknown> & { taskId: string }, signal?: AbortSignal): Promise<McpClientCallResult> {
+    const taskId = initialTask.taskId
+    let delayMs = taskPollDelayMs(initialTask)
     for (;;) {
       if (signal?.aborted) {
         const current = await this.request('tasks/get', { taskId })
@@ -254,17 +262,24 @@ class FirstPartyRelayMcpClient implements McpClientLike {
       const task = await this.request('tasks/get', { taskId })
       if (!isJsonRecord(task)) throw new Error('Remote MCP task returned an invalid result')
       const status = typeof task.status === 'string' ? task.status : ''
+      if (status === 'input_required') throw new Error('Remote MCP task requires additional input')
       if (status !== 'working') return taskResult(task)
-      await new Promise(resolve => setTimeout(resolve, 50))
+      delayMs = taskPollDelayMs(task, delayMs)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
     }
   }
 
   private async cancelTask(taskId: string) {
     await this.request('tasks/cancel', { taskId })
-    for (let attempt = 0; attempt < 200; attempt++) {
+    const deadline = Date.now() + 5000
+    let delayMs = 250
+    while (Date.now() < deadline) {
       const task = await this.request('tasks/get', { taskId })
       if (isJsonRecord(task) && task.status !== 'working') return
-      await new Promise(resolve => setTimeout(resolve, 25))
+      if (isJsonRecord(task)) delayMs = taskPollDelayMs(task, delayMs)
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) break
+      await new Promise(resolve => setTimeout(resolve, Math.min(delayMs, remainingMs)))
     }
     throw new Error('First-party relay task cancellation did not settle')
   }
@@ -300,17 +315,16 @@ class FirstPartyRelayMcpClient implements McpClientLike {
       }
     }
     const headers = new Headers({
-      'Accept': 'application/json, text/event-stream',
+      'Accept': 'application/json',
       'Authorization': `Bearer ${this.accessToken}`,
       'Content-Type': 'application/json',
       'MCP-Protocol-Version': MODERN_MCP_VERSION,
       'Mcp-Method': method
     })
-    if (method === 'tools/call' && typeof params.name === 'string') {
-      headers.set('Mcp-Name', encodeMcpHeaderValue(params.name))
-    }
+    const routingName = mcpRoutingName(method, params)
+    if (routingName) headers.set('Mcp-Name', encodeMcpHeaderValue(routingName))
 
-    const response = await this.fetchImpl(this.url, {
+    const response = await fetchWithMcpDeadline(this.fetchImpl, this.url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -319,7 +333,7 @@ class FirstPartyRelayMcpClient implements McpClientLike {
         method,
         params: requestParams
       })
-    })
+    }, this.requestTimeoutMs)
 
     if (response.status === 401 || response.status === 403) {
       throw new Error('Remote MCP authorization failed')
@@ -351,10 +365,17 @@ class FirstPartyRelayMcpClient implements McpClientLike {
 }
 
 function taskResult(task: Record<string, unknown>): McpClientCallResult {
+  const status = typeof task.status === 'string' ? task.status : ''
+  if (status === 'failed') return { content: [{ type: 'text', text: 'Tool execution failed' }], isError: true }
+  if (status === 'cancelled') return { content: [{ type: 'text', text: 'Tool execution cancelled' }], isError: true }
+
   const result = isJsonRecord(task.result) ? task.result : undefined
+  if (!result || !Array.isArray(result.content)) {
+    return { content: [{ type: 'text', text: 'Tool execution returned no result' }], isError: true }
+  }
   return {
-    content: Array.isArray(result?.content) ? result.content : [],
-    ...(typeof result?.isError === 'boolean' && { isError: result.isError })
+    content: result.content,
+    ...(typeof result.isError === 'boolean' && { isError: result.isError })
   }
 }
 
@@ -393,7 +414,8 @@ export async function createMcpClient(serverConfig: McpServerConfig): Promise<Mc
     const client = new FirstPartyRelayMcpClient(
       url,
       firstParty.accessToken,
-      withFirstPartyTrace(guardedFetch)
+      withFirstPartyTrace(guardedFetch),
+      firstParty.requestTimeoutMs
     )
     await client.connect()
     return client
