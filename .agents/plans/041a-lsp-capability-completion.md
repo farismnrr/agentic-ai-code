@@ -1,6 +1,6 @@
 # Plan 041A — LSP Capability Completion
 
-**Status:** IMPLEMENTED / VERIFIED — MERGE PENDING
+**Status:** CLOSED / VERIFIED / MERGED (2026-08-19)
 **Parent:** [Plan 041](041-code-intelligence-and-platform-polish-roadmap.md)
 **Depends on:** Plan 040 CLOSED / VERIFIED
 
