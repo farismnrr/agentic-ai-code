@@ -29,3 +29,7 @@ url.workspace = true
 [[example]]
 name = "plan044a_issue_reads_acceptance"
 required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044a_issue_mutations_acceptance"
+required-features = ["test-gh-provider"]

@@ -5,10 +5,7 @@ use serde_json::Value;
 
 const MAX_ISSUES: usize = 50;
 const MAX_LABEL_FILTER_COUNT: usize = 10;
-const MAX_LABEL_NAME_BYTES: usize = 128;
 const MAX_LABELS_PER_ISSUE: usize = 50;
-const MAX_TITLE_BYTES: usize = 256;
-const MAX_BODY_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +68,7 @@ pub(in crate::git) struct IssueDetail {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::git) struct IssueListResult {
     pub repository_root: String,
     pub forge: ForgeRepository,
@@ -79,10 +77,20 @@ pub(in crate::git) struct IssueListResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::git) struct IssueResult {
     pub repository_root: String,
     pub forge: ForgeRepository,
     pub issue: IssueDetail,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::git) struct IssueCommentResult {
+    pub repository_root: String,
+    pub forge: ForgeRepository,
+    pub issue_number: u64,
+    pub comment_url: String,
 }
 
 pub(in crate::git) async fn issue_list(
@@ -98,7 +106,7 @@ pub(in crate::git) async fn issue_list(
     if !matches!(state, "open" | "closed" | "all") {
         return Err(McpError::InvalidRequest("issue state is invalid".into()));
     }
-    let label_filters = parse_label_filters(arguments)?;
+    let label_filters = parse_label_array(arguments, "labels", MAX_LABEL_FILTER_COUNT)?;
     let repo_spec = repo_spec(&remote);
     let mut args = vec![
         "issue".into(),
@@ -138,25 +146,147 @@ pub(in crate::git) async fn issue_get(
 ) -> Result<IssueResult, McpError> {
     let repo = resolve_repo(arguments, config)?;
     let remote = remote::requested_remote(&repo.root, arguments)?;
-    let number = super::common::requested_number(arguments, "issue")?;
-    let repo_spec = repo_spec(&remote);
-    let args = vec![
-        "issue".into(),
-        "view".into(),
-        number.to_string(),
-        "--repo".into(),
-        repo_spec,
-        "--json".into(),
-        detail_fields().into(),
-    ];
-    let output = forge_process::run_gh(&repo.root, &args, &[]).await?;
-    let raw_item: ProviderIssue = parse_json(&output)?;
-    let detail = validate_issue_detail(&raw_item, &remote, number)?;
+    let number = requested_number(arguments, "issue")?;
+    let detail = get_detail(&repo.root, &remote, number).await?;
     Ok(IssueResult {
         repository_root: repo.relative_root,
         forge: forge_identity(&remote),
         issue: detail,
     })
+}
+
+pub(in crate::git) async fn issue_create(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<IssueResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    let remote = remote::requested_remote(&repo.root, arguments)?;
+    let title = bounded_text(arguments, "title", MAX_TITLE_BYTES, false)?;
+    let body = match arguments.get("body") {
+        Some(_) => bounded_text(arguments, "body", MAX_BODY_BYTES, true)?,
+        None => String::new(),
+    };
+    let labels = parse_label_array(arguments, "labels", MAX_LABELS_PER_ISSUE)?;
+    let repo_spec = repo_spec(&remote);
+    let mut args = vec![
+        "issue".into(),
+        "create".into(),
+        "--repo".into(),
+        repo_spec,
+        "--title".into(),
+        title,
+        "--body".into(),
+        body,
+    ];
+    for label in &labels {
+        args.push("--label".into());
+        args.push(label.clone());
+    }
+    let output = forge_process::run_gh(&repo.root, &args, &[]).await?;
+    let number = parse_created_issue_number(&output, &remote)?;
+    let detail = get_detail(&repo.root, &remote, number).await?;
+    Ok(IssueResult {
+        repository_root: repo.relative_root,
+        forge: forge_identity(&remote),
+        issue: detail,
+    })
+}
+
+pub(in crate::git) async fn issue_update(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<IssueResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    let remote = remote::requested_remote(&repo.root, arguments)?;
+    let number = requested_number(arguments, "issue")?;
+    let repo_spec = repo_spec(&remote);
+    let mut args = vec![
+        "issue".into(),
+        "edit".into(),
+        number.to_string(),
+        "--repo".into(),
+        repo_spec,
+    ];
+    let mut changed = false;
+    if arguments.get("title").is_some() {
+        args.push("--title".into());
+        args.push(bounded_text(arguments, "title", MAX_TITLE_BYTES, false)?);
+        changed = true;
+    }
+    if arguments.get("body").is_some() {
+        args.push("--body".into());
+        args.push(bounded_text(arguments, "body", MAX_BODY_BYTES, true)?);
+        changed = true;
+    }
+    for label in parse_label_array(arguments, "add_labels", MAX_LABELS_PER_ISSUE)? {
+        args.push("--add-label".into());
+        args.push(label);
+        changed = true;
+    }
+    for label in parse_label_array(arguments, "remove_labels", MAX_LABELS_PER_ISSUE)? {
+        args.push("--remove-label".into());
+        args.push(label);
+        changed = true;
+    }
+    if !changed {
+        return Err(McpError::InvalidRequest(
+            "no issue update was supplied".into(),
+        ));
+    }
+    forge_process::run_gh(&repo.root, &args, &[]).await?;
+    let detail = get_detail(&repo.root, &remote, number).await?;
+    Ok(IssueResult {
+        repository_root: repo.relative_root,
+        forge: forge_identity(&remote),
+        issue: detail,
+    })
+}
+
+pub(in crate::git) async fn issue_comment(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<IssueCommentResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    let remote = remote::requested_remote(&repo.root, arguments)?;
+    let number = requested_number(arguments, "issue")?;
+    let body = bounded_text(arguments, "body", MAX_BODY_BYTES, false)?;
+    let repo_spec = repo_spec(&remote);
+    let args = vec![
+        "issue".into(),
+        "comment".into(),
+        number.to_string(),
+        "--repo".into(),
+        repo_spec,
+        "--body".into(),
+        body,
+    ];
+    let output = forge_process::run_gh(&repo.root, &args, &[]).await?;
+    let comment_url = parse_comment_url(&output, &remote, number)?;
+    Ok(IssueCommentResult {
+        repository_root: repo.relative_root,
+        forge: forge_identity(&remote),
+        issue_number: number,
+        comment_url,
+    })
+}
+
+async fn get_detail(
+    root: &std::path::Path,
+    remote: &remote::GitRemoteIdentity,
+    number: u64,
+) -> Result<IssueDetail, McpError> {
+    let args = vec![
+        "issue".into(),
+        "view".into(),
+        number.to_string(),
+        "--repo".into(),
+        repo_spec(remote),
+        "--json".into(),
+        detail_fields().into(),
+    ];
+    let output = forge_process::run_gh(root, &args, &[]).await?;
+    let raw: ProviderIssue = parse_json(&output)?;
+    validate_issue_detail(&raw, remote, number)
 }
 
 fn validate_issue_summary(
@@ -236,34 +366,50 @@ fn validate_issue_detail(
     })
 }
 
-fn parse_label_filters(arguments: &Value) -> Result<Vec<String>, McpError> {
-    let Some(raw_labels) = arguments.get("labels") else {
-        return Ok(Vec::new());
-    };
-    let array = raw_labels
-        .as_array()
-        .ok_or_else(|| McpError::InvalidRequest("issue labels are invalid".into()))?;
-    if array.len() > MAX_LABEL_FILTER_COUNT {
+fn parse_created_issue_number(
+    output: &[u8],
+    remote: &remote::GitRemoteIdentity,
+) -> Result<u64, McpError> {
+    let text = std::str::from_utf8(output)
+        .map_err(|_| invalid_git_output())?
+        .trim();
+    let prefix = format!(
+        "https://github.com/{}/{}/issues/",
+        remote.owner, remote.repository
+    );
+    let number = text
+        .strip_prefix(&prefix)
+        .and_then(|tail| tail.trim_end_matches('/').parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .ok_or_else(|| McpError::InvalidRequest("created issue identity is invalid".into()))?;
+    Ok(number)
+}
+
+fn parse_comment_url(
+    output: &[u8],
+    remote: &remote::GitRemoteIdentity,
+    issue_number: u64,
+) -> Result<String, McpError> {
+    let text = std::str::from_utf8(output)
+        .map_err(|_| invalid_git_output())?
+        .trim()
+        .to_owned();
+    let expected_prefix = format!(
+        "https://github.com/{}/{}/issues/{}#issuecomment-",
+        remote.owner, remote.repository, issue_number
+    );
+    if !text.starts_with(&expected_prefix) || text.len() > 512 || text.contains('\0') {
         return Err(McpError::InvalidRequest(
-            "issue labels exceed maximum".into(),
+            "comment identity is invalid".into(),
         ));
     }
-    let mut labels = Vec::with_capacity(array.len());
-    for item in array {
-        let label = item
-            .as_str()
-            .ok_or_else(|| McpError::InvalidRequest("issue label is invalid".into()))?;
-        if label.trim().is_empty()
-            || label.len() > MAX_LABEL_NAME_BYTES
-            || label.contains('\0')
-            || label.contains('\n')
-            || label.contains('\r')
-        {
-            return Err(McpError::InvalidRequest("issue label is invalid".into()));
-        }
-        labels.push(label.to_owned());
+    let fragment = &text[expected_prefix.len()..];
+    if fragment.is_empty() || !fragment.chars().all(|c| c.is_ascii_digit()) {
+        return Err(McpError::InvalidRequest(
+            "comment identity is invalid".into(),
+        ));
     }
-    Ok(labels)
+    Ok(text)
 }
 
 fn summary_fields() -> &'static str {
