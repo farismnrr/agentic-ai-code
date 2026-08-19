@@ -15,7 +15,8 @@ pub(super) async fn run_gh(
     accepted_exit_codes: &[i32],
 ) -> Result<Vec<u8>, McpError> {
     let home = runtime_home()?;
-    let mut command = Command::new("gh");
+    let program = resolve_gh_program()?;
+    let mut command = Command::new(program);
     command
         .current_dir(root)
         .env_clear()
@@ -76,6 +77,25 @@ pub(super) async fn run_gh(
         }
     }
     Ok(output)
+}
+
+#[cfg(debug_assertions)]
+fn resolve_gh_program() -> Result<PathBuf, McpError> {
+    if let Some(override_var) = std::env::var_os("RELAY_TEST_GH_PATH").filter(|v| !v.is_empty()) {
+        let path = PathBuf::from(override_var);
+        if !path.is_absolute() || !path.is_file() {
+            return Err(McpError::InvalidRequest(
+                "test gh path override must be an absolute path to a regular file".into(),
+            ));
+        }
+        return Ok(path);
+    }
+    Ok(PathBuf::from("gh"))
+}
+
+#[cfg(not(debug_assertions))]
+fn resolve_gh_program() -> Result<PathBuf, McpError> {
+    Ok(PathBuf::from("gh"))
 }
 
 fn runtime_home() -> Result<PathBuf, McpError> {
