@@ -170,7 +170,7 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
       execute: async ({ generation }) => {
         orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
         const result = orchestratorScheduler.dispatchReady({ userId: input.userId, conversationId: input.parentSessionId, generation, parentSessionId: input.parentSessionId, parentAuthority: input.authority, port })
-        logger.info('chat.orchestrator.dispatch', { 'operation': 'chat.orchestrator.dispatch', 'outcome': 'ok', 'orchestration.started.count': result.started.length, 'orchestration.denied.count': result.denied.length, 'orchestration.ready.count': result.graph.ready.length })
+        logger.info('chat.orchestrator.dispatch', { 'operation': 'chat.orchestrator.dispatch', 'outcome': 'ok', 'orchestration.run_id': generation, 'orchestration.started.count': result.started.length, 'orchestration.denied.count': result.denied.length, 'orchestration.ready.count': result.graph.ready.length })
         return result
       }
     }),
@@ -179,7 +179,7 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
       inputSchema: z.object({ generation: z.string().uuid() }),
       execute: async ({ generation }) => {
         const graph = orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
-        logger.info('chat.orchestrator.poll', { 'operation': 'chat.orchestrator.poll', 'outcome': graph.status, 'orchestration.ready.count': graph.ready.length, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
+        logger.info('chat.orchestrator.poll', { 'operation': 'chat.orchestrator.poll', 'outcome': graph.status, 'orchestration.run_id': generation, 'orchestration.state': graph.status, 'orchestration.ready.count': graph.ready.length, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
         return graph
       }
     }),
@@ -191,7 +191,7 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
         const graph = scope === 'run'
           ? orchestratorScheduler.cancelRun({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
           : orchestratorScheduler.cancelNode({ userId: input.userId, conversationId: input.parentSessionId, generation, nodeId: node_id!, subtree: scope === 'subtree', port })
-        logger.info('chat.orchestrator.cancel', { 'operation': 'chat.orchestrator.cancel', 'outcome': 'cancelled', 'cancel.reason': scope, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
+        logger.info('chat.orchestrator.cancel', { 'operation': 'chat.orchestrator.cancel', 'outcome': 'cancelled', 'cancel.reason': scope, 'orchestration.run_id': generation, 'orchestration.state': graph.status, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
         return graph
       }
     }),
@@ -208,7 +208,7 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
           children.push(child)
         }
         const result = reconcileChildren({ userId: input.userId, conversationId: input.parentSessionId, generation, children })
-        logger.info('chat.orchestrator.reconcile', { 'operation': 'chat.orchestrator.reconcile', 'outcome': result.blockers.length ? 'blocked' : 'ok', 'orchestration.issue.count': result.issues.length, 'orchestration.blocker.count': result.blockers.length })
+        logger.info('chat.orchestrator.reconcile', { 'operation': 'chat.orchestrator.reconcile', 'outcome': result.blockers.length ? 'blocked' : 'ok', 'orchestration.run_id': generation, 'orchestration.reconciliation_outcome': result.blockers.length ? 'blocked' : 'clear', 'orchestration.issue.count': result.issues.length, 'orchestration.blocker.count': result.blockers.length })
         return result
       }
     }),

@@ -12,8 +12,8 @@ const PRESENTATION_REDACTIONS: ReadonlyArray<[RegExp, string]> = [
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED-JWT]']
 ]
 const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
-const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column|number|draft|set_upstream)$/i
-const SAFE_IDENTITY_KEY = /^(remote|branch|head_branch|base_branch|strategy|state)$/i
+const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column|number|draft|set_upstream|scope|action|delivery_ready)$/i
+const SAFE_IDENTITY_KEY = /^(remote|branch|head_branch|base_branch|strategy|state|node_id|generation)$/i
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
@@ -58,7 +58,7 @@ function scalar(value: unknown): string | number | boolean | undefined {
 }
 
 export function toolCategory(toolName: string): ToolRenderCategory {
-  if (toolName === 'delegate_task' || toolName.startsWith('background_') || toolName.startsWith('agent_task_')) return 'subagent'
+  if (toolName === 'delegate_task' || toolName.startsWith('background_') || toolName.startsWith('agent_task_') || toolName.startsWith('orchestrator_')) return 'subagent'
   if (toolName.startsWith('git_') || toolName.startsWith('change_request_')) return 'git'
   if (toolName.startsWith('code_')) return 'diagnostics'
   if (['file_write', 'file_edit', 'apply_patch'].includes(toolName)) return 'mutation'
@@ -130,6 +130,19 @@ export interface OutputPresentation {
 export function presentToolOutput(output: unknown): OutputPresentation | undefined {
   if (output === undefined || output === null) return undefined
   const value = record(output)
+  if (value && Array.isArray(value.nodes) && typeof value.status === 'string') {
+    const counts = new Map<string, number>()
+    for (const raw of value.nodes) {
+      const node = record(raw)
+      const state = typeof node?.status === 'string' ? node.status : 'unknown'
+      counts.set(state, (counts.get(state) ?? 0) + 1)
+    }
+    const active = ['ready', 'running', 'blocked', 'completed', 'failed', 'cancelled'].flatMap(state => counts.has(state) ? [`${counts.get(state)} ${state}`] : [])
+    return { summary: `Orchestration · ${value.nodes.length} nodes · ${active.join(' · ')} · state ${String(value.status).slice(0, 32)}`, truncated: false, continuation: false }
+  }
+  if (value && Array.isArray(value.issues) && Array.isArray(value.writers) && Array.isArray(value.blockers)) {
+    return { summary: `Reconciliation · ${value.issues.length} issues · ${value.writers.length} writers · ${value.blockers.length} blockers · delivery ${value.delivery_ready === true ? 'ready' : 'blocked'}`, truncated: false, continuation: false }
+  }
   const continuation = Boolean(value?.continuation)
   const declaredTruncated = value?.truncated === true
   const candidate = previewCandidate(output)
