@@ -53,7 +53,7 @@ pub(super) async fn handle_tools_call(
             &McpError::InvalidParams("invalid tools/call parameters".to_string()),
         )
     })?;
-    let Some(tool) = mcp::find_tool(&call.name) else {
+    let Some(tool) = mcp::find_tool_for_profile(&call.name, state.config.tool_profile) else {
         return Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -297,7 +297,8 @@ pub(super) async fn handle_tools_call(
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
 
-    if client_supports_tasks(request.params.as_ref())
+    if state.config.tool_profile == relay_core::config::ToolProfile::Full
+        && client_supports_tasks(request.params.as_ref())
         && relay_application::execution::tool_call_supports_tasks(&tool, &call.arguments)
     {
         let tool_dispatch_started = Instant::now();

@@ -16,7 +16,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use crate::observability::{audit, CorrelationId, RequestId};
 use crate::telemetry::extract_traceparent;
 use relay_core::error::McpError;
-use relay_interfaces::mcp::{self, parse_request, tool_catalog, DiscoverResult, Id, Response};
+use relay_interfaces::mcp::{self, parse_request, DiscoverResult, Id, Response};
 
 pub(super) async fn handle_mcp(
     State(state): State<Arc<AppState>>,
@@ -108,7 +108,7 @@ pub(super) async fn handle_mcp(
         // this server before switching to the existing request contract.
         if request.method == "initialize" {
             tracing::info!(event = "relay.mcp.initialize");
-            return handle_initialize(&request)
+            return handle_initialize(&request, &state)
                 .map_or_else(json_error_response, |body| body.into_response());
         }
 
@@ -120,7 +120,7 @@ pub(super) async fn handle_mcp(
             relay_interfaces::transport_validation::is_legacy_tools_list(&headers, &request);
         if legacy_tools_list {
             tracing::info!(event = "relay.mcp.tools_list", outcome = "legacy");
-            return handle_tools_list(&request)
+            return handle_tools_list(&request, &state)
                 .map_or_else(json_error_response, |body| body.into_response());
         }
 
@@ -142,7 +142,7 @@ pub(super) async fn handle_mcp(
             }
             relay_application::dispatcher::Dispatch::ToolsList => {
                 tracing::info!(event = "relay.mcp.tools_list");
-                handle_tools_list(&request)
+                handle_tools_list(&request, &state)
             }
             relay_application::dispatcher::Dispatch::ToolsCall => {
                 tracing::info!(event = "relay.mcp.tools_call");
@@ -199,7 +199,7 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_initialize(request: &mcp::Request) -> JsonErr2 {
+fn handle_initialize(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let params = request.params.as_ref().and_then(Value::as_object);
     let Some(requested) = params
         .and_then(|p| p.get("protocolVersion"))
@@ -232,7 +232,7 @@ fn handle_initialize(request: &mcp::Request) -> JsonErr2 {
         request.id.clone(),
         json!({
             "protocolVersion": requested,
-            "capabilities": { "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } },
+            "capabilities": if state.config.tool_profile == relay_core::config::ToolProfile::Full { json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }) } else { json!({ "tools": { "listChanged": false }, "resources": {} }) },
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
         }),
@@ -240,8 +240,8 @@ fn handle_initialize(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_tools_list(request: &mcp::Request) -> JsonErr2 {
-    let tools = tool_catalog();
+fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+    let tools = mcp::tool_catalog_for_profile(state.config.tool_profile);
     let response = Response::new(
         request.id.clone(),
         json!({

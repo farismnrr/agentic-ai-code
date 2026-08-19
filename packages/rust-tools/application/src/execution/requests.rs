@@ -45,6 +45,13 @@ pub(super) fn build_terminal_exec_invocation(
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(config.default_terminal_timeout_ms);
+    if config.tool_profile == relay_core::config::ToolProfile::Primary
+        && (timeout_ms == 0 || timeout_ms > 30_000)
+    {
+        return Err(McpError::InvalidRequest(
+            "primary terminal_exec timeout_ms must be between 1 and 30000; use terminal_job_start for long-running work".into(),
+        ));
+    }
     if config.max_terminal_timeout_ms > 0 && timeout_ms > config.max_terminal_timeout_ms {
         return Err(McpError::InvalidRequest(
             "timeout_ms exceeds operator maximum".into(),

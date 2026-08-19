@@ -207,3 +207,11 @@ mutable coordination state or agent framework.
 Task metadata is intentionally process-local in 039G. After a restart, an
 existing worktree is not automatically adopted, cleaned, or reused because
 ownership cannot be proven without introducing a persistence system.
+
+## MCP tool profiles (Plan 045)
+
+The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a ChatGPT routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
+
+Primary exposes 31 common coding tools: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise MCP Tasks; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+
+A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where ChatGPT Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.
