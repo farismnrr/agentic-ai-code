@@ -52,10 +52,11 @@ pub fn effect_classes(
         | "issue_list"
         | "issue_get"
         | "workflow_list"
+        | "workflow_get"
         | "workflow_run_list"
         | "workflow_run_get"
-        | "workflow_job_get"
-        | "workflow_run_job_log" => vec!["network_read", "privileged_bridge"],
+        | "workflow_run_jobs"
+        | "workflow_job_log_preview" => vec!["network_read", "privileged_bridge"],
         "change_request_create"
         | "change_request_update"
         | "change_request_merge"

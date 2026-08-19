@@ -123,10 +123,11 @@ issue_comment
 issue_close
 issue_reopen
 workflow_list
+workflow_get
 workflow_run_list
 workflow_run_get
-workflow_job_get
-workflow_run_job_log
+workflow_run_jobs
+workflow_job_log_preview
 apply_patch
 code_symbols
 code_definition
@@ -188,10 +189,11 @@ issue_comment(cwd?, remote="origin", number, body)
 issue_close(cwd?, remote="origin", number, reason="completed"|"not_planned"|"duplicate", duplicate_of?, comment?)
 issue_reopen(cwd?, remote="origin", number, comment?)
 workflow_list(cwd?, remote="origin")
-workflow_run_list(cwd?, remote="origin", workflow?, branch?, status?)
-workflow_run_get(cwd?, remote="origin", number)
-workflow_job_get(cwd?, remote="origin", number)
-workflow_run_job_log(cwd?, remote="origin", number, job_id?, max_lines=100)
+workflow_get(cwd?, remote="origin", workflow_id)
+workflow_run_list(cwd?, remote="origin", workflow_id?, branch?, commit_sha?, status?)
+workflow_run_get(cwd?, remote="origin", run_id)
+workflow_run_jobs(cwd?, remote="origin", run_id)
+workflow_job_log_preview(cwd?, remote="origin", job_id, failed_only=true, max_lines=100)
 code_symbols(path=..., cwd?, max_results?) or code_symbols(query=..., cwd?, max_results?)
 code_definition(...)
 code_references(...)
