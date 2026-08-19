@@ -35,7 +35,7 @@ export interface OrchestratorGraphSnapshot {
   graph_id: string
   generation: string
   parent_session_id: string
-  status: 'active' | 'completed' | 'cancelled' | 'invalid'
+  status: 'active' | 'completed' | 'blocked' | 'cancelled' | 'invalid'
   nodes: OrchestratorNode[]
   ready: string[]
   updated_at: number

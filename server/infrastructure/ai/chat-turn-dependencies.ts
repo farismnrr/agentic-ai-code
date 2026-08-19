@@ -12,7 +12,7 @@ import { findUserWorkspace } from '../../infrastructure/database/workspaces'
 import { resolveWorkspacePath } from '../filesystem/browse'
 import { hasActivePairedDevice } from '../database/devices'
 import { buildLocalTerminalTool } from './local-terminal-tool'
-import { buildBackgroundTaskTools, buildSubagentTool } from './subagent-tool'
+import { buildBackgroundTaskTools, buildOrchestratorTools, buildSubagentTool } from './subagent-tool'
 
 /**
  * The narrow, explicit dependency contract `executeChatTurn` orchestrates
@@ -33,7 +33,7 @@ export function createChatTurnDependencies(): ChatTurnDependencies {
     history: { load: async conversation => loadHistoryMessages(conversation as never), insertUser: insertUserMessage },
     persistence: { findLast: async id => findLastMessage(id), updateAssistant: updateAssistantMessage, insertAssistant: insertAssistantMessage, cacheTokens: cacheLastMeasuredTokens },
     localTerminal: { hasPairedDevice: hasActivePairedDevice, buildTool: buildLocalTerminalTool },
-    subagent: { build: input => buildSubagentTool(input), buildBackground: input => buildBackgroundTaskTools(input) },
+    subagent: { build: input => buildSubagentTool(input), buildBackground: input => buildBackgroundTaskTools(input), buildOrchestration: input => buildOrchestratorTools(input) },
     resolveWorkspacePath,
     resolveModelConfig: model => resolveModelConfig(model as Parameters<typeof resolveModelConfig>[0]),
     getChatModel: (provider, modelId) => getChatModel(provider as Parameters<typeof getChatModel>[0], modelId),

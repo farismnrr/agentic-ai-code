@@ -3,7 +3,10 @@ import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
 import type { SubagentBudget, SubagentResult } from '#shared/types/subagents'
 import { SubagentRuntime } from '../../application/subagents/runtime'
-import { nativeToolMatchesProfile } from '../../application/subagents/profiles'
+import { loadAgentProfile, nativeToolMatchesProfile } from '../../application/subagents/profiles'
+import { intersectSubagentAuthority } from '../../application/subagents/policy'
+import { OrchestratorScheduler, ORCHESTRATOR_BUDGETS, ORCHESTRATOR_ROLE_PROFILE, requirementsFitAuthority } from '../../application/orchestration/scheduler'
+import { getOrchestratorGraph } from '../../application/orchestration/task-graph'
 import { buildMcpTools, scopeMcpTools } from '../mcp/mcp-tools'
 import { logger } from '../observability/logger'
 import { BackgroundTaskManager } from '../../application/subagents/background'
@@ -11,21 +14,25 @@ import { classifyOutput, putResultRef } from '../../application/task-context-out
 import { parsePresentationSafeSubagentResult, presentationSafeBackgroundTask } from './subagent-result'
 import { readRuntimeInstruction } from './runtime-instructions'
 
+function readProfileInstruction(name: string) {
+  const loaded = readRuntimeInstruction(process.cwd(), ['.agents', 'agents'], [`${name}.md`])
+  if (!loaded) throw new Error('configured profile is unavailable')
+  return loaded.text
+}
+
+function readSkillInstruction(name: string) {
+  const found = new Map<string, string>()
+  for (const root of [['ai-self', 'skills'], ['.agents', 'skills']]) {
+    const loaded = readRuntimeInstruction(process.cwd(), root, [name, 'SKILL.md'], { optional: true })
+    if (loaded && !found.has(loaded.canonical)) found.set(loaded.canonical, loaded.text)
+  }
+  if (found.size > 1) throw new Error('configured profile skill is ambiguous across approved roots')
+  return found.values().next().value
+}
+
 const runtime = new SubagentRuntime({
-  readProfile: (name) => {
-    const loaded = readRuntimeInstruction(process.cwd(), ['.agents', 'agents'], [`${name}.md`])
-    if (!loaded) throw new Error('configured profile is unavailable')
-    return loaded.text
-  },
-  readSkill: (name) => {
-    const found = new Map<string, string>()
-    for (const root of [['ai-self', 'skills'], ['.agents', 'skills']]) {
-      const loaded = readRuntimeInstruction(process.cwd(), root, [name, 'SKILL.md'], { optional: true })
-      if (loaded && !found.has(loaded.canonical)) found.set(loaded.canonical, loaded.text)
-    }
-    if (found.size > 1) throw new Error('configured profile skill is ambiguous across approved roots')
-    return found.values().next().value
-  },
+  readProfile: readProfileInstruction,
+  readSkill: readSkillInstruction,
   lifecycle: {
     event: (name, payload) => logger.info(`chat.subagent.${name}`, { 'operation': `chat.subagent.${name}`, 'outcome': payload.status ?? 'started', 'agent.profile': payload.profile, 'agent.state': payload.status ?? 'started', 'agent.depth': payload.depth })
   },
@@ -65,6 +72,7 @@ const runtime = new SubagentRuntime({
 })
 
 const backgroundTasks = new BackgroundTaskManager(runtime)
+const orchestratorScheduler = new OrchestratorScheduler()
 
 export function buildSubagentTool(input: Parameters<SubagentToolPort['build']>[0]) {
   return tool({
@@ -109,6 +117,81 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
         const cancelled = backgroundTasks.cancel(task_id, input.userId, input.parentSessionId)
         logger.info('chat.background.cancel', { 'operation': 'chat.background.cancel', 'outcome': cancelled ? 'cancelled' : 'error', 'background.state': cancelled ? 'cancelling' : 'not_found', 'cancel.reason': cancelled ? 'user-request' : 'not-found' })
         return { task_id, cancelled }
+      }
+    })
+  }
+}
+
+export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build']>[0]) {
+  const port = {
+    capacity: (parentSessionId: string) => backgroundTasks.capacity(parentSessionId),
+    prepare: (node: Parameters<typeof requirementsFitAuthority>[0], parentAuthority: Parameters<typeof requirementsFitAuthority>[1]) => {
+      const profileName = ORCHESTRATOR_ROLE_PROFILE[node.role]
+      if (node.profile && node.profile !== profileName) throw new Error('orchestrator role/profile mismatch')
+      const profile = loadAgentProfile(profileName, readProfileInstruction)
+      const childAuthority = intersectSubagentAuthority(parentAuthority, profile)
+      if (!requirementsFitAuthority(node, childAuthority)) throw new Error('orchestrator child authority is insufficient')
+      if (node.role === 'writer' && childAuthority.working_mode !== 'workspace') throw new Error('writer authority is read-only')
+      if (node.role !== 'writer' && childAuthority.working_mode !== 'read-only') throw new Error('non-writer authority is not read-only')
+      return { profile: profileName, isolation: node.role === 'writer' ? 'worktree' as const : 'shared_read' as const, budget: ORCHESTRATOR_BUDGETS[node.budget_class] }
+    },
+    start: ({ taskId, node, prepared }: { taskId: string, node: Parameters<typeof requirementsFitAuthority>[0], prepared: { profile: SubagentResult['profile'], isolation: 'shared_read' | 'worktree', budget: Partial<SubagentBudget> } }) => backgroundTasks.start({
+      taskId,
+      user_id: input.userId,
+      parent_session_id: input.parentSessionId,
+      parent_authority: input.authority,
+      profile: prepared.profile,
+      task: node.objective,
+      budget: prepared.budget,
+      isolation: prepared.isolation,
+      repositoryRoot: input.authority.workspace_root,
+      worktreeRoot: `${input.authority.workspace_root}/.agents/worktrees`,
+      model: input.model,
+      approvals: input.approvals,
+      permission_mode: input.permissionMode
+    }),
+    get: (taskId: string) => backgroundTasks.get(taskId, input.userId, input.parentSessionId),
+    cancel: (taskId: string) => backgroundTasks.cancel(taskId, input.userId, input.parentSessionId)
+  }
+
+  const cancelActiveRun = () => {
+    const graph = getOrchestratorGraph(input.userId, input.parentSessionId)
+    if (!graph || graph.status !== 'active') return
+    orchestratorScheduler.cancelRun({ userId: input.userId, conversationId: input.parentSessionId, generation: graph.generation, port })
+  }
+  if (input.abortSignal.aborted) cancelActiveRun()
+  else input.abortSignal.addEventListener('abort', cancelActiveRun, { once: true })
+
+  return {
+    orchestrator_dispatch: tool({
+      description: 'Dispatch dependency-ready orchestration nodes through the existing bounded background/subagent runtime. Writer nodes use isolated worktrees; other roles stay read-only.',
+      inputSchema: z.object({ generation: z.string().uuid() }),
+      execute: async ({ generation }) => {
+        orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
+        const result = orchestratorScheduler.dispatchReady({ userId: input.userId, conversationId: input.parentSessionId, generation, parentSessionId: input.parentSessionId, parentAuthority: input.authority, port })
+        logger.info('chat.orchestrator.dispatch', { 'operation': 'chat.orchestrator.dispatch', 'outcome': 'ok', 'orchestration.started.count': result.started.length, 'orchestration.denied.count': result.denied.length, 'orchestration.ready.count': result.graph.ready.length })
+        return result
+      }
+    }),
+    orchestrator_poll: tool({
+      description: 'Refresh parent-owned orchestration state from bounded child task results without starting new work.',
+      inputSchema: z.object({ generation: z.string().uuid() }),
+      execute: async ({ generation }) => {
+        const graph = orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
+        logger.info('chat.orchestrator.poll', { 'operation': 'chat.orchestrator.poll', 'outcome': graph.status, 'orchestration.ready.count': graph.ready.length, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
+        return graph
+      }
+    }),
+    orchestrator_cancel: tool({
+      description: 'Cancel one orchestration node, its dependency subtree, or the whole parent-owned run. Running child process trees receive cancellation through the existing background runtime.',
+      inputSchema: z.object({ generation: z.string().uuid(), scope: z.enum(['node', 'subtree', 'run']), node_id: z.string().min(1).max(64).optional() }),
+      execute: async ({ generation, scope, node_id }) => {
+        if (scope !== 'run' && !node_id) throw new Error('orchestrator cancellation target is required')
+        const graph = scope === 'run'
+          ? orchestratorScheduler.cancelRun({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
+          : orchestratorScheduler.cancelNode({ userId: input.userId, conversationId: input.parentSessionId, generation, nodeId: node_id!, subtree: scope === 'subtree', port })
+        logger.info('chat.orchestrator.cancel', { 'operation': 'chat.orchestrator.cancel', 'outcome': 'cancelled', 'cancel.reason': scope, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
+        return graph
       }
     })
   }
