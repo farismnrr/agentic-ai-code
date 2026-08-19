@@ -56,7 +56,14 @@ pub fn effect_classes(
         | "workflow_run_list"
         | "workflow_run_get"
         | "workflow_run_jobs"
-        | "workflow_job_log_preview" => vec!["network_read", "privileged_bridge"],
+        | "workflow_job_log_preview"
+        | "dependabot_alert_list"
+        | "dependabot_alert_get"
+        | "code_scanning_alert_list"
+        | "code_scanning_alert_get"
+        | "secret_scanning_alert_list"
+        | "secret_scanning_alert_get"
+        | "secret_scanning_alert_locations" => vec!["network_read", "privileged_bridge"],
         "change_request_create"
         | "change_request_update"
         | "change_request_merge"

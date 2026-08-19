@@ -172,6 +172,27 @@ pub async fn dispatch_git_tool(
         "workflow_job_log_preview" => {
             serde_json::to_value(forge::workflow_job_log_preview(arguments, config).await?)
         }
+        "dependabot_alert_list" => {
+            serde_json::to_value(forge::dependabot_alert_list(arguments, config).await?)
+        }
+        "dependabot_alert_get" => {
+            serde_json::to_value(forge::dependabot_alert_get(arguments, config).await?)
+        }
+        "code_scanning_alert_list" => {
+            serde_json::to_value(forge::code_scanning_alert_list(arguments, config).await?)
+        }
+        "code_scanning_alert_get" => {
+            serde_json::to_value(forge::code_scanning_alert_get(arguments, config).await?)
+        }
+        "secret_scanning_alert_list" => {
+            serde_json::to_value(forge::secret_scanning_alert_list(arguments, config).await?)
+        }
+        "secret_scanning_alert_get" => {
+            serde_json::to_value(forge::secret_scanning_alert_get(arguments, config).await?)
+        }
+        "secret_scanning_alert_locations" => {
+            serde_json::to_value(forge::secret_scanning_alert_locations(arguments, config).await?)
+        }
         _ => return Ok(None),
     }
     .map_err(|_| McpError::Internal("failed to serialize git result".into()))?;
