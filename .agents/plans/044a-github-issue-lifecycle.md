@@ -112,12 +112,12 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify: `packages/rust-tools/application/src/git.rs`
 
 **Steps:**
-- [ ] Define a bounded `IssueSummary` containing only stable workflow fields such as number, title, state/state reason, URL, labels, author login, created/updated/closed timestamps and comment count where available.
-- [ ] Define `IssueDetail` as summary + bounded body; do not include the full comment thread.
-- [ ] Implement `issue_list` with a repository-owned maximum result count, state enum (`open|closed|all`), optional bounded label filters, deterministic ordering from provider output, and `truncated` when applicable.
-- [ ] Implement `issue_get` for one positive issue number.
-- [ ] Reject malformed issue numbers, labels, provider JSON, oversized title/body/label arrays, and repository-mismatched URLs.
-- [ ] Ensure a pull-request-shaped provider object is rejected or normalized out of the issue-only surface rather than silently returned as an issue.
+- [x] Define a bounded `IssueSummary` containing only stable workflow fields such as number, title, state/state reason, URL, labels, author login, created/updated/closed timestamps and comment count where available.
+- [x] Define `IssueDetail` as summary + bounded body; do not include the full comment thread.
+- [x] Implement `issue_list` with a repository-owned maximum result count, state enum (`open|closed|all`), optional bounded label filters, deterministic ordering from provider output, and `truncated` when applicable.
+- [x] Implement `issue_get` for one positive issue number.
+- [x] Reject malformed issue numbers, labels, provider JSON, oversized title/body/label arrays, and repository-mismatched URLs.
+- [x] Ensure a pull-request-shaped provider object is rejected or normalized out of the issue-only surface rather than silently returned as an issue.
 
 **Validation:**
 - Add `scripts/verify-044a-issue-contract.sh` covering schemas, annotations, forbidden model-facing fields, malformed numbers/state/labels, provider identity rejection, body/output bounds, and PR-vs-issue discrimination.
