@@ -76,11 +76,11 @@ All six are read-only model-facing operations. They use validated repository ide
 - Modify: `packages/rust-tools/application/src/git.rs`
 
 **Steps:**
-- [ ] Implement `workflow_list` using `gh workflow list --all --json id,name,path,state` with a repository-owned result cap.
-- [ ] Normalize workflow path as repository-relative metadata only; reject control characters/oversized values/provider repository mismatch.
-- [ ] Implement `workflow_get(workflow_id)` through a fixed endpoint or equally structured provider path; the endpoint must be generated internally from validated owner/repo and numeric ID.
-- [ ] If introducing internal `gh api`, expose only a typed/fixed adapter; no tool argument may select method, host, endpoint, header, jq expression or arbitrary form field.
-- [ ] Normalize unsupported/disabled/no-workflow states without fabricating data.
+- [x] Implement `workflow_list` using `gh workflow list --all --json id,name,path,state` with a repository-owned result cap.
+- [x] Normalize workflow path as repository-relative metadata only; reject control characters/oversized values/provider repository mismatch.
+- [x] Implement `workflow_get(workflow_id)` through a fixed endpoint or equally structured provider path; the endpoint must be generated internally from validated owner/repo and numeric ID.
+- [x] If introducing internal `gh api`, expose only a typed/fixed adapter; no tool argument may select method, host, endpoint, header, jq expression or arbitrary form field.
+- [x] Normalize unsupported/disabled/no-workflow states without fabricating data.
 
 **Validation:**
 - deterministic fixture verifies exact argv/endpoint construction, repository binding, malformed ID rejection and output bounds.
@@ -96,11 +96,11 @@ All six are read-only model-facing operations. They use validated repository ide
 - Modify: `packages/rust-tools/application/src/git/forge/actions.rs`
 
 **Steps:**
-- [ ] Implement `workflow_run_list` through `gh run list --json` with a hard result cap.
-- [ ] Allow only typed optional filters: workflow ID, validated branch, exact 40-hex commit SHA, and a normalized status enum supported by current GitHub CLI.
-- [ ] Normalize stable fields: run ID/number/attempt, workflow ID/name, display title, event, branch/SHA, status/conclusion, timestamps and validated GitHub URL.
-- [ ] Implement `workflow_run_get(run_id)` using `gh run view <id> --json` and omit jobs from this result if jobs have their own tool, preventing duplicate oversized payloads.
-- [ ] Reject malformed IDs/SHA/status/provider JSON and repository-mismatched URLs.
+- [x] Implement `workflow_run_list` through `gh run list --json` with a hard result cap.
+- [x] Allow only typed optional filters: workflow ID, validated branch, exact 40-hex commit SHA, and a normalized status enum supported by current GitHub CLI.
+- [x] Normalize stable fields: run ID/number/attempt, workflow ID/name, display title, event, branch/SHA, status/conclusion, timestamps and validated GitHub URL.
+- [x] Implement `workflow_run_get(run_id)` using `gh run view <id> --json` and omit jobs from this result if jobs have their own tool, preventing duplicate oversized payloads.
+- [x] Reject malformed IDs/SHA/status/provider JSON and repository-mismatched URLs.
 
 **Validation:**
 - fixture covers queued/in-progress/completed success/failure/cancelled states and unknown provider enum fail-closed/normalized handling.
@@ -108,8 +108,8 @@ All six are read-only model-facing operations. They use validated repository ide
 **Commit boundary:** `feat(044b): add github workflow run reads`
 
 **Phase exit criteria:**
-- [ ] workflow and run list/get work without log access.
-- [ ] absence of Actions history returns a valid empty result, not an internal error.
+- [x] workflow and run list/get work without log access.
+- [x] absence of Actions history returns a valid empty result, not an internal error.
 
 ## PHASE-02 — Job/step diagnosis
 
@@ -125,11 +125,11 @@ All six are read-only model-facing operations. They use validated repository ide
 - Modify: `packages/rust-tools/application/src/git/forge/actions.rs`
 
 **Steps:**
-- [ ] Implement `workflow_run_jobs(run_id)` from structured `gh run view --json jobs` or a fixed jobs endpoint if provider behavior is more reliable.
-- [ ] Cap jobs and steps independently.
-- [ ] Normalize job ID/name/status/conclusion/start/end and step number/name/status/conclusion/start/end only.
-- [ ] Do not include runner labels, environment variables, matrices, annotations or raw log text unless separately reviewed and explicitly needed.
-- [ ] Validate all returned URLs/identities where present.
+- [x] Implement `workflow_run_jobs(run_id)` from structured `gh run view --json jobs` or a fixed jobs endpoint if provider behavior is more reliable.
+- [x] Cap jobs and steps independently.
+- [x] Normalize job ID/name/status/conclusion/start/end and step number/name/status/conclusion/start/end only.
+- [x] Do not include runner labels, environment variables, matrices, annotations or raw log text unless separately reviewed and explicitly needed.
+- [x] Validate all returned URLs/identities where present.
 
 **Validation:**
 - fixture includes multiple jobs, skipped/cancelled jobs, failed steps, over-cap truncation, malformed provider objects and long names.
@@ -153,11 +153,11 @@ All six are read-only model-facing operations. They use validated repository ide
 - Add deterministic regression acceptance under `scripts/` or existing observability example surfaces; do not add a unit-test suite.
 
 **Steps:**
-- [ ] Identify the credential-shaped substring redaction logic currently embedded in infrastructure observability.
-- [ ] Extract only the pure reusable credential redaction portion to `relay_core`; leave observability field allowlisting, path-specific redaction and telemetry policy in infrastructure.
-- [ ] Make infrastructure call the shared primitive so Plan-035 behavior does not fork.
-- [ ] Preserve existing redaction categories and canary behavior exactly or make stricter changes only with explicit evidence.
-- [ ] Add regression canaries for JSON-quoted credentials, bearer/API-key shapes, URL query credentials and representative ordinary text that must remain readable.
+- [x] Identify the credential-shaped substring redaction logic currently embedded in infrastructure observability.
+- [x] Extract only the pure reusable credential redaction portion to `relay_core`; leave observability field allowlisting, path-specific redaction and telemetry policy in infrastructure.
+- [x] Make infrastructure call the shared primitive so Plan-035 behavior does not fork.
+- [x] Preserve existing redaction categories and canary behavior exactly or make stricter changes only with explicit evidence.
+- [x] Add regression canaries for JSON-quoted credentials, bearer/API-key shapes, URL query credentials and representative ordinary text that must remain readable.
 
 **Validation:**
 - existing Plan-035 redaction/telemetry acceptance affected by the refactor → PASS.
@@ -175,13 +175,13 @@ All six are read-only model-facing operations. They use validated repository ide
 - Modify: `packages/rust-tools/application/src/git/forge_process.rs`
 
 **Steps:**
-- [ ] Use a fixed direct-argv `gh run view --job <id> --log-failed` path by default; optionally allow reviewed `failed_only:false` for one job, never an entire run archive.
-- [ ] Add a specialized bounded text capture path that drains/terminates safely and cannot deadlock on large output.
-- [ ] Enforce provider-read hard ceiling, retained byte ceiling, returned line ceiling, per-line ceiling and operation timeout.
-- [ ] Prefer a bounded tail/diagnostic window when implementable safely; if provider output exceeds the hard ceiling, return explicit `truncated`/classification rather than enlarging limits unboundedly.
-- [ ] Normalize control characters and pass every returned line through the shared credential redactor.
-- [ ] Never return raw provider stderr, signed log URLs, redirect URLs, auth headers, archive data or continuation tokens that grant direct log access.
-- [ ] Return metadata such as job ID, failed-only flag, returned line count, `truncated`, and sanitized lines.
+- [x] Use a fixed direct-argv `gh run view --job <id> --log-failed` path by default; optionally allow reviewed `failed_only:false` for one job, never an entire run archive.
+- [x] Add a specialized bounded text capture path that drains/terminates safely and cannot deadlock on large output.
+- [x] Enforce provider-read hard ceiling, retained byte ceiling, returned line ceiling, per-line ceiling and operation timeout.
+- [x] Prefer a bounded tail/diagnostic window when implementable safely; if provider output exceeds the hard ceiling, return explicit `truncated`/classification rather than enlarging limits unboundedly.
+- [x] Normalize control characters and pass every returned line through the shared credential redactor.
+- [x] Never return raw provider stderr, signed log URLs, redirect URLs, auth headers, archive data or continuation tokens that grant direct log access.
+- [x] Return metadata such as job ID, failed-only flag, returned line count, `truncated`, and sanitized lines.
 
 **Validation:**
 - fixture output contains credential canaries, very long lines, ANSI/control chars, >limit output and ordinary compiler/test failures.
@@ -191,9 +191,9 @@ All six are read-only model-facing operations. They use validated repository ide
 **Commit boundary:** `feat(044b): add bounded workflow log preview`
 
 **Phase exit criteria:**
-- [ ] No unbounded raw log path exists.
-- [ ] Credential canaries are absent from model-visible preview.
-- [ ] Existing telemetry redaction remains at least as strict as before.
+- [x] No unbounded raw log path exists.
+- [x] Credential canaries are absent from model-visible preview.
+- [x] Existing telemetry redaction remains at least as strict as before.
 
 ## PHASE-04 — Catalog, capability policy and deterministic acceptance
 
@@ -213,12 +213,12 @@ All six are read-only model-facing operations. They use validated repository ide
 - Create: `scripts/verify-044b-actions-observability.sh`
 
 **Steps:**
-- [ ] Add strict schemas for the six read tools.
-- [ ] Mark every tool read-only + open-world and non-destructive.
-- [ ] Map every tool to `network_read + privileged_bridge` in both policy owners.
-- [ ] Add malformed-input checks for IDs, SHA, branch, status, log bounds/flags.
-- [ ] Ensure UI summaries never echo log lines into approval/input summaries; result preview remains bounded by existing presentation constraints.
-- [ ] Verify catalog contains all prior tools exactly once plus six new 044B tools.
+- [x] Add strict schemas for the six read tools.
+- [x] Mark every tool read-only + open-world and non-destructive.
+- [x] Map every tool to `network_read + privileged_bridge` in both policy owners.
+- [x] Add malformed-input checks for IDs, SHA, branch, status, log bounds/flags.
+- [x] Ensure UI summaries never echo log lines into approval/input summaries; result preview remains bounded by existing presentation constraints.
+- [x] Verify catalog contains all prior tools exactly once plus six new 044B tools.
 
 **Validation:**
 - `bash scripts/verify-044b-actions-observability.sh` → PASS.
@@ -241,11 +241,11 @@ All six are read-only model-facing operations. They use validated repository ide
 - Modify `.agents/memories/README.md` only for durable redaction/architecture changes introduced by TASK-004.
 
 **Steps:**
-- [ ] Document tool semantics and log-preview bounds at a high level.
-- [ ] Explicitly preserve no-CI/no-unit-test repository policy.
-- [ ] Run mandatory closeout review and local gates.
-- [ ] Deliver via short-lived implementation branch + PR to `main`.
-- [ ] Mark `MERGED / LIVE VERIFICATION PENDING` after source integration.
+- [x] Document tool semantics and log-preview bounds at a high level.
+- [x] Explicitly preserve no-CI/no-unit-test repository policy.
+- [x] Run mandatory closeout review and local gates.
+- [x] Deliver via short-lived implementation branch + PR to `main`.
+- [x] Mark `MERGED / LIVE VERIFICATION PENDING` after source integration.
 
 **Validation:**
 - exact merged source passes Plan-044B deterministic acceptance and repository gate.
@@ -262,17 +262,17 @@ All six are read-only model-facing operations. They use validated repository ide
 
 ## Final 044B acceptance criteria
 
-- [ ] Six Actions-read tools exist exactly once.
-- [ ] workflows/runs/jobs are bounded structured data.
-- [ ] log preview is bounded, failed-focused by default, sanitized and non-streaming.
-- [ ] no raw log/archive/signed URL passthrough exists.
-- [ ] existing GitHub credential isolation remains intact.
-- [ ] existing Plan-035 redaction behavior remains green after shared-redactor extraction.
-- [ ] deterministic 044B acceptance passes.
-- [ ] `cargo test --workspace` passes.
-- [ ] `pnpm verify:commit` passes.
-- [ ] source PR merges to `main`.
-- [ ] live Actions proof remains pending until 044D deployment.
+- [x] Six Actions-read tools exist exactly once.
+- [x] workflows/runs/jobs are bounded structured data.
+- [x] log preview is bounded, failed-focused by default, sanitized and non-streaming.
+- [x] no raw log/archive/signed URL passthrough exists.
+- [x] existing GitHub credential isolation remains intact.
+- [x] existing Plan-035 redaction behavior remains green after shared-redactor extraction.
+- [x] deterministic 044B acceptance passes.
+- [x] `cargo test --workspace` passes.
+- [x] `pnpm verify:commit` passes.
+- [x] source PR merges to `main`.
+- [x] live Actions proof remains pending until 044D deployment.
 
 ## Handoff
 

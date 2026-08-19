@@ -59,7 +59,7 @@ function scalar(value: unknown): string | number | boolean | undefined {
 
 export function toolCategory(toolName: string): ToolRenderCategory {
   if (toolName === 'delegate_task' || toolName.startsWith('background_') || toolName.startsWith('agent_task_') || toolName.startsWith('orchestrator_')) return 'subagent'
-  if (toolName.startsWith('git_') || toolName.startsWith('change_request_') || toolName.startsWith('issue_')) return 'git'
+  if (toolName.startsWith('git_') || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')) return 'git'
   if (toolName.startsWith('code_')) return 'diagnostics'
   if (['file_write', 'file_edit', 'apply_patch'].includes(toolName)) return 'mutation'
   if (['terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel', 'local_terminal'].includes(toolName)) return 'execution'

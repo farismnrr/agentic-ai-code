@@ -47,6 +47,7 @@ const SAFE_READ_TOOLS = new Set([
   'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'git_branch_list', 'git_operation_status', 'git_remote_list',
   'change_request_list', 'change_request_get', 'change_request_checks',
   'issue_list', 'issue_get',
+  'workflow_list', 'workflow_run_list', 'workflow_run_get', 'workflow_job_get', 'workflow_run_job_log',
   'code_symbols', 'code_definition', 'code_references', 'code_hover',
   'code_diagnostics', 'code_rename_preview', 'web_search'
 ])
@@ -168,7 +169,7 @@ export function capabilityFactsForToolCall({
     domain: inputDomain(values),
     command: inputString(values, 'command'),
     args: inputArgs(values),
-    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'local_terminal' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_')
+    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'local_terminal' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
       ? toolName !== 'local_terminal' || effects.includes('network_read')
       : undefined,
     destructive: annotations?.destructiveHint,
@@ -241,7 +242,7 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (toolName === 'git_fetch') return ['git_read', 'workspace_write', 'network_read']
   if (toolName === 'git_push') return ['git_read', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
   if (toolName === 'git_remote_branch_delete') return ['git_read', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
-  if (['change_request_list', 'change_request_get', 'change_request_checks', 'issue_list', 'issue_get'].includes(toolName)) return ['network_read', 'privileged_bridge']
+  if (['change_request_list', 'change_request_get', 'change_request_checks', 'issue_list', 'issue_get', 'workflow_list', 'workflow_run_list', 'workflow_run_get', 'workflow_job_get', 'workflow_run_job_log'].includes(toolName)) return ['network_read', 'privileged_bridge']
   if (['change_request_create', 'change_request_update', 'change_request_merge', 'issue_create', 'issue_update', 'issue_comment', 'issue_close', 'issue_reopen'].includes(toolName)) return ['network_read', 'network_write', 'external_mutation', 'privileged_bridge']
   if (SAFE_READ_TOOLS.has(toolName)) return toolName.startsWith('git_') ? ['git_read'] : ['workspace_read']
   if (trustedProvenance === 'external') {

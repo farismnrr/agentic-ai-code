@@ -122,6 +122,11 @@ issue_update
 issue_comment
 issue_close
 issue_reopen
+workflow_list
+workflow_run_list
+workflow_run_get
+workflow_job_get
+workflow_run_job_log
 apply_patch
 code_symbols
 code_definition
@@ -182,6 +187,11 @@ issue_update(cwd?, remote="origin", number, title?, body?, add_labels=[], remove
 issue_comment(cwd?, remote="origin", number, body)
 issue_close(cwd?, remote="origin", number, reason="completed"|"not_planned"|"duplicate", duplicate_of?, comment?)
 issue_reopen(cwd?, remote="origin", number, comment?)
+workflow_list(cwd?, remote="origin")
+workflow_run_list(cwd?, remote="origin", workflow?, branch?, status?)
+workflow_run_get(cwd?, remote="origin", number)
+workflow_job_get(cwd?, remote="origin", number)
+workflow_run_job_log(cwd?, remote="origin", number, job_id?, max_lines=100)
 code_symbols(path=..., cwd?, max_results?) or code_symbols(query=..., cwd?, max_results?)
 code_definition(...)
 code_references(...)
