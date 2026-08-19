@@ -1,6 +1,6 @@
 # Plan 041B — Dependency and Toolchain Hygiene
 
-**Status:** IMPLEMENTED / VERIFIED — MERGE PENDING
+**Status:** CLOSED / VERIFIED / MERGED (2026-08-19)
 **Parent:** [Plan 041](041-code-intelligence-and-platform-polish-roadmap.md)
 **Depends on:** 041A CLOSED / VERIFIED
 
