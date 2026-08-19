@@ -77,10 +77,10 @@ with tempfile.TemporaryDirectory(prefix='relay-044a-') as owner:
         st, b = rpc(url, 'tools/list', {}, 1)
         assert st == 200, b
         tools_list = b['result']['tools']
-        assert len(tools_list) == 84, f"Expected 84 tools, got {len(tools_list)}"
+        assert len(tools_list) >= 84, f"Expected at least the 84-tool 044A surface, got {len(tools_list)}"
         
         tools = {x['name']: x for x in tools_list}
-        assert len(tools) == 84, "Duplicate tool names found in catalog"
+        assert len(tools) == len(tools_list), "Duplicate tool names found in catalog"
         
         expected_issue_tools = [
             'issue_list',

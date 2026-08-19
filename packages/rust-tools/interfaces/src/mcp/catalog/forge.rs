@@ -193,3 +193,60 @@ pub(super) fn issue_tools() -> Vec<Tool> {
         },
     ]
 }
+
+pub(super) fn action_tools() -> Vec<Tool> {
+    vec![
+        read_tool(
+            "workflow_list",
+            "Workflow List",
+            "List bounded GitHub Actions workflows for the validated repository.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"}},"additionalProperties":false}),
+        ),
+        read_tool(
+            "workflow_run_list",
+            "Workflow Run List",
+            "List bounded GitHub Actions runs with optional workflow, branch, and status filters.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"workflow":{"type":"string","minLength":1,"maxLength":256},"branch":{"type":"string","minLength":1,"maxLength":256},"status":{"type":"string","minLength":1,"maxLength":64}},"additionalProperties":false}),
+        ),
+        read_tool(
+            "workflow_run_get",
+            "Workflow Run Get",
+            "Read one bounded workflow run and its bounded job summaries.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"number":{"type":"integer","minimum":1}},"required":["number"],"additionalProperties":false}),
+        ),
+        read_tool(
+            "workflow_job_get",
+            "Workflow Job Get",
+            "Read one bounded GitHub Actions job summary.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"number":{"type":"integer","minimum":1}},"required":["number"],"additionalProperties":false}),
+        ),
+        read_tool(
+            "workflow_run_job_log",
+            "Workflow Failed Log Preview",
+            "Return a bounded, credential-redacted preview of failed workflow log lines.",
+            json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"number":{"type":"integer","minimum":1},"job_id":{"type":"integer","minimum":1},"max_lines":{"type":"integer","minimum":1,"maximum":200,"default":100}},"required":["number"],"additionalProperties":false}),
+        ),
+    ]
+}
+
+fn read_tool(
+    name: &'static str,
+    title: &'static str,
+    description: &'static str,
+    input_schema: serde_json::Value,
+) -> Tool {
+    Tool {
+        name,
+        title: Some(title),
+        description,
+        input_schema,
+        annotations: Some(ToolAnnotations {
+            read_only_hint: true,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: true,
+        }),
+        security_schemes: coding_security_scheme(),
+        execution: None,
+    }
+}
