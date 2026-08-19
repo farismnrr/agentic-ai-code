@@ -33,3 +33,7 @@ required-features = ["test-gh-provider"]
 [[example]]
 name = "plan044a_issue_mutations_acceptance"
 required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044a_issue_transitions_acceptance"
+required-features = ["test-gh-provider"]
