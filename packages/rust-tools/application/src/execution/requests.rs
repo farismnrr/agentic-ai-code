@@ -53,10 +53,22 @@ pub(super) fn build_terminal_exec_invocation(
     let execution_root = config
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let cwd = relay_core::terminal_policy::resolve_contained_cwd(
-        &execution_root,
-        arguments.get("cwd").and_then(Value::as_str),
-    )?;
+    let cwd = match arguments.get("cwd").and_then(Value::as_str) {
+        Some(cwd) => {
+            relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd))?
+        }
+        None => std::fs::canonicalize(
+            config
+                .resolved_dir()
+                .map_err(|_| McpError::Internal("failed to resolve workspace directory".into()))?,
+        )
+        .map_err(|_| McpError::InvalidRequest("workspace directory is inaccessible".into()))?,
+    };
+    if !cwd.starts_with(&execution_root) {
+        return Err(McpError::InvalidRequest(
+            "working directory is outside the execution root".into(),
+        ));
+    }
     reject_protected_target(&execution_root, &cwd)?;
     let parts = shell_words::split(command)
         .map_err(|_| McpError::InvalidRequest("command could not be parsed".into()))?;

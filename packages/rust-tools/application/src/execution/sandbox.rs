@@ -27,8 +27,17 @@ struct SandboxProfile<'a> {
     network_access: NetworkAccess,
     expose_optional_sockets: bool,
     expose_runtime_extras: bool,
-    home: &'a str,
     workspace_root: Option<&'a Path>,
+}
+
+fn runtime_home() -> Result<PathBuf, std::io::Error> {
+    let home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| std::io::Error::other("HOME is unavailable"))?;
+    if !home.is_absolute() {
+        return Err(std::io::Error::other("HOME must be an absolute path"));
+    }
+    std::fs::canonicalize(&home).map_err(|_| std::io::Error::other("HOME is unavailable"))
 }
 
 pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
@@ -57,14 +66,37 @@ pub(crate) fn resolve_safe_executable(
     binary: &str,
 ) -> Result<PathBuf, McpError> {
     relay_core::terminal_policy::validate_executable(binary, config.allow_docker)?;
-    let candidate = safe_path_entries(config)
-        .into_iter()
-        .map(|directory| directory.join(binary))
-        .find(|candidate| candidate.is_file() && is_executable(candidate))
-        .ok_or_else(|| {
-            McpError::InvalidRequest("command is not available in the configured safe PATH".into())
+    let safe_entries = safe_path_entries(config);
+    let canonical_safe_entries = safe_entries
+        .iter()
+        .filter_map(|directory| std::fs::canonicalize(directory).ok())
+        .collect::<Vec<_>>();
+
+    for directory in safe_entries {
+        let candidate = directory.join(binary);
+        if !candidate.is_file() || !is_executable(&candidate) {
+            continue;
+        }
+        let canonical_target = std::fs::canonicalize(&candidate).map_err(|_| {
+            McpError::InvalidRequest("configured executable target is unavailable".into())
         })?;
-    Ok(std::fs::canonicalize(&candidate).unwrap_or(candidate))
+        if !canonical_safe_entries
+            .iter()
+            .any(|safe_root| canonical_target.starts_with(safe_root))
+        {
+            return Err(McpError::InvalidRequest(
+                "configured executable symlink escapes the reviewed safe PATH roots".into(),
+            ));
+        }
+        // Preserve the reviewed executable path instead of replacing it with
+        // the canonical target. Multi-call shims such as rustup dispatch from
+        // argv[0] (`cargo`, `rustc`, ...); canonicalizing the final symlink to
+        // `rustup` changes program semantics even though the target is safe.
+        return Ok(candidate);
+    }
+    Err(McpError::InvalidRequest(
+        "command is not available in the configured safe PATH".into(),
+    ))
 }
 
 #[cfg(unix)]
@@ -97,7 +129,6 @@ pub(super) fn spawn(
             },
             expose_optional_sockets: matches!(workspace_access, WorkspaceAccess::Writable),
             expose_runtime_extras: matches!(workspace_access, WorkspaceAccess::Writable),
-            home: "execution_root",
             workspace_root: None,
         },
     )
@@ -105,8 +136,8 @@ pub(super) fn spawn(
 
 /// Spawn an approved language server with a stricter profile than ordinary
 /// terminal execution: read-only workspace, isolated network namespace, no
-/// Docker/Tailscale sockets, a temporary HOME, cleared environment, and only
-/// the relay safe PATH/toolchain mounts.
+/// Docker/Tailscale sockets, the runtime-resolved HOME path without a whole-home
+/// bind, a cleared environment, and only the relay safe PATH/toolchain mounts.
 pub(crate) fn spawn_lsp(
     config: &ServerConfig,
     executable: PathBuf,
@@ -128,7 +159,6 @@ pub(crate) fn spawn_lsp(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
-            home: "/tmp/lsp-home",
             workspace_root: Some(&cwd),
         },
     )
@@ -159,7 +189,6 @@ pub(crate) fn spawn_hook(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
-            home: "/tmp/agent-hook-home",
             workspace_root: Some(&cwd),
         },
     )
@@ -185,6 +214,8 @@ fn spawn_with_profile(
     let execution_root = config
         .resolved_execution_root()
         .map_err(|_| std::io::Error::other("invalid execution root"))?;
+    let host_home = runtime_home()?;
+    let home = host_home.to_string_lossy().into_owned();
     let bwrap = resolve_safe_executable(config, "bwrap")
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     let discovered_workspace = if profile.workspace_root.is_none() {
@@ -195,10 +226,21 @@ fn spawn_with_profile(
     } else {
         None
     };
+    let configured_workspace = std::fs::canonicalize(
+        config
+            .resolved_dir()
+            .map_err(|_| std::io::Error::other("invalid workspace directory"))?,
+    )
+    .map_err(|_| std::io::Error::other("invalid workspace directory"))?;
     let sandbox_root = profile
         .workspace_root
         .or(discovered_workspace.as_deref())
-        .unwrap_or(&execution_root);
+        .unwrap_or(&configured_workspace);
+    if sandbox_root == host_home {
+        return Err(std::io::Error::other(
+            "workspace directory must not be the runtime HOME",
+        ));
+    }
     if relay_core::protected_paths::is_protected_path(&execution_root, sandbox_root) {
         return Err(std::io::Error::other(
             "sandbox workspace is protected by credential policy",
@@ -234,6 +276,8 @@ fn spawn_with_profile(
         "/proc",
         "--tmpfs",
         "/tmp",
+        "--dir",
+        home.as_str(),
         root_bind,
         root.as_str(),
         root.as_str(),
@@ -245,9 +289,6 @@ fn spawn_with_profile(
     .collect::<Vec<_>>();
     if matches!(profile.network_access, NetworkAccess::Isolated) {
         args.push("--unshare-net".into());
-    }
-    if profile.home != "execution_root" {
-        args.extend(["--dir".into(), profile.home.into()]);
     }
     if profile.expose_runtime_extras {
         args.extend([
@@ -261,6 +302,8 @@ fn spawn_with_profile(
     }
     let mut cargo_home = None;
     let mut rustup_home = None;
+    let home_cargo_bin = host_home.join(".cargo/bin");
+    let canonical_home_cargo_bin = std::fs::canonicalize(&home_cargo_bin).ok();
     for path in &config.toolchain_paths {
         let configured = PathBuf::from(path);
         let canonical = std::fs::canonicalize(&configured)
@@ -278,24 +321,20 @@ fn spawn_with_profile(
                 }
             }
         }
-        if configured.file_name() == Some(std::ffi::OsStr::new("bin"))
-            && configured.parent().and_then(Path::file_name) == Some(std::ffi::OsStr::new(".cargo"))
-        {
-            if let Some(owner_home) = configured.parent().and_then(Path::parent) {
-                let candidate = owner_home.join(".cargo");
-                if candidate.is_dir() {
-                    let value = candidate.to_string_lossy().into_owned();
-                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                    mask_protected_file(&mut args, &candidate.join("credentials"))?;
-                    mask_protected_file(&mut args, &candidate.join("credentials.toml"))?;
-                    cargo_home = Some(value);
-                }
-                let candidate = owner_home.join(".rustup");
-                if candidate.is_dir() {
-                    let value = candidate.to_string_lossy().into_owned();
-                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                    rustup_home = Some(value);
-                }
+        if canonical_home_cargo_bin.as_ref() == Some(&canonical) {
+            let candidate = host_home.join(".cargo");
+            if candidate.is_dir() {
+                let value = candidate.to_string_lossy().into_owned();
+                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                mask_protected_file(&mut args, &candidate.join("credentials"))?;
+                mask_protected_file(&mut args, &candidate.join("credentials.toml"))?;
+                cargo_home = Some(value);
+            }
+            let candidate = host_home.join(".rustup");
+            if candidate.is_dir() {
+                let value = candidate.to_string_lossy().into_owned();
+                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                rustup_home = Some(value);
             }
         }
     }
@@ -327,11 +366,6 @@ fn spawn_with_profile(
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join(":");
-    let home = if profile.home == "execution_root" {
-        root
-    } else {
-        profile.home.into()
-    };
     let mut command = Command::new(bwrap);
     command
         .args(args)

@@ -17,13 +17,14 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 
 The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
 
-### Long-running terminal contract
+### Long-running / slow-operation contract
 
-- `terminal_exec` declares optional MCP Tasks support. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; tool-level non-zero exits complete the task with `isError: true` rather than becoming JSON-RPC failures.
-- First-party/non-Tasks clients that need live output use `terminal_job_start/get/cancel`; polling returns bounded current stdout/stderr tails without introducing a second process runner.
-- `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
+- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; fast bounded native reads remain synchronous.
+- The first-party client honors task `pollIntervalMs`, uses bounded backoff, and applies its own bounded HTTP round-trip deadline independently of the task lifetime.
+- First-party/non-Tasks clients that need live terminal output use `terminal_job_start/get/cancel`; those fallback tools reuse the same job manager rather than creating a second process runner.
+- `timeout_ms: 0` means no terminal command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
 - Running pipes are drained continuously. Output retention is bounded and reports omitted earlier bytes rather than killing noisy commands solely for exceeding the retained log window.
-- Manual cancel, timeout, and relay shutdown terminate/reap the sandbox process tree through the same authoritative job manager.
+- Manual cancel, timeout, and relay shutdown terminate/reap the sandbox process tree through the same authoritative job manager. A transport timeout/disconnect is not implicit task cancellation.
 
 ## Build
 

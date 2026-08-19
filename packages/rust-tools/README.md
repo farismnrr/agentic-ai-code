@@ -52,8 +52,8 @@ Prefer native workspace/Git tools for structure, search, read, review, history, 
 - **Filesystem containment.** Execution is constrained to the configured execution root through Bubblewrap plus server policy.
 - **Local/remote modes.** Local is loopback-oriented; remote is OAuth-protected and fail-closed.
 - **Docker is opt-in.** The default sandbox does not expose the host Docker socket; trusted local development may enable the reviewed socket escape hatch explicitly, while remote/production deployments should normally leave it disabled.
-- **Long-running execution.** One bounded job manager owns spawn, output draining, timeout, cancellation, process-tree cleanup, retention, and concurrency for synchronous calls, MCP Tasks, and fallback jobs.
-- **Timeout policy.** `timeout_ms = 0` is deadline-free unless an operator maximum is configured; terminal execution has no unconditional five-minute server ceiling.
+- **Long-running / slow execution.** One bounded job manager owns spawn, output draining, timeout, cancellation, process-tree cleanup, retention, and concurrency for synchronous calls, MCP Tasks, and fallback jobs. `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) may use that Tasks lifecycle when the client negotiates it; mutating HTTP methods stay synchronous until request-level idempotency/deduplication exists, and fast bounded native reads stay synchronous.
+- **Timeout policy.** `timeout_ms = 0` is deadline-free unless an operator maximum is configured; terminal execution has no unconditional five-minute server ceiling. HTTP client round-trip deadlines remain separate from durable task execution lifetime.
 - **Output policy.** stdout/stderr are drained continuously into bounded retained tails; exceeding retention omits older bytes instead of killing an otherwise valid process.
 
 See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), the canonical [memory](../../.agents/memories/README.md#rust-cli-migration-invariants), and [Plan 030 history](../../.agents/plans/030-previous-plans-summary.md) before changing these boundaries.

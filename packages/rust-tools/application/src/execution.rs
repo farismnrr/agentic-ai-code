@@ -354,6 +354,58 @@ fn now_ms() -> u128 {
         .unwrap_or_default()
         .as_millis()
 }
+pub fn tool_call_supports_tasks(tool: &Tool, arguments: &Value) -> bool {
+    let catalog_support = tool
+        .execution
+        .as_ref()
+        .and_then(|execution| execution.get("taskSupport"))
+        .and_then(Value::as_str)
+        .is_some_and(|support| matches!(support, "optional" | "required"));
+    if !catalog_support {
+        return false;
+    }
+    if tool.name != "http_fetch" {
+        return true;
+    }
+
+    // A lost tools/call response can leave the caller without the task id.
+    // Until a later remote-mutation plan adds request-level idempotency/dedup,
+    // only read-like HTTP calls may outlive that initial request safely.
+    matches!(
+        arguments
+            .get("method")
+            .and_then(Value::as_str)
+            .unwrap_or("GET")
+            .to_ascii_uppercase()
+            .as_str(),
+        "GET" | "HEAD" | "OPTIONS"
+    )
+}
+
+pub async fn start_tool_task(
+    tool: &Tool,
+    arguments: &Value,
+    config: &ServerConfig,
+    manager: &Arc<JobManager>,
+) -> Result<String, McpError> {
+    if !tool_call_supports_tasks(tool, arguments) {
+        return Err(McpError::InvalidRequest(
+            "tool does not support task execution".into(),
+        ));
+    }
+    let invocation = match tool.name {
+        "terminal_exec" => requests::build_terminal_exec_invocation(arguments, config)?,
+        "http_fetch" => requests::build_http_fetch_invocation(arguments)?,
+        "web_search" => requests::build_web_search_invocation(arguments),
+        _ => {
+            return Err(McpError::InvalidRequest(
+                "tool task execution is not implemented".into(),
+            ))
+        }
+    };
+    manager.start(invocation).await
+}
+
 pub async fn start_terminal_job(
     arguments: &Value,
     config: &ServerConfig,

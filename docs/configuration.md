@@ -54,7 +54,10 @@ The hosted Nuxt application may call one configured first-party public MCP relay
 NUXT_REMOTE_MCP_URL
 NUXT_REMOTE_MCP_OWNER_USER_ID
 NUXT_REMOTE_MCP_ACCESS_TOKEN
+NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS=45000
 ```
+
+`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS` is the first-party client's per-HTTP-round-trip deadline, not a durable task execution limit. Keep it bounded (1,000–120,000 ms); long-running work should continue through the MCP task lifecycle instead of relying on one HTTP request remaining open.
 
 Security rules:
 
