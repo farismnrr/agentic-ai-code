@@ -117,11 +117,14 @@ In addition, this plan investigates and resolves current runtime symptoms (`term
 
 ### Closure evidence (2026-08-19)
 
+- PR #155 merged into `main` at commit `fa121019c4d9ad6fa1b13ce828a2a537f7147a74`.
 - Current v8 `tools/list` contract: **77 tools**, preserving all 50 v7 tools and adding 27 Plan 043 tools; `git_push` and `git_commit_amend` are both present exactly once. Snapshot hash: `588154b6009b02863471c4c6ef043fb0a8e34831fef130da0fdf10aebb1934b7`.
 - `cargo test --workspace`: PASS. `plan043_acceptance`: PASS. `plan043_security_acceptance`: PASS. `typescript_lsp_acceptance`: `TYPESCRIPT_LSP_ACCEPTANCE_PASS`.
-- Black-box candidate MCP: `file_read` returned `_meta.timing { dispatch_ms: 0, server_total_ms: 10 }`; secondary workspace was denied before `workspace_add`, allowed after add, and denied again after `workspace_remove`; terminal job completed with `executionDurationMs: 74` in the sampled run.
+- Release binary compiled from `main`: `ai-tools 0.0.11` (SHA256: `7d8129bd6533f25301e342cd082993f594e9aa7055e4545f63433f76ea893c52`), installed to `/home/farismnrr/.local/share/ai-code/bin/ai-tools`.
+- Operator relay service `ai-tools-relay.service` restarted via `systemctl --user restart ai-tools-relay.service`; active and running with zero crash loops.
+- Live MCP black-box verification on deployed binary: 77 tools validated, monotonic timing `_meta.timing { dispatch_ms: 0, server_total_ms: 2 }` verified on tool calls, workspace allowlist deny -> add -> allow -> remove -> deny lifecycle verified, structured Git worktree/stash/tag/remote/clean operations verified, terminal background job execution duration verified (`executionDurationMs: 127`), and sandboxed Node.js (`v24.15.0`) / npm (`11.16.0`) toolchains verified.
 - Candidate sandbox executed `node v24.15.0`, `npm 11.16.0`, Corepack/pnpm, and finally `pnpm verify:commit` end-to-end with Cargo + FNM toolchain mounts; the repository gate finished `OK`.
-- TypeScript source support is verified when the language server is explicitly configured. The currently deployed operator relay still requires a separately approved rebuild/restart and MCP action rediscovery before these source changes are considered live; no production/service restart is part of this implementation closure.
+- TypeScript source support is verified when the language server is explicitly configured. Operator relay is restarted and live; ChatGPT action rediscovery is ready.
 
 ---
 
