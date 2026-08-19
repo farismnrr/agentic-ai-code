@@ -71,6 +71,7 @@ ledger = reconcileChildren({ ...owner, children: [{ task: writerTask, writer: { 
 assert(ledger.blockers.includes('unintegrated_writer'))
 assert.equal(ledger.writers[0]?.state, 'produced')
 assert.throws(() => advanceWriter({ ...owner, taskId: writerTask.task_id, expectedHead: 'c'.repeat(40), action: 'review' }), /stale or dirty/)
+assert.throws(() => advanceWriter({ ...owner, taskId: writerTask.task_id, expectedHead: head, action: 'review', currentWriter: { branch: 'ai-code/background/task', base_commit: 'b'.repeat(40), head_commit: 'c'.repeat(40), dirty: false } }), /stale or dirty/)
 ledger = advanceWriter({ ...owner, taskId: writerTask.task_id, expectedHead: head, action: 'review', now: 4001 })
 assert.equal(ledger.writers[0]?.state, 'reviewed')
 ledger = advanceWriter({ ...owner, taskId: writerTask.task_id, expectedHead: head, action: 'accept', now: 4002 })
