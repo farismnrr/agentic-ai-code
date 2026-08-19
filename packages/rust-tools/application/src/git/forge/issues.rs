@@ -242,6 +242,111 @@ pub(in crate::git) async fn issue_update(
     })
 }
 
+pub(in crate::git) async fn issue_close(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<IssueResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    let remote = remote::requested_remote(&repo.root, arguments)?;
+    let number = requested_number(arguments, "issue")?;
+    let reason = arguments
+        .get("reason")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("close reason is required".into()))?;
+    let provider_reason = match reason {
+        "completed" => "completed",
+        "not_planned" => "not planned",
+        "duplicate" => "duplicate",
+        _ => return Err(McpError::InvalidRequest("close reason is invalid".into())),
+    };
+    let duplicate_of = arguments.get("duplicate_of");
+    let duplicate_number: Option<u64> = match (reason, duplicate_of) {
+        ("duplicate", Some(value)) => Some(
+            value
+                .as_u64()
+                .filter(|number| *number > 0)
+                .ok_or_else(|| McpError::InvalidRequest("duplicate_of is invalid".into()))?,
+        ),
+        ("duplicate", None) => {
+            return Err(McpError::InvalidRequest(
+                "duplicate_of is required for duplicate close".into(),
+            ));
+        }
+        (_, Some(_)) => {
+            return Err(McpError::InvalidRequest(
+                "duplicate_of is only valid for duplicate close".into(),
+            ));
+        }
+        (_, None) => None,
+    };
+    if duplicate_number == Some(number) {
+        return Err(McpError::InvalidRequest(
+            "duplicate_of cannot reference the issue itself".into(),
+        ));
+    }
+    let repo_spec = repo_spec(&remote);
+    let mut args = vec![
+        "issue".into(),
+        "close".into(),
+        number.to_string(),
+        "--repo".into(),
+        repo_spec,
+    ];
+    if reason != "duplicate" {
+        args.push("--reason".into());
+        args.push(provider_reason.into());
+    }
+    if let Some(duplicate_number) = duplicate_number {
+        args.push("--duplicate-of".into());
+        args.push(duplicate_number.to_string());
+    }
+    if arguments.get("comment").is_some() {
+        args.push("--comment".into());
+        args.push(bounded_text(arguments, "comment", MAX_BODY_BYTES, false)?);
+    }
+    forge_process::run_gh(&repo.root, &args, &[]).await?;
+    let detail = get_detail(&repo.root, &remote, number).await?;
+    verify_closed_state(&detail, reason)?;
+    Ok(IssueResult {
+        repository_root: repo.relative_root,
+        forge: forge_identity(&remote),
+        issue: detail,
+    })
+}
+
+pub(in crate::git) async fn issue_reopen(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<IssueResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    let remote = remote::requested_remote(&repo.root, arguments)?;
+    let number = requested_number(arguments, "issue")?;
+    let repo_spec = repo_spec(&remote);
+    let mut args = vec![
+        "issue".into(),
+        "reopen".into(),
+        number.to_string(),
+        "--repo".into(),
+        repo_spec,
+    ];
+    if arguments.get("comment").is_some() {
+        args.push("--comment".into());
+        args.push(bounded_text(arguments, "comment", MAX_BODY_BYTES, false)?);
+    }
+    forge_process::run_gh(&repo.root, &args, &[]).await?;
+    let detail = get_detail(&repo.root, &remote, number).await?;
+    if detail.summary.state != "OPEN" {
+        return Err(McpError::InvalidRequest(
+            "issue reopen post-state is not open".into(),
+        ));
+    }
+    Ok(IssueResult {
+        repository_root: repo.relative_root,
+        forge: forge_identity(&remote),
+        issue: detail,
+    })
+}
+
 pub(in crate::git) async fn issue_comment(
     arguments: &Value,
     config: &ServerConfig,
@@ -410,6 +515,26 @@ fn parse_comment_url(
         ));
     }
     Ok(text)
+}
+
+fn verify_closed_state(detail: &IssueDetail, requested_reason: &str) -> Result<(), McpError> {
+    if detail.summary.state != "CLOSED" {
+        return Err(McpError::InvalidRequest(
+            "issue close post-state is not closed".into(),
+        ));
+    }
+    let expected_reason = match requested_reason {
+        "completed" => "COMPLETED",
+        "not_planned" => "NOT_PLANNED",
+        "duplicate" => "DUPLICATE",
+        _ => return Err(McpError::Internal("close reason mapping is invalid".into())),
+    };
+    if detail.summary.state_reason.as_deref() != Some(expected_reason) {
+        return Err(McpError::InvalidRequest(
+            "issue close post-state reason does not match".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn summary_fields() -> &'static str {
