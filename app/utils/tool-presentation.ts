@@ -12,7 +12,8 @@ const PRESENTATION_REDACTIONS: ReadonlyArray<[RegExp, string]> = [
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED-JWT]']
 ]
 const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
-const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column)$/i
+const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column|number|draft|set_upstream)$/i
+const SAFE_IDENTITY_KEY = /^(remote|branch|head_branch|base_branch|strategy|state)$/i
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
@@ -58,7 +59,7 @@ function scalar(value: unknown): string | number | boolean | undefined {
 
 export function toolCategory(toolName: string): ToolRenderCategory {
   if (toolName === 'delegate_task' || toolName.startsWith('background_') || toolName.startsWith('agent_task_')) return 'subagent'
-  if (toolName.startsWith('git_')) return 'git'
+  if (toolName.startsWith('git_') || toolName.startsWith('change_request_')) return 'git'
   if (toolName.startsWith('code_')) return 'diagnostics'
   if (['file_write', 'file_edit', 'apply_patch'].includes(toolName)) return 'mutation'
   if (['terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel', 'local_terminal'].includes(toolName)) return 'execution'
@@ -98,7 +99,7 @@ export function safeInputSummary(input: unknown): SafeInputSummary {
     else if (/^(command|executable)$/i.test(key)) shown = safeExecutable(raw)
     else if (Array.isArray(raw)) shown = `${raw.length} item${raw.length === 1 ? '' : 's'}`
     else if (record(raw)) shown = `${Object.keys(raw as Record<string, unknown>).length} fields`
-    else if (SAFE_SCALAR_KEY.test(key)) shown = scalar(raw)
+    else if (SAFE_SCALAR_KEY.test(key) || SAFE_IDENTITY_KEY.test(key)) shown = scalar(raw)
     if (shown === undefined) {
       hiddenFields += 1
       continue

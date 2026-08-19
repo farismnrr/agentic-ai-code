@@ -50,18 +50,16 @@ The target is **not full async everywhere**. Fast bounded calls stay synchronous
 
 ## Execution guide — mandatory sequential workflow
 
-**Do not implement all child plans at once.**
+Implementation remains sequential by child-plan ownership; do not develop sibling boundaries concurrently against the same source state. After 040A closed independently, the operator explicitly authorized 040B→040F source implementation to proceed sequentially on one Plan-040 feature branch while batching relay deployment, external MCP client resync, live GitHub proof, and final closure review at the end. This batching changes the delivery checkpoint, not the dependency order or closure standard.
 
-Execute exactly in this order:
+Current execution order:
 
-1. implement **040A** only;
-2. run its focused tests + mandatory repository gates + live timeout/disconnect/cancellation proof;
-3. obtain independent review because task/transport behavior is security- and reliability-sensitive;
-4. mark 040A CLOSED / VERIFIED and merge it according to repository policy;
-5. re-read current `main` before beginning **040B**;
-6. repeat the same process for 040B, then 040C, 040D, 040E, and 040F;
-7. do not start Plan 041 until Plan 040 is fully CLOSED / VERIFIED / MERGED;
-8. follow [Plans 040–042 execution guide](../roadmap-execution-guide-040-042.md): do **not** restart/redeploy the relay per child or phase. Runtime restart/deployment and external MCP client connector/action resync are operator-owned. Continue implementation and deterministic verification against source/build artifacts until a genuine live-runtime checkpoint requires loading the new runtime, then stop and provide the user the exact reviewed restart/deploy and resync commands/steps.
+1. 040A is already CLOSED / VERIFIED / MERGED;
+2. implement and deterministically verify 040B source, then 040C, 040D, 040E, and 040F in order;
+3. keep each child marked live-verification pending until the final candidate is deployed and the affected boundary is proven live;
+4. do not mark any pending child or master 040 CLOSED merely because source gates pass;
+5. after the composed source candidate is committed/pushed, perform one coordinated release/deploy/resync checkpoint, live GitHub/MCP acceptance, and fresh security review;
+6. do not start Plan 041 until Plan 040 is fully CLOSED / VERIFIED / MERGED.
 
 A child plan may use read-only/review subagents, but sibling child-plan implementations must not run concurrently against the same worktree. If implementation of one child exposes a prerequisite gap owned by an earlier child, stop and remediate the earlier boundary rather than papering over it in a later child.
 
@@ -70,20 +68,21 @@ A child plan may use read-only/review subagents, but sibling child-plan implemen
 | Plan | Capability | Depends on | Status | Exit criterion |
 | --- | --- | --- | --- | --- |
 | 040A | MCP task + transport reliability | 039 / 037 foundation | CLOSED / VERIFIED / MERGED (2026-08-19) | Fast calls remain sync; slow calls can use bounded durable tasks with explicit HTTP deadlines, backoff, cancellation, retained results, reconnect/retrieval semantics and live relay proof |
-| 040B | Local Git mutation + structured conflict workflow | 040A | PLANNED | Branch/commit/merge/rebase/abort/continue work safely through bounded native contracts with explicit conflict state |
-| 040C | Remote Git transport | 040B | PLANNED | Fetch/push/ref sync work through a narrow credential-isolated path with remote/ref validation, idempotency and policy enforcement |
-| 040D | Forge abstraction + GitHub/`gh` adapter | 040C | PLANNED | Generic change-request/read-check primitives map safely to GitHub without exposing `gh` credentials to normal terminal execution |
-| 040E | Pull-request lifecycle + merge | 040D | PLANNED | Agent can create/update/read PRs, inspect checks/reviews, wait reliably, merge with policy, and clean remote branches truthfully |
-| 040F | End-to-end delivery orchestration + UX/observability | 040E | PLANNED | First-party and remote-MCP workflows prove branch → commit → push → PR → checks → merge → cleanup with correct approvals, retries/task semantics and audit evidence |
+| 040B | Local Git mutation + structured conflict workflow | 040A | IMPLEMENTED / SOURCE VERIFIED / LIVE CLOSURE PENDING | Branch/commit/merge/rebase/abort/continue work safely through bounded native contracts with explicit conflict state |
+| 040C | Remote Git transport | 040B | IMPLEMENTED / SOURCE VERIFIED / LIVE GITHUB PROOF PENDING | Fetch/push/ref sync work through a narrow credential-isolated path with remote/ref validation, idempotency and policy enforcement |
+| 040D | Forge abstraction + GitHub/`gh` adapter | 040C | IMPLEMENTED / SOURCE VERIFIED / LIVE GITHUB PROOF PENDING | Generic change-request/read-check primitives map safely to GitHub without exposing `gh` credentials to normal terminal execution |
+| 040E | Pull-request lifecycle + merge | 040D | IMPLEMENTED / SOURCE VERIFIED / LIVE GITHUB PROOF PENDING | Agent can create/update/read PRs, inspect checks/reviews, merge with policy, and clean remote branches truthfully |
+| 040F | End-to-end delivery orchestration + UX/observability | 040E | IMPLEMENTED / SOURCE VERIFIED / COMPOSED LIVE CLOSURE PENDING | First-party and remote-MCP workflows prove branch → commit → push → PR → checks → merge → cleanup with correct approvals, task semantics and audit evidence |
 
 ## Master todo
 
-- [x] 040A — MCP task + transport reliability foundation
-- [ ] 040B — local Git mutation + structured conflicts
-- [ ] 040C — remote Git transport
-- [ ] 040D — forge abstraction + GitHub adapter
-- [ ] 040E — PR/check/review/merge lifecycle
-- [ ] 040F — integrated delivery loop and closure
+- [x] 040A — MCP task + transport reliability foundation (closed/merged)
+- [x] 040B — local Git mutation + structured conflicts (source implemented; live closure pending)
+- [x] 040C — remote Git transport (source implemented; live GitHub proof pending)
+- [x] 040D — forge abstraction + GitHub adapter (source implemented; live GitHub proof pending)
+- [x] 040E — PR/check/review/merge lifecycle (source implemented; live GitHub proof pending)
+- [x] 040F — integrated delivery source/UX/policy composition (source implemented; live closure pending)
+- [ ] composed release deploy + external MCP client resync + live GitHub/MCP acceptance + final independent closure review
 
 ## Target end-to-end workflow
 

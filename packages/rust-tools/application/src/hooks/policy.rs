@@ -16,6 +16,31 @@ pub fn effect_classes(
         "http_fetch" => vec!["network_read", "network_write", "external_mutation"],
         "web_search" => vec!["network_read"],
         "file_write" | "file_edit" | "apply_patch" => vec!["workspace_write"],
+        "git_branch_create" | "git_branch_switch" | "git_stage" | "git_unstage" | "git_commit"
+        | "git_merge_start" | "git_merge_continue" => vec!["workspace_write"],
+        "git_merge_abort"
+        | "git_rebase_start"
+        | "git_rebase_continue"
+        | "git_rebase_abort"
+        | "git_branch_delete" => vec!["workspace_write", "workspace_delete"],
+        "git_remote_branch_get" => vec!["git_read", "network_read"],
+        "git_fetch" => vec!["git_read", "workspace_write", "network_read"],
+        "git_push" | "git_remote_branch_delete" => vec![
+            "git_read",
+            "network_read",
+            "network_write",
+            "external_mutation",
+            "privileged_bridge",
+        ],
+        "change_request_list" | "change_request_get" | "change_request_checks" => {
+            vec!["network_read", "privileged_bridge"]
+        }
+        "change_request_create" | "change_request_update" | "change_request_merge" => vec![
+            "network_read",
+            "network_write",
+            "external_mutation",
+            "privileged_bridge",
+        ],
         name if name.starts_with("git_") => vec!["git_read"],
         _ if destructive_hint => vec!["external_mutation"],
         _ if open_world_hint => vec!["network_read", "external_mutation"],

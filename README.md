@@ -41,7 +41,8 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
 - workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
-- Git read intelligence: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`;
+- Git inspection and bounded local mutation: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, branch/stage/commit/merge/rebase/conflict primitives;
+- remote Git and forge delivery: validated remote discovery/fetch/push/branch cleanup plus forge-neutral change-request list/get/create/update/checks/merge backed by the GitHub adapter;
 - LSP code intelligence: `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`;
 - execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
 - web: `http_fetch`, `web_search`.
@@ -70,8 +71,8 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - package manager: **pnpm 11.18.0**
 - development Rust toolchain: **Rust 1.95.0**
 - normal Nuxt development port: **3333**
-- integration branch: **`dev`**
-- release branch: **`main`**
+- integration/release branch: **`main`**
+- implementation work: dedicated feature branch → PR → `main`
 - no GitHub Actions CI workflow and no unit-test suite by project policy
 - every normal local commit must pass `pnpm verify:commit`, including architecture and maintainability-budget enforcement
 
