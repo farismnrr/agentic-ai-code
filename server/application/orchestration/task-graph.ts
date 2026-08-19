@@ -112,6 +112,50 @@ export function claimReadyNode(input: {
   }
 }
 
+export function blockReadyNode(input: { userId: string, conversationId: string, nodeId: string, generation: string, resultRef?: string, now?: number }): OrchestratorGraphSnapshot {
+  const now = input.now ?? Date.now()
+  const graph = requireGraph(input.userId, input.conversationId, input.generation, now)
+  const node = graph.nodes.find(item => item.id === input.nodeId)
+  if (!node || node.status !== 'ready') throw new Error('orchestrator node is not ready')
+  node.status = 'blocked'
+  node.result_ref = input.resultRef === undefined ? undefined : strictString(input.resultRef, ORCHESTRATOR_CAPS.ref)
+  node.updated_at = now
+  graph.updated_at = now
+  recompute(graph, now)
+  return publicGraph(graph)
+}
+
+export function releaseClaim(input: { userId: string, conversationId: string, nodeId: string, generation: string, lease: string, now?: number }): OrchestratorGraphSnapshot {
+  const now = input.now ?? Date.now()
+  const graph = requireGraph(input.userId, input.conversationId, input.generation, now)
+  const node = graph.nodes.find(item => item.id === input.nodeId)
+  if (!node || node.status !== 'running' || !node.lease || node.lease !== input.lease) throw new Error('stale orchestrator release')
+  node.status = 'ready'
+  node.owner = undefined
+  node.lease = undefined
+  node.updated_at = now
+  graph.updated_at = now
+  recompute(graph, now)
+  return publicGraph(graph)
+}
+
+export function cancelOrchestratorNodes(input: { userId: string, conversationId: string, generation: string, nodeIds: string[], now?: number }): OrchestratorGraphSnapshot {
+  const now = input.now ?? Date.now()
+  const graph = requireGraph(input.userId, input.conversationId, input.generation, now)
+  const selected = new Set(input.nodeIds)
+  if (selected.size === 0 || [...selected].some(id => !graph.nodes.some(node => node.id === id))) throw new Error('invalid orchestrator cancellation target')
+  for (const node of graph.nodes) {
+    if (!selected.has(node.id) || ['completed', 'failed', 'cancelled', 'invalid'].includes(node.status)) continue
+    node.status = 'cancelled'
+    node.owner = undefined
+    node.lease = undefined
+    node.blocked_by = []
+    node.updated_at = now
+  }
+  recompute(graph, now)
+  return publicGraph(graph)
+}
+
 export function settleClaim(input: {
   userId: string
   conversationId: string
@@ -276,6 +320,7 @@ function recompute(graph: GraphEntry, now: number) {
   if (graph.status !== 'cancelled') {
     if (graph.nodes.every(node => node.status === 'completed')) graph.status = 'completed'
     else if (graph.nodes.some(node => node.status === 'invalid')) graph.status = 'invalid'
+    else if (graph.nodes.every(node => ['completed', 'failed', 'blocked', 'cancelled'].includes(node.status))) graph.status = 'blocked'
     else graph.status = 'active'
   }
   graph.updated_at = now
