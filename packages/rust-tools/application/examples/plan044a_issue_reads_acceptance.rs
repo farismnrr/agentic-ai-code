@@ -1,8 +1,7 @@
 use relay_application::git::dispatch_git_tool;
 use relay_core::config::ServerConfig;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::{fs, path::Path, process::Command};
+use serde_json::{json, Value};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 fn run(dir: &Path, args: &[&str]) {
     assert!(Command::new("git")
@@ -13,185 +12,23 @@ fn run(dir: &Path, args: &[&str]) {
         .success());
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureAuthor {
-    login: String,
+fn set_fixture_response(base: &Path, payload: &str, exit_code: i32) {
+    fs::write(base.join("response.json"), payload).unwrap();
+    fs::write(base.join("exit_code"), exit_code.to_string()).unwrap();
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureLabel {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureIssue {
-    number: u64,
-    title: String,
-    url: String,
-    state: String,
-    #[serde(default)]
-    state_reason: Option<String>,
-    #[serde(default)]
-    author: Option<FixtureAuthor>,
-    #[serde(default)]
-    labels: Vec<FixtureLabel>,
-    #[serde(default)]
-    created_at: String,
-    #[serde(default)]
-    updated_at: String,
-    #[serde(default)]
-    closed_at: Option<String>,
-    #[serde(default)]
-    body: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureSummary {
-    number: u64,
-    title: String,
-    url: String,
-    state: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    state_reason: Option<String>,
-    author: Option<String>,
-    labels: Vec<String>,
-    created_at: String,
-    updated_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    closed_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureDetail {
-    #[serde(flatten)]
-    summary: FixtureSummary,
-    body: String,
-}
-
-fn validate_fixture_summary(
-    item: &FixtureIssue,
-    owner: &str,
-    repository: &str,
-) -> Result<FixtureSummary, String> {
-    if item.url.contains("/pull/") {
-        return Err("pull request cannot be accessed as an issue".into());
-    }
-    if item.number == 0
-        || item.title.len() > 256
-        || item.title.contains('\0')
-        || item.labels.len() > 50
-    {
-        return Err("invalid_git_output".into());
-    }
-    let expected_url = format!(
-        "https://github.com/{}/{}/issues/{}",
-        owner, repository, item.number
-    );
-    if item.url != expected_url {
-        return Err("issue repository identity mismatch".into());
-    }
-    let mut labels = Vec::with_capacity(item.labels.len());
-    for label in &item.labels {
-        if label.name.is_empty() || label.name.len() > 128 || label.name.contains('\0') {
-            return Err("invalid_git_output".into());
-        }
-        labels.push(label.name.clone());
-    }
-    let author = item.author.as_ref().and_then(|a| {
-        if a.login.is_empty() || a.login.contains('\0') {
-            None
-        } else {
-            Some(a.login.clone())
-        }
-    });
-    Ok(FixtureSummary {
-        number: item.number,
-        title: item.title.clone(),
-        url: item.url.clone(),
-        state: item.state.clone(),
-        state_reason: item.state_reason.clone().filter(|s| !s.is_empty()),
-        author,
-        labels,
-        created_at: item.created_at.clone(),
-        updated_at: item.updated_at.clone(),
-        closed_at: item.closed_at.clone().filter(|s| !s.is_empty()),
-    })
-}
-
-fn validate_fixture_detail(
-    item: &FixtureIssue,
-    owner: &str,
-    repo: &str,
-    expected_num: u64,
-) -> Result<FixtureDetail, String> {
-    if item.number != expected_num {
-        return Err("issue repository identity mismatch".into());
-    }
-    let summary = validate_fixture_summary(item, owner, repo)?;
-    let body = item.body.as_deref().unwrap_or("");
-    if body.len() > 64 * 1024 || body.contains('\0') {
-        return Err("invalid_git_output".into());
-    }
-    Ok(FixtureDetail {
-        summary,
-        body: body.to_owned(),
-    })
+fn read_argv(base: &Path) -> Vec<String> {
+    let content = fs::read_to_string(base.join("argv.log")).unwrap_or_default();
+    content.lines().map(str::to_owned).collect()
 }
 
 #[tokio::main]
 async fn main() {
-    // 1. Verify field list strings: Must NOT contain unsupported fields or comment overfetch
-    let summary_fields =
-        "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt";
-    let detail_fields =
-        "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt,body";
-    let supported = [
-        "assignees",
-        "author",
-        "blockedBy",
-        "blocking",
-        "body",
-        "closed",
-        "closedAt",
-        "closedByPullRequestsReferences",
-        "comments",
-        "createdAt",
-        "id",
-        "isPinned",
-        "issueType",
-        "labels",
-        "milestone",
-        "number",
-        "parent",
-        "projectCards",
-        "projectItems",
-        "reactionGroups",
-        "state",
-        "stateReason",
-        "subIssues",
-        "subIssuesSummary",
-        "title",
-        "updatedAt",
-        "url",
-    ];
-    for field in summary_fields.split(',') {
-        assert!(supported.contains(&field));
-    }
-    for field in detail_fields.split(',') {
-        assert!(supported.contains(&field));
-    }
-    assert!(!summary_fields.contains("isPullRequest") && !detail_fields.contains("isPullRequest"));
-    assert!(!summary_fields.contains("comments") && !detail_fields.contains("comments"));
-
-    // 2. Live dispatch input validation tests
     let base = std::env::temp_dir().join(format!("relay-044a-issues-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
     let repo = base.join("repo");
     fs::create_dir_all(&repo).unwrap();
+
     run(&repo, &["init", "-q", "-b", "main"]);
     run(&repo, &["config", "user.email", "fixture@example.test"]);
     run(&repo, &["config", "user.name", "fixture"]);
@@ -208,14 +45,32 @@ async fn main() {
         ],
     );
 
+    // Create fake gh provider executable
+    let fake_gh = base.join("fake-gh");
+    let script = format!(
+        "#!/usr/bin/env bash\n\
+         printf '%s\\n' \"$@\" > \"{}/argv.log\"\n\
+         if [ -f \"{}/response.json\" ]; then cat \"{}/response.json\"; fi\n\
+         if [ -f \"{}/exit_code\" ]; then exit $(cat \"{}/exit_code\"); fi\n\
+         exit 0\n",
+        base.display(),
+        base.display(),
+        base.display(),
+        base.display(),
+        base.display()
+    );
+    fs::write(&fake_gh, script).unwrap();
+    fs::set_permissions(&fake_gh, fs::Permissions::from_mode(0o755)).unwrap();
+    std::env::set_var("RELAY_TEST_GH_PATH", &fake_gh);
+
     let config = ServerConfig {
         execution_root: Some(base.to_string_lossy().into()),
         dir: Some(repo.to_string_lossy().into()),
         ..ServerConfig::default()
     };
 
-    let invalid_states = ["evil", "merged"];
-    for st in invalid_states {
+    // 1. Client Input Validation Tests (Fails before running gh)
+    for st in ["evil", "merged"] {
         let err = dispatch_git_tool("issue_list", &json!({"cwd": repo, "state": st}), &config)
             .await
             .unwrap_err();
@@ -232,13 +87,7 @@ async fn main() {
     .unwrap_err();
     assert!(format!("{err:?}").contains("issue labels exceed maximum"));
 
-    let invalid_labels = vec![
-        "".to_string(),
-        "has\nnewline".to_string(),
-        "has\0nul".to_string(),
-        "a".repeat(129),
-    ];
-    for l in invalid_labels {
+    for l in ["", "has\nnewline", "has\0nul", &"a".repeat(129)] {
         let err = dispatch_git_tool("issue_list", &json!({"cwd": repo, "labels": [l]}), &config)
             .await
             .unwrap_err();
@@ -254,17 +103,15 @@ async fn main() {
         .unwrap_err();
     assert!(format!("{err:?}").contains("issue number is required"));
 
-    // 3. Deterministic Provider Fixture & Parsing Invariant Verification
-    let (owner, repository) = ("farismnrr", "ai-code");
-
-    let valid_list_json = json!([
+    // 2. Real Production issue_list Execution & Argv Verification
+    let valid_list = json!([
         {
             "number": 10,
-            "title": "Fix issue listing bug",
+            "title": "Fix bug",
             "url": "https://github.com/farismnrr/ai-code/issues/10",
             "state": "OPEN",
             "stateReason": "",
-            "author": { "login": "developer" },
+            "author": { "login": "alice" },
             "labels": [{ "name": "bug" }, { "name": "forge" }],
             "createdAt": "2026-08-19T10:00:00Z",
             "updatedAt": "2026-08-19T11:00:00Z",
@@ -272,56 +119,120 @@ async fn main() {
         },
         {
             "number": 11,
-            "title": "Add issue detail read",
+            "title": "Closed issue",
             "url": "https://github.com/farismnrr/ai-code/issues/11",
             "state": "CLOSED",
             "stateReason": "COMPLETED",
-            "author": { "login": "maintainer" },
-            "labels": [{ "name": "enhancement" }],
-            "createdAt": "2026-08-18T09:00:00Z",
-            "updatedAt": "2026-08-19T08:00:00Z",
-            "closedAt": "2026-08-19T08:00:00Z"
+            "author": null,
+            "labels": [],
+            "createdAt": "2026-08-18T10:00:00Z",
+            "updatedAt": "2026-08-19T10:00:00Z",
+            "closedAt": "2026-08-19T10:00:00Z"
         }
     ]);
-    let raw_list: Vec<FixtureIssue> = serde_json::from_value(valid_list_json).unwrap();
-    let s1 = validate_fixture_summary(&raw_list[0], owner, repository).unwrap();
+    set_fixture_response(&base, &valid_list.to_string(), 0);
+
+    let res = dispatch_git_tool(
+        "issue_list",
+        &json!({"cwd": repo, "state": "open", "labels": ["bug", "forge"]}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let list_data: Value = serde_json::from_str(&res.content[0].text).unwrap();
+    let issues = list_data["issues"].as_array().unwrap();
+    assert_eq!(issues.len(), 2);
+    assert_eq!(list_data["truncated"], false);
+    assert_eq!(list_data["forge"]["owner"], "farismnrr");
+    assert_eq!(list_data["forge"]["repository"], "ai-code");
+    assert_eq!(issues[0]["number"], 10);
+    assert_eq!(issues[0]["author"], "alice");
+    assert_eq!(issues[0]["labels"], json!(["bug", "forge"]));
+    assert_eq!(issues[1]["number"], 11);
+    assert_eq!(issues[1]["stateReason"], "COMPLETED");
+
+    // Verify exact real issue_list argv
+    let argv = read_argv(&base);
+    assert_eq!(argv[0], "issue");
+    assert_eq!(argv[1], "list");
+    assert_eq!(argv[2], "--repo");
+    assert_eq!(argv[3], "farismnrr/ai-code");
+    assert_eq!(argv[4], "--state");
+    assert_eq!(argv[5], "open");
+    assert_eq!(argv[6], "--limit");
+    assert_eq!(argv[7], "51");
+    assert_eq!(argv[8], "--json");
     assert_eq!(
-        (
-            s1.number,
-            s1.title.as_str(),
-            s1.state.as_str(),
-            s1.labels.len()
-        ),
-        (10, "Fix issue listing bug", "OPEN", 2)
+        argv[9],
+        "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt"
     );
-    let s2 = validate_fixture_summary(&raw_list[1], owner, repository).unwrap();
-    assert_eq!(
-        (s2.number, s2.state.as_str(), s2.state_reason.as_deref()),
-        (11, "CLOSED", Some("COMPLETED"))
+    assert_eq!(argv[10], "--label");
+    assert_eq!(argv[11], "bug");
+    assert_eq!(argv[12], "--label");
+    assert_eq!(argv[13], "forge");
+
+    assert!(
+        !argv.iter().any(|a| a.contains("isPullRequest")),
+        "issue_list must not contain isPullRequest"
+    );
+    assert!(
+        !argv.iter().any(|a| a.contains("comments")),
+        "issue_list must not overfetch comments"
     );
 
-    let valid_detail_json = json!({
+    // 3. Real Production issue_get Execution & Argv Verification
+    let valid_detail = json!({
         "number": 10,
-        "title": "Fix issue listing bug",
+        "title": "Fix bug",
         "url": "https://github.com/farismnrr/ai-code/issues/10",
         "state": "OPEN",
         "stateReason": "",
-        "author": { "login": "developer" },
+        "author": { "login": "alice" },
         "labels": [{ "name": "bug" }],
         "createdAt": "2026-08-19T10:00:00Z",
         "updatedAt": "2026-08-19T11:00:00Z",
         "closedAt": null,
-        "body": "## Description\nDetailed issue body explaining the bug."
+        "body": "## Description\nReal issue body content."
     });
-    let raw_detail: FixtureIssue = serde_json::from_value(valid_detail_json).unwrap();
-    let detail = validate_fixture_detail(&raw_detail, owner, repository, 10).unwrap();
+    set_fixture_response(&base, &valid_detail.to_string(), 0);
+
+    let res = dispatch_git_tool("issue_get", &json!({"cwd": repo, "number": 10}), &config)
+        .await
+        .unwrap()
+        .unwrap();
+    let get_data: Value = serde_json::from_str(&res.content[0].text).unwrap();
+    assert_eq!(get_data["issue"]["number"], 10);
     assert_eq!(
-        detail.body,
-        "## Description\nDetailed issue body explaining the bug."
+        get_data["issue"]["body"],
+        "## Description\nReal issue body content."
     );
 
-    // Truncation behavior (> 50 items)
-    let many_items: Vec<serde_json::Value> = (1..=51)
+    // Verify exact real issue_get argv
+    let argv = read_argv(&base);
+    assert_eq!(argv[0], "issue");
+    assert_eq!(argv[1], "view");
+    assert_eq!(argv[2], "10");
+    assert_eq!(argv[3], "--repo");
+    assert_eq!(argv[4], "farismnrr/ai-code");
+    assert_eq!(argv[5], "--json");
+    assert_eq!(
+        argv[6],
+        "number,title,url,state,stateReason,author,labels,createdAt,updatedAt,closedAt,body"
+    );
+
+    assert!(
+        !argv.iter().any(|a| a.contains("isPullRequest")),
+        "issue_get must not contain isPullRequest"
+    );
+    assert!(
+        !argv.iter().any(|a| a.contains("comments")),
+        "issue_get must not overfetch comments"
+    );
+
+    // 4. Real Truncation Handling (> 50 items)
+    let many_items: Vec<Value> = (1..=51)
         .map(|i| {
             json!({
                 "number": i, "title": format!("Issue {i}"),
@@ -330,85 +241,109 @@ async fn main() {
             })
         })
         .collect();
-    let mut raw_many: Vec<FixtureIssue> =
-        serde_json::from_value(serde_json::Value::Array(many_items)).unwrap();
-    assert!(raw_many.len() > 50);
-    raw_many.truncate(50);
-    assert_eq!(raw_many.len(), 50);
+    set_fixture_response(&base, &json!(many_items).to_string(), 0);
+    let res = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap()
+        .unwrap();
+    let list_data: Value = serde_json::from_str(&res.content[0].text).unwrap();
+    assert_eq!(list_data["truncated"], true);
+    assert_eq!(list_data["issues"].as_array().unwrap().len(), 50);
 
-    // PR Rejection
-    let pr_item: FixtureIssue = serde_json::from_value(json!({
+    // 5. PR URL Rejection (/pull/ path)
+    let pr_list = json!([{
         "number": 1, "title": "PR", "url": "https://github.com/farismnrr/ai-code/pull/1", "state": "MERGED", "labels": []
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&pr_item, owner, repository).unwrap_err(),
-        "pull request cannot be accessed as an issue"
-    );
+    }]);
+    set_fixture_response(&base, &pr_list.to_string(), 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("pull request cannot be accessed as an issue"));
 
-    // Repo Mismatches
-    let mismatch_owner: FixtureIssue = serde_json::from_value(json!({
+    let pr_detail = json!({
+        "number": 1, "title": "PR", "url": "https://github.com/farismnrr/ai-code/pull/1", "state": "MERGED", "labels": []
+    });
+    set_fixture_response(&base, &pr_detail.to_string(), 0);
+    let err = dispatch_git_tool("issue_get", &json!({"cwd": repo, "number": 1}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("pull request cannot be accessed as an issue"));
+
+    // 6. Identity Mismatches (Foreign owner / foreign repo / number mismatch)
+    let foreign_owner = json!([{
         "number": 10, "title": "x", "url": "https://github.com/evil/ai-code/issues/10", "state": "OPEN", "labels": []
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&mismatch_owner, owner, repository).unwrap_err(),
-        "issue repository identity mismatch"
-    );
+    }]);
+    set_fixture_response(&base, &foreign_owner.to_string(), 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("issue repository identity mismatch"));
 
-    let mismatch_num: FixtureIssue = serde_json::from_value(json!({
+    let num_mismatch = json!({
         "number": 11, "title": "x", "url": "https://github.com/farismnrr/ai-code/issues/11", "state": "OPEN", "labels": []
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_detail(&mismatch_num, owner, repository, 10).unwrap_err(),
-        "issue repository identity mismatch"
-    );
+    });
+    set_fixture_response(&base, &num_mismatch.to_string(), 0);
+    let err = dispatch_git_tool("issue_get", &json!({"cwd": repo, "number": 10}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("issue repository identity mismatch"));
 
-    // Bounds Checks: Oversized title, body, label
-    let oversized_title: FixtureIssue = serde_json::from_value(json!({
+    // 7. Bounds Violations (Oversized title, body, label name, excess labels, NUL bytes)
+    let bad_title = json!([{
         "number": 10, "title": "a".repeat(257), "url": "https://github.com/farismnrr/ai-code/issues/10", "state": "OPEN", "labels": []
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&oversized_title, owner, repository).unwrap_err(),
-        "invalid_git_output"
-    );
+    }]);
+    set_fixture_response(&base, &bad_title.to_string(), 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("git output is invalid"));
 
-    let nul_title: FixtureIssue = serde_json::from_value(json!({
-        "number": 10, "title": "bad\0title", "url": "https://github.com/farismnrr/ai-code/issues/10", "state": "OPEN", "labels": []
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&nul_title, owner, repository).unwrap_err(),
-        "invalid_git_output"
-    );
-
-    let oversized_body: FixtureIssue = serde_json::from_value(json!({
+    let bad_body = json!({
         "number": 10, "title": "x", "url": "https://github.com/farismnrr/ai-code/issues/10", "state": "OPEN", "labels": [],
         "body": "a".repeat(64 * 1024 + 1)
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_detail(&oversized_body, owner, repository, 10).unwrap_err(),
-        "invalid_git_output"
-    );
+    });
+    set_fixture_response(&base, &bad_body.to_string(), 0);
+    let err = dispatch_git_tool("issue_get", &json!({"cwd": repo, "number": 10}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("git output is invalid"));
 
-    let oversized_label: FixtureIssue = serde_json::from_value(json!({
+    let bad_label = json!([{
         "number": 10, "title": "x", "url": "https://github.com/farismnrr/ai-code/issues/10", "state": "OPEN",
         "labels": [{ "name": "a".repeat(129) }]
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&oversized_label, owner, repository).unwrap_err(),
-        "invalid_git_output"
-    );
+    }]);
+    set_fixture_response(&base, &bad_label.to_string(), 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("git output is invalid"));
 
-    let excess_labels_vec: Vec<serde_json::Value> = (0..51)
+    let excess_labels: Vec<Value> = (0..51)
         .map(|i| json!({ "name": format!("l{i}") }))
         .collect();
-    let excess_labels: FixtureIssue = serde_json::from_value(json!({
+    let bad_labels = json!([{
         "number": 10, "title": "x", "url": "https://github.com/farismnrr/ai-code/issues/10", "state": "OPEN",
-        "labels": excess_labels_vec
-    })).unwrap();
-    assert_eq!(
-        validate_fixture_summary(&excess_labels, owner, repository).unwrap_err(),
-        "invalid_git_output"
-    );
+        "labels": excess_labels
+    }]);
+    set_fixture_response(&base, &bad_labels.to_string(), 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("git output is invalid"));
 
-    let _ = fs::remove_dir_all(base);
+    // 8. Malformed Provider JSON & Error Exit Codes
+    set_fixture_response(&base, "not valid json", 0);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("forge output is invalid"));
+
+    set_fixture_response(&base, "{}", 1);
+    let err = dispatch_git_tool("issue_list", &json!({"cwd": repo}), &config)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("forge operation failed"));
+
+    let _ = fs::remove_dir_all(&base);
     println!("plan044a issue reads acceptance: PASS");
 }
