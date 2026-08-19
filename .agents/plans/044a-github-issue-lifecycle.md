@@ -248,7 +248,7 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 ## Final 044A acceptance criteria
 
 - [x] Seven issue tools exist exactly once.
-- [x] Existing 77-tool baseline is otherwise preserved (84 tools total in v9 catalog).
+- [x] Existing 77-tool v8 baseline is otherwise preserved; the Plan-044A candidate surface is 84 tools. Canonical v9 freeze is deferred to Plan 044D.
 - [x] Existing change-request lifecycle passes unchanged.
 - [x] No generic GitHub API/CLI passthrough exists.
 - [x] No GitHub credential becomes available to ordinary terminal execution.
