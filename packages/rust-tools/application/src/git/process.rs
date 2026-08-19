@@ -1,5 +1,6 @@
 use super::*;
 use std::io::Read;
+use std::path::Component;
 use std::process::Stdio;
 
 pub(crate) fn run_git(cwd: &Path, args: &[&str], max: usize) -> Result<Vec<u8>, McpError> {
@@ -201,6 +202,60 @@ pub(super) fn validated_required_path(
         .to_str()
         .map(str::to_owned)
         .ok_or_else(|| McpError::InvalidRequest("git path is not valid UTF-8".into()))
+}
+
+pub(super) fn validated_path_list(
+    values: &[Value],
+    repo: &RepoContext,
+) -> Result<Vec<String>, McpError> {
+    if values.is_empty() || values.len() > 64 {
+        return Err(McpError::InvalidRequest(
+            "git path list exceeds allowed bounds".into(),
+        ));
+    }
+    let mut paths = Vec::with_capacity(values.len());
+    for value in values {
+        let raw = value
+            .as_str()
+            .ok_or_else(|| McpError::InvalidRequest("git path is invalid".into()))?;
+        let path = Path::new(raw);
+        if raw.is_empty()
+            || raw.len() > MAX_GIT_PATH_BYTES
+            || raw.starts_with(':')
+            || raw.contains(['\0', '\n', '\r'])
+            || path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            })
+            || relay_core::protected_paths::is_protected_relative(path)
+        {
+            return Err(McpError::InvalidRequest(
+                "git path is outside the allowed repository path contract".into(),
+            ));
+        }
+        let requested = repo.root.join(path);
+        let mut probe = Some(requested.as_path());
+        while let Some(candidate) = probe {
+            if candidate.exists() {
+                let canonical = std::fs::canonicalize(candidate)
+                    .map_err(|_| McpError::InvalidRequest("git path is inaccessible".into()))?;
+                if !canonical.starts_with(&repo.root) {
+                    return Err(McpError::InvalidRequest(
+                        "git path escapes the repository through a symlink".into(),
+                    ));
+                }
+                break;
+            }
+            probe = candidate.parent();
+        }
+        paths.push(raw.to_owned());
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
 }
 
 pub(super) fn invalid_git_output() -> McpError {

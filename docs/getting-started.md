@@ -115,19 +115,19 @@ Install Bubblewrap, then from the repository root:
 ```bash
 ./target/release/ai-tools relay \
   --mode local \
-  --dir "$HOME" \
+  --dir "$PWD" \
   --execution-root "$HOME" \
   --origin http://localhost:3333 \
   --allowed-host mcp.example.com
 ```
 
-The relay remains loopback-only. For a general single-owner coding profile, use `--dir "$HOME"` together with `--execution-root "$HOME"`; the relay starts in your home directory and each tool call can select any verified project beneath it with `cwd`. Use `--dir "$PWD"` when you intentionally want a project-scoped default, and use a narrower execution root when you want stricter filesystem scope.
+The relay remains loopback-only. `--execution-root` is the hard maximum filesystem boundary; `--dir` is the primary authorized workspace. Additional projects beneath that execution boundary must be authorized explicitly with `workspace_add`, can be inspected with `workspace_list` / `workspace_get`, and can be revoked with `workspace_remove`. Setting both values to `$HOME` intentionally authorizes the whole home tree and therefore removes most of the value of explicit workspace allowlisting.
 
 For routine repository work, prefer the relay's native workspace tools: `directory_list` for structure, `file_search` for filename/glob discovery, `text_search` for source occurrences, `file_read` for bounded text ranges, `file_edit` for exact guarded replacement, and `file_write` for explicit create/full replacement. Use native Git tools for inspection plus bounded branch/stage/commit/merge/rebase/conflict workflows, native remote-Git tools for validated fetch/push/remote-branch operations, forge-neutral `change_request_*` tools for GitHub PR lifecycle work, and `apply_patch` for bounded multi-hunk source changes. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, and operations that still do not have a native contract; ordinary terminal execution remains credential-isolated and is not the GitHub delivery bridge. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
 
-When an operator configures an approved LSP server, prefer the bounded `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, and `code_rename_preview` tools over shell-driven source introspection. The relay also exposes bounded read-only repository resources for manifest/agent-guidance/status/HEAD context; those resources are server-owned views, not arbitrary file reads.
+When an operator configures an approved LSP server, prefer the bounded `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, and `code_rename_preview` tools over shell-driven source introspection. TypeScript/Vue support is opt-in, for example `--lsp-server typescript=typescript-language-server --lsp-server vue=vue-language-server` (or `RELAY_LSP_SERVER=typescript=typescript-language-server,vue=vue-language-server`) with those executables available through the reviewed safe PATH/toolchain paths. Without that registration, TypeScript/Vue `code_*` calls truthfully return `unsupported_language`. The relay also exposes bounded read-only repository resources for manifest/agent-guidance/status/HEAD context; those resources are server-owned views, not arbitrary file reads.
 
-All workspace paths are resolved beneath `--execution-root`. Relative paths use the tool's optional `cwd`; absolute paths are accepted only when they remain contained. Read-style operations may follow a symlink only when its resolved target stays inside the execution root. Mutation tools fail closed on final symlinks and symlinked mutation parents rather than writing through them.
+Workspace paths must remain both beneath the hard `--execution-root` boundary and inside the primary or explicitly authorized workspace roots. Relative paths use the selected workspace/cwd; absolute paths are accepted only when they remain authorized. Read-style operations may follow a symlink only when its resolved target stays inside an authorized root. Mutation tools fail closed on final symlinks and symlinked mutation parents rather than writing through them.
 
 The relay always permits `localhost:<port>` and `127.0.0.1:<port>`. If the MCP client reaches the loopback listener using an externally-addressed Host, add that exact hostname with `--allowed-host` (or `RELAY_ALLOWED_HOSTS`). An entry without a port matches only that hostname without a port; configure `hostname:<port>` when a port must be allowed.
 

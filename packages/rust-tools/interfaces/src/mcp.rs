@@ -73,6 +73,34 @@ pub fn with_server_info_meta(mut result: Value) -> Value {
     result
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct ToolTimingMeta {
+    pub dispatch_ms: u64,
+    pub server_total_ms: u64,
+}
+
+/// Add monotonic server timing metadata to a tool result value while preserving
+/// any existing `_meta` entries.
+pub fn with_timing_meta(mut result: Value, dispatch_ms: u64, server_total_ms: u64) -> Value {
+    let Some(result_object) = result.as_object_mut() else {
+        return result;
+    };
+    let meta = result_object
+        .entry("_meta")
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    let timing = serde_json::to_value(ToolTimingMeta {
+        dispatch_ms,
+        server_total_ms,
+    })
+    .unwrap_or_else(|_| json!({}));
+    if let Some(meta_object) = meta.as_object_mut() {
+        meta_object.insert("timing".to_string(), timing);
+    } else {
+        *meta = json!({ "timing": timing });
+    }
+    result
+}
+
 impl Response {
     pub fn new(id: Id, result: Value) -> Self {
         Self {
@@ -282,6 +310,19 @@ impl ToolCallResult {
 
     pub fn with_meta(mut self, meta: Value) -> Self {
         self.meta = Some(meta);
+        self
+    }
+
+    pub fn with_timing(mut self, dispatch_ms: u64, server_total_ms: u64) -> Self {
+        let timing = serde_json::to_value(ToolTimingMeta {
+            dispatch_ms,
+            server_total_ms,
+        })
+        .unwrap_or_else(|_| json!({}));
+        let meta = self.meta.get_or_insert_with(|| json!({}));
+        if let Some(obj) = meta.as_object_mut() {
+            obj.insert("timing".to_string(), timing);
+        }
         self
     }
 

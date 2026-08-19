@@ -4,14 +4,10 @@
 //! exactly, per the frozen audit in `.agents/plans/028-phase0-contract-audit.md`:
 //! `--dir`/`-d`, `--port`/`-p` (default `47821`), `--origin`/`-o` (env fallback
 //! `RELAY_AGENT_ORIGIN`), and a `stop --port <port>` subcommand.
-
-use serde::{Deserialize, Serialize};
-
 use crate::error::RelayError;
-
+use serde::{Deserialize, Serialize};
 mod cli;
 pub use cli::{Cli, Command, SecurityMode, DEFAULT_PORT};
-
 /// Validated server configuration, independent of how it was sourced (CLI,
 /// tests, or otherwise). `ServerConfig::default()` is intentionally *not*
 /// "production ready" — `origin: None` fails closed in the transport layer's
@@ -46,8 +42,15 @@ pub struct ServerConfig {
     pub lsp_servers: Vec<String>,
     pub enable_agent_hooks: bool,
     pub agent_hooks_config: Option<String>,
+    #[serde(skip, default = "default_workspaces")]
+    pub workspaces: std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>>,
 }
-
+fn default_workspaces(
+) -> std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>> {
+    std::sync::Arc::new(std::sync::RwLock::new(
+        crate::workspace_path::WorkspaceAllowlist::default(),
+    ))
+}
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -78,10 +81,10 @@ impl Default for ServerConfig {
             lsp_servers: Vec::new(),
             enable_agent_hooks: false,
             agent_hooks_config: None,
+            workspaces: default_workspaces(),
         }
     }
 }
-
 impl ServerConfig {
     /// Resolve the effective working directory: the configured `dir`, or the
     /// OS home directory if unset. Does not touch the filesystem.
@@ -95,7 +98,6 @@ impl ServerConfig {
             }),
         }
     }
-
     /// Resolve the effective execution root, and reject unsafe system paths.
     pub fn resolved_execution_root(&self) -> Result<std::path::PathBuf, RelayError> {
         let root = match &self.execution_root {
@@ -105,7 +107,6 @@ impl ServerConfig {
         let canonical = std::fs::canonicalize(&root).map_err(|e| {
             RelayError::InvalidConfig(format!("execution root cannot be resolved: {}", e))
         })?;
-
         // P0-2: Reject system-level directories that would neutralize filesystem containment.
         // If execution_root is "/", every starts_with check passes — containment is void.
         let forbidden_roots: &[&std::path::Path] = &[
@@ -148,8 +149,35 @@ impl ServerConfig {
                 depth
             )));
         }
-
         Ok(canonical)
+    }
+    /// Ensure that the primary workspace root is registered in the allowlist.
+    pub fn ensure_workspaces_initialized(&self) -> Result<(), RelayError> {
+        let mut guard = self
+            .workspaces
+            .write()
+            .map_err(|_| RelayError::InvalidConfig("workspace allowlist lock poisoned".into()))?;
+        if guard.primary_root() == std::path::Path::new("/nonexistent") {
+            let boundary = self.resolved_execution_root()?;
+            let primary = std::fs::canonicalize(self.resolved_dir()?).map_err(|_| {
+                RelayError::InvalidConfig("workspace directory cannot be resolved".into())
+            })?;
+            guard
+                .set_roots(boundary, primary)
+                .map_err(|error| RelayError::InvalidConfig(error.to_string()))?;
+        }
+        Ok(())
+    }
+    /// Check if a path is contained within any authorized workspace root.
+    pub fn is_path_contained(&self, path: &std::path::Path) -> bool {
+        let _ = self.ensure_workspaces_initialized();
+        if let Ok(guard) = self.workspaces.read() {
+            guard.is_contained(path)
+        } else if let Ok(root) = self.resolved_execution_root() {
+            path.starts_with(&root)
+        } else {
+            false
+        }
     }
 
     /// Validate configuration before binding. Never broadens trust (e.g.
@@ -322,6 +350,15 @@ impl ServerConfig {
             }
         }
         validate_lsp_server_entries(&self.lsp_servers)?;
+        let execution_root = self.resolved_execution_root()?;
+        let workspace = std::fs::canonicalize(self.resolved_dir()?).map_err(|_| {
+            RelayError::InvalidConfig("workspace directory cannot be resolved".into())
+        })?;
+        if !workspace.is_dir() || !workspace.starts_with(&execution_root) {
+            return Err(RelayError::InvalidConfig(
+                "workspace directory must be contained by execution root".into(),
+            ));
+        }
         if let Some(path) = &self.agent_hooks_config {
             if !self.enable_agent_hooks {
                 return Err(RelayError::InvalidConfig(
@@ -340,7 +377,7 @@ impl ServerConfig {
                     "toolchain-path must resolve to an existing directory".into(),
                 )
             })?;
-            if !candidate.is_dir() || !candidate.starts_with(self.resolved_execution_root()?) {
+            if !candidate.is_dir() || !candidate.starts_with(&execution_root) {
                 return Err(RelayError::InvalidConfig(
                     "toolchain-path must be a directory beneath execution root".into(),
                 ));
@@ -428,6 +465,7 @@ impl From<&Cli> for ServerConfig {
             lsp_servers: cli.lsp_servers.clone(),
             enable_agent_hooks: cli.enable_agent_hooks,
             agent_hooks_config: cli.agent_hooks_config.clone(),
+            workspaces: default_workspaces(),
         }
     }
 }

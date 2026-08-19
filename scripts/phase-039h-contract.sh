@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Current Plan-039H MCP contract gate.
 #
-# The v7 snapshot is captured from the live relay tools/list path. Historical
-# v1-v6 artifacts remain immutable; v7 records Plan 040 local/remote Git and
-# forge-neutral change-request tools without rewriting prior closure evidence.
+# The v8 snapshot is captured from the candidate relay tools/list path. Historical
+# v1-v7 artifacts remain immutable; v8 records Plan 043 workspace/worktree,
+# broader structured Git, and timing-era catalog changes without rewriting history.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-catalog="$root/.agents/contracts/039h-tool-catalog-v7.json"
-catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v7.sha256"
+catalog="$root/.agents/contracts/039h-tool-catalog-v8.json"
+catalog_hash_file="$root/.agents/contracts/039h-tool-catalog-v8.sha256"
+historical_v7="$root/.agents/contracts/039h-tool-catalog-v7.json"
+historical_v7_hash="$root/.agents/contracts/039h-tool-catalog-v7.sha256"
 historical_v6="$root/.agents/contracts/039h-tool-catalog-v6.json"
 historical_v6_hash="$root/.agents/contracts/039h-tool-catalog-v6.sha256"
 historical_v5="$root/.agents/contracts/039h-tool-catalog-v5.json"
@@ -22,6 +24,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 test -f "$catalog"
 test -f "$catalog_hash_file"
+test -f "$historical_v7"
+test -f "$historical_v7_hash"
 test -f "$historical_v6"
 test -f "$historical_v6_hash"
 test -f "$historical_v5"
@@ -43,7 +47,10 @@ validate_snapshot() {
   if [[ "$expected" != "$(jq -S -c . "$runtime")" ]]; then return 1; fi
 }
 
-# Historical v3/v4/v5/v6 integrity is checked independently of the live runtime.
+# Historical v3/v4/v5/v6/v7 integrity is checked independently of the live runtime.
+v7_normalized="$(jq -S -c . "$historical_v7")"
+v7_hash="$(printf '%s' "$v7_normalized" | sha256sum | awk '{print $1}')"
+test "$v7_hash" = "$(tr -d '[:space:]' < "$historical_v7_hash")"
 v6_normalized="$(jq -S -c . "$historical_v6")"
 v6_hash="$(printf '%s' "$v6_normalized" | sha256sum | awk '{print $1}')"
 test "$v6_hash" = "$(tr -d '[:space:]' < "$historical_v6_hash")"

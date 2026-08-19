@@ -39,11 +39,11 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Applies to: Local coding relays, MCP bridges, sandboxed coding agents, and developer environments using version-managed Node/Rust/Bun toolchains.
 - Action taken: Documented the relay coding profile, explicit Host/Origin behavior, Docker/Tailscale boundaries, safe toolchain PATH configuration, direct-argv shell semantics, and an MCP-side smoke-test checklist.
 
-- Date: 2026-08-16
-- Context: Choosing the default working directory for a single-owner general coding relay.
-- Lesson: `--dir` is only the relay's default working directory; `--execution-root` is the real filesystem containment boundary. For a general coding agent that should work across projects under one home directory, use `--dir "$HOME"` with `--execution-root "$HOME"`, then set task-specific `cwd` per tool call. Reserve `--dir "$PWD"` for intentionally project-scoped relay instances.
+- Date: 2026-08-19
+- Context: Reconciling explicit workspace authorization with a broader single-owner execution ceiling.
+- Lesson: Keep the filesystem ceiling and active workspace authority separate. `--execution-root` is the hard maximum boundary, `--dir` is the primary authorized workspace, and sibling projects require explicit bounded `workspace_add` authorization. Setting both to `$HOME` intentionally authorizes the whole home tree and should not be the default when an explicit allowlist is desired. Toolchain mounts may live elsewhere beneath the execution ceiling without becoming workspaces.
 - Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
-- Action taken: Updated agent-facing and operator documentation to use a home-based general coding profile by default.
+- Action taken: Split execution-boundary vs workspace-allowlist semantics in core containment, updated Bubblewrap/Git/file-tool integration, and corrected operator/agent documentation.
 
 - Date: 2026-08-16
 - Context: Adding native read/search/edit/write tools to a filesystem-contained MCP coding relay.
