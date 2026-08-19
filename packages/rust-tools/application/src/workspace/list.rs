@@ -4,7 +4,7 @@ use super::protected::{is_protected_discovered_path, reject_protected_path};
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_existing_path, EntryKind};
+use relay_core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::Path;
@@ -36,9 +36,11 @@ pub fn directory_list(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<DirectoryListResult, McpError> {
-    let execution_root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     let requested_path = arguments.get("path").and_then(Value::as_str).unwrap_or(".");
     let depth = arguments
@@ -54,11 +56,18 @@ pub fn directory_list(
         .unwrap_or(DEFAULT_DIRECTORY_ENTRIES)
         .clamp(1, MAX_DIRECTORY_ENTRIES);
 
-    let directory =
-        resolve_existing_path(&execution_root, cwd, requested_path, EntryKind::Directory)?;
-    reject_protected_path(&execution_root, &directory)?;
+    let directory = relay_core::workspace_path::resolve_existing_path_in_allowlist(
+        &guard,
+        cwd,
+        requested_path,
+        EntryKind::Directory,
+    )?;
+    let execution_root = guard.containing_root(&directory).ok_or_else(|| {
+        McpError::InvalidRequest("directory is outside authorized workspace roots".into())
+    })?;
+    reject_protected_path(execution_root, &directory)?;
     let scope = directory.to_string_lossy().into_owned();
-    let directory = SecureDirectory::open_relative(&execution_root, &directory)?;
+    let directory = SecureDirectory::open_relative(execution_root, &directory)?;
     let mut state = TraversalState {
         entries: Vec::new(),
         max_entries: MAX_DIRECTORY_SCAN_ENTRIES.min(crate::continuation::MAX_TOTAL_ENTRIES),

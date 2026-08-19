@@ -5,6 +5,7 @@ use super::{now_ms, render_output, JobManager, JobState, ToolInvocation};
 use relay_core::config::ServerConfig;
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio::sync::{watch, Mutex};
@@ -29,9 +30,8 @@ pub(super) async fn run_job(
                 &id,
                 JobState::Cancelled,
                 -1,
-                String::new(),
-                String::new(),
-                0,
+                (String::new(), String::new(), 0),
+                None,
             )
             .await;
             return;
@@ -43,9 +43,8 @@ pub(super) async fn run_job(
             &id,
             JobState::Cancelled,
             -1,
-            String::new(),
-            String::new(),
-            0,
+            (String::new(), String::new(), 0),
+            None,
         )
         .await;
         return;
@@ -56,15 +55,16 @@ pub(super) async fn run_job(
             &id,
             JobState::Failed,
             -1,
-            "execution semaphore unavailable".into(),
-            String::new(),
-            0,
+            ("execution semaphore unavailable".into(), String::new(), 0),
+            None,
         )
         .await;
         return;
     };
+    let execution_started = Instant::now();
     update_state(&manager, &id, JobState::Running, Some(now_ms()), None).await;
     let result = run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await;
+    let execution_duration_ms = execution_started.elapsed().as_millis() as u64;
     match result {
         Ok(process) => {
             finish(
@@ -72,9 +72,8 @@ pub(super) async fn run_job(
                 &id,
                 process.state,
                 process.exit_code,
-                process.stdout,
-                process.stderr,
-                process.omitted,
+                (process.stdout, process.stderr, process.omitted),
+                Some(execution_duration_ms),
             )
             .await
         }
@@ -84,9 +83,8 @@ pub(super) async fn run_job(
                 &id,
                 JobState::Failed,
                 -1,
-                String::new(),
-                String::new(),
-                0,
+                (String::new(), String::new(), 0),
+                Some(execution_duration_ms),
             )
             .await
         }
@@ -226,10 +224,10 @@ async fn finish(
     id: &str,
     state: JobState,
     exit_code: i32,
-    stdout: String,
-    stderr: String,
-    omitted: u64,
+    output: (String, String, u64),
+    execution_duration_ms: Option<u64>,
 ) {
+    let (stdout, stderr, omitted) = output;
     let result = match state {
         JobState::Completed if exit_code == 0 => {
             Some(ToolCallResult::complete(vec![ToolResultContent {
@@ -251,6 +249,7 @@ async fn finish(
         let finished_at = now_ms();
         job.snapshot.state = state;
         job.snapshot.finished_at = Some(finished_at);
+        job.snapshot.execution_duration_ms = execution_duration_ms;
         job.snapshot.last_updated_at = finished_at;
         job.snapshot.exit_code = Some(exit_code);
         job.snapshot.stdout = stdout;

@@ -53,9 +53,14 @@ pub(super) fn build_terminal_exec_invocation(
     let execution_root = config
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let _ = config.ensure_workspaces_initialized();
     let cwd = match arguments.get("cwd").and_then(Value::as_str) {
         Some(cwd) => {
-            relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd))?
+            if let Ok(guard) = config.workspaces.read() {
+                relay_core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, Some(cwd))?
+            } else {
+                relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd))?
+            }
         }
         None => std::fs::canonicalize(
             config
@@ -64,9 +69,9 @@ pub(super) fn build_terminal_exec_invocation(
         )
         .map_err(|_| McpError::InvalidRequest("workspace directory is inaccessible".into()))?,
     };
-    if !cwd.starts_with(&execution_root) {
+    if !config.is_path_contained(&cwd) {
         return Err(McpError::InvalidRequest(
-            "working directory is outside the execution root".into(),
+            "working directory is outside authorized workspace roots".into(),
         ));
     }
     reject_protected_target(&execution_root, &cwd)?;
@@ -208,7 +213,25 @@ fn build_text_search_invocation(
     let execution_root = config
         .resolved_execution_root()
         .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let cwd = relay_core::terminal_policy::resolve_contained_cwd(&execution_root, cwd_arg)?;
+    let _ = config.ensure_workspaces_initialized();
+    let cwd = match cwd_arg {
+        Some(cwd_str) => {
+            if let Ok(guard) = config.workspaces.read() {
+                relay_core::workspace_path::resolve_contained_cwd_in_allowlist(
+                    &guard,
+                    Some(cwd_str),
+                )?
+            } else {
+                relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd_str))?
+            }
+        }
+        None => execution_root.clone(),
+    };
+    if !config.is_path_contained(&cwd) {
+        return Err(McpError::InvalidRequest(
+            "working directory is outside authorized workspace roots".into(),
+        ));
+    }
     reject_protected_target(&execution_root, &cwd)?;
     let mut args = vec![
         "--json".into(),

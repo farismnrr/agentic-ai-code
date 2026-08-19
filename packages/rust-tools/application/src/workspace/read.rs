@@ -3,7 +3,7 @@
 use super::protected::reject_protected_path;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_existing_path, EntryKind};
+use relay_core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
@@ -85,11 +85,21 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(DEFAULT_FILE_READ_LINES)
         .clamp(1, MAX_FILE_READ_LINES);
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let target = resolve_existing_path(&root, cwd, path, EntryKind::File)?;
-    reject_protected_path(&root, &target)?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let target = relay_core::workspace_path::resolve_existing_path_in_allowlist(
+        &guard,
+        cwd,
+        path,
+        EntryKind::File,
+    )?;
+    let root = guard.containing_root(&target).ok_or_else(|| {
+        McpError::InvalidRequest("file is outside authorized workspace roots".into())
+    })?;
+    reject_protected_path(root, &target)?;
     let file = std::fs::File::open(&target)
         .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
     let mut reader = BufReader::new(file);

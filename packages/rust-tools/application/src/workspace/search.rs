@@ -4,7 +4,7 @@ use super::protected::{is_protected_discovered_path, reject_protected_path};
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_existing_path, EntryKind};
+use relay_core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -53,13 +53,23 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(DEFAULT_FILE_SEARCH_RESULTS)
         .clamp(1, MAX_FILE_SEARCH_RESULTS);
-    let execution_root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
-    let search_root = resolve_existing_path(&execution_root, cwd, ".", EntryKind::Directory)?;
-    reject_protected_path(&execution_root, &search_root)?;
-    let search_root = SecureDirectory::open_relative(&execution_root, &search_root)?;
+    let search_root_path = relay_core::workspace_path::resolve_existing_path_in_allowlist(
+        &guard,
+        cwd,
+        ".",
+        EntryKind::Directory,
+    )?;
+    let execution_root = guard.containing_root(&search_root_path).ok_or_else(|| {
+        McpError::InvalidRequest("directory is outside authorized workspace roots".into())
+    })?;
+    reject_protected_path(execution_root, &search_root_path)?;
+    let search_root = SecureDirectory::open_relative(execution_root, &search_root_path)?;
     let path_pattern = pattern.contains('/');
     let mut state = FileSearchState {
         pattern,

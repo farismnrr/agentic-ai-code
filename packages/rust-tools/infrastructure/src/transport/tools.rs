@@ -12,7 +12,6 @@ use relay_core::error::McpError;
 use relay_interfaces::mcp::{self, Response, ToolCallResult, ToolsCallParams};
 
 type JsonErr2 = Result<Json<Value>, JsonErr>;
-
 pub(super) async fn handle_tools_call(
     request: &mcp::Request,
     state: Arc<AppState>,
@@ -20,6 +19,7 @@ pub(super) async fn handle_tools_call(
     request_id: &str,
     client_hint: Option<&str>,
 ) -> JsonErr2 {
+    let request_started = Instant::now();
     let auth_challenge = match auth_ctx.decision {
         AuthDecision::Authorized => None,
         AuthDecision::Missing => Some(("invalid_token", None)),
@@ -32,13 +32,13 @@ pub(super) async fn handle_tools_call(
             text: "Authentication is required to use this tool".to_string(),
         }])
         .with_meta(json!({ "mcp/www_authenticate": [challenge] }));
+        let result = result.with_timing(0, request_started.elapsed().as_millis() as u64);
         let response = Response::new(
             request.id.clone(),
             serde_json::to_value(result).unwrap_or(json!({})),
         );
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
-
     let params_val = request.params.clone().ok_or_else(|| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -46,7 +46,6 @@ pub(super) async fn handle_tools_call(
             &McpError::InvalidParams("missing tools/call parameters".to_string()),
         )
     })?;
-
     let call: ToolsCallParams = serde_json::from_value(params_val).map_err(|_| {
         err_response(
             StatusCode::BAD_REQUEST,
@@ -54,7 +53,6 @@ pub(super) async fn handle_tools_call(
             &McpError::InvalidParams("invalid tools/call parameters".to_string()),
         )
     })?;
-
     let Some(tool) = mcp::find_tool(&call.name) else {
         return Err(err_response(
             StatusCode::NOT_FOUND,
@@ -62,7 +60,6 @@ pub(super) async fn handle_tools_call(
             &McpError::InvalidParams("unknown tool".to_string()),
         ));
     };
-
     if let Err(err) = mcp::validate_tool_arguments(&tool, &call.arguments) {
         return Err(err_response(
             StatusCode::BAD_REQUEST,
@@ -118,6 +115,7 @@ pub(super) async fn handle_tools_call(
                 return bounded_tool_error(
                     &request.id,
                     "approval requires stable agent session metadata",
+                    request_started,
                 );
             };
             match state
@@ -127,7 +125,11 @@ pub(super) async fn handle_tools_call(
             {
                 Some(index) => Some(index),
                 None => {
-                    return bounded_tool_error(&request.id, "approval token is invalid or expired")
+                    return bounded_tool_error(
+                        &request.id,
+                        "approval token is invalid or expired",
+                        request_started,
+                    )
                 }
             }
         }
@@ -154,6 +156,7 @@ pub(super) async fn handle_tools_call(
             return bounded_tool_error(
                 &request.id,
                 "agent session security lifecycle did not start",
+                request_started,
             );
         }
     }
@@ -193,17 +196,26 @@ pub(super) async fn handle_tools_call(
                 return bounded_tool_error(
                     &request.id,
                     "approval requires stable agent session metadata",
+                    request_started,
                 );
             };
             let Some(resume_index) = pre.approval_checkpoint else {
-                return bounded_tool_error(&request.id, "approval checkpoint is unavailable");
+                return bounded_tool_error(
+                    &request.id,
+                    "approval checkpoint is unavailable",
+                    request_started,
+                );
             };
             let Some(approval_token) = state
                 .hooks
                 .issue_approval(agent_session, &call.name, &hook_payload, resume_index)
                 .await
             else {
-                return bounded_tool_error(&request.id, "approval capacity is exhausted");
+                return bounded_tool_error(
+                    &request.id,
+                    "approval capacity is exhausted",
+                    request_started,
+                );
             };
             ToolCallResult::complete(vec![relay_interfaces::mcp::ToolResultContent {
                 kind: "text",
@@ -218,6 +230,7 @@ pub(super) async fn handle_tools_call(
                 text: text.into(),
             }])
         };
+        let result = result.with_timing(0, request_started.elapsed().as_millis() as u64);
         let response = Response::new(
             request.id.clone(),
             serde_json::to_value(result).unwrap_or(json!({})),
@@ -226,6 +239,7 @@ pub(super) async fn handle_tools_call(
     }
 
     if call.name == "terminal_job_start" {
+        let tool_dispatch_started = Instant::now();
         let task_id = relay_application::execution::start_terminal_job(
             &call.arguments,
             &state.config,
@@ -240,13 +254,16 @@ pub(super) async fn handle_tools_call(
                 &McpError::Internal("task creation failed".into()),
             )
         })?;
-        let response = Response::new(
-            request.id.clone(),
+        let result = mcp::with_timing_meta(
             json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+            tool_dispatch_started.elapsed().as_millis() as u64,
+            request_started.elapsed().as_millis() as u64,
         );
+        let response = Response::new(request.id.clone(), result);
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
     if call.name == "terminal_job_get" || call.name == "terminal_job_cancel" {
+        let tool_dispatch_started = Instant::now();
         let id = call
             .arguments
             .get("taskId")
@@ -271,16 +288,19 @@ pub(super) async fn handle_tools_call(
                 )
             })?
         };
-        let response = Response::new(
-            request.id.clone(),
+        let result = mcp::with_timing_meta(
             json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+            tool_dispatch_started.elapsed().as_millis() as u64,
+            request_started.elapsed().as_millis() as u64,
         );
+        let response = Response::new(request.id.clone(), result);
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
 
     if client_supports_tasks(request.params.as_ref())
         && relay_application::execution::tool_call_supports_tasks(&tool, &call.arguments)
     {
+        let tool_dispatch_started = Instant::now();
         let task_id = relay_application::execution::start_tool_task(
             &tool,
             &call.arguments,
@@ -303,14 +323,15 @@ pub(super) async fn handle_tools_call(
             effects.clone(),
             call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
         );
-        let response = Response::new(request.id.clone(), task.create_task_json());
+        let result = mcp::with_timing_meta(
+            task.create_task_json(),
+            tool_dispatch_started.elapsed().as_millis() as u64,
+            request_started.elapsed().as_millis() as u64,
+        );
+        let response = Response::new(request.id.clone(), result);
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
 
-    // Tool exists in the registry and both the request shape and its
-    // actual execution is Phase 3 scope. Timeout/kill/output-limit outcomes
-    // are classified distinctly inside `dispatch_tool_call` itself (never
-    // lumped in with a generic "error"), never logging tool arguments/output.
     let tool_dispatch_started = Instant::now();
     let dispatch_result = relay_application::execution::dispatch_tool_call(
         &tool,
@@ -321,6 +342,7 @@ pub(super) async fn handle_tools_call(
         &state.hooks,
     )
     .await;
+    let dispatch_ms = tool_dispatch_started.elapsed().as_millis() as u64;
     tracing::info!(
         event = "relay.tool.dispatch",
         outcome = if dispatch_result.is_ok() {
@@ -329,7 +351,7 @@ pub(super) async fn handle_tools_call(
             "error"
         },
         tool = call.name.as_str(),
-        duration_ms = tool_dispatch_started.elapsed().as_millis() as u64,
+        duration_ms = dispatch_ms,
     );
     let result = dispatch_result.unwrap_or_else(|err| {
         let text = match &err {
@@ -338,8 +360,7 @@ pub(super) async fn handle_tools_call(
         };
         ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
             kind: "text",
-            // Policy/argument rejections are safe and useful to return to the
-            // caller; internal/provider/process diagnostics remain redacted.
+            // Safe policy errors are returned; internal diagnostics stay redacted.
             text,
         }])
     });
@@ -363,6 +384,7 @@ pub(super) async fn handle_tools_call(
         )
         .await;
 
+    let result = result.with_timing(dispatch_ms, request_started.elapsed().as_millis() as u64);
     let response = Response::new(
         request.id.clone(),
         serde_json::to_value(result).unwrap_or(json!({})),
@@ -423,16 +445,15 @@ pub(super) async fn handle_agent_session_start(
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn bounded_tool_error(id: &mcp::Id, message: &str) -> JsonErr2 {
+fn bounded_tool_error(id: &mcp::Id, message: &str, request_started: Instant) -> JsonErr2 {
+    let result = ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
+        kind: "text",
+        text: message.into(),
+    }])
+    .with_timing(0, request_started.elapsed().as_millis() as u64);
     let response = Response::new(
         id.clone(),
-        serde_json::to_value(ToolCallResult::error(vec![
-            relay_interfaces::mcp::ToolResultContent {
-                kind: "text",
-                text: message.into(),
-            },
-        ]))
-        .unwrap_or(json!({})),
+        serde_json::to_value(result).unwrap_or(json!({})),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }

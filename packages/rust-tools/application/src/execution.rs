@@ -1,5 +1,4 @@
 //! Bounded execution lifecycle and application tool dispatch.
-
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_interfaces::mcp::{Tool, ToolCallResult, ToolResultContent};
@@ -12,20 +11,17 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{watch, Mutex, Semaphore};
 use tokio::time::{timeout, Duration};
 use uuid::Uuid;
-
 mod process;
 mod requests;
 pub(crate) mod sandbox;
+mod toolchain;
 pub(crate) use process::kill_process_group;
-
 const MAX_RETAINED_JOBS: usize = 64;
-
 #[derive(Clone)]
 enum InvocationProgram {
     SelfBinary,
     Direct(PathBuf),
 }
-
 #[derive(Clone)]
 struct ToolInvocation {
     program: InvocationProgram,
@@ -34,7 +30,6 @@ struct ToolInvocation {
     timeout_ms: u64,
     allow_network: bool,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
     Queued,
@@ -44,7 +39,6 @@ pub enum JobState {
     TimedOut,
     Cancelled,
 }
-
 impl JobState {
     pub fn task_status(self) -> &'static str {
         match self {
@@ -55,7 +49,6 @@ impl JobState {
         }
     }
 }
-
 #[derive(Debug, Clone)]
 pub struct JobSnapshot {
     pub job_id: String,
@@ -64,6 +57,7 @@ pub struct JobSnapshot {
     pub last_updated_at: u128,
     pub started_at: Option<u128>,
     pub finished_at: Option<u128>,
+    pub execution_duration_ms: Option<u64>,
     pub stdout: String,
     pub stderr: String,
     pub omitted_bytes: u64,
@@ -100,6 +94,9 @@ impl JobSnapshot {
             "ttlMs": ttl_ms,
             "pollIntervalMs": 1000
         });
+        if let Some(duration_ms) = self.execution_duration_ms {
+            value["executionDurationMs"] = json!(duration_ms);
+        }
         match self.state {
             JobState::Completed | JobState::TimedOut => {
                 if let Some(result) = &self.result {
@@ -130,6 +127,9 @@ impl JobSnapshot {
                 "exitCode": self.exit_code
             }
         });
+        if let Some(duration_ms) = self.execution_duration_ms {
+            value["executionDurationMs"] = json!(duration_ms);
+        }
         if let Some(result) = &self.result {
             value["result"] = serde_json::to_value(result).unwrap_or_else(|_| json!({}));
         }
@@ -226,6 +226,7 @@ impl JobManager {
             last_updated_at: created_at,
             started_at: None,
             finished_at: None,
+            execution_duration_ms: None,
             stdout: String::new(),
             stderr: String::new(),
             omitted_bytes: 0,

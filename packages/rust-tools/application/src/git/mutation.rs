@@ -3,11 +3,9 @@ use relay_core::workspace_path::{resolve_write_target, EntryKind};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::Path;
-
 const MAX_MUTATION_PATHS: usize = 64;
 const MAX_COMMIT_MESSAGE_BYTES: usize = 4096;
 const MAX_MUTATION_CONFIG_BYTES: usize = 16 * 1024;
-
 pub(super) fn validate_mutation_config(root: &Path) -> Result<(), McpError> {
     let output = git_command(root)
         .args([
@@ -41,14 +39,12 @@ pub(super) fn validate_mutation_config(root: &Path) -> Result<(), McpError> {
     }
     Ok(())
 }
-
 #[derive(Debug, Serialize)]
 pub(super) struct GitPathsMutationResult {
     repository_root: String,
     operation: &'static str,
     paths: Vec<String>,
 }
-
 #[derive(Debug, Serialize)]
 pub(super) struct GitCommitMutationResult {
     repository_root: String,
@@ -56,7 +52,6 @@ pub(super) struct GitCommitMutationResult {
     branch: String,
     head: String,
 }
-
 #[derive(Debug, Serialize)]
 pub(super) struct GitOperationState {
     repository_root: String,
@@ -66,14 +61,12 @@ pub(super) struct GitOperationState {
     conflicts: Vec<String>,
     next_actions: Vec<&'static str>,
 }
-
 #[derive(Debug, Serialize)]
 pub(super) struct GitBranchDeleteResult {
     repository_root: String,
     operation: &'static str,
     branch: String,
 }
-
 pub(super) fn git_stage(
     arguments: &Value,
     config: &ServerConfig,
@@ -91,7 +84,6 @@ pub(super) fn git_stage(
         paths,
     })
 }
-
 pub(super) fn git_unstage(
     arguments: &Value,
     config: &ServerConfig,
@@ -108,7 +100,6 @@ pub(super) fn git_unstage(
         paths,
     })
 }
-
 pub(super) fn git_commit(
     arguments: &Value,
     config: &ServerConfig,
@@ -145,7 +136,40 @@ pub(super) fn git_commit(
     )?;
     mutation_head_result(repo, "commit")
 }
-
+pub(super) fn git_commit_amend(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<GitCommitMutationResult, McpError> {
+    let repo = resolve_repo(arguments, config)?;
+    validate_mutation_config(&repo.root)?;
+    ensure_no_operation(&repo.root)?;
+    reject_protected_diff_changes(&repo.root, "staged", &[])?;
+    require_repo_identity(&repo.root)?;
+    let message = arguments.get("message").and_then(Value::as_str);
+    if message.is_some_and(|value| {
+        value.trim().is_empty() || value.len() > MAX_COMMIT_MESSAGE_BYTES || value.contains('\0')
+    }) {
+        return Err(McpError::InvalidRequest("commit message is invalid".into()));
+    }
+    let staged = run_git(
+        &repo.root,
+        &["diff", "--cached", "--name-only", "-z"],
+        MAX_GIT_OUTPUT_BYTES,
+    )?;
+    if staged.is_empty() && message.is_none() {
+        return Err(McpError::InvalidRequest(
+            "amend requires staged changes or a replacement message".into(),
+        ));
+    }
+    let mut args = vec!["commit", "--amend", "--no-gpg-sign"];
+    if let Some(message) = message {
+        args.extend(["-m", message]);
+    } else {
+        args.push("--no-edit");
+    }
+    run_git(&repo.root, &args, MAX_GIT_OUTPUT_BYTES)?;
+    mutation_head_result(repo, "amend")
+}
 pub(super) fn git_merge_start(
     arguments: &Value,
     config: &ServerConfig,
@@ -162,7 +186,6 @@ pub(super) fn git_merge_start(
     );
     operation_state(repo)
 }
-
 pub(super) fn git_merge_continue(
     arguments: &Value,
     config: &ServerConfig,
@@ -184,7 +207,6 @@ pub(super) fn git_merge_continue(
     )?;
     operation_state(repo)
 }
-
 pub(super) fn git_merge_abort(
     arguments: &Value,
     config: &ServerConfig,
@@ -195,7 +217,6 @@ pub(super) fn git_merge_abort(
     run_git(&repo.root, &["merge", "--abort"], MAX_GIT_OUTPUT_BYTES)?;
     operation_state(repo)
 }
-
 pub(super) fn git_rebase_start(
     arguments: &Value,
     config: &ServerConfig,

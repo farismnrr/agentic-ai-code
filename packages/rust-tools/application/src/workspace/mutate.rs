@@ -4,7 +4,7 @@ use super::protected::reject_protected_path;
 use super::secure::SecureDirectory;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
-use relay_core::workspace_path::{resolve_existing_path, resolve_write_target, EntryKind};
+use relay_core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
 use std::io::Read;
@@ -58,18 +58,28 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
             "file edit cwd exceeds maximum".into(),
         ));
     }
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let target = resolve_write_target(&root, cwd, path, EntryKind::File)?;
-    reject_protected_path(&root, &target)?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let target = relay_core::workspace_path::resolve_write_target_in_allowlist(
+        &guard,
+        cwd,
+        path,
+        EntryKind::File,
+    )?;
+    let root = guard.containing_root(&target).ok_or_else(|| {
+        McpError::InvalidRequest("file edit target is outside authorized workspace roots".into())
+    })?;
+    reject_protected_path(root, &target)?;
     let parent = target
         .parent()
         .ok_or_else(|| McpError::InvalidRequest("file edit target is invalid".into()))?;
     let name = target
         .file_name()
         .ok_or_else(|| McpError::InvalidRequest("file edit target is invalid".into()))?;
-    let directory = SecureDirectory::open_relative(&root, parent)?;
+    let directory = SecureDirectory::open_relative(root, parent)?;
     let (mut file, identity, mode) = directory.open_regular_file(name)?;
     let mut bytes = Vec::new();
     Read::by_ref(&mut file)
@@ -148,13 +158,15 @@ fn normalize_write_path(
             Component::ParentDir => {
                 if !normalized.pop() {
                     return Err(McpError::InvalidRequest(
-                        "write target escapes execution root".into(),
+                        "write target escapes directory boundary".into(),
                     ));
                 }
             }
-            Component::Normal(value) => normalized.push(value),
+            Component::Normal(component) => normalized.push(component),
             Component::Prefix(_) => {
-                return Err(McpError::InvalidRequest("write target is invalid".into()))
+                return Err(McpError::InvalidRequest(
+                    "write target uses an unsupported path prefix".into(),
+                ));
             }
         }
     }
@@ -168,12 +180,11 @@ fn normalize_write_path(
 
 fn resolve_write_parent_directory(
     root: &Path,
-    cwd: Option<&str>,
+    cwd_resolved: &Path,
     path: &str,
     create_parents: bool,
 ) -> Result<(SecureDirectory, std::ffi::OsString), McpError> {
-    let cwd = resolve_existing_path(root, cwd, ".", EntryKind::Directory)?;
-    let normalized = normalize_write_path(root, &cwd, path)?;
+    let normalized = normalize_write_path(root, cwd_resolved, path)?;
     let relative = normalized
         .strip_prefix(root)
         .map_err(|_| McpError::InvalidRequest("write target escapes execution root".into()))?;
@@ -227,13 +238,25 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
         .get("overwrite")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let cwd_resolved = resolve_existing_path(&root, cwd, ".", EntryKind::Directory)?;
-    let normalized = normalize_write_path(&root, &cwd_resolved, path)?;
-    reject_protected_path(&root, &normalized)?;
-    let (directory, name) = resolve_write_parent_directory(&root, cwd, path, create_parents)?;
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let cwd_resolved = relay_core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, cwd)?;
+    let root = if Path::new(path).is_absolute() {
+        guard
+            .containing_root(Path::new(path))
+            .unwrap_or_else(|| guard.primary_root())
+    } else {
+        guard
+            .containing_root(&cwd_resolved)
+            .unwrap_or_else(|| guard.primary_root())
+    };
+    let normalized = normalize_write_path(root, &cwd_resolved, path)?;
+    reject_protected_path(root, &normalized)?;
+    let (directory, name) =
+        resolve_write_parent_directory(root, &cwd_resolved, path, create_parents)?;
     match directory.entry_type(&name)? {
         Some(entry) if entry.is_symlink() || entry.is_dir() || !entry.is_file() => Err(
             McpError::InvalidRequest("write target has an unsupported entry type".into()),

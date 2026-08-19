@@ -60,6 +60,26 @@ pub fn dispatch_native_tool(
                 "file read result exceeds output maximum",
             )),
         )?,
+        "workspace_add" => complete_json(
+            &super::allowlist::workspace_add(arguments, config)?,
+            "failed to serialize workspace add result",
+            None,
+        )?,
+        "workspace_list" => complete_json(
+            &super::allowlist::workspace_list(arguments, config)?,
+            "failed to serialize workspace list result",
+            None,
+        )?,
+        "workspace_get" => complete_json(
+            &super::allowlist::workspace_get(arguments, config)?,
+            "failed to serialize workspace get result",
+            None,
+        )?,
+        "workspace_remove" => complete_json(
+            &super::allowlist::workspace_remove(arguments, config)?,
+            "failed to serialize workspace remove result",
+            None,
+        )?,
         _ => return Ok(None),
     };
 
