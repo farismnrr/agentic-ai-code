@@ -1,6 +1,6 @@
 # Plan 044A — GitHub Issue Lifecycle
 
-**Status:** SOURCE COMPLETE / REVIEW-PR PENDING
+**Status:** MERGED / LIVE VERIFICATION PENDING (Plan 044D)
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 043 CLOSED / VERIFIED / MERGED / DEPLOYED and Plan 040 forge boundary
 
@@ -229,8 +229,8 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - [x] Create a short-lived implementation branch from current `main`; do not commit implementation directly to `main`.
 - [x] Stage only Plan-044A-owned changes; preserve unrelated user changes.
 - [x] Push and create PR targeting `main`, recording exact local verification.
-- [ ] Review exact pushed head and squash-merge only when authorized and clean.
-- [ ] Mark 044A `MERGED / LIVE VERIFICATION PENDING`, not CLOSED, until 044D deployment proves the connector surface.
+- [x] Review exact pushed head and merge only when authorized and clean; PR #156 merged after refreshed-head verification.
+- [x] Mark 044A `MERGED / LIVE VERIFICATION PENDING`, not CLOSED, until 044D deployment proves the connector surface.
 
 **Validation:**
 - exact merged `main` contains the seven issue tools and passes required local verification at the reviewed boundary.
@@ -258,7 +258,7 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - [x] deterministic Plan-044A acceptance passes.
 - [x] `cargo test --workspace` passes.
 - [x] `pnpm verify:commit` passes.
-- [ ] source PR is merged to `main`.
+- [x] source PR is merged to `main` (PR #156).
 - [ ] live relay/external MCP client proof remains explicitly pending for 044D.
 
 ## Handoff
