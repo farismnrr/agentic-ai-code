@@ -160,12 +160,12 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify: `packages/rust-tools/application/src/git/forge/issues.rs`
 
 **Steps:**
-- [ ] `issue_close` requires issue number and accepts only normalized reasons `completed`, `not_planned`, or `duplicate`.
-- [ ] Require a positive `duplicate_of` issue number when reason is `duplicate`; reject it for unrelated reasons unless GitHub semantics justify otherwise.
-- [ ] Optional closing comment is bounded and explicitly included in the same operation; do not expose arbitrary close flags.
-- [ ] Re-read the issue and verify closed state/state reason before success.
-- [ ] `issue_reopen` reopens one issue, optionally with one bounded comment only if this remains a single atomic high-level GitHub operation; otherwise keep comment separate through `issue_comment`.
-- [ ] Re-read and verify open state before success.
+- [x] `issue_close` requires issue number and accepts only normalized reasons `completed`, `not_planned`, or `duplicate`.
+- [x] Require a positive `duplicate_of` issue number when reason is `duplicate`; reject it for unrelated reasons unless GitHub semantics justify otherwise.
+- [x] Optional closing comment is bounded and explicitly included in the same operation; do not expose arbitrary close flags.
+- [x] Re-read the issue and verify closed state/state reason before success.
+- [x] `issue_reopen` reopens one issue, optionally with one bounded comment only if this remains a single atomic high-level GitHub operation; otherwise keep comment separate through `issue_comment`.
+- [x] Re-read and verify open state before success.
 
 **Validation:**
 - deterministic transition fixture covers open→closed→open, duplicate validation, already-closed/already-open behavior, and state mismatch fail-closed behavior.
