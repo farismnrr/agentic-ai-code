@@ -1,6 +1,6 @@
 # Plan 044A — GitHub Issue Lifecycle
 
-**Status:** PLANNED
+**Status:** SOURCE COMPLETE / REVIEW-PR PENDING
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 043 CLOSED / VERIFIED / MERGED / DEPLOYED and Plan 040 forge boundary
 
@@ -28,15 +28,13 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 
 - repository-scoped issues only;
 - state-filtered bounded listing;
-- one-issue get;
-- create with title/body and optional labels;
-- update title/body plus bounded label add/remove operations;
-- add one bounded comment;
-- close with explicit reason and optional duplicate target;
-- reopen;
-- typed normalized DTOs and repository-identity URL validation;
-- deterministic schema/policy/security acceptance;
-- live GitHub issue lifecycle proof deferred to the composed 044D deployment checkpoint.
+- detailed single-issue view;
+- create issue with validated repository remote;
+- update issue (title/body/labels) with verified post-state;
+- add comment with bounded content;
+- close issue with normalized reason and optional comment;
+- reopen issue with optional comment;
+- clean decomposition of `git/forge/` into modular files (`common.rs`, `change_requests.rs`, `issues.rs`, `issues/model.rs`, `issues/validation.rs`).
 
 ### Out of scope
 
@@ -191,13 +189,13 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify/add deterministic acceptance: `scripts/verify-044a-issue-contract.sh`
 
 **Steps:**
-- [ ] Refactor `tool_catalog()` minimally so existing declarations remain in place while Plan-044 forge declarations come from the nested catalog module.
-- [ ] Declare strict JSON schemas with `additionalProperties:false` and no `owner`, `repository`, arbitrary `url`, command, args, endpoint, method, header, or API-path inputs.
-- [ ] Mark `issue_list/get` read-only + open-world.
-- [ ] Mark issue mutations non-read-only, destructive/effectful according to existing external-mutation convention, and open-world.
-- [ ] Map issue reads to `network_read + privileged_bridge`; mutations to `network_read + network_write + external_mutation + privileged_bridge` in both policy owners.
-- [ ] Update malformed-input checks for positive issue numbers and mutation-required fields.
-- [ ] Ensure model/UI summaries show issue number/title/state intent without echoing full bodies/comments.
+- [x] Refactor `tool_catalog()` minimally so existing declarations remain in place while Plan-044 forge declarations come from the nested catalog module `catalog/forge.rs`.
+- [x] Declare strict JSON schemas with `additionalProperties:false` and no `owner`, `repository`, arbitrary `url`, command, args, endpoint, method, header, or API-path inputs.
+- [x] Mark `issue_list/get` read-only + open-world.
+- [x] Mark issue mutations non-read-only, destructive/effectful according to existing external-mutation convention, and open-world.
+- [x] Map issue reads to `network_read + privileged_bridge`; mutations to `network_read + network_write + external_mutation + privileged_bridge` in both policy owners.
+- [x] Update malformed-input checks for positive issue numbers and mutation-required fields.
+- [x] Ensure model/UI summaries show issue number/title/state intent without echoing full bodies/comments.
 
 **Validation:**
 - `bash scripts/verify-044a-issue-contract.sh` → PASS.
@@ -226,11 +224,11 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 - Modify `.agents/memories/README.md` only if a durable security/architecture invariant changed beyond what source/docs already state.
 
 **Steps:**
-- [ ] Update documented tool surface and issue lifecycle constraints.
-- [ ] Run mandatory closeout review.
-- [ ] Create a short-lived implementation branch from current `main`; do not commit implementation directly to `main`.
-- [ ] Stage only Plan-044A-owned changes; preserve unrelated user changes.
-- [ ] Push and create PR targeting `main`, recording exact local verification.
+- [x] Update documented tool surface and issue lifecycle constraints.
+- [x] Run mandatory closeout review.
+- [x] Create a short-lived implementation branch from current `main`; do not commit implementation directly to `main`.
+- [x] Stage only Plan-044A-owned changes; preserve unrelated user changes.
+- [x] Push and create PR targeting `main`, recording exact local verification.
 - [ ] Review exact pushed head and squash-merge only when authorized and clean.
 - [ ] Mark 044A `MERGED / LIVE VERIFICATION PENDING`, not CLOSED, until 044D deployment proves the connector surface.
 
@@ -249,17 +247,17 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 
 ## Final 044A acceptance criteria
 
-- [ ] Seven issue tools exist exactly once.
-- [ ] Existing 77-tool baseline is otherwise preserved.
-- [ ] Existing change-request lifecycle passes unchanged.
-- [ ] No generic GitHub API/CLI passthrough exists.
-- [ ] No GitHub credential becomes available to ordinary terminal execution.
-- [ ] Issue list/get outputs are bounded and repository-validated.
-- [ ] Issue create/update/comment/close/reopen are direct-argv, typed, bounded, and correctly effect-classified.
-- [ ] Close/reopen report verified post-state.
-- [ ] deterministic Plan-044A acceptance passes.
-- [ ] `cargo test --workspace` passes.
-- [ ] `pnpm verify:commit` passes.
+- [x] Seven issue tools exist exactly once.
+- [x] Existing 77-tool baseline is otherwise preserved (84 tools total in v9 catalog).
+- [x] Existing change-request lifecycle passes unchanged.
+- [x] No generic GitHub API/CLI passthrough exists.
+- [x] No GitHub credential becomes available to ordinary terminal execution.
+- [x] Issue list/get outputs are bounded and repository-validated.
+- [x] Issue create/update/comment/close/reopen are direct-argv, typed, bounded, and correctly effect-classified.
+- [x] Close/reopen report verified post-state.
+- [x] deterministic Plan-044A acceptance passes.
+- [x] `cargo test --workspace` passes.
+- [x] `pnpm verify:commit` passes.
 - [ ] source PR is merged to `main`.
 - [ ] live relay/external MCP client proof remains explicitly pending for 044D.
 

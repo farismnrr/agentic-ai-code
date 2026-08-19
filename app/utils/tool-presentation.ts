@@ -11,8 +11,8 @@ const PRESENTATION_REDACTIONS: ReadonlyArray<[RegExp, string]> = [
   [/\b(x-api-key|api[-_]?key|apikey|cookie|session|password|passwd|token|secret|access[-_]?key|client[-_]?secret|key)['"]?\s*[:=]\s*['"]?[^\s'",;}]+/gi, '$1=[REDACTED]'],
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED-JWT]']
 ]
-const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
-const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column|number|draft|set_upstream|scope|action|delivery_ready)$/i
+const HIDDEN_KEY = /(token|secret|password|passwd|cookie|authorization|api[-_]?key|credential|content|body|comment|patch|diff|source|prompt|message|args|headers?|task|instruction)/i
+const SAFE_SCALAR_KEY = /^(max_results|depth|offset_line|limit_lines|case_sensitive|replace_all|create_parents|overwrite|dry_run|include_untracked|include_patch|context_lines|max_bytes|start_line|end_line|line|column|number|draft|set_upstream|scope|action|delivery_ready|duplicate_of|reason)$/i
 const SAFE_IDENTITY_KEY = /^(remote|branch|head_branch|base_branch|strategy|state|node_id|generation)$/i
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -59,7 +59,7 @@ function scalar(value: unknown): string | number | boolean | undefined {
 
 export function toolCategory(toolName: string): ToolRenderCategory {
   if (toolName === 'delegate_task' || toolName.startsWith('background_') || toolName.startsWith('agent_task_') || toolName.startsWith('orchestrator_')) return 'subagent'
-  if (toolName.startsWith('git_') || toolName.startsWith('change_request_')) return 'git'
+  if (toolName.startsWith('git_') || toolName.startsWith('change_request_') || toolName.startsWith('issue_')) return 'git'
   if (toolName.startsWith('code_')) return 'diagnostics'
   if (['file_write', 'file_edit', 'apply_patch'].includes(toolName)) return 'mutation'
   if (['terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel', 'local_terminal'].includes(toolName)) return 'execution'

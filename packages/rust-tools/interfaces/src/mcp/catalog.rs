@@ -1,4 +1,4 @@
-//! Canonical MCP tool catalog, annotations, schemas, and argument validation.
+mod forge;
 
 use relay_core::error::McpError;
 use serde::Serialize;
@@ -53,7 +53,7 @@ fn coding_security_scheme() -> Vec<ToolSecurityScheme> {
 /// binaries. Execution is deliberately not wired here (Phase 3) — this only
 /// describes the surface a client can discover and validate calls against.
 pub fn tool_catalog() -> Vec<Tool> {
-    vec![
+    let mut tools = vec![
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
@@ -402,7 +402,9 @@ pub fn tool_catalog() -> Vec<Tool> {
             security_schemes: coding_security_scheme(),
             execution: None,
         },
-    ]
+    ];
+    tools.extend(forge::issue_tools());
+    tools
 }
 
 pub fn find_tool(name: &str) -> Option<Tool> {
