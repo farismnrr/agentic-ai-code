@@ -39,7 +39,8 @@ Demonstrate a small set of real debugging scenarios, such as:
 - MCP approval evaluation emits bounded `chat.tool.policy` telemetry so a policy-denied action remains observable even when tool execution never starts;
 - MCP tool failures classify results with the existing secret-safe cause classifier (`cancelled`, `timeout`, bounded runtime/provider code, or `unclassified`) rather than collapsing every failure to a generic `error` result class;
 - operator documentation now gives a request/trace-first debugging flow without recommending raw arguments, provider responses, source, private paths, credentials, or exception text;
-- `pnpm verify:041c`, `pnpm verify:039j`, full typecheck, architecture, maintainability, subagent/background/task-context gates, and the current Plan-039H contract pass in the isolated task worktree. The terminal-sandbox worktree metadata limitation prevents the Git-dependent tail of `verify:commit` / `phase-039i-contract.sh` from running there; this is an environment limitation, not a source failure, and Git-native MCP status/diff remain healthy for the branch.
+- no separate Rust log-to-OTel bridge is added: the relay already installs a `tracing_opentelemetry` subscriber and joins inbound MCP requests to W3C trace context at `relay.request`, so duplicating that path would add plumbing without closing a measured gap;
+- `pnpm verify:041c`, `pnpm verify:039j`, full typecheck, lint/clippy/fmt, architecture, maintainability, subagent/background/task-context gates, and the current Plan-039H contract pass in the isolated task worktree. The terminal-sandbox worktree metadata limitation prevents the Git-dependent tail of `verify:commit` / `phase-039i-contract.sh` from running there; this is an environment limitation, not a source failure, and Git-native MCP status/diff remain healthy for the branch.
 
 ## Exit criteria
 
