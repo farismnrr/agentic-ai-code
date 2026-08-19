@@ -133,65 +133,8 @@ pub async fn dispatch_git_tool(
         "git_cherry_pick" => serde_json::to_value(advanced::git_cherry_pick(arguments, config)?),
         "git_revert" => serde_json::to_value(advanced::git_revert(arguments, config)?),
         "git_reset" => serde_json::to_value(advanced::git_reset(arguments, config)?),
-        "change_request_list" => {
-            serde_json::to_value(forge::change_request_list(arguments, config).await?)
-        }
-        "change_request_get" => {
-            serde_json::to_value(forge::change_request_get(arguments, config).await?)
-        }
-        "change_request_create" => {
-            serde_json::to_value(forge::change_request_create(arguments, config).await?)
-        }
-        "change_request_update" => {
-            serde_json::to_value(forge::change_request_update(arguments, config).await?)
-        }
-        "change_request_checks" => {
-            serde_json::to_value(forge::change_request_checks(arguments, config).await?)
-        }
-        "change_request_merge" => {
-            serde_json::to_value(forge::change_request_merge(arguments, config).await?)
-        }
-        "issue_list" => serde_json::to_value(forge::issue_list(arguments, config).await?),
-        "issue_get" => serde_json::to_value(forge::issue_get(arguments, config).await?),
-        "issue_create" => serde_json::to_value(forge::issue_create(arguments, config).await?),
-        "issue_update" => serde_json::to_value(forge::issue_update(arguments, config).await?),
-        "issue_comment" => serde_json::to_value(forge::issue_comment(arguments, config).await?),
-        "issue_close" => serde_json::to_value(forge::issue_close(arguments, config).await?),
-        "issue_reopen" => serde_json::to_value(forge::issue_reopen(arguments, config).await?),
-        "workflow_list" => serde_json::to_value(forge::workflow_list(arguments, config).await?),
-        "workflow_get" => serde_json::to_value(forge::workflow_get(arguments, config).await?),
-        "workflow_run_list" => {
-            serde_json::to_value(forge::workflow_run_list(arguments, config).await?)
-        }
-        "workflow_run_get" => {
-            serde_json::to_value(forge::workflow_run_get(arguments, config).await?)
-        }
-        "workflow_run_jobs" => {
-            serde_json::to_value(forge::workflow_run_jobs(arguments, config).await?)
-        }
-        "workflow_job_log_preview" => {
-            serde_json::to_value(forge::workflow_job_log_preview(arguments, config).await?)
-        }
-        "dependabot_alert_list" => {
-            serde_json::to_value(forge::dependabot_alert_list(arguments, config).await?)
-        }
-        "dependabot_alert_get" => {
-            serde_json::to_value(forge::dependabot_alert_get(arguments, config).await?)
-        }
-        "code_scanning_alert_list" => {
-            serde_json::to_value(forge::code_scanning_alert_list(arguments, config).await?)
-        }
-        "code_scanning_alert_get" => {
-            serde_json::to_value(forge::code_scanning_alert_get(arguments, config).await?)
-        }
-        "secret_scanning_alert_list" => {
-            serde_json::to_value(forge::secret_scanning_alert_list(arguments, config).await?)
-        }
-        "secret_scanning_alert_get" => {
-            serde_json::to_value(forge::secret_scanning_alert_get(arguments, config).await?)
-        }
-        "secret_scanning_alert_locations" => {
-            serde_json::to_value(forge::secret_scanning_alert_locations(arguments, config).await?)
+        _ if let Some(value) = forge::dispatch_forge_tool(name, arguments, config).await? => {
+            Ok(value)
         }
         _ => return Ok(None),
     }
