@@ -151,6 +151,8 @@ pub async fn dispatch_git_tool(
         "change_request_merge" => {
             serde_json::to_value(forge::change_request_merge(arguments, config).await?)
         }
+        "issue_list" => serde_json::to_value(forge::issue_list(arguments, config).await?),
+        "issue_get" => serde_json::to_value(forge::issue_get(arguments, config).await?),
         _ => return Ok(None),
     }
     .map_err(|_| McpError::Internal("failed to serialize git result".into()))?;
