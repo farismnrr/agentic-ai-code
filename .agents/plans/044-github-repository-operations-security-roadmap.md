@@ -117,14 +117,14 @@ If current code cannot express a truthful safe presentation without a small new 
 
 | Plan | Capability | Depends on | Status | Exit criterion |
 | --- | --- | --- | --- | --- |
-| 044A | GitHub issue lifecycle | Plan 043 / Plan 040 forge boundary | SOURCE COMPLETE / REVIEW-PR PENDING | Seven structured issue tools work against validated GitHub repos with bounded DTOs, verified mutations, correct policy effects, and deterministic acceptance |
+| 044A | GitHub issue lifecycle | Plan 043 / Plan 040 forge boundary | MERGED / LIVE VERIFICATION PENDING (044D) | Seven structured issue tools work against validated GitHub repos with bounded DTOs, verified mutations, correct policy effects, and deterministic acceptance |
 | 044B | GitHub Actions observability | 044A source architecture | PLANNED | Six read-oriented workflow/run/job/log-preview tools provide useful bounded diagnosis without adopting CI or exposing raw unbounded logs |
 | 044C | GitHub security alert visibility | 044B | PLANNED | Dependabot/code/secret scanning reads are normalized, permission-aware, secret-safe, and proven not to disclose literal detected secrets |
 | 044D | Controlled Actions mutations + integrated closure | 044C | PLANNED | Rerun/cancel/dispatch are narrowly controlled; composed v9 contract is reviewed, merged, deployed, restarted, rediscovered, and verified live |
 
 ## Master todo
 
-- [ ] 044A — issue lifecycle
+- [x] 044A — issue lifecycle (source merged; live verification deferred to 044D)
 - [ ] 044B — Actions observability
 - [ ] 044C — security alert visibility
 - [ ] 044D — controlled Actions mutations and final integration
