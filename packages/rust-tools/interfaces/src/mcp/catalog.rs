@@ -393,6 +393,7 @@ pub fn tool_catalog() -> Vec<Tool> {
 
 pub const PRIMARY_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
+    "agent_delegate",
     "terminal_job_start",
     "terminal_job_get",
     "terminal_job_cancel",
@@ -438,15 +439,15 @@ pub fn tool_catalog_for_profile(profile: relay_core::config::ToolProfile) -> Vec
     }
 }
 
-/// Build the live full-profile catalog with only provider sessions that
-/// passed application-level capability discovery. The static `tool_catalog`
-/// remains the canonical superset used by frozen contract snapshots.
+/// Build the live profile catalog with only provider sessions that passed
+/// application-level capability discovery. The static `tool_catalog` remains
+/// the canonical superset used by frozen contract snapshots.
 pub fn tool_catalog_for_profile_and_agent_providers(
     profile: relay_core::config::ToolProfile,
     providers: &[&str],
 ) -> Vec<Tool> {
     let mut tools = tool_catalog_for_profile(profile);
-    if profile != relay_core::config::ToolProfile::Full {
+    if !tools.iter().any(|tool| tool.name == "agent_delegate") {
         return tools;
     }
     if providers.is_empty() {

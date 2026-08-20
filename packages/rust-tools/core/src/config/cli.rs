@@ -164,7 +164,7 @@ pub struct Cli {
     #[arg(long = "lsp-server", env = "RELAY_LSP_SERVER", value_delimiter = ',')]
     pub lsp_servers: Vec<String>,
 
-    /// MCP tool exposure profile. Full is the canonical superset; Primary is the ChatGPT fast-path subset.
+    /// MCP tool exposure profile. Full is the canonical superset; Primary is the ChatGPT fast-path subset and may include capability-filtered delegation.
     #[arg(long, value_enum, env = "RELAY_TOOL_PROFILE", default_value = "full")]
     pub tool_profile: ToolProfile,
 

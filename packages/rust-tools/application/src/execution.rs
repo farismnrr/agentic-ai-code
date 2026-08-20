@@ -14,6 +14,7 @@ use uuid::Uuid;
 pub mod agent;
 mod agent_capabilities;
 mod agent_policy;
+mod agent_snapshot;
 mod dispatch;
 mod paths;
 mod process;
@@ -37,6 +38,7 @@ struct ToolInvocation {
     environment: Vec<(String, String)>,
     auth_roots: Vec<PathBuf>,
     expose_optional_sockets: bool,
+    expose_authorized_siblings: bool,
 }
 
 enum JobKind {

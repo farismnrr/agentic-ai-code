@@ -46,7 +46,10 @@ pub(super) fn spawn(
     invocation: &ToolInvocation,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
-    let network_access = if invocation.allow_network || config.allow_terminal_network {
+    // Network authority is translated into each invocation by its owning
+    // request path. Do not OR terminal policy into unrelated subprocesses:
+    // delegated agents have a separate operator-controlled network capability.
+    let network_access = if invocation.allow_network {
         NetworkAccess::Host
     } else {
         NetworkAccess::Isolated
@@ -86,6 +89,7 @@ pub(crate) fn spawn_lsp(
             environment: Vec::new(),
             auth_roots: Vec::new(),
             expose_optional_sockets: false,
+            expose_authorized_siblings: false,
         },
         SandboxProfile {
             workspace_access: WorkspaceAccess::ReadOnly,
@@ -118,6 +122,7 @@ pub(crate) fn spawn_hook(
             environment: Vec::new(),
             auth_roots: Vec::new(),
             expose_optional_sockets: false,
+            expose_authorized_siblings: false,
         },
         SandboxProfile {
             workspace_access,
@@ -257,15 +262,17 @@ fn spawn_with_profile(
         add_protected_paths(&mut args, &execution_root, false)?;
     }
     let _ = config.ensure_workspaces_initialized();
-    if let Ok(guard) = config.workspaces.read() {
-        for ws in guard.all_roots() {
-            if ws != sandbox_root
-                && ws != host_home
-                && !relay_core::protected_paths::is_protected_path(&execution_root, &ws)
-            {
-                let val = ws.to_string_lossy().into_owned();
-                args.extend([root_bind.into(), val.clone(), val]);
-                add_protected_paths(&mut args, &ws, false)?;
+    if invocation.expose_authorized_siblings {
+        if let Ok(guard) = config.workspaces.read() {
+            for ws in guard.all_roots() {
+                if ws != sandbox_root
+                    && ws != host_home
+                    && !relay_core::protected_paths::is_protected_path(&execution_root, &ws)
+                {
+                    let val = ws.to_string_lossy().into_owned();
+                    args.extend([root_bind.into(), val.clone(), val]);
+                    add_protected_paths(&mut args, &ws, false)?;
+                }
             }
         }
     }

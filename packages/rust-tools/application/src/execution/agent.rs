@@ -2,15 +2,16 @@ pub use super::agent_capabilities::{detect_agent_capabilities, AgentCapabilities
 pub use super::agent_policy::{
     classify_failure, fallback_allowed, provider_argv, AgentProvider, FailureClass,
 };
+use super::agent_snapshot::workspace_snapshot;
 use super::paths::resolve_authorized_cwd;
 use super::process::{run_process, OutputBuffer, ProcessResult};
 use super::sandbox;
 use super::{InvocationProgram, ToolInvocation};
-use relay_core::config::{ServerConfig, ToolProfile};
+use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{watch, Mutex};
@@ -46,21 +47,10 @@ struct AgentResult {
     message: String,
 }
 
-#[derive(Debug, Clone)]
-struct WorkspaceSnapshot {
-    fingerprint: String,
-    safe_to_compare: bool,
-}
-
 pub(super) fn build_request(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<AgentRequest, McpError> {
-    if config.tool_profile != ToolProfile::Full {
-        return Err(McpError::InvalidRequest(
-            "agent_delegate requires the Full tool profile".into(),
-        ));
-    }
     let prompt = arguments
         .get("prompt")
         .and_then(Value::as_str)
@@ -156,30 +146,11 @@ async fn run_provider(
         environment: config.agent_environment_for(provider.name()),
         auth_roots: config.agent_auth_roots_for(provider.name()),
         expose_optional_sockets: false,
+        expose_authorized_siblings: false,
     };
     let stdout = Arc::new(Mutex::new(OutputBuffer::new(super::now_ms())));
     let stderr = Arc::new(Mutex::new(OutputBuffer::new(super::now_ms())));
     run_process(config, &invocation, cancel, stdout, stderr).await
-}
-
-async fn workspace_snapshot(cwd: &PathBuf, config: &ServerConfig) -> Option<WorkspaceSnapshot> {
-    let result = crate::git::dispatch_git_tool("git_status", &json!({ "cwd": cwd }), config)
-        .await
-        .ok()??;
-    if result.is_error {
-        return None;
-    }
-    let text = result.content.first()?.text.clone();
-    let value: Value = serde_json::from_str(&text).ok()?;
-    let safe_to_compare = value.get("truncated").and_then(Value::as_bool) != Some(true)
-        && value
-            .get("untracked")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty);
-    Some(WorkspaceSnapshot {
-        fingerprint: serde_json::to_string(&value).ok()?,
-        safe_to_compare,
-    })
 }
 
 async fn append_attempt_output(
@@ -215,9 +186,11 @@ pub(super) async fn run_agent_job(
                 workspace_changed: false,
                 message: "delegation cancelled; no fallback was attempted".into(),
             };
-            return Ok(ProcessResult::cancelled(result));
+            return Ok(ProcessResult::cancelled(result, stdout, stderr).await);
         }
-        let before = workspace_snapshot(&request.cwd, config).await;
+        let has_next = index + 1 < request.providers.len();
+        let before =
+            (request.fallback && has_next).then(|| workspace_snapshot(&request.cwd, config));
         let provider_result = run_provider(config, &request, provider, cancel).await;
         let provider_spawn_failed = provider_result.is_err();
         let (state, exit_code, provider_stdout, provider_stderr) = match provider_result {
@@ -272,7 +245,22 @@ pub(super) async fn run_agent_job(
                 workspace_changed: false,
                 message: "delegation cancelled; no fallback was attempted".into(),
             };
-            return Ok(ProcessResult::cancelled(result));
+            return Ok(ProcessResult::cancelled(result, stdout, stderr).await);
+        }
+        if state == super::JobState::TimedOut {
+            attempts.push(AttemptSummary {
+                provider: provider.name(),
+                outcome: "timed_out",
+                exit_code: Some(exit_code),
+            });
+            let result = AgentResult {
+                provider: None,
+                fallback_used,
+                attempts,
+                workspace_changed: false,
+                message: "delegation timed out; no fallback was attempted".into(),
+            };
+            return Ok(ProcessResult::timed_out(result, stdout, stderr).await);
         }
         if state != super::JobState::Completed && !provider_spawn_failed {
             attempts.push(AttemptSummary {
@@ -296,21 +284,20 @@ pub(super) async fn run_agent_job(
             },
             exit_code: Some(exit_code),
         });
-        let has_next = index + 1 < request.providers.len();
         if !request.fallback || !has_next || !fallback_allowed(class, false) {
             break;
         }
-        let after = workspace_snapshot(&request.cwd, config).await;
+        let after = workspace_snapshot(&request.cwd, config);
         let workspace_changed = if provider_spawn_failed {
             false
         } else {
-            match (before, after) {
-                (Some(before), Some(after)) => {
+            match before {
+                Some(before) => {
                     !before.safe_to_compare
                         || !after.safe_to_compare
                         || before.fingerprint != after.fingerprint
                 }
-                _ => true,
+                None => true,
             }
         };
         if workspace_changed {
@@ -378,15 +365,35 @@ impl ProcessResult {
         }
     }
 
-    fn cancelled(result: AgentResult) -> Self {
-        let result = result_text(result);
+    async fn timed_out(
+        result: AgentResult,
+        stdout: Arc<Mutex<OutputBuffer>>,
+        stderr: Arc<Mutex<OutputBuffer>>,
+    ) -> Self {
+        let (stdout, stderr, omitted) = output_values(&stdout, &stderr).await;
+        Self {
+            state: super::JobState::TimedOut,
+            exit_code: -1,
+            stdout,
+            stderr,
+            omitted,
+            result: Some(result_text(result)),
+        }
+    }
+
+    async fn cancelled(
+        result: AgentResult,
+        stdout: Arc<Mutex<OutputBuffer>>,
+        stderr: Arc<Mutex<OutputBuffer>>,
+    ) -> Self {
+        let (stdout, stderr, omitted) = output_values(&stdout, &stderr).await;
         Self {
             state: super::JobState::Cancelled,
             exit_code: -1,
-            stdout: String::new(),
-            stderr: String::new(),
-            omitted: 0,
-            result: Some(result),
+            stdout,
+            stderr,
+            omitted,
+            result: Some(result_text(result)),
         }
     }
 }

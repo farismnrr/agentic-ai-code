@@ -34,10 +34,18 @@ fn main() {
         serde_json::to_value(&all_tools).unwrap(),
         serde_json::to_value(&static_catalog).unwrap()
     );
+    let primary = tool_catalog_for_profile_and_agent_providers(ToolProfile::Primary, &["codex"]);
+    let primary_delegate = primary
+        .iter()
+        .find(|tool| tool.name == "agent_delegate")
+        .expect("primary profile must expose authenticated delegation");
+    assert_eq!(
+        primary_delegate.input_schema["properties"]["providers"]["items"]["enum"],
+        serde_json::json!(["codex"])
+    );
     assert!(
-        tool_catalog_for_profile_and_agent_providers(ToolProfile::Primary, &all)
-            .iter()
-            .all(|tool| tool.name != "agent_delegate")
+        find_tool_for_profile_and_agent_providers("agent_delegate", ToolProfile::Primary, &[])
+            .is_none()
     );
 
     assert_eq!(
@@ -53,6 +61,11 @@ fn main() {
         provider_argv(AgentProvider::Antigravity, "fix it", 3),
         vec!["--print", "--mode=accept-edits", "fix it"]
     );
+    let codex = provider_argv(AgentProvider::Codex, "fix it", 3);
+    assert!(codex
+        .windows(2)
+        .any(|pair| { pair[0] == "--sandbox" && pair[1] == "workspace-write" }));
+    assert!(codex.iter().any(|arg| arg == "--approve-for-me"));
     for provider in [
         AgentProvider::Codex,
         AgentProvider::Antigravity,
@@ -63,6 +76,7 @@ fn main() {
                 arg.as_str(),
                 "--yolo"
                     | "--dangerously-skip-permissions"
+                    | "--dangerously-bypass-approvals-and-sandbox"
                     | "--no-sandbox"
                     | "--api-key"
                     | "--with-api-key"

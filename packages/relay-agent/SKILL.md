@@ -11,7 +11,7 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
 - **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
-- **Tools:** Full currently exposes 101 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, bounded alert/workflow tools, and the Full-only `agent_delegate`. Primary is the intentional 31-tool subset. The exact catalog contract is frozen under `.agents/contracts/`.
+- **Tools:** Full currently exposes 101 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, bounded alert/workflow tools, and `agent_delegate`. Primary is the intentional 32-tool fast-path subset and includes capability-filtered `agent_delegate`. The exact static catalog contract is frozen under `.agents/contracts/`.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
 
@@ -138,20 +138,21 @@ All plans through 029b were explicitly closed for a planning refresh. Current 03
 
 ## MCP tool profiles (Plan 045)
 
-The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a smaller routing/UX subset for deployments that opt into it and does not change the underlying authorization or filesystem boundaries.
+The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 31 common coding tools: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise MCP Tasks; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 32 common coding tools: capability-filtered `agent_delegate`, short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.
 
-Plan 046 adds the Full-only `agent_delegate` tool for operator-installed coding
+Plan 046 adds the `agent_delegate` tool for operator-installed coding
 CLIs. Plan 048 adds startup capability discovery: locally authenticated
 sessions are preferred, the live provider schema omits unavailable CLIs, and a
 restart refreshes login/logout state. Each adapter uses its documented
 headless interface; explicit environment mappings remain an opt-in fallback,
 but never make an unverified provider visible; they are not a generated or
 inferred API-key path. Serial fallback is limited to
-quota, authentication, or availability failures; workspace uncertainty stops
-fallback. Provider network and non-default auth roots remain opt-in relay
-configuration. Permission-bypass flags are never generated, and delegated
+quota, authentication, or availability failures; a bounded metadata-only
+snapshot covers the selected writable workspace and any change or incomplete
+snapshot stops fallback. Provider network and non-default auth roots remain opt-in relay
+configuration, independent from terminal network permission. Permission-bypass flags are never generated, and delegated
 work remains inside the existing Bubblewrap boundary.

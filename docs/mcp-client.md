@@ -126,22 +126,25 @@ The relay separates the HTTP round-trip deadline from execution lifetime:
 
 ## 6. Delegated coding agents
 
-The Full profile may expose `agent_delegate` when one or more supported coding
-CLIs are installed and locally authenticated. Capability discovery uses each
+Full and Primary profiles may expose `agent_delegate` when one or more supported
+coding CLIs are installed and locally authenticated; the live provider schema
+is filtered from the startup capability snapshot. Capability discovery uses each
 CLI's noninteractive login-status interface where one exists; a CLI without a
 safe status check is advertised only when its authentication source is
 explicitly configured. The relay invokes providers in their headless/structured
-output modes inside the same containment boundary. Fallback is allowed only
+output modes inside the same containment boundary, scoped to the selected
+workspace rather than every authorized sibling root. Fallback is allowed only
 for classified quota/rate-limit, authentication, or provider-unavailable
-errors; if a failed provider may have changed the workspace, fallback stops.
+errors; if the bounded metadata snapshot detects a selected-workspace change or cannot
+prove the snapshot complete, fallback stops.
 
 Local login sessions are required for providers with a status command. A
 provider without a safe status command must have an explicit auth-root
 mapping. `RELAY_AGENT_ENV` and non-default auth directories are explicit
 operator configuration and do not make an unverified provider appear in the
-catalog; API keys are never generated or inferred. Network access is disabled
-by default, no host sockets are exposed, and the relay does not generate
-permission-bypass flags. A client cannot elevate these operator controls.
+catalog; API keys are never generated or inferred. Network access is disabled by default and remains independent from terminal
+network permission; no sibling workspaces or host sockets are exposed, and the
+relay does not generate permission-bypass flags. A client cannot elevate these operator controls.
 
 ## What a successful connection proves
 

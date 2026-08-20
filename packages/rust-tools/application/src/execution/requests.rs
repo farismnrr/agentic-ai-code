@@ -94,10 +94,13 @@ pub(super) fn build_terminal_invocation(
         args,
         cwd: Some(cwd),
         timeout_ms,
-        allow_network: false,
+        // Terminal network permission is translated here so other process
+        // classes cannot inherit it accidentally inside the sandbox layer.
+        allow_network: config.allow_terminal_network,
         environment: Vec::new(),
         auth_roots: Vec::new(),
         expose_optional_sockets: true,
+        expose_authorized_siblings: true,
     })
 }
 
@@ -267,6 +270,7 @@ fn build_text_search_invocation(
             environment: Vec::new(),
             auth_roots: Vec::new(),
             expose_optional_sockets: true,
+            expose_authorized_siblings: true,
         },
         max_results,
     ))
@@ -462,6 +466,7 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         environment: Vec::new(),
         auth_roots: Vec::new(),
         expose_optional_sockets: true,
+        expose_authorized_siblings: true,
     })
 }
 
@@ -484,5 +489,6 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         environment: Vec::new(),
         auth_roots: Vec::new(),
         expose_optional_sockets: true,
+        expose_authorized_siblings: true,
     }
 }

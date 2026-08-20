@@ -53,7 +53,14 @@ pub enum FailureClass {
 
 pub fn provider_argv(provider: AgentProvider, prompt: &str, max_turns: u64) -> Vec<String> {
     match provider {
-        AgentProvider::Codex => vec!["exec".into(), "--full-auto".into(), prompt.into()],
+        AgentProvider::Codex => vec![
+            "exec".into(),
+            "--approve-for-me".into(),
+            "--sandbox".into(),
+            "workspace-write".into(),
+            "--ephemeral".into(),
+            prompt.into(),
+        ],
         AgentProvider::Antigravity => vec![
             "--print".into(),
             "--mode=accept-edits".into(),

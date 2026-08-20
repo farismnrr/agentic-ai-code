@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${RELAY_TOOL_PROFILE:-}" != full ]]; then
-  echo "expected RELAY_TOOL_PROFILE=full, got ${RELAY_TOOL_PROFILE:-unset}" >&2
+if [[ "${RELAY_TOOL_PROFILE:-}" != primary ]]; then
+  echo "expected RELAY_TOOL_PROFILE=primary, got ${RELAY_TOOL_PROFILE:-unset}" >&2
   exit 1
 fi
 
@@ -32,4 +32,4 @@ for index in "${!expected_args[@]}"; do
   fi
 done
 
-echo '045 relay deployment wrapper acceptance: PASS profile=full'
+echo '045 relay deployment wrapper acceptance: PASS profile=primary'

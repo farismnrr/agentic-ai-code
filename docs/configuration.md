@@ -104,32 +104,37 @@ Conversation approval modes are `plan` (read-only), `workspace` (edits with revi
 
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories appended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
-The Full-only `agent_delegate` tool runs operator-installed coding CLIs in the
+The capability-filtered `agent_delegate` tool runs operator-installed coding CLIs in the
 same Bubblewrap boundary. The CLIs must be reachable through the reviewed safe
 PATH (for example, `RELAY_TOOLCHAIN_PATH=$HOME/.local/bin`). At relay startup,
 each supported CLI is checked for a usable local login session. The live tool
-catalog advertises only providers that pass this check; restart the relay after
-logging in or out.
+Full and Primary live catalogs advertise delegation only for providers that
+pass this check; restart the relay after logging in or out.
 
 ```text
 RELAY_ALLOW_AGENT_NETWORK=true
-RELAY_AGENT_ENV=provider-a=PROVIDER_A_AUTH_VALUE,provider-b=PROVIDER_B_AUTH_VALUE
-RELAY_AGENT_AUTH_ROOT=provider-a=/home/owner/.provider-a,provider-b=/home/owner/.provider-b
+RELAY_AGENT_ENV=<supported-provider>=AUTH_ENV_NAME
+RELAY_AGENT_AUTH_ROOT=<supported-provider>=/home/owner/.provider-auth
 ```
 
 Logged-in local sessions are the default and required discovery source for CLIs
-with a local status command. `RELAY_AGENT_ENV` is only an explicit mapping for
-an already-verified provider process; it does not make an unverified provider
-appear in the catalog. A CLI without a safe status command additionally needs
-an explicit `RELAY_AGENT_AUTH_ROOT`. The relay does not create, discover, or
+with a local status command. Replace `<supported-provider>` with a provider name
+actually advertised by the relay; provider labels are not operator-defined.
+`RELAY_AGENT_ENV` is only an explicit mapping for an already-verified provider
+process; it does not make an unverified provider appear in the catalog. A CLI
+without a safe status command additionally needs an explicit
+`RELAY_AGENT_AUTH_ROOT`. Delegation fallback uses a bounded metadata-only
+workspace snapshot and stops when it changes or cannot be completed safely.
+The relay does not create, discover, or
 recommend API keys. Known session directories are mounted narrowly when they
 are present; the rest of the runtime HOME remains unavailable to the
 subprocess.
 Only the named environment variables are copied into the matching provider
 process. Auth roots are mounted read-only one provider at a time. Docker and
-Tailscale sockets are never exposed to delegated agents, and the relay never
-generates host-level permission-bypass flags. Keep `RELAY_ALLOW_AGENT_NETWORK`
-disabled when provider CLIs use a local/mock backend.
+Tailscale sockets and sibling workspaces are never exposed to delegated agents,
+and terminal network permission does not enable agent network access. The relay
+never generates host-level permission-bypass flags. Keep
+`RELAY_ALLOW_AGENT_NETWORK` disabled when provider CLIs use a local/mock backend.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
@@ -234,8 +239,8 @@ ownership cannot be proven without introducing a persistence system.
 
 ## MCP tool profiles (Plan 045)
 
-The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a smaller routing/UX subset for deployments that opt into it and does not change the underlying authorization or filesystem boundaries.
+The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 31 common coding tools: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise MCP Tasks; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 32 common coding tools, including authenticated `agent_delegate` when a supported local CLI session is available: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.

@@ -57,29 +57,36 @@ If toolchains are installed under the home directory, allow only the required
 directories through `RELAY_TOOLCHAIN_PATH`. Do not copy the entire interactive
 shell PATH into the relay.
 
-For delegated coding providers, configure their executable directory. The
+For delegated coding providers, configure their executable directory. The public
+Primary fast path exposes delegation only when startup capability discovery
+finds at least one usable provider. The
 relay prefers the local CLI login already present for the operator and checks
-capability at startup. Provider labels are operator-defined; these examples
-use placeholders only for optional overrides:
+capability at startup. Provider labels are fixed by the relay; the placeholders
+below must be replaced with a provider name actually advertised by the live
+catalog:
 
 ```bash
 export RELAY_TOOLCHAIN_PATH="$HOME/.local/bin"
 export RELAY_ALLOW_AGENT_NETWORK=true
-export RELAY_AGENT_ENV='provider-a=PROVIDER_A_AUTH_VALUE,provider-b=PROVIDER_B_AUTH_VALUE'
-export RELAY_AGENT_AUTH_ROOT='provider-a=/home/owner/.provider-a,provider-b=/home/owner/.provider-b'
+export RELAY_AGENT_ENV='<supported-provider>=AUTH_ENV_NAME'
+export RELAY_AGENT_AUTH_ROOT='<supported-provider>=/home/owner/.provider-auth'
 ```
 
 `RELAY_AGENT_ENV` and `RELAY_AGENT_AUTH_ROOT` are explicit process/root
 configuration. They are not required for a normal local login when the CLI has
 a supported status command; a CLI without one needs the explicit auth-root
 mapping. The relay does not generate or infer API keys. Only authenticated or
-explicitly rooted providers are included in the live tool schema; restart
-after changing a CLI login.
+explicitly rooted providers are included in the live Full/Primary tool schema;
+restart after changing a CLI login.
 
 Delegation runs providers serially and falls back only for classified
-quota/authentication/availability failures. If a failed provider may have
-written to the workspace, fallback stops. The relay supplies bounded provider
-arguments inside Bubblewrap and never adds host-level permission-bypass flags.
+quota/authentication/availability failures. A bounded metadata-only snapshot
+covers the selected writable workspace; fallback stops when that snapshot
+changes or cannot be completed safely. Delegated providers do not
+receive sibling-workspace mounts, and agent network authorization remains
+independent from terminal network permission. The relay supplies bounded
+provider arguments inside Bubblewrap and never adds host-level
+permission-bypass flags.
 
 ## 3. Configure OAuth values
 
@@ -97,7 +104,7 @@ value must be present in the token audience.
 
 ## 4. Start the remote relay
 
-Use the repository's remote-relay launcher or an equivalent service definition:
+Use the repository's Primary fast-path remote-relay launcher or an equivalent reviewed service definition:
 
 ```bash
 export AI_TOOLS_BIN="$PWD/target/release/ai-tools"
@@ -107,7 +114,7 @@ scripts/phase36-start-remote-relay.sh
 The important effective arguments are:
 
 ```bash
-RELAY_TOOL_PROFILE=full \
+RELAY_TOOL_PROFILE=primary \
 ai-tools relay \
   --mode remote \
   --trusted-proxy \
@@ -121,8 +128,11 @@ ai-tools relay \
 ```
 
 The relay accepts forwarded HTTPS metadata only when the direct peer is in
-the explicitly trusted loopback CIDR. The Full profile is the canonical tool
-superset; choose Primary only when a deliberately smaller catalog is wanted.
+the explicitly trusted loopback CIDR. The repository launcher pins Primary for
+the public fast-path surface; authenticated `agent_delegate` remains available
+there when a supported local CLI session is detected. Full remains the
+canonical static superset for deployments that intentionally need the larger
+catalog.
 
 ## 5. Publish through an HTTPS edge
 

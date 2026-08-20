@@ -15,6 +15,7 @@ if rg -n -i 'chatgpt|openai|claude|codex|antigravity|gemini|cloudflare|keycloak|
 fi
 
 bash scripts/verify-file-edit.sh
+bash scripts/verify-workspace-docs.sh
 bash scripts/phase-039h-contract.sh
 
 python3 - "$root" <<'PY'
