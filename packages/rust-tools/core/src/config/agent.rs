@@ -120,6 +120,19 @@ pub(super) fn validate_env_entries(entries: &[String]) -> Result<(), RelayError>
     Ok(())
 }
 
+pub(super) fn validate_provider_allowlist(entries: &[String]) -> Result<(), RelayError> {
+    let unique = entries.iter().collect::<std::collections::HashSet<_>>();
+    if entries.len() > 3
+        || entries.iter().any(|entry| !valid_provider(entry))
+        || unique.len() != entries.len()
+    {
+        return Err(RelayError::InvalidConfig(
+            "agent-provider must contain unique supported provider names".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_auth_root_entries(
     entries: &[String],
     execution_root: &Path,

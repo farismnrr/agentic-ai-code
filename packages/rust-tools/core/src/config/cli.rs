@@ -148,6 +148,15 @@ pub struct Cli {
     )]
     pub toolchain_paths: Vec<String>,
 
+    /// Optional fail-closed provider allowlist. Empty means capability
+    /// discovery may consider all supported providers.
+    #[arg(
+        long = "agent-provider",
+        env = "RELAY_AGENT_PROVIDER_ALLOWLIST",
+        value_delimiter = ','
+    )]
+    pub agent_provider_allowlist: Vec<String>,
+
     /// Operator-approved provider environment mappings. Values are
     /// `provider=ENV_NAME`; only the named parent environment variable is
     /// copied into that provider's sandbox.

@@ -39,6 +39,13 @@ pub fn detect_agent_capabilities(config: &ServerConfig) -> AgentCapabilities {
         AgentProvider::Claude,
     ]
     .into_iter()
+    .filter(|provider| {
+        config.agent_provider_allowlist.is_empty()
+            || config
+                .agent_provider_allowlist
+                .iter()
+                .any(|allowed| allowed == provider.name())
+    })
     .filter(|provider| provider_is_available(config, *provider))
     .collect();
     AgentCapabilities { providers }

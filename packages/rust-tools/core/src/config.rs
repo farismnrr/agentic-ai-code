@@ -41,6 +41,10 @@ pub struct ServerConfig {
     pub allow_tailscale: bool,
     pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
+    /// Optional fail-closed provider allowlist for deployments where a local
+    /// CLI is installed but its current entitlement is unavailable.
+    #[serde(default)]
+    pub agent_provider_allowlist: Vec<String>,
     /// Operator-approved provider environment mappings (`provider=ENV_NAME`).
     pub agent_env_vars: Vec<String>,
     /// Operator-approved provider auth roots (`provider=/absolute/path`).
@@ -88,6 +92,7 @@ impl Default for ServerConfig {
             allow_tailscale: false,
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
+            agent_provider_allowlist: Vec::new(),
             agent_env_vars: Vec::new(),
             agent_auth_roots: Vec::new(),
             lsp_servers: Vec::new(),
@@ -363,6 +368,7 @@ impl ServerConfig {
             }
         }
         agent::validate_lsp_entries(&self.lsp_servers)?;
+        agent::validate_provider_allowlist(&self.agent_provider_allowlist)?;
         agent::validate_env_entries(&self.agent_env_vars)?;
         let execution_root = self.resolved_execution_root()?;
         agent::validate_auth_root_entries(&self.agent_auth_roots, &execution_root)?;
@@ -440,6 +446,7 @@ impl From<&Cli> for ServerConfig {
             allow_tailscale: cli.allow_tailscale,
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
+            agent_provider_allowlist: cli.agent_provider_allowlist.clone(),
             agent_env_vars: cli.agent_env_vars.clone(),
             agent_auth_roots: cli.agent_auth_roots.clone(),
             lsp_servers: cli.lsp_servers.clone(),

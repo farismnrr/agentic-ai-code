@@ -23,6 +23,16 @@ AI_TOOLS_BIN=/home/<owner>/.local/bin/ai-tools
 
 If a different installation path is used, update the systemd environment override to match it before restarting the relay.
 
+When the service has the full-tools.conf drop-in, that drop-in is the
+authoritative binary override and the service intentionally runs the Full
+catalog. Keep AI_TOOLS_BIN in that drop-in synchronized with the installed
+release; the repository remote launcher itself pins Primary, but a systemd
+Full-profile override is a deliberate deployment choice. If EnvironmentFile
+and a drop-in both define AI_TOOLS_BIN, verify the actual post-restart process
+with readlink -f on /proc/MAIN_PID/exe, where MAIN_PID comes from systemctl
+--user show. A daemon reload updates unit metadata; only a restart replaces
+the running process environment and executable.
+
 ## systemd user service
 
 The service is managed as a user unit:
@@ -58,8 +68,11 @@ The three capability flags are independent:
 - `RELAY_ALLOW_HOST_GITHUB_AUTH=true` lets ordinary terminal sandboxes reuse the owner's existing GitHub CLI and Git user configuration through narrow read-only mounts. It does not unmask the whole home directory.
 - `RELAY_ALLOW_TERMINAL_NETWORK=true` permits network access for ordinary sandboxed terminal commands.
 - `RELAY_ALLOW_AGENT_NETWORK=true` permits network access for delegated coding CLI processes. Terminal network permission alone does not grant delegated-agent network access.
+- `RELAY_AGENT_PROVIDER_ALLOWLIST=codex,agy` is an optional fail-closed deployment allowlist. Use it when a provider binary is installed and its local login status succeeds but the provider entitlement still rejects real headless execution; an empty value lets capability discovery consider all supported providers.
 
 Only enable these flags on a trusted single-owner development relay. Generic credential stores, SSH keys, cloud credentials, and unrelated protected paths remain outside the intended credential bridge.
+
+Delegated provider auth roots stay host-read-only. Bubblewrap presents them as temporary overlays so a CLI can create transient session/cache state without writing back to the host credential directory. Provider-specific toolchain symlink directories must be listed in `RELAY_TOOLCHAIN_PATH` alongside their canonical reviewed roots when the CLI is installed behind a version-manager alias.
 
 ## Reload and restart
 

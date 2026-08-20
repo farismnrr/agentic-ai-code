@@ -8,7 +8,7 @@ use relay_interfaces::mcp::{
 };
 use serde_json::{json, Value};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -75,6 +75,7 @@ fn runtime_fixture() -> (PathBuf, PathBuf, ServerConfig) {
     let workspace = root.join("workspace");
     let sibling = root.join("sibling");
     let bin = workspace.join("bin");
+    let toolchain_link = root.join("toolchain-link");
     let codex_auth = workspace.join("auth-codex");
     let claude_auth = workspace.join("auth-claude");
     for path in [&workspace, &sibling, &bin, &codex_auth, &claude_auth] {
@@ -100,7 +101,7 @@ fi
 mode=""
 for arg in "$@"; do
   case "$arg" in
-    fallback-test|mutation-test|timeout-test|network-test|sibling-test) mode="$arg" ;;
+    fallback-test|mutation-test|timeout-test|network-test|auth-write-test|sibling-test) mode="$arg" ;;
   esac
 done
 case "$mode" in
@@ -125,6 +126,11 @@ case "$mode" in
     printf 'network-checked\n'
     exit 0
     ;;
+  auth-write-test)
+    printf 'ephemeral-auth-write\n' > '{}'
+    printf 'auth-write-checked\n'
+    exit 0
+    ;;
   sibling-test)
     if [ -e '{}' ]; then
       : > sibling-visible
@@ -138,7 +144,8 @@ case "$mode" in
     ;;
 esac
 "#,
-            sibling_secret.display()
+            sibling_secret.display(),
+            codex_auth.join("provider-write").display()
         ),
     );
     write_executable(
@@ -171,12 +178,13 @@ case "$mode" in
 esac
 "#,
     );
+    symlink(&bin, &toolchain_link).unwrap();
 
     let config = ServerConfig {
         dir: Some(root.to_string_lossy().into_owned()),
         execution_root: Some(root.to_string_lossy().into_owned()),
         tool_profile: ToolProfile::Primary,
-        toolchain_paths: vec![bin.to_string_lossy().into_owned()],
+        toolchain_paths: vec![toolchain_link.to_string_lossy().into_owned()],
         agent_auth_roots: vec![
             format!("codex={}", codex_auth.display()),
             format!("claude={}", claude_auth.display()),
@@ -201,6 +209,11 @@ async fn runtime_acceptance() {
     assert_eq!(fallback.exit_code, Some(0));
     assert!(workspace.join("fallback-ran").is_file());
     assert_eq!(result_json(&fallback)["fallback_used"], true);
+
+    let auth_write = run_agent(&config, &workspace, &["codex"], "auth-write-test", 5_000).await;
+    assert_eq!(auth_write.state, JobState::Completed);
+    assert_eq!(auth_write.exit_code, Some(0));
+    assert!(!workspace.join("auth-codex/provider-write").exists());
 
     let mutation = run_agent(
         &config,

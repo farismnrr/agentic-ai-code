@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
+#[path = "sandbox_mounts.rs"]
+mod sandbox_mounts;
 use tokio::process::{Child, Command};
 
 #[derive(Clone, Copy)]
@@ -191,7 +193,7 @@ fn spawn_with_profile(
         WorkspaceAccess::ReadOnly => "--ro-bind",
         WorkspaceAccess::Writable => "--bind",
     };
-    let mut args = base_bwrap_args(&home, root_bind, &root);
+    let mut args = sandbox_mounts::base_bwrap_args(&home, root_bind, &root);
     if matches!(profile.network_access, NetworkAccess::Isolated) {
         args.push("--unshare-net".into());
     }
@@ -210,8 +212,34 @@ fn spawn_with_profile(
         let configured = PathBuf::from(path);
         let canonical = std::fs::canonicalize(&configured)
             .map_err(|_| std::io::Error::other("invalid toolchain path"))?;
-        let value = canonical.to_string_lossy().into_owned();
-        args.extend(["--ro-bind".into(), value.clone(), value]);
+        let canonical_value = canonical.to_string_lossy().into_owned();
+        args.extend([
+            "--ro-bind".into(),
+            canonical_value.clone(),
+            canonical_value.clone(),
+        ]);
+        // Executable resolution preserves the configured path so shims keep
+        // their argv[0] semantics. Mount the configured symlink directory at
+        // that same path as well as its canonical target; otherwise a
+        // provider such as fnm-managed Codex resolves successfully during
+        // capability discovery but is absent from the Bubblewrap namespace.
+        let configured_value = configured.to_string_lossy().into_owned();
+        if configured != canonical {
+            if configured.starts_with(&host_home) {
+                sandbox_mounts::add_bwrap_parent_dirs(&mut args, configured.parent(), &host_home);
+                args.extend([
+                    "--symlink".into(),
+                    canonical_value.clone(),
+                    configured_value,
+                ]);
+            } else {
+                args.extend([
+                    "--ro-bind".into(),
+                    canonical_value.clone(),
+                    configured_value,
+                ]);
+            }
+        }
         if let Some(toolchain_root) = super::toolchain::reviewed_root(&canonical) {
             let value = toolchain_root.to_string_lossy().into_owned();
             args.extend(["--ro-bind".into(), value.clone(), value]);
@@ -258,7 +286,17 @@ fn spawn_with_profile(
             ));
         }
         let value = auth_root.to_string_lossy().into_owned();
-        args.extend(["--ro-bind".into(), value.clone(), value]);
+        // Provider CLIs commonly create transient session/cache files even
+        // in noninteractive mode. Keep the host auth root as the read-only
+        // lower layer and put writes in Bubblewrap's ephemeral tmp overlay;
+        // this preserves the provider session without granting host-side
+        // credential write access.
+        args.extend([
+            "--overlay-src".into(),
+            value.clone(),
+            "--tmp-overlay".into(),
+            value,
+        ]);
         add_protected_paths(&mut args, auth_root, true, false)?;
     }
     add_protected_paths(&mut args, sandbox_root, true, false)?;
@@ -455,27 +493,4 @@ fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error>
         }
     }
     Ok(protected)
-}
-
-fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<String> {
-    let mut args = Vec::with_capacity(32);
-    for p in ["/usr", "/lib"] {
-        args.extend(["--ro-bind".into(), p.into(), p.into()]);
-    }
-    for p in ["/lib64", "/etc", "/bin", "/sbin"] {
-        args.extend(["--ro-bind-try".into(), p.into(), p.into()]);
-    }
-    for (flag, p) in [("--dev", "/dev"), ("--proc", "/proc"), ("--tmpfs", "/tmp")] {
-        args.extend([flag.into(), p.into()]);
-    }
-    args.extend([
-        "--dir".into(),
-        home.into(),
-        root_bind.into(),
-        root.into(),
-        root.into(),
-        "--unshare-pid".into(),
-        "--die-with-parent".into(),
-    ]);
-    args
 }
