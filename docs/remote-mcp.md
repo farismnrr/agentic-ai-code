@@ -87,6 +87,10 @@ receive sibling-workspace mounts, and agent network authorization remains
 independent from terminal network permission. The relay supplies bounded
 provider arguments inside Bubblewrap and never adds host-level
 permission-bypass flags.
+When delegation completes successfully, its structured result includes the
+provider's bounded final stdout in `output` (maximum 64 KiB), with
+credential-shaped values redacted and applicable truncation/redaction
+indicators. It does not expose hidden chain-of-thought.
 
 ## 3. Configure OAuth values
 

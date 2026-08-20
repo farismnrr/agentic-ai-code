@@ -9,6 +9,7 @@ use super::sandbox;
 use super::{InvocationProgram, ToolInvocation};
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
+use relay_core::redaction::redact_credentials;
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::Serialize;
 use serde_json::Value;
@@ -20,6 +21,7 @@ const MAX_PROMPT_BYTES: usize = 65_536;
 const MAX_PROVIDERS: usize = 3;
 const MAX_TURNS: u64 = 50;
 const MAX_TIMEOUT_MS: u64 = 600_000;
+const MAX_RESULT_OUTPUT_BYTES: usize = 64 * 1024;
 #[derive(Debug, Clone)]
 pub(super) struct AgentRequest {
     pub prompt: String,
@@ -45,6 +47,16 @@ struct AgentResult {
     attempts: Vec<AttemptSummary>,
     workspace_changed: bool,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    output_truncated: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    output_redacted: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 pub(super) fn build_request(
@@ -185,6 +197,9 @@ pub(super) async fn run_agent_job(
                 attempts,
                 workspace_changed: false,
                 message: "delegation cancelled; no fallback was attempted".into(),
+                output: None,
+                output_truncated: false,
+                output_redacted: false,
             };
             return Ok(ProcessResult::cancelled(result, stdout, stderr).await);
         }
@@ -228,12 +243,17 @@ pub(super) async fn run_agent_job(
                 outcome: "completed",
                 exit_code: Some(exit_code),
             });
+            let (output, output_truncated, output_redacted) =
+                bounded_provider_output(&provider_stdout);
             let result = AgentResult {
                 provider: Some(provider.name()),
                 fallback_used,
                 attempts,
                 workspace_changed: false,
                 message: "delegation completed".into(),
+                output: Some(output),
+                output_truncated,
+                output_redacted,
             };
             return Ok(ProcessResult::completed(result, stdout, stderr, exit_code).await);
         }
@@ -244,6 +264,9 @@ pub(super) async fn run_agent_job(
                 attempts,
                 workspace_changed: false,
                 message: "delegation cancelled; no fallback was attempted".into(),
+                output: None,
+                output_truncated: false,
+                output_redacted: false,
             };
             return Ok(ProcessResult::cancelled(result, stdout, stderr).await);
         }
@@ -259,6 +282,9 @@ pub(super) async fn run_agent_job(
                 attempts,
                 workspace_changed: false,
                 message: "delegation timed out; no fallback was attempted".into(),
+                output: None,
+                output_truncated: false,
+                output_redacted: false,
             };
             return Ok(ProcessResult::timed_out(result, stdout, stderr).await);
         }
@@ -307,6 +333,9 @@ pub(super) async fn run_agent_job(
                 attempts,
                 workspace_changed: true,
                 message: "automatic fallback stopped because the failed provider may have changed the workspace".into(),
+                output: None,
+                output_truncated: false,
+                output_redacted: false,
             };
             return Ok(ProcessResult::failed(result, stdout, stderr).await);
         }
@@ -319,6 +348,9 @@ pub(super) async fn run_agent_job(
         attempts,
         workspace_changed: false,
         message: format!("all selected providers failed ({last_class:?})"),
+        output: None,
+        output_truncated: false,
+        output_redacted: false,
     };
     Ok(ProcessResult::failed(result, stdout, stderr).await)
 }
@@ -327,6 +359,28 @@ fn result_text(result: AgentResult) -> ToolCallResult {
     let text = serde_json::to_string(&result)
         .unwrap_or_else(|_| "{\"message\":\"delegation result could not be serialized\"}".into());
     ToolCallResult::error(vec![ToolResultContent { kind: "text", text }])
+}
+
+fn bounded_provider_output(value: &str) -> (String, bool, bool) {
+    let redacted = redact_credentials(value);
+    let output_redacted = redacted != value;
+    if redacted.len() <= MAX_RESULT_OUTPUT_BYTES {
+        return (redacted, false, output_redacted);
+    }
+
+    let marker = "\n[provider output truncated]";
+    let available = MAX_RESULT_OUTPUT_BYTES.saturating_sub(marker.len());
+    let mut end = 0;
+    for (index, character) in redacted.char_indices() {
+        let next = index + character.len_utf8();
+        if next > available {
+            break;
+        }
+        end = next;
+    }
+    let mut output = redacted[..end].to_owned();
+    output.push_str(marker);
+    (output, true, output_redacted)
 }
 
 impl ProcessResult {

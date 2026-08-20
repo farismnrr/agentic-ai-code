@@ -137,6 +137,9 @@ workspace rather than every authorized sibling root. Fallback is allowed only
 for classified quota/rate-limit, authentication, or provider-unavailable
 errors; if the bounded metadata snapshot detects a selected-workspace change or cannot
 prove the snapshot complete, fallback stops.
+On success, the structured result also includes the completed provider's final
+stdout as bounded `output` (maximum 64 KiB); credential-shaped values are
+redacted and truncation/redaction indicators are included when applicable.
 
 Local login sessions are required for providers with a status command. A
 provider without a safe status command must have an explicit auth-root

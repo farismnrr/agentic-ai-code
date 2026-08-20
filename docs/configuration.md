@@ -125,6 +125,10 @@ process; it does not make an unverified provider appear in the catalog. A CLI
 without a safe status command additionally needs an explicit
 `RELAY_AGENT_AUTH_ROOT`. Delegation fallback uses a bounded metadata-only
 workspace snapshot and stops when it changes or cannot be completed safely.
+Successful delegation results include the completed provider's bounded final
+stdout in `output` (maximum 64 KiB); credential-shaped values are redacted and
+the response indicates when output was redacted or truncated. This is provider
+output, not hidden chain-of-thought.
 The relay does not create, discover, or
 recommend API keys. Known session directories are mounted narrowly when they
 are present; the rest of the runtime HOME remains unavailable to the

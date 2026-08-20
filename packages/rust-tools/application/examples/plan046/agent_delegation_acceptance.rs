@@ -101,7 +101,7 @@ fi
 mode=""
 for arg in "$@"; do
   case "$arg" in
-    fallback-test|mutation-test|timeout-test|network-test|auth-write-test|sibling-test) mode="$arg" ;;
+    fallback-test|mutation-test|timeout-test|network-test|auth-write-test|sibling-test|result-test|large-result-test) mode="$arg" ;;
   esac
 done
 case "$mode" in
@@ -136,6 +136,19 @@ case "$mode" in
       : > sibling-visible
     fi
     printf 'sibling-checked\n'
+    exit 0
+    ;;
+  result-test)
+    printf 'provider=codex\nbranch=fixture-branch\nREADME=true\ntoken=fixture-secret\n'
+    exit 0
+    ;;
+  large-result-test)
+    i=0
+    while [ "$i" -lt 70000 ]; do
+      printf x
+      i=$((i + 1))
+    done
+    printf '\n'
     exit 0
     ;;
   *)
@@ -228,6 +241,28 @@ async fn runtime_acceptance() {
     assert!(workspace.join("ignored.txt").is_file());
     assert!(!workspace.join("mutation-fallback-ran").exists());
     assert_eq!(result_json(&mutation)["workspace_changed"], true);
+
+    let result = run_agent(&config, &workspace, &["codex"], "result-test", 5_000).await;
+    assert_eq!(result.state, JobState::Completed);
+    assert_eq!(result.exit_code, Some(0));
+    let result_value = result_json(&result);
+    let output = result_value["output"].as_str().expect("provider output");
+    assert!(output.contains("provider=codex"));
+    assert!(output.contains("branch=fixture-branch"));
+    assert!(output.contains("README=true"));
+    assert!(output.contains("token=[REDACTED]"));
+    assert!(!output.contains("fixture-secret"));
+    assert_eq!(result_value["output_redacted"], true);
+    assert_eq!(result_value.get("output_truncated"), None);
+
+    let large_result = run_agent(&config, &workspace, &["codex"], "large-result-test", 5_000).await;
+    let large_result_value = result_json(&large_result);
+    let large_output = large_result_value["output"]
+        .as_str()
+        .expect("bounded provider output");
+    assert!(large_output.len() <= 64 * 1024);
+    assert!(large_output.ends_with("[provider output truncated]"));
+    assert_eq!(large_result_value["output_truncated"], true);
 
     let timeout = run_agent(&config, &workspace, &["codex"], "timeout-test", 100).await;
     assert_eq!(timeout.state, JobState::TimedOut);
