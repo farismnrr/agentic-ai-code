@@ -1,6 +1,6 @@
 # Plan 049 — Live relay host authentication and provider acceptance
 
-Status: IN PROGRESS
+Status: BLOCKED — authenticated remote MCP owner token unavailable
 
 ## Objective
 
@@ -46,6 +46,13 @@ provider capability and delegation evidence without exposing credentials.
   the current MCP connector supplies an owner token; absent external OAuth
   authority is reported as an exact unproven condition rather than a pass.
 - Human deployment documentation and canonical memory remain synchronized.
+
+## Closure evidence and external blocker
+
+- The final deployed release hash is `db6e0cd248c2f86b742a4c42446de7059b6f72044e13fe51a7c3d23893466364`; systemd is active and its process executable matches `/home/farismnrr/.local/bin/ai-tools`.
+- The live local MCP path proved authenticated `gh` status, a read-only GitHub repository query, Full catalog provider enum `[codex, agy]`, and successful delegation for the two allowed providers with no workspace change. The excluded provider is absent from the deployment allowlist after its real headless invocation was rejected by the provider organization entitlement.
+- The public remote edge and OAuth challenge pass, but authenticated remote `server/discover`/`tools/list` and remote delegated smoke remain unproven because this session has no owner OAuth access token or connected authenticated MCP client. No token was fabricated or read from unrelated credentials.
+- This external authorization gap is the sole remaining Definition-of-Done blocker; rerun the authenticated remote MCP acceptance after supplying the owner token through the approved MCP connector, then change this status only if those live checks pass.
 
 ## Closeout
 
