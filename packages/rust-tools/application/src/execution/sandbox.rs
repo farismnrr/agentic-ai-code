@@ -26,6 +26,7 @@ struct SandboxProfile<'a> {
     network_access: NetworkAccess,
     expose_optional_sockets: bool,
     expose_runtime_extras: bool,
+    expose_host_auth: bool,
     workspace_root: Option<&'a Path>,
 }
 
@@ -63,6 +64,7 @@ pub(super) fn spawn(
             network_access,
             expose_optional_sockets: writable && invocation.expose_optional_sockets,
             expose_runtime_extras: writable,
+            expose_host_auth: true,
             workspace_root: None,
         },
     )
@@ -96,6 +98,7 @@ pub(crate) fn spawn_lsp(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
+            expose_host_auth: false,
             workspace_root: Some(&cwd),
         },
     )
@@ -129,6 +132,7 @@ pub(crate) fn spawn_hook(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
+            expose_host_auth: false,
             workspace_root: Some(&cwd),
         },
     )
@@ -263,7 +267,7 @@ fn spawn_with_profile(
             &mut args,
             &execution_root,
             false,
-            profile.expose_runtime_extras && config.allow_host_github_auth,
+            profile.expose_host_auth && config.allow_host_github_auth,
         )?;
     }
     let _ = config.ensure_workspaces_initialized();
@@ -283,7 +287,7 @@ fn spawn_with_profile(
     }
     // Apply this reviewed exception after the generic protected-path masks so
     // the explicit operator opt-in wins only for the host GitHub/Git paths.
-    if profile.expose_runtime_extras && config.allow_host_github_auth {
+    if profile.expose_host_auth && config.allow_host_github_auth {
         super::host_auth::add_host_github_auth(&mut args, &host_home)?;
     }
     if let Some(cwd) = &invocation.cwd {
