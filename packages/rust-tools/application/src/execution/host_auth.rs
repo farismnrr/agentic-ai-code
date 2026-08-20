@@ -24,6 +24,10 @@ pub(crate) fn add_host_github_auth(
     Ok(())
 }
 
+pub(crate) fn skip_protected_mask(root: &Path, path: &Path, enabled: bool) -> bool {
+    enabled && path == root.join(".config/gh")
+}
+
 fn add_read_only_home_path(
     args: &mut Vec<String>,
     host_home: &Path,
@@ -53,6 +57,26 @@ fn add_read_only_home_path(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn github_auth_opt_in_skips_only_exact_host_gh_mask() {
+        let root = Path::new("/home/example");
+        assert!(skip_protected_mask(
+            root,
+            Path::new("/home/example/.config/gh"),
+            true,
+        ));
+        assert!(!skip_protected_mask(
+            root,
+            Path::new("/home/example/.ssh"),
+            true,
+        ));
+        assert!(!skip_protected_mask(
+            root,
+            Path::new("/home/example/.config/gh"),
+            false,
+        ));
+    }
 
     #[test]
     fn mounts_only_reviewed_git_config_paths() {

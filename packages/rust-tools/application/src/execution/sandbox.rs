@@ -255,11 +255,16 @@ fn spawn_with_profile(
         }
         let value = auth_root.to_string_lossy().into_owned();
         args.extend(["--ro-bind".into(), value.clone(), value]);
-        add_protected_paths(&mut args, auth_root, true)?;
+        add_protected_paths(&mut args, auth_root, true, false)?;
     }
-    add_protected_paths(&mut args, sandbox_root, true)?;
+    add_protected_paths(&mut args, sandbox_root, true, false)?;
     if sandbox_root != execution_root {
-        add_protected_paths(&mut args, &execution_root, false)?;
+        add_protected_paths(
+            &mut args,
+            &execution_root,
+            false,
+            profile.expose_runtime_extras && config.allow_host_github_auth,
+        )?;
     }
     let _ = config.ensure_workspaces_initialized();
     if invocation.expose_authorized_siblings {
@@ -271,7 +276,7 @@ fn spawn_with_profile(
                 {
                     let val = ws.to_string_lossy().into_owned();
                     args.extend([root_bind.into(), val.clone(), val]);
-                    add_protected_paths(&mut args, &ws, false)?;
+                    add_protected_paths(&mut args, &ws, false, false)?;
                 }
             }
         }
@@ -369,6 +374,7 @@ fn add_protected_paths(
     args: &mut Vec<String>,
     execution_root: &Path,
     recursive: bool,
+    expose_host_github_auth: bool,
 ) -> Result<(), std::io::Error> {
     let paths = if recursive {
         discover_protected_paths(execution_root)?
@@ -376,6 +382,9 @@ fn add_protected_paths(
         relay_core::protected_paths::protected_paths(execution_root).collect()
     };
     for path in paths {
+        if super::host_auth::skip_protected_mask(execution_root, &path, expose_host_github_auth) {
+            continue;
+        }
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
             continue;
         };
