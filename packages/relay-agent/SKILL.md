@@ -11,7 +11,7 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
 - **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
-- **Tools:** 50 total — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation (`git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, branch/stage/commit/merge/rebase/conflict primitives), credential-isolated remote Git (`git_remote_*`, `git_fetch`, `git_push`), forge-neutral change-request lifecycle (`change_request_*`, initially backed by GitHub/`gh`), and bounded LSP-backed code tools (`code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`).
+- **Tools:** Full currently exposes 101 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, bounded alert/workflow tools, and `agent_delegate`. Primary is the intentional 32-tool fast-path subset and includes capability-filtered `agent_delegate`. The exact static catalog contract is frozen under `.agents/contracts/`.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
 
@@ -108,7 +108,7 @@ For security-sensitive relay/MCP changes, also run applicable local checks, typi
 ```bash
 cargo audit
 bash scripts/phase4-black-box.sh
-bash scripts/phase7-chatgpt-contract.sh
+Run the applicable remote-client contract acceptance script under `scripts/`.
 bash scripts/phase-039c-contract.sh
 bash scripts/phase8-zero-bypass.sh
 ```
@@ -124,7 +124,7 @@ This deterministic fixture exercises framing, correlation, lifecycle, capability
 
 The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
 
-Live external ChatGPT/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
+Live external-client/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
 
 ## Durable design context
 
@@ -138,8 +138,21 @@ All plans through 029b were explicitly closed for a planning refresh. Current 03
 
 ## MCP tool profiles (Plan 045)
 
-The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a ChatGPT routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
+The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 31 common coding tools: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise MCP Tasks; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 32 common coding tools: capability-filtered `agent_delegate`, short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
 
-A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where ChatGPT Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.
+A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.
+
+Plan 046 adds the `agent_delegate` tool for operator-installed coding
+CLIs. Plan 048 adds startup capability discovery: locally authenticated
+sessions are preferred, the live provider schema omits unavailable CLIs, and a
+restart refreshes login/logout state. Each adapter uses its documented
+headless interface; explicit environment mappings remain an opt-in fallback,
+but never make an unverified provider visible; they are not a generated or
+inferred API-key path. Serial fallback is limited to
+quota, authentication, or availability failures; a bounded metadata-only
+snapshot covers the selected writable workspace and any change or incomplete
+snapshot stops fallback. Provider network and non-default auth roots remain opt-in relay
+configuration, independent from terminal network permission. Permission-bypass flags are never generated, and delegated
+work remains inside the existing Bubblewrap boundary.

@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix="relay-file-edit-") as base:
  ws=os.path.join(base,"ws"); ext=os.path.join(base,"ext"); os.makedirs(ws); os.makedirs(ext)
  def put(name,text,mode=0o640):
   p=os.path.join(ws,name); open(p,"w",encoding="utf8").write(text); os.chmod(p,mode); return p
- one=put("one.txt","alpha βeta gamma\n"); multi=put("multi.txt","x x x\n"); amb=put("amb.txt","dup dup\n"); same=put("same.txt","stable\n"); over=put("over.txt","a"*(1024*1024+1))
+ one=put("one.txt","alpha βeta gamma\n"); multi=put("multi.txt","x x x\n"); amb=put("amb.txt","dup dup\n"); same=put("same.txt","stable\n"); batch=put("batch.txt","first = 1\nsecond = 2\nthird = 3\n"); preflight=put("preflight.txt","keep this\nchange this\n"); over=put("over.txt","a"*(1024*1024+1))
  canary=os.path.join(ext,"CANARY-EXTERNAL-038.txt"); open(canary,"w").write("external")
  os.symlink(canary,os.path.join(ws,"external-link.txt")); os.symlink(ext,os.path.join(ws,"external-parent"))
  pnum=port(); p=subprocess.Popen([relay,"relay","--port",str(pnum),"--dir",ws,"--execution-root",ws,"--origin",O,"--mode","local"],cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -34,6 +34,9 @@ with tempfile.TemporaryDirectory(prefix="relay-file-edit-") as base:
   url=f"http://127.0.0.1:{pnum}/mcp"
   before=stat.S_IMODE(os.stat(one).st_mode); x=call(url,{"path":"one.txt","old_text":"βeta","new_text":"BETA"}); assert x=={"path":"one.txt","replacements":1,"changed":True}; assert open(one).read()=="alpha BETA gamma\n"; assert stat.S_IMODE(os.stat(one).st_mode)==before
   x=call(url,{"path":"multi.txt","old_text":"x","new_text":"y","replace_all":True}); assert x["replacements"]==3 and open(multi).read()=="y y y\n"
+  x=call(url,{"path":"batch.txt","edits":[{"old_text":"first = 1","new_text":"first = 10"},{"old_text":"third = 3","new_text":"third = 30"}]}); assert x=={"path":"batch.txt","replacements":2,"changed":True}; assert open(batch).read()=="first = 10\nsecond = 2\nthird = 30\n"
+  original=open(preflight).read(); err(url,{"path":"preflight.txt","edits":[{"old_text":"keep this","new_text":"changed"},{"old_text":"missing","new_text":"still missing"}]}); assert open(preflight).read()==original
+  original=open(batch).read(); err(url,{"path":"batch.txt","edits":[{"old_text":"first = 10","new_text":"x"},{"old_text":"first = 10\nsecond","new_text":"y"}]}); assert open(batch).read()==original
   original=open(amb).read(); err(url,{"path":"amb.txt","old_text":"dup","new_text":"z"}); assert open(amb).read()==original
   err(url,{"path":"amb.txt","old_text":"missing","new_text":"z"}); assert open(amb).read()==original
   x=call(url,{"path":"same.txt","old_text":"stable","new_text":"stable"}); assert x["changed"] is False and open(same).read()=="stable\n"

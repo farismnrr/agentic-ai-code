@@ -35,16 +35,10 @@ NUXT_SMTP_PASSWORD
 NUXT_SMTP_FROM
 ```
 
-Optional application OAuth login uses:
+Optional application OAuth login uses the provider-specific client ID and
+secret variables documented in `.env.example`.
 
-```text
-NUXT_OAUTH_GOOGLE_CLIENT_ID
-NUXT_OAUTH_GOOGLE_CLIENT_SECRET
-NUXT_OAUTH_GITHUB_CLIENT_ID
-NUXT_OAUTH_GITHUB_CLIENT_SECRET
-```
-
-These are unrelated to the Keycloak configuration used by the remote MCP relay. See [authentication.md](authentication.md).
+These are unrelated to the Authorization Server configuration used by the remote MCP relay. See [authentication.md](authentication.md).
 
 ## First-party remote MCP configuration
 
@@ -92,7 +86,10 @@ RELAY_COMPLETED_JOB_TTL_MS
 RELAY_MAX_RETAINED_OUTPUT_BYTES
 RELAY_MAX_RUNNING_JOBS
 RELAY_ALLOW_TERMINAL_NETWORK
+RELAY_ALLOW_AGENT_NETWORK
 RELAY_TOOLCHAIN_PATH
+RELAY_AGENT_ENV
+RELAY_AGENT_AUTH_ROOT
 RELAY_ALLOW_DOCKER
 RELAY_DOCKER_SOCKET
 RELAY_ALLOW_TAILSCALE
@@ -106,6 +103,38 @@ Terminal subprocesses use an isolated network namespace by default. Set `RELAY_A
 Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories appended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit and prevents unrelated user PATH entries from silently becoming agent capabilities.
+
+The capability-filtered `agent_delegate` tool runs operator-installed coding CLIs in the
+same Bubblewrap boundary. The CLIs must be reachable through the reviewed safe
+PATH (for example, `RELAY_TOOLCHAIN_PATH=$HOME/.local/bin`). At relay startup,
+each supported CLI is checked for a usable local login session. The live tool
+Full and Primary live catalogs advertise delegation only for providers that
+pass this check; restart the relay after logging in or out.
+
+```text
+RELAY_ALLOW_AGENT_NETWORK=true
+RELAY_AGENT_ENV=<supported-provider>=AUTH_ENV_NAME
+RELAY_AGENT_AUTH_ROOT=<supported-provider>=/home/owner/.provider-auth
+```
+
+Logged-in local sessions are the default and required discovery source for CLIs
+with a local status command. Replace `<supported-provider>` with a provider name
+actually advertised by the relay; provider labels are not operator-defined.
+`RELAY_AGENT_ENV` is only an explicit mapping for an already-verified provider
+process; it does not make an unverified provider appear in the catalog. A CLI
+without a safe status command additionally needs an explicit
+`RELAY_AGENT_AUTH_ROOT`. Delegation fallback uses a bounded metadata-only
+workspace snapshot and stops when it changes or cannot be completed safely.
+The relay does not create, discover, or
+recommend API keys. Known session directories are mounted narrowly when they
+are present; the rest of the runtime HOME remains unavailable to the
+subprocess.
+Only the named environment variables are copied into the matching provider
+process. Auth roots are mounted read-only one provider at a time. Docker and
+Tailscale sockets and sibling workspaces are never exposed to delegated agents,
+and terminal network permission does not enable agent network access. The relay
+never generates host-level permission-bypass flags. Keep
+`RELAY_ALLOW_AGENT_NETWORK` disabled when provider CLIs use a local/mock backend.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
@@ -210,8 +239,8 @@ ownership cannot be proven without introducing a persistence system.
 
 ## MCP tool profiles (Plan 045)
 
-The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a ChatGPT routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
+The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 31 common coding tools: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise MCP Tasks; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 32 common coding tools, including authenticated `agent_delegate` when a supported local CLI session is available: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
 
-A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where ChatGPT Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.
+A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.

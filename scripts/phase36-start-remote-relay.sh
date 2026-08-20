@@ -82,8 +82,10 @@ else
 fi
 
 # This repository wrapper is the ChatGPT-facing remote deployment path. Pin
-# it to Primary explicitly, even if a caller inherited Full, while keeping
-# the Rust CLI's Full default intact for direct/local and other deployments.
+# it to Primary explicitly, even if a caller inherited Full. Capabilities that
+# need the public fast path (such as authenticated delegation) are promoted
+# explicitly instead of widening the endpoint; the Rust CLI keeps Full as its
+# default for direct/local and other deployments.
 export RELAY_TOOL_PROFILE=primary
 
 exec "$ai_tools_bin" relay \

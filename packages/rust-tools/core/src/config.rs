@@ -6,6 +6,7 @@
 //! `RELAY_AGENT_ORIGIN`), and a `stop --port <port>` subcommand.
 use crate::error::RelayError;
 use serde::{Deserialize, Serialize};
+mod agent;
 mod cli;
 pub use cli::{Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
@@ -33,11 +34,16 @@ pub struct ServerConfig {
     pub max_retained_output_bytes: usize,
     pub max_running_jobs: usize,
     pub allow_terminal_network: bool,
+    pub allow_agent_network: bool,
     pub allow_docker: bool,
     pub docker_socket: String,
     pub allow_tailscale: bool,
     pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
+    /// Operator-approved provider environment mappings (`provider=ENV_NAME`).
+    pub agent_env_vars: Vec<String>,
+    /// Operator-approved provider auth roots (`provider=/absolute/path`).
+    pub agent_auth_roots: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
     pub enable_agent_hooks: bool,
@@ -74,11 +80,14 @@ impl Default for ServerConfig {
             max_retained_output_bytes: 1_048_576,
             max_running_jobs: 16,
             allow_terminal_network: false,
+            allow_agent_network: false,
             allow_docker: false,
             docker_socket: "/var/run/docker.sock".into(),
             allow_tailscale: false,
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
+            agent_env_vars: Vec::new(),
+            agent_auth_roots: Vec::new(),
             lsp_servers: Vec::new(),
             enable_agent_hooks: false,
             agent_hooks_config: None,
@@ -351,8 +360,10 @@ impl ServerConfig {
                 ));
             }
         }
-        validate_lsp_server_entries(&self.lsp_servers)?;
+        agent::validate_lsp_entries(&self.lsp_servers)?;
+        agent::validate_env_entries(&self.agent_env_vars)?;
         let execution_root = self.resolved_execution_root()?;
+        agent::validate_auth_root_entries(&self.agent_auth_roots, &execution_root)?;
         let workspace = std::fs::canonicalize(self.resolved_dir()?).map_err(|_| {
             RelayError::InvalidConfig("workspace directory cannot be resolved".into())
         })?;
@@ -389,45 +400,6 @@ impl ServerConfig {
     }
 }
 
-fn validate_lsp_server_entries(entries: &[String]) -> Result<(), RelayError> {
-    if entries.len() > 16 {
-        return Err(RelayError::InvalidConfig(
-            "at most 16 lsp-server mappings may be configured".into(),
-        ));
-    }
-    let mut languages = std::collections::HashSet::new();
-    for entry in entries {
-        let Some((language, executable)) = entry.split_once('=') else {
-            return Err(RelayError::InvalidConfig(
-                "lsp-server must use language=executable syntax".into(),
-            ));
-        };
-        let valid_language = !language.is_empty()
-            && language.len() <= 64
-            && language.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
-            });
-        let valid_executable = !executable.is_empty()
-            && executable.len() <= 128
-            && !executable.contains('/')
-            && !executable.contains('\\')
-            && executable.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
-            });
-        if !valid_language || !valid_executable {
-            return Err(RelayError::InvalidConfig(
-                "lsp-server language/executable contains unsupported characters".into(),
-            ));
-        }
-        if !languages.insert(language.to_ascii_lowercase()) {
-            return Err(RelayError::InvalidConfig(
-                "lsp-server language is configured more than once".into(),
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn dirs_home() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .filter(|s| !s.is_empty())
@@ -459,11 +431,14 @@ impl From<&Cli> for ServerConfig {
             max_retained_output_bytes: cli.max_retained_output_bytes,
             max_running_jobs: cli.max_running_jobs,
             allow_terminal_network: cli.allow_terminal_network,
+            allow_agent_network: cli.allow_agent_network,
             allow_docker: cli.allow_docker,
             docker_socket: cli.docker_socket.clone(),
             allow_tailscale: cli.allow_tailscale,
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
+            agent_env_vars: cli.agent_env_vars.clone(),
+            agent_auth_roots: cli.agent_auth_roots.clone(),
             lsp_servers: cli.lsp_servers.clone(),
             enable_agent_hooks: cli.enable_agent_hooks,
             agent_hooks_config: cli.agent_hooks_config.clone(),

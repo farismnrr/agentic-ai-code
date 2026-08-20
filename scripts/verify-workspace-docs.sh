@@ -2,20 +2,21 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 catalog="$root/.agents/contracts/029-tool-catalog-v1.json"
-chatgpt="$root/docs/chatgpt.md"
+client_docs=(
+  "$root/docs/mcp-client.md"
+  "$root/docs/getting-started.md"
+  "$root/docs/configuration.md"
+)
 rust_readme="$root/packages/rust-tools/README.md"
 root_readme="$root/README.md"
-troubleshooting="$root/docs/troubleshooting.md"
 
 command -v jq >/dev/null
 for name in directory_list file_search text_search file_read file_edit file_write terminal_exec http_fetch web_search terminal_job_start terminal_job_get terminal_job_cancel; do
   jq -e --arg name "$name" 'any(.[]; .name == $name)' "$catalog" >/dev/null
-  rg -q "${name}" "$chatgpt"
+  rg -q "${name}" "${client_docs[@]}"
 done
 
 test "$(jq 'length' "$catalog")" = "12"
-rg -q 'A healthy current relay exposes 12 tools' "$chatgpt"
-rg -q 'current relay exposes 12 tools' "$troubleshooting"
 for name in directory_list file_search text_search file_read file_edit file_write; do
   rg -q "${name}" "$root_readme"
   rg -q "${name}" "$rust_readme"

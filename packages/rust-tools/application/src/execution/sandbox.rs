@@ -46,7 +46,10 @@ pub(super) fn spawn(
     invocation: &ToolInvocation,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
-    let network_access = if invocation.allow_network || config.allow_terminal_network {
+    // Network authority is translated into each invocation by its owning
+    // request path. Do not OR terminal policy into unrelated subprocesses:
+    // delegated agents have a separate operator-controlled network capability.
+    let network_access = if invocation.allow_network {
         NetworkAccess::Host
     } else {
         NetworkAccess::Isolated
@@ -58,7 +61,7 @@ pub(super) fn spawn(
         SandboxProfile {
             workspace_access,
             network_access,
-            expose_optional_sockets: writable,
+            expose_optional_sockets: writable && invocation.expose_optional_sockets,
             expose_runtime_extras: writable,
             workspace_root: None,
         },
@@ -83,6 +86,10 @@ pub(crate) fn spawn_lsp(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
+            environment: Vec::new(),
+            auth_roots: Vec::new(),
+            expose_optional_sockets: false,
+            expose_authorized_siblings: false,
         },
         SandboxProfile {
             workspace_access: WorkspaceAccess::ReadOnly,
@@ -112,6 +119,10 @@ pub(crate) fn spawn_hook(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
+            environment: Vec::new(),
+            auth_roots: Vec::new(),
+            expose_optional_sockets: false,
+            expose_authorized_siblings: false,
         },
         SandboxProfile {
             workspace_access,
@@ -231,20 +242,37 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    for auth_root in &invocation.auth_roots {
+        if !auth_root.is_absolute()
+            || auth_root == &host_home
+            || !auth_root.starts_with(&host_home)
+            || !auth_root.is_dir()
+            || relay_core::protected_paths::is_protected_path(&host_home, auth_root)
+        {
+            return Err(std::io::Error::other(
+                "agent auth root is outside the approved runtime-home boundary",
+            ));
+        }
+        let value = auth_root.to_string_lossy().into_owned();
+        args.extend(["--ro-bind".into(), value.clone(), value]);
+        add_protected_paths(&mut args, auth_root, true)?;
+    }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false)?;
     }
     let _ = config.ensure_workspaces_initialized();
-    if let Ok(guard) = config.workspaces.read() {
-        for ws in guard.all_roots() {
-            if ws != sandbox_root
-                && ws != host_home
-                && !relay_core::protected_paths::is_protected_path(&execution_root, &ws)
-            {
-                let val = ws.to_string_lossy().into_owned();
-                args.extend([root_bind.into(), val.clone(), val]);
-                add_protected_paths(&mut args, &ws, false)?;
+    if invocation.expose_authorized_siblings {
+        if let Ok(guard) = config.workspaces.read() {
+            for ws in guard.all_roots() {
+                if ws != sandbox_root
+                    && ws != host_home
+                    && !relay_core::protected_paths::is_protected_path(&execution_root, &ws)
+                {
+                    let val = ws.to_string_lossy().into_owned();
+                    args.extend([root_bind.into(), val.clone(), val]);
+                    add_protected_paths(&mut args, &ws, false)?;
+                }
             }
         }
     }
@@ -272,6 +300,9 @@ fn spawn_with_profile(
         .kill_on_drop(true);
     if let Some(rustup_home) = rustup_home {
         command.env("RUSTUP_HOME", rustup_home);
+    }
+    for (name, value) in &invocation.environment {
+        command.env(name, value);
     }
     match (profile.workspace_root.is_some(), cargo_home) {
         (true, _) => {

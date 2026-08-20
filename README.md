@@ -8,7 +8,7 @@ It gives an authenticated user one place to:
 - organize conversations by workspace;
 - connect MCP servers and tools;
 - execute coding tasks through a sandboxed native relay;
-- use the same OAuth-protected MCP relay from the web app, ChatGPT, or another compatible MCP client;
+- use the same OAuth-protected MCP relay from the web app or any compatible MCP client;
 - observe application and relay behavior through OpenTelemetry-compatible telemetry.
 
 The project is deliberately split into two trust zones: the **web application** owns chat, users, persistence, providers, and MCP orchestration, while **`ai-tools relay`** owns native command execution and its Linux/Bubblewrap security boundary.
@@ -21,9 +21,9 @@ The human/operator documentation lives in [`docs/`](docs/README.md):
 - [Architecture](docs/architecture.md) — how the Nuxt app, MCP layer, Rust relay, OAuth, and tunnel fit together
 - [Configuration](docs/configuration.md) — runtime environment and security-sensitive settings
 - [Authentication](docs/authentication.md) — AI Code login versus remote MCP OAuth
-- [Keycloak](docs/keycloak.md) — configure an external Authorization Server for the MCP relay
+- [OAuth/OIDC provider](docs/oauth-provider.md) — configure an external Authorization Server for the MCP relay
 - [Remote MCP deployment](docs/remote-mcp.md) — run the relay safely and expose it through an outbound HTTPS tunnel
-- [Connect ChatGPT](docs/chatgpt.md) — connect the public MCP endpoint and verify tool access
+- [Connect an MCP client](docs/mcp-client.md) — connect the public MCP endpoint and verify tool access
 - [Development](docs/development.md) — repository workflow and validation
 - [Releases](docs/releases.md) — build and publish web + CLI releases from `main`
 - [Troubleshooting](docs/troubleshooting.md) — common setup, OAuth, relay, and Docker issues
@@ -42,7 +42,7 @@ The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-
 
 - workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
 - Git inspection and bounded local mutation: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, branch/stage/commit/merge/rebase/conflict primitives;
-- remote Git and forge delivery: validated remote discovery/fetch/push/branch cleanup plus forge-neutral change-request list/get/create/update/checks/merge backed by the GitHub adapter;
+- remote Git and forge delivery: validated remote discovery/fetch/push/branch cleanup plus forge-neutral change-request list/get/create/update/checks/merge backed by a reviewed forge adapter;
 - LSP code intelligence: `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`;
 - execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
 - web: `http_fetch`, `web_search`.
@@ -73,7 +73,7 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - normal Nuxt development port: **3333**
 - integration/release branch: **`main`**
 - implementation work: dedicated feature branch → PR → `main`
-- no GitHub Actions CI workflow and no unit-test suite by project policy
+- no hosted CI workflow and no unit-test suite by project policy
 - every normal local commit must pass `pnpm verify:commit`, including architecture and maintainability-budget enforcement
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.

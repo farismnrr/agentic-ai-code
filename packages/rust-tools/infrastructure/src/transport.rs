@@ -84,6 +84,10 @@ pub(super) use relay_interfaces::mcp::CODING_SCOPE;
 /// token when admitted; it does not consume tokens while it remains active.
 pub struct AppState {
     pub config: ServerConfig,
+    /// Provider sessions discovered once at startup. This snapshot keeps
+    /// `tools/list` deterministic during a relay lifetime; restart after a
+    /// local login/logout to refresh it.
+    pub agent_capabilities: relay_application::execution::agent::AgentCapabilities,
     pub jobs: std::sync::Arc<relay_application::execution::JobManager>,
     /// Bounded, per-workspace LSP session manager backing the public
     /// `code_*` code-intelligence tools (Plan 039C). Constructed once per
@@ -107,6 +111,17 @@ pub struct AppState {
     /// server. Never accept authorization-server URLs or PKCE parameters from
     /// MCP tool arguments.
     pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
+}
+
+impl AppState {
+    pub fn tool_for_name(&self, name: &str) -> Option<relay_interfaces::mcp::Tool> {
+        let providers = self.agent_capabilities.names();
+        relay_interfaces::mcp::find_tool_for_profile_and_agent_providers(
+            name,
+            self.config.tool_profile,
+            &providers,
+        )
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -181,6 +196,7 @@ pub fn create_router_with_jobs_and_hooks(
     });
     let state = Arc::new(AppState {
         config: config.clone(),
+        agent_capabilities: relay_application::execution::agent::detect_agent_capabilities(&config),
         jobs,
         lsp,
         hooks,
