@@ -65,6 +65,7 @@ Important:
 - User-managed toolchains are opt-in through repeated `--toolchain-path` flags (or `RELAY_TOOLCHAIN_PATH`); the relay never inherits an arbitrary parent `PATH`.
 - LSP executables are operator-approved through repeated `--lsp-server language=executable` (or `RELAY_LSP_SERVER`) entries. The executable is resolved only from the relay safe PATH/toolchain directories; repository files cannot replace it or provide command arguments. The public `code_*` MCP tools use that bounded substrate; unsupported server capabilities fail distinctly rather than being fabricated.
 - The owner-home Bubblewrap namespace masks common credential stores (`.ssh`, cloud credentials, Docker/Kubernetes credentials, and common token files). Review the exact deployment policy before relying on a command that needs one of them.
+- A trusted single-owner relay may opt into `RELAY_ALLOW_HOST_GITHUB_AUTH=true`, which re-exposes only the host GitHub CLI config and Git user config read-only to ordinary terminal sandboxes. This is narrower than unmasking HOME; network permission remains a separate opt-in.
 
 Default port: `47821`.
 

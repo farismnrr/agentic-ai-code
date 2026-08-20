@@ -276,6 +276,11 @@ fn spawn_with_profile(
             }
         }
     }
+    // Apply this reviewed exception after the generic protected-path masks so
+    // the explicit operator opt-in wins only for the host GitHub/Git paths.
+    if profile.expose_runtime_extras && config.allow_host_github_auth {
+        super::host_auth::add_host_github_auth(&mut args, &host_home)?;
+    }
     if let Some(cwd) = &invocation.cwd {
         args.extend(["--chdir".into(), cwd.to_string_lossy().into_owned()]);
     }

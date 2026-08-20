@@ -16,6 +16,7 @@ mod agent_capabilities;
 mod agent_policy;
 mod agent_snapshot;
 mod dispatch;
+mod host_auth;
 mod paths;
 mod process;
 mod requests;

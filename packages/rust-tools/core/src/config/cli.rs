@@ -109,6 +109,12 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ALLOW_AGENT_NETWORK", default_value_t = false)]
     pub allow_agent_network: bool,
 
+    /// Expose the owner's GitHub CLI and Git user configuration read-only to
+    /// ordinary terminal sandboxes. This is an explicit trust expansion for
+    /// single-owner development relays; protected credentials remain masked.
+    #[arg(long, env = "RELAY_ALLOW_HOST_GITHUB_AUTH", default_value_t = false)]
+    pub allow_host_github_auth: bool,
+
     /// Explicit local-development access to a host Docker daemon socket.
     /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
