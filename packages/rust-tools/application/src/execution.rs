@@ -11,6 +11,12 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{watch, Mutex, Semaphore};
 use tokio::time::{timeout, Duration};
 use uuid::Uuid;
+pub mod agent;
+mod agent_capabilities;
+mod agent_policy;
+mod agent_snapshot;
+mod dispatch;
+mod paths;
 mod process;
 mod requests;
 pub(crate) mod sandbox;
@@ -29,6 +35,15 @@ struct ToolInvocation {
     cwd: Option<PathBuf>,
     timeout_ms: u64,
     allow_network: bool,
+    environment: Vec<(String, String)>,
+    auth_roots: Vec<PathBuf>,
+    expose_optional_sockets: bool,
+    expose_authorized_siblings: bool,
+}
+
+enum JobKind {
+    Process(ToolInvocation),
+    Agent(agent::AgentRequest),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
@@ -183,7 +198,7 @@ impl JobManager {
         })
     }
 
-    async fn start(self: &Arc<Self>, invocation: ToolInvocation) -> Result<String, McpError> {
+    async fn start(self: &Arc<Self>, job: JobKind) -> Result<String, McpError> {
         self.expire_completed().await;
         let mut jobs = self.jobs.lock().await;
         let mut completed = jobs
@@ -246,7 +261,7 @@ impl JobManager {
         let manager = Arc::clone(self);
         let job_id = id.clone();
         tokio::spawn(async move {
-            process::run_job(manager, job_id, invocation, receiver, stdout, stderr).await;
+            process::run_job(manager, job_id, job, receiver, stdout, stderr).await;
         });
         Ok(id)
     }
@@ -356,31 +371,7 @@ fn now_ms() -> u128 {
         .as_millis()
 }
 pub fn tool_call_supports_tasks(tool: &Tool, arguments: &Value) -> bool {
-    let catalog_support = tool
-        .execution
-        .as_ref()
-        .and_then(|execution| execution.get("taskSupport"))
-        .and_then(Value::as_str)
-        .is_some_and(|support| matches!(support, "optional" | "required"));
-    if !catalog_support {
-        return false;
-    }
-    if tool.name != "http_fetch" {
-        return true;
-    }
-
-    // A lost tools/call response can leave the caller without the task id.
-    // Until a later remote-mutation plan adds request-level idempotency/dedup,
-    // only read-like HTTP calls may outlive that initial request safely.
-    matches!(
-        arguments
-            .get("method")
-            .and_then(Value::as_str)
-            .unwrap_or("GET")
-            .to_ascii_uppercase()
-            .as_str(),
-        "GET" | "HEAD" | "OPTIONS"
-    )
+    dispatch::supports_tasks(tool, arguments)
 }
 
 pub async fn start_tool_task(
@@ -394,17 +385,20 @@ pub async fn start_tool_task(
             "tool does not support task execution".into(),
         ));
     }
-    let invocation = match tool.name {
-        "terminal_exec" => requests::build_terminal_exec_invocation(arguments, config)?,
-        "http_fetch" => requests::build_http_fetch_invocation(arguments)?,
-        "web_search" => requests::build_web_search_invocation(arguments),
+    let job = match tool.name {
+        "terminal_exec" => {
+            JobKind::Process(requests::build_terminal_exec_invocation(arguments, config)?)
+        }
+        "http_fetch" => JobKind::Process(requests::build_http_fetch_invocation(arguments)?),
+        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)),
+        "agent_delegate" => JobKind::Agent(agent::build_request(arguments, config)?),
         _ => {
             return Err(McpError::InvalidRequest(
                 "tool task execution is not implemented".into(),
             ))
         }
     };
-    manager.start(invocation).await
+    manager.start(job).await
 }
 
 pub async fn start_terminal_job(
@@ -413,7 +407,9 @@ pub async fn start_terminal_job(
     manager: &Arc<JobManager>,
 ) -> Result<String, McpError> {
     manager
-        .start(requests::build_terminal_exec_invocation(arguments, config)?)
+        .start(JobKind::Process(requests::build_terminal_invocation(
+            arguments, config, false,
+        )?))
         .await
 }
 
@@ -480,13 +476,16 @@ pub async fn dispatch_tool_call(
         return requests::run_text_search(arguments, config).await;
     }
 
-    let invocation = match tool.name {
-        "terminal_exec" => requests::build_terminal_exec_invocation(arguments, config)?,
-        "http_fetch" => requests::build_http_fetch_invocation(arguments)?,
-        "web_search" => requests::build_web_search_invocation(arguments),
+    let job = match tool.name {
+        "terminal_exec" => {
+            JobKind::Process(requests::build_terminal_exec_invocation(arguments, config)?)
+        }
+        "http_fetch" => JobKind::Process(requests::build_http_fetch_invocation(arguments)?),
+        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)),
+        "agent_delegate" => JobKind::Agent(agent::build_request(arguments, config)?),
         _ => return Ok(ToolCallResult::not_implemented(tool.name)),
     };
-    let id = manager.start(invocation).await?;
+    let id = manager.start(job).await?;
     let snapshot = manager.wait(&id).await?;
     Ok(snapshot.result.unwrap_or_else(|| {
         ToolCallResult::error(vec![ToolResultContent {

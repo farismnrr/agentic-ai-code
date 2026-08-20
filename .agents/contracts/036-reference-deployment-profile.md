@@ -98,10 +98,11 @@ Start with:
 scripts/phase36-start-remote-relay.sh
 ```
 
-The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=primary` for
-the external MCP client-facing remote relay, overriding an inherited profile so an
-accidental `full` setting cannot widen that surface. The Rust CLI's `full`
-default remains the canonical superset for direct and other deployments.
+The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=primary` for the
+external MCP client-facing remote relay, overriding an inherited `full` setting so the
+client keeps the reviewed fast-path catalog. Primary deliberately includes the
+capability-filtered `agent_delegate` tool without widening to the Full catalog;
+the Rust CLI keeps `full` as the canonical default for direct and other deployments.
 
 That wrapper launches the existing binary equivalent of:
 

@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(workspace.join(".env"), "SECRET_TOKEN_ABC=do_not_leak\n")?;
     fs::write(workspace.join(".env.local"), "SECRET_LOCAL=do_not_leak\n")?;
 
-    let config = ServerConfig {
+    let mut config = ServerConfig {
         dir: Some(workspace.to_string_lossy().into_owned()),
         execution_root: Some(boundary.path.to_string_lossy().into_owned()),
         ..Default::default()
@@ -162,10 +162,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 3: Background terminal_job lifecycle and cancellation
     // -------------------------------------------------------------
     println!("\n[3/5] Testing terminal_job lifecycle...");
+    config.tool_profile = relay_core::config::ToolProfile::Primary;
 
-    // 3.1 Successful job
+    // 3.1 Successful long-running-capable job. Primary terminal_exec is capped at
+    // 30s, but terminal_job_start is the explicit escape hatch and must accept a
+    // larger bounded timeout while preserving the same sandbox/argv validation.
     let task_id = start_terminal_job(
-        &json!({ "command": "sh", "args": ["-c", "printf 'async-output-456'"] }),
+        &json!({ "command": "sh", "args": ["-c", "printf 'async-output-456'"], "timeout_ms": 60_000 }),
         &config,
         &jobs,
     )

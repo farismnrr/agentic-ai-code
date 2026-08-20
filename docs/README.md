@@ -7,15 +7,15 @@ If you are setting up a fresh installation, follow the pages in this order:
 1. **[Getting started](getting-started.md)** — prerequisites, database, `.env`, install, migrations, and first run.
 2. **[Configuration](configuration.md)** — understand the environment variables before exposing anything externally.
 3. **[Authentication](authentication.md)** — distinguish AI Code's own user login from the OAuth boundary used by the remote MCP relay.
-4. **[Keycloak](keycloak.md)** — configure the external OAuth/OIDC Authorization Server used by the relay.
+4. **[OAuth/OIDC provider](oauth-provider.md)** — configure the external Authorization Server used by the relay.
 5. **[Remote MCP deployment](remote-mcp.md)** — start `ai-tools relay` in remote mode and publish it through an outbound HTTPS tunnel.
-6. **[Connect external MCP client](external-mcp.md)** — add the public MCP endpoint in external MCP client and verify discovery/tool execution.
+6. **[Connect an MCP client](mcp-client.md)** — add the public MCP endpoint to any compatible client and verify discovery/tool execution.
 
 Reference pages:
 
 - **[Architecture](architecture.md)** — trust boundaries and request flows.
 - **[Development](development.md)** — repository workflow, maintainability guardrails, local verification, branches, and targeted acceptance scripts.
-- **[Releases](releases.md)** — versioning, artifacts, GHCR, and GitHub Release publication.
+- **[Releases](releases.md)** — versioning and release artifact publication.
 - **[Troubleshooting](troubleshooting.md)** — common setup and runtime failures.
 
 ## Documentation boundaries

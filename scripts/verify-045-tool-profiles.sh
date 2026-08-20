@@ -8,6 +8,9 @@ rg -q 'tool_profile: ToolProfile::Full' packages/rust-tools/core/src/config.rs
 rg -q 'ToolProfile::Full' packages/rust-tools/infrastructure/src/transport/tools.rs
 rg -q 'tool_catalog_for_profile' packages/rust-tools/infrastructure/src/transport/mcp_http.rs
 test -x scripts/fixtures/verify-045-relay-profile.sh
+# The external MCP client-facing wrapper must narrow an inherited Full profile back to the
+# reviewed Primary fast path; agent delegation is promoted explicitly instead
+# of widening the endpoint.
 RELAY_TOOL_PROFILE=full \
 REMOTE_MCP_URL='https://mcp.example.com/mcp' \
 OAUTH_ISSUER='https://auth.example.com/' \

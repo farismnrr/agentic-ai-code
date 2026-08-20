@@ -69,18 +69,18 @@ Expected. The relay intentionally does not expose `/var/run/docker.sock`.
 
 Run Docker-dependent operations—such as `pnpm release:publish`—from a trusted host shell with Docker configured. Do not use sudo/socket mounts/privileged-container tricks to bypass the relay boundary.
 
-## Public MCP `/health` works but external MCP client cannot connect
+## Public MCP `/health` works but a client cannot connect
 
 A healthy tunnel is only the first layer. Check in order:
 
 1. `/.well-known/oauth-protected-resource/mcp` returns the expected resource and Authorization Server.
 2. unauthenticated `server/discover` returns HTTP 401 with a Bearer challenge and `resource_metadata`.
-3. Keycloak/OIDC discovery advertises the exact issuer configured on the relay.
+3. OIDC discovery advertises the exact issuer configured on the relay.
 4. JWKS is reachable.
 5. issued token audience contains the exact `https://.../mcp` resource.
 6. token scope contains `relay.coding`.
 7. token `sub` matches `OAUTH_OWNER_SUBJECT`.
-8. the current external MCP client callback URI is allowlisted exactly.
+8. the callback URI supplied by the current client is allowlisted exactly.
 
 Use:
 
@@ -88,13 +88,15 @@ Use:
 REMOTE_MCP_URL='https://mcp.example.com/mcp' scripts/phase36-public-mcp-smoke.sh
 ```
 
-before debugging external MCP client UI behavior.
+before debugging client UI behavior.
 
-## external MCP client connects but shows an old tool catalog
+## A client connects but shows an old tool catalog
 
-The client may have cached/discovered an older MCP action snapshot. A current relay exposes 12 tools: six native workspace tools, `terminal_exec`, `http_fetch`, `web_search`, and the three `terminal_job_*` fallback tools.
-
-Refresh or recreate the connection and test from a fresh conversation before concluding the server is stale.
+The client may have cached/discovered an older MCP catalog. Refresh or recreate
+the connection and test from a fresh session before concluding the server is
+stale. The Full profile exposes the complete reviewed catalog; Primary is an
+intentional reduced profile. Confirm the deployed `RELAY_TOOL_PROFILE` before
+troubleshooting client-side visibility.
 
 ## Authenticated public smoke fails with 401/403
 
@@ -108,12 +110,15 @@ That can be the expected ownership guard. The private first-party relay token is
 
 A second user creating a row with the same URL must not inherit the owner's credential.
 
-## Release stays in GitHub Draft
+## Release stays in draft
 
-The release publisher intentionally publishes GitHub only after the GHCR web image succeeds. Verify Docker is available and rerun from clean tagged `main`:
+The release publisher intentionally publishes the release record only after
+the OCI web image succeeds. Verify Docker is available and rerun from clean
+tagged `main`:
 
 ```bash
 CI=true pnpm release:publish vX.Y.Z
 ```
 
-Do not manually publish the draft first if the intended release contract requires web + CLI to ship atomically.
+Do not manually publish the draft first if the intended release contract
+requires web + CLI to ship atomically.

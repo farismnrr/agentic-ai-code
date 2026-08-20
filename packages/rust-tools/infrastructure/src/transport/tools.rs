@@ -53,7 +53,7 @@ pub(super) async fn handle_tools_call(
             &McpError::InvalidParams("invalid tools/call parameters".to_string()),
         )
     })?;
-    let Some(tool) = mcp::find_tool_for_profile(&call.name, state.config.tool_profile) else {
+    let Some(tool) = state.tool_for_name(&call.name) else {
         return Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),

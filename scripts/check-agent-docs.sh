@@ -26,6 +26,7 @@ done
 # external tools, so references are intentionally outside this guidance scan.
 if grep -RInE \
   --exclude='check-agent-docs.sh' \
+  --exclude='039h-tool-catalog-v*.json' \
   --exclude-dir='.git' \
   --exclude-dir='node_modules' \
   --exclude-dir='.nuxt' \

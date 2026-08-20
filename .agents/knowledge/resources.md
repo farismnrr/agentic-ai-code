@@ -54,7 +54,7 @@ Do not confuse the Nuxt UI documentation MCP above with this application's own M
 - any current `031+` plan file if a new MCP effort has been opened;
 - [`../contracts/`](../contracts/) before changing client-visible frozen descriptors.
 
-Plan 030 is history, not current external MCP client integration status. External external MCP client/OAuth behavior must be re-verified when a future task depends on it.
+Plan 030 is history, not current external-client integration status. External OAuth behavior must be re-verified when a future task depends on it.
 
 ## Agentation — visual feedback
 

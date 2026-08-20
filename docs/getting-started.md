@@ -1,6 +1,6 @@
 # Getting started
 
-This page gets the web application and native tools running from source. Remote MCP/external MCP client setup comes later.
+This page gets the web application and native tools running from source. Remote MCP setup comes later.
 
 ## 1. Prerequisites
 
@@ -16,15 +16,15 @@ Install:
 Optional integrations have additional requirements:
 
 - SMTP for email verification/password reset;
-- Google/GitHub OAuth credentials for those application login methods;
+- OAuth credentials for optional application login methods;
 - Jaeger/Loki-compatible endpoints for telemetry;
-- Keycloak or another compatible OAuth/OIDC Authorization Server for remote MCP;
-- an outbound HTTPS tunnel such as Cloudflare Tunnel for public MCP access.
+- a compatible OAuth/OIDC Authorization Server for remote MCP;
+- an outbound HTTPS tunnel or reverse proxy for public MCP access.
 
 ## 2. Clone and install
 
 ```bash
-git clone https://github.com/farismnrr/ai-code.git
+git clone <repository-url>
 cd ai-code
 pnpm install
 ```
@@ -123,7 +123,7 @@ Install Bubblewrap, then from the repository root:
 
 The relay remains loopback-only. `--execution-root` is the hard maximum filesystem boundary; `--dir` is the primary authorized workspace. Additional projects beneath that execution boundary must be authorized explicitly with `workspace_add`, can be inspected with `workspace_list` / `workspace_get`, and can be revoked with `workspace_remove`. Setting both values to `$HOME` intentionally authorizes the whole home tree and therefore removes most of the value of explicit workspace allowlisting.
 
-For routine repository work, prefer the relay's native workspace tools: `directory_list` for structure, `file_search` for filename/glob discovery, `text_search` for source occurrences, `file_read` for bounded text ranges, `file_edit` for exact guarded replacement, and `file_write` for explicit create/full replacement. Use native Git tools for inspection plus bounded branch/stage/commit/merge/rebase/conflict workflows, native remote-Git tools for validated fetch/push/remote-branch operations, forge-neutral `change_request_*` tools for GitHub PR lifecycle work, and `apply_patch` for bounded multi-hunk source changes. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, and operations that still do not have a native contract; ordinary terminal execution remains credential-isolated and is not the GitHub delivery bridge. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
+For routine repository work, prefer the relay's native workspace tools: `directory_list` for structure, `file_search` for filename/glob discovery, `text_search` for source occurrences, `file_read` for bounded text ranges, `file_edit` for exact guarded replacement or several anchored edits, and `file_write` for explicit create/full replacement. Use native Git tools for inspection plus bounded branch/stage/commit/merge/rebase/conflict workflows, native remote-Git tools for validated fetch/push/remote-branch operations, forge-neutral `change_request_*` tools for change-request lifecycle work, and `apply_patch` for bounded multi-hunk source changes. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, and operations that still do not have a native contract; ordinary terminal execution remains credential-isolated. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
 
 When an operator configures an approved LSP server, prefer the bounded `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, and `code_rename_preview` tools over shell-driven source introspection. TypeScript/Vue support is opt-in, for example `--lsp-server typescript=typescript-language-server --lsp-server vue=vue-language-server` (or `RELAY_LSP_SERVER=typescript=typescript-language-server,vue=vue-language-server`) with those executables available through the reviewed safe PATH/toolchain paths. Without that registration, TypeScript/Vue `code_*` calls truthfully return `unsupported_language`. The relay also exposes bounded read-only repository resources for manifest/agent-guidance/status/HEAD context; those resources are server-owned views, not arbitrary file reads.
 
@@ -144,6 +144,6 @@ For trusted local debugging that needs Docker, add `--allow-docker` (or set `REL
 For public/remote tool access, continue with:
 
 1. [Authentication](authentication.md)
-2. [Keycloak](keycloak.md)
+2. [OAuth/OIDC provider](oauth-provider.md)
 3. [Remote MCP deployment](remote-mcp.md)
-4. [Connect external MCP client](external-mcp.md)
+4. [Connect an MCP client](mcp-client.md)

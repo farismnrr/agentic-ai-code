@@ -14,6 +14,13 @@ pub const MAX_FILE_EDIT_BYTES: usize = 1024 * 1024;
 const MAX_FILE_EDIT_TEXT_BYTES: usize = 256 * 1024;
 const MAX_FILE_EDIT_PATH_BYTES: usize = 4_096;
 const MAX_FILE_EDIT_CWD_BYTES: usize = 4_096;
+const MAX_FILE_EDIT_OPERATIONS: usize = 64;
+
+struct EditOperation {
+    old_text: String,
+    new_text: String,
+    replace_all: bool,
+}
 
 #[derive(Debug, Serialize)]
 pub struct FileEditResult {
@@ -27,29 +34,10 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| McpError::InvalidRequest("file edit path is required".into()))?;
-    let old_text = arguments
-        .get("old_text")
-        .and_then(Value::as_str)
-        .ok_or_else(|| McpError::InvalidRequest("file edit old_text is required".into()))?;
-    let new_text = arguments
-        .get("new_text")
-        .and_then(Value::as_str)
-        .ok_or_else(|| McpError::InvalidRequest("file edit new_text is required".into()))?;
-    let replace_all = arguments
-        .get("replace_all")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let operations = parse_edit_operations(arguments)?;
     if path.is_empty() || path.len() > MAX_FILE_EDIT_PATH_BYTES {
         return Err(McpError::InvalidRequest(
             "file edit path exceeds allowed bounds".into(),
-        ));
-    }
-    if old_text.is_empty()
-        || old_text.len() > MAX_FILE_EDIT_TEXT_BYTES
-        || new_text.len() > MAX_FILE_EDIT_TEXT_BYTES
-    {
-        return Err(McpError::InvalidRequest(
-            "file edit text exceeds allowed bounds".into(),
         ));
     }
     let cwd = arguments.get("cwd").and_then(Value::as_str);
@@ -93,22 +81,7 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
     }
     let source = String::from_utf8(bytes)
         .map_err(|_| McpError::InvalidRequest("file edit target is not valid UTF-8 text".into()))?;
-    let matches = source.match_indices(old_text).count();
-    if matches == 0 {
-        return Err(McpError::InvalidRequest(
-            "file edit text was not found".into(),
-        ));
-    }
-    if !replace_all && matches != 1 {
-        return Err(McpError::InvalidRequest(
-            "file edit text is ambiguous".into(),
-        ));
-    }
-    let updated = if replace_all {
-        source.replace(old_text, new_text)
-    } else {
-        source.replacen(old_text, new_text, 1)
-    };
+    let (updated, replacements) = apply_edit_operations(&source, &operations)?;
     if updated.len() > MAX_FILE_EDIT_BYTES {
         return Err(McpError::InvalidRequest(
             "file edit result exceeds maximum".into(),
@@ -122,9 +95,139 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
     }
     Ok(FileEditResult {
         path: path.to_owned(),
-        replacements: if replace_all { matches } else { 1 },
+        replacements,
         changed,
     })
+}
+
+fn parse_edit_operations(arguments: &Value) -> Result<Vec<EditOperation>, McpError> {
+    if let Some(edits) = arguments.get("edits") {
+        if arguments.get("old_text").is_some()
+            || arguments.get("new_text").is_some()
+            || arguments.get("replace_all").is_some()
+        {
+            return Err(McpError::InvalidRequest(
+                "file edit cannot mix edits with old_text/new_text".into(),
+            ));
+        }
+        let edits = edits
+            .as_array()
+            .ok_or_else(|| McpError::InvalidRequest("file edit edits must be an array".into()))?;
+        if edits.is_empty() || edits.len() > MAX_FILE_EDIT_OPERATIONS {
+            return Err(McpError::InvalidRequest(
+                "file edit operation count exceeds allowed bounds".into(),
+            ));
+        }
+        edits.iter().map(parse_edit_operation).collect()
+    } else {
+        let old_text = arguments
+            .get("old_text")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidRequest("file edit old_text is required".into()))?;
+        let new_text = arguments
+            .get("new_text")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidRequest("file edit new_text is required".into()))?;
+        let replace_all = arguments
+            .get("replace_all")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        validate_edit_text(old_text, new_text)?;
+        Ok(vec![EditOperation {
+            old_text: old_text.to_owned(),
+            new_text: new_text.to_owned(),
+            replace_all,
+        }])
+    }
+}
+
+fn parse_edit_operation(value: &Value) -> Result<EditOperation, McpError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| McpError::InvalidRequest("file edit operation must be an object".into()))?;
+    let old_text = object
+        .get("old_text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file edit old_text is required".into()))?;
+    let new_text = object
+        .get("new_text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest("file edit new_text is required".into()))?;
+    validate_edit_text(old_text, new_text)?;
+    let replace_all = object
+        .get("replace_all")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Ok(EditOperation {
+        old_text: old_text.to_owned(),
+        new_text: new_text.to_owned(),
+        replace_all,
+    })
+}
+
+fn validate_edit_text(old_text: &str, new_text: &str) -> Result<(), McpError> {
+    if old_text.is_empty()
+        || old_text.len() > MAX_FILE_EDIT_TEXT_BYTES
+        || new_text.len() > MAX_FILE_EDIT_TEXT_BYTES
+    {
+        return Err(McpError::InvalidRequest(
+            "file edit text exceeds allowed bounds".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn apply_edit_operations(
+    source: &str,
+    operations: &[EditOperation],
+) -> Result<(String, usize), McpError> {
+    let mut replacements = Vec::new();
+    for operation in operations {
+        let matches = source
+            .match_indices(&operation.old_text)
+            .map(|(start, _)| {
+                (
+                    start,
+                    start + operation.old_text.len(),
+                    operation.new_text.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+        if matches.is_empty() {
+            return Err(McpError::InvalidRequest(
+                "file edit text was not found".into(),
+            ));
+        }
+        if !operation.replace_all && matches.len() != 1 {
+            return Err(McpError::InvalidRequest(
+                "file edit text is ambiguous".into(),
+            ));
+        }
+        replacements.extend(if operation.replace_all {
+            matches
+        } else {
+            matches.into_iter().take(1).collect()
+        });
+    }
+    replacements.sort_by_key(|(start, end, _)| (*start, *end));
+    let mut previous_end = 0;
+    for (start, end, _) in &replacements {
+        if *start < previous_end {
+            return Err(McpError::InvalidRequest(
+                "file edit operations overlap".into(),
+            ));
+        }
+        previous_end = *end;
+    }
+    let mut updated = String::with_capacity(source.len());
+    let mut cursor = 0;
+    for (start, end, replacement) in &replacements {
+        updated.push_str(&source[cursor..*start]);
+        updated.push_str(replacement);
+        cursor = *end;
+    }
+    updated.push_str(&source[cursor..]);
+    Ok((updated, replacements.len()))
 }
 
 pub const MAX_FILE_WRITE_BYTES: usize = 1024 * 1024;
