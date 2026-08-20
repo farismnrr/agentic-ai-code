@@ -55,3 +55,7 @@ the final application boundary.
   authenticated remote discovery/delegation remains unavailable because no
   owner OAuth token was supplied. No token was fabricated or read from an
   unrelated credential source.
+- Implementation commit: `5c31d71bbf9006053bcaf340fbbb2763da4c39c8`; after the
+  closure-only documentation commit, local `fix/host-github-auth`, its
+  configured `origin` tracking ref, and `git ls-remote` all match the final
+  pushed HEAD.
