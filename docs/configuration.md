@@ -102,7 +102,7 @@ Terminal subprocesses use an isolated network namespace by default. Set `RELAY_A
 
 Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 
-`RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories appended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit and prevents unrelated user PATH entries from silently becoming agent capabilities.
+`RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories prepended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit, gives operator-selected runtimes precedence, and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
 The capability-filtered `agent_delegate` tool runs operator-installed coding CLIs in the
 same Bubblewrap boundary. The CLIs must be reachable through the reviewed safe
