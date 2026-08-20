@@ -81,6 +81,11 @@ else
   command -v "$ai_tools_bin" >/dev/null
 fi
 
+# This repository wrapper is the ChatGPT-facing remote deployment path. Pin
+# it to Primary explicitly, even if a caller inherited Full, while keeping
+# the Rust CLI's Full default intact for direct/local and other deployments.
+export RELAY_TOOL_PROFILE=primary
+
 exec "$ai_tools_bin" relay \
   --mode remote \
   --trusted-proxy \
