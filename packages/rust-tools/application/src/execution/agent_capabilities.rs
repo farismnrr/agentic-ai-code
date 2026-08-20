@@ -54,11 +54,12 @@ fn provider_is_available(config: &ServerConfig, provider: AgentProvider) -> bool
             return true;
         }
     }
-    // This CLI has no documented side-effect-free auth-status command. Only
-    // an explicit, narrow auth-root mapping can opt it into the catalog; an
-    // environment variable alone must never make an unverified provider look
-    // available.
-    provider == AgentProvider::Antigravity && config.has_explicit_agent_auth_root(provider.name())
+    // This CLI has no documented side-effect-free auth-status command. Treat
+    // a provider-specific local auth root as the capability proof, whether it
+    // came from an explicit operator mapping or one of the reviewed well-known
+    // session locations. Environment variables alone never advertise it.
+    provider == AgentProvider::Antigravity
+        && !config.agent_auth_roots_for(provider.name()).is_empty()
 }
 
 fn run_auth_probe(
