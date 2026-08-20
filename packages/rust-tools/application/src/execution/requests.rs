@@ -1,5 +1,4 @@
 //! Tool-specific request validation and invocation translation.
-
 use super::now_ms;
 use super::process::{drain_pipe, kill_process_group, OutputBuffer};
 use super::sandbox;
@@ -14,7 +13,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
-
 const MAX_EXEC_ARGS: usize = 100;
 const MAX_EXEC_ARG_BYTES: usize = 64 * 1024;
 const MAX_HTTP_HEADERS: usize = 100;
@@ -32,10 +30,17 @@ const TEXT_SEARCH_MAX_COLUMNS: usize = 1024;
 fn resolve_safe_executable(config: &ServerConfig, binary: &str) -> Result<PathBuf, McpError> {
     sandbox::resolve_safe_executable(config, binary)
 }
-
 pub(super) fn build_terminal_exec_invocation(
     arguments: &Value,
     config: &ServerConfig,
+) -> Result<ToolInvocation, McpError> {
+    build_terminal_invocation(arguments, config, true)
+}
+
+pub(super) fn build_terminal_invocation(
+    arguments: &Value,
+    config: &ServerConfig,
+    enforce_primary_exec_limit: bool,
 ) -> Result<ToolInvocation, McpError> {
     let command = arguments
         .get("command")
@@ -45,7 +50,8 @@ pub(super) fn build_terminal_exec_invocation(
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(config.default_terminal_timeout_ms);
-    if config.tool_profile == relay_core::config::ToolProfile::Primary
+    if enforce_primary_exec_limit
+        && config.tool_profile == relay_core::config::ToolProfile::Primary
         && (timeout_ms == 0 || timeout_ms > 30_000)
     {
         return Err(McpError::InvalidRequest(

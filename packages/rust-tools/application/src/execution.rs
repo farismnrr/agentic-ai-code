@@ -413,7 +413,9 @@ pub async fn start_terminal_job(
     manager: &Arc<JobManager>,
 ) -> Result<String, McpError> {
     manager
-        .start(requests::build_terminal_exec_invocation(arguments, config)?)
+        .start(requests::build_terminal_invocation(
+            arguments, config, false,
+        )?)
         .await
 }
 
