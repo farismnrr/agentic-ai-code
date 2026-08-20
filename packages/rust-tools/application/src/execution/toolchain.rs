@@ -24,7 +24,8 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
         "/sbin",
         "/bin",
     ];
-    let mut entries: Vec<PathBuf> = DEFAULT_PATHS.iter().map(PathBuf::from).collect();
+    let mut entries: Vec<PathBuf> = config.toolchain_paths.iter().map(PathBuf::from).collect();
+    entries.extend(DEFAULT_PATHS.iter().map(PathBuf::from));
     if let Ok(home) = super::sandbox::runtime_home() {
         for sub in [".cargo/bin", ".local/bin"] {
             let dir = home.join(sub);
@@ -32,9 +33,6 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
                 entries.push(dir);
             }
         }
-    }
-    for p in &config.toolchain_paths {
-        entries.push(std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p)));
     }
     entries
 }

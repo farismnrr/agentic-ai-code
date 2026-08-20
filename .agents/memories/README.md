@@ -77,6 +77,7 @@ Durable final rules:
 - The `ai-tools relay` production execution boundary is Linux + Bubblewrap + non-root runtime + explicit execution root.
 - Filesystem containment is OS-namespace based; do not replace Bubblewrap with fragile shell/path parsing.
 - Preserve one authoritative process-safety path: sibling binary resolution, bwrap mounts, execution root, env clearing, safe PATH, output bounds, timeout grace/kill, and process-group cleanup.
+- Explicit relay toolchain directories are prepended to the safe PATH. This precedence is required so an operator-allowlisted runtime/provider is not shadowed by a default-path symlink whose canonical target falls outside the reviewed safe roots.
 - Local relay mode is loopback-oriented. Remote mode is an OAuth Resource Server, not an Authorization Server.
 - Local relay access still requires a configured exact browser Origin allowlist, but a non-browser MCP client may omit `Origin`; the mandatory loopback `Host` check remains the DNS-rebinding boundary. Additional local Host authorities are explicit exact host+optional-port entries via `--allowed-host`/`RELAY_ALLOWED_HOSTS`; missing ports do not imply arbitrary ports. When local access is denied, log only the check plus bounded Origin/configured-Origin/Host values—never auth material.
 - Remote auth preserves admission-before-expensive-work, trusted-proxy HTTPS policy, asymmetric JWKS verification, issuer/audience/time/signature checks, owner binding, and `relay.coding` scope.
