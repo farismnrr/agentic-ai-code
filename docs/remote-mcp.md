@@ -69,9 +69,16 @@ export AI_TOOLS_BIN="$PWD/target/release/ai-tools"
 scripts/phase36-start-remote-relay.sh
 ```
 
+This repository wrapper is the external MCP client-facing remote deployment path and
+explicitly supplies `RELAY_TOOL_PROFILE=primary`, overriding any inherited
+profile so an accidental `full` setting cannot widen the external MCP client surface. The
+Rust CLI still defaults to `full`, preserving the canonical superset for direct
+and other deployments.
+
 The wrapper fixes the trusted proxy CIDR to IPv4 loopback and is equivalent to the important parts of:
 
 ```bash
+RELAY_TOOL_PROFILE=primary \
 ai-tools relay \
   --mode remote \
   --trusted-proxy \
