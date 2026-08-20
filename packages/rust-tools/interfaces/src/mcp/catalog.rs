@@ -1,3 +1,5 @@
+mod agent;
+mod file_edit;
 mod forge;
 
 use relay_core::error::McpError;
@@ -88,6 +90,7 @@ pub fn tool_catalog() -> Vec<Tool> {
             security_schemes: coding_security_scheme(),
             execution: Some(json!({ "taskSupport": "optional" })),
         },
+        agent::tool(),
         Tool {
             name: "http_fetch",
             title: Some("HTTP Fetch"),
@@ -222,29 +225,7 @@ pub fn tool_catalog() -> Vec<Tool> {
             security_schemes: coding_security_scheme(),
             execution: None,
         },
-        Tool {
-            name: "file_edit",
-            title: Some("File Edit"),
-            description: "Atomically replace an exact UTF-8 text occurrence in an existing contained regular file. By default exactly one match is required; replace_all=true replaces every match. Final symlinks, ambiguous matches, stale entry identity, oversized content, and root escapes fail before commit.",
-            input_schema: json!({
-                "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "old_text": { "type": "string", "minLength": 1, "maxLength": 262144 },
-                    "new_text": { "type": "string", "maxLength": 262144 },
-                    "replace_all": { "type": "boolean", "default": false }
-                },
-                "required": ["path", "old_text", "new_text"],
-                "additionalProperties": false
-            }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
+        file_edit::tool(),
         Tool {
             name: "file_read",
             title: Some("File Read"),
@@ -457,10 +438,41 @@ pub fn tool_catalog_for_profile(profile: relay_core::config::ToolProfile) -> Vec
     }
 }
 
+/// Build the live full-profile catalog with only provider sessions that
+/// passed application-level capability discovery. The static `tool_catalog`
+/// remains the canonical superset used by frozen contract snapshots.
+pub fn tool_catalog_for_profile_and_agent_providers(
+    profile: relay_core::config::ToolProfile,
+    providers: &[&str],
+) -> Vec<Tool> {
+    let mut tools = tool_catalog_for_profile(profile);
+    if profile != relay_core::config::ToolProfile::Full {
+        return tools;
+    }
+    if providers.is_empty() {
+        tools.retain(|tool| tool.name != "agent_delegate");
+        return tools;
+    }
+    if let Some(tool) = tools.iter_mut().find(|tool| tool.name == "agent_delegate") {
+        *tool = agent::tool_for_providers(providers);
+    }
+    tools
+}
+
 pub fn find_tool_for_profile(name: &str, profile: relay_core::config::ToolProfile) -> Option<Tool> {
     tool_catalog_for_profile(profile)
         .into_iter()
         .find(|t| t.name == name)
+}
+
+pub fn find_tool_for_profile_and_agent_providers(
+    name: &str,
+    profile: relay_core::config::ToolProfile,
+    providers: &[&str],
+) -> Option<Tool> {
+    tool_catalog_for_profile_and_agent_providers(profile, providers)
+        .into_iter()
+        .find(|tool| tool.name == name)
 }
 
 pub fn find_tool(name: &str) -> Option<Tool> {

@@ -1,7 +1,7 @@
 //! Job execution and the single sandboxed process lifecycle.
 
 use super::sandbox;
-use super::{now_ms, render_output, JobManager, JobState, ToolInvocation};
+use super::{now_ms, render_output, JobKind, JobManager, JobState, ToolInvocation};
 use relay_core::config::ServerConfig;
 use relay_interfaces::mcp::{ToolCallResult, ToolResultContent};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ const TIMEOUT_GRACE_MS: u64 = 5_000;
 pub(super) async fn run_job(
     manager: Arc<JobManager>,
     id: String,
-    invocation: ToolInvocation,
+    job: JobKind,
     mut cancel: watch::Receiver<bool>,
     stdout: Arc<Mutex<OutputBuffer>>,
     stderr: Arc<Mutex<OutputBuffer>>,
@@ -32,6 +32,7 @@ pub(super) async fn run_job(
                 -1,
                 (String::new(), String::new(), 0),
                 None,
+                None,
             )
             .await;
             return;
@@ -45,6 +46,7 @@ pub(super) async fn run_job(
             -1,
             (String::new(), String::new(), 0),
             None,
+            None,
         )
         .await;
         return;
@@ -57,13 +59,21 @@ pub(super) async fn run_job(
             -1,
             ("execution semaphore unavailable".into(), String::new(), 0),
             None,
+            None,
         )
         .await;
         return;
     };
     let execution_started = Instant::now();
     update_state(&manager, &id, JobState::Running, Some(now_ms()), None).await;
-    let result = run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await;
+    let result = match job {
+        JobKind::Process(invocation) => {
+            run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await
+        }
+        JobKind::Agent(request) => {
+            super::agent::run_agent_job(&manager.config, request, &mut cancel, stdout, stderr).await
+        }
+    };
     let execution_duration_ms = execution_started.elapsed().as_millis() as u64;
     match result {
         Ok(process) => {
@@ -74,6 +84,7 @@ pub(super) async fn run_job(
                 process.exit_code,
                 (process.stdout, process.stderr, process.omitted),
                 Some(execution_duration_ms),
+                process.result,
             )
             .await
         }
@@ -91,18 +102,20 @@ pub(super) async fn run_job(
                 -1,
                 (String::new(), String::new(), 0),
                 Some(execution_duration_ms),
+                None,
             )
             .await
         }
     }
 }
 
-struct ProcessResult {
-    state: JobState,
-    exit_code: i32,
-    stdout: String,
-    stderr: String,
-    omitted: u64,
+pub(super) struct ProcessResult {
+    pub(super) state: JobState,
+    pub(super) exit_code: i32,
+    pub(super) stdout: String,
+    pub(super) stderr: String,
+    pub(super) omitted: u64,
+    pub(super) result: Option<ToolCallResult>,
 }
 
 pub(super) struct OutputBuffer {
@@ -120,7 +133,7 @@ impl OutputBuffer {
         }
     }
 
-    fn push(&mut self, chunk: &[u8], limit: usize) {
+    pub(super) fn push(&mut self, chunk: &[u8], limit: usize) {
         self.updated_at = now_ms();
         if chunk.len() >= limit {
             self.omitted += (self.bytes.len() + chunk.len() - limit) as u64;
@@ -150,7 +163,7 @@ pub(super) async fn drain_pipe<R: tokio::io::AsyncRead + Unpin>(
     }
 }
 
-async fn run_process(
+pub(super) async fn run_process(
     config: &ServerConfig,
     invocation: &ToolInvocation,
     cancel: &mut watch::Receiver<bool>,
@@ -187,6 +200,7 @@ async fn run_process(
         stdout: String::from_utf8_lossy(&out.bytes).into_owned(),
         stderr: String::from_utf8_lossy(&err.bytes).into_owned(),
         omitted: out.omitted + err.omitted,
+        result: None,
     })
 }
 
@@ -232,9 +246,10 @@ async fn finish(
     exit_code: i32,
     output: (String, String, u64),
     execution_duration_ms: Option<u64>,
+    result_override: Option<ToolCallResult>,
 ) {
     let (stdout, stderr, omitted) = output;
-    let result = match state {
+    let result = result_override.or_else(|| match state {
         JobState::Completed if exit_code == 0 => {
             Some(ToolCallResult::complete(vec![ToolResultContent {
                 kind: "text",
@@ -250,7 +265,7 @@ async fn finish(
             text: "execution timed out".into(),
         }])),
         JobState::Queued | JobState::Running | JobState::Failed | JobState::Cancelled => None,
-    };
+    });
     if let Some(job) = manager.jobs.lock().await.get_mut(id) {
         let finished_at = now_ms();
         job.snapshot.state = state;

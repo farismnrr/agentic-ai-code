@@ -10,12 +10,12 @@ Browser
 Nuxt / Nitro application
   |-- PostgreSQL               users, workspaces, conversations, providers, MCP config
   |-- model providers          AI generation
-  |-- SMTP / Google / GitHub   application login options
+  |-- SMTP / external OAuth   application login options
   |-- Loki / Jaeger            optional telemetry
   |
   | MCP client
   v
-Public MCP resource  <---------------- ChatGPT / other MCP clients
+Public MCP resource  <---------------- compatible MCP clients
   |
   | HTTPS edge / outbound tunnel
   v
@@ -33,7 +33,7 @@ The Nuxt application owns:
 
 - user sessions and application accounts;
 - email/password verification and reset flows;
-- optional Google/GitHub OAuth login;
+- optional external OAuth login;
 - workspaces and conversations;
 - model providers and encrypted provider credentials;
 - MCP server configuration and tool orchestration;
@@ -64,8 +64,8 @@ The relay:
 - owns terminal timeout, cancellation, job concurrency, bounded output retention, and process-tree cleanup;
 - exposes bounded native workspace inspection/search/read/edit/write/patch operations without routing routine filesystem work through a shell;
 - exposes fixed-subcommand Git inspection plus bounded branch/stage/commit/merge/rebase/conflict operations with protected paths and executable Git config/helpers fail-closed;
-- keeps ordinary terminal credentials/network isolated while a narrow remote-Git bridge validates GitHub repository/ref identity, obtains Git credentials only through fixed `gh auth git-credential`, forbids force/arbitrary refspecs, and independently verifies fetch/push/delete results;
-- exposes provider-neutral `change_request_*` contracts whose initial GitHub adapter uses fixed `gh pr` templates; arbitrary `gh api`, admin/auto merge, implicit push/fork, and raw provider errors are not model-facing capabilities;
+- keeps ordinary terminal credentials/network isolated while a narrow remote-Git bridge validates repository/ref identity, obtains Git credentials through a fixed credential helper, forbids force/arbitrary refspecs, and independently verifies fetch/push/delete results;
+- exposes provider-neutral `change_request_*` contracts; arbitrary provider API passthrough, admin/auto merge, implicit push/fork, and raw provider errors are not model-facing capabilities;
 - uses one component-aware protected credential-path policy for native workspace operations and Bubblewrap masking (`.ssh`, cloud/Docker/Kubernetes configuration, and common package-manager credential files); `.env.example` is intentionally not covered by this policy;
 - treats terminal network access as an explicit operator capability (`RELAY_ALLOW_TERMINAL_NETWORK`), isolated by default, while dedicated HTTP/search tools remain separately classified network capabilities.
 
@@ -75,7 +75,7 @@ For the single-owner profile, `--execution-root` may be the canonical non-root h
 
 The remote relay is an **OAuth Resource Server**, not an Authorization Server.
 
-The external Authorization Server—currently Keycloak in the reference deployment—owns login, authorization codes, PKCE, token issuance, client registration, signing keys, and identity lifecycle. The relay only validates the presented access token:
+The external Authorization Server owns login, authorization codes, PKCE, token issuance, client registration, signing keys, and identity lifecycle. The relay only validates the presented access token:
 
 - issuer (`iss`);
 - resource/audience (`aud`);
@@ -96,11 +96,11 @@ Internet
 
 Do not expose port `47821` through router/NAT forwarding and do not bind the relay to `0.0.0.0`.
 
-## ChatGPT and hosted Nuxt
+## External MCP clients and hosted Nuxt
 
-ChatGPT and the hosted Nuxt application can consume the same public MCP resource, but they authenticate independently.
+External MCP clients and the hosted Nuxt application can consume the same public MCP resource, but they authenticate independently.
 
-- **ChatGPT** performs its own interactive OAuth flow against the Authorization Server.
+- **External MCP clients** perform their own interactive OAuth flow against the Authorization Server.
 - **Hosted Nuxt** currently uses a private server-side access token only for the configured first-party MCP URL and only for the configured AI Code owner user ID.
 
 Those two owner identities are intentionally different concepts: the Nuxt owner is an `ai_code.users.id`; the relay owner is the Authorization Server's stable `sub` claim.

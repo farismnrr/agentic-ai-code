@@ -11,10 +11,9 @@ Supported application account flows include:
 - email/password registration and login;
 - email verification;
 - password reset through SMTP;
-- optional Google OAuth login;
-- optional GitHub OAuth login.
+- optional external OAuth login.
 
-Relevant configuration lives under the session, SMTP, and Google/GitHub sections of `.env.example`.
+Relevant configuration lives under the session, SMTP, and application OAuth sections of `.env.example`.
 
 This authentication controls access to AI Code's UI and server APIs.
 
@@ -22,7 +21,7 @@ This authentication controls access to AI Code's UI and server APIs.
 
 The Rust `ai-tools relay` has a different job: it protects coding-machine tools exposed over MCP.
 
-In remote mode the relay is an OAuth **Resource Server**. It does not show a login page and does not issue tokens. A separate Authorization Server such as Keycloak handles the interactive user login and token lifecycle.
+In remote mode the relay is an OAuth **Resource Server**. It does not show a login page and does not issue tokens. A separate standards-compatible Authorization Server handles interactive login and token lifecycle.
 
 The relay validates:
 
@@ -33,7 +32,7 @@ The relay validates:
 - a stable allowed owner `sub`;
 - the `relay.coding` scope.
 
-See [keycloak.md](keycloak.md) for the reference Authorization Server setup.
+See [oauth-provider.md](oauth-provider.md) for the provider-neutral Authorization Server setup.
 
 ## Two owner identifiers
 
@@ -46,17 +45,17 @@ A hosted Nuxt deployment may use a server-side first-party relay token. This cre
 
 Do not substitute one for the other.
 
-## ChatGPT authentication
+## MCP client authentication
 
-ChatGPT does not use the Nuxt application's private relay token. It connects directly to the public MCP resource and completes its own OAuth flow with the Authorization Server.
+An external MCP client does not use the Nuxt application's private relay token. It connects directly to the public MCP resource and completes its own OAuth flow with the Authorization Server.
 
-That means a valid ChatGPT setup requires all three pieces to agree on the same resource contract:
+That means a valid external-client setup requires all three pieces to agree on the same resource contract:
 
 ```text
-ChatGPT OAuth client
+MCP OAuth client
       -> Authorization Server
       -> access token for https://mcp.example.com/mcp
       -> ai-tools relay validates token
 ```
 
-Continue with [keycloak.md](keycloak.md), [remote-mcp.md](remote-mcp.md), and [chatgpt.md](chatgpt.md).
+Continue with [oauth-provider.md](oauth-provider.md), [remote-mcp.md](remote-mcp.md), and [mcp-client.md](mcp-client.md).

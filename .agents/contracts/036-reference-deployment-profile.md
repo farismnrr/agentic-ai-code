@@ -98,10 +98,10 @@ Start with:
 scripts/phase36-start-remote-relay.sh
 ```
 
-The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=primary` for
-the ChatGPT-facing remote relay, overriding an inherited profile so an
-accidental `full` setting cannot widen that surface. The Rust CLI's `full`
-default remains the canonical superset for direct and other deployments.
+The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=full` for the
+ChatGPT-facing remote relay, overriding an inherited `primary` setting so the
+client discovers the complete reviewed tool catalog. The Rust CLI uses the
+same `full` default for direct and other deployments.
 
 That wrapper launches the existing binary equivalent of:
 

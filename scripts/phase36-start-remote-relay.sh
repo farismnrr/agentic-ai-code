@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # This script deliberately keeps the Rust listener on 127.0.0.1 and trusts
 # HTTPS forwarding only from an IPv4 loopback tunnel process on the same host.
-# A public tunnel/edge (reference profile: cloudflared) must forward to
+# A public tunnel/edge must forward to
 # http://127.0.0.1:${RELAY_AGENT_PORT:-47821}.
 #
 # Required environment:
@@ -81,10 +81,11 @@ else
   command -v "$ai_tools_bin" >/dev/null
 fi
 
-# This repository wrapper is the ChatGPT-facing remote deployment path. Pin
-# it to Primary explicitly, even if a caller inherited Full, while keeping
-# the Rust CLI's Full default intact for direct/local and other deployments.
-export RELAY_TOOL_PROFILE=primary
+# This repository wrapper is the public remote deployment path. Pin it to
+# Full explicitly, even if a caller inherited Primary, so compatible clients
+# discover the complete reviewed catalog while the Rust CLI keeps the same
+# Full default for direct/local and other deployments.
+export RELAY_TOOL_PROFILE=full
 
 exec "$ai_tools_bin" relay \
   --mode remote \

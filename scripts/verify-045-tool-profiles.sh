@@ -8,7 +8,9 @@ rg -q 'tool_profile: ToolProfile::Full' packages/rust-tools/core/src/config.rs
 rg -q 'ToolProfile::Full' packages/rust-tools/infrastructure/src/transport/tools.rs
 rg -q 'tool_catalog_for_profile' packages/rust-tools/infrastructure/src/transport/mcp_http.rs
 test -x scripts/fixtures/verify-045-relay-profile.sh
-RELAY_TOOL_PROFILE=full \
+# The ChatGPT-facing wrapper must widen an inherited fast-path profile to the
+# complete catalog explicitly.
+RELAY_TOOL_PROFILE=primary \
 REMOTE_MCP_URL='https://mcp.example.com/mcp' \
 OAUTH_ISSUER='https://auth.example.com/' \
 OAUTH_OWNER_SUBJECT='plan045-test-subject' \

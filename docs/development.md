@@ -19,7 +19,7 @@ Do not commit implementation directly to `main` or `dev`.
 
 ## Mandatory local gate
 
-This repository intentionally has no GitHub Actions CI workflow and no unit-test suite. Normal local commits are protected by the tracked pre-commit hook installed during `pnpm install`.
+This repository intentionally has no hosted CI workflow and no unit-test suite. Normal local commits are protected by the tracked pre-commit hook installed during `pnpm install`.
 
 For capability-boundary changes, run `sh scripts/verify-capability-policy.sh`. It checks the canonical protected-path semantics, deterministic mode/remembered-rule/external/local-terminal behavior, the fail-closed terminal network default, and the first-party policy module's lint contract.
 
@@ -72,7 +72,7 @@ Examples:
 
 ```bash
 bash scripts/phase4-black-box.sh
-bash scripts/phase7-chatgpt-contract.sh
+Run the applicable remote-client contract acceptance script under `scripts/`.
 bash scripts/phase-039c-contract.sh
 bash scripts/verify-git-patch-tools.sh
 bash scripts/phase8-zero-bypass.sh

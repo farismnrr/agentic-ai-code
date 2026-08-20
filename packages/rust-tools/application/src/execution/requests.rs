@@ -1,5 +1,6 @@
 //! Tool-specific request validation and invocation translation.
 use super::now_ms;
+use super::paths::resolve_authorized_cwd;
 use super::process::{drain_pipe, kill_process_group, OutputBuffer};
 use super::sandbox;
 use super::{InvocationProgram, ToolInvocation};
@@ -63,31 +64,7 @@ pub(super) fn build_terminal_invocation(
             "timeout_ms exceeds operator maximum".into(),
         ));
     }
-    let execution_root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::Internal("failed to resolve execution root".into()))?;
-    let _ = config.ensure_workspaces_initialized();
-    let cwd = match arguments.get("cwd").and_then(Value::as_str) {
-        Some(cwd) => {
-            if let Ok(guard) = config.workspaces.read() {
-                relay_core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, Some(cwd))?
-            } else {
-                relay_core::terminal_policy::resolve_contained_cwd(&execution_root, Some(cwd))?
-            }
-        }
-        None => std::fs::canonicalize(
-            config
-                .resolved_dir()
-                .map_err(|_| McpError::Internal("failed to resolve workspace directory".into()))?,
-        )
-        .map_err(|_| McpError::InvalidRequest("workspace directory is inaccessible".into()))?,
-    };
-    if !config.is_path_contained(&cwd) {
-        return Err(McpError::InvalidRequest(
-            "working directory is outside authorized workspace roots".into(),
-        ));
-    }
-    reject_protected_target(&execution_root, &cwd)?;
+    let cwd = resolve_authorized_cwd(arguments, config)?;
     let parts = shell_words::split(command)
         .map_err(|_| McpError::InvalidRequest("command could not be parsed".into()))?;
     let Some(binary) = parts.first() else {
@@ -118,6 +95,9 @@ pub(super) fn build_terminal_invocation(
         cwd: Some(cwd),
         timeout_ms,
         allow_network: false,
+        environment: Vec::new(),
+        auth_roots: Vec::new(),
+        expose_optional_sockets: true,
     })
 }
 
@@ -284,6 +264,9 @@ fn build_text_search_invocation(
             cwd: Some(cwd),
             timeout_ms: 0,
             allow_network: false,
+            environment: Vec::new(),
+            auth_roots: Vec::new(),
+            expose_optional_sockets: true,
         },
         max_results,
     ))
@@ -476,6 +459,9 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         cwd: None,
         timeout_ms,
         allow_network: true,
+        environment: Vec::new(),
+        auth_roots: Vec::new(),
+        expose_optional_sockets: true,
     })
 }
 
@@ -495,5 +481,8 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         cwd: None,
         timeout_ms: 30_000,
         allow_network: true,
+        environment: Vec::new(),
+        auth_roots: Vec::new(),
+        expose_optional_sockets: true,
     }
 }

@@ -75,7 +75,7 @@ The remediation also restored application ownership boundaries across API compos
 
 ### Agent/project guidance
 
-- `docs/` — human/operator installation, deployment, ChatGPT, development, and release handbook.
+- `docs/` — human/operator installation, deployment, MCP client, development, and release handbook.
 - `AGENTS.md` — single repository agent entrypoint.
 - `.agents/knowledge/` — stable operating guidance.
 - `.agents/skills/` — shared framework/tool skill discovery.
@@ -101,7 +101,7 @@ The tracked pre-commit hook runs the same command automatically after `pnpm inst
 
 `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`. Maintainability policy is implemented by `scripts/check-maintainability.mjs`: >500 maintained-source lines and >15 direct maintained implementation files are hard failures unless an exact-path, reasoned exception exists; >400 lines and 13–15 files are explicit review findings.
 
-There is no remote CI safety net. PR descriptions must record local verification performed; GitHub mergeability is not proof of quality.
+There is no remote CI safety net. Change-request descriptions must record local verification performed; forge mergeability is not proof of quality.
 
 See [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
 

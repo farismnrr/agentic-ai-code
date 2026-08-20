@@ -14,6 +14,15 @@ fn main() {
     }
     assert!(find_tool_for_profile("issue_create", ToolProfile::Primary).is_none());
     assert!(find_tool_for_profile("issue_create", ToolProfile::Full).is_some());
+    for name in [
+        "workspace_add",
+        "workspace_list",
+        "workspace_get",
+        "workspace_remove",
+    ] {
+        assert!(find_tool_for_profile(name, ToolProfile::Full).is_some());
+        assert!(find_tool_for_profile(name, ToolProfile::Primary).is_none());
+    }
     assert!(primary
         .iter()
         .all(|t| full.iter().any(|f| f.name == t.name)));

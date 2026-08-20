@@ -68,7 +68,7 @@ When implementation starts:
 7. Push/open a PR targeting `main` when requested/appropriate.
 8. Record exact local verification in the PR body.
 
-Do not merge merely because GitHub says a PR is mergeable. There is no CI. Merge only when the user has authorized it and required verification is recorded.
+Do not merge merely because a forge says a change request is mergeable. There is no CI. Merge only when the user has authorized it and required verification is recorded.
 
 ## Plans
 

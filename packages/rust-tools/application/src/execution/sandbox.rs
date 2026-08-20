@@ -58,7 +58,7 @@ pub(super) fn spawn(
         SandboxProfile {
             workspace_access,
             network_access,
-            expose_optional_sockets: writable,
+            expose_optional_sockets: writable && invocation.expose_optional_sockets,
             expose_runtime_extras: writable,
             workspace_root: None,
         },
@@ -83,6 +83,9 @@ pub(crate) fn spawn_lsp(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
+            environment: Vec::new(),
+            auth_roots: Vec::new(),
+            expose_optional_sockets: false,
         },
         SandboxProfile {
             workspace_access: WorkspaceAccess::ReadOnly,
@@ -112,6 +115,9 @@ pub(crate) fn spawn_hook(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
+            environment: Vec::new(),
+            auth_roots: Vec::new(),
+            expose_optional_sockets: false,
         },
         SandboxProfile {
             workspace_access,
@@ -231,6 +237,21 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    for auth_root in &invocation.auth_roots {
+        if !auth_root.is_absolute()
+            || auth_root == &host_home
+            || !auth_root.starts_with(&host_home)
+            || !auth_root.is_dir()
+            || relay_core::protected_paths::is_protected_path(&host_home, auth_root)
+        {
+            return Err(std::io::Error::other(
+                "agent auth root is outside the approved runtime-home boundary",
+            ));
+        }
+        let value = auth_root.to_string_lossy().into_owned();
+        args.extend(["--ro-bind".into(), value.clone(), value]);
+        add_protected_paths(&mut args, auth_root, true)?;
+    }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false)?;
@@ -272,6 +293,9 @@ fn spawn_with_profile(
         .kill_on_drop(true);
     if let Some(rustup_home) = rustup_home {
         command.env("RUSTUP_HOME", rustup_home);
+    }
+    for (name, value) in &invocation.environment {
+        command.env(name, value);
     }
     match (profile.workspace_root.is_some(), cargo_home) {
         (true, _) => {

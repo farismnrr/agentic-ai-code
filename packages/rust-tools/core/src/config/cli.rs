@@ -103,6 +103,12 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ALLOW_TERMINAL_NETWORK", default_value_t = false)]
     pub allow_terminal_network: bool,
 
+    /// Allow delegated coding CLIs to use the host network namespace. Disabled
+    /// by default because provider authentication and network access are
+    /// separate operator capabilities.
+    #[arg(long, env = "RELAY_ALLOW_AGENT_NETWORK", default_value_t = false)]
+    pub allow_agent_network: bool,
+
     /// Explicit local-development access to a host Docker daemon socket.
     /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
@@ -135,6 +141,22 @@ pub struct Cli {
         value_delimiter = ','
     )]
     pub toolchain_paths: Vec<String>,
+
+    /// Operator-approved provider environment mappings. Values are
+    /// `provider=ENV_NAME`; only the named parent environment variable is
+    /// copied into that provider's sandbox.
+    #[arg(long = "agent-env", env = "RELAY_AGENT_ENV", value_delimiter = ',')]
+    pub agent_env_vars: Vec<String>,
+
+    /// Operator-approved provider authentication roots. Values are
+    /// `provider=/absolute/path`; each root is mounted read-only only for that
+    /// provider.
+    #[arg(
+        long = "agent-auth-root",
+        env = "RELAY_AGENT_AUTH_ROOT",
+        value_delimiter = ','
+    )]
+    pub agent_auth_roots: Vec<String>,
 
     /// Operator-approved language-server executable mappings. Values are
     /// `language=executable`; executable resolution is restricted to the relay
