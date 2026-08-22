@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   // Generate and send password reset email
   const { token, hash: tokenHash } = event.context.application.security.generateToken()
-  const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes
 
   await event.context.application.auth.addVerificationToken({
     tokenHash,
@@ -34,7 +34,9 @@ export default defineEventHandler(async (event) => {
 
   const { sendEmail, getTemplate } = event.context.application.mail
   const config = useRuntimeConfig()
-  const resetUrl = `${config.public.siteUrl}/reset-password?token=${token}`
+  // Keep the bearer token in the URL fragment so it is not sent in HTTP
+  // request targets, access logs, or Referer headers.
+  const resetUrl = `${config.public.siteUrl}/reset-password#token=${token}`
 
   const emailSent = await sendEmail({
     to: user.email,
@@ -48,8 +50,9 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!emailSent) {
-    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { to: user.email, purpose: 'forgot' })
+    event.context.application.observability.logger.warn('[email] delivery failed', undefined, { userId: user.id, purpose: 'forgot' })
   }
 
+  event.context.application.observability.request?.event('auth.password_reset_requested', 'ok', { 'auth.present': true })
   return { ok: true }
 })

@@ -33,7 +33,7 @@ export default defineOAuthGitHubEventHandler({
 
     if (existingAccount) {
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
         .from(users)
         .where(eq(users.id, existingAccount.userId))
         .limit(1)
@@ -44,7 +44,8 @@ export default defineOAuthGitHubEventHandler({
             id: user.id,
             email: user.email,
             name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            authVersion: user.authVersion
           }
         })
         return sendRedirect(event, '/chat')
@@ -72,7 +73,7 @@ export default defineOAuthGitHubEventHandler({
       }
 
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
         .from(users)
         .where(eq(users.id, existingUser.id))
         .limit(1)
@@ -83,7 +84,8 @@ export default defineOAuthGitHubEventHandler({
             id: user.id,
             email: user.email,
             name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            authVersion: user.authVersion
           }
         })
         return sendRedirect(event, '/chat')
@@ -103,7 +105,8 @@ export default defineOAuthGitHubEventHandler({
         id: users.id,
         email: users.email,
         name: users.name,
-        emailVerifiedAt: users.emailVerifiedAt
+        emailVerifiedAt: users.emailVerifiedAt,
+        authVersion: users.authVersion
       })
     } catch (err) {
       if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
@@ -128,7 +131,8 @@ export default defineOAuthGitHubEventHandler({
         id: createdUser.id,
         email: createdUser.email,
         name: createdUser.name,
-        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null
+        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null,
+        authVersion: createdUser.authVersion
       }
     })
 

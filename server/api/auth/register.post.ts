@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Fetch the created user to seed the session.
-  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null } | undefined
+  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null, authVersion: number } | undefined
 
   if (!created) throw internal(safeDiagnostic('Account creation failed'))
 
@@ -53,7 +53,8 @@ export default defineEventHandler(async (event) => {
       id: created.id,
       email: created.email,
       name: created.name,
-      emailVerifiedAt: created.emailVerifiedAt?.toISOString() ?? null
+      emailVerifiedAt: created.emailVerifiedAt?.toISOString() ?? null,
+      authVersion: created.authVersion
     }
   })
 

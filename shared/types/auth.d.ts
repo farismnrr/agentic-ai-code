@@ -5,6 +5,7 @@ declare module '#auth-utils' {
     name?: string
     avatarUrl?: string | null
     emailVerifiedAt?: string | null
+    authVersion?: number
   }
 }
 

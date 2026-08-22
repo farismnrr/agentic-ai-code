@@ -25,7 +25,8 @@ export default defineEventHandler(async (event) => {
             email: user.email,
             name: user.name,
             avatarUrl: user.avatarUrl,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            authVersion: user.authVersion
           }
         })
         telemetry?.event('auth.login', 'ok', { 'auth.present': true })
@@ -36,5 +37,18 @@ export default defineEventHandler(async (event) => {
       logger.error('[api-auth] API Key verification failed', err)
       telemetry?.event('auth.login', 'denied', { 'auth.present': true })
     }
+  }
+
+  // Sealed cookies cannot be deleted centrally. Bind browser sessions to an
+  // auth generation so a password reset invalidates every older cookie.
+  const session = await getUserSession(event)
+  const sessionUser = session.user as { id?: string, authVersion?: number } | undefined
+  if (!sessionUser?.id) return
+
+  const db = useDb()
+  const [current] = await db.select({ authVersion: users.authVersion }).from(users).where(eq(users.id, sessionUser.id)).limit(1)
+  if (!current || (sessionUser.authVersion ?? 0) !== current.authVersion) {
+    await clearUserSession(event)
+    event.context.application?.observability?.request?.event('auth.session', 'denied', { 'auth.present': true })
   }
 })

@@ -34,7 +34,7 @@ export default defineOAuthGoogleEventHandler({
     if (existingAccount) {
       // Fetch the user to seed the session
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
         .from(users)
         .where(eq(users.id, existingAccount.userId))
         .limit(1)
@@ -45,7 +45,8 @@ export default defineOAuthGoogleEventHandler({
             id: user.id,
             email: user.email,
             name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            authVersion: user.authVersion
           }
         })
         return sendRedirect(event, '/chat')
@@ -79,7 +80,7 @@ export default defineOAuthGoogleEventHandler({
 
       // Fetch full user to seed session
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
         .from(users)
         .where(eq(users.id, existingUser.id))
         .limit(1)
@@ -90,7 +91,8 @@ export default defineOAuthGoogleEventHandler({
             id: user.id,
             email: user.email,
             name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            authVersion: user.authVersion
           }
         })
         return sendRedirect(event, '/chat')
@@ -114,7 +116,8 @@ export default defineOAuthGoogleEventHandler({
         id: users.id,
         email: users.email,
         name: users.name,
-        emailVerifiedAt: users.emailVerifiedAt
+        emailVerifiedAt: users.emailVerifiedAt,
+        authVersion: users.authVersion
       })
     } catch (err) {
       if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
@@ -139,7 +142,8 @@ export default defineOAuthGoogleEventHandler({
         id: createdUser.id,
         email: createdUser.email,
         name: createdUser.name,
-        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null
+        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null,
+        authVersion: createdUser.authVersion
       }
     })
 

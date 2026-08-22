@@ -13,6 +13,7 @@
     "lint:fix": "eslint . --fix && cargo fmt --all",
     "typecheck": "nuxt prepare --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit && RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked",
     "verify:commit": "bash scripts/verify-commit.sh",
+    "verify:account-recovery": "node --experimental-strip-types scripts/verify-account-recovery-security.ts",
     "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.ts",
     "verify:background-agents": "node --experimental-strip-types scripts/verify-background-agents.ts",
     "verify:task-context-output": "node --experimental-strip-types scripts/verify-task-context-output.ts",

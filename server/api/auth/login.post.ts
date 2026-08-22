@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
-  const user = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, passwordHash?: string | null, emailVerifiedAt?: Date | null } | undefined
+  const user = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, passwordHash?: string | null, emailVerifiedAt?: Date | null, authVersion: number } | undefined
 
   // No account OR account has no password (OAuth-only) — same generic message.
   if (!user || !user.passwordHash) {
@@ -47,7 +47,8 @@ export default defineEventHandler(async (event) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null
+      emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+      authVersion: user.authVersion
     }
   })
 
