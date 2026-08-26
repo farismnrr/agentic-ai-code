@@ -1,6 +1,10 @@
 # Plan 044B — GitHub Actions Observability
 
-**Status:** MERGED / LIVE VERIFICATION PENDING (Plan 044D)
+**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+
+Deterministic evidence: `bash scripts/verify-044b-actions-observability.sh`
+passes, including bounded output and redaction checks. No live Actions
+mutation/read claim is made without an authenticated connector fixture.
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 044A source merged / live verification pending
 

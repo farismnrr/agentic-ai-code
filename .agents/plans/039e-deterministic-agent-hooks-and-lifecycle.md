@@ -1,9 +1,15 @@
 # Plan 039E — Deterministic Agent Hooks and Lifecycle
 
-**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED (2026-08-26)
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039D  
+
+**Closure evidence:** The implementation is covered by `bash scripts/verify-hooks.sh`
+(`PLAN039E_HOOKS_ACCEPTANCE_PASS`), `pnpm verify:subagents`, and `pnpm verify:039j`.
+The formerly dependency-gated `subagent_stop` lifecycle is now implemented in
+the composed relay and exercised by the 039J closure evidence. No reimplementation
+was required; the checklist below is reconciled to the later master/039J proof.
 
 ## Goal
 
@@ -143,9 +149,9 @@ Only lifecycle points where decisions make sense may block. Post hooks cannot re
 
 ### PHASE-06 — subagent lifecycle
 
-- [ ] Add `subagent_stop` after 039F exists (dependency-gated; not started).
-- [ ] Ensure child identity/policy is represented without leaking child context.
-- [ ] Parent remains responsible for accepting/rejecting child result.
+- [x] Add `subagent_stop` after 039F exists (dependency-gated; not started).
+- [x] Ensure child identity/policy is represented without leaking child context.
+- [x] Parent remains responsible for accepting/rejecting child result.
 
 ### PHASE-07 — hostile configuration acceptance
 

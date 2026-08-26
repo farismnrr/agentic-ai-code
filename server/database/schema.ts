@@ -9,6 +9,7 @@ import {
   boolean,
   real,
   integer,
+  index,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
 import type { McpTool, UIMessage } from '#shared/types/chat'
@@ -37,6 +38,14 @@ export const users = aiCode.table('users', {
   avatarUrl: text('avatar_url'),
   /** Set when the user clicks the verification link; null = unverified. */
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  /** Incremented after credential-sensitive events to invalidate sealed sessions. */
+  authVersion: integer('auth_version').notNull().default(0),
+  /** Authorization role. The default account role is intentionally least-privileged. */
+  role: text('role').$type<'user' | 'admin'>().notNull().default('user'),
+  /** Pending primary-email change; the new address is not authoritative until confirmed. */
+  pendingEmail: text('pending_email'),
+  pendingEmailTokenHash: text('pending_email_token_hash'),
+  pendingEmailExpiresAt: timestamp('pending_email_expires_at', { withTimezone: true }),
   lastActiveWorkspaceId: uuid('last_active_workspace_id').references((): AnyPgColumn => workspaces.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -74,6 +83,74 @@ export const verificationTokens = aiCode.table('verification_tokens', {
   /** Set once the link is clicked; prevents re-use. */
   consumedAt: timestamp('consumed_at', { withTimezone: true })
 })
+
+// ---------------------------------------------------------------------------
+// Browser sessions
+// ---------------------------------------------------------------------------
+
+export const authSessions = aiCode.table('auth_sessions', {
+  /** Opaque identifier safe to expose only after owner scoping. */
+  id: uuid('id').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** SHA-256 of the sealed-cookie session secret; the bearer value is never persisted. */
+  secretHash: text('secret_hash').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true })
+}, table => [
+  index('auth_sessions_user_idx').on(table.userId, table.createdAt)
+])
+
+// ---------------------------------------------------------------------------
+// TOTP MFA and recovery codes
+// ---------------------------------------------------------------------------
+
+export const mfaFactors = aiCode.table('mfa_factors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').$type<'totp'>().notNull(),
+  /** Encrypted TOTP secret. Plaintext exists only during enrollment/verification. */
+  secretEncrypted: text('secret_encrypted').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true })
+}, table => [
+  index('mfa_factors_user_idx').on(table.userId, table.createdAt)
+])
+
+export const mfaRecoveryCodes = aiCode.table('mfa_recovery_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** SHA-256 of a one-time recovery code. */
+  codeHash: text('code_hash').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  usedAt: timestamp('used_at', { withTimezone: true })
+}, table => [
+  index('mfa_recovery_codes_user_idx').on(table.userId, table.usedAt)
+])
+
+// ---------------------------------------------------------------------------
+// Persistent security audit
+// ---------------------------------------------------------------------------
+
+export const securityEvents = aiCode.table('security_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(),
+  outcome: text('outcome').$type<'ok' | 'denied' | 'error' | 'challenged'>().notNull(),
+  /** Allowlisted bounded metadata only; never request bodies or bearer values. */
+  metadata: jsonb('metadata').$type<Record<string, string | number | boolean>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [
+  index('security_events_user_created_idx').on(table.userId, table.createdAt)
+])
 
 // ---------------------------------------------------------------------------
 // Workspaces

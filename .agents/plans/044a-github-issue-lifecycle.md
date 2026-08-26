@@ -1,6 +1,11 @@
 # Plan 044A — GitHub Issue Lifecycle
 
-**Status:** MERGED / LIVE VERIFICATION PENDING (Plan 044D)
+**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+
+Deterministic evidence: `bash scripts/verify-044a-issue-contract.sh`,
+`verify-044a-issue-reads.sh`, `verify-044a-issue-transitions.sh`, and
+`verify-044a-issue-mutations.sh` pass. Live authenticated fixture execution
+remains unproven under the parent-plan blocker.
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 043 CLOSED / VERIFIED / MERGED / DEPLOYED and Plan 040 forge boundary
 

@@ -55,7 +55,6 @@ pub fn provider_argv(provider: AgentProvider, prompt: &str, max_turns: u64) -> V
     match provider {
         AgentProvider::external MCP client => vec![
             "exec".into(),
-            "--approve-for-me".into(),
             "--sandbox".into(),
             "workspace-write".into(),
             "--ephemeral".into(),

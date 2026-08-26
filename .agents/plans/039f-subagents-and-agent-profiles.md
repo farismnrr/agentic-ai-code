@@ -1,9 +1,14 @@
 # Plan 039F — Subagents and Reusable Agent Profiles
 
-**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED (2026-08-26)
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039E  
+
+**Closure evidence:** `pnpm verify:subagents` passed, with background and
+task/context integrations covered by `pnpm verify:background-agents`,
+`pnpm verify:task-context-output`, and `pnpm verify:039j`. The later 039J and
+master-039 closure records supersede this stale independent-verification header.
 
 ## Goal
 
@@ -211,4 +216,4 @@ Prove:
 - [x] Context and output are bounded; results return as concise evidence-backed summaries.
 - [x] One-child-at-a-time behavior is stable before Plan 039G introduces concurrency.
 - [x] Cancellation, failure, telemetry, and approval behavior are implemented.
-- [ ] Repository verification and live agent acceptance pass.
+- [x] Repository verification and live agent acceptance pass.

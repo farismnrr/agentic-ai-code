@@ -61,7 +61,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         Check your inbox
       </h2>
       <p class="text-sm text-muted mt-2">
-        We sent a password reset link to <span class="font-semibold">{{ state.email }}</span>.
+        If an account exists for <span class="font-semibold">{{ state.email }}</span>, a password reset link has been sent.
       </p>
       <UButton
         to="/login"

@@ -30,8 +30,8 @@ impl AgentCapabilities {
 }
 
 /// Discover only providers that can be invoked without an interactive login.
-/// The check runs once while the relay router is built; a restart refreshes a
-/// login/logout change and keeps request handling free of subprocess probes.
+/// Callers refresh this capability view when listing or invoking delegated
+/// agents so a login/logout change is visible without restarting the relay.
 pub fn detect_agent_capabilities(config: &ServerConfig) -> AgentCapabilities {
     let providers = [
         AgentProvider::external MCP client,

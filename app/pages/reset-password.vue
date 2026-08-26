@@ -7,7 +7,7 @@ definePageMeta({ layout: 'auth' })
 useSeoMeta({ title: 'Reset password' })
 
 const route = useRoute()
-const token = typeof route.query.token === 'string' ? route.query.token : ''
+const token = ref('')
 
 const schema = v.pipe(
   v.object({
@@ -26,19 +26,31 @@ const loading = ref(false)
 const serverError = ref<string | null>(null)
 const success = ref(false)
 
-if (!token) {
-  serverError.value = 'Invalid password reset link. Please request a new one.'
-}
+onMounted(() => {
+  const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get('token')
+  const legacyQueryToken = typeof route.query.token === 'string' ? route.query.token : ''
+  token.value = fragmentToken || legacyQueryToken
+
+  // Scrub bearer credentials from the visible URL immediately after reading
+  // them. The query fallback keeps already-issued legacy reset links working.
+  if (fragmentToken || legacyQueryToken) {
+    window.history.replaceState(null, '', window.location.pathname)
+  }
+
+  if (!token.value) {
+    serverError.value = 'Invalid password reset link. Please request a new one.'
+  }
+})
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
-  if (!token) return
+  if (!token.value) return
 
   loading.value = true
   serverError.value = null
   try {
     await $fetch('/api/auth/reset', {
       method: 'POST',
-      body: { token, password: event.data.password }
+      body: { token: token.value, password: event.data.password }
     })
     success.value = true
   } catch (err: unknown) {

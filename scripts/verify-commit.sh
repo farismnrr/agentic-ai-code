@@ -18,6 +18,11 @@ bash scripts/check-agent-docs.sh
 printf 'commit-gate: checking architecture boundaries...\n'
 bash scripts/check-architecture.sh
 
+printf 'commit-gate: checking account recovery security invariants...\n'
+pnpm verify:account-recovery
+pnpm verify:account-security
+pnpm verify:account-security-runtime
+
 printf 'commit-gate: checking maintainability budgets...\n'
 node scripts/check-maintainability.mjs
 

@@ -130,7 +130,9 @@ recommend API keys. Known session directories are mounted narrowly when they
 are present; the rest of the runtime HOME remains unavailable to the
 subprocess.
 Only the named environment variables are copied into the matching provider
-process. Auth roots are mounted read-only one provider at a time. Docker and
+process. Auth roots are exposed one provider at a time through an ephemeral
+write layer, so provider login state is usable without mutating the host copy.
+Docker and
 Tailscale sockets and sibling workspaces are never exposed to delegated agents,
 and terminal network permission does not enable agent network access. The relay
 never generates host-level permission-bypass flags. Keep

@@ -65,7 +65,7 @@ fn main() {
     assert!(external-mcp
         .windows(2)
         .any(|pair| { pair[0] == "--sandbox" && pair[1] == "workspace-write" }));
-    assert!(external-mcp.iter().any(|arg| arg == "--approve-for-me"));
+    assert!(!external-mcp.iter().any(|arg| arg == "--approve-for-me"));
     for provider in [
         AgentProvider::external MCP client,
         AgentProvider::Antigravity,

@@ -1,9 +1,16 @@
 # Plan 039H — Task, Context, and Output Management
 
-**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING  
+**Status:** CLOSED / VERIFIED (2026-08-26)
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039G  
+
+**Closure evidence:** `pnpm verify:task-context-output`,
+`bash scripts/phase-039h-contract.sh`, and `pnpm verify:039j` passed. The
+current runtime contract is the later v11 catalog (not the original draft
+version in this plan); task-ledger bounds, signed owner/query-bound
+continuations, result references, and output caps are covered by the current
+source and verification scripts.
 
 ## Goal
 
@@ -128,48 +135,48 @@ Agents should get success summaries for noisy successful commands and enough bou
 
 ### PHASE-01 — task-state contract
 
-- [ ] Define schema/lifecycle/bounds.
-- [ ] Decide minimal persistence using existing conversation architecture.
-- [ ] Add internal task-update interface.
-- [ ] Prevent task state from becoming a false acceptance/proof source.
+- [x] Define schema/lifecycle/bounds.
+- [x] Decide minimal persistence using existing conversation architecture.
+- [x] Add internal task-update interface.
+- [x] Prevent task state from becoming a false acceptance/proof source.
 
 ### PHASE-02 — task UX
 
-- [ ] Render compact todo/progress panel in agent mode.
-- [ ] Show blocked reasons and dependencies.
-- [ ] Integrate subagent/background task status without duplicating runtime state.
+- [x] Render compact todo/progress panel in agent mode.
+- [x] Show blocked reasons and dependencies.
+- [x] Integrate subagent/background task status without duplicating runtime state.
 
 ### PHASE-03 — context inspector
 
-- [ ] Reuse existing context-compaction/token metadata.
-- [ ] Add user-facing context/budget view.
-- [ ] Add bounded model-visible budget hints where useful.
-- [ ] Verify no hidden chain-of-thought/raw private provider data is exposed.
+- [x] Reuse existing context-compaction/token metadata.
+- [x] Add user-facing context/budget view.
+- [x] Add bounded model-visible budget hints where useful.
+- [x] Verify no hidden chain-of-thought/raw private provider data is exposed.
 
 ### PHASE-04 — continuation core
 
-- [ ] Define reusable continuation token/offset contract.
-- [ ] Bind continuation to repository/cwd/query/tool identity.
-- [ ] Add tamper/staleness/expiry checks where needed.
+- [x] Define reusable continuation token/offset contract.
+- [x] Bind continuation to repository/cwd/query/tool identity.
+- [x] Add tamper/staleness/expiry checks where needed.
 
 ### PHASE-05 — retrofit existing workspace search/list tools
 
-- [ ] `directory_list` continuation where useful.
-- [ ] `file_search` continuation.
-- [ ] `text_search` continuation.
-- [ ] Preserve existing hard per-call caps/backward compatibility.
+- [x] `directory_list` continuation where useful.
+- [x] `file_search` continuation.
+- [x] `text_search` continuation.
+- [x] Preserve existing hard per-call caps/backward compatibility.
 
 ### PHASE-06 — Git/LSP continuation
 
-- [ ] Integrate 039B diff/log/show pagination.
-- [ ] Integrate 039C reference/symbol/diagnostic pagination.
-- [ ] Prove underlying-state changes are handled truthfully.
+- [x] Integrate 039B diff/log/show pagination.
+- [x] Integrate 039C reference/symbol/diagnostic pagination.
+- [x] Prove underlying-state changes are handled truthfully.
 
 ### PHASE-07 — result refs/output budgets
 
-- [ ] Add bounded session-scoped result references only where repeated reuse saves context materially.
-- [ ] Apply shared output policy to child-agent and terminal results.
-- [ ] Add memory/eviction limits and telemetry counters without content logging.
+- [x] Add bounded session-scoped result references only where repeated reuse saves context materially.
+- [x] Apply shared output policy to child-agent and terminal results.
+- [x] Add memory/eviction limits and telemetry counters without content logging.
 
 ## Non-goals
 
@@ -181,10 +188,10 @@ Agents should get success summaries for noisy successful commands and enough bou
 
 ## Acceptance criteria
 
-- [ ] Agent tasks are explicit, bounded, and visible without becoming false proof of completion.
-- [ ] User can inspect context pressure/compaction state meaningfully.
-- [ ] Large search/Git/LSP results support safe continuation rather than forced re-query or context flooding.
-- [ ] Continuation cannot escape repository/query limits or be tampered into broader access.
-- [ ] Result references are short-lived/bounded and do not create a custom retrieval store.
-- [ ] Existing compaction behavior has no regression.
-- [ ] Mandatory repository and end-to-end agent validation passes.
+- [x] Agent tasks are explicit, bounded, and visible without becoming false proof of completion.
+- [x] User can inspect context pressure/compaction state meaningfully.
+- [x] Large search/Git/LSP results support safe continuation rather than forced re-query or context flooding.
+- [x] Continuation cannot escape repository/query limits or be tampered into broader access.
+- [x] Result references are short-lived/bounded and do not create a custom retrieval store.
+- [x] Existing compaction behavior has no regression.
+- [x] Mandatory repository and end-to-end agent validation passes.

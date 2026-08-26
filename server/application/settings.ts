@@ -8,7 +8,6 @@ export interface SettingsInput {
   temperature?: number
   systemPrompt?: string
   displayName?: string
-  email?: string
 }
 export interface SettingsPort {
   read(userId: string, profile: { name?: string, email?: string }): Promise<unknown>

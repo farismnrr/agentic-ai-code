@@ -1,6 +1,10 @@
 # Plan 044C — GitHub Security Alert Visibility
 
-**Status:** SOURCE IMPLEMENTED / DETERMINISTIC VERIFICATION PASS / MERGE PENDING
+**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+
+Deterministic evidence: `bash scripts/verify-044c-security-alerts.sh` passes,
+including secret-canary and permission-aware behavior. Live provider alert
+visibility remains unproven without an authorized connector session.
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plan 044B source merged / live verification pending
 

@@ -1,6 +1,13 @@
 # Plan 044D — Controlled GitHub Actions Mutations and Plan 044 Closure
 
-**Status:** SOURCE COMPLETE / V9 CONTRACT FROZEN / LIVE VERIFICATION PENDING
+**Status:** MERGED / DEPLOYED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+
+Deterministic evidence: `bash scripts/verify-044d-actions-mutations.sh` and
+`bash scripts/verify-044-composed-contract.sh` pass; the v9 catalog has the
+reviewed 100-tool shape. The public relay's health/metadata/challenge are
+live, but authenticated tools/list, live issue/actions operations, and
+connector rediscovery are not claimed because their external fixture/session
+is unavailable.
 **Parent:** [Plan 044](044-github-repository-operations-security-roadmap.md)
 **Depends on:** Plans 044A, 044B and 044C source merged / live verification pending
 
