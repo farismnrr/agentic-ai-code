@@ -1,4 +1,4 @@
-import { badRequest, gone, unprocessable, tooManyRequests } from '#server/core/errors/http'
+import { badRequest, unprocessable, tooManyRequests } from '#server/core/errors/http'
 import { verifySchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
@@ -17,16 +17,12 @@ export default defineEventHandler(async (event) => {
   const hashedToken = event.context.application.security.hashToken(body.token)
   const consumed = await event.context.application.auth.consumeEmailVerification(hashedToken)
   const tokenRecord = consumed?.record
-
   if (!tokenRecord) {
+    await event.context.application.audit.record({ eventType: 'auth.email_verification', outcome: 'denied' })
     throw badRequest('Invalid verification link.')
   }
 
-  if (tokenRecord.consumedAt || tokenRecord.expiresAt < new Date()) {
-    throw gone('This verification link has expired or already been used.')
-  }
-
-  const now = consumed!.now
+  const now = consumed.now
 
   // Update session if they are currently logged in as that user
   const session = await getUserSession(event)
@@ -42,6 +38,8 @@ export default defineEventHandler(async (event) => {
       }
     })
   }
+
+  await event.context.application.audit.record({ userId: tokenRecord.userId, eventType: 'auth.email_verification', outcome: 'ok' })
 
   return { ok: true }
 })

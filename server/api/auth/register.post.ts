@@ -1,7 +1,8 @@
-import { conflict, unprocessable, tooManyRequests, internal } from '#server/core/errors/http'
+import { badRequest, conflict, unprocessable, tooManyRequests, internal } from '#server/core/errors/http'
 import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import * as v from 'valibot'
 import { registerSchema } from '../../../shared/schemas/auth'
+import { establishAuthSession } from '../../transport/auth-session'
 
 /**
  * POST /api/auth/register
@@ -34,6 +35,12 @@ export default defineEventHandler(async (event) => {
     return { ok: true }
   }
 
+  const passwordScreening = await event.context.application.security.screenPassword(body.password)
+  if (passwordScreening === 'breached') throw badRequest('Choose a password that has not appeared in a known breach.')
+  if (passwordScreening === 'unavailable') {
+    await event.context.application.audit.record({ eventType: 'auth.password_screening', outcome: 'error', metadata: { boundary: 'register' } })
+  }
+
   const hash = await hashPassword(body.password)
 
   try {
@@ -44,18 +51,17 @@ export default defineEventHandler(async (event) => {
   }
 
   // Fetch the created user to seed the session.
-  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null, authVersion: number } | undefined
+  const created = await event.context.application.auth.findLoginUser(body.email) as { id: string, email: string, name: string, emailVerifiedAt?: Date | null, authVersion: number, role?: 'user' | 'admin' } | undefined
 
   if (!created) throw internal(safeDiagnostic('Account creation failed'))
 
-  await setUserSession(event, {
-    user: {
-      id: created.id,
-      email: created.email,
-      name: created.name,
-      emailVerifiedAt: created.emailVerifiedAt?.toISOString() ?? null,
-      authVersion: created.authVersion
-    }
+  await establishAuthSession(event, {
+    id: created.id,
+    email: created.email,
+    name: created.name,
+    emailVerifiedAt: created.emailVerifiedAt?.toISOString() ?? null,
+    authVersion: created.authVersion,
+    role: created.role
   })
 
   // Generate and send verification email

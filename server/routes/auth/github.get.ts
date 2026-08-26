@@ -2,6 +2,7 @@ import { badRequest, conflict, internal } from '#server/core/errors/http'
 import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
 import { eq, and } from 'drizzle-orm'
 import { users, oauthAccounts } from '../../database/schema'
+import { establishAuthSession } from '../../transport/auth-session'
 
 export default defineOAuthGitHubEventHandler({
   config: {
@@ -33,20 +34,19 @@ export default defineOAuthGitHubEventHandler({
 
     if (existingAccount) {
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion, role: users.role })
         .from(users)
         .where(eq(users.id, existingAccount.userId))
         .limit(1)
 
       if (user) {
-        await setUserSession(event, {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
-            authVersion: user.authVersion
-          }
+        await establishAuthSession(event, {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+          authVersion: user.authVersion,
+          role: user.role
         })
         return sendRedirect(event, '/chat')
       }
@@ -73,20 +73,19 @@ export default defineOAuthGitHubEventHandler({
       }
 
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion })
+        .select({ id: users.id, email: users.email, name: users.name, emailVerifiedAt: users.emailVerifiedAt, authVersion: users.authVersion, role: users.role })
         .from(users)
         .where(eq(users.id, existingUser.id))
         .limit(1)
 
       if (user) {
-        await setUserSession(event, {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
-            authVersion: user.authVersion
-          }
+        await establishAuthSession(event, {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+          authVersion: user.authVersion,
+          role: user.role
         })
         return sendRedirect(event, '/chat')
       }
@@ -106,7 +105,8 @@ export default defineOAuthGitHubEventHandler({
         email: users.email,
         name: users.name,
         emailVerifiedAt: users.emailVerifiedAt,
-        authVersion: users.authVersion
+        authVersion: users.authVersion,
+        role: users.role
       })
     } catch (err) {
       if (event.context.application.database.isUniqueViolation(err)) throw conflict('Email already registered')
@@ -126,14 +126,13 @@ export default defineOAuthGitHubEventHandler({
       throw err
     }
 
-    await setUserSession(event, {
-      user: {
-        id: createdUser.id,
-        email: createdUser.email,
-        name: createdUser.name,
-        emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null,
-        authVersion: createdUser.authVersion
-      }
+    await establishAuthSession(event, {
+      id: createdUser.id,
+      email: createdUser.email,
+      name: createdUser.name,
+      emailVerifiedAt: createdUser.emailVerifiedAt?.toISOString() ?? null,
+      authVersion: createdUser.authVersion,
+      role: createdUser.role
     })
 
     return sendRedirect(event, '/chat')

@@ -133,16 +133,13 @@ const faq: AccordionItem[] = [
 
       <!-- Glowing blobs -->
       <div
-        class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[400px] bg-primary/20 blur-[120px] rounded-[100%] animate-pulse"
-        style="animation-duration: 4s;"
+        class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[400px] bg-primary/20 blur-[120px] rounded-[100%] motion-slow"
       />
       <div
-        class="absolute top-[10%] right-[-10%] w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-[100%] animate-pulse"
-        style="animation-duration: 7s; animation-delay: 1s;"
+        class="absolute top-[10%] right-[-10%] w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-[100%] motion-slower"
       />
       <div
-        class="absolute top-[20%] left-[-10%] w-[600px] h-[600px] bg-purple-500/10 blur-[120px] rounded-[100%] animate-pulse"
-        style="animation-duration: 5s; animation-delay: 2s;"
+        class="absolute top-[20%] left-[-10%] w-[600px] h-[600px] bg-purple-500/10 blur-[120px] rounded-[100%] motion-medium"
       />
     </div>
 

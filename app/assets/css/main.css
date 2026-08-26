@@ -134,6 +134,35 @@ html.dark .shiki span {
   }
 }
 
+@keyframes landing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.motion-slow,
+.motion-slower,
+.motion-medium {
+  animation-name: landing-pulse;
+  animation-iteration-count: infinite;
+}
+
+.motion-slow {
+  animation-duration: 4s;
+}
+.motion-slower {
+  animation-duration: 7s;
+  animation-delay: 1s;
+}
+.motion-medium {
+  animation-duration: 5s;
+  animation-delay: 2s;
+}
+
 /* Anyone who has asked for less motion gets none of it. This has to be
    blunt: a design that respects the preference selectively still makes
    people ill. */

@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
 
   // We ALWAYS return success to prevent user enumeration
   if (!user) {
+    await event.context.application.audit.record({ eventType: 'auth.password_reset_requested', outcome: 'ok' })
     return { ok: true }
   }
 
@@ -54,5 +55,6 @@ export default defineEventHandler(async (event) => {
   }
 
   event.context.application.observability.request?.event('auth.password_reset_requested', 'ok', { 'auth.present': true })
+  await event.context.application.audit.record({ userId: user.id, eventType: 'auth.password_reset_requested', outcome: 'ok' })
   return { ok: true }
 })

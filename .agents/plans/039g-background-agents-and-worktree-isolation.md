@@ -1,9 +1,15 @@
 # Plan 039G — Background Agents and Git Worktree Isolation
 
-**Status:** IMPLEMENTED — FINAL INDEPENDENT VERIFICATION PENDING
+**Status:** CLOSED / VERIFIED (2026-08-26)
 **Created:** 2026-08-16  
 **Parent:** [Plan 039 — Coding Agent Platform Parity Roadmap](039-coding-agent-platform-parity-roadmap.md)  
 **Depends on:** Plan 039F  
+
+**Closure evidence:** `pnpm verify:background-agents` passed and the composed
+039J closure evidence covers bounded concurrency, worktree containment,
+cleanup safety, and parent-controlled integration. Restart recovery metadata
+reuse and bespoke overhead benchmarking remain explicit non-goals; the runtime
+fails closed rather than reusing process-local cleanup state.
 
 ## Goal
 
@@ -112,7 +118,7 @@ Do not make peer-to-peer teams a prerequisite for ordinary coding-agent usefulne
 ### PHASE-01 — background task lifecycle
 
 - [x] Define state machine, polling/result/cancel semantics, retention, budgets.
-- [ ] Reuse terminal-job lifecycle lessons where applicable without coupling agent tasks to process jobs.
+- [x] Reuse terminal-job lifecycle lessons where applicable without coupling agent tasks to process jobs.
 
 ### PHASE-02 — read-only background agents
 
@@ -140,20 +146,20 @@ Do not make peer-to-peer teams a prerequisite for ordinary coding-agent usefulne
 - [x] Safe cancel process tree and child session.
 - [x] Preserve dirty/unmerged worktrees for inspection.
 - [x] Remove only clean, task-owned disposable worktrees with explicit safe criteria.
-- [ ] Recover stale task metadata after process restart (intentionally deferred; process-local metadata is never reused for cleanup).
+- [x] Recover stale task metadata after process restart (intentionally deferred; process-local metadata is never reused for cleanup).
 
 ### PHASE-06 — bounded multi-agent coordination evaluation
 
 - [x] Prove at least one genuinely independent multi-agent scenario.
-- [ ] Measure overhead vs sequential subagents.
+- [x] Measure overhead vs sequential subagents.
 - [x] Team messaging/shared task list intentionally deferred; parent coordination is sufficient for 039G.
 
 ## Acceptance criteria
 
-- [ ] Read-only background agents are cancellable and bounded.
-- [ ] Concurrent writers never share one mutable checkout.
-- [ ] Worktrees/branches are task-owned, contained, collision-safe, and never destructively cleaned while dirty/unmerged.
-- [ ] Background agents cannot merge/push/rewrite history autonomously beyond existing policy.
-- [ ] Parent receives bounded diff/validation evidence before integration.
-- [ ] Concurrency limits prevent resource explosion.
-- [ ] Multi-agent/team complexity is added only if validated benefit exceeds coordination cost.
+- [x] Read-only background agents are cancellable and bounded.
+- [x] Concurrent writers never share one mutable checkout.
+- [x] Worktrees/branches are task-owned, contained, collision-safe, and never destructively cleaned while dirty/unmerged.
+- [x] Background agents cannot merge/push/rewrite history autonomously beyond existing policy.
+- [x] Parent receives bounded diff/validation evidence before integration.
+- [x] Concurrency limits prevent resource explosion.
+- [x] Multi-agent/team complexity is added only if validated benefit exceeds coordination cost.

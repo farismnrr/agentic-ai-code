@@ -9,7 +9,6 @@ const settingsSchema = v.object({
   temperature: v.optional(v.number()),
   systemPrompt: v.optional(v.string()),
   displayName: v.optional(v.string()),
-  email: v.optional(v.string()),
   defaultContextWindow: v.optional(v.number()),
   defaultMaxOutputTokens: v.optional(v.number()),
   defaultThinkingEnabled: v.optional(v.boolean()),

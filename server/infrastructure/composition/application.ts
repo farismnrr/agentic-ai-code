@@ -24,13 +24,17 @@ import { createWorkspaceUseCases, type WorkspacePort } from '../../application/w
 import { createModelUseCases, type ModelPort } from '../../application/models'
 import { providerRequiresBaseUrl } from '#shared/utils/providers'
 
-import { encryptSecret } from '../security/crypto'
+import { screenPassword } from '../security/password-screening'
+import { decryptSecret, encryptSecret } from '../security/crypto'
+import { buildTotpUri, generateTotpSecret, verifyTotpCode } from '../security/totp'
 import { insertUserProvider, listUserProviders, updateUserProvider, deleteUserProvider, findUserProvider, type ProviderInput, type ProviderUpdate } from '../database/providers'
 import { listProviderModels } from '../ai/providers/index'
 import { createChatTurnDependencies } from '../ai/chat-turn-dependencies'
 import * as auth from '../database/auth'
 import * as mcp from '../database/mcp-servers'
 import * as apiKey from '../auth/api-key'
+import * as mfa from '../database/mfa'
+import * as audit from '../database/security-events'
 import type { AuthUseCases } from '../../application/auth'
 import type { AccountDataUseCases } from '../../application/account-data'
 import type { McpUseCases } from '../../application/mcp'
@@ -55,7 +59,20 @@ export function createApplicationAdapters(requestId: string) {
     mail: useMailer(),
     observability: { logger, getLogger, request },
     database: { isUniqueViolation, db: useDb() },
-    security: { generateToken, hashToken },
+    security: { generateToken, hashToken, screenPassword, encryptSecret, decryptSecret, buildTotpUri, generateTotpSecret, verifyTotpCode },
+    mfa: {
+      createFactor: mfa.createFactor,
+      findFactor: mfa.findFactor,
+      confirmFactor: mfa.confirmFactor,
+      revokeFactor: mfa.revokeFactor,
+      listFactors: mfa.listFactors,
+      replaceRecoveryCodes: mfa.replaceRecoveryCodes,
+      consumeRecoveryCode: mfa.consumeRecoveryCode
+    },
+    audit: {
+      record: audit.recordSecurityEvent,
+      list: audit.listSecurityEvents
+    },
     filesystem: { resolveWorkspacePath },
     auth: { ...auth, verifyApiKey: apiKey.verifyApiKey } satisfies AuthUseCases,
     account: {
@@ -66,7 +83,14 @@ export function createApplicationAdapters(requestId: string) {
       revokeDevice: account.revokeDevice,
       listApiKeys: account.listApiKeys,
       createApiKey: account.createApiKey,
-      deleteApiKey: account.deleteApiKey
+      deleteApiKey: account.deleteApiKey,
+      createAuthSession: account.createAuthSession,
+      listAuthSessions: account.listAuthSessions,
+      validateAuthSession: account.validateAuthSession,
+      touchAuthSession: account.touchAuthSession,
+      revokeAuthSession: account.revokeAuthSession,
+      revokeOtherAuthSessions: account.revokeOtherAuthSessions,
+      getUserRole: account.getUserRole
     } satisfies AccountDataUseCases,
     mcp: {
       testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, async () => (await import('../mcp/test-server')).testMcpServer(userId, id)),

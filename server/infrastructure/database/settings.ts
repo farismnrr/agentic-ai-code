@@ -14,7 +14,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     .limit(1)
 
   const [userRow] = await db
-    .select({ lastActiveWorkspaceId: users.lastActiveWorkspaceId })
+    .select({ lastActiveWorkspaceId: users.lastActiveWorkspaceId, email: users.email })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
@@ -30,7 +30,7 @@ export async function getSettings(userId: string, name: string = 'User', email: 
       temperature: settings.temperature,
       systemPrompt: settings.systemPrompt,
       displayName: settings.displayName,
-      email: settings.email,
+      email: userRow?.email ?? email,
       lastActiveWorkspaceId
     }
   }
@@ -61,12 +61,12 @@ export async function getSettings(userId: string, name: string = 'User', email: 
     temperature: newSettings.temperature,
     systemPrompt: newSettings.systemPrompt,
     displayName: newSettings.displayName,
-    email: newSettings.email,
+    email: userRow?.email ?? email,
     lastActiveWorkspaceId
   }
 }
 
-export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string, email?: string }) {
+export async function updateSettings(userId: string, updates: { language?: string, streaming?: boolean, sendOnEnter?: boolean, defaultModelId?: string | null, temperature?: number, systemPrompt?: string, displayName?: string }) {
   const db = useDb()
   const [updatedSettings] = await db
     .update(userSettings)
@@ -86,6 +86,6 @@ export async function updateSettings(userId: string, updates: { language?: strin
     temperature: updatedSettings.temperature,
     systemPrompt: updatedSettings.systemPrompt,
     displayName: updatedSettings.displayName,
-    email: updatedSettings.email
+    email: (await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1))[0]?.email ?? ''
   }
 }
