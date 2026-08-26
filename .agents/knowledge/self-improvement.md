@@ -58,10 +58,11 @@ Durable docs may summarize implementation facts when needed to orient future age
 
 The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-The repository also intentionally has **no CI** and **no unit-test suite**. Structural and code-quality enforcement is local:
+The repository intentionally has **no CI**. Structural and code-quality enforcement is local, and any standalone unit/integration tests must live under sibling `tests/` directories:
 
 - [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
 - [`../../scripts/check-maintainability.mjs`](../../scripts/check-maintainability.mjs) enforces maintained-source/folder budgets and exact reasoned exceptions;
+- [`../../scripts/check-test-layout.mjs`](../../scripts/check-test-layout.mjs) rejects inline tests and test-like files outside dedicated test directories;
 - [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + architecture + maintainability + `pnpm lint` + `pnpm typecheck`;
 - [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
 - [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.

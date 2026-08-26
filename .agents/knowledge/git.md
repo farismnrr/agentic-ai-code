@@ -19,11 +19,11 @@ implementation branch ──PR──▶ main
 | --- | --- | --- |
 | `main` | Canonical integration/release branch | Direct docs/plans where appropriate; implementation via PRs from short-lived branches |
 
-Implementation branches base from current `main`. If a future integration branch is introduced, verify it from current Git refs and repository policy before changing this workflow; never resurrect a historical `dev` assumption from memory alone.
+Implementation branches base from current `main`. The default delivery is always: short-lived branch → focused commit → push → pull request into `main` → merge → return to `main` and verify a clean checkout. If a future integration branch is introduced, verify it from current Git refs and repository policy before changing this workflow; never resurrect a historical `dev` assumption from memory alone.
 
 ## Repository verification policy
 
-This repository intentionally has **no CI workflow**, **no unit-test suite**, and a **mandatory local pre-commit gate** for normal local commits.
+This repository intentionally has **no CI workflow**, requires standalone test files under sibling `tests/` directories, and has a **mandatory local pre-commit gate** for normal local commits.
 
 After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit). Every normal local commit must pass:
 
@@ -39,9 +39,9 @@ A connector/API-created docs-only commit is allowed by the direct-docs workflow,
 
 See the canonical [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
 
-## No unit-test policy
+## Test layout policy
 
-Do not introduce a unit-test framework or unit-test suite unless the user explicitly changes this policy. Existing deterministic protocol/security acceptance scripts are allowed as targeted local verification; they are not unit tests and they are not CI.
+Unit/integration test files must live under a dedicated sibling `tests/` directory. Production files must not contain inline tests or references to test modules. Deterministic protocol/security acceptance scripts remain allowed as separate local verification and are not CI.
 
 ## Working a plan or task
 
@@ -65,8 +65,9 @@ When implementation starts:
 4. Run `pnpm verify:commit` until it passes.
 5. Review `git status`; stage only intended files.
 6. Commit only after the local gate is green.
-7. Push/open a PR targeting `main` when requested/appropriate.
-8. Record exact local verification in the PR body.
+7. Push the branch and open a PR targeting `main`.
+8. Merge the approved PR, return to `main`, and verify `git status --short` is clean.
+9. Record exact local verification in the PR body.
 
 Do not merge merely because a forge says a change request is mergeable. There is no CI. Merge only when the user has authorized it and required verification is recorded.
 
@@ -129,7 +130,7 @@ pnpm build
 
 The pre-commit gate is the minimum, not proof of runtime behavior. UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and deterministic scripts; contract changes need the applicable contract gate.
 
-Do not create a unit-test suite as a substitute for these explicit local checks unless repository policy changes.
+Keep standalone tests and deterministic acceptance checks complementary; neither replaces the repository's explicit local gates.
 
 ## Rules for agents
 

@@ -26,6 +26,9 @@ pnpm verify:account-security-runtime
 printf 'commit-gate: checking maintainability budgets...\n'
 node scripts/check-maintainability.mjs
 
+printf 'commit-gate: checking test layout...\n'
+pnpm check:test-layout
+
 printf 'commit-gate: checking subagent policy and lifecycle behavior...\n'
 pnpm verify:subagents
 pnpm verify:background-agents

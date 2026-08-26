@@ -19,6 +19,7 @@
     "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.ts",
     "verify:background-agents": "node --experimental-strip-types scripts/verify-background-agents.ts",
     "verify:task-context-output": "node --experimental-strip-types scripts/verify-task-context-output.ts",
+    "check:test-layout": "node scripts/check-test-layout.mjs",
     "verify:039i": "node --experimental-strip-types scripts/verify-039i-extension-interoperability.ts",
     "verify:039j": "node --experimental-strip-types scripts/verify-039j-agent-ux-observability.ts",
     "verify:040a": "node --experimental-strip-types scripts/verify-040a-mcp-task-reliability.ts && bash scripts/verify-040a-mcp-task-transport.sh",
