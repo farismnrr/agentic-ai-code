@@ -141,6 +141,48 @@
       "when": 1787747669358,
       "tag": "0019_even_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787757050956,
+      "tag": "0020_abnormal_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787757139014,
+      "tag": "0021_massive_talon",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787758411921,
+      "tag": "0022_plain_roughhouse",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787759099251,
+      "tag": "0023_famous_tiger_shark",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787759871606,
+      "tag": "0024_damp_victor_mancha",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787761622357,
+      "tag": "0025_spotty_fallen_one",
+      "breakpoints": true
     }
   ]
 }

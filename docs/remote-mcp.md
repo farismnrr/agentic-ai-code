@@ -57,38 +57,10 @@ If toolchains are installed under the home directory, allow only the required
 directories through `RELAY_TOOLCHAIN_PATH`. Do not copy the entire interactive
 shell PATH into the relay.
 
-For delegated coding providers, configure their executable directory. The public
-Primary fast path exposes delegation only when startup capability discovery
-finds at least one usable provider. The
-relay prefers the local CLI login already present for the operator and checks
-capability at startup. Provider labels are fixed by the relay; the placeholders
-below must be replaced with a provider name actually advertised by the live
-catalog:
-
-```bash
-export RELAY_TOOLCHAIN_PATH="$HOME/.local/bin"
-export RELAY_ALLOW_AGENT_NETWORK=true
-export RELAY_AGENT_ENV='<supported-provider>=AUTH_ENV_NAME'
-export RELAY_AGENT_AUTH_ROOT='<supported-provider>=/home/owner/.provider-auth'
-```
-
-`RELAY_AGENT_ENV` and `RELAY_AGENT_AUTH_ROOT` are explicit process/root
-configuration. They are not required for a normal local login when the CLI has
-a supported status command; a CLI without one needs the explicit auth-root
-mapping. The relay does not generate or infer API keys. Only authenticated or
-explicitly rooted providers are included in the live Full/Primary tool schema;
-the relay rechecks provider capability when the live tool schema is requested
-or `agent_delegate` is invoked, so a relay restart is not required after a CLI
-login change.
-
-Delegation runs providers serially and falls back only for classified
-quota/authentication/availability failures. A bounded metadata-only snapshot
-covers the selected writable workspace; fallback stops when that snapshot
-changes or cannot be completed safely. Delegated providers do not
-receive sibling-workspace mounts, and agent network authorization remains
-independent from terminal network permission. The relay supplies bounded
-provider arguments inside Bubblewrap and never adds host-level
-permission-bypass flags.
+Provider-specific coding-CLI delegation is not part of the current relay
+surface. Long-running eligible tools use standard MCP Tasks with explicit
+`execution_mode=sync|async|auto`; `auto` selects async only when the client
+advertises Tasks.
 
 ## 3. Configure OAuth values
 
@@ -103,6 +75,15 @@ export OAUTH_OWNER_SUBJECT='<stable-owner-subject>'
 
 The resource URL must be canonical HTTPS and include `/mcp`. The same exact
 value must be present in the token audience.
+
+To record this relay in the hosted workspace activity ledger, separately
+enroll/bind a source as described in [configuration.md](configuration.md#workspace-activity-ledger),
+then add the `RELAY_ACTIVITY_*` values to the relay service environment. The
+activity sink is an authenticated Nuxt API; it is independent of OAuth tool
+authorization and does not grant access to normal application APIs. Keep the
+relay state directory outside `EXECUTION_ROOT`/workspace mounts where
+possible, and set `RELAY_ACTIVITY_MODE=required` when silent pre-execution
+gaps are unacceptable.
 
 ## 4. Start the remote relay
 
@@ -131,10 +112,8 @@ ai-tools relay \
 
 The relay accepts forwarded HTTPS metadata only when the direct peer is in
 the explicitly trusted loopback CIDR. The repository launcher pins Primary for
-the public fast-path surface; authenticated `agent_delegate` remains available
-there when a supported local CLI session is detected. Full remains the
-canonical static superset for deployments that intentionally need the larger
-catalog.
+the public fast-path surface. Full remains the canonical static superset for
+deployments that intentionally need the larger catalog.
 
 ## 5. Publish through an HTTPS edge
 

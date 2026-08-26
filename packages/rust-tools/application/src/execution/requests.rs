@@ -41,7 +41,7 @@ pub(super) fn build_terminal_exec_invocation(
 pub(super) fn build_terminal_invocation(
     arguments: &Value,
     config: &ServerConfig,
-    enforce_primary_exec_limit: bool,
+    _legacy_job_path: bool,
 ) -> Result<ToolInvocation, McpError> {
     let command = arguments
         .get("command")
@@ -51,14 +51,6 @@ pub(super) fn build_terminal_invocation(
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(config.default_terminal_timeout_ms);
-    if enforce_primary_exec_limit
-        && config.tool_profile == relay_core::config::ToolProfile::Primary
-        && (timeout_ms == 0 || timeout_ms > 30_000)
-    {
-        return Err(McpError::InvalidRequest(
-            "primary terminal_exec timeout_ms must be between 1 and 30000; use terminal_job_start for long-running work".into(),
-        ));
-    }
     if config.max_terminal_timeout_ms > 0 && timeout_ms > config.max_terminal_timeout_ms {
         return Err(McpError::InvalidRequest(
             "timeout_ms exceeds operator maximum".into(),
@@ -97,8 +89,6 @@ pub(super) fn build_terminal_invocation(
         // Terminal network permission is translated here so other process
         // classes cannot inherit it accidentally inside the sandbox layer.
         allow_network: config.allow_terminal_network,
-        environment: Vec::new(),
-        auth_roots: Vec::new(),
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
     })
@@ -267,8 +257,6 @@ fn build_text_search_invocation(
             cwd: Some(cwd),
             timeout_ms: 0,
             allow_network: false,
-            environment: Vec::new(),
-            auth_roots: Vec::new(),
             expose_optional_sockets: true,
             expose_authorized_siblings: true,
         },
@@ -463,8 +451,6 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         cwd: None,
         timeout_ms,
         allow_network: true,
-        environment: Vec::new(),
-        auth_roots: Vec::new(),
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
     })
@@ -486,8 +472,6 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         cwd: None,
         timeout_ms: 30_000,
         allow_network: true,
-        environment: Vec::new(),
-        auth_roots: Vec::new(),
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
     }

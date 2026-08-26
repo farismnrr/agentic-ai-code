@@ -103,12 +103,6 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ALLOW_TERMINAL_NETWORK", default_value_t = false)]
     pub allow_terminal_network: bool,
 
-    /// Allow delegated coding CLIs to use the host network namespace. Disabled
-    /// by default because provider authentication and network access are
-    /// separate operator capabilities.
-    #[arg(long, env = "RELAY_ALLOW_AGENT_NETWORK", default_value_t = false)]
-    pub allow_agent_network: bool,
-
     /// Explicit local-development access to a host Docker daemon socket.
     /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
@@ -142,29 +136,13 @@ pub struct Cli {
     )]
     pub toolchain_paths: Vec<String>,
 
-    /// Operator-approved provider environment mappings. Values are
-    /// `provider=ENV_NAME`; only the named parent environment variable is
-    /// copied into that provider's sandbox.
-    #[arg(long = "agent-env", env = "RELAY_AGENT_ENV", value_delimiter = ',')]
-    pub agent_env_vars: Vec<String>,
-
-    /// Operator-approved provider authentication roots. Values are
-    /// `provider=/absolute/path`; each root is exposed only to that provider
-    /// through a temporary write layer, leaving the host copy unchanged.
-    #[arg(
-        long = "agent-auth-root",
-        env = "RELAY_AGENT_AUTH_ROOT",
-        value_delimiter = ','
-    )]
-    pub agent_auth_roots: Vec<String>,
-
     /// Operator-approved language-server executable mappings. Values are
     /// `language=executable`; executable resolution is restricted to the relay
     /// safe PATH and no repository file can supply command arguments.
     #[arg(long = "lsp-server", env = "RELAY_LSP_SERVER", value_delimiter = ',')]
     pub lsp_servers: Vec<String>,
 
-    /// MCP tool exposure profile. Full is the canonical superset; Primary is the ChatGPT fast-path subset and may include capability-filtered delegation.
+    /// MCP tool exposure profile. Full is the canonical superset; Primary is the fast-path subset.
     #[arg(long, value_enum, env = "RELAY_TOOL_PROFILE", default_value = "full")]
     pub tool_profile: ToolProfile,
 
@@ -176,6 +154,38 @@ pub struct Cli {
     /// Optional contained path to the repository-owned hook configuration.
     #[arg(long, env = "RELAY_AGENT_HOOKS_CONFIG")]
     pub agent_hooks_config: Option<String>,
+
+    /// Workspace activity capture mode. Off preserves the pre-activity
+    /// compatibility behavior; required durably admits workspace operations
+    /// before execution.
+    #[arg(long, env = "RELAY_ACTIVITY_MODE", default_value = "off")]
+    pub activity_mode: ActivityMode,
+
+    /// Owner-only relay activity state directory. When omitted, the relay
+    /// uses the operator's XDG state directory outside the workspace.
+    #[arg(long, env = "RELAY_ACTIVITY_STATE_DIR")]
+    pub activity_state_dir: Option<String>,
+
+    /// HTTPS Nuxt activity ingestion endpoint. The exporter is asynchronous.
+    #[arg(long, env = "RELAY_ACTIVITY_SINK_URL")]
+    pub activity_sink_url: Option<String>,
+
+    /// Scoped activity source bearer credential. It is never presented in
+    /// diagnostics or activity metadata.
+    #[arg(long, env = "RELAY_ACTIVITY_SOURCE_TOKEN")]
+    pub activity_source_token: Option<String>,
+
+    /// Maximum encrypted journal bytes, including SQLite WAL overhead.
+    #[arg(long, env = "RELAY_ACTIVITY_SPOOL_QUOTA_BYTES", default_value_t = 64 * 1024 * 1024)]
+    pub activity_spool_quota_bytes: u64,
+
+    /// How long acknowledged local rows remain available for recovery.
+    #[arg(
+        long,
+        env = "RELAY_ACTIVITY_ACK_RETENTION_MS",
+        default_value_t = 86_400_000
+    )]
+    pub activity_ack_retention_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
@@ -191,6 +201,13 @@ pub enum SecurityMode {
     Local,
     #[serde(rename = "remote")]
     Remote,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActivityMode {
+    Off,
+    Required,
 }
 
 #[derive(Subcommand, Debug)]

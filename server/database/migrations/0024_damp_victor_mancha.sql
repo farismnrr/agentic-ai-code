@@ -1,0 +1,2 @@
+ALTER TABLE "ai_code"."relay_activity_sources" ALTER COLUMN "source_key" SET DATA TYPE varchar(256);--> statement-breakpoint
+ALTER TABLE "ai_code"."workspace_activity" ALTER COLUMN "channel" SET DATA TYPE varchar(256);

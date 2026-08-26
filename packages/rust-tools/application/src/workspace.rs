@@ -2,6 +2,7 @@
 
 mod allowlist;
 mod dispatch;
+mod evidence;
 mod list;
 mod mutate;
 mod patch;
@@ -17,6 +18,8 @@ pub use mutate::*;
 pub use patch::*;
 pub use read::*;
 pub use search::*;
+
+pub(crate) use evidence::{activity_evidence, ActivityEvidence};
 
 pub(crate) fn reject_protected_target(
     root: &std::path::Path,

@@ -10,6 +10,8 @@ use serde_json::Value;
 use std::io::Read;
 use std::path::Path;
 
+use super::{activity_evidence, ActivityEvidence};
+
 pub const MAX_FILE_EDIT_BYTES: usize = 1024 * 1024;
 const MAX_FILE_EDIT_TEXT_BYTES: usize = 256 * 1024;
 const MAX_FILE_EDIT_PATH_BYTES: usize = 4_096;
@@ -27,6 +29,8 @@ pub struct FileEditResult {
     path: String,
     replacements: usize,
     changed: bool,
+    #[serde(rename = "_activity")]
+    activity: ActivityEvidence,
 }
 
 pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditResult, McpError> {
@@ -79,6 +83,7 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
             "file edit target exceeds maximum".into(),
         ));
     }
+    let before_bytes = bytes.clone();
     let source = String::from_utf8(bytes)
         .map_err(|_| McpError::InvalidRequest("file edit target is not valid UTF-8 text".into()))?;
     let (updated, replacements) = apply_edit_operations(&source, &operations)?;
@@ -93,10 +98,19 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
     } else {
         directory.verify_regular_entry(name, identity)?;
     }
+    let evidence_path = target
+        .strip_prefix(root)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_owned());
     Ok(FileEditResult {
         path: path.to_owned(),
         replacements,
         changed,
+        activity: if changed {
+            activity_evidence(&evidence_path, Some(&before_bytes), updated.as_bytes())
+        } else {
+            ActivityEvidence::no_change()
+        },
     })
 }
 
@@ -240,6 +254,8 @@ pub struct FileWriteResult {
     created: bool,
     overwritten: bool,
     bytes: usize,
+    #[serde(rename = "_activity")]
+    activity: ActivityEvidence,
 }
 
 fn normalize_write_path(
@@ -360,6 +376,10 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
     reject_protected_path(root, &normalized)?;
     let (directory, name) =
         resolve_write_parent_directory(root, &cwd_resolved, path, create_parents)?;
+    let evidence_path = normalized
+        .strip_prefix(root)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_owned());
     match directory.entry_type(&name)? {
         Some(entry) if entry.is_symlink() || entry.is_dir() || !entry.is_file() => Err(
             McpError::InvalidRequest("write target has an unsupported entry type".into()),
@@ -368,13 +388,21 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
             "file already exists; overwrite is required".into(),
         )),
         Some(_) => {
-            let (_file, identity, mode) = directory.open_regular_file(&name)?;
+            let (mut file, identity, mode) = directory.open_regular_file(&name)?;
+            let mut before = Vec::new();
+            Read::by_ref(&mut file)
+                .take((MAX_FILE_WRITE_BYTES + 1) as u64)
+                .read_to_end(&mut before)
+                .map_err(|_| {
+                    McpError::InvalidRequest("file write target is inaccessible".into())
+                })?;
             directory.atomic_replace_regular_file(&name, identity, content.as_bytes(), mode)?;
             Ok(FileWriteResult {
                 path: path.to_owned(),
                 created: false,
                 overwritten: true,
                 bytes: content.len(),
+                activity: activity_evidence(&evidence_path, Some(&before), content.as_bytes()),
             })
         }
         None => {
@@ -384,6 +412,7 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
                 created: true,
                 overwritten: false,
                 bytes: content.len(),
+                activity: activity_evidence(&evidence_path, None, content.as_bytes()),
             })
         }
     }

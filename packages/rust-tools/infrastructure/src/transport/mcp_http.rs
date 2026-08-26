@@ -199,7 +199,7 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-fn handle_initialize(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2 {
     let params = request.params.as_ref().and_then(Value::as_object);
     let Some(requested) = params
         .and_then(|p| p.get("protocolVersion"))
@@ -232,7 +232,7 @@ fn handle_initialize(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 
         request.id.clone(),
         json!({
             "protocolVersion": requested,
-            "capabilities": if state.config.tool_profile == relay_core::config::ToolProfile::Full { json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }) } else { json!({ "tools": { "listChanged": false }, "resources": {} }) },
+            "capabilities": json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
         }),
@@ -241,9 +241,7 @@ fn handle_initialize(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 
 }
 
 fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
-    let providers = state.agent_provider_names();
-    let tools =
-        mcp::tool_catalog_for_profile_and_agent_providers(state.config.tool_profile, &providers);
+    let tools = mcp::tool_catalog_for_profile(state.config.tool_profile);
     let response = Response::new(
         request.id.clone(),
         json!({

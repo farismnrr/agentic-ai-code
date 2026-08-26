@@ -119,32 +119,21 @@ The relay separates the HTTP round-trip deadline from execution lifetime:
   `RELAY_MAX_TERMINAL_TIMEOUT_MS`;
 - task-capable clients may use MCP Tasks for `terminal_exec`, `web_search`, and
   read-like `http_fetch` calls;
+- eligible tools accept `execution_mode: sync | async | auto`; `auto` selects
+  async only when the client advertises Tasks, while explicit async fails
+  clearly for clients without that capability;
 - clients without Tasks can use `terminal_job_start`,
   `terminal_job_get`, and `terminal_job_cancel`;
 - a dropped HTTP request does not implicitly cancel the relay job; explicit
   cancellation targets the authoritative process tree.
 
-## 6. Delegated coding agents
+## 6. Execution modes
 
-Full and Primary profiles may expose `agent_delegate` when one or more supported
-coding CLIs are installed and locally authenticated; the live provider schema
-is filtered from the startup capability snapshot. Capability discovery uses each
-CLI's noninteractive login-status interface where one exists; a CLI without a
-safe status check is advertised only when its authentication source is
-explicitly configured. The relay invokes providers in their headless/structured
-output modes inside the same containment boundary, scoped to the selected
-workspace rather than every authorized sibling root. Fallback is allowed only
-for classified quota/rate-limit, authentication, or provider-unavailable
-errors; if the bounded metadata snapshot detects a selected-workspace change or cannot
-prove the snapshot complete, fallback stops.
-
-Local login sessions are required for providers with a status command. A
-provider without a safe status command must have an explicit auth-root
-mapping. `RELAY_AGENT_ENV` and non-default auth directories are explicit
-operator configuration and do not make an unverified provider appear in the
-catalog; API keys are never generated or inferred. Network access is disabled by default and remains independent from terminal
-network permission; no sibling workspaces or host sockets are exposed, and the
-relay does not generate permission-bypass flags. A client cannot elevate these operator controls.
+`sync` waits for a direct result, `async` returns a standard MCP task and
+requires a client that advertises Tasks, and `auto` selects async only when
+that capability is present. An explicit async request is rejected rather than
+silently converted to synchronous execution. Accepted tasks remain owned by
+the relay after the initiating HTTP request disconnects.
 
 ## What a successful connection proves
 

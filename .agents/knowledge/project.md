@@ -70,6 +70,19 @@ The final rules are:
 - Plan 039D adds the shared capability effect/risk contract at `shared/utils/capability-policy.ts`, persisted conversation permission modes, structured approval facts, component-aware protected credential paths in `relay-core`, and opt-in terminal network access. First-party approval state narrows remembered approvals; MCP annotations remain hints and relay hard policy remains authoritative.
 - Plan 039I is CLOSED / VERIFIED. Stable MCP tool identity/scoping remains lockstep with approval ownership, and the relay exposes only bounded server-owned read-only `workspace://` resources for manifest, approved agent guidance, Git status, and HEAD metadata under MCP `2026-07-28`; templates/subscriptions are intentionally absent.
 - Plan 039J composes existing agent surfaces in the Nuxt UI: category-driven tool presentation, sensitivity-aware approval summaries, bounded diff/result previews, compact subagent/background cards, and task/context state. Semantic agent/tool observability stays on the Plan-035 logger/OTel sanitizer chokepoint; raw prompts, tool arguments/results, credentials, private absolute paths, and raw provider/tool errors are never telemetry attributes.
+- Plan 050 adds the workspace activity ledger. The relay is the execution
+  authority: required mode durably records a bounded lifecycle start in its
+  encrypted owner-only SQLite outbox before execution, then exports
+  asynchronously to the Nuxt/PostgreSQL product read model. Nuxt binds the
+  relay's canonical root fingerprint to an owned workspace; activity payloads
+  are separate from OTel/Loki, encrypted at rest, and decrypted only through
+  ownership-checked lazy diff APIs. `file_edit`, `file_write`, and applied
+  `apply_patch` can provide exact text evidence; opaque process/Git/delegated
+  work must remain summary/unavailable. The Logs page uses a durable cursor
+  and bounded visible polling, not process-local pub/sub. Source tokens are
+  one-time enrollment credentials stored hashed/revocable; actor `clientInfo`
+  remains presentation metadata and missing identity is shown as External MCP
+  client.
 
 The remediation also restored application ownership boundaries across API composition, identity/settings/conversation/model/workspace use cases, and infrastructure adapters. Provider credential containment, repository-wide API ownership, mixed utility cleanup, strict architecture probes, and JWT pre-validation compatibility remain implemented. Same-origin redirect handling remains bounded and policy-validated; cross-origin authenticated provider redirects are rejected.
 
