@@ -22,6 +22,7 @@
     "check:test-layout": "node scripts/check-test-layout.mjs",
     "verify:039i": "node --experimental-strip-types scripts/verify-039i-extension-interoperability.ts",
     "verify:039j": "node --experimental-strip-types scripts/verify-039j-agent-ux-observability.ts",
+    "verify:050": "node --experimental-strip-types scripts/verify-050-activity-contract.ts",
     "verify:040a": "node --experimental-strip-types scripts/verify-040a-mcp-task-reliability.ts && bash scripts/verify-040a-mcp-task-transport.sh",
     "verify:040b": "bash scripts/verify-040b-git-branch-foundation.sh && bash scripts/verify-040b-local-git-mutations.sh",
     "verify:040c": "bash scripts/verify-040c-remote-git-contract.sh",

@@ -70,9 +70,6 @@ pub(super) async fn run_job(
         JobKind::Process(invocation) => {
             run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await
         }
-        JobKind::Agent(request) => {
-            super::agent::run_agent_job(&manager.config, request, &mut cancel, stdout, stderr).await
-        }
     };
     let execution_duration_ms = execution_started.elapsed().as_millis() as u64;
     match result {
