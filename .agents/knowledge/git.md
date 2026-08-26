@@ -33,7 +33,7 @@ The command runs repository policy checks, agent-doc integrity, `pnpm lint`, and
 
 Never use `git commit --no-verify`, never change/disable `core.hooksPath` to bypass the gate, and never claim a connector/API-created commit passed a local hook that did not actually run.
 
-A connector/API-created docs-only commit is allowed by the direct-docs workflow, but it is **not** local lint/typecheck evidence. Keep that distinction explicit instead of inventing verification.
+A connector/API-created commit is **not** local lint/typecheck evidence. Keep that distinction explicit instead of inventing verification, and still deliver it through a branch and PR.
 
 See the canonical [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
 
@@ -47,11 +47,12 @@ Unit/integration test files must live under a dedicated sibling `tests/` directo
 
 When the requested change is only documentation, memories, agent knowledge, or a numbered plan:
 
-1. Edit the canonical file directly on current `main` when using the accepted direct-docs workflow.
-2. Keep the change docs-only.
-3. Do not create a branch or PR just for the documentation/plan edit.
-4. If using a connector/API, state truthfully that the local pre-commit hook did not run there.
-5. Keep the plan/memory files consistent with their repository rules.
+1. Start a short-lived branch from the current `main`; never edit or commit directly on `main`.
+2. Keep the change docs-only and consistent with repository rules.
+3. Run the applicable local verification and commit the focused change.
+4. Push the branch and open a pull request targeting `main`.
+5. Merge the approved PR, return to `main`, and verify a clean checkout.
+6. If using a connector/API, state truthfully that the local pre-commit hook did not run there.
 
 ### Implementation
 
@@ -132,9 +133,8 @@ Keep standalone tests and deterministic acceptance checks complementary; neither
 
 ## Rules for agents
 
-- For user-requested docs/plans, edit directly on `main` when the accepted direct-docs workflow applies; do not waste time creating a branch or PR.
-- Never commit implementation/runtime/config/dependency/script changes directly to `main`; use a short-lived implementation branch and PR.
-- Direct `main` commits are documentation/planning-only, never an implementation shortcut.
+- For every user-requested change, including docs/plans, use a short-lived branch and PR; never commit directly to `main`.
+- Do not treat a pushed branch as delivered until its PR is merged.
 - Before **every normal local implementation commit**, ensure `pnpm verify:commit` passed; the hook must not be bypassed.
 - Never claim connector/API docs commits passed a local hook that did not run.
 - Never use `git push --force` on a shared branch.
