@@ -65,7 +65,7 @@ fn main() {
     assert!(codex
         .windows(2)
         .any(|pair| { pair[0] == "--sandbox" && pair[1] == "workspace-write" }));
-    assert!(codex.iter().any(|arg| arg == "--approve-for-me"));
+    assert!(!codex.iter().any(|arg| arg == "--approve-for-me"));
     for provider in [
         AgentProvider::Codex,
         AgentProvider::Antigravity,

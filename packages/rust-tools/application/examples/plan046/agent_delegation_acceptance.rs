@@ -270,7 +270,6 @@ async fn main() {
         provider_argv(AgentProvider::Codex, "fix it", 3),
         vec![
             "exec",
-            "--approve-for-me",
             "--sandbox",
             "workspace-write",
             "--ephemeral",

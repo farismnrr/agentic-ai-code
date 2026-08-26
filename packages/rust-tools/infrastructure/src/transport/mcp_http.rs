@@ -241,15 +241,15 @@ fn handle_initialize(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 
 }
 
 fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
-    let providers = state.agent_capabilities.names();
+    let providers = state.agent_provider_names();
     let tools =
         mcp::tool_catalog_for_profile_and_agent_providers(state.config.tool_profile, &providers);
     let response = Response::new(
         request.id.clone(),
         json!({
             "resultType": "complete",
-            "ttlMs": TOOLS_LIST_TTL_MS,
-            "cacheScope": "public",
+            "ttlMs": 0,
+            "cacheScope": "private",
             "tools": tools
         }),
     );

@@ -149,8 +149,8 @@ pub struct Cli {
     pub agent_env_vars: Vec<String>,
 
     /// Operator-approved provider authentication roots. Values are
-    /// `provider=/absolute/path`; each root is mounted read-only only for that
-    /// provider.
+    /// `provider=/absolute/path`; each root is exposed only to that provider
+    /// through a temporary write layer, leaving the host copy unchanged.
     #[arg(
         long = "agent-auth-root",
         env = "RELAY_AGENT_AUTH_ROOT",
