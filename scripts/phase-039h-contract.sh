@@ -86,18 +86,12 @@ def free_port():
 with tempfile.TemporaryDirectory(prefix='relay-phase039h-') as workspace:
     fixture_bin = os.path.join(workspace, '.capability-bin')
     relay_home = os.path.join(workspace, '.relay-home')
-    agy_auth_root = os.path.join(relay_home, '.agy-session')
     os.makedirs(fixture_bin, exist_ok=True)
     os.makedirs(relay_home, exist_ok=True)
-    os.makedirs(agy_auth_root, exist_ok=True)
-    for provider in ('external-mcp', 'agy', 'external-mcp'):
-        os.symlink('/usr/bin/true', os.path.join(fixture_bin, provider))
     port = free_port()
     process = subprocess.Popen([relay, 'relay', '--port', str(port), '--dir', workspace,
                                 '--execution-root', workspace, '--origin', 'http://localhost:3333',
-                                '--mode', 'local', '--toolchain-path', fixture_bin,
-                                '--agent-env', 'agy=AGY_CAPABILITY_FIXTURE',
-                                '--agent-auth-root', f'agy={agy_auth_root}'],
+                                '--mode', 'local'],
                                cwd=root, env={**os.environ, 'HOME': relay_home,
                                               'AGY_CAPABILITY_FIXTURE': '1'},
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -125,17 +119,18 @@ with tempfile.TemporaryDirectory(prefix='relay-phase039h-') as workspace:
         except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
 PY
 
-# Verify canonical v11 catalog matches candidate runtime exactly
+# Historical v11 remains immutable; the current runtime intentionally removes
+# the provider-specific delegation tool in Plan 050.
 python3 - "$catalog" "$tmp/runtime.json" <<'PY'
 import json, sys
 catalog_file, runtime_file = sys.argv[1:]
 catalog_list = json.load(open(catalog_file))
 runtime_list = json.load(open(runtime_file))
-catalog = {t['name']: t for t in catalog_list}
-runtime = {t['name']: t for t in runtime_list}
 assert len(catalog_list) == 101, f"expected 101 v11 tools, got {len(catalog_list)}"
-assert catalog_list == runtime_list, "candidate runtime differs from canonical v11 catalog"
+runtime = {t['name']: t for t in runtime_list}
 assert len(runtime_list) == len(runtime), "duplicate tool names in candidate runtime"
+assert len(runtime_list) == 100, f"expected 100 current tools, got {len(runtime_list)}"
+assert 'agent_delegate' not in runtime, "removed provider delegation is still in current runtime"
 PY
 
 validate_snapshot_integrity "$catalog" "$catalog_hash_file"

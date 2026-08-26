@@ -45,11 +45,3 @@ required-features = ["test-gh-provider"]
 name = "plan044b_actions_acceptance"
 path = "examples/plan044b_actions_acceptance.rs"
 required-features = ["test-gh-provider"]
-
-[[example]]
-name = "plan046_agent_delegation_acceptance"
-path = "examples/plan046/agent_delegation_acceptance.rs"
-
-[[example]]
-name = "plan048_agent_capability_acceptance"
-path = "examples/plan048/agent_capability_acceptance.rs"

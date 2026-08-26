@@ -1,4 +1,3 @@
-mod agent;
 mod file_edit;
 mod forge;
 
@@ -76,6 +75,16 @@ pub fn tool_catalog() -> Vec<Tool> {
                         "type": "integer",
                         "minimum": 0,
                         "default": 30000
+                    },
+                    "execution_mode": {
+                        "type": "string",
+                        "enum": ["sync", "async", "auto"],
+                        "default": "auto"
+                    },
+                    "idempotency_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
                     }
                 },
                 "required": ["command"],
@@ -90,7 +99,6 @@ pub fn tool_catalog() -> Vec<Tool> {
             security_schemes: coding_security_scheme(),
             execution: Some(json!({ "taskSupport": "optional" })),
         },
-        agent::tool(),
         Tool {
             name: "http_fetch",
             title: Some("HTTP Fetch"),
@@ -116,6 +124,16 @@ pub fn tool_catalog() -> Vec<Tool> {
                         "minimum": 0,
                         "maximum": 300000,
                         "default": 30000
+                    },
+                    "execution_mode": {
+                        "type": "string",
+                        "enum": ["sync", "async", "auto"],
+                        "default": "auto"
+                    },
+                    "idempotency_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
                     }
                 },
                 "required": ["url"],
@@ -138,7 +156,12 @@ pub fn tool_catalog() -> Vec<Tool> {
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 }
+                    "query": { "type": "string", "minLength": 1, "maxLength": 65536 },
+                    "execution_mode": {
+                        "type": "string",
+                        "enum": ["sync", "async", "auto"],
+                        "default": "auto"
+                    }
                 },
                 "required": ["query"],
                 "additionalProperties": false
@@ -393,7 +416,6 @@ pub fn tool_catalog() -> Vec<Tool> {
 
 pub const PRIMARY_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
-    "agent_delegate",
     "terminal_job_start",
     "terminal_job_get",
     "terminal_job_cancel",
@@ -439,41 +461,10 @@ pub fn tool_catalog_for_profile(profile: relay_core::config::ToolProfile) -> Vec
     }
 }
 
-/// Build the live profile catalog with only provider sessions that passed
-/// application-level capability discovery. The static `tool_catalog` remains
-/// the canonical superset used by frozen contract snapshots.
-pub fn tool_catalog_for_profile_and_agent_providers(
-    profile: relay_core::config::ToolProfile,
-    providers: &[&str],
-) -> Vec<Tool> {
-    let mut tools = tool_catalog_for_profile(profile);
-    if !tools.iter().any(|tool| tool.name == "agent_delegate") {
-        return tools;
-    }
-    if providers.is_empty() {
-        tools.retain(|tool| tool.name != "agent_delegate");
-        return tools;
-    }
-    if let Some(tool) = tools.iter_mut().find(|tool| tool.name == "agent_delegate") {
-        *tool = agent::tool_for_providers(providers);
-    }
-    tools
-}
-
 pub fn find_tool_for_profile(name: &str, profile: relay_core::config::ToolProfile) -> Option<Tool> {
     tool_catalog_for_profile(profile)
         .into_iter()
         .find(|t| t.name == name)
-}
-
-pub fn find_tool_for_profile_and_agent_providers(
-    name: &str,
-    profile: relay_core::config::ToolProfile,
-    providers: &[&str],
-) -> Option<Tool> {
-    tool_catalog_for_profile_and_agent_providers(profile, providers)
-        .into_iter()
-        .find(|tool| tool.name == name)
 }
 
 pub fn find_tool(name: &str) -> Option<Tool> {

@@ -39,6 +39,14 @@ The Nuxt application owns:
 - MCP server configuration and tool orchestration;
 - telemetry emitted by the web/server application.
 
+Workspace activity is a separate product-data path. The relay records a bounded
+activity lifecycle at the execution boundary and, when required mode is
+enabled, durably admits the start in an encrypted owner-local SQLite journal
+before running the operation. An asynchronous authenticated exporter delivers
+those records to Nuxt; PostgreSQL is the owned workspace read model. Activity
+payloads are purpose-separated from OpenTelemetry/Loki and are decrypted only
+by an ownership-checked historical-diff endpoint.
+
 The server follows a layered structure:
 
 ```text
@@ -68,6 +76,16 @@ The relay:
 - exposes provider-neutral `change_request_*` contracts; arbitrary provider API passthrough, admin/auto merge, implicit push/fork, and raw provider errors are not model-facing capabilities;
 - uses one component-aware protected credential-path policy for native workspace operations and Bubblewrap masking (`.ssh`, cloud/Docker/Kubernetes configuration, and common package-manager credential files); `.env.example` is intentionally not covered by this policy;
 - treats terminal network access as an explicit operator capability (`RELAY_ALLOW_TERMINAL_NETWORK`), isolated by default, while dedicated HTTP/search tools remain separately classified network capabilities.
+- optionally records workspace operations through the Plan 050 activity
+  recorder. Its source identity and encrypted spool live under the operator's
+  state directory, not in the workspace; `off` preserves compatibility and
+  `required` fails closed when a start cannot be durably admitted.
+
+The activity source is enrolled by an authenticated Nuxt user and bound to an
+owned workspace by the canonical path fingerprint. The relay never accepts a
+Nuxt workspace UUID as authority. Structured text mutations can carry exact
+before/after evidence; terminal, Git, and opaque process operations remain bounded
+summary/unavailable evidence unless the relay can prove more.
 
 For the single-owner profile, `--execution-root` may be the canonical non-root home directory while `--dir` identifies the primary authorized repository. Sibling projects are not implicitly authorized merely because they are beneath the execution boundary; add them explicitly with `workspace_add` before selecting them with `cwd`. Workspace path resolution therefore enforces two levels: the execution root as the hard maximum boundary and the primary/dynamic workspace allowlist as the active authorization boundary. Recursive native traversal does not follow symlink directories; edit/write operations additionally use no-follow directory/file descriptors and same-directory atomic replacement semantics so validation-time containment is not treated as sufficient mutation safety.
 

@@ -11,15 +11,36 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
 - **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
-- **Tools:** Full currently exposes 101 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, bounded alert/workflow tools, and `agent_delegate`. Primary is the intentional 32-tool fast-path subset and includes capability-filtered `agent_delegate`. The exact static catalog contract is frozen under `.agents/contracts/`.
+- **Tools:** Full currently exposes 100 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, and bounded alert/workflow tools. Primary is the intentional 31-tool fast-path subset. The exact static catalog contract is frozen under `.agents/contracts/`.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
+
+### Workspace activity ledger (Plan 050)
+
+The relay can record every mediated tool call at the shared MCP execution
+boundary. `RELAY_ACTIVITY_MODE=off` is the compatibility default;
+`required` durably admits a bounded `started` event in an encrypted,
+owner-only SQLite outbox before workspace execution. Configure
+`RELAY_ACTIVITY_STATE_DIR`, `RELAY_ACTIVITY_SINK_URL`, and the one-time
+enrollment `RELAY_ACTIVITY_SOURCE_TOKEN` to enable authenticated asynchronous
+delivery. The source ID and local encryption key persist in the state directory;
+unacknowledged records are retained across sink outages/restarts and quota
+failure is fail-closed. 401/403 marks delivery degraded rather than hammering a
+revoked credential.
+
+The relay derives workspace scope from its canonical `WorkspaceAllowlist` root;
+it never trusts a Nuxt workspace UUID from an MCP client. `clientInfo` is
+presentation metadata only. Structured text mutations may provide exact
+historical evidence; process and Git operations remain bounded
+summary/unavailable evidence when exact provenance is not relay-owned. Activity
+payloads are not OTel/Loki telemetry and never include raw arguments/results,
+prompts, auth, environment variables, or arbitrary stdout/stderr.
 
 The security boundary is server-side authorization plus the Bubblewrap sandbox. Client confirmation UI, MCP annotations, or tool descriptions are not security controls.
 
 ### Long-running / slow-operation contract
 
-- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; fast bounded native reads remain synchronous.
+- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. `execution_mode=sync` waits, `async` requires Tasks, and `auto` uses async only when Tasks are advertised. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; fast bounded native reads remain synchronous.
 - The first-party client honors task `pollIntervalMs`, uses bounded backoff, and applies its own bounded HTTP round-trip deadline independently of the task lifetime.
 - First-party/non-Tasks clients that need live terminal output use `terminal_job_start/get/cancel`; those fallback tools reuse the same job manager rather than creating a second process runner.
 - `timeout_ms: 0` means no terminal command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
@@ -140,20 +161,6 @@ All plans through 029b were explicitly closed for a planning refresh. Current 03
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 32 common coding tools: capability-filtered `agent_delegate`, short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 31 common coding tools: `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Both profiles advertise the server-level MCP Tasks extension, and eligible tools use the explicit `execution_mode` contract.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.
-
-Plan 046 adds the `agent_delegate` tool for operator-installed coding
-CLIs. Plan 048 adds startup capability discovery: locally authenticated
-sessions are preferred, the live provider schema omits unavailable CLIs, and a
-live tool-list and delegation checks refresh login/logout state without a
-relay restart. Each adapter uses its documented
-headless interface; explicit environment mappings remain an opt-in fallback,
-but never make an unverified provider visible; they are not a generated or
-inferred API-key path. Serial fallback is limited to
-quota, authentication, or availability failures; a bounded metadata-only
-snapshot covers the selected writable workspace and any change or incomplete
-snapshot stops fallback. Provider network and non-default auth roots remain opt-in relay
-configuration, independent from terminal network permission. Permission-bypass flags are never generated, and delegated
-work remains inside the existing Bubblewrap boundary.

@@ -9,6 +9,8 @@ use serde_json::Value;
 use std::io::Read;
 use std::path::Path;
 
+use super::{activity_evidence, ActivityEvidence};
+
 const MAX_PATCH_BYTES: usize = 512 * 1024;
 const MAX_PATCH_FILES: usize = 20;
 const MAX_PATCH_HUNKS: usize = 100;
@@ -20,6 +22,8 @@ pub struct ApplyPatchResult {
     changed_paths: Vec<String>,
     hunks: usize,
     files: Vec<PatchFileResult>,
+    #[serde(rename = "_activity")]
+    activity: ActivityEvidence,
 }
 #[derive(Debug, Serialize)]
 struct PatchFileResult {
@@ -173,11 +177,38 @@ pub fn apply_patch(arguments: &Value, config: &ServerConfig) -> Result<ApplyPatc
             committed.push(p);
         }
     }
+    let evidence_files = planned
+        .iter()
+        .map(|file| activity_evidence(&file.path, Some(&file.before), &file.after))
+        .collect::<Vec<_>>();
+    let evidence_complete = evidence_files.iter().all(|evidence| evidence.complete);
+    let changed = evidence_files
+        .iter()
+        .any(|evidence| !evidence.files.is_empty());
     Ok(ApplyPatchResult {
         dry_run,
         changed_paths: planned.iter().map(|p| p.path.clone()).collect(),
         hunks: total_hunks,
         files,
+        activity: ActivityEvidence {
+            evidence: if dry_run {
+                "summary"
+            } else if !changed {
+                "not_applicable"
+            } else if evidence_complete {
+                "exact"
+            } else {
+                "unavailable"
+            },
+            complete: evidence_complete && changed && !dry_run,
+            preview: dry_run,
+            change_type: if changed { "modify" } else { "no_change" },
+            content_kind: if evidence_complete { "text" } else { "binary" },
+            files: evidence_files
+                .into_iter()
+                .flat_map(|evidence| evidence.files)
+                .collect(),
+        },
     })
 }
 
