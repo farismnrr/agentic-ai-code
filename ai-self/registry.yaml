@@ -7,6 +7,12 @@ skills:
     status: active
     role: safety-primary
     purpose: resolve, verify, and lock the correct project before repository mutation
+  premium-landing-page:
+    path: skills/premium-landing-page/SKILL.md
+    source: local
+    status: active
+    role: primary
+    purpose: product-grounded premium landing-page design and cinematic scroll orchestration
   motion-explainer-video:
     path: skills/motion-explainer-video/SKILL.md
     source: local
@@ -67,6 +73,69 @@ skills:
     status: active
     role: supporting
     purpose: repository contribution-policy checks around commits, pushes, issues, and PRs
+
+  ui-animation:
+    path: ../.agents/skills/ui-animation/SKILL.md
+    source: https://github.com/mblode/agent-skills
+    status: active
+    role: primary
+    purpose: UI motion design, implementation, review, and animation quality guidance
+  frontend-design:
+    path: ../.agents/skills/frontend-design/SKILL.md
+    source: https://github.com/anthropics/skills
+    source_ref: 3b3fad96af16a10759d930941b4520ba0c40edae
+    installed_via: manual-pinned-download
+    status: active
+    role: primary
+    purpose: distinctive landing-page visual direction, typography, layout, and frontend design quality
+  gsap-core:
+    path: ../.agents/skills/gsap-core/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP tween, easing, stagger, responsive, and reduced-motion guidance
+  gsap-timeline:
+    path: ../.agents/skills/gsap-timeline/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP sequencing and timeline choreography guidance
+  gsap-scrolltrigger:
+    path: ../.agents/skills/gsap-scrolltrigger/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP scroll-linked animation, pinning, parallax, and scrub guidance
+  gsap-plugins:
+    path: ../.agents/skills/gsap-plugins/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP plugin guidance including SplitText, Flip, MorphSVG, and ScrollSmoother
+  gsap-performance:
+    path: ../.agents/skills/gsap-performance/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP animation performance and jank-avoidance guidance
+  gsap-frameworks:
+    path: ../.agents/skills/gsap-frameworks/SKILL.md
+    source: https://github.com/greensock/gsap-skills
+    source_ref: aed9cfd3277740755f6bfc1155c7aa645403b760
+    installed_via: manual-pinned-download
+    status: active
+    role: supporting
+    purpose: official GSAP Vue and Nuxt lifecycle, SSR, scoping, and cleanup guidance
 
 tools:
   workspace-verify:

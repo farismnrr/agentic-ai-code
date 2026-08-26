@@ -48,9 +48,9 @@ Before decomposing tasks:
 
 Apply KISS, DRY, YAGNI, least privilege, and repository conventions.
 
-### 4. Decide whether the work needs one plan or multiple plans
+### 4. Keep one plan by default; split only when independence is real
 
-For large work, create a master roadmap and split the initiative into self-contained child plans with stable IDs such as PLAN-01 and PLAN-02. Maintain a master todo/checklist, make cross-plan dependencies and handoffs explicit, and keep each child plan independently reviewable and executable. Do not create one oversized monolithic plan.
+Default to one numbered plan file for the initiative and decompose it into phases/tasks inside that file. Cross-subsystem scope, many phases, or a long checklist are not sufficient reasons to create child plans. Split into child plans only when parts are genuinely independently deliverable/reviewable, have materially separate owners/lifecycles, or the single file would become impractical to execute and maintain. When a split is truly justified, keep dependencies and handoffs explicit and avoid administrative fragmentation.
 
 ### 5. Decompose each plan into phases
 
@@ -159,17 +159,19 @@ Use this structure unless the repository already has a stricter plan template:
 - approvals/external actions still required
 ```
 
-## Multi-plan structure for large work
+## Multi-plan structure — exception only
 
-When work is large, create a master roadmap plus child plans. The master roadmap must contain:
+Use a master roadmap plus child plans only when the work has genuinely independent deliverables, owners, release/review lifecycles, or a single plan file would be impractical. Large size by itself is not enough; prefer one plan with phase IDs and task IDs.
 
-- a table of `PLAN-XX` items with goal, dependency, status, and exit criteria;
-- a **Master Todo** checklist (`- [ ] PLAN-01: ...`);
+When a multi-plan split is justified, the master roadmap must contain:
+
+- a table of child plans with goal, dependency, status, and exit criteria;
+- a master checklist;
 - execution order and parallelizable plans;
 - cross-plan risks/decisions;
 - final initiative acceptance criteria.
 
-Each child plan must contain its parent roadmap, plan ID, dependencies, its own task checklist, validation, rollback, acceptance criteria, and handoff to the next dependent plan. Do not start a dependent child plan until its prerequisite plan exit criteria are satisfied.
+Each child plan must contain its parent roadmap, plan ID, dependencies, its own task checklist, validation, rollback, acceptance criteria, and handoff to the next dependent plan. Do not start a dependent child plan until its prerequisite exit criteria are satisfied.
 
 ## Plan persistence
 
