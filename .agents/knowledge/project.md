@@ -85,7 +85,7 @@ The remediation also restored application ownership boundaries across API compos
 - `.agents/contracts/` — frozen client-visible contract evidence.
 - `.githooks/pre-commit` — mandatory local commit gate.
 
-The repository intentionally has **no CI workflow** and **no unit-test suite**.
+The repository intentionally has **no CI workflow**. Unit/integration tests, when present, must be standalone files under a dedicated sibling `tests/` directory; production files must not contain inline tests or references to test modules.
 
 ## Normal verification
 
@@ -121,9 +121,9 @@ The mandatory local gates pin the repository toolchain and cover formatting, war
 
 The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
 
-### No unit tests
+### Test layout and code length
 
-Do not introduce a unit-test framework or unit-test suite by default. Existing deterministic acceptance/security scripts may remain as explicit local verification for protocol/security boundaries; they are not CI and are not a substitute for the mandatory lint/typecheck gate.
+Keep unit/integration tests in standalone files under a dedicated sibling `tests/` directory. Production files must not contain inline tests or references to test modules. `pnpm check:test-layout` enforces this policy and is part of `pnpm verify:commit`. The maintainability checker reports files over 400 lines and fails unexplained files over 500 lines.
 
 ## Runtime/config orientation
 

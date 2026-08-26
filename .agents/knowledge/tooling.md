@@ -57,7 +57,7 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 - The native workspace is under `packages/rust-tools/`.
 - Repository development pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
 - `pnpm build:tools` builds the native binaries used by local tool/relay packages.
-- This repository intentionally has **no CI** and **no unit-test suite**.
+- This repository intentionally has **no CI**. Standalone unit/integration tests, when present, live in sibling `tests/` directories; production files contain no inline tests or test-module references.
 
 ## Mandatory local commit gate
 
@@ -70,6 +70,8 @@ pnpm verify:commit
 ```
 
 That command runs repository policy enforcement, agent-doc integrity, architecture checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
+
+`pnpm check:test-layout` is included in the commit gate. It rejects test-like files outside dedicated test directories and inline Rust/JavaScript test markers.
 
 For Plan-039 composed agent UX/observability changes, `pnpm verify:039j` is the deterministic focused gate and `scripts/phase-039j-contract.sh` composes it with the current 039H/039I MCP contracts. Focused closure evidence requires three consecutive passes before broader regression gates.
 

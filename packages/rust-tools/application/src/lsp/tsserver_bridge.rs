@@ -448,7 +448,3 @@ async fn reply(state: &Arc<SharedState>, request_id: i64, body: Value) {
         super::protocol::fault_and_terminate(state, &state.primary_child, LspError::Crashed).await;
     }
 }
-
-#[cfg(test)]
-#[path = "tsserver_bridge/tests.rs"]
-mod tests;
