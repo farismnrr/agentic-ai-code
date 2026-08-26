@@ -5,7 +5,7 @@
 ## Repository policy and verification
 
 - Human/operator documentation now lives under `docs/`; `README.md` is the concise project landing page, while `.agents/` remains agent-only durable context/contracts/history. Keep these roles separate and update `docs/` when installation/deployment behavior changes.
-- The repository intentionally has **no CI workflow** and **no unit-test suite**. Do not add normal test directories/files, package `test` scripts, or Rust `#[cfg(test)]` modules unless the user explicitly changes policy.
+- The repository intentionally has **no CI workflow**. Any unit/integration tests must be standalone files under sibling `tests/` directories; production files must not contain inline tests or references to test modules. `pnpm check:test-layout` enforces the layout policy.
 - Every normal local commit must pass the tracked pre-commit gate. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm verify:commit`. Never use `--no-verify` or disable/replace the hook path.
 - `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. A failure means do not claim the commit is verified.
 - `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` runs `nuxt prepare --dotenv .env.example`, direct `vue-tsc -p .nuxt/tsconfig.json --noEmit`, then warnings-denied Rust `cargo check`.
@@ -92,7 +92,7 @@ Durable final rules:
 - Do not infer current architecture from old plan snapshots; several designs were superseded (inbound SSE, Node/WebSocket relay, JS executable CLIs, hardcoded provider assumptions).
 - Do not weaken a production security boundary to make a deterministic fixture pass.
 - Do not treat grep/source strings as behavior proof when deterministic black-box verification is practical.
-- Do not create a unit-test suite merely to replace explicit deterministic security/contract scripts.
+- Keep standalone tests separate from deterministic security/contract scripts; neither should be embedded in production modules.
 - Fixture-looking directories can contain real configuration; inspect references before deleting.
 
 ## Planning reset and active plan

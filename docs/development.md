@@ -19,7 +19,7 @@ Do not commit implementation directly to `main` or `dev`.
 
 ## Mandatory local gate
 
-This repository intentionally has no hosted CI workflow and no unit-test suite. Normal local commits are protected by the tracked pre-commit hook installed during `pnpm install`.
+This repository intentionally has no hosted CI workflow. Any unit/integration test code is kept in standalone files under a sibling `tests/` directory; production files do not contain inline tests or references to test modules. Normal local commits are protected by the tracked pre-commit hook installed during `pnpm install`.
 
 For capability-boundary changes, run `sh scripts/verify-capability-policy.sh`. It checks the canonical protected-path semantics, deterministic mode/remembered-rule/external/local-terminal behavior, the fail-closed terminal network default, and the first-party policy module's lint contract.
 
@@ -45,6 +45,10 @@ Current guardrails:
 - function-size decomposition remains a review concern rather than a custom parser rule;
 - never split code solely to satisfy counts. Prefer one clear owner, DRY policy, pragmatic SOLID/layering, YAGNI, and KISS.
 
+## Test layout
+
+`pnpm check:test-layout` is part of `pnpm verify:commit`. It rejects test-like files outside dedicated `tests/` directories and rejects inline Rust/JavaScript tests in production code. Standalone acceptance/security scripts remain valid when they are kept in their own test directory.
+
 Run the checker directly with `node scripts/check-maintainability.mjs`; run its deterministic negative probes with `node scripts/check-maintainability.mjs --self-test`. Architecture/folder/module changes are not complete until relevant operator docs and agent guidance describe the final ownership.
 
 ## Common commands
@@ -66,7 +70,7 @@ For final runtime verification, prefer `pnpm build && pnpm preview` over a long-
 
 ## Security/protocol acceptance scripts
 
-Targeted deterministic scripts exist for areas where static lint/type checks are insufficient. They are acceptance/security checks, not a unit-test suite.
+Targeted deterministic scripts exist for areas where static lint/type checks are insufficient. They are acceptance/security checks and remain separate from the standalone test tree.
 
 Examples:
 

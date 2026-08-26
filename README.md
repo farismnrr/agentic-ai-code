@@ -73,7 +73,7 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - normal Nuxt development port: **3333**
 - integration/release branch: **`main`**
 - implementation work: dedicated feature branch → PR → `main`
-- no hosted CI workflow and no unit-test suite by project policy
-- every normal local commit must pass `pnpm verify:commit`, including architecture and maintainability-budget enforcement
+- no hosted CI workflow; standalone tests, when present, live under sibling `tests/` directories and never inline in production files
+- every normal local commit must pass `pnpm verify:commit`, including test-layout and maintainability-budget enforcement
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.

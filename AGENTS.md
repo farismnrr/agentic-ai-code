@@ -4,13 +4,15 @@ All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start a
 
 This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
 
-This repository intentionally has **no CI** and **no unit-test suite**. Quality enforcement is local and mandatory. Before every normal local commit, all required lint/type gates must pass:
+This repository intentionally has **no CI**. Any unit/integration test code must be a standalone file under a dedicated sibling `tests/` directory; production files must not contain inline test modules or references to test modules. Quality enforcement is local and mandatory. Before every normal local commit, all required lint/type gates must pass:
 
 ```sh
 pnpm verify:commit
 ```
 
 A tracked pre-commit hook runs that command automatically after `pnpm install`. The gate includes architecture and maintainability-budget checks in addition to lint/type verification. Never bypass it with `git commit --no-verify`, and never commit while any gate is failing. Architecture/folder/module changes must synchronize relevant `docs/` and `.agents/` guidance before closure.
+
+Implementation delivery always uses a short-lived branch from `main`: commit the focused change, push the branch, open a pull request into `main`, merge the approved PR, then return to `main` and verify the checkout is clean. Do not implement directly on `main` or treat a pushed branch as delivered without the PR merge.
 
 Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files.
 

@@ -1,0 +1,84 @@
+#!/usr/bin/env node
+import fs from 'node:fs'
+import path from 'node:path'
+
+const ROOT = path.resolve(import.meta.dirname, '..')
+const SOURCE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.tsx', '.vue', '.rs'])
+const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents'])
+const TEST_DIRS = new Set(['test', 'tests', '__tests__'])
+
+function walk(dir, files = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIRS.has(entry.name)) continue
+    const file = path.join(dir, entry.name)
+    if (entry.isDirectory()) walk(file, files)
+    else if (SOURCE_EXTENSIONS.has(path.extname(file))) files.push(file)
+  }
+  return files
+}
+
+function relative(file) {
+  return path.relative(ROOT, file).split(path.sep).join('/')
+}
+
+function isTestDirectory(file) {
+  return relative(file).split('/').some(segment => TEST_DIRS.has(segment))
+}
+
+function lineNumber(source, index) {
+  return source.slice(0, index).split('\n').length
+}
+
+function sourceWithoutComments(source) {
+  return source.replaceAll(/\/\*[\s\S]*?\*\//g, comment => comment.replaceAll(/[^\n]/g, ' ')).replaceAll(/\/\/.*$/gm, comment => comment.replaceAll(/[^\n]/g, ' '))
+}
+
+function testFileName(file) {
+  const extension = path.extname(file)
+  const basename = path.basename(file, extension)
+  return /(?:\.test|\.spec|[_-]tests?)$/i.test(basename) || /^(?:test|tests|spec|specs)$/i.test(basename)
+}
+
+function rustFailures(file, source) {
+  const failures = []
+  for (const pattern of [
+    /#\s*\[\s*(?:(?:[A-Za-z_]\w*::)*(?:test|rstest|test_case)(?:\s*\([^]]*\))?|(?:cfg|cfg_attr)\s*\([^]]*\btest\b[^]]*\))\s*\]/gs,
+    /\bmod\s+tests?\s*\{/g
+  ]) {
+    for (const match of source.matchAll(pattern)) {
+      failures.push(`${relative(file)}:${lineNumber(source, match.index)}: unit tests must live in a dedicated test folder`)
+    }
+  }
+  return failures
+}
+
+function javascriptFailures(file, source) {
+  const code = sourceWithoutComments(source)
+  const frameworkImport = /from\s+['"](?:vitest|jest|@jest\/globals|mocha|node:test|bun:test)['"]|require\(\s*['"](?:vitest|jest|mocha|node:test|bun:test)['"]\s*\)/.test(source)
+  const patterns = [
+    /(?<![\w.$])(?:describe|it|beforeEach|afterEach)\s*\(/g,
+    ...(frameworkImport ? [/(?<![\w.$])(?:test|expect)\s*\(/g] : [])
+  ]
+  return patterns.flatMap(pattern => [...code.matchAll(pattern)].map(match => (
+    `${relative(file)}:${lineNumber(source, match.index)}: unit tests must live in a dedicated test folder`
+  )))
+}
+
+function check(root = ROOT) {
+  const files = walk(root)
+  return files.flatMap((file) => {
+    if (isTestDirectory(file)) return []
+    if (testFileName(file)) return [`${relative(file)}: test files must live in a dedicated test folder`]
+    const source = fs.readFileSync(file, 'utf8')
+    if (path.extname(file) === '.rs') return rustFailures(file, source)
+    if (['.js', '.mjs', '.ts', '.tsx', '.vue'].includes(path.extname(file))) return javascriptFailures(file, source)
+    return []
+  })
+}
+
+const failures = check()
+if (failures.length) {
+  console.error(`Test layout guard failed:\n${failures.map(failure => `- ${failure}`).join('\n')}`)
+  process.exit(1)
+}
+console.log('Test layout guard passed: unit tests are isolated in dedicated folders')
