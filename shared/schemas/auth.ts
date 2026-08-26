@@ -54,7 +54,29 @@ export const resetPasswordSchema = v.pipe(
 export type ResetPasswordInput = v.InferOutput<typeof resetPasswordSchema>
 
 export const verifySchema = v.object({
-  token: v.pipe(v.string(), v.minLength(1, 'Token is required'))
+  token: v.pipe(v.string(), v.minLength(1, 'Token is required'), v.maxLength(256, 'Token is invalid'))
 })
 
 export type VerifyInput = v.InferOutput<typeof verifySchema>
+
+export const reauthSchema = v.object({
+  password: v.pipe(v.string(), v.minLength(8, 'Password is required'), v.maxLength(128, 'Password is too long'))
+})
+
+export const emailChangeSchema = v.object({
+  email: v.pipe(v.string(), v.email('Enter a valid email address'), v.maxLength(320, 'Email is too long')),
+  password: v.pipe(v.string(), v.minLength(8, 'Current password is required'), v.maxLength(128, 'Password is too long'))
+})
+
+export const mfaEnrollmentSchema = v.object({
+  factorId: v.pipe(v.string(), v.uuid('Factor id is invalid')),
+  code: v.pipe(v.string(), v.regex(/^\d{6}$/, 'Enter the six-digit code'))
+})
+
+export const mfaFactorSchema = v.object({
+  factorId: v.pipe(v.string(), v.uuid('Factor id is invalid'))
+})
+
+export const recoveryCodeSchema = v.object({
+  code: v.pipe(v.string(), v.regex(/^[a-f0-9]{4}(?:-[a-f0-9]{4}){3}$/i, 'Recovery code is invalid'))
+})

@@ -147,7 +147,8 @@ A simultaneous public Full + Primary deployment is a separate operator decision 
 Plan 046 adds the `agent_delegate` tool for operator-installed coding
 CLIs. Plan 048 adds startup capability discovery: locally authenticated
 sessions are preferred, the live provider schema omits unavailable CLIs, and a
-restart refreshes login/logout state. Each adapter uses its documented
+live tool-list and delegation checks refresh login/logout state without a
+relay restart. Each adapter uses its documented
 headless interface; explicit environment mappings remain an opt-in fallback,
 but never make an unverified provider visible; they are not a generated or
 inferred API-key path. Serial fallback is limited to

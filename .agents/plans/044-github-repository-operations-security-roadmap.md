@@ -1,6 +1,17 @@
 # Plan 044 — GitHub Repository Operations and Security Visibility Roadmap
 
-**Status:** PLANNED
+**Status:** PARTIALLY VERIFIED / EXTERNAL ACCEPTANCE BLOCKED (2026-08-26)
+
+**Verified now:** Plans 044A–044D source is present in merged history through
+`78f7f9e`, the deterministic issue/actions/security/mutation guards and the
+composed v9 contract pass, and the user relay remains active with the expected
+public OAuth challenge/metadata boundary.
+
+**Still externally blocked:** no authenticated MCP connector session or
+authorized disposable GitHub issue/workflow fixture is available in this
+closure pass. Therefore live issue mutations, Actions mutations, connector
+rediscovery, and authenticated v9 discovery remain explicitly unproven. No
+GitHub mutation was fabricated or performed.
 **Created:** 2026-08-19
 **Predecessor:** Plan 043 — Broad Git, Worktrees, Timing, and Workspace Authorization (CLOSED / VERIFIED / MERGED / DEPLOYED)
 **Plan family:** 044A–044D

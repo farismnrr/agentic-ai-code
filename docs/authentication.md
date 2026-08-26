@@ -13,6 +13,14 @@ Supported application account flows include:
 - password reset through SMTP;
 - optional external OAuth login.
 
+Authenticated browser sessions are owner-scoped server records whose bearer
+secret is sealed in the httpOnly cookie and hashed in PostgreSQL. Users can
+revoke individual sessions or sign out other browsers from Account settings.
+Password reset and confirmed email changes invalidate existing sessions.
+TOTP and single-use recovery codes are available as an MFA foundation; their
+seeds/codes are never stored in plaintext. See [security.md](security.md) for
+the exact invariants and the remaining deployment-role acceptance boundary.
+
 Relevant configuration lives under the session, SMTP, and application OAuth sections of `.env.example`.
 
 This authentication controls access to AI Code's UI and server APIs.

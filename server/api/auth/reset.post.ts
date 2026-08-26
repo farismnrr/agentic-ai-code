@@ -1,4 +1,4 @@
-import { badRequest, gone, unprocessable, tooManyRequests } from '#server/core/errors/http'
+import { badRequest, unprocessable, tooManyRequests } from '#server/core/errors/http'
 import { resetPasswordSchema as resetSchema } from '../../../shared/schemas/auth'
 import * as v from 'valibot'
 
@@ -14,20 +14,26 @@ export default defineEventHandler(async (event) => {
     throw tooManyRequests(retryAfter)
   }
 
+  const passwordScreening = await event.context.application.security.screenPassword(body.password)
+  if (passwordScreening === 'breached') throw badRequest('Choose a password that has not appeared in a known breach.')
+  if (passwordScreening === 'unavailable') {
+    await event.context.application.audit.record({ eventType: 'auth.password_screening', outcome: 'error', metadata: { boundary: 'reset' } })
+  }
+
   const hashedToken = event.context.application.security.hashToken(body.token)
-  const tokenRecord = await event.context.application.auth.consumePasswordReset(hashedToken, await hashPassword(body.password))
+  const tokenRecord = await event.context.application.auth.consumePasswordReset(hashedToken, await hashPassword(body.password)) as { userId: string } | null
 
   if (!tokenRecord) {
+    await event.context.application.audit.record({ eventType: 'auth.password_reset', outcome: 'denied' })
+    event.context.application.observability.request?.event('auth.password_reset', 'denied', { 'auth.present': false })
     throw badRequest('Invalid password reset link.')
   }
 
-  if (tokenRecord.consumedAt || tokenRecord.expiresAt < new Date()) {
-    throw gone('This password reset link has expired or already been used.')
-  }
-
-  // Optionally, clear their session here to force re-login on all devices
-  // But we use cookie sessions without DB tracking, so we can't easily invalidate other devices.
-  // The user can login normally now.
+  // Clear this browser immediately. Other sealed-cookie sessions are rejected
+  // by the auth-version guard on their next request.
+  await clearUserSession(event)
+  await event.context.application.audit.record({ userId: tokenRecord.userId, eventType: 'auth.password_reset', outcome: 'ok' })
+  event.context.application.observability.request?.event('auth.password_reset', 'ok', { 'auth.present': true })
 
   return { ok: true }
 })

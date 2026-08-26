@@ -77,7 +77,9 @@ configuration. They are not required for a normal local login when the CLI has
 a supported status command; a CLI without one needs the explicit auth-root
 mapping. The relay does not generate or infer API keys. Only authenticated or
 explicitly rooted providers are included in the live Full/Primary tool schema;
-restart after changing a CLI login.
+the relay rechecks provider capability when the live tool schema is requested
+or `agent_delegate` is invoked, so a relay restart is not required after a CLI
+login change.
 
 Delegation runs providers serially and falls back only for classified
 quota/authentication/availability failures. A bounded metadata-only snapshot

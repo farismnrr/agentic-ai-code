@@ -1,6 +1,19 @@
 # Plan 036 — Public Remote MCP and OAuth Interoperability
 
-**Status:** OPEN — the runtime implementation, public deployment, and a live ChatGPT connection/tool call are proven as of 2026-08-16; hosted-Nuxt execution, OAuth callback/token-claim evidence, approval behavior, and the remaining negative-case matrix are still open.
+**Status:** PARTIALLY VERIFIED / EXTERNAL ACCEPTANCE BLOCKED (2026-08-26)
+
+**Verified now:** first-party server-only Nuxt remote-MCP ownership binding and
+HTTPS URL checks exist in source; the public relay is active; the public health,
+RFC 9728 protected-resource metadata, and unauthenticated `/mcp` OAuth challenge
+were read-only verified on 2026-08-26. No bearer token or callback credential was
+handled or logged during this check.
+
+**Still externally blocked:** this workspace has no deployed hosted-Nuxt
+runtime to exercise, no reusable authenticated MCP connector session for an
+OAuth callback/token-claim proof, and no authorized disposable tool fixture for
+approval and negative-case calls. Those claims remain unproven; the existing
+2026-08-16 ChatGPT proof is historical evidence, not a substitute for this
+closure pass's current connector evidence.
 
 ## Goal
 

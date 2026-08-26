@@ -44,7 +44,7 @@ W5. Before Git writes, revalidate the canonical repository root and project iden
 13. All implementation plans must be written in English unless the user explicitly requests another language.
 14. Planning is plan-only by default: inspect and design, but do not implement unless the user also asks to execute.
 15. Plans must be grounded in verified repository context, decomposed into executable phases/tasks, and include validation, risks, dependencies, todo/checklists, and team/review boundaries where relevant.
-16. Large initiatives must be split into multiple self-contained child plans under a master roadmap with explicit dependencies and a master todo/checklist; do not create one oversized monolithic plan.
+16. Default to one numbered plan file per initiative and use phases/tasks inside that file, even for large cross-subsystem work. Split into child plans only when parts are genuinely independently deliverable/reviewable, have materially separate lifecycles/owners, or one file would become impractical; do not split merely because an initiative has many phases.
 
 ## Delivery
 
