@@ -1,23 +1,21 @@
 # Git workflow
 
-Documentation/planning edits and implementation changes intentionally use different workflows, but the repository currently has a single long-lived branch: `main` (`origin/HEAD -> origin/main`; no `dev` branch exists).
+Documentation/planning edits and implementation changes use the same protected delivery workflow. The repository currently has a single long-lived branch: `main` (`origin/HEAD -> origin/main`; no `dev` branch exists).
 
-- **Docs/plans:** documentation-only and planning-only edits may be committed directly to `main` when the operator requests or accepts that direct-docs workflow. Do **not** create a branch or pull request for docs-only work by default.
-- **Implementation:** source/runtime/config/dependency/script changes must use a short-lived branch based on current `main` and a pull request targeting `main`.
+- **All changes:** docs, plans, source, runtime/config, dependencies, and scripts must use a short-lived branch based on current `main` and a pull request targeting `main`.
 - **Release/deployment:** merging implementation to `main` is not itself authorization to tag, publish, deploy, restart services, or mutate production/runtime state.
 
-A docs/plan edit must stay docs-only. If the same task starts changing executable code, runtime config, dependencies, migrations, scripts, or other implementation surfaces, switch to an implementation branch before making those changes.
+Keep `main` clean: never commit directly to it, and never treat a pushed branch as delivered before its pull request is merged.
 
 ## Long-lived branch
 
 ```text
-docs / plans ───────────────▶ main
-implementation branch ──PR──▶ main
+any change branch ───────PR──▶ main
 ```
 
 | Branch | Role | How it moves |
 | --- | --- | --- |
-| `main` | Canonical integration/release branch | Direct docs/plans where appropriate; implementation via PRs from short-lived branches |
+| `main` | Canonical integration/release branch | Changes arrive through merged PRs from short-lived branches |
 
 Implementation branches base from current `main`. The default delivery is always: short-lived branch → focused commit → push → pull request into `main` → merge → return to `main` and verify a clean checkout. If a future integration branch is introduced, verify it from current Git refs and repository policy before changing this workflow; never resurrect a historical `dev` assumption from memory alone.
 
@@ -77,7 +75,7 @@ Plan history through 029b was compacted once into [`../plans/030-previous-plans-
 
 Future plans are separate files starting at **031**. Use `NNN-kebab-case.md`, never reuse a number, and do not fold post-030 plans back into Plan 030 automatically.
 
-Creating or editing a plan is a documentation-only operation and therefore may happen directly on `main` under the accepted direct-docs workflow. **Implementation of that plan** happens on one or more short-lived branches/PRs as appropriate.
+Creating or editing a plan also follows the short-lived branch → PR → merge workflow. Return to `main` and verify a clean checkout after the PR is merged.
 
 ## Branch names
 
