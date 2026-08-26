@@ -191,7 +191,10 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
               </UDropdownMenu>
             </div>
             <UNavigationMenu
-              :items="itemsFor(group.conversations)"
+              :items="[
+                { label: 'Logs', icon: 'i-lucide-activity', to: `/workspaces/${group.workspace.id}/logs`, active: route.path === `/workspaces/${group.workspace.id}/logs` },
+                ...itemsFor(group.conversations)
+              ]"
               orientation="vertical"
               :ui="{ link: 'group', root: 'py-0.5' }"
             >

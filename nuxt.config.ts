@@ -29,6 +29,10 @@ export default defineNuxtConfig({
     routerBaseUrl: 'http://localhost:20128/v1',
     routerApiKey: '',
     modelProviderSecretKey: '',
+    // Dedicated server-side key for encrypting source-bearing activity
+    // evidence at rest. It is never exposed to the browser or relay events.
+    activityPayloadSecret: '',
+    activityRetentionDays: 90,
     searxngBaseUrl: 'http://127.0.0.1:8888',
     workspacesRoot: '',
     // Plan 036: private credentials for the one first-party public MCP

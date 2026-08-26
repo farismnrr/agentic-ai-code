@@ -245,8 +245,7 @@ impl DiscoverResult {
 
 mod catalog;
 pub use catalog::{
-    find_tool, find_tool_for_profile, find_tool_for_profile_and_agent_providers, tool_catalog,
-    tool_catalog_for_profile, tool_catalog_for_profile_and_agent_providers,
+    find_tool, find_tool_for_profile, tool_catalog, tool_catalog_for_profile,
     validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
     PRIMARY_TOOL_NAMES,
 };

@@ -9,6 +9,7 @@ It gives an authenticated user one place to:
 - connect MCP servers and tools;
 - execute coding tasks through a sandboxed native relay;
 - use the same OAuth-protected MCP relay from the web app or any compatible MCP client;
+- review durable per-workspace activity history and exact supported mutation diffs;
 - observe application and relay behavior through OpenTelemetry-compatible telemetry.
 
 The project is deliberately split into two trust zones: the **web application** owns chat, users, persistence, providers, and MCP orchestration, while **`ai-tools relay`** owns native command execution and its Linux/Bubblewrap security boundary.
@@ -48,6 +49,13 @@ The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-
 - web: `http_fetch`, `web_search`.
 
 The relay also exposes bounded read-only repository resources for manifest, approved agent guidance, Git status, and HEAD metadata. The first-party agent UI renders tool calls by capability category, keeps approval inputs bounded/sensitivity-aware, and surfaces task/context/subagent/background/orchestration state without exposing hidden reasoning. Agent mode can define bounded dependency graphs, dispatch independent child work through the existing subagent/background runtime, require writer worktrees, reconcile child evidence, and gate delivery until reviewed writer work is integrated and high-severity/conflicting findings are cleared.
+
+When enabled, the relay's Plan 050 activity recorder durably captures bounded
+workspace lifecycles in an encrypted owner-local outbox before execution;
+Nuxt/PostgreSQL provides the owned Logs read model. Activity is separate from
+OpenTelemetry/Loki, and opaque process/Git/delegated work is never presented as
+an exact source diff without relay-owned proof. See
+[configuration](docs/configuration.md#workspace-activity-ledger).
 
 The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem.
 

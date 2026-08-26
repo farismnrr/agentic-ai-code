@@ -38,6 +38,8 @@ import * as audit from '../database/security-events'
 import type { AuthUseCases } from '../../application/auth'
 import type { AccountDataUseCases } from '../../application/account-data'
 import type { McpUseCases } from '../../application/mcp'
+import { createActivityUseCases } from '../../application/activity'
+import { activityDatabase } from '../database/activity'
 
 const conversationPort: ConversationPort = {
   find: findUserConversation as ConversationPort['find'],
@@ -105,7 +107,8 @@ export function createApplicationAdapters(requestId: string) {
     settings: createSettingsUseCases({ read: settings.getSettings, write: settings.updateSettings }, conversationPort.assertModelOwnership, request),
     providers: createProviderManagementUseCases(providerPort, request),
     workspaces: createWorkspaceUseCases(workspacePort, request),
-    models: createModelUseCases(modelPort, request)
+    models: createModelUseCases(modelPort, request),
+    activity: createActivityUseCases(activityDatabase)
   }
 }
 

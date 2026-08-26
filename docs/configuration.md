@@ -14,6 +14,8 @@ This page explains the groups and security intent; it intentionally does not dup
 | `NUXT_DATABASE_URL` | PostgreSQL connection string. |
 | `NUXT_SESSION_PASSWORD` | Seals the `nuxt-auth-utils` session cookie; must be at least 32 characters. |
 | `NUXT_MODEL_PROVIDER_SECRET_KEY` | 32-byte hex AES key for encrypting provider secrets at rest. |
+| `NUXT_ACTIVITY_PAYLOAD_SECRET` | Dedicated server-only key for encrypting historical activity evidence; use at least 32 characters. |
+| `NUXT_ACTIVITY_RETENTION_DAYS` | Bounded product-history retention in days; defaults to 90 and accepts 1–3650. |
 | `NUXT_WORKSPACES_ROOT` | Operator-owned filesystem boundary used by workspace features. |
 
 Avoid setting `NUXT_HOST=0.0.0.0` casually. If another trusted device must reach development, bind to a specific trusted interface.
@@ -62,6 +64,49 @@ Security rules:
 
 `NUXT_REMOTE_MCP_OWNER_USER_ID` is an AI Code database user ID. It is **not** the OAuth `sub` used by the Rust relay.
 
+## Workspace activity ledger
+
+Plan 050 activity is product history, not OpenTelemetry/Loki telemetry. Set
+`NUXT_ACTIVITY_PAYLOAD_SECRET` in every Nuxt instance that receives activity;
+source-bearing exact evidence is AES-256-GCM encrypted before PostgreSQL
+storage. The default retention is 90 days and cleanup runs in bounded batches;
+`NUXT_ACTIVITY_RETENTION_DAYS` can be set from 1 through 3650.
+
+Enroll a relay source from an authenticated server-side/admin workflow:
+
+```text
+POST /api/activity/sources        { "label": "owner relay", "kind": "relay" }
+POST /api/activity/bindings       { "sourceId": "<returned id>", "workspaceId": "<owned workspace id>" }
+```
+
+The enrollment response contains the high-entropy bearer token once. Store it
+in the relay process configuration only; the database stores its hash and safe
+prefix. Configure the relay with the matching sink and local state settings:
+
+```text
+RELAY_ACTIVITY_MODE=required
+RELAY_ACTIVITY_STATE_DIR=/home/owner/.local/state/ai-tools
+RELAY_ACTIVITY_SINK_URL=https://app.example.com/api/activity/ingest
+RELAY_ACTIVITY_SOURCE_TOKEN=<one-time-enrollment-token>
+RELAY_ACTIVITY_SPOOL_QUOTA_BYTES=67108864
+RELAY_ACTIVITY_ACK_RETENTION_MS=86400000
+```
+
+The relay source ID is stable in `source-id` inside the owner-only state
+directory. Sink outages leave encrypted unacknowledged rows queued for retry;
+401/403 stops delivery and reports degraded state without printing the token.
+The quota never overwrites unacknowledged rows, so required mode rejects a new
+workspace operation when its start cannot be admitted. Clearing a workspace's
+history removes retained metadata/evidence while preserving source enrollment;
+the source sequence watermark prevents delayed pre-clear rows from returning.
+
+List/live activity responses contain bounded metadata only. Historical diffs
+are lazy and available only for exact structured text mutations (`file_edit`,
+`file_write`, and applied `apply_patch`); opaque process/Git work is
+shown as summary or unavailable evidence. `clientInfo` is display metadata,
+not authorization: absent or unsupported client identity is shown as
+**External MCP client**.
+
 ## Relay configuration
 
 The Rust relay accepts CLI flags and matching environment variables. Important remote-mode values include:
@@ -86,10 +131,7 @@ RELAY_COMPLETED_JOB_TTL_MS
 RELAY_MAX_RETAINED_OUTPUT_BYTES
 RELAY_MAX_RUNNING_JOBS
 RELAY_ALLOW_TERMINAL_NETWORK
-RELAY_ALLOW_AGENT_NETWORK
 RELAY_TOOLCHAIN_PATH
-RELAY_AGENT_ENV
-RELAY_AGENT_AUTH_ROOT
 RELAY_ALLOW_DOCKER
 RELAY_DOCKER_SOCKET
 RELAY_ALLOW_TAILSCALE
@@ -98,45 +140,23 @@ RELAY_TAILSCALE_SOCKET
 
 `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
 
+`terminal_exec`, `http_fetch`, and `web_search` accept `execution_mode`:
+`sync` waits for the direct result, `async` returns an MCP task and requires a
+client that advertises Tasks, and `auto` uses async only when the client
+advertises Tasks. Primary and Full advertise the same Tasks capability. An
+explicit async request from an incompatible client is rejected; it is never
+silently converted to sync. Mutating HTTP methods remain synchronous until a
+request-level idempotency layer is available.
+
 Terminal subprocesses use an isolated network namespace by default. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for a trusted workflow that needs network-capable commands such as package installation or remote Git. Dedicated `http_fetch` and `web_search` remain separate network capabilities and are not enabled by this flag.
 
 Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories prepended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit, gives operator-selected runtimes precedence, and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
-The capability-filtered `agent_delegate` tool runs operator-installed coding CLIs in the
-same Bubblewrap boundary. The CLIs must be reachable through the reviewed safe
-PATH (for example, `RELAY_TOOLCHAIN_PATH=$HOME/.local/bin`). At relay startup,
-each supported CLI is checked for a usable local login session. The live tool
-Full and Primary live catalogs advertise delegation only for providers that
-pass this check; restart the relay after logging in or out.
-
-```text
-RELAY_ALLOW_AGENT_NETWORK=true
-RELAY_AGENT_ENV=<supported-provider>=AUTH_ENV_NAME
-RELAY_AGENT_AUTH_ROOT=<supported-provider>=/home/owner/.provider-auth
-```
-
-Logged-in local sessions are the default and required discovery source for CLIs
-with a local status command. Replace `<supported-provider>` with a provider name
-actually advertised by the relay; provider labels are not operator-defined.
-`RELAY_AGENT_ENV` is only an explicit mapping for an already-verified provider
-process; it does not make an unverified provider appear in the catalog. A CLI
-without a safe status command additionally needs an explicit
-`RELAY_AGENT_AUTH_ROOT`. Delegation fallback uses a bounded metadata-only
-workspace snapshot and stops when it changes or cannot be completed safely.
-The relay does not create, discover, or
-recommend API keys. Known session directories are mounted narrowly when they
-are present; the rest of the runtime HOME remains unavailable to the
-subprocess.
-Only the named environment variables are copied into the matching provider
-process. Auth roots are exposed one provider at a time through an ephemeral
-write layer, so provider login state is usable without mutating the host copy.
-Docker and
-Tailscale sockets and sibling workspaces are never exposed to delegated agents,
-and terminal network permission does not enable agent network access. The relay
-never generates host-level permission-bypass flags. Keep
-`RELAY_ALLOW_AGENT_NETWORK` disabled when provider CLIs use a local/mock backend.
+Provider-specific coding-CLI delegation is not part of the current relay
+surface. Long-running eligible tools use the standard MCP Tasks contract and
+the explicit `execution_mode` described above.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
@@ -243,6 +263,6 @@ ownership cannot be proven without introducing a persistence system.
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary exposes 32 common coding tools, including authenticated `agent_delegate` when a supported local CLI session is available: short `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Primary does not advertise the server-level MCP Tasks extension; `terminal_exec` must use a 1..30000 ms timeout and longer work should use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 31 common coding tools: `terminal_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Both profiles advertise the server-level MCP Tasks extension and eligible tools accept `execution_mode=sync|async|auto`.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.

@@ -6,9 +6,11 @@
 //! `RELAY_AGENT_ORIGIN`), and a `stop --port <port>` subcommand.
 use crate::error::RelayError;
 use serde::{Deserialize, Serialize};
-mod agent;
+mod activity;
 mod cli;
-pub use cli::{Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
+mod lsp;
+pub use activity::ActivityConfig;
+pub use cli::{ActivityMode, Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
 /// tests, or otherwise). `ServerConfig::default()` is intentionally *not*
 /// "production ready" — `origin: None` fails closed in the transport layer's
@@ -34,21 +36,17 @@ pub struct ServerConfig {
     pub max_retained_output_bytes: usize,
     pub max_running_jobs: usize,
     pub allow_terminal_network: bool,
-    pub allow_agent_network: bool,
     pub allow_docker: bool,
     pub docker_socket: String,
     pub allow_tailscale: bool,
     pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
-    /// Operator-approved provider environment mappings (`provider=ENV_NAME`).
-    pub agent_env_vars: Vec<String>,
-    /// Operator-approved provider auth roots (`provider=/absolute/path`).
-    pub agent_auth_roots: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
     pub enable_agent_hooks: bool,
     pub agent_hooks_config: Option<String>,
     pub tool_profile: ToolProfile,
+    pub activity: ActivityConfig,
     #[serde(skip, default = "default_workspaces")]
     pub workspaces: std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>>,
 }
@@ -80,18 +78,16 @@ impl Default for ServerConfig {
             max_retained_output_bytes: 1_048_576,
             max_running_jobs: 16,
             allow_terminal_network: false,
-            allow_agent_network: false,
             allow_docker: false,
             docker_socket: "/var/run/docker.sock".into(),
             allow_tailscale: false,
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
-            agent_env_vars: Vec::new(),
-            agent_auth_roots: Vec::new(),
             lsp_servers: Vec::new(),
             enable_agent_hooks: false,
             agent_hooks_config: None,
             tool_profile: ToolProfile::Full,
+            activity: ActivityConfig::default(),
             workspaces: default_workspaces(),
         }
     }
@@ -344,6 +340,7 @@ impl ServerConfig {
                 "max_retained_output_bytes must be non-zero".into(),
             ));
         }
+        activity::validate(&self.activity)?;
         if self.allow_docker {
             let socket = std::path::Path::new(&self.docker_socket);
             if !socket.is_absolute() {
@@ -360,10 +357,8 @@ impl ServerConfig {
                 ));
             }
         }
-        agent::validate_lsp_entries(&self.lsp_servers)?;
-        agent::validate_env_entries(&self.agent_env_vars)?;
+        lsp::validate_entries(&self.lsp_servers)?;
         let execution_root = self.resolved_execution_root()?;
-        agent::validate_auth_root_entries(&self.agent_auth_roots, &execution_root)?;
         let workspace = std::fs::canonicalize(self.resolved_dir()?).map_err(|_| {
             RelayError::InvalidConfig("workspace directory cannot be resolved".into())
         })?;
@@ -431,18 +426,23 @@ impl From<&Cli> for ServerConfig {
             max_retained_output_bytes: cli.max_retained_output_bytes,
             max_running_jobs: cli.max_running_jobs,
             allow_terminal_network: cli.allow_terminal_network,
-            allow_agent_network: cli.allow_agent_network,
             allow_docker: cli.allow_docker,
             docker_socket: cli.docker_socket.clone(),
             allow_tailscale: cli.allow_tailscale,
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
-            agent_env_vars: cli.agent_env_vars.clone(),
-            agent_auth_roots: cli.agent_auth_roots.clone(),
             lsp_servers: cli.lsp_servers.clone(),
             enable_agent_hooks: cli.enable_agent_hooks,
             agent_hooks_config: cli.agent_hooks_config.clone(),
             tool_profile: cli.tool_profile,
+            activity: ActivityConfig {
+                mode: cli.activity_mode,
+                state_dir: cli.activity_state_dir.clone(),
+                sink_url: cli.activity_sink_url.clone(),
+                source_token: cli.activity_source_token.clone(),
+                spool_quota_bytes: cli.activity_spool_quota_bytes,
+                acknowledged_retention_ms: cli.activity_ack_retention_ms,
+            },
             workspaces: default_workspaces(),
         }
     }

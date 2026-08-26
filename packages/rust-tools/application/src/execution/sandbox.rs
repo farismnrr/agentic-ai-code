@@ -49,8 +49,7 @@ pub(super) fn spawn(
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
     // Network authority is translated into each invocation by its owning
-    // request path. Do not OR terminal policy into unrelated subprocesses:
-    // delegated agents have a separate operator-controlled network capability.
+    // request path and is never inferred from the selected sandbox profile.
     let network_access = if invocation.allow_network {
         NetworkAccess::Host
     } else {
@@ -88,8 +87,6 @@ pub(crate) fn spawn_lsp(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
-            environment: Vec::new(),
-            auth_roots: Vec::new(),
             expose_optional_sockets: false,
             expose_authorized_siblings: false,
         },
@@ -121,8 +118,6 @@ pub(crate) fn spawn_hook(
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
-            environment: Vec::new(),
-            auth_roots: Vec::new(),
             expose_optional_sockets: false,
             expose_authorized_siblings: false,
         },
@@ -270,29 +265,6 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
-    for auth_root in &invocation.auth_roots {
-        if !auth_root.is_absolute()
-            || auth_root == &host_home
-            || !auth_root.starts_with(&host_home)
-            || !auth_root.is_dir()
-            || relay_core::protected_paths::is_protected_path(&host_home, auth_root)
-        {
-            return Err(std::io::Error::other(
-                "agent auth root is outside the approved runtime-home boundary",
-            ));
-        }
-        let value = auth_root.to_string_lossy().into_owned();
-        // Provider auth state needs to be writable while the host copy stays
-        // untouched.  A temporary overlay preserves login visibility without
-        // allowing the sandboxed process to mutate the real credential root.
-        args.extend([
-            "--overlay-src".into(),
-            value.clone(),
-            "--tmp-overlay".into(),
-            value.clone(),
-        ]);
-        add_protected_paths(&mut args, auth_root, true)?;
-    }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false)?;
@@ -336,9 +308,6 @@ fn spawn_with_profile(
         .kill_on_drop(true);
     if let Some(rustup_home) = rustup_home {
         command.env("RUSTUP_HOME", rustup_home);
-    }
-    for (name, value) in &invocation.environment {
-        command.env(name, value);
     }
     match (profile.workspace_root.is_some(), cargo_home) {
         (true, _) => {

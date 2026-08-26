@@ -50,6 +50,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::auth;
 use crate::auth::{CachedJwks, Claims};
 use crate::observability::{CorrelationId, RequestId};
+use relay_application::activity::SharedActivityRecorder;
 use relay_application::admission::RequestAdmission;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -107,28 +108,16 @@ pub struct AppState {
     /// server. Never accept authorization-server URLs or PKCE parameters from
     /// MCP tool arguments.
     pub jwks_cache: tokio::sync::RwLock<Option<CachedJwks>>,
+    /// Durable relay-boundary activity recorder. Required mode is opened
+    /// before the router is returned, so a failed journal cannot admit calls.
+    pub activity: SharedActivityRecorder,
 }
 
 impl AppState {
     pub fn tool_for_name(&self, name: &str) -> Option<relay_interfaces::mcp::Tool> {
-        let providers = self.agent_provider_names_for_tool(name);
-        relay_interfaces::mcp::find_tool_for_profile_and_agent_providers(
-            name,
-            self.config.tool_profile,
-            &providers,
-        )
-    }
-
-    pub(super) fn agent_provider_names(&self) -> Vec<&'static str> {
-        relay_application::execution::agent::detect_agent_capabilities(&self.config).names()
-    }
-
-    fn agent_provider_names_for_tool(&self, name: &str) -> Vec<&'static str> {
-        if name == "agent_delegate" {
-            self.agent_provider_names()
-        } else {
-            Vec::new()
-        }
+        relay_interfaces::mcp::tool_catalog_for_profile(self.config.tool_profile)
+            .into_iter()
+            .find(|tool| tool.name == name)
     }
 }
 
@@ -202,6 +191,8 @@ pub fn create_router_with_jobs_and_hooks(
         relay_application::lsp::LspSessionManager::new(unconfigured)
             .expect("LSP session manager with no configured servers must construct")
     });
+    let activity = crate::activity::ActivityRuntime::open(&config)
+        .expect("required activity journal must be available before relay startup");
     let state = Arc::new(AppState {
         config: config.clone(),
         jobs,
@@ -209,6 +200,7 @@ pub fn create_router_with_jobs_and_hooks(
         hooks,
         request_admission: Arc::new(RequestAdmission::configured()),
         jwks_cache: tokio::sync::RwLock::new(None),
+        activity,
     });
 
     let mcp_router = Router::new().route("/mcp", post(mcp_http::handle_mcp));

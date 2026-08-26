@@ -8,10 +8,35 @@ use std::time::Instant;
 
 use crate::auth::bearer_challenge_value;
 use crate::observability::audit;
+use relay_application::activity::{self, Evidence, Status};
 use relay_core::error::McpError;
 use relay_interfaces::mcp::{self, Response, ToolCallResult, ToolsCallParams};
 
-type JsonErr2 = Result<Json<Value>, JsonErr>;
+#[path = "task_calls.rs"]
+mod task_calls;
+#[path = "tool_helpers.rs"]
+mod tool_helpers;
+use tool_helpers::deny_activity;
+use tool_helpers::{
+    agent_session_from_params, bounded_tool_error, client_supports_tasks, record_activity_outcome,
+    requires_idempotency_key,
+};
+
+pub(super) type JsonErr2 = Result<Json<Value>, JsonErr>;
+
+pub(super) async fn handle_agent_session_start(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    tool_helpers::handle_agent_session_start(request, state).await
+}
+
+pub(super) async fn handle_agent_pre_stop(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+) -> JsonErr2 {
+    tool_helpers::handle_agent_pre_stop(request, state).await
+}
 pub(super) async fn handle_tools_call(
     request: &mcp::Request,
     state: Arc<AppState>,
@@ -95,6 +120,139 @@ pub(super) async fn handle_tools_call(
             .is_some_and(|a| a.destructive_hint),
         tool.annotations.as_ref().is_some_and(|a| a.open_world_hint),
     );
+    let client_info = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("_meta"))
+        .and_then(|meta| meta.get("io.modelcontextprotocol/clientInfo"))
+        .and_then(|info| Some((info.get("name")?.as_str()?, info.get("version")?.as_str()?)));
+    let execution_mode = call
+        .arguments
+        .get("execution_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("auto");
+    let client_has_tasks = client_supports_tasks(request.params.as_ref());
+    let tool_has_tasks =
+        relay_application::execution::tool_call_supports_tasks(&tool, &call.arguments);
+    let idempotency_key = call
+        .arguments
+        .get("idempotency_key")
+        .and_then(Value::as_str);
+    let idempotency_scope = auth_ctx
+        .claims
+        .as_ref()
+        .and_then(|claims| claims.sub.as_deref())
+        .unwrap_or("local");
+    let idempotency_key = idempotency_key
+        .filter(|_| {
+            execution_mode == "async"
+                || (execution_mode == "auto" && client_has_tasks && tool_has_tasks)
+        })
+        .map(|key| format!("{idempotency_scope}:{}:{key}", call.name));
+    let request_fingerprint = serde_json::to_string(&call.arguments).unwrap_or_default();
+    if let Some(key) = idempotency_key.as_deref() {
+        match state
+            .jobs
+            .existing_idempotency_key(key, &request_fingerprint)
+            .await
+        {
+            Ok(Some(task_id)) => {
+                let Some(task) = state.jobs.get(&task_id).await else {
+                    return bounded_tool_error(
+                        &request.id,
+                        "accepted task is no longer available",
+                        request_started,
+                    );
+                };
+                let result = mcp::with_timing_meta(
+                    task.create_task_json(),
+                    0,
+                    request_started.elapsed().as_millis() as u64,
+                );
+                let response = Response::new(request.id.clone(), result);
+                return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+            }
+            Ok(None) => {}
+            Err(err) => return bounded_tool_error(&request.id, &err.to_string(), request_started),
+        }
+    }
+    let activity_start = activity::event_for_tool(
+        &state.config,
+        &call.name,
+        &effects,
+        &call.arguments,
+        client_info,
+    );
+    let activity_start = match state.activity.record_start(activity_start, None) {
+        Ok(event) => event,
+        Err(_) => {
+            return bounded_tool_error(
+                &request.id,
+                "activity history is unavailable; tool execution was not started",
+                request_started,
+            )
+        }
+    };
+    let execute_async = match execution_mode {
+        "sync" => false,
+        "async" => {
+            if !client_has_tasks {
+                record_activity_outcome(
+                    &state,
+                    &activity_start,
+                    Status::Error,
+                    request_started.elapsed().as_millis() as u64,
+                    "async execution requires MCP Tasks capability",
+                    Evidence::NotApplicable,
+                    None,
+                );
+                return bounded_tool_error(
+                    &request.id,
+                    "async execution requires MCP Tasks capability",
+                    request_started,
+                );
+            }
+            if !tool_has_tasks {
+                record_activity_outcome(
+                    &state,
+                    &activity_start,
+                    Status::Error,
+                    request_started.elapsed().as_millis() as u64,
+                    "async execution is not supported for this tool or request",
+                    Evidence::NotApplicable,
+                    None,
+                );
+                return bounded_tool_error(
+                    &request.id,
+                    "async execution is not supported for this tool or request",
+                    request_started,
+                );
+            }
+            if requires_idempotency_key(&call.name, &call.arguments) && idempotency_key.is_none() {
+                record_activity_outcome(
+                    &state,
+                    &activity_start,
+                    Status::Error,
+                    request_started.elapsed().as_millis() as u64,
+                    "async mutation requires an idempotency key",
+                    Evidence::NotApplicable,
+                    None,
+                );
+                return bounded_tool_error(
+                    &request.id,
+                    "async mutation requires an idempotency key",
+                    request_started,
+                );
+            }
+            true
+        }
+        _ => {
+            client_has_tasks
+                && tool_has_tasks
+                && (!requires_idempotency_key(&call.name, &call.arguments)
+                    || idempotency_key.is_some())
+        }
+    };
     let hook_payload = json!({
         "hook_event": "pre_tool_use",
         "tool_id": call.name.as_str(),
@@ -112,6 +270,12 @@ pub(super) async fn handle_tools_call(
     let approval_resume = match hook_approval_token {
         Some(token) => {
             let Some(agent_session) = agent_session.as_deref() else {
+                deny_activity(
+                    &state,
+                    &activity_start,
+                    request_started,
+                    "approval requires stable agent session metadata",
+                );
                 return bounded_tool_error(
                     &request.id,
                     "approval requires stable agent session metadata",
@@ -125,11 +289,17 @@ pub(super) async fn handle_tools_call(
             {
                 Some(index) => Some(index),
                 None => {
+                    deny_activity(
+                        &state,
+                        &activity_start,
+                        request_started,
+                        "approval token is invalid or expired",
+                    );
                     return bounded_tool_error(
                         &request.id,
                         "approval token is invalid or expired",
                         request_started,
-                    )
+                    );
                 }
             }
         }
@@ -153,6 +323,12 @@ pub(super) async fn handle_tools_call(
                 | relay_application::hooks::SessionStartOutcome::SecurityFailure
                 | relay_application::hooks::SessionStartOutcome::CapacityExhausted
         ) {
+            deny_activity(
+                &state,
+                &activity_start,
+                request_started,
+                "agent session security lifecycle did not start",
+            );
             return bounded_tool_error(
                 &request.id,
                 "agent session security lifecycle did not start",
@@ -193,6 +369,12 @@ pub(super) async fn handle_tools_call(
         };
         let result = if approval_requested {
             let Some(agent_session) = agent_session.as_deref() else {
+                deny_activity(
+                    &state,
+                    &activity_start,
+                    request_started,
+                    "approval requires stable agent session metadata",
+                );
                 return bounded_tool_error(
                     &request.id,
                     "approval requires stable agent session metadata",
@@ -200,6 +382,12 @@ pub(super) async fn handle_tools_call(
                 );
             };
             let Some(resume_index) = pre.approval_checkpoint else {
+                deny_activity(
+                    &state,
+                    &activity_start,
+                    request_started,
+                    "approval checkpoint is unavailable",
+                );
                 return bounded_tool_error(
                     &request.id,
                     "approval checkpoint is unavailable",
@@ -211,6 +399,12 @@ pub(super) async fn handle_tools_call(
                 .issue_approval(agent_session, &call.name, &hook_payload, resume_index)
                 .await
             else {
+                deny_activity(
+                    &state,
+                    &activity_start,
+                    request_started,
+                    "approval capacity is exhausted",
+                );
                 return bounded_tool_error(
                     &request.id,
                     "approval capacity is exhausted",
@@ -231,6 +425,15 @@ pub(super) async fn handle_tools_call(
             }])
         };
         let result = result.with_timing(0, request_started.elapsed().as_millis() as u64);
+        record_activity_outcome(
+            &state,
+            &activity_start,
+            Status::Denied,
+            request_started.elapsed().as_millis() as u64,
+            "tool call denied by relay policy",
+            Evidence::NotApplicable,
+            None,
+        );
         let response = Response::new(
             request.id.clone(),
             serde_json::to_value(result).unwrap_or(json!({})),
@@ -238,101 +441,22 @@ pub(super) async fn handle_tools_call(
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
 
-    if call.name == "terminal_job_start" {
-        let tool_dispatch_started = Instant::now();
-        let task_id = relay_application::execution::start_terminal_job(
-            &call.arguments,
-            &state.config,
-            &state.jobs,
-        )
-        .await
-        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
-        let task = state.jobs.get(&task_id).await.ok_or_else(|| {
-            err_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Some(request.id.clone()),
-                &McpError::Internal("task creation failed".into()),
-            )
-        })?;
-        let result = mcp::with_timing_meta(
-            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
-            tool_dispatch_started.elapsed().as_millis() as u64,
-            request_started.elapsed().as_millis() as u64,
-        );
-        let response = Response::new(request.id.clone(), result);
-        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
-    }
-    if call.name == "terminal_job_get" || call.name == "terminal_job_cancel" {
-        let tool_dispatch_started = Instant::now();
-        let id = call
-            .arguments
-            .get("taskId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                err_response(
-                    StatusCode::BAD_REQUEST,
-                    Some(request.id.clone()),
-                    &McpError::InvalidParams("taskId is required".into()),
-                )
-            })?;
-        let task = if call.name == "terminal_job_cancel" {
-            state.jobs.cancel(id).await.map_err(|err| {
-                err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err)
-            })?
-        } else {
-            state.jobs.get(id).await.ok_or_else(|| {
-                err_response(
-                    StatusCode::NOT_FOUND,
-                    Some(request.id.clone()),
-                    &McpError::InvalidParams("unknown task".into()),
-                )
-            })?
-        };
-        let result = mcp::with_timing_meta(
-            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
-            tool_dispatch_started.elapsed().as_millis() as u64,
-            request_started.elapsed().as_millis() as u64,
-        );
-        let response = Response::new(request.id.clone(), result);
-        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
-    }
-
-    if state.config.tool_profile == relay_core::config::ToolProfile::Full
-        && client_supports_tasks(request.params.as_ref())
-        && relay_application::execution::tool_call_supports_tasks(&tool, &call.arguments)
+    if let Some(response) = task_calls::try_handle_task_call(task_calls::ToolCallContext {
+        request,
+        state: state.clone(),
+        call: &call,
+        tool: &tool,
+        activity_start: &activity_start,
+        effects: &effects,
+        execute_async,
+        idempotency_key: idempotency_key.as_deref(),
+        request_fingerprint,
+        request_started,
+    })
+    .await
     {
-        let tool_dispatch_started = Instant::now();
-        let task_id = relay_application::execution::start_tool_task(
-            &tool,
-            &call.arguments,
-            &state.config,
-            &state.jobs,
-        )
-        .await
-        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
-        let task = state.jobs.get(&task_id).await.ok_or_else(|| {
-            err_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Some(request.id.clone()),
-                &McpError::Internal("task creation failed".into()),
-            )
-        })?;
-        super::task_lifecycle::observe(
-            state.clone(),
-            task_id,
-            call.name.clone(),
-            effects.clone(),
-            call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
-        );
-        let result = mcp::with_timing_meta(
-            task.create_task_json(),
-            tool_dispatch_started.elapsed().as_millis() as u64,
-            request_started.elapsed().as_millis() as u64,
-        );
-        let response = Response::new(request.id.clone(), result);
-        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
+        return response;
     }
-
     let tool_dispatch_started = Instant::now();
     let dispatch_result = relay_application::execution::dispatch_tool_call(
         &tool,
@@ -354,147 +478,16 @@ pub(super) async fn handle_tools_call(
         tool = call.name.as_str(),
         duration_ms = dispatch_ms,
     );
-    let result = dispatch_result.unwrap_or_else(|err| {
-        let text = match &err {
-            McpError::InvalidRequest(_) | McpError::InvalidParams(_) => err.to_string(),
-            _ => "Tool execution failed".to_string(),
-        };
-        ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
-            kind: "text",
-            // Safe policy errors are returned; internal diagnostics stay redacted.
-            text,
-        }])
-    });
-    let lifecycle_event = if result.is_error {
-        relay_application::hooks::HookEvent::ToolError
-    } else {
-        relay_application::hooks::HookEvent::PostToolUse
-    };
-    let _ = state
-        .hooks
-        .invoke(
-            lifecycle_event,
-            json!({
-                "hook_event": lifecycle_event.name(),
-                "tool_id": call.name.as_str(),
-                "effect_classes": effects,
-                "cwd": call.arguments.get("cwd").cloned().unwrap_or(Value::Null),
-                "success": !result.is_error,
-                "reason": "tool_result",
-            }),
-        )
-        .await;
-
-    let result = result.with_timing(dispatch_ms, request_started.elapsed().as_millis() as u64);
-    let response = Response::new(
-        request.id.clone(),
-        serde_json::to_value(result).unwrap_or(json!({})),
-    );
-    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
-}
-
-pub(super) async fn handle_agent_session_start(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-) -> JsonErr2 {
-    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
-        err_response(
-            StatusCode::BAD_REQUEST,
-            Some(request.id.clone()),
-            &McpError::InvalidParams("agent session metadata is required".into()),
-        )
-    })?;
-    let identity = state
-        .hooks
-        .repository_identity()
-        .unwrap_or_else(|| "untrusted".into());
-    let outcome = state.hooks.start_session(&agent_session, &identity).await;
-    let (context, failure) = match outcome {
-        relay_application::hooks::SessionStartOutcome::Started { context } => (context, None),
-        relay_application::hooks::SessionStartOutcome::AlreadyStarted => (None, None),
-        relay_application::hooks::SessionStartOutcome::Blocked => {
-            (None, Some("session start was blocked"))
-        }
-        relay_application::hooks::SessionStartOutcome::SecurityFailure => {
-            (None, Some("session start security check failed"))
-        }
-        relay_application::hooks::SessionStartOutcome::CapacityExhausted => {
-            (None, Some("session start capacity is exhausted"))
-        }
-    };
-    if let Some(message) = failure {
-        let response = Response::new(
-            request.id.clone(),
-            serde_json::to_value(ToolCallResult::error(vec![
-                relay_interfaces::mcp::ToolResultContent {
-                    kind: "text",
-                    text: message.into(),
-                },
-            ]))
-            .unwrap_or(json!({})),
-        );
-        return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
-    }
-    let response = Response::new(
-        request.id.clone(),
-        json!({
-            "resultType": "complete",
-            "context": context.unwrap_or_else(|| json!({})),
-            "bounded": true
-        }),
-    );
-    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
-}
-
-fn bounded_tool_error(id: &mcp::Id, message: &str, request_started: Instant) -> JsonErr2 {
-    let result = ToolCallResult::error(vec![relay_interfaces::mcp::ToolResultContent {
-        kind: "text",
-        text: message.into(),
-    }])
-    .with_timing(0, request_started.elapsed().as_millis() as u64);
-    let response = Response::new(
-        id.clone(),
-        serde_json::to_value(result).unwrap_or(json!({})),
-    );
-    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
-}
-
-pub(super) async fn handle_agent_pre_stop(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-) -> JsonErr2 {
-    let agent_session = agent_session_from_params(request.params.as_ref()).ok_or_else(|| {
-        err_response(
-            StatusCode::BAD_REQUEST,
-            Some(request.id.clone()),
-            &McpError::InvalidParams("agent session metadata is required".into()),
-        )
-    })?;
-    let allowed = state.hooks.pre_agent_stop(&agent_session).await;
-    let response = Response::new(
-        request.id.clone(),
-        json!({
-            "resultType": "complete",
-            "completion": if allowed { "allowed" } else { "remediation_required" },
-            "max_attempts": 2
-        }),
-    );
-    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
-}
-
-fn agent_session_from_params(params: Option<&Value>) -> Option<String> {
-    params?
-        .get("_meta")?
-        .get("io.modelcontextprotocol/agentSession")?
-        .as_str()
-        .map(|value| value.chars().take(128).collect())
-}
-
-fn client_supports_tasks(params: Option<&Value>) -> bool {
-    params
-        .and_then(|value| value.get("_meta"))
-        .and_then(|value| value.get("io.modelcontextprotocol/clientCapabilities"))
-        .and_then(|value| value.get("extensions"))
-        .and_then(|value| value.get("io.modelcontextprotocol/tasks"))
-        .is_some()
+    return tool_helpers::finish_tool_call(tool_helpers::ToolCompletionContext {
+        request,
+        state,
+        tool_name: &call.name,
+        arguments: &call.arguments,
+        effects,
+        activity_start: &activity_start,
+        dispatch_result,
+        request_started,
+        dispatch_ms,
+    })
+    .await;
 }

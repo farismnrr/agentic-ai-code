@@ -1,5 +1,7 @@
 import { friendlyRelayErrorMessage } from '../utils/chat-errors'
 
+const MCP_CLIENT_INFO = { name: 'AI Code', version: 'local-tool-controller' }
+
 export interface RelayExecResult {
   type: 'exec_result'
   id?: string
@@ -68,6 +70,7 @@ export function useRelayAgent() {
           _meta: {
             'io.modelcontextprotocol/protocolVersion': '2026-07-28',
             'io.modelcontextprotocol/clientCapabilities': {},
+            'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO,
             ...(agentSession ? { 'io.modelcontextprotocol/agentSession': agentSession } : {}),
             ...(hookApprovalToken ? { 'io.modelcontextprotocol/hookApprovalToken': hookApprovalToken } : {})
           }
@@ -152,7 +155,7 @@ export function useRelayAgent() {
     const response = await $fetch<{ result?: T, error?: { message?: string } }>(`http://127.0.0.1:${port.value}/mcp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'mcp-protocol-version': '2026-07-28', 'mcp-method': method, 'mcp-name': name },
-      body: { jsonrpc: '2.0', id: Math.random().toString(36).slice(2), method, params: { ...params, _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': { extensions: { 'io.modelcontextprotocol/tasks': {} } }, ...(agentSession ? { 'io.modelcontextprotocol/agentSession': agentSession } : {}) } } }
+      body: { jsonrpc: '2.0', id: Math.random().toString(36).slice(2), method, params: { ...params, _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': { extensions: { 'io.modelcontextprotocol/tasks': {} } }, 'io.modelcontextprotocol/clientInfo': MCP_CLIENT_INFO, ...(agentSession ? { 'io.modelcontextprotocol/agentSession': agentSession } : {}) } } }
     })
     if (response.error) throw new Error(response.error.message || 'Relay request failed')
     return response.result as T

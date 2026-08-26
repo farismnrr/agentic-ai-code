@@ -8,6 +8,14 @@ Human/operator setup is documented under [`../../docs/`](../../docs/README.md); 
 
 Current configuration groups include dev server/public site URL, router/model-provider credentials, workspace root, PostgreSQL, session sealing, SMTP/optional OAuth providers, and OpenTelemetry/Jaeger/Loki.
 
+Workspace activity adds a separate configuration group: Nuxt uses
+`NUXT_ACTIVITY_PAYLOAD_SECRET` and bounded `NUXT_ACTIVITY_RETENTION_DAYS`,
+while the Rust relay uses `RELAY_ACTIVITY_MODE`, an owner-only state directory,
+an HTTPS sink URL, a one-time source token, and bounded spool/ack-retention
+limits. Keep the relay state directory outside workspace roots. Required mode
+fails closed before execution when its local journal cannot admit a start; sink
+outage after admission is asynchronous and recoverable.
+
 Not every key is required for every workflow. Fill the values needed by the subsystem you are running; never commit secrets or real credentials to Markdown, plans, memories, fixtures, or examples.
 
 ### Stable conventions
