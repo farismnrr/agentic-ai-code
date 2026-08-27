@@ -43,9 +43,6 @@
     "release:publish": "bash scripts/publish-release.sh"
   },
   "dependencies": {
-    "@ai-code/curl-tool": "workspace:*",
-    "@ai-code/searxng-search-tool": "workspace:*",
-    "@ai-code/terminal-tool": "workspace:*",
     "@ai-sdk/anthropic": "^4.0.36",
     "@ai-sdk/google-vertex": "^4.0.177",
     "@ai-sdk/openai-compatible": "^3.0.25",

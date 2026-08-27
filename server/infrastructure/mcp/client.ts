@@ -55,6 +55,24 @@ function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
   return config.remoteMcp as RemoteMcpRuntimeConfig
 }
 
+function parseConfiguredRemoteUrl(raw: string) {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error('Remote MCP runtime configuration has an invalid URL')
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error('Remote MCP runtime configuration must use HTTPS')
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error('Remote MCP runtime configuration must not contain credentials, query, or fragment')
+  }
+
+  return url
+}
+
 /**
  * Returns the private first-party configuration only when both the stored MCP
  * URL and the owning ai-code user match the operator's private runtime config.
@@ -70,19 +88,7 @@ function resolveFirstPartyRemote(url: URL, serverConfig: McpServerConfig) {
   const configuredUrlRaw = configured.url?.trim()
   if (!configuredUrlRaw) return undefined
 
-  let configuredUrl: URL
-  try {
-    configuredUrl = new URL(configuredUrlRaw)
-  } catch {
-    throw new Error('Remote MCP runtime configuration has an invalid URL')
-  }
-
-  if (configuredUrl.protocol !== 'https:') {
-    throw new Error('Remote MCP runtime configuration must use HTTPS')
-  }
-  if (configuredUrl.username || configuredUrl.password || configuredUrl.search || configuredUrl.hash) {
-    throw new Error('Remote MCP runtime configuration must not contain credentials, query, or fragment')
-  }
+  const configuredUrl = parseConfiguredRemoteUrl(configuredUrlRaw)
 
   // Exact resource identity is intentional: an access token configured for
   // https://host/mcp must never be attached to https://host/other-path.
@@ -430,4 +436,33 @@ export async function createMcpClient(serverConfig: McpServerConfig): Promise<Mc
 
   await client.connect(transport)
   return Object.assign(client as unknown as McpClientLike, { trustedProvenance: 'external' as const })
+}
+
+/**
+ * Creates the server-configured first-party relay client for Nuxt-owned
+ * server work. This path is intentionally independent of the MCP database
+ * rows used by user-selected third-party servers: the relay URL and bearer
+ * token come only from private runtime configuration, and the URL is still
+ * checked by the same SSRF policy before any request is sent.
+ */
+export async function createConfiguredFirstPartyRelayClient(): Promise<McpClientLike | undefined> {
+  const configured = getRemoteMcpRuntimeConfig()
+  const configuredUrlRaw = configured.url?.trim()
+  const accessToken = configured.accessToken?.trim()
+
+  if (!configuredUrlRaw && !accessToken) return undefined
+  if (!configuredUrlRaw || !accessToken) {
+    throw new Error('Remote MCP runtime configuration requires both URL and access token')
+  }
+
+  const url = parseConfiguredRemoteUrl(configuredUrlRaw)
+  const guardedFetch = createSsrfSafeFetch('Configured first-party remote MCP')
+  const client = new FirstPartyRelayMcpClient(
+    url,
+    accessToken,
+    withFirstPartyTrace(guardedFetch),
+    resolveMcpRequestTimeoutMs(configured.requestTimeoutMs)
+  )
+  await client.connect()
+  return client
 }

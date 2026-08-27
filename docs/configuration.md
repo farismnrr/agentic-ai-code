@@ -64,6 +64,13 @@ Security rules:
 
 `NUXT_REMOTE_MCP_OWNER_USER_ID` is an AI Code database user ID. It is **not** the OAuth `sub` used by the Rust relay.
 
+Nuxt chat-mode network tools also use this first-party MCP connection; they do
+not execute a local Rust binary. The access token is server-only and must be a
+short-lived/rotatable OAuth token issued for the relay resource. External MCP
+clients perform their own interactive OAuth flow; the Nuxt application's
+normal application login is a separate boundary and is not forwarded to the
+relay.
+
 ## Workspace activity ledger
 
 Plan 050 activity is product history, not OpenTelemetry/Loki telemetry. Set
