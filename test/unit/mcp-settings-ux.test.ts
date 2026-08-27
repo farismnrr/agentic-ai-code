@@ -55,6 +55,9 @@ const mcpComposable = read('app/composables/useMcpServers.ts')
 assert.match(mcpComposable, /oauth-discovery/)
 assert.match(mcpComposable, /oauth-start/)
 assert.match(dialog, /startOAuth/)
+
+assert.match(dialog, /authChoice\.value === 'auto' && discoveryKey\.value !== config\.url/)
+assert.match(dialog, /oauthDiscovery\.value = await discoverOAuth\(config\.url\)/)
 assert.match(dialog, /navigateTo\(result\.authorizationUrl, \{ external: true \}\)/)
 
 const oauthDiscovery = read('server/api/mcp-servers/oauth-discovery.post.ts')

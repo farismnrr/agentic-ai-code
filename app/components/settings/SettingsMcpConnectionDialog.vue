@@ -191,6 +191,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   if (!isEditing.value) {
     if (!canCreate.value) return
     try {
+      if (authChoice.value === 'auto' && discoveryKey.value !== config.url) {
+        oauthDiscovery.value = await discoverOAuth(config.url)
+        discoveryKey.value = config.url
+      }
       if (effectiveAuth.value === 'oauth') {
         saving.value = true
         const result = await startOAuth(config.url)
