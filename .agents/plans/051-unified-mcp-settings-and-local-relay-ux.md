@@ -1,6 +1,6 @@
 # Plan 051 — Unified MCP Settings and Local Relay UX
 
-**Status:** IMPLEMENTED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RELAY DEPLOYMENT AND APP RECREATE VERIFIED
+**Status:** CLOSED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RELAY DEPLOYMENT AND APP RECREATE VERIFIED; BROWSER EXECUTION FOLLOW-UP MOVED TO PLAN 052
 **Created:** 2026-08-27
 
 ## Execution status — 2026-08-27
@@ -21,6 +21,14 @@ Verified locally after remediation:
 Authenticated visual/mobile interaction and a live third-party remote MCP scan are not claimed because those fixtures are unavailable through the current execution tools. The deployment closeout was subsequently completed on 2026-08-27: PR #173 added the smallest supported Rust CLI/config contract for an explicit non-loopback bind host, was merged to `main`, and the installed release binary was restarted through the existing `ai-tools-relay.service` user unit. The existing base unit, wrapper, auth, GitHub, and full-tools drop-ins remain unchanged; a host-only `network-bind.conf` drop-in supplies the bind host and the exact configured browser Origin. The relay is active on the wildcard IPv4 listener, `/health` succeeds, the configured Origin receives matching `Access-Control-Allow-Origin`, and an unrelated Origin is browser-rejected because the response does not reflect it and is not wildcard. `docker compose up -d --build --no-deps --force-recreate app` then recreated only the Nuxt app container; `/` returned 200, unauthenticated `/settings/mcp` redirected to login, and `/settings/local-terminal` redirected to `/settings/mcp`. Authenticated visual/mobile interaction and a live third-party remote MCP scan remain unavailable and are not inferred from these checks.
 
 The active laptop browser setup was subsequently aligned with this page's Local relay contract: the same systemd user unit now uses the supported `local` mode with loopback binding, the exact page Origin `http://100.99.88.53:3333`, and port `47821`. The former remote-mode wildcard listener is not used by the Local relay UI. The effective local MCP `server/discover` request returns 200 for the configured Origin and 403 for an unrelated Origin; `/health` remains 200. Remote-mode relay access remains a separate HTTPS/trusted-proxy/OAuth deployment shape and must not be substituted into the browser-local flow.
+
+## Closure status — 2026-08-27
+
+Plan 051 is closed at its implementation and deployment scope. The unified Settings → MCP surface, browser-local relay ownership model, Rust bind-host contract, exact-Origin CORS boundary, systemd user-service deployment, and Nuxt-only container recreation were delivered through the required PR flow and verified with the evidence recorded above and in the merged deployment closeout.
+
+The remaining browser Agent Mode `local_terminal` failure is a separate follow-up: the relay is healthy and accepts a direct, correctly shaped MCP `tools/call`, while one browser request was rejected by strict MCP routing-header validation and the UI reduced the result to the generic **Tool execution failed** state. The repeated `/api/conversations/.../tasks` requests are the Agent Mode's ephemeral progress-ledger polling, not evidence that the relay is stuck. This behavior is recorded as the open Plan 052 investigation; closing Plan 051 does not claim that browser execution issue is fixed.
+
+Authenticated visual/mobile interaction and a live third-party remote MCP scan remain explicitly unclaimed because their fixtures are unavailable. They are not converted into false acceptance claims by this closure.
 
 ## Goal
 
