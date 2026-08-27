@@ -38,7 +38,7 @@ cloudflared on laptop
 ai-tools relay --mode remote
 ```
 
-The relay must not bind a public interface. `scripts/phase36-start-remote-relay.sh` fixes the trusted-proxy CIDR to `127.0.0.1/32`. The Cloudflare config generator deliberately emits `http://127.0.0.1:<port>` rather than `localhost` so the tunnel cannot unexpectedly connect over `::1` while the relay trusts only IPv4 loopback.
+The relay must not bind a public interface. `ops/remote-mcp/start-relay.sh` fixes the trusted-proxy CIDR to `127.0.0.1/32`. The Cloudflare config generator deliberately emits `http://127.0.0.1:<port>` rather than `localhost` so the tunnel cannot unexpectedly connect over `::1` while the relay trusts only IPv4 loopback.
 
 The public edge terminates HTTPS. The relay sees a loopback peer and accepts `X-Forwarded-Proto: https` only because all three conditions are true:
 
@@ -57,7 +57,7 @@ export CLOUDFLARED_TUNNEL_ID='<tunnel uuid>'
 export CLOUDFLARED_CREDENTIALS_FILE="$HOME/.cloudflared/<tunnel uuid>.json"
 export REMOTE_MCP_URL='https://mcp.farismunir.my.id/mcp'
 
-scripts/phase36-cloudflared-config.sh > "$HOME/.cloudflared/config.yml"
+ops/remote-mcp/cloudflared-config.sh > "$HOME/.cloudflared/config.yml"
 cloudflared tunnel ingress validate
 cloudflared tunnel run "$CLOUDFLARED_TUNNEL_ID"
 ```
@@ -95,7 +95,7 @@ EXECUTION_ROOT=<user-owned project/workspace root>
 Start with:
 
 ```bash
-scripts/phase36-start-remote-relay.sh
+ops/remote-mcp/start-relay.sh
 ```
 
 The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=primary` for the
@@ -169,7 +169,7 @@ Provisioning should be proven in this order so failures stay attributable:
 3. confirm public `/health`;
 4. confirm public Protected Resource Metadata;
 5. confirm unauthenticated `server/discover` gets a Bearer challenge;
-6. issue an owner token and run `scripts/phase36-public-mcp-smoke.sh` with `REMOTE_MCP_ACCESS_TOKEN_FILE`;
+6. issue an owner token and run `ops/remote-mcp/public-smoke.sh` with `REMOTE_MCP_ACCESS_TOKEN_FILE`;
 7. configure hosted Nuxt with the same resource, the single owner's ai-code user id, and an owner token, then use Settings -> MCP servers -> Test from that owner account;
 8. verify a different ai-code user cannot use the first-party credential even if they create an MCP row containing the same public URL;
 9. connect external MCP client in developer mode, complete OAuth, inspect tools, then test a safe tool call before terminal execution;

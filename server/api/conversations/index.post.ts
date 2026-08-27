@@ -7,7 +7,8 @@ const createSchema = v.object({
   modelId: v.string(),
   workspaceId: v.string(),
   mode: v.picklist(['chat', 'agent']),
-  permissionMode: v.optional(v.picklist(['plan', 'workspace', 'autonomous', 'manual'])),
+  permissionMode: v.optional(v.picklist(['plan', 'bypass', 'manual'])),
+  enabledToolIds: v.optional(v.array(v.string())),
   reasoningEffort: v.optional(v.picklist(['low', 'medium', 'high', 'max']))
 })
 
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
     modelId: body.modelId,
     mode: body.mode,
     permissionMode: body.permissionMode,
+    enabledToolIds: body.enabledToolIds,
     reasoningEffort: body.reasoningEffort
   })
 

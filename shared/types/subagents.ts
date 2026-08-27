@@ -92,7 +92,7 @@ export interface SubagentRequest {
   abort_signal?: AbortSignal
   model?: unknown
   approvals?: Record<string, string>
-  permission_mode?: 'plan' | 'workspace' | 'autonomous' | 'manual'
+  permission_mode?: 'plan' | 'bypass' | 'manual'
   /** Internal background orchestration escape hatch; never exposed as a user permission. */
   allow_concurrent_parent?: boolean
 }

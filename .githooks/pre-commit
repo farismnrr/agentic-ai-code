@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-exec bash scripts/verify-commit.sh
+exec pnpm guardrail

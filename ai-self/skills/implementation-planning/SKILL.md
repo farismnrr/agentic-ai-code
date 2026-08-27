@@ -81,6 +81,8 @@ Do not use placeholders such as `TBD`, `TODO`, "add appropriate validation", or 
 
 Include relevant unit/integration/e2e validation, lint/type/build/config/schema checks, migration/compatibility checks, rollback/recovery, security boundaries, and CI/PR/reviewer gates for team repositories.
 
+Follow the repository's native test architecture instead of inventing verification infrastructure for the plan. Prefer feature/behavior-named tests owned by the affected subsystem. Do not create plan-numbered `verify-*`, `phase-*`, composed acceptance scripts, or cross-stack runners unless the repository explicitly requires that model or the real product boundary cannot be validated through existing test runners. Scope validation to the changed stack/subsystem; a frontend-only task should not compile/test an unrelated native backend merely because both live in one repository, and vice versa. Cross-stack validation is justified when both sides or their actual shared contract change.
+
 Never plan to bypass hooks, required checks, reviews, CODEOWNERS, or protected-branch policies.
 
 ### 8. Review the plan before handoff

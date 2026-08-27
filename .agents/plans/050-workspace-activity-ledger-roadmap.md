@@ -54,7 +54,7 @@ Verified in the working tree on 2026-08-26:
 - `start_tool_task` currently supports `terminal_exec`, `http_fetch`, `web_search`, and `agent_delegate`; `terminal_job_start/get/cancel` provide a separate terminal-only async path. Plan 050 must converge new agent-facing long-running execution on one explicit sync/async policy rather than requiring agents to guess which special tool to call after a timeout.
 - `agent_delegate` is still present in the current MCP catalog/profile filtering, execution dispatch, hook/effect policy, provider capability discovery, acceptance scripts, and operator docs. Plan 050 intentionally removes this provider-specific coding-CLI delegation surface instead of extending it.
 - Hosted Nuxt and external MCP clients may consume the same public MCP resource while authenticating independently.
-- Repository policy has no CI and no unit-test suite; deterministic acceptance/security scripts plus `pnpm verify:commit` are the required local verification model.
+- Repository policy has no CI. As of 2026-08-27, feature verification uses normal tests (`test/` for web, Cargo `tests/` for Rust) plus the stack-aware `pnpm guardrail`; plan-numbered acceptance scripts are no longer part of the repository model.
 - Plan 050 must stay isolated from unrelated predecessor work. If implementation is already active on the dedicated Plan-050 branch/worktree, preserve and reconcile that partial work against this updated plan rather than resetting it; otherwise start from current `main` according to repository policy.
 
 ## Scope
@@ -89,7 +89,7 @@ Verified in the working tree on 2026-08-26:
 - syscall-level surveillance of arbitrary non-relay processes;
 - claiming cryptographic tamper-proof/compliance-grade immutability without an independent trust/key store;
 - production deployment/restart or irreversible deletion without separate authorization;
-- introducing a unit-test framework or remote CI workflow.
+- introducing a new third-party test framework or remote CI workflow; the repository uses Node's native test runner and Cargo tests.
 
 ## Architecture and product decisions
 
@@ -285,8 +285,10 @@ If `async` is explicitly requested but the client does not support Tasks, fail w
 
 **Planned files:**
 - `.agents/contracts/050-activity-event-v1.json`;
-- `scripts/verify-050-activity-contract.ts`;
-- `package.json` `verify:050` may compose phase-specific scripts while keeping Plan 050 as one plan.
+- feature-named web tests under `test/`;
+- focused Rust tests under the owning crate's `tests/` directory.
+
+Do not create a `verify:050` command or Plan-050-specific verification script. Each owning stack validates its own behavior through its native test runner.
 
 **Required cases:** contract versioning, state legality, field bounds, no raw arguments/results/auth/env/prompts, stable root fingerprint, generic actor fallback, and strict telemetry separation.
 
@@ -763,15 +765,15 @@ Build fresh output and use `pnpm preview`; do not trust stale dev state. Exercis
 
 **Goal:** falsify the composed system before marking Plan 050 complete.
 
-## TASK-036 — Add one composed Plan-050 verifier
+## TASK-036 — Add focused activity tests at each ownership boundary
 
-**Planned files:** `scripts/verify-050-workspace-activity-ledger.sh` plus focused TypeScript/Rust acceptance helpers as justified; `package.json` exposes one `verify:050` entrypoint.
+**Planned files:** feature-named Node tests under `test/` for Nuxt/application behavior and focused Cargo tests under the owning Rust crate `tests/` directories.
 
-The verifier must drive contract, relay durability, adaptive execution, diff, persistence/API, and UI-contract acceptance in dependency order and include composed source→journal→ingestion→query assertions. It must also prove the current tool catalog no longer exposes `agent_delegate`, Primary/Full execution capability negotiation is truthful, requested/effective timeout policy is enforced, and sync/async/auto task behavior is deterministic. Missing required local dependencies must fail nonzero rather than becoming success.
+Tests must cover contract validation, relay durability, adaptive execution, diff behavior, persistence/API behavior, and UI-facing contracts without creating one cross-stack Plan-050 runner. The Rust suite proves relay/catalog/timeout/task behavior; the web suite proves persistence/API/UI behavior. End-to-end source→journal→ingestion→query verification is a separate live acceptance step only when that actual boundary needs proof.
 
-**Target:** pass three consecutive times on the final implementation candidate.
+**Target:** focused tests pass reliably through their native runners and `pnpm guardrail` selects only the stack(s) touched by the change.
 
-**Commit boundary:** `test(activity): compose workspace activity acceptance`
+**Commit boundary:** `test(activity): cover workspace activity behavior`
 
 ## TASK-037 — Prove crash/restart/outage/quota integrity
 
@@ -828,7 +830,7 @@ Place controlled canaries in diff text, command/search summaries, relative paths
 
 Expected source-bearing content appears only through explicitly authorized decryption/diff response. Tokens must not remain in logs/DB after one-time creation/config boundary. Protected-path denial must never capture protected file content.
 
-## TASK-041 — Re-run established security regression contracts
+## TASK-041 — Re-run established security regression tests
 
 At minimum relevant coverage for:
 - current MCP profile/catalog contracts proving `agent_delegate` is absent and no dead provider-only capability is advertised;
@@ -889,23 +891,24 @@ Document activity as product data separate from telemetry; required/off mode; st
 
 ## TASK-046 — Run final repository gates
 
-Required final commands:
+Because Plan 050 changes both stacks, required final commands are:
 
 ```bash
-pnpm verify:050
-pnpm verify:commit
+pnpm test:web
+pnpm test:rust
+pnpm guardrail
 pnpm build
 pnpm build:tools
 pnpm audit
 git diff --check
 ```
 
-Run `cargo audit` when Rust dependency/security surface changes and all relevant deterministic security/contract scripts affected by relay workspace/Git/tasks/hooks/telemetry behavior.
+Run `cargo audit` when Rust dependency/security surface changes. Add focused feature tests for relay workspace/Git/tasks/hooks/telemetry behavior rather than introducing new deterministic scripts.
 
 Do not claim a command passed unless it actually did.
 
 **Phase exit criteria:**
-- [x] composed Plan-050 verifier passes three consecutive times;
+- [x] focused web and Rust activity tests cover the implemented ownership boundaries;
 - [ ] crash/restart/outage/quota tests show no silent accepted-operation loss;
 - [ ] duplicate/out-of-order/concurrent delivery converges to one truthful lifecycle entry;
 - [ ] cross-user/cross-workspace/source-token attacks fail safely;
@@ -932,6 +935,8 @@ Local evidence completed:
 - `pnpm verify:commit` passed, including architecture, maintainability, lint, typecheck, repository policy, and all configured contract gates.
 - `pnpm lint`, Nuxt preparation/typecheck, Rust workspace check with `-D warnings`, `pnpm check:architecture`, `node scripts/check-maintainability.mjs`, `pnpm build`, `pnpm build:tools`, `pnpm audit`, `cargo audit`, `git diff --check`, and the affected Plan 046/047/048 regression scripts passed.
 - Independent review found and the implementation fixed terminal-outcome error loss, spoofable actor attribution, and unbounded chunked ingestion. The reviewers re-checked the fixes and reported zero unresolved P0/P1 findings.
+
+The `verify:050` / `verify:commit` / plan-numbered script names above are historical evidence of what was run on 2026-08-26. They were intentionally removed from the active repository model on 2026-08-27 in favor of feature-named Node/Cargo tests and the stack-aware `pnpm guardrail`; future agents must not recreate them.
 
 The following acceptance remains explicitly **UNPROVEN**, not inferred: live PostgreSQL migration/ingestion against an enrolled source, paired/local-terminal end-to-end activity, first-party Nuxt MCP activity, browser acceptance against persisted Logs, direct external MCP/external MCP client connector activity, generic-client live compatibility, adversarial database/connector/canary sweeps, and measured performance/backlog behavior. The local environment had no activity payload secret, authorized enrollment/source fixture, or available browser runtime; no shared database mutation or deployment was performed. These are external/environmental blockers for live closure and require an authorized operator fixture and deployment/runtime access.
 

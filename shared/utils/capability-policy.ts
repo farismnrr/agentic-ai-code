@@ -9,7 +9,7 @@ export type CapabilityEffect
     | 'external_mutation'
     | 'privileged_bridge'
 
-export type CapabilityMode = 'plan' | 'workspace' | 'autonomous' | 'manual'
+export type CapabilityMode = 'plan' | 'bypass' | 'manual'
 export type ApprovalOutcome = 'approved' | 'denied' | 'user-approval'
 type CapabilityApprovalDecision = 'always' | 'never'
 export type RiskLevel = 'low' | 'medium' | 'high'
@@ -205,21 +205,18 @@ export function approvalForCapability(
   mode: CapabilityMode = 'manual'
 ): { outcome: ApprovalOutcome, assessment: CapabilityAssessment } {
   const assessment = classifyCapability(facts)
-  if (remembered === 'never') return { outcome: 'denied', assessment }
+  // Hard safety boundaries are invariant across every user-facing permission
+  // mode. "Bypass" means bypass product approval prompts; it never bypasses
+  // malformed-input or protected-credential enforcement.
   if (assessment.invalidInput) return { outcome: 'denied', assessment }
   if (assessment.protectedBoundary) return { outcome: 'denied', assessment }
   if (mode === 'plan' && assessment.effects.some(effect => effect !== 'workspace_read' && effect !== 'git_read')) {
     return { outcome: 'denied', assessment: { ...assessment, reason: 'Plan mode permits read-only capabilities only' } }
   }
+  if (mode === 'bypass') return { outcome: 'approved', assessment }
+  if (remembered === 'never') return { outcome: 'denied', assessment }
+
   const trusted = facts.trustedProvenance === 'first-party-relay' || facts.trustedProvenance === 'native'
-  const containedWorkspaceMutation = trusted
-    && facts.path !== undefined
-    && assessment.effects.length === 1
-    && assessment.effects[0] === 'workspace_write'
-    && !assessment.destructive
-    && !assessment.networkRequested
-    && !assessment.opaque
-  if (containedWorkspaceMutation && (mode === 'workspace' || mode === 'autonomous')) return { outcome: 'approved', assessment }
   if (remembered === 'always' && assessment.risk === 'low' && trusted && !assessment.opaque && !facts.requiresConcreteScope) return { outcome: 'approved', assessment }
   if (SAFE_READ_TOOLS.has(facts.toolId.split('.').pop() ?? '') && assessment.risk === 'low' && trusted) return { outcome: 'approved', assessment }
   return { outcome: 'user-approval', assessment }
@@ -230,6 +227,7 @@ export function rememberedApprovalCanAutoAnswer(
   decision: CapabilityApprovalDecision,
   mode: CapabilityMode = 'manual'
 ) {
+  if (mode === 'bypass') return approvalForCapability(facts, decision, mode).outcome === 'approved'
   return decision === 'never' || approvalForCapability(facts, decision, mode).outcome === 'approved'
 }
 

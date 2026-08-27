@@ -51,14 +51,16 @@ defineProps<{ message: UIMessage }>()
         :value="part.text"
         :streaming="isPartStreaming(part)"
         :class="[
-          'prose dark:prose-invert max-w-none',
+          'prose dark:prose-invert w-full min-w-0 max-w-full overflow-x-hidden',
+          '[&_.comark-content]:min-w-0 [&_.comark-content]:max-w-full',
+          '[&_table]:min-w-full [&_th]:min-w-32 [&_td]:min-w-32',
           '*:first:mt-0 *:last:mb-0 transition-opacity duration-150',
           isPartStreaming(part) ? 'opacity-80' : 'opacity-100'
         ]"
       />
       <p
         v-else
-        class="whitespace-pre-wrap"
+        class="min-w-0 max-w-full whitespace-pre-wrap break-words"
       >
         {{ part.text }}
       </p>
