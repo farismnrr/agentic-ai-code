@@ -74,17 +74,20 @@ pub fn tool_catalog() -> Vec<Tool> {
                     "timeout_ms": {
                         "type": "integer",
                         "minimum": 0,
-                        "default": 30000
+                        "default": 30000,
+                        "description": "Requested command runtime in milliseconds. Choose a realistic value for the operation; 0 means no command deadline unless the relay operator configured a maximum."
                     },
                     "execution_mode": {
                         "type": "string",
                         "enum": ["sync", "async", "auto"],
-                        "default": "auto"
+                        "default": "auto",
+                        "description": "Use sync for short commands whose result is needed immediately, async for long-running work that should survive the initial request, or auto to use task execution when the client supports Tasks and the call is safe to resume."
                     },
                     "idempotency_key": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "description": "Stable key for one logical async command. Required for async terminal execution so retries or lost responses resolve to the same accepted task instead of running the command twice."
                     }
                 },
                 "required": ["command"],
@@ -123,17 +126,20 @@ pub fn tool_catalog() -> Vec<Tool> {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 300000,
-                        "default": 30000
+                        "default": 30000,
+                        "description": "Requested HTTP operation timeout in milliseconds. Choose it based on expected latency; the relay still enforces this tool's maximum."
                     },
                     "execution_mode": {
                         "type": "string",
                         "enum": ["sync", "async", "auto"],
-                        "default": "auto"
+                        "default": "auto",
+                        "description": "Use sync for short requests, async for eligible long-running safe requests, or auto to use task execution when supported. Mutating HTTP methods remain synchronous until request-level idempotency is available."
                     },
                     "idempotency_key": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "description": "Stable logical-operation key reserved for task-backed requests that require retry deduplication."
                     }
                 },
                 "required": ["url"],
@@ -160,7 +166,8 @@ pub fn tool_catalog() -> Vec<Tool> {
                     "execution_mode": {
                         "type": "string",
                         "enum": ["sync", "async", "auto"],
-                        "default": "auto"
+                        "default": "auto",
+                        "description": "Use sync for an immediate result, async when the search may take longer and the client can poll MCP Tasks, or auto to let the relay select task execution when supported."
                     }
                 },
                 "required": ["query"],

@@ -47,6 +47,13 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
+Production deployment keeps these runtimes separate: the Nuxt image is
+Docker-only and excludes the Rust workspace, relay package, native targets,
+and native-tool adapter packages. The Rust relay is installed and supervised
+independently by systemd. Nuxt server-side network tools reach the relay only
+through the configured first-party MCP/OAuth resource; they do not execute or
+mount the Rust binary inside the Nuxt container.
+
 ### Current shipped architecture
 
 The post-closure remediation is implemented at `bd22cc6`. The shipped server follows:
