@@ -4,14 +4,17 @@ import { NATIVE_LOCAL_TERMINAL_TOOL_ID, nativeTools } from '#shared/utils/native
 const modelValue = defineModel<string[]>({ default: () => [] })
 
 const { servers } = useMcpServers()
-const { isConnected, isConnecting, checkConnection } = useRelayAgent()
+const { isConfigured, isConnected, isConnecting, checkConnection } = useRelayAgent()
 
 /** Only connected, enabled MCP servers can offer tools. */
 const usable = computed(() =>
   servers.value.filter(server => server.enabled && server.status === 'connected')
 )
 
-const visibleNativeTools = computed(() => nativeTools.filter(tool => tool.pickerVisible !== false))
+const visibleNativeTools = computed(() => nativeTools.filter(tool =>
+  tool.pickerVisible !== false
+  && (tool.id !== NATIVE_LOCAL_TERMINAL_TOOL_ID || isConfigured.value)
+))
 const terminalTool = computed(() => visibleNativeTools.value.find(tool => tool.id === NATIVE_LOCAL_TERMINAL_TOOL_ID))
 const terminalEnabled = computed(() => modelValue.value.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
 
@@ -36,6 +39,7 @@ function setTool(toolId: string, enabled: boolean) {
 }
 
 function toggleTerminal(enabled: boolean) {
+  if (!isConfigured.value) return
   setTool(NATIVE_LOCAL_TERMINAL_TOOL_ID, enabled)
 }
 

@@ -14,6 +14,7 @@ const emit = defineEmits<{
 
 const open = defineModel<boolean>('open', { default: false })
 const { scan, create, update } = useMcpServers()
+const { isConfigured: localConfigured, isConnected: localConnected, addLocalRelay } = useRelayAgent()
 const toast = useToast()
 
 const schema = v.strictObject({
@@ -102,9 +103,25 @@ function resetDialog() {
 }
 
 function choose(kind: 'local' | 'remote') {
+  if (kind === 'local' && localConfigured.value) return
   mode.value = kind
   scanError.value = null
   saveError.value = null
+}
+
+function finishLocal() {
+  if (!localConfigured.value) {
+    if (!localConnected.value) return
+    addLocalRelay()
+    toast.add({
+      title: 'Local relay added',
+      description: 'This connection is stored only in this browser.',
+      icon: 'i-lucide-check',
+      color: 'success'
+    })
+    emit('saved')
+  }
+  open.value = false
 }
 
 function remoteConfig(data: Schema): McpRemoteConfig {
@@ -175,7 +192,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         <div class="grid gap-3 sm:grid-cols-2">
           <button
             type="button"
-            class="group rounded-lg border border-default p-4 text-left outline-none transition hover:bg-elevated focus-visible:ring-2 focus-visible:ring-primary"
+            class="group rounded-lg border border-default p-4 text-left outline-none transition hover:bg-elevated focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+            :disabled="localConfigured"
             @click="choose('local')"
           >
             <div class="flex items-start gap-3">
@@ -190,7 +208,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
                   Local relay
                 </p>
                 <p class="mt-1 text-xs leading-5 text-muted">
-                  Connect the Rust relay running on this browser's Linux device.
+                  {{ localConfigured ? 'Already added on this browser.' : "Connect the Rust relay running on this browser's Linux device." }}
                 </p>
               </div>
             </div>
@@ -368,7 +386,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     <template #footer>
       <div class="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <UButton
-          v-if="mode !== 'choose' && !server"
+          v-if="mode !== 'choose' && !server && !props.initialKind"
           label="Back"
           icon="i-lucide-arrow-left"
           color="neutral"
@@ -387,8 +405,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           />
           <UButton
             v-if="mode === 'local'"
-            label="Done"
-            @click="open = false"
+            :label="localConfigured ? 'Done' : 'Add MCP'"
+            :icon="localConfigured ? undefined : 'i-lucide-plus'"
+            :disabled="!localConfigured && !localConnected"
+            @click="finishLocal"
           />
           <template v-else-if="mode === 'remote'">
             <UButton

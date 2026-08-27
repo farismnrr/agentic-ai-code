@@ -1,21 +1,24 @@
 # Plan 051 — Unified MCP Settings and Local Relay UX
 
-**Status:** IMPLEMENTED — LOCAL VERIFIED; DELIVERY/RECREATE PENDING
+**Status:** IMPLEMENTED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RECREATE PENDING
 **Created:** 2026-08-27
 
 ## Execution status — 2026-08-27
 
-The planned web implementation is complete on `refactor/051-unified-mcp-settings`. The local quality gate passes with Rust correctly skipped because no Rust/native contract changed. Production bundling also passes when the required session password is supplied through a build-only environment value.
+The main Plan-051 implementation merged to `main` through PR #171. A browser review immediately after merge exposed one product-model mismatch: the Local relay was rendered as if already added and settings probed loopback automatically, so a fresh user saw a phantom connection and unsolicited browser CORS failures before choosing any connector. The post-merge remediation on `fix/051-mcp-local-connection-ux` corrects that behavior without changing the Rust relay/security contract.
 
-Verified locally:
+Verified locally after remediation:
 
-- `pnpm guardrail` — PASS (repository policy, agent docs, architecture, maintainability, test layout, web lint/typecheck/tests; Rust skipped);
-- `pnpm test:web` — 24/24 PASS through the guardrail;
-- `NUXT_SESSION_PASSWORD=<build-only-value> pnpm build` — PASS;
-- production preview smoke: `/` → 200, `/settings/mcp` → expected unauthenticated auth redirect, `/settings/local-terminal` → 307 to `/settings/mcp`;
-- the host listener on `127.0.0.1:47821` answers `/health`, but its direct modern MCP discovery request returns a fail-closed 403 in the current operator runtime. The unified UI therefore must not claim a usable local connection from health alone; `useRelayAgent()` now verifies modern MCP discovery before marking the local relay connected.
+- fresh browsers show a single **No MCP connections yet** state; **Add MCP** opens the Local relay / Remote MCP choice first;
+- Local relay is added only after an explicit modern-MCP verification and is persisted only in browser storage;
+- Local relay and remote servers both expose a consistent **Remove connection** action; removing Local relay clears the browser-local capability state but does not stop the external process;
+- Settings does not probe `127.0.0.1` before a user adds/checks the Local relay, preventing the unsolicited CORS requests seen in the initial browser review;
+- manual preflight against the currently running `127.0.0.1:47821` relay permits the required MCP headers/methods but does not return `Access-Control-Allow-Origin` for `http://100.99.88.53:3333`, confirming that runtime was started for a different exact Origin; the UI now tells the user to restart it with the generated `--origin` command instead of weakening CORS;
+- stale `native.local_terminal` conversation IDs cannot re-enable Agent Mode or client execution after the browser-local connection is removed;
+- `pnpm guardrail` — PASS (24/24 web tests; Rust correctly skipped because no Rust/native source changed);
+- `NUXT_SESSION_PASSWORD=<build-only-value> pnpm build` — PASS.
 
-Authenticated visual interaction, responsive browser inspection, and a live third-party remote MCP scan are not claimed because no authenticated browser/remote fixture was available through the current execution tools. Delivery, merge, and app-container recreation remain pending at this status snapshot.
+Authenticated visual/mobile interaction and a live third-party remote MCP scan are not claimed because those fixtures are unavailable through the current execution tools. App-container recreation remains pending because the MCP coding sandbox intentionally cannot read the repository `.env` required by Docker Compose.
 
 ## Goal
 

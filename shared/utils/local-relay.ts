@@ -1,6 +1,7 @@
 export const LOCAL_RELAY_PORT = 47821
 export const LOCAL_RELAY_BINARY = 'ai-tools-x86_64-unknown-linux-gnu'
-export const LOCAL_RELAY_DOWNLOAD_URL = `https://github.com/farismnrr/ai-code/releases/latest/download/${LOCAL_RELAY_BINARY}`
+export const LOCAL_RELAY_STORAGE_KEY = 'ai-code:local-relay-added'
+export const LOCAL_RELAY_DOWNLOAD_URL = `https://github.com/farismnrr/agentic-ai-code/releases/latest/download/${LOCAL_RELAY_BINARY}`
 
 export interface LocalRelayCommandOptions {
   origin: string

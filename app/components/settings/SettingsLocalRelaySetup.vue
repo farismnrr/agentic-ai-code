@@ -18,10 +18,6 @@ const backgroundCommand = computed(() => buildLocalRelayCommand({
   background: true
 }))
 
-onMounted(() => {
-  if (!isConnected.value) void checkConnection()
-})
-
 async function copyCommand(command: string) {
   await navigator.clipboard.writeText(command)
   toast.add({ title: 'Command copied', icon: 'i-lucide-check', color: 'success' })
@@ -186,12 +182,17 @@ async function copyCommand(command: string) {
                 :loading="isConnecting"
                 @click="checkConnection"
               />
-              <p
+              <div
                 v-if="!isConnected && error"
-                class="text-xs text-muted"
+                class="space-y-1"
               >
-                {{ error }}
-              </p>
+                <p class="text-xs text-muted">
+                  {{ error }}
+                </p>
+                <p class="text-xs text-dimmed">
+                  If DevTools reports CORS, restart the relay with the generated command above so <code class="font-mono text-highlighted">--origin</code> exactly matches this page.
+                </p>
+              </div>
             </div>
           </div>
         </div>
