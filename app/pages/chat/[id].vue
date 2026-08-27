@@ -159,7 +159,10 @@ defineShortcuts({
 </script>
 
 <template>
-  <UDashboardPanel :id="`chat-${conversationId}`">
+  <UDashboardPanel
+    :id="`chat-${conversationId}`"
+    :ui="{ body: 'min-w-0 overflow-x-hidden' }"
+  >
     <template #header>
       <UDashboardNavbar>
         <template #left>
@@ -208,7 +211,10 @@ defineShortcuts({
         />
       </div>
 
-      <UContainer v-else>
+      <UContainer
+        v-else
+        class="min-w-0 max-w-full"
+      >
         <ChatTaskLedger
           :conversation-id="conversationId"
           :visible="mode === 'agent'"
@@ -228,10 +234,10 @@ defineShortcuts({
           :status="status"
           :assistant="{ actions: [], ui: { root: 'animate-message-in' } }"
           :user="{ ui: { root: 'animate-message-in' } }"
-          class="max-w-3xl mx-auto w-full"
+          class="min-w-0 max-w-3xl mx-auto w-full overflow-x-hidden"
         >
           <template #content="{ message }">
-            <div class="flex flex-col gap-y-4 w-full">
+            <div class="flex min-w-0 max-w-full flex-col gap-y-4 w-full overflow-x-hidden">
               <ChatMessageParts :message="message" />
             </div>
           </template>
