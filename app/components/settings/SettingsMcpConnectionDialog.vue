@@ -12,7 +12,7 @@ const emit = defineEmits<{
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
-const { discoverOAuth, scan, create, update } = useMcpServers()
+const { discoverOAuth, startOAuth, scan, create, update } = useMcpServers()
 const toast = useToast()
 
 const schema = v.strictObject({
@@ -191,14 +191,22 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   if (!isEditing.value) {
     if (!canCreate.value) return
     try {
+      if (effectiveAuth.value === 'oauth') {
+        saving.value = true
+        const result = await startOAuth(config.url)
+        await navigateTo(result.authorizationUrl, { external: true })
+        return
+      }
       await createConnection(config)
     } catch (err: unknown) {
       errorMessage.value = clientErrorMessage(
         err,
         effectiveAuth.value === 'oauth'
-          ? 'Could not connect. Verify the OAuth server and that AI Code has credentials for this MCP resource.'
+          ? 'Could not start OAuth sign-in. The authorization server may reject the AI Code callback URL.'
           : 'Could not connect. Check the server URL and access, then try again.'
       )
+    } finally {
+      saving.value = false
     }
     return
   }

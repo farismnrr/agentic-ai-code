@@ -60,6 +60,10 @@ export interface McpScanResult {
   tools: McpDiscoveredTool[]
 }
 
+export interface McpOAuthStartResult {
+  authorizationUrl: string
+}
+
 export interface McpOAuthDiscovery {
   available: boolean
   authorizationUrl?: string
