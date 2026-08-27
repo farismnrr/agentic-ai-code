@@ -1,6 +1,5 @@
 const GENERIC_PROVIDER_ERROR = 'The model provider returned an error. Try again, or switch models.'
 const GENERIC_REQUEST_ERROR = 'The request could not be completed. Please try again.'
-const GENERIC_RELAY_ERROR = 'The local relay could not complete the request. Check that it is running and try again.'
 const REQUEST_CANCELLED = 'Request cancelled.'
 
 function isCancellation(error: unknown): boolean {
@@ -16,8 +15,4 @@ export function friendlyChatErrorMessage(error: unknown): string {
 
 export function friendlyRequestErrorMessage(error: unknown): string {
   return isCancellation(error) ? REQUEST_CANCELLED : GENERIC_REQUEST_ERROR
-}
-
-export function friendlyRelayErrorMessage(error: unknown): string {
-  return isCancellation(error) ? REQUEST_CANCELLED : GENERIC_RELAY_ERROR
 }

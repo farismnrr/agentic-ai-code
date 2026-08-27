@@ -1,10 +1,7 @@
 import { useChat } from '@ai-sdk/vue'
 import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
-import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { friendlyChatErrorMessage } from '../utils/chat-errors'
-import { createAttemptLedger } from './chat/attempt-ledger'
-import { createLocalToolController } from './chat/local-tool-controller'
 import { createConversationTransport } from './chat/chat-transport'
 import { createMessageMirror } from './chat/message-mirror'
 
@@ -23,7 +20,6 @@ import { createMessageMirror } from './chat/message-mirror'
 export function useConversationChat(conversation: Ref<Conversation | undefined>) {
   const { setMessages, loadOne } = useConversations()
   const toast = useToast()
-  const relayAgent = useRelayAgent()
 
   // `useChat`'s options factory re-runs — recreating its whole internal
   // chat instance and resetting `status` back to 'ready' — whenever ANY
@@ -41,91 +37,13 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // notify consumers when their result actually differs), and
   // `seedMessages` is a snapshot only re-taken when that id changes.
   const conversationId = computed(() => conversation.value?.id)
-  const terminalAgentEnabled = computed(() => relayAgent.isConfigured.value && conversation.value?.mode === 'agent' && conversation.value.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
   const seedMessages = shallowRef<UIMessage[]>(conversation.value?.messages ?? [])
-  const agentContext = shallowRef<{ repository_identity?: string } | undefined>()
-  const agentSessionReady = ref(!terminalAgentEnabled.value)
   watch(conversationId, () => {
     seedMessages.value = conversation.value?.messages ?? []
-    agentContext.value = undefined
-    agentSessionReady.value = !terminalAgentEnabled.value
   })
-  watch([conversationId, terminalAgentEnabled], ([id, enabled]) => {
-    if (!id || !enabled) {
-      agentSessionReady.value = true
-      agentContext.value = undefined
-      return
-    }
-    agentSessionReady.value = false
-    void relayAgent.startSession(id).then((result) => {
-      const context = result?.context
-      if (context && typeof context === 'object' && 'repository_identity' in context && typeof context.repository_identity === 'string') {
-        agentContext.value = { repository_identity: context.repository_identity.slice(0, 512) }
-      }
-      agentSessionReady.value = true
-    }).catch(() => {})
-  }, { immediate: true })
-  // Scoped to one completion cycle: the boundary that follows a remediation
-  // continuation closes the cycle and gives the next independent run a fresh
-  // single-continuation budget.
-  const stopContinuationUsed = ref(false)
-  const completionGateInFlight = ref(false)
-  watch(conversationId, () => {
-    stopContinuationUsed.value = false
-  })
-
-  // `local_terminal` is registered server-side with no `execute` (see
-  // server/api/chat.post.ts) precisely so this server never runs the user's
-  // local command — once approved, the SDK streams the tool call to the
-  // client to run instead. It is deliberately NOT run from `onToolCall`:
-  // the SDK fires that the instant a tool call's *input* is available,
-  // completely independent of approval — traced through
-  // node_modules/ai/dist/index.js and confirmed live (a chat turn stuck at
-  // "Still working…" forever, no approval modal ever shown) that this SDK
-  // behavior does not gate client-tool execution behind approval at all.
-  // Executing from `onToolCall` therefore risked running a command before,
-  // or regardless of, whatever the user actually decided in
-  // ChatToolApproval.vue's modal. Instead, a real command only ever runs
-  // from the watcher below, which fires strictly on the message part
-  // actually reaching `state: 'approval-responded'` with
-  // `approval.approved === true` — true whether that came from the user
-  // clicking Allow just now, or from a remembered `conv.approvals` decision
-  // the server already auto-resolved (both produce the same state
-  // transition, just in different turns). A denied response needs no
-  // handling here — the SDK resolves `output-denied` on its own without
-  // ever invoking a client tool.
-  const ledger = createAttemptLedger()
-  const hookApproval = ref<{ input: unknown, token: string }>()
-  let resolveHookApproval: ((approved: boolean) => void) | undefined
-  const requestHookApproval = (input: unknown, token: string) => new Promise<boolean>((resolve) => {
-    resolveHookApproval = resolve
-    hookApproval.value = { input, token }
-  })
-  const answerHookApproval = (approved: boolean) => {
-    resolveHookApproval?.(approved)
-    resolveHookApproval = undefined
-    hookApproval.value = undefined
-  }
-
-  // `executedLocalTerminalCalls` alone only guards within one page
-  // session — the `{ immediate: true }` watcher below is what makes
-  // reopening a conversation resume a call that was approved but never
-  // got to run (e.g. the tab closed mid-flight), which is the behavior we
-  // want. But that same resume-on-reload logic has a narrow failure
-  // window: if a command actually finished running on the CLI but the
-  // follow-up request that would persist its output never completed
-  // (network dropped at exactly that moment), the DB row is left looking
-  // identical to "never ran yet" — reopening would then run it again.
-  // A durable, cross-reload ledger closes that window: mark a call as
-  // attempted here, synchronously, before ever awaiting `exec()` — so even
-  // a mid-flight crash right after this line means a reload will never
-  // retry it, at the cost of never auto-retrying a call that setup-failed
-  // for some unrelated reason (acceptable; the model still sees the error
-  // via `addToolOutput` below in that case, it just won't self-heal on
-  // reload — a real duplicate command run is the worse failure mode here).
 
   const chat = useChat(() => ({
-    transport: createConversationTransport(agentContext, agentSessionReady),
+    transport: createConversationTransport(),
     id: conversationId.value,
     messages: seedMessages.value as UIMessage[],
     // Without this, `addToolApprovalResponse` only marks the pending part as
@@ -133,10 +51,8 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     // request that resumes the conversation and runs the approved tool, so
     // clicking "Always allow" (or an auto-remembered decision) appeared to
     // do nothing and the turn hung forever. This is the SDK's own official
-    // helper for exactly this trigger. `local_terminal`'s result arrives via
-    // `addToolOutput` above rather than an approval response, so both
-    // "turn is ready to resume" conditions are checked — either one being
-    // true is enough to send the follow-up request.
+    // helper for exactly this trigger. Both approval responses and completed
+    // server-side MCP tool calls can require a follow-up request.
     sendAutomaticallyWhen: options =>
       lastAssistantMessageIsCompleteWithApprovalResponses(options) || lastAssistantMessageIsCompleteWithToolCalls(options),
     onError: (error: Error) => {
@@ -148,30 +64,6 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
       })
     }
   }))
-
-  const runApprovedLocalTerminalCall = createLocalToolController({ chat, relayAgent, ledger, agentSession: conversationId.value, requestApproval: requestHookApproval })
-
-  // The one place `local_terminal` actually gets executed — see the note
-  // above `runApprovedLocalTerminalCall`. Fires on every message mutation
-  // (cheap: `executedLocalTerminalCalls` skips anything already handled),
-  // scanning for a part that just became genuinely approved. `immediate:
-  // true` because plain `watch()` only reacts to *changes* — without it, a
-  // conversation reopened with an already-approved-but-never-executed call
-  // still sitting in its loaded history (e.g. the tab closed before this
-  // ever got a chance to run) would never resume it, only a fresh mutation
-  // would ever be seen.
-  watch(chat.messages, () => {
-    if (!relayAgent.isConfigured.value) return
-    for (const message of chat.messages.value) {
-      for (const part of message.parts) {
-        if (part.type !== 'tool-local_terminal') continue
-        const p = part as unknown as { state?: string, approval?: { approved?: boolean }, toolCallId: string, input: unknown }
-        if (p.state === 'approval-responded' && p.approval?.approved === true) {
-          void runApprovedLocalTerminalCall(p)
-        }
-      }
-    }
-  }, { immediate: true })
 
   // Mirror the SDK's messages back into the store so the sidebar, titles and
   // a later revisit of this conversation all see the same history. The SDK
@@ -193,30 +85,10 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     mirror.schedule()
   })
 
-  watch(() => chat.status.value, (status, previousStatus) => {
+  watch(() => chat.status.value, (status) => {
     if (status !== 'streaming') {
-      if (previousStatus === 'streaming' && conversationId.value && terminalAgentEnabled.value && !completionGateInFlight.value) {
-        completionGateInFlight.value = true
-        void relayAgent.preAgentStop(conversationId.value).then((decision) => {
-          if (decision.completion === 'remediation_required' && !stopContinuationUsed.value) {
-            stopContinuationUsed.value = true
-            void chat.regenerate()
-            return
-          }
-          stopContinuationUsed.value = false
-          flushMessages()
-          if (conversation.value) loadOne(conversation.value.id)
-        }).catch(() => {
-          stopContinuationUsed.value = false
-          flushMessages()
-          if (conversation.value) loadOne(conversation.value.id)
-        }).finally(() => {
-          completionGateInFlight.value = false
-        })
-      } else if (previousStatus !== 'streaming' || !terminalAgentEnabled.value) {
-        flushMessages()
-        if (conversation.value) loadOne(conversation.value.id)
-      }
+      flushMessages()
+      if (conversation.value) loadOne(conversation.value.id)
       // The mirror-back watcher above only ever patches `messages` — server
       // side fields a turn can also change (lastMeasuredTokens from
       // compaction's usage tracking, contextSummary, approvals persisted
@@ -227,5 +99,5 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
     }
   })
 
-  return { ...chat, hookApproval, answerHookApproval }
+  return { ...chat }
 }

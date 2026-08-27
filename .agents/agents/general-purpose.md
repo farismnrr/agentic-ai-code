@@ -3,7 +3,7 @@ name: general-purpose
 description: Perform a bounded delegated task using only authority inherited from the parent.
 model_policy: default
 tools:
-  allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, git_blame, code_symbols, code_definition, code_references, code_hover, code_diagnostics, web_search, http_fetch, local_terminal, file_write, file_edit, apply_patch]
+  allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, git_blame, code_symbols, code_definition, code_references, code_hover, code_diagnostics, web_search, http_fetch, file_write, file_edit, apply_patch]
   deny: []
 effects:
   allow: [workspace_read, workspace_write, workspace_delete, git_read, process_exec, network_read, network_write, external_mutation, privileged_bridge]

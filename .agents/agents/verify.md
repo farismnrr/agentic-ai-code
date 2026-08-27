@@ -4,7 +4,7 @@ description: Run approved bounded repository validation and report truthful resu
 model_policy: fast
 tools:
   allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, code_diagnostics, terminal_exec]
-  deny: [file_write, file_edit, apply_patch, local_terminal, http_fetch, web_search]
+  deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, workspace_write, git_read, process_exec, network_read, external_mutation]
   deny: [workspace_delete, network_write, privileged_bridge]
