@@ -31,10 +31,10 @@ export function useMcpServers() {
     })
   }
 
-  async function startOAuth(url: string) {
+  async function startOAuth(config: McpRemoteConfig) {
     return $fetch<McpOAuthStartResult>('/api/mcp-servers/oauth-start', {
       method: 'POST',
-      body: { url }
+      body: config
     })
   }
 

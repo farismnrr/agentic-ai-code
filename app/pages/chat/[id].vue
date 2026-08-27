@@ -11,6 +11,7 @@ const conversationId = computed(() => String(route.params.id))
 const conversation = computed(() => get(conversationId.value))
 
 const { models, load: loadModels } = useModels()
+const { capabilities, load: loadCapabilities } = useChatCapabilities()
 
 const loadError = ref<Error | null>(null)
 
@@ -20,6 +21,7 @@ async function fetchInitialData() {
     if (models.value.length === 0) {
       await loadModels()
     }
+    await loadCapabilities()
     // The conversations list only carries metadata, not messages (see
     // server/api/conversations/index.get.ts) — this page needs the full
     // conversation, and it must resolve before useConversationChat() reads
@@ -77,7 +79,8 @@ const input = ref('')
 
 const { editorRef, syncText, clearEditor, handleKeydown, mentionItems } = useChatEditor(input, computed(() => settings.value.sendOnEnter))
 
-const { modelId, mode, reasoningEffort, enabledToolIds, permissionMode } = useConversationConfiguration(conversation, models)
+const { modelId, mode, reasoningEffort, permissionMode } = useConversationConfiguration(conversation)
+const agentAvailable = computed(() => capabilities.value.terminal.available)
 
 async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }) {
   if (remember && toolId && conversation.value) {
@@ -215,7 +218,7 @@ defineShortcuts({
       >
         <ChatTaskLedger
           :conversation-id="conversationId"
-          :visible="mode === 'agent'"
+          :visible="mode === 'agent' && agentAvailable"
         />
         <div
           v-if="!messages.length && status === 'ready'"
@@ -327,12 +330,12 @@ defineShortcuts({
               v-model:model-id="modelId"
               v-model:mode="mode"
               v-model:reasoning-effort="reasoningEffort"
-              v-model:enabled-tool-ids="enabledToolIds"
               v-model:permission-mode="permissionMode"
               :model-items="modelItems"
               :mode-items="modeItems"
               :effort-items="effortItems"
               :supports-reasoning="supportsReasoning"
+              :agent-available="agentAvailable"
             />
             <ChatContextUsage
               :conversation-id="conversationId"

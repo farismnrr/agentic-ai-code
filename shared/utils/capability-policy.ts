@@ -54,11 +54,16 @@ const SAFE_READ_TOOLS = new Set([
 ])
 
 const OPAQUE_COMMANDS = new Set(['sh', 'bash', 'zsh', 'fish', 'dash', 'eval', 'env', 'xargs'])
-const READ_COMMANDS = new Map([
-  ['cat', 'workspace_read'], ['head', 'workspace_read'], ['tail', 'workspace_read'],
-  ['ls', 'workspace_read'], ['pwd', 'workspace_read'], ['rg', 'workspace_read'],
-  ['grep', 'workspace_read'], ['find', 'workspace_read'], ['git', 'git_read']
-] as const)
+const SAFE_DIRECT_READ_COMMANDS = new Set(['cat', 'head', 'tail', 'ls', 'pwd', 'rg', 'grep'])
+
+const MUTATING_EFFECTS = new Set<CapabilityEffect>([
+  'workspace_write',
+  'workspace_delete',
+  'process_exec',
+  'network_write',
+  'external_mutation',
+  'privileged_bridge'
+])
 
 const REVIEWED_STRUCTURED_TOOLS = new Set([
   ...SAFE_READ_TOOLS,
@@ -163,20 +168,25 @@ export function capabilityFactsForToolCall({
     || (toolName === 'terminal_exec' && !hasString(values, 'command'))
   const path = inputString(values, 'path')
   const cwd = inputString(values, 'cwd')
-  const effects = toolEffects(toolName, annotations, trustedProvenance)
+  const args = inputArgs(values)
+  const command = inputString(values, 'command')
+  const directCommand = command?.trim().toLowerCase()
+  const safeDirectRead = toolName === 'terminal_exec' && Boolean(directCommand && SAFE_DIRECT_READ_COMMANDS.has(directCommand))
+  const effects = safeDirectRead ? ['workspace_read'] as CapabilityEffect[] : toolEffects(toolName, annotations, trustedProvenance)
+  const protectedArgument = safeDirectRead && args?.some(arg => !arg.startsWith('-') && isProtectedPath(arg, cwd))
   return {
     toolId,
     effects,
     path,
     domain: inputDomain(values),
-    command: inputString(values, 'command'),
-    args: inputArgs(values),
+    command,
+    args,
     networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
       ? true
       : undefined,
     destructive: annotations?.destructiveHint,
     external: trustedProvenance === 'external',
-    protectedBoundary: isProtectedPath(path, cwd),
+    protectedBoundary: isProtectedPath(path, cwd) || protectedArgument === true,
     invalidInput: malformedInput,
     trustedProvenance,
     requiresConcreteScope: !REVIEWED_STRUCTURED_TOOLS.has(toolName)
@@ -188,13 +198,10 @@ export function classifyCapability(facts: CapabilityFacts): CapabilityAssessment
   const opaque = Boolean(command && OPAQUE_COMMANDS.has(command))
   const network = facts.networkRequested === true || facts.effects.some(effect => effect === 'network_read' || effect === 'network_write')
   const destructive = facts.destructive === true || facts.effects.some(effect => effect === 'workspace_delete' || effect === 'network_write' || effect === 'external_mutation' || effect === 'privileged_bridge')
-  const lowRisk = facts.effects.every(effect => effect === 'workspace_read' || effect === 'git_read') && !network && !destructive && !opaque && facts.external !== true && facts.protectedBoundary !== true && facts.invalidInput !== true
-  const risk: RiskLevel = facts.invalidInput === true || destructive || opaque || facts.external === true || facts.protectedBoundary === true ? 'high' : network || facts.effects.includes('process_exec') || facts.effects.includes('workspace_write') ? 'medium' : 'low'
-  let reason = facts.invalidInput ? 'malformed capability input requires explicit review' : facts.protectedBoundary ? 'protected credential boundary requires explicit review' : opaque ? 'opaque shell or wrapper execution requires explicit review' : facts.external === true ? 'external tool provenance is untrusted and requires explicit review' : network ? 'network access is an independent capability' : destructive ? 'the operation can mutate or delete state' : facts.effects.includes('workspace_write') ? 'workspace mutation requires explicit review' : 'bounded read-only capability'
-
-  if (command && READ_COMMANDS.has(command as 'cat' | 'head' | 'tail' | 'ls' | 'pwd' | 'rg' | 'grep' | 'find' | 'git') && facts.effects.length === 0) {
-    reason = 'reviewed direct-argv read-only command'
-  }
+  const mutating = facts.effects.some(effect => MUTATING_EFFECTS.has(effect))
+  const lowRisk = !mutating && !destructive && !opaque && facts.protectedBoundary !== true && facts.invalidInput !== true
+  const risk: RiskLevel = facts.invalidInput === true || destructive || opaque || facts.protectedBoundary === true ? 'high' : mutating || network ? 'medium' : 'low'
+  const reason = facts.invalidInput ? 'malformed capability input requires explicit review' : facts.protectedBoundary ? 'protected credential boundary requires explicit review' : opaque ? 'opaque shell or wrapper execution requires explicit review' : destructive ? 'the operation can mutate or delete state' : mutating ? 'state-changing capability requires explicit review' : network ? 'read-only network capability' : command && SAFE_DIRECT_READ_COMMANDS.has(command) ? 'reviewed direct-argv read-only command' : 'bounded read-only capability'
 
   return { ...facts, networkRequested: network, destructive, opaque, risk: lowRisk ? 'low' : risk, reason }
 }
@@ -217,6 +224,8 @@ export function approvalForCapability(
   if (remembered === 'never') return { outcome: 'denied', assessment }
 
   const trusted = facts.trustedProvenance === 'first-party-relay' || facts.trustedProvenance === 'native'
+  const readOnly = assessment.effects.every(effect => !MUTATING_EFFECTS.has(effect)) && !assessment.destructive && !assessment.opaque
+  if (readOnly) return { outcome: 'approved', assessment }
   if (remembered === 'always' && assessment.risk === 'low' && trusted && !assessment.opaque && !facts.requiresConcreteScope) return { outcome: 'approved', assessment }
   if (SAFE_READ_TOOLS.has(facts.toolId.split('.').pop() ?? '') && assessment.risk === 'low' && trusted) return { outcome: 'approved', assessment }
   return { outcome: 'user-approval', assessment }

@@ -1,11 +1,11 @@
-import type { ChatModel, Conversation } from '#shared/types/chat'
+import type { Conversation } from '#shared/types/chat'
 
-export function useConversationConfiguration(conversation: ComputedRef<Conversation | undefined>, models: Ref<ChatModel[]>) {
+export function useConversationConfiguration(conversation: ComputedRef<Conversation | undefined>) {
   const { update } = useConversations()
   const modelId = computed({
-    get: () => conversation.value?.modelId ?? models.value[0]?.id,
-    set: (value: string) => {
-      if (conversation.value) update(conversation.value.id, { modelId: value })
+    get: () => conversation.value?.modelId,
+    set: (value: string | undefined) => {
+      if (conversation.value && value) update(conversation.value.id, { modelId: value })
     }
   })
   const mode = computed({
@@ -20,17 +20,11 @@ export function useConversationConfiguration(conversation: ComputedRef<Conversat
       if (conversation.value) update(conversation.value.id, { reasoningEffort: value })
     }
   })
-  const enabledToolIds = computed({
-    get: () => conversation.value?.enabledToolIds ?? [],
-    set: (value: string[]) => {
-      if (conversation.value) update(conversation.value.id, { enabledToolIds: value })
-    }
-  })
   const permissionMode = computed({
     get: () => conversation.value?.permissionMode ?? 'manual',
     set: (value: Conversation['permissionMode']) => {
       if (conversation.value) update(conversation.value.id, { permissionMode: value })
     }
   })
-  return { modelId, mode, reasoningEffort, enabledToolIds, permissionMode }
+  return { modelId, mode, reasoningEffort, permissionMode }
 }

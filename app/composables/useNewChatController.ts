@@ -1,7 +1,7 @@
 import type { Conversation } from '#shared/types/chat'
 import { friendlyRequestErrorMessage } from '../utils/chat-errors'
 
-export function useNewChatController(input: Ref<string>, workspaceId: Ref<string | undefined>, modelId: Ref<string | undefined>, mode: Ref<Conversation['mode']>, reasoningEffort: Ref<NonNullable<Conversation['reasoningEffort']>>, enabledToolIds: Ref<string[]>, permissionMode: Ref<Conversation['permissionMode']>) {
+export function useNewChatController(input: Ref<string>, workspaceId: Ref<string | undefined>, modelId: Ref<string | undefined>, mode: Ref<Conversation['mode']>, reasoningEffort: Ref<NonNullable<Conversation['reasoningEffort']>>, permissionMode: Ref<Conversation['permissionMode']>) {
   const { create, titleFrom } = useConversations()
   const { activeWorkspaceId, setActive } = useWorkspaces()
   const { set: setPendingPrompt } = usePendingPrompt()
@@ -10,9 +10,16 @@ export function useNewChatController(input: Ref<string>, workspaceId: Ref<string
 
   async function start(text: string) {
     const trimmed = text.trim()
-    if (!trimmed) return
+    if (!trimmed || !modelId.value) return
     try {
-      const conversation = await create({ title: titleFrom(trimmed), modelId: modelId.value, mode: mode.value, reasoningEffort: reasoningEffort.value, permissionMode: permissionMode.value, enabledToolIds: enabledToolIds.value, workspaceId: workspaceId.value })
+      const conversation = await create({
+        title: titleFrom(trimmed),
+        modelId: modelId.value,
+        mode: mode.value,
+        reasoningEffort: reasoningEffort.value,
+        permissionMode: permissionMode.value,
+        workspaceId: workspaceId.value
+      })
       input.value = ''
       if (workspaceId.value && workspaceId.value !== activeWorkspaceId.value) setActive(workspaceId.value)
       setPendingPrompt(conversation.id, trimmed)

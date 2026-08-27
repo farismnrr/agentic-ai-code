@@ -304,9 +304,30 @@ export const mcpServers = aiCode.table('mcp_servers', {
   status: text('status').notNull().default('disconnected'),
   enabled: boolean('enabled').notNull().default(true),
   tools: jsonb('tools').$type<McpTool[]>().notNull().default([]),
+  oauthAuthorizationServer: text('oauth_authorization_server'),
+  oauthResource: text('oauth_resource'),
+  oauthRedirectUri: text('oauth_redirect_uri'),
+  oauthClientInformationEncrypted: text('oauth_client_information_encrypted'),
+  oauthTokensEncrypted: text('oauth_tokens_encrypted'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 })
+
+export const mcpOauthFlows = aiCode.table('mcp_oauth_flows', {
+  stateHash: text('state_hash').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  transport: text('transport').notNull(),
+  serverUrl: text('server_url').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  authorizationServer: text('authorization_server').notNull(),
+  resource: text('resource').notNull(),
+  clientInformationEncrypted: text('client_information_encrypted').notNull(),
+  codeVerifierEncrypted: text('code_verifier_encrypted').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [index('mcp_oauth_flows_user_idx').on(table.userId, table.expiresAt)])
 
 // ---------------------------------------------------------------------------
 // User Devices (Relay Agent Metadata)

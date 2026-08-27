@@ -115,6 +115,13 @@ export interface McpServer {
   tools: McpTool[]
 }
 
+/** Public, credential-free execution capability summary for chat UX. */
+export interface ChatCapabilities {
+  terminal: {
+    available: boolean
+  }
+}
+
 /** Remembered answer to an approval prompt, scoped to one conversation. */
 export type ApprovalDecision = 'always' | 'never'
 export type PermissionMode = 'plan' | 'bypass' | 'manual'

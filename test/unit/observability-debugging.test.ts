@@ -42,6 +42,24 @@ for (const forbidden of ['abc.def', 'token=hello', '/home/alice/private/file', '
 const requestContext = readFileSync(resolve(import.meta.dirname, '../../server/infrastructure/observability/request-context.ts'), 'utf8')
 assert(requestContext.includes(`attributes: sanitizeAttributes({ 'request.id': requestId, ...safeAttributes })`), 'request spans must use the shared sanitizer')
 
+const infrastructureSpan = readFileSync(resolve(import.meta.dirname, '../../server/infrastructure/observability/span.ts'), 'utf8')
+assert(infrastructureSpan.includes('sanitizeAttributes(attributes)'), 'infrastructure spans must use the shared sanitizer')
+assert(infrastructureSpan.includes('recordSanitizedException(span, error)'), 'infrastructure span failures must use sanitized exception recording')
+
+const oauthStart = readFileSync(resolve(import.meta.dirname, '../../server/infrastructure/mcp/oauth-start.ts'), 'utf8')
+const oauthComplete = readFileSync(resolve(import.meta.dirname, '../../server/infrastructure/mcp/oauth-complete.ts'), 'utf8')
+for (const source of [oauthStart, oauthComplete]) {
+  assert(source.includes(`'mcp.flow_id'`), 'OAuth telemetry needs an opaque flow correlation id')
+  for (const forbiddenAttribute of [`'authorization.code'`, `'oauth.code'`, `'oauth.state'`, `'oauth.token'`, `'oauth.verifier'`, `'client.secret'`]) {
+    assert(!source.includes(forbiddenAttribute), `OAuth telemetry must not emit ${forbiddenAttribute}`)
+  }
+}
+assert(oauthStart.includes(`'mcp.oauth.external.client_registration'`), 'OAuth start must trace dynamic client registration')
+assert(oauthStart.includes(`'mcp.oauth.db.persist_flow'`), 'OAuth start must trace DB flow persistence')
+assert(oauthComplete.includes(`'mcp.oauth.external.token_exchange'`), 'OAuth callback must trace token exchange')
+assert(oauthComplete.includes(`'mcp.oauth.external.verify_mcp'`), 'OAuth callback must trace MCP verification')
+assert(oauthComplete.includes(`'mcp.oauth.db.rollback_server'`), 'OAuth callback must trace rollback')
+
 const mcpTools = readFileSync(resolve(import.meta.dirname, '../../server/infrastructure/mcp/mcp-tools.ts'), 'utf8')
 assert(mcpTools.includes(`logger.info('chat.tool.policy'`), 'approval decisions need a bounded policy event even when execution is denied')
 assert(mcpTools.includes(`'result.classification': options.abortSignal?.aborted ? 'cancelled' : classifyRawCause(err)`), 'tool failures need bounded cause classification')

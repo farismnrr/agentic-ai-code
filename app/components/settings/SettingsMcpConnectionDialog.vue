@@ -13,6 +13,7 @@ const emit = defineEmits<{
 
 const open = defineModel<boolean>('open', { default: false })
 const { discoverOAuth, startOAuth, scan, create, update } = useMcpServers()
+const telemetry = useTelemetry()
 const toast = useToast()
 
 const schema = v.strictObject({
@@ -197,12 +198,35 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       }
       if (effectiveAuth.value === 'oauth') {
         saving.value = true
-        const result = await startOAuth(config.url)
+        telemetry.logEvent('info', 'mcp.oauth.start', 'MCP OAuth start requested', {
+          'operation': 'mcp.oauth.start',
+          'outcome': 'success',
+          'mcp.stage': 'frontend_start',
+          'mcp.transport': config.transport,
+          'mcp.oauth': true
+        })
+        const result = await startOAuth(config)
+        telemetry.logEvent('info', 'mcp.oauth.redirect', 'MCP OAuth authorization redirect ready', {
+          'operation': 'mcp.oauth.redirect',
+          'outcome': 'success',
+          'mcp.stage': 'frontend_redirect',
+          'mcp.transport': config.transport,
+          'mcp.oauth': true
+        })
+        telemetry.flush()
         await navigateTo(result.authorizationUrl, { external: true })
         return
       }
       await createConnection(config)
     } catch (err: unknown) {
+      if (effectiveAuth.value === 'oauth') {
+        telemetry.logError('mcp.oauth.start', err, {
+          'operation': 'mcp.oauth.start',
+          'mcp.stage': 'frontend_start',
+          'mcp.transport': config.transport,
+          'mcp.oauth': true
+        })
+      }
       errorMessage.value = clientErrorMessage(
         err,
         effectiveAuth.value === 'oauth'
