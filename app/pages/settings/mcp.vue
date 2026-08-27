@@ -1,87 +1,63 @@
 <script setup lang="ts">
-import * as v from 'valibot'
-import type { FormSubmitEvent } from '@nuxt/ui'
-import type { McpTransport } from '#shared/types/chat'
+import type { DropdownMenuItem } from '@nuxt/ui'
+import type { McpServer } from '#shared/types/chat'
 
-useSeoMeta({ title: 'MCP servers' })
+useSeoMeta({ title: 'MCP connections' })
 
-const { servers, setEnabled, add, test, remove } = useMcpServers()
+const { servers, setEnabled, test, remove } = useMcpServers()
+const { port, isConnected, isConnecting, checkConnection } = useRelayAgent()
 const toast = useToast()
 
-const statusColor = {
-  connected: 'success',
-  connecting: 'warning',
-  disconnected: 'neutral',
-  error: 'error'
-} as const
-
-const addOpen = ref(false)
+const dialogOpen = ref(false)
+const dialogServer = ref<McpServer | null>(null)
+const dialogKind = ref<'local' | 'remote' | undefined>()
 const testingId = ref<string | null>(null)
+const removeCandidate = ref<McpServer | null>(null)
+const removing = ref(false)
 
-const schema = v.pipe(
-  v.object({
-    name: v.pipe(v.string(), v.minLength(1, 'Name is required')),
-    description: v.string(),
-    transport: v.picklist(['http', 'sse', 'stdio'] as const),
-    url: v.optional(v.string()),
-    command: v.optional(v.string())
-  }),
-  // stdio needs a command, http/sse need a URL — the field that matters
-  // depends on the transport, so it can't be a per-field rule.
-  v.forward(
-    v.check(
-      input => input.transport !== 'stdio' || Boolean(input.command?.trim()),
-      'A command is required for stdio servers'
-    ),
-    ['command']
-  ),
-  v.forward(
-    v.check(
-      input => input.transport === 'stdio' || Boolean(input.url?.trim()),
-      'A URL is required for http and sse servers'
-    ),
-    ['url']
-  )
-)
+const localStatus = computed(() => isConnecting.value ? 'connecting' : isConnected.value ? 'connected' : 'disconnected')
 
-type Schema = v.InferOutput<typeof schema>
+onMounted(() => {
+  if (!isConnected.value) void checkConnection()
+})
 
-const state = reactive<{
-  name: string
-  description: string
-  transport: McpTransport
-  url: string
-  command: string
-}>({ name: '', description: '', transport: 'http', url: '', command: '' })
-
-async function onSubmit(event: FormSubmitEvent<Schema>) {
-  await add({
-    name: event.data.name,
-    description: event.data.description,
-    transport: event.data.transport,
-    url: event.data.url || undefined,
-    command: event.data.command || undefined,
-    enabled: true
-  })
-  toast.add({ title: `Added ${event.data.name}`, description: 'Test the connection to discover its tools.', icon: 'i-lucide-check', color: 'success' })
-  addOpen.value = false
-  Object.assign(state, { name: '', description: '', transport: 'http', url: '', command: '' })
+function openAdd() {
+  dialogServer.value = null
+  dialogKind.value = undefined
+  dialogOpen.value = true
 }
 
-async function testServer(id: string, name: string) {
-  testingId.value = id
+function manageLocal() {
+  dialogServer.value = null
+  dialogKind.value = 'local'
+  dialogOpen.value = true
+}
+
+function manageRemote(server: McpServer) {
+  dialogKind.value = 'remote'
+  dialogServer.value = server
+  dialogOpen.value = true
+}
+
+function remoteStatus(server: McpServer) {
+  return server.transport === 'stdio' ? 'unsupported' : server.status
+}
+
+async function recheck(server: McpServer) {
+  if (server.transport === 'stdio') return
+  testingId.value = server.id
   try {
-    const result = await test(id)
+    const result = await test(server.id)
     toast.add({
-      title: `${name} connected`,
+      title: `${server.name} connected`,
       description: `${result.tools.length} tools discovered.`,
       icon: 'i-lucide-plug-zap',
       color: 'success'
     })
-  } catch {
+  } catch (err: unknown) {
     toast.add({
-      title: `Could not connect to ${name}`,
-      description: 'Check the endpoint, tunnel, and server-side OAuth configuration.',
+      title: 'Connection check failed',
+      description: clientErrorMessage(err, 'Check the server URL and access, then try again.'),
       icon: 'i-lucide-circle-alert',
       color: 'error'
     })
@@ -90,233 +66,266 @@ async function testServer(id: string, name: string) {
   }
 }
 
-async function removeServer(id: string, name: string) {
-  await remove(id)
-  toast.add({ title: `Removed ${name}`, icon: 'i-lucide-trash-2', color: 'neutral' })
+async function toggleEnabled(server: McpServer, enabled: boolean) {
+  if (server.transport === 'stdio') return
+  try {
+    await setEnabled(server.id, enabled)
+  } catch (err: unknown) {
+    toast.add({
+      title: 'Could not update connection',
+      description: clientErrorMessage(err, 'Try again in a moment.'),
+      color: 'error'
+    })
+  }
+}
+
+function serverMenuItems(server: McpServer): DropdownMenuItem[][] {
+  if (server.transport === 'stdio') {
+    return [[
+      { label: 'Remove connection', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => { removeCandidate.value = server } }
+    ]]
+  }
+
+  return [[
+    { label: 'Recheck connection', icon: 'i-lucide-refresh-cw', onSelect: () => { void recheck(server) } },
+    { label: 'Remove connection', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => { removeCandidate.value = server } }
+  ]]
+}
+
+async function confirmRemove() {
+  const server = removeCandidate.value
+  if (!server) return
+  removing.value = true
+  try {
+    await remove(server.id)
+    toast.add({ title: `${server.name} removed`, icon: 'i-lucide-trash-2', color: 'neutral' })
+    removeCandidate.value = null
+  } catch (err: unknown) {
+    toast.add({
+      title: 'Could not remove connection',
+      description: clientErrorMessage(err, 'Try again in a moment.'),
+      color: 'error'
+    })
+  } finally {
+    removing.value = false
+  }
 }
 </script>
 
 <template>
-  <div class="space-y-4 py-4">
-    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-      <div>
+  <div class="space-y-5 py-4">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div class="max-w-2xl">
         <h2 class="text-base font-semibold text-highlighted">
-          MCP servers
+          MCP connections
         </h2>
-        <p class="text-sm text-muted">
-          Tools from connected servers are offered to the model. Disable a
-          server to withdraw its tools from every conversation.
+        <p class="mt-1 text-sm leading-6 text-muted">
+          Manage the local relay on this device and remote MCP servers from one place. Connections are verified before their tools are offered to the model.
         </p>
       </div>
-
       <UButton
-        label="Add server"
+        label="Add MCP"
         icon="i-lucide-plus"
-        @click="addOpen = true"
+        class="self-start"
+        @click="openAdd"
       />
     </div>
 
-    <UCard
-      v-if="!servers.length"
-      class="border-dashed"
-      :ui="{ body: 'flex flex-col items-center justify-center py-12 text-center' }"
-    >
-      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-elevated">
-        <UIcon
-          name="i-lucide-blocks"
-          class="size-5 text-muted"
-        />
-      </div>
-      <h3 class="mb-1 text-sm font-medium text-highlighted">
-        No MCP servers
-      </h3>
-      <p class="mb-4 text-sm text-muted">
-        Add a server to give the model tools to work with.
+    <div class="space-y-3">
+      <p class="text-xs font-medium uppercase tracking-wide text-dimmed">
+        This device
       </p>
-      <UButton
-        label="Add server"
-        icon="i-lucide-plus"
-        color="neutral"
-        variant="outline"
-        @click="addOpen = true"
-      />
-    </UCard>
-
-    <UCard
-      v-for="server in servers"
-      :key="server.id"
-      :ui="{ body: 'space-y-3' }"
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <p class="font-medium text-highlighted">
-              {{ server.name }}
-            </p>
-            <UBadge
-              :label="server.status"
-              :color="statusColor[server.status]"
-              variant="subtle"
-              size="sm"
-            />
-            <UBadge
-              :label="server.transport"
-              color="neutral"
-              variant="outline"
-              size="sm"
-            />
-          </div>
-          <p class="text-sm text-muted">
-            {{ server.description }}
-          </p>
-          <code class="text-xs break-all text-dimmed">{{ server.url ?? server.command }}</code>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <UButton
-            icon="i-lucide-plug-zap"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :loading="testingId === server.id"
-            :disabled="server.transport === 'stdio' || (testingId !== null && testingId !== server.id)"
-            :aria-label="`Test ${server.name}`"
-            @click="testServer(server.id, server.name)"
-          />
-          <USwitch
-            :model-value="server.enabled"
-            :aria-label="`Enable ${server.name}`"
-            @update:model-value="setEnabled(server.id, $event)"
-          />
-          <UButton
-            icon="i-lucide-trash-2"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :aria-label="`Remove ${server.name}`"
-            @click="removeServer(server.id, server.name)"
-          />
-        </div>
-      </div>
-
-      <UCollapsible v-if="server.tools.length">
-        <UButton
-          :label="`${server.tools.length} tools`"
-          icon="i-lucide-chevron-down"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-        />
-
-        <template #content>
-          <div class="space-y-1 pt-2">
-            <div
-              v-for="tool in server.tools"
-              :key="tool.id"
-              class="rounded-md px-2 py-1 hover:bg-elevated"
-            >
-              <code class="text-sm text-highlighted">{{ tool.name }}</code>
-              <p class="text-xs text-muted">
-                {{ tool.description }}
-              </p>
-            </div>
-          </div>
-        </template>
-      </UCollapsible>
-
-      <p
-        v-else
-        class="text-xs text-dimmed"
+      <SettingsMcpConnectionCard
+        name="Local relay"
+        description="Run coding tools through the loopback Rust relay on this device."
+        kind="Local"
+        :status="localStatus"
+        :endpoint="`http://127.0.0.1:${port}`"
+        icon="i-lucide-laptop"
       >
-        No tools discovered. Test the connection after adding or changing the server.
-      </p>
-    </UCard>
+        <template #actions>
+          <UButton
+            label="Check"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :loading="isConnecting"
+            @click="checkConnection"
+          />
+          <UButton
+            :label="isConnected ? 'Manage' : 'Set up'"
+            icon="i-lucide-settings-2"
+            size="sm"
+            @click="manageLocal"
+          />
+        </template>
+        <p class="text-xs text-muted">
+          Local relay configuration stays browser/device-owned and is never saved as a remote localhost server.
+        </p>
+      </SettingsMcpConnectionCard>
+    </div>
+
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-xs font-medium uppercase tracking-wide text-dimmed">
+          Remote servers
+        </p>
+        <span
+          v-if="servers.length"
+          class="text-xs text-dimmed"
+        >{{ servers.length }} configured</span>
+      </div>
+
+      <div
+        v-if="!servers.length"
+        class="rounded-lg border border-dashed border-default px-5 py-8 text-center"
+      >
+        <div class="mx-auto flex size-10 items-center justify-center rounded-full bg-elevated">
+          <UIcon
+            name="i-lucide-cloud"
+            class="size-5 text-muted"
+          />
+        </div>
+        <h3 class="mt-3 text-sm font-medium text-highlighted">
+          No remote MCP servers
+        </h3>
+        <p class="mx-auto mt-1 max-w-md text-sm text-muted">
+          The local relay is built in. Add a remote server when you want tools hosted somewhere else.
+        </p>
+        <UButton
+          label="Add MCP"
+          icon="i-lucide-plus"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          class="mt-4"
+          @click="openAdd"
+        />
+      </div>
+
+      <SettingsMcpConnectionCard
+        v-for="server in servers"
+        :key="server.id"
+        :name="server.name"
+        :description="server.description || (server.transport === 'stdio' ? 'Legacy server configuration' : 'Remote MCP server')"
+        :kind="server.transport === 'stdio' ? 'Legacy stdio' : server.transport === 'http' ? 'HTTP' : 'SSE'"
+        :status="remoteStatus(server)"
+        :endpoint="server.url ?? server.command"
+        :tool-count="server.transport === 'stdio' ? 0 : server.tools.length"
+        icon="i-lucide-cloud"
+      >
+        <template #actions>
+          <div
+            v-if="server.transport !== 'stdio'"
+            class="flex items-center gap-2 rounded-md border border-default px-2.5 py-1.5"
+          >
+            <span class="text-xs text-muted">Enabled</span>
+            <USwitch
+              :model-value="server.enabled"
+              size="sm"
+              :aria-label="`${server.enabled ? 'Disable' : 'Enable'} ${server.name}`"
+              @update:model-value="toggleEnabled(server, Boolean($event))"
+            />
+          </div>
+          <UButton
+            v-if="server.transport !== 'stdio'"
+            label="Manage"
+            icon="i-lucide-settings-2"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            @click="manageRemote(server)"
+          />
+          <UDropdownMenu :items="serverMenuItems(server)">
+            <UButton
+              icon="i-lucide-ellipsis"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :loading="testingId === server.id"
+              :aria-label="`More actions for ${server.name}`"
+            />
+          </UDropdownMenu>
+        </template>
+
+        <UAlert
+          v-if="server.transport === 'stdio'"
+          title="Unsupported legacy transport"
+          description="Server-side stdio execution is intentionally disabled. Remove this legacy entry and add a remote HTTP or SSE server instead."
+          icon="i-lucide-shield-alert"
+          color="warning"
+          variant="subtle"
+        />
+
+        <UCollapsible v-else-if="server.tools.length">
+          <UButton
+            :label="`View ${server.tools.length} ${server.tools.length === 1 ? 'tool' : 'tools'}`"
+            icon="i-lucide-chevron-down"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+          />
+          <template #content>
+            <div class="mt-2 grid gap-2 sm:grid-cols-2">
+              <div
+                v-for="tool in server.tools"
+                :key="tool.id"
+                class="rounded-md bg-elevated px-3 py-2"
+              >
+                <code class="text-xs font-medium text-highlighted">{{ tool.name }}</code>
+                <p
+                  v-if="tool.description"
+                  class="mt-0.5 line-clamp-2 text-xs text-muted"
+                >
+                  {{ tool.description }}
+                </p>
+              </div>
+            </div>
+          </template>
+        </UCollapsible>
+
+        <p
+          v-else
+          class="text-xs text-muted"
+        >
+          {{ server.status === 'error' ? 'Connection needs attention. Recheck it before using its tools.' : 'Connected server has not advertised any tools.' }}
+        </p>
+      </SettingsMcpConnectionCard>
+    </div>
+
+    <SettingsMcpConnectionDialog
+      v-model:open="dialogOpen"
+      :server="dialogServer"
+      :initial-kind="dialogKind"
+      @saved="dialogServer = null"
+    />
 
     <UModal
-      v-model:open="addOpen"
-      title="Add MCP server"
+      :open="Boolean(removeCandidate)"
+      title="Remove MCP connection"
+      description="This removes the saved server and withdraws its tools from conversations."
+      @update:open="value => { if (!value) removeCandidate = null }"
     >
       <template #body>
-        <UForm
-          id="add-server"
-          :schema="schema"
-          :state="state"
-          class="space-y-4"
-          @submit="onSubmit"
-        >
-          <UFormField
-            label="Name"
-            name="name"
-            required
-          >
-            <UInput
-              v-model="state.name"
-              placeholder="Laptop relay"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            label="Description"
-            name="description"
-          >
-            <UInput
-              v-model="state.description"
-              placeholder="Remote coding tools on my laptop"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            label="Transport"
-            name="transport"
-          >
-            <USelect
-              v-model="state.transport"
-              :items="['http', 'sse', 'stdio']"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            v-if="state.transport === 'stdio'"
-            label="Command"
-            name="command"
-          >
-            <UInput
-              v-model="state.command"
-              placeholder="npx -y @modelcontextprotocol/server-filesystem ~/"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            v-else
-            label="URL"
-            name="url"
-            :description="state.transport === 'http' ? 'For the first-party laptop relay, use the exact NUXT_REMOTE_MCP_URL configured on the Nuxt server. Its OAuth access token remains server-only.' : undefined"
-          >
-            <UInput
-              v-model="state.url"
-              placeholder="https://mcp.farismunir.my.id/mcp"
-              class="w-full"
-            />
-          </UFormField>
-        </UForm>
+        <p class="text-sm text-muted">
+          Remove <span class="font-medium text-highlighted">{{ removeCandidate?.name }}</span>? You can add it again later by scanning the server again.
+        </p>
       </template>
-
       <template #footer>
         <div class="flex w-full justify-end gap-2">
           <UButton
             label="Cancel"
             color="neutral"
             variant="ghost"
-            @click="addOpen = false"
+            @click="removeCandidate = null"
           />
           <UButton
-            label="Add server"
-            type="submit"
-            form="add-server"
+            label="Remove connection"
+            icon="i-lucide-trash-2"
+            color="error"
+            :loading="removing"
+            @click="confirmRemove"
           />
         </div>
       </template>

@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const body = await readValidatedBody(event, body => v.parse(remoteConfigSchema, body))
 
   try {
-    return await event.context.application.mcp.createServer(session.user.id, body)
+    return await event.context.application.mcp.scanServer(session.user.id, body)
   } catch (err) {
     if (err instanceof McpConnectionError) throw badRequest('Unable to connect to MCP server')
     throw err
