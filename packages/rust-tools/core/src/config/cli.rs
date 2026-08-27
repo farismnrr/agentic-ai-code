@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_PORT: u16 = 47_821;
 
 /// Top-level CLI, matching the legacy `relay-agent [--port] [--dir] [--origin]`
-/// and `relay-agent stop --port <port>` invocations.
+/// and `relay-agent stop --port <port>` invocations, with explicit bind-host
+/// control for deployments that need a non-loopback listener.
 #[derive(Parser, Debug)]
 #[command(name = "ai-tools relay-agent", author, version, about, long_about = None)]
 pub struct Cli {
@@ -16,6 +17,12 @@ pub struct Cli {
     /// Port to run the server on.
     #[arg(short, long, default_value_t = DEFAULT_PORT)]
     pub port: u16,
+
+    /// IP address on which to listen. Defaults to loopback; local mode only
+    /// permits loopback, while remote non-loopback binds require OAuth and an
+    /// explicit browser Origin.
+    #[arg(long, env = "RELAY_AGENT_BIND_HOST", default_value = "127.0.0.1")]
+    pub bind_host: String,
 
     /// Explicit security mode: local (loopback only) or remote (OAuth required).
     #[arg(long, value_enum, env = "RELAY_AGENT_MODE", default_value = "local")]
