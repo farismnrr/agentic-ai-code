@@ -23,9 +23,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 FROM base AS build
 WORKDIR /app
+# The native Rust workspace, relay, and native-tool adapter packages are
+# deliberately excluded by .dockerignore. Rust is deployed as the separate
+# ai-tools systemd service; this image builds and runs only the Nuxt app.
+# Nuxt prerenders `/`, and nuxt-auth-utils validates its password during that
+# build-time request. This throwaway value is scoped to the build command; the
+# final image receives the real NUXT_SESSION_PASSWORD from Compose/runtime env.
 COPY . .
 RUN pnpm install --config.ignore-scripts=true
-RUN pnpm build
+RUN NUXT_SESSION_PASSWORD="build-only-session-password-not-for-runtime" pnpm build
 
 FROM runtime-tools AS runtime
 ARG VERSION=dev

@@ -8,6 +8,13 @@ Human/operator setup is documented under [`../../docs/`](../../docs/README.md); 
 
 Current configuration groups include dev server/public site URL, router/model-provider credentials, workspace root, PostgreSQL, session sealing, SMTP/optional OAuth providers, and OpenTelemetry/Jaeger/Loki.
 
+Production runtime separation is mandatory: Docker is for the Nuxt
+application only. Do not add the Rust workspace, relay binary, native build
+targets, or native-tool adapter packages to the Nuxt image or mount them into
+it. Build/install the Rust relay separately and keep it under its systemd
+service. Nuxt-to-relay server work uses the first-party MCP URL and private
+OAuth access-token configuration described in `NUXT_REMOTE_MCP_*`.
+
 Workspace activity adds a separate configuration group: Nuxt uses
 `NUXT_ACTIVITY_PAYLOAD_SECRET` and bounded `NUXT_ACTIVITY_RETENTION_DAYS`,
 while the Rust relay uses `RELAY_ACTIVITY_MODE`, an owner-only state directory,

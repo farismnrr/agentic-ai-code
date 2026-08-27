@@ -1,6 +1,14 @@
 .git
 node_modules
-target
+target/
+**/target/
+.tmp/
+.cache/
+packages/rust-tools/
+packages/relay-agent/
+packages/curl-tool/
+packages/searxng-search-tool/
+packages/terminal-tool/
 .output
 .nuxt
 dist

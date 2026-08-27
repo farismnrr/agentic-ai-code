@@ -2,13 +2,11 @@ import { logger } from '../../observability/logger'
 import { createAgent } from 'langchain'
 
 import { buildLanggraphTools } from './langgraph-tools'
-import { createSearxngSearchTool } from '@ai-code/searxng-search-tool'
 import type { UIMessage } from '#shared/types/chat'
 import { createUIMessageStream, getToolName } from 'ai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { getLanggraphModel } from '../providers/langgraph-model'
 import type { RequestTelemetryContext } from '../../../application/observability/contracts'
-import { aiToolsTraceEnv } from '../../observability/ai-tools-trace'
 
 type LanggraphModel = ReturnType<typeof getLanggraphModel>
 
@@ -126,6 +124,7 @@ export function runLanggraphChat({
       // a `const` inside `try {}` isn't visible in the paired `catch {}`.
       let timeoutId: ReturnType<typeof setTimeout> | undefined
       let totalTokens: number | undefined
+      let langgraphTools: Awaited<ReturnType<typeof buildLanggraphTools>> | undefined
 
       try {
         if (forced && cleanedText !== undefined) {
@@ -159,8 +158,8 @@ export function runLanggraphChat({
 
           let searchResultText: string
           try {
-            const searxngSearchTool = createSearxngSearchTool({ baseUrl: useRuntimeConfig().searxngBaseUrl, getChildEnv: aiToolsTraceEnv })
-            searchResultText = await searxngSearchTool.invoke({ query: cleanedText })
+            langgraphTools = await buildLanggraphTools()
+            searchResultText = await langgraphTools.search(cleanedText)
           } catch (err) {
             // Plan 035 remediation round 2 — same class of leak as the MCP
             // tool-result fix: this text becomes user-visible chat content
@@ -213,8 +212,8 @@ export function runLanggraphChat({
           return
         }
 
-        const langgraphTools = buildLanggraphTools()
-        const agent = createAgent({ model: baseModel, tools: langgraphTools })
+        langgraphTools = await buildLanggraphTools()
+        const agent = createAgent({ model: baseModel, tools: langgraphTools.tools })
 
         const inputMessages = convertToLangchainMessages(uiMessages, cleanedText)
         if (systemPrompt) inputMessages.unshift(new SystemMessage(systemPrompt))
@@ -334,6 +333,7 @@ export function runLanggraphChat({
           }
         }
       } finally {
+        await langgraphTools?.close()
         await cleanup()
       }
     }

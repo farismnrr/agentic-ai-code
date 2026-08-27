@@ -137,6 +137,15 @@ The coding relay does not expose the host Tailscale local API socket by default.
 
 The coding relay does **not** expose the host Docker socket by default. For trusted single-owner local development, an operator may explicitly opt in with `RELAY_ALLOW_DOCKER=true`; that escape hatch permits the `docker` CLI and bind-mounts the daemon socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`) into the Bubblewrap sandbox. Docker daemon access is effectively host-level authority and therefore weakens the filesystem boundary. Production/remote deployments should keep it disabled unless the operator deliberately accepts that trust expansion.
 
+The Nuxt production image and the Rust relay are separate deployments. The
+Nuxt Docker build excludes `packages/rust-tools`, `packages/relay-agent`, Rust
+targets, and local build artifacts; it does not build, copy, mount, or execute
+the native relay binary. Chat-mode `curl` and web search use the configured
+first-party MCP URL with the server-only `NUXT_REMOTE_MCP_ACCESS_TOKEN`, so
+Nuxt reaches the relay over the same MCP/OAuth-protected resource used by
+external MCP clients. The Rust relay remains an independent
+systemd/host service and has no dependency on the Nuxt container.
+
 ## Internal module ownership and maintainability
 
 The runtime trust boundaries above are unchanged by the maintainability refactor. Internally, the Rust relay now keeps stable crate facades while grouping implementation by responsibility:
