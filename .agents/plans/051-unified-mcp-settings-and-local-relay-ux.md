@@ -1,6 +1,6 @@
 # Plan 051 — Unified MCP Settings and Local Relay UX
 
-**Status:** CLOSED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RELAY DEPLOYMENT AND APP RECREATE VERIFIED; BROWSER EXECUTION FOLLOW-UP MOVED TO PLAN 052
+**Status:** CLOSED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RELAY DEPLOYMENT AND APP RECREATE VERIFIED
 **Created:** 2026-08-27
 
 ## Execution status — 2026-08-27
@@ -26,7 +26,7 @@ The active laptop browser setup was subsequently aligned with this page's Local 
 
 Plan 051 is closed at its implementation and deployment scope. The unified Settings → MCP surface, browser-local relay ownership model, Rust bind-host contract, exact-Origin CORS boundary, systemd user-service deployment, and Nuxt-only container recreation were delivered through the required PR flow and verified with the evidence recorded above and in the merged deployment closeout.
 
-The remaining browser Agent Mode `local_terminal` failure is a separate follow-up: the relay is healthy and accepts a direct, correctly shaped MCP `tools/call`, while one browser request was rejected by strict MCP routing-header validation and the UI reduced the result to the generic **Tool execution failed** state. The repeated `/api/conversations/.../tasks` requests are the Agent Mode's ephemeral progress-ledger polling, not evidence that the relay is stuck. This behavior is recorded as the open Plan 052 investigation; closing Plan 051 does not claim that browser execution issue is fixed.
+The remaining browser Agent Mode `local_terminal` failure is an explicitly unclaimed follow-up: the relay is healthy and accepts a direct, correctly shaped MCP `tools/call`, while one browser request was rejected by strict MCP routing-header validation and the UI reduced the result to the generic **Tool execution failed** state. The repeated `/api/conversations/.../tasks` requests are the Agent Mode's ephemeral progress-ledger polling, not evidence that the relay is stuck. If this issue is resumed, it must be freshly re-audited and given a new plan rather than inferred from this closed plan.
 
 Authenticated visual/mobile interaction and a live third-party remote MCP scan remain explicitly unclaimed because their fixtures are unavailable. They are not converted into false acceptance claims by this closure.
 
