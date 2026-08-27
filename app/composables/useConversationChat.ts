@@ -41,7 +41,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // notify consumers when their result actually differs), and
   // `seedMessages` is a snapshot only re-taken when that id changes.
   const conversationId = computed(() => conversation.value?.id)
-  const terminalAgentEnabled = computed(() => conversation.value?.mode === 'agent' && conversation.value.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
+  const terminalAgentEnabled = computed(() => relayAgent.isConfigured.value && conversation.value?.mode === 'agent' && conversation.value.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
   const seedMessages = shallowRef<UIMessage[]>(conversation.value?.messages ?? [])
   const agentContext = shallowRef<{ repository_identity?: string } | undefined>()
   const agentSessionReady = ref(!terminalAgentEnabled.value)
@@ -161,6 +161,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // ever got a chance to run) would never resume it, only a fresh mutation
   // would ever be seen.
   watch(chat.messages, () => {
+    if (!relayAgent.isConfigured.value) return
     for (const message of chat.messages.value) {
       for (const part of message.parts) {
         if (part.type !== 'tool-local_terminal') continue
