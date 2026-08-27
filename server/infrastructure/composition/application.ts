@@ -34,6 +34,7 @@ import * as auth from '../database/auth'
 import * as mcp from '../database/mcp-servers'
 import * as mcpManagement from '../mcp/server-management'
 import { startMcpOAuthAuthorization } from '../mcp/oauth-start'
+import { completeMcpOAuthAuthorization } from '../mcp/oauth-complete'
 import * as apiKey from '../auth/api-key'
 import * as mfa from '../database/mfa'
 import * as audit from '../database/security-events'
@@ -99,7 +100,8 @@ export function createApplicationAdapters(requestId: string) {
     mcp: {
       testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, () => mcpManagement.testMcpServer(userId, id)),
       discoverOAuth: async url => request.withSpan('mcp_server.oauth_discovery', {}, () => mcpManagement.discoverMcpOAuth(url)),
-      startOAuth: async (url, redirectUrl) => request.withSpan('mcp_server.oauth_start', {}, () => startMcpOAuthAuthorization(url, redirectUrl)),
+      startOAuth: async (userId, input, redirectUrl) => request.withSpan('mcp_server.oauth_start', {}, () => startMcpOAuthAuthorization(userId, input, redirectUrl)),
+      completeOAuth: async (state, authorizationCode) => request.withSpan('mcp_server.oauth_callback', {}, () => completeMcpOAuthAuthorization(state, authorizationCode)),
       scanServer: async (userId, input) => request.withSpan('mcp_server.scan', {}, () => mcpManagement.scanMcpServer(userId, input)),
       listServers: mcp.listMcpServers,
       createServer: async (userId, input) => request.withSpan('mcp_server.create', {}, () => mcpManagement.createVerifiedMcpServer(userId, input)),

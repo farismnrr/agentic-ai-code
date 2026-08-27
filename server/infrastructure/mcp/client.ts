@@ -1,13 +1,19 @@
 import { Buffer } from 'node:buffer'
 import { context, propagation } from '@opentelemetry/api'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
+import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
+import { getMcpServerOAuthCredentials, updateMcpServerOAuthTokens } from '../database/mcp-servers'
+import { decryptSecret, encryptSecret } from '../security/crypto'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, resolveMcpRequestTimeoutMs, taskPollDelayMs } from './task-reliability'
 
 export interface McpClientConfig {
   userId: string
+  id?: string
+  serverId?: string
   name: string
   transport: string
   url?: string | null
@@ -168,15 +174,15 @@ function encodeMcpHeaderValue(value: string) {
  * v2 with an atomic lockfile update + local verification, this class should be
  * deleted in favor of the official modern client with version negotiation.
  */
-class FirstPartyRelayMcpClient implements McpClientLike {
-  readonly trustedProvenance = 'first-party-relay' as const
+class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
 
   constructor(
     private readonly url: URL,
     private readonly accessToken: string,
     private readonly fetchImpl: typeof fetch,
-    private readonly requestTimeoutMs: number
+    private readonly requestTimeoutMs: number,
+    readonly trustedProvenance: 'first-party-relay' | 'external'
   ) {}
 
   async connect() {
@@ -390,6 +396,62 @@ function taskResult(task: Record<string, unknown>): McpClientCallResult {
   }
 }
 
+class StoredMcpOAuthProvider implements OAuthClientProvider {
+  constructor(
+    private readonly userId: string,
+    private readonly serverId: string,
+    private readonly credentials: Awaited<ReturnType<typeof getMcpServerOAuthCredentials>> & {}
+  ) {}
+
+  get redirectUrl() {
+    return this.credentials.redirectUri
+  }
+
+  get clientMetadata(): OAuthClientMetadata {
+    return {
+      client_name: 'AI Code',
+      redirect_uris: [this.credentials.redirectUri],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'client_secret_basic'
+    }
+  }
+
+  clientInformation(): OAuthClientInformationMixed {
+    return JSON.parse(decryptSecret(this.credentials.clientInformationEncrypted)) as OAuthClientInformationMixed
+  }
+
+  tokens(): OAuthTokens {
+    return JSON.parse(decryptSecret(this.credentials.tokensEncrypted)) as OAuthTokens
+  }
+
+  async saveTokens(tokens: OAuthTokens) {
+    const encrypted = encryptSecret(JSON.stringify(tokens))
+    await updateMcpServerOAuthTokens(this.userId, this.serverId, encrypted)
+    this.credentials.tokensEncrypted = encrypted
+  }
+
+  redirectToAuthorization() {
+    throw new Error('Stored MCP OAuth session requires interactive reauthorization')
+  }
+
+  saveCodeVerifier() {
+    throw new Error('Stored MCP OAuth session cannot start a new authorization flow')
+  }
+
+  codeVerifier(): string {
+    throw new Error('Stored MCP OAuth session has no pending PKCE verifier')
+  }
+}
+
+async function storedOAuthProvider(serverConfig: McpClientConfig) {
+  const serverId = serverConfig.serverId ?? serverConfig.id
+  if (!serverId) return undefined
+  const credentials = await getMcpServerOAuthCredentials(serverConfig.userId, serverId)
+  if (!credentials) return undefined
+  return new StoredMcpOAuthProvider(serverConfig.userId, serverId, credentials)
+}
+
 /**
  * Connects to a stored MCP server, per request — no pooling, no reconnect
  * logic (see plan 012's "Scope boundary" decision). Callers must `close()`
@@ -422,25 +484,56 @@ export async function createMcpClient(serverConfig: McpClientConfig): Promise<Mc
       throw new Error('The configured first-party remote MCP resource must use the http transport')
     }
     const guardedFetch = createSsrfSafeFetch(`Server "${serverConfig.name}"`)
-    const client = new FirstPartyRelayMcpClient(
+    const client = new ModernHttpMcpClient(
       url,
       firstParty.accessToken,
       withFirstPartyTrace(guardedFetch),
-      firstParty.requestTimeoutMs
+      firstParty.requestTimeoutMs,
+      'first-party-relay'
     )
     await client.connect()
     return client
   }
 
   const client = new Client({ name: MCP_CLIENT_INFO.name, version: MCP_CLIENT_INFO.version }, { capabilities: {} })
+  const authProvider = await storedOAuthProvider(serverConfig)
+  const guardedFetch = createSsrfSafeFetch(`Server "${serverConfig.name}"`)
   const transport = serverConfig.transport === 'sse'
-    ? new SSEClientTransport(url)
+    ? new SSEClientTransport(url, { authProvider })
     : new StreamableHTTPClientTransport(url, {
-        fetch: createSsrfSafeFetch(`Server "${serverConfig.name}"`)
+        authProvider,
+        fetch: guardedFetch
       })
 
-  await client.connect(transport)
-  return Object.assign(client as unknown as McpClientLike, { trustedProvenance: 'external' as const })
+  try {
+    await client.connect(transport)
+    return Object.assign(client as unknown as McpClientLike, { trustedProvenance: 'external' as const })
+  } catch (error) {
+    await client.close().catch(() => undefined)
+
+    const httpStatus = error instanceof Error && 'code' in error
+      ? Number((error as Error & { code?: unknown }).code)
+      : undefined
+    const canTryModernOAuthHttp = serverConfig.transport === 'http'
+      && authProvider
+      && error instanceof Error
+      && (httpStatus === 400 || /HTTP 400|status code 400/i.test(error.message))
+
+    if (!canTryModernOAuthHttp) throw error
+
+    const tokens = authProvider.tokens()
+    if (!tokens.access_token) throw error
+
+    const modernClient = new ModernHttpMcpClient(
+      url,
+      tokens.access_token,
+      guardedFetch,
+      resolveMcpRequestTimeoutMs(undefined),
+      'external'
+    )
+    await modernClient.connect()
+    return modernClient
+  }
 }
 
 /**
@@ -462,11 +555,12 @@ export async function createConfiguredFirstPartyRelayClient(): Promise<McpClient
 
   const url = parseConfiguredRemoteUrl(configuredUrlRaw)
   const guardedFetch = createSsrfSafeFetch('Configured first-party remote MCP')
-  const client = new FirstPartyRelayMcpClient(
+  const client = new ModernHttpMcpClient(
     url,
     accessToken,
     withFirstPartyTrace(guardedFetch),
-    resolveMcpRequestTimeoutMs(configured.requestTimeoutMs)
+    resolveMcpRequestTimeoutMs(configured.requestTimeoutMs),
+    'first-party-relay'
   )
   await client.connect()
   return client

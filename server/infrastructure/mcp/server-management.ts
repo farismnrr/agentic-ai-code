@@ -5,6 +5,7 @@ import { discoverOAuthServerInfo } from '@modelcontextprotocol/sdk/client/auth.j
 import { createMcpClient } from './client'
 import { createMcpServer, getMcpServer, mcpServerIdFor, updateMcpServer } from '../database/mcp-servers'
 import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
+import { withInfrastructureSpan } from '../observability/span'
 import type { McpDiscoveredTool, McpOAuthDiscovery, McpRemoteConfig, McpRemoteTransport, McpScanResult, McpServerUpdateInput, McpTool } from '#shared/types/chat'
 
 function isRemoteTransport(value: string): value is McpRemoteTransport {
@@ -36,17 +37,27 @@ async function discoverTools(userId: string, config: McpRemoteConfig): Promise<M
 }
 
 async function discoverStoredTools(userId: string, serverId: string, config: McpRemoteConfig) {
-  const client = await createMcpClient({
-    userId,
-    name: config.name,
-    transport: config.transport,
-    url: config.url
-  }).catch(() => {
+  const telemetry = { 'mcp.transport': config.transport, 'external.system': 'mcp_server' }
+  const client = await withInfrastructureSpan(
+    'mcp.client.connect',
+    { ...telemetry, 'mcp.stage': 'connect' },
+    () => createMcpClient({
+      userId,
+      serverId,
+      name: config.name,
+      transport: config.transport,
+      url: config.url
+    })
+  ).catch(() => {
     throw new McpConnectionError()
   })
 
   try {
-    const listed = await client.listTools()
+    const listed = await withInfrastructureSpan(
+      'mcp.client.list_tools',
+      { ...telemetry, 'mcp.stage': 'list_tools', 'mcp.method': 'tools/list' },
+      () => client.listTools()
+    )
     const trustedProvenance = client.trustedProvenance ?? 'external'
     return listed.tools.map(tool => ({
       id: `${serverId}.${tool.name}`,
