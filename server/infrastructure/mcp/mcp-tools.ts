@@ -42,9 +42,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
 // being exactly what `toolApproval` ends up passed as into `streamText`):
 // that generic type is a union of "one function for every tool call" OR "an
 // object literal keyed by the tool set's own literal key type" — assigning
-// into it key-by-key (`toolApproval['terminal'] = ...`, done by
-// server/api/chat.post.ts for tools this function doesn't know about,
-// e.g. the native terminal/local_terminal tools) doesn't typecheck against
+// into it key-by-key for dynamically discovered MCP tools doesn't typecheck against
 // that union. Every real value ever stored here is one of these two shapes;
 // callers cast to `ToolApprovalConfiguration<ToolSet, never>` only at the
 // `streamText`/`generateText` call site, once nothing further mutates it.

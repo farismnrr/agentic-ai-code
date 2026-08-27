@@ -56,9 +56,7 @@ const {
   sendMessage,
   stop,
   regenerate,
-  addToolApprovalResponse,
-  hookApproval,
-  answerHookApproval
+  addToolApprovalResponse
 } = useConversationChat(conversation)
 
 // UChatMessages' own #indicator only shows while status === 'submitted', or
@@ -282,9 +280,7 @@ defineShortcuts({
         <ChatToolApproval
           :messages="messages"
           :conversation="conversation"
-          :hook-approval="hookApproval"
           @answer="handleApprovalAnswer"
-          @hook-answer="answerHookApproval"
         />
       </UContainer>
     </template>

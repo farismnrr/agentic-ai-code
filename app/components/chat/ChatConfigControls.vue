@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Conversation } from '#shared/types/chat'
-import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 
 const props = defineProps<{
   modelItems: Array<{ label: string, value: string, icon: string }>
@@ -15,9 +14,12 @@ const reasoningEffort = defineModel<NonNullable<Conversation['reasoningEffort']>
 const enabledToolIds = defineModel<string[]>('enabledToolIds', { default: () => [] })
 const permissionMode = defineModel<Conversation['permissionMode']>('permissionMode', { default: 'manual' })
 
-const { isConfigured, isConnected, checkConnection } = useRelayAgent()
-const terminalEnabled = computed(() => isConfigured.value && enabledToolIds.value.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
-const agentAvailable = computed(() => terminalEnabled.value && isConnected.value)
+const { servers } = useMcpServers()
+const usableRemoteTools = computed(() => servers.value
+  .filter(server => server.enabled && server.status === 'connected')
+  .flatMap(server => server.tools))
+const remoteToolsEnabled = computed(() => usableRemoteTools.value.some(tool => enabledToolIds.value.includes(tool.id)))
+const agentAvailable = computed(() => remoteToolsEnabled.value)
 
 const permissionItems = [
   { label: 'Plan mode', value: 'plan' },
@@ -34,26 +36,11 @@ function enforceAvailableMode() {
 }
 
 watch(agentAvailable, enforceAvailableMode)
-watch(terminalEnabled, (enabled) => {
-  if (!enabled) {
-    enforceAvailableMode()
-    return
-  }
-  void checkConnection().then(enforceAvailableMode)
-})
-
-onMounted(() => {
-  if (!terminalEnabled.value) {
-    enforceAvailableMode()
-    return
-  }
-  void checkConnection().then(enforceAvailableMode)
-})
 </script>
 
 <template>
   <USelect
-    v-if="terminalEnabled"
+    v-if="agentAvailable"
     v-model="permissionMode"
     :items="permissionItems"
     icon="i-lucide-shield-check"

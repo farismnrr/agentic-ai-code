@@ -62,7 +62,7 @@ export function toolCategory(toolName: string): ToolRenderCategory {
   if (toolName.startsWith('git_') || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')) return 'git'
   if (toolName.startsWith('code_')) return 'diagnostics'
   if (['file_write', 'file_edit', 'apply_patch'].includes(toolName)) return 'mutation'
-  if (['terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel', 'local_terminal'].includes(toolName)) return 'execution'
+  if (['terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel'].includes(toolName)) return 'execution'
   if (['http_fetch', 'web_search'].includes(toolName)) return 'network'
   if (toolName.includes('hook') || toolName.includes('approval') || toolName.includes('policy')) return 'policy'
   if (['directory_list', 'file_search', 'text_search', 'file_read'].includes(toolName)) return 'read'
