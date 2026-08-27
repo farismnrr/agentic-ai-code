@@ -1,7 +1,15 @@
 import { tool as aiTool, type Tool } from 'ai'
-import { terminalToolSchema } from '@ai-code/terminal-tool'
+import { z } from 'zod'
 
-const LOCAL_TERMINAL_DESCRIPTION = 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Not scoped to any single project folder — pass an explicit `cwd` (absolute path) whenever the target directory matters, since it otherwise runs in the agent\'s own default directory, which may not be the folder the user means. Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.'
+const LOCAL_TERMINAL_DESCRIPTION = 'Execute a shell command on the user\'s own machine via their paired local CLI relay agent (a loopback bridge — this server never runs the command itself). Not scoped to any single project folder — pass an explicit `cwd` (absolute path) whenever the target directory matters, since it otherwise runs in the agent\'s own default directory, which may not be the folder the user means. Choose `timeout_ms` based on the expected command duration. Prefer `execution_mode=sync` for short operations whose result is needed immediately, `async` for long-running builds/tests/installations, and `auto` when either is acceptable. Async work is task-backed and continues independently of the initiating HTTP round trip. Only available if the user has paired a device; if execution reports the agent is not connected, tell the user to open Settings → Local Terminal and pair it.'
+
+const localTerminalToolSchema = z.object({
+  command: z.string().describe('The binary to run, e.g. "ls" — do not include flags/arguments here, put them in `args` instead.'),
+  args: z.array(z.string()).optional().describe('Arguments for the command, e.g. ["-la", "."].'),
+  cwd: z.string().optional().describe('Absolute path to run the command in. Omit to use the relay agent default directory.'),
+  timeout_ms: z.number().int().min(0).optional().describe('Requested command runtime in milliseconds. Pick a realistic value for the operation; 0 means no command deadline unless the relay operator configured a maximum.'),
+  execution_mode: z.enum(['sync', 'async', 'auto']).optional().default('auto').describe('Execution strategy. Use sync for short commands, async for long-running work that should survive the initial request, or auto to let the relay use task execution when supported and safe.')
+})
 
 /**
  * Builds the local-terminal `ai` SDK tool definition. This is the only place
@@ -12,6 +20,6 @@ const LOCAL_TERMINAL_DESCRIPTION = 'Execute a shell command on the user\'s own m
 export function buildLocalTerminalTool(): Tool {
   return aiTool({
     description: LOCAL_TERMINAL_DESCRIPTION,
-    inputSchema: terminalToolSchema
+    inputSchema: localTerminalToolSchema
   })
 }

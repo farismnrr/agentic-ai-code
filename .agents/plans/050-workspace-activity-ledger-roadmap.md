@@ -935,6 +935,18 @@ Local evidence completed:
 
 The following acceptance remains explicitly **UNPROVEN**, not inferred: live PostgreSQL migration/ingestion against an enrolled source, paired/local-terminal end-to-end activity, first-party Nuxt MCP activity, browser acceptance against persisted Logs, direct external MCP/external MCP client connector activity, generic-client live compatibility, adversarial database/connector/canary sweeps, and measured performance/backlog behavior. The local environment had no activity payload secret, authorized enrollment/source fixture, or available browser runtime; no shared database mutation or deployment was performed. These are external/environmental blockers for live closure and require an authorized operator fixture and deployment/runtime access.
 
+## Deployment-boundary follow-up — 2026-08-27
+
+The production Nuxt runtime was deployed as a Docker-only image on port 3333;
+the image and running container contain no Rust workspace, relay package,
+native target, adapter package, or `ai-tools` binary. The Rust relay remains a
+separate active user-systemd service on its inspected host binary path and
+loopback port 47821. Nuxt chat-mode `curl` and web search now route through the
+first-party MCP adapter, but authenticated Nuxt-to-relay execution remains
+UNPROVEN because the three private `NUXT_REMOTE_MCP_*` values were empty on the
+machine. The old project image tag was removed selectively; no orphan cleanup,
+global prune, or unrelated Docker-project cleanup was performed.
+
 ---
 
 ## Risks and rollback
