@@ -1,8 +1,8 @@
-import type { McpServer, McpTool } from '#shared/types/chat'
+import type { McpRemoteConfig, McpScanResult, McpServer, McpServerUpdateInput, McpTool } from '#shared/types/chat'
 
 /**
- * In-memory MCP server registry. Stands in for what an MCP client would
- * report; `useState` for the same SSR-safety reason as the conversation store.
+ * SSR-safe MCP connection registry for user-scoped remote servers. The local
+ * loopback relay intentionally lives in useRelayAgent() instead of this list.
  */
 export function useMcpServers() {
   const servers = useState<McpServer[]>('mcp-servers', () => [])
@@ -18,29 +18,42 @@ export function useMcpServers() {
     Object.fromEntries(servers.value.flatMap(s => s.tools).map(t => [t.id, t]))
   )
 
-  async function loadAll() {
-    const fetch = import.meta.server ? useRequestFetch() : $fetch
-    const data = await fetch<McpServer[]>('/api/mcp-servers')
-    servers.value = data
+  function replaceServer(next: McpServer) {
+    servers.value = servers.value.map(server => server.id === next.id ? next : server)
   }
 
-  async function setEnabled(id: string, enabled: boolean) {
-    servers.value = servers.value.map(server =>
-      server.id === id ? { ...server, enabled } : server
-    )
-    await $fetch(`/api/mcp-servers/${id}`, {
-      method: 'PUT',
-      body: { enabled }
+  async function loadAll() {
+    const fetch = import.meta.server ? useRequestFetch() : $fetch
+    servers.value = await fetch<McpServer[]>('/api/mcp-servers')
+  }
+
+  async function scan(config: McpRemoteConfig) {
+    return $fetch<McpScanResult>('/api/mcp-servers/scan', {
+      method: 'POST',
+      body: config
     })
   }
 
-  async function add(server: Omit<McpServer, 'id' | 'tools' | 'status'>) {
+  async function create(config: McpRemoteConfig) {
     const data = await $fetch<McpServer>('/api/mcp-servers', {
       method: 'POST',
-      body: server
+      body: config
     })
     servers.value = [...servers.value, data]
     return data
+  }
+
+  async function update(id: string, updates: McpServerUpdateInput) {
+    const data = await $fetch<McpServer>(`/api/mcp-servers/${id}`, {
+      method: 'PUT',
+      body: updates
+    })
+    replaceServer(data)
+    return data
+  }
+
+  async function setEnabled(id: string, enabled: boolean) {
+    return update(id, { enabled })
   }
 
   async function test(id: string) {
@@ -55,20 +68,17 @@ export function useMcpServers() {
       )
       return result
     } catch (error) {
-      // The server persists the failed test as `error`; mirror that state
-      // immediately so the UI doesn't keep displaying a stale connected badge
-      // until the next full settings reload.
       servers.value = servers.value.map(server =>
-        server.id === id ? { ...server, status: 'error' } : server
+        server.id === id ? { ...server, status: 'error', tools: [] } : server
       )
       throw error
     }
   }
 
   async function remove(id: string) {
-    servers.value = servers.value.filter(server => server.id !== id)
     await $fetch(`/api/mcp-servers/${id}`, { method: 'DELETE' })
+    servers.value = servers.value.filter(server => server.id !== id)
   }
 
-  return { servers, availableTools, toolsById, loadAll, setEnabled, add, test, remove }
+  return { servers, availableTools, toolsById, loadAll, scan, create, update, setEnabled, test, remove }
 }

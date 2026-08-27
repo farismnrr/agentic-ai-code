@@ -35,6 +35,33 @@ export interface ChatModel {
 
 export type McpTransport = 'http' | 'sse' | 'stdio'
 
+export type McpRemoteTransport = Exclude<McpTransport, 'stdio'>
+
+export interface McpRemoteConfig {
+  name: string
+  description: string
+  transport: McpRemoteTransport
+  url: string
+}
+
+export interface McpDiscoveredTool {
+  name: string
+  description: string
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    idempotentHint?: boolean
+    openWorldHint?: boolean
+  }
+}
+
+export interface McpScanResult {
+  transport: McpRemoteTransport
+  tools: McpDiscoveredTool[]
+}
+
+export type McpServerUpdateInput = Partial<McpRemoteConfig> & { enabled?: boolean }
+
 export type McpStatus = 'connected' | 'connecting' | 'disconnected' | 'error'
 
 export interface McpTool {

@@ -1,53 +1,66 @@
+import { and, eq } from 'drizzle-orm'
 import { useDb } from './connection'
-import { notFound, conflict, internal } from '#server/core/errors/http'
+import { conflict, internal, notFound } from '#server/core/errors/http'
 import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
-import { eq, and } from 'drizzle-orm'
 import { mcpServers } from '../../database/schema'
 import { isUniqueViolation } from './errors'
+import type { McpRemoteConfig, McpStatus, McpTool, McpTransport } from '../../../shared/types/chat'
 
-import type { McpTool } from '../../../shared/types/chat'
+function parseTools(value: unknown): McpTool[] {
+  if (Array.isArray(value)) return value as McpTool[]
+  if (typeof value === 'string') return JSON.parse(value) as McpTool[]
+  return []
+}
+
+function presentServer(server: typeof mcpServers.$inferSelect) {
+  const unsupported = server.transport === 'stdio'
+  return {
+    id: server.id,
+    name: server.name,
+    description: server.description,
+    transport: server.transport as McpTransport,
+    url: server.url ?? undefined,
+    command: server.command ?? undefined,
+    status: (unsupported ? 'error' : server.status) as McpStatus,
+    enabled: unsupported ? false : server.enabled,
+    tools: unsupported ? [] : parseTools(server.tools)
+  }
+}
+
+export function mcpServerIdFor(userId: string, name: string) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'server'
+  return `${slug}-${userId}`
+}
 
 export async function listMcpServers(userId: string) {
   const db = useDb()
-  const servers = await db
-    .select()
-    .from(mcpServers)
-    .where(eq(mcpServers.userId, userId))
-
-  return servers.map(s => ({
-    id: s.id,
-    name: s.name,
-    description: s.description,
-    transport: s.transport,
-    url: s.url,
-    command: s.command,
-    status: s.status,
-    enabled: s.enabled,
-    tools: Array.isArray(s.tools) ? s.tools : (typeof s.tools === 'string' ? JSON.parse(s.tools) : s.tools)
-  }))
+  const servers = await db.select().from(mcpServers).where(eq(mcpServers.userId, userId))
+  return servers.map(presentServer)
 }
 
-export async function createMcpServer(userId: string, body: { name: string, description?: string, transport: string, url?: string, command?: string }) {
+export async function getMcpServer(userId: string, id: string) {
   const db = useDb()
-  const id = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `server-${Date.now().toString(36)}`
+  const [server] = await db.select().from(mcpServers).where(and(eq(mcpServers.id, id), eq(mcpServers.userId, userId))).limit(1)
+  return server
+}
 
+export async function createMcpServer(userId: string, input: McpRemoteConfig & { id: string, tools: McpTool[] }) {
+  const db = useDb()
   let server
   try {
     [server] = await db
       .insert(mcpServers)
       .values({
-        id: `${id}-${userId}`,
+        id: input.id,
         userId,
-        name: body.name,
-        description: body.description,
-        transport: body.transport,
-        url: body.url,
-        command: body.command,
-        // 'connected' is a claim, not yet a fact — POST /api/mcp-servers/:id/test
-        // is what actually verifies it and updates this.
-        status: 'disconnected',
+        name: input.name,
+        description: input.description,
+        transport: input.transport,
+        url: input.url,
+        command: null,
+        status: 'connected',
         enabled: true,
-        tools: []
+        tools: input.tools
       })
       .returning()
   } catch (err) {
@@ -56,43 +69,40 @@ export async function createMcpServer(userId: string, body: { name: string, desc
   }
 
   if (!server) throw internal(safeDiagnostic('Failed to create server'))
-
-  return {
-    ...server,
-    tools: []
-  }
+  return presentServer(server)
 }
-export async function updateMcpServer(userId: string, id: string, updates: { name?: string, description?: string, transport?: string, url?: string, command?: string, status?: string, enabled?: boolean, tools?: McpTool[] }) {
+
+export async function updateMcpServer(
+  userId: string,
+  id: string,
+  updates: {
+    name?: string
+    description?: string
+    transport?: McpRemoteConfig['transport']
+    url?: string
+    status?: McpStatus
+    enabled?: boolean
+    tools?: McpTool[]
+  }
+) {
   const db = useDb()
   const [updated] = await db
     .update(mcpServers)
     .set({
       ...(updates.name !== undefined && { name: updates.name }),
       ...(updates.description !== undefined && { description: updates.description }),
-      ...(updates.transport !== undefined && { transport: updates.transport }),
+      ...(updates.transport !== undefined && { transport: updates.transport, command: null }),
       ...(updates.url !== undefined && { url: updates.url }),
       ...(updates.status !== undefined && { status: updates.status }),
       ...(updates.enabled !== undefined && { enabled: updates.enabled }),
       ...(updates.tools !== undefined && { tools: updates.tools }),
-      ...(updates.command !== undefined && { command: updates.command }),
       updatedAt: new Date()
     })
     .where(and(eq(mcpServers.id, id), eq(mcpServers.userId, userId)))
     .returning()
 
   if (!updated) throw notFound('Server not found')
-
-  return {
-    id: updated.id,
-    name: updated.name,
-    description: updated.description,
-    transport: updated.transport,
-    url: updated.url,
-    command: updated.command,
-    status: updated.status,
-    enabled: updated.enabled,
-    tools: Array.isArray(updated.tools) ? updated.tools : (typeof updated.tools === 'string' ? JSON.parse(updated.tools) : updated.tools)
-  }
+  return presentServer(updated)
 }
 
 export async function deleteMcpServer(userId: string, id: string) {

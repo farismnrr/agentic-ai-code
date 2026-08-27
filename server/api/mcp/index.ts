@@ -3,6 +3,42 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { publicMcpToolFailure } from '../../application/observability/public-tool-error'
+import type { McpRemoteConfig, McpRemoteTransport, McpServerUpdateInput } from '#shared/types/chat'
+
+function boundedString(value: unknown, field: string, maxLength: number, required = false) {
+  if (value === undefined && !required) return undefined
+  if (typeof value !== 'string') throw badRequest(`Invalid ${field}`)
+  const trimmed = value.trim()
+  if ((required && !trimmed) || trimmed.length > maxLength) throw badRequest(`Invalid ${field}`)
+  return trimmed
+}
+
+function remoteTransport(value: unknown): McpRemoteTransport {
+  if (value !== 'http' && value !== 'sse') throw badRequest('Invalid MCP transport')
+  return value
+}
+
+function createMcpServerInput(args: Record<string, unknown>): McpRemoteConfig {
+  return {
+    name: boundedString(args.name, 'MCP server name', 80, true)!,
+    description: boundedString(args.description, 'MCP server description', 280) ?? '',
+    transport: remoteTransport(args.transport),
+    url: boundedString(args.url, 'MCP server URL', 2048, true)!
+  }
+}
+
+function updateMcpServerInput(args: Record<string, unknown>): McpServerUpdateInput {
+  const input: McpServerUpdateInput = {}
+  if (args.name !== undefined) input.name = boundedString(args.name, 'MCP server name', 80, true)
+  if (args.description !== undefined) input.description = boundedString(args.description, 'MCP server description', 280) ?? ''
+  if (args.transport !== undefined) input.transport = remoteTransport(args.transport)
+  if (args.url !== undefined) input.url = boundedString(args.url, 'MCP server URL', 2048, true)
+  if (args.enabled !== undefined) {
+    if (typeof args.enabled !== 'boolean') throw badRequest('Invalid MCP enabled state')
+    input.enabled = args.enabled
+  }
+  return input
+}
 
 // We store active transports keyed by their SDK-generated session ID
 // Note: This in-memory map means connections won't survive across Nitro workers
@@ -41,8 +77,8 @@ export default defineEventHandler(async (event) => {
           { name: 'update_workspace', description: 'Update workspace', inputSchema: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, path: { type: 'string' } }, required: ['id', 'name'] } },
           { name: 'delete_workspace', description: 'Delete workspace', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
           { name: 'list_mcp_servers', description: 'List connected MCP servers', inputSchema: { type: 'object', properties: {} } },
-          { name: 'create_mcp_server', description: 'Create MCP server', inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, transport: { type: 'string' }, url: { type: 'string' }, command: { type: 'string' } }, required: ['name', 'transport'] } },
-          { name: 'update_mcp_server', description: 'Update MCP server', inputSchema: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, transport: { type: 'string' }, url: { type: 'string' }, command: { type: 'string' }, status: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['id'] } },
+          { name: 'create_mcp_server', description: 'Create and verify a remote MCP server', inputSchema: { type: 'object', properties: { name: { type: 'string', maxLength: 80 }, description: { type: 'string', maxLength: 280 }, transport: { type: 'string', enum: ['http', 'sse'] }, url: { type: 'string', maxLength: 2048 } }, required: ['name', 'transport', 'url'], additionalProperties: false } },
+          { name: 'update_mcp_server', description: 'Update MCP server metadata or a verified remote endpoint', inputSchema: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string', maxLength: 80 }, description: { type: 'string', maxLength: 280 }, transport: { type: 'string', enum: ['http', 'sse'] }, url: { type: 'string', maxLength: 2048 }, enabled: { type: 'boolean' } }, required: ['id'], additionalProperties: false } },
           { name: 'delete_mcp_server', description: 'Delete MCP server', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
           { name: 'send_message', description: 'Send a message to a conversation', inputSchema: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] } },
           { name: 'list_messages', description: 'List messages in a conversation', inputSchema: { type: 'object', properties: { conversationId: { type: 'string' } }, required: ['conversationId'] } }
@@ -77,10 +113,11 @@ export default defineEventHandler(async (event) => {
           const res = await event.context.application.mcp.listServers(userId)
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'create_mcp_server') {
-          const res = await event.context.application.mcp.createServer(userId, args as { name: string, description?: string, transport: 'http' | 'stdio' | 'sse', url?: string, command?: string })
+          const res = await event.context.application.mcp.createServer(userId, createMcpServerInput(args))
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'update_mcp_server') {
-          const res = await event.context.application.mcp.updateServer(userId, args.id as string, args)
+          const id = boundedString(args.id, 'MCP server id', 256, true)!
+          const res = await event.context.application.mcp.updateServer(userId, id, updateMcpServerInput(args))
           return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] }
         } else if (name === 'delete_mcp_server') {
           const res = await event.context.application.mcp.deleteServer(userId, args.id as string)

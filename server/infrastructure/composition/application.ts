@@ -32,6 +32,7 @@ import { listProviderModels } from '../ai/providers/index'
 import { createChatTurnDependencies } from '../ai/chat-turn-dependencies'
 import * as auth from '../database/auth'
 import * as mcp from '../database/mcp-servers'
+import * as mcpManagement from '../mcp/server-management'
 import * as apiKey from '../auth/api-key'
 import * as mfa from '../database/mfa'
 import * as audit from '../database/security-events'
@@ -95,10 +96,11 @@ export function createApplicationAdapters(requestId: string) {
       getUserRole: account.getUserRole
     } satisfies AccountDataUseCases,
     mcp: {
-      testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, async () => (await import('../mcp/test-server')).testMcpServer(userId, id)),
+      testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, () => mcpManagement.testMcpServer(userId, id)),
+      scanServer: async (userId, input) => request.withSpan('mcp_server.scan', {}, () => mcpManagement.scanMcpServer(userId, input)),
       listServers: mcp.listMcpServers,
-      createServer: async (userId: string, input: unknown) => request.withSpan('mcp_server.create', {}, () => mcp.createMcpServer(userId, input as never)),
-      updateServer: async (userId: string, id: string, input: unknown) => request.withSpan('mcp_server.update', {}, () => mcp.updateMcpServer(userId, id, input as never)),
+      createServer: async (userId, input) => request.withSpan('mcp_server.create', {}, () => mcpManagement.createVerifiedMcpServer(userId, input)),
+      updateServer: async (userId, id, input) => request.withSpan('mcp_server.update', {}, () => mcpManagement.updateVerifiedMcpServer(userId, id, input)),
       deleteServer: async (userId: string, id: string) => request.withSpan('mcp_server.delete', {}, () => mcp.deleteMcpServer(userId, id)),
       listMessages: messages.listConversationMessages,
       sendMessage: messages.sendMessage

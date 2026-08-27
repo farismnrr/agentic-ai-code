@@ -19,6 +19,7 @@
 - GitHub mergeability is not verification. Record only commands actually executed successfully.
 - `scripts/check-architecture.sh` is mandatory through `pnpm guardrail` and rejects representative direct, type-only, transitive-facade, and API-bypass violations.
 - Browser/Playwright automation may use the shared development database. Never assume browser-test data is isolated unless the environment explicitly provides isolation.
+- Top-level `workspaces/` is a local container for nested user/project checkouts, not maintained `ai-code` source. Keep it ignored by the parent Git repository and excluded from parent ESLint/test-layout traversal so a nested repository's own generated config/tests cannot break `ai-code` gates; validate each nested repository under its own rules instead.
 
 ## Nuxt/application invariants
 
@@ -59,6 +60,7 @@ Durable final rules:
 - Chat submit/regenerate/resume semantics belong to application, not database infrastructure.
 - Preserve abort/stop behavior, assistant persistence, token/context compaction, reasoning/provider options, approval allow/deny/user-approval semantics, MCP close-once cleanup, and local-terminal behavior during architecture moves.
 - Local terminal is client-executed through the paired local relay path (via `ai-tools relay`); do not restore a server-side shell execution path.
+- Settings → MCP is the single connection-management surface. The local relay remains browser/device-owned loopback state and must never be persisted as a remote `127.0.0.1` MCP row; remote MCP servers remain user-scoped Postgres rows verified server-side through the SSRF-safe client path. Remote creation uses scan/review before save and final server-side re-verification; legacy `stdio` rows remain fail-closed/removable. Preserve the stable internal `native.local_terminal` ID unless an explicit migration is designed.
 
 ## Provider/tenant security invariants
 

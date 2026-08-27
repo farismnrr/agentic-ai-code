@@ -18,9 +18,9 @@ export interface NativeTool {
 export const nativeTools: NativeTool[] = [
   {
     id: NATIVE_LOCAL_TERMINAL_TOOL_ID,
-    name: 'Terminal relay',
+    name: 'Local relay',
     toolName: 'local_terminal',
-    description: 'Let AI Code use the local CLI relay for terminal commands.',
+    description: 'Let AI Code run terminal commands through the local relay.',
     pickerVisible: true
   }
 ]

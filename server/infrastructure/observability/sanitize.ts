@@ -129,7 +129,7 @@ const FILESYSTEM_PATH_PATTERN: readonly [RegExp, string] = [
 // they are unaffected by the generic pattern and don't need this bypass.
 const SKIP_FILESYSTEM_PATH_REDACTION = new Set<string>(['route'])
 
-const REDACTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
+const REDACTION_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   // Absolute filesystem paths (including source-map stack locations). Paths
   // are sensitive workspace/environment data and are not useful as a stable
   // exception classification.
