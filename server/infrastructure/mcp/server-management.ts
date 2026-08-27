@@ -1,9 +1,11 @@
 import { logger } from '../observability/logger'
 import { notFound } from '#server/core/errors/http'
 import { McpConnectionError } from '#server/application/mcp'
+import { discoverOAuthServerInfo } from '@modelcontextprotocol/sdk/client/auth.js'
 import { createMcpClient } from './client'
 import { createMcpServer, getMcpServer, mcpServerIdFor, updateMcpServer } from '../database/mcp-servers'
-import type { McpDiscoveredTool, McpRemoteConfig, McpRemoteTransport, McpScanResult, McpServerUpdateInput, McpTool } from '#shared/types/chat'
+import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
+import type { McpDiscoveredTool, McpOAuthDiscovery, McpRemoteConfig, McpRemoteTransport, McpScanResult, McpServerUpdateInput, McpTool } from '#shared/types/chat'
 
 function isRemoteTransport(value: string): value is McpRemoteTransport {
   return value === 'http' || value === 'sse'
@@ -59,6 +61,59 @@ async function discoverStoredTools(userId: string, serverId: string, config: Mcp
     throw new McpConnectionError()
   } finally {
     await client.close().catch((err: unknown) => logger.error('[mcp discovery] error closing client', err))
+  }
+}
+
+function boundedUrl(value: unknown) {
+  return typeof value === 'string' && value.length <= 2048 ? value : undefined
+}
+
+function boundedStringList(value: unknown, maxItems = 64) {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.length > 0 && item.length <= 256)
+    .slice(0, maxItems)
+}
+
+export async function discoverMcpOAuth(urlValue: string): Promise<McpOAuthDiscovery> {
+  const url = new URL(urlValue)
+  await assertSafeUrl(url, 'MCP OAuth discovery')
+  const fetchFn = createSsrfSafeFetch('MCP OAuth discovery')
+
+  try {
+    const info = await discoverOAuthServerInfo(url, { fetchFn })
+    const metadata = info.authorizationServerMetadata as Record<string, unknown> | undefined
+    const resourceMetadata = info.resourceMetadata as Record<string, unknown> | undefined
+    const scopes = boundedStringList(resourceMetadata?.scopes_supported ?? metadata?.scopes_supported)
+    const oidcEnabled = scopes.includes('openid')
+    const authorizationServer = boundedUrl(info.authorizationServerUrl)
+    const issuer = boundedUrl(metadata?.issuer) ?? authorizationServer
+    const registrationMethods: Array<'dcr' | 'cimd'> = []
+    if (boundedUrl(metadata?.registration_endpoint)) registrationMethods.push('dcr')
+    if (metadata?.client_id_metadata_document_supported === true) registrationMethods.push('cimd')
+
+    return {
+      available: Boolean(boundedUrl(metadata?.authorization_endpoint) && boundedUrl(metadata?.token_endpoint)),
+      authorizationUrl: boundedUrl(metadata?.authorization_endpoint),
+      tokenUrl: boundedUrl(metadata?.token_endpoint),
+      registrationUrl: boundedUrl(metadata?.registration_endpoint),
+      authorizationServer: issuer,
+      resource: boundedUrl(resourceMetadata?.resource) ?? url.href,
+      scopes,
+      oidcEnabled,
+      oidcConfigurationUrl: oidcEnabled && issuer ? new URL('.well-known/openid-configuration', issuer.endsWith('/') ? issuer : `${issuer}/`).href : undefined,
+      oidcUserinfoEndpoint: boundedUrl(metadata?.userinfo_endpoint),
+      oidcScopesSupported: boundedStringList(metadata?.scopes_supported),
+      registrationMethods
+    }
+  } catch {
+    return {
+      available: false,
+      scopes: [],
+      oidcEnabled: false,
+      oidcScopesSupported: [],
+      registrationMethods: []
+    }
   }
 }
 
