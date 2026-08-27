@@ -10,20 +10,18 @@ import type { UIMessage } from '#shared/types/chat'
 // the native global `fetch`) wires chat traffic through the SAME
 // `createTracedFetch()` primitive the global `$fetch` override uses, so
 // trace generation/telemetry logic is never duplicated between the two.
-export function createConversationTransport(agentContext: Ref<{ repository_identity?: string } | undefined>, agentSessionReady: Ref<boolean>) {
+export function createConversationTransport() {
   const telemetry = useTelemetry()
 
   return new DefaultChatTransport({
     api: '/api/chat',
     fetch: createTracedFetch(telemetry, globalThis.fetch),
     prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
-      ...(agentSessionReady.value ? {} : (() => { throw new Error('Agent security session is not ready') })()),
       body: {
         id,
         trigger,
         messageId,
-        message: messages[messages.length - 1] as UIMessage | undefined,
-        agentContext: agentContext.value
+        message: messages[messages.length - 1] as UIMessage | undefined
       }
     })
   })

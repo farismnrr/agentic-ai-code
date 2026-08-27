@@ -1,30 +1,17 @@
 <script setup lang="ts">
-import { NATIVE_LOCAL_TERMINAL_TOOL_ID, nativeTools } from '#shared/utils/native-tools'
-
 const modelValue = defineModel<string[]>({ default: () => [] })
 
 const { servers } = useMcpServers()
-const { isConfigured, isConnected, isConnecting, checkConnection } = useRelayAgent()
 
 /** Only connected, enabled MCP servers can offer tools. */
 const usable = computed(() =>
   servers.value.filter(server => server.enabled && server.status === 'connected')
 )
 
-const visibleNativeTools = computed(() => nativeTools.filter(tool =>
-  tool.pickerVisible !== false
-  && (tool.id !== NATIVE_LOCAL_TERMINAL_TOOL_ID || isConfigured.value)
-))
-const terminalTool = computed(() => visibleNativeTools.value.find(tool => tool.id === NATIVE_LOCAL_TERMINAL_TOOL_ID))
-const terminalEnabled = computed(() => modelValue.value.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
-
 // Persisted tool IDs can outlive the catalog entries they point at. Count only
 // capabilities the user can actually see and toggle in this picker.
 const count = computed(() => {
-  const validIds = new Set([
-    ...visibleNativeTools.value.map(tool => tool.id),
-    ...usable.value.flatMap(server => server.tools.map(tool => tool.id))
-  ])
+  const validIds = new Set(usable.value.flatMap(server => server.tools.map(tool => tool.id)))
   return modelValue.value.filter(id => validIds.has(id)).length
 })
 
@@ -36,11 +23,6 @@ function setTool(toolId: string, enabled: boolean) {
   modelValue.value = enabled
     ? [...new Set([...modelValue.value, toolId])]
     : modelValue.value.filter(id => id !== toolId)
-}
-
-function toggleTerminal(enabled: boolean) {
-  if (!isConfigured.value) return
-  setTool(NATIVE_LOCAL_TERMINAL_TOOL_ID, enabled)
 }
 
 function serverState(serverId: string): boolean | 'indeterminate' {
@@ -72,59 +54,9 @@ function toggleServer(serverId: string) {
 
     <template #content>
       <div class="max-h-96 w-80 overflow-y-auto p-2">
-        <div
-          v-if="terminalTool"
-          class="p-2"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <p class="text-sm font-medium">
-                  {{ terminalTool.name }}
-                </p>
-                <UBadge
-                  :label="isConnecting ? 'Checking' : isConnected ? 'Connected' : 'Disconnected'"
-                  :color="isConnecting ? 'neutral' : isConnected ? 'success' : 'neutral'"
-                  variant="subtle"
-                  size="xs"
-                />
-              </div>
-              <p class="mt-1 text-xs text-muted">
-                {{ terminalTool.description }} Agent Mode is available only while this is enabled and connected.
-              </p>
-            </div>
-            <USwitch
-              :model-value="terminalEnabled"
-              class="mt-0.5 shrink-0"
-              @update:model-value="toggleTerminal(Boolean($event))"
-            />
-          </div>
-
-          <div class="mt-2 flex items-center gap-1">
-            <UButton
-              label="Check connection"
-              icon="i-lucide-refresh-cw"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :loading="isConnecting"
-              @click="checkConnection()"
-            />
-            <UButton
-              v-if="!isConnected"
-              label="MCP settings"
-              icon="i-lucide-settings"
-              color="neutral"
-              variant="link"
-              size="xs"
-              to="/settings/mcp"
-            />
-          </div>
-        </div>
-
-        <div class="border-t border-default pt-2">
+        <div>
           <div class="px-2 py-1 text-xs font-medium uppercase tracking-wide text-dimmed">
-            MCP tools
+            Remote MCP tools
           </div>
 
           <p

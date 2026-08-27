@@ -1,12 +1,11 @@
 import type { UIMessage } from '#shared/types/chat'
-import { NATIVE_LOCAL_TERMINAL_TOOL_ID, isNativeToolId } from '#shared/utils/native-tools'
+import { isNativeToolId } from '#shared/utils/native-tools'
 import type { ChatTurnDependencies, SubagentToolInput } from './contracts'
 import type { RequestTelemetryContext } from '../observability/contracts'
 import { loadAuthorizedChatContext } from './ownership'
 import { buildChatWorkspaceSystemPrompt, resolveChatWorkspaceContext } from './workspace-context'
 import { buildTurnMessages } from './history'
 import { createAssistantPersister } from './persistence'
-import { createLocalTerminalPolicy } from './local-terminal-policy'
 import { buildTaskUpdateTool } from '../task-context-output'
 import { buildOrchestratorPlanTool } from '../orchestration/tool'
 import { composeAgentTools } from './tool-composition'
@@ -34,8 +33,6 @@ export interface ExecuteChatTurnInput {
   deps: ChatTurnDependencies
   /** Request-scoped telemetry context (Plan 035 Phase 6). Optional so this use case stays callable without a live request (tests/tools). */
   telemetry?: RequestTelemetryContext
-  /** Bounded structured context returned by the first-party relay session hook. */
-  agentContext?: { repository_identity?: string }
 }
 
 /**
@@ -61,11 +58,10 @@ export async function executeChatTurn(input: ExecuteChatTurnInput) {
   return telemetry.withSpan('chat.execute', {}, () => executeChatTurnInner(input))
 }
 
-async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry, agentContext }: ExecuteChatTurnInput) {
+async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
-  const localTerminalEnabled = conv.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID)
-  const agentTurn = conv.mode === 'agent' && localTerminalEnabled
   const enabledMcpToolIds = conv.enabledToolIds.filter(toolId => !isNativeToolId(toolId))
+  const agentTurn = conv.mode === 'agent' && enabledMcpToolIds.length > 0
 
   // Bound the query with the compaction cutoff (once one exists) instead of
   // fetching every message in the conversation on every single turn — see
@@ -86,24 +82,12 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
 
   const { path: workspacePath, name: workspaceName } = await resolveChatWorkspaceContext(userId, conv.workspaceId, deps.ownership, deps.resolveWorkspacePath, telemetry)
 
-  // The server itself no longer has any file/shell access to offer the
-  // model — that tool (`native.terminal`, workspace-sandboxed, server-side)
-  // was removed by deliberate decision; the only execution path left is
-  // `local_terminal`, which runs on the user's own machine via their paired
-  // relay-agent CLI (see plan 026) and is opt-in per conversation. This is
-  // now just location context, not a capability description — the model
-  // learns what tools it actually has (if any) from the tools/approvals the
-  // SDK gives it directly, not from this prompt.
-  const boundedAgentContext = agentContext?.repository_identity
-    ? { repository_identity: agentContext.repository_identity.slice(0, 512) }
-    : undefined
   const buildWorkspaceSystemPrompt = () => {
     const workspacePrompt = buildChatWorkspaceSystemPrompt(workspacePath, workspaceName)
     const prompts = [workspacePrompt]
     if (agentTurn && conv.permissionMode === 'plan') {
       prompts.push('Plan mode is active. Analyze and produce a concrete implementation plan only. Do not make changes or request mutating capabilities.')
     }
-    if (boundedAgentContext && agentTurn) prompts.push(`Bounded repository hook context: ${JSON.stringify(boundedAgentContext)}`)
     return prompts.filter(Boolean).join('\n')
   }
 
@@ -130,17 +114,6 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     close = mcp.close
     if (enabledMcpToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
 
-    // Terminal relay is an explicit per-conversation capability. The client
-    // additionally requires a live loopback connection before it exposes Agent
-    // Mode; the server enforces the persisted enablement side.
-    const localTerminalPolicy = createLocalTerminalPolicy({ approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, permissionMode: conv.permissionMode, localTerminal: deps.localTerminal })
-    // No `execute` here — this is a client-executed AI SDK tool. The browser
-    // runs an approved call through its loopback relay; this server never
-    // executes the shell command itself.
-    tools['local_terminal'] = localTerminalPolicy.tool
-    toolApproval = toolApproval ?? {}
-    toolApproval['local_terminal'] = localTerminalPolicy.approval
-    telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
     if (workspacePath) {
       const subagentInput: SubagentToolInput = {
         userId,
@@ -176,10 +149,9 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   }
 
   if (!agentTurn) {
-    // Chat mode has no shell/file-access tool of its own (curl + search
-    // only, see server/infrastructure/ai/langgraph-tools.ts) — the workspace-sandboxed
-    // `terminal` tool it used to always wire in was removed; `local_terminal`
-    // is agent-mode-only.
+    // Chat mode has no coding-tool execution of its own. Its dedicated
+    // network tools remain managed by LangGraph; remote MCP coding tools are
+    // available only in Agent Mode.
     const systemPrompt = buildWorkspaceSystemPrompt()
     const langgraphModel = deps.getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     return deps.streamLangGraphChat({

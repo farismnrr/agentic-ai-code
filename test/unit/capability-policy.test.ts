@@ -27,7 +27,7 @@ expect(approvalForCapability(write, undefined, 'bypass').outcome === 'approved',
 expect(approvalForCapability(write, undefined, 'plan').outcome === 'denied', 'plan denies mutation')
 
 const terminal = capabilityFactsForToolCall({
-  toolId: 'native.local_terminal', toolName: 'local_terminal', input: { command: 'cat', args: ['src/main.ts'] }, trustedProvenance: 'native'
+  toolId: 'relay.terminal_exec', toolName: 'terminal_exec', input: { command: 'cat', args: ['src/main.ts'] }, trustedProvenance: 'first-party-relay'
 })
 expect(terminal.effects.includes('process_exec') && terminal.effects.includes('network_read') && terminal.effects.includes('external_mutation'), 'local terminal effects')
 expect(classifyCapability(terminal).risk === 'high', 'local terminal is high risk')
@@ -36,7 +36,7 @@ expect(!rememberedApprovalCanAutoAnswer(terminal, 'always', 'manual'), 'narrowed
 expect(rememberedApprovalCanAutoAnswer(terminal, 'never', 'manual'), 'remembered never can answer')
 
 const opaque = capabilityFactsForToolCall({
-  toolId: 'native.local_terminal', toolName: 'local_terminal', input: { command: 'sh', args: ['-lc', 'cat src/main.ts'] }, trustedProvenance: 'native'
+  toolId: 'relay.terminal_exec', toolName: 'terminal_exec', input: { command: 'sh', args: ['-lc', 'cat src/main.ts'] }, trustedProvenance: 'first-party-relay'
 })
 expect(classifyCapability(opaque).opaque === true, 'shell command is opaque')
 

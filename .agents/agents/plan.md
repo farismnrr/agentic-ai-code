@@ -4,7 +4,7 @@ description: Produce a grounded implementation plan from read-only repository in
 model_policy: default
 tools:
   allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, code_symbols, code_definition, code_references, code_hover, code_diagnostics]
-  deny: [file_write, file_edit, apply_patch, local_terminal, http_fetch, web_search]
+  deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, git_read]
   deny: [workspace_write, workspace_delete, process_exec, network_read, network_write, external_mutation, privileged_bridge]
