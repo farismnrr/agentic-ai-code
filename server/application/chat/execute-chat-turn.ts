@@ -1,5 +1,5 @@
 import type { UIMessage } from '#shared/types/chat'
-import { isNativeToolId } from '#shared/utils/native-tools'
+import type { SubagentEffect } from '#shared/types/subagents'
 import type { ChatTurnDependencies, SubagentToolInput } from './contracts'
 import type { RequestTelemetryContext } from '../observability/contracts'
 import { loadAuthorizedChatContext } from './ownership'
@@ -60,8 +60,11 @@ export async function executeChatTurn(input: ExecuteChatTurnInput) {
 
 async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
-  const enabledMcpToolIds = conv.enabledToolIds.filter(toolId => !isNativeToolId(toolId))
-  const agentTurn = conv.mode === 'agent' && enabledMcpToolIds.length > 0
+  const mcpExecution = await deps.resolveMcpExecutionContext(userId)
+  const enabledMcpToolIds = mcpExecution.enabledToolIds
+  const agentTurn = conv.mode === 'agent' && mcpExecution.terminalAvailable
+  const readOnlyToolTurn = conv.mode === 'chat' && mcpExecution.terminalAvailable
+  const toolTurn = agentTurn || readOnlyToolTurn
 
   // Bound the query with the compaction cutoff (once one exists) instead of
   // fetching every message in the conversation on every single turn — see
@@ -88,6 +91,9 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     if (agentTurn && conv.permissionMode === 'plan') {
       prompts.push('Plan mode is active. Analyze and produce a concrete implementation plan only. Do not make changes or request mutating capabilities.')
     }
+    if (readOnlyToolTurn) {
+      prompts.push('Chat mode is read-only. You may inspect the workspace with the provided structured read capabilities, but you must not make changes or request mutating capabilities.')
+    }
     return prompts.filter(Boolean).join('\n')
   }
 
@@ -103,38 +109,46 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let toolApproval: Record<string, unknown> | undefined
   let close: () => Promise<void> = async () => {}
 
-  if (agentTurn) {
-    const internalTools = {
-      task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }),
-      orchestrator_plan: buildOrchestratorPlanTool({ userId, conversationId: conv.id, parentSessionId: conv.id })
-    }
-    const mcp = await deps.buildMcpTools(userId, enabledMcpToolIds, conv.approvals, conv.permissionMode)
-    tools = composeAgentTools(internalTools, mcp.tools)
+  if (toolTurn) {
+    const effectivePermissionMode = agentTurn ? conv.permissionMode : 'plan'
+    const allowedEffects: SubagentEffect[] = agentTurn && conv.permissionMode !== 'plan'
+      ? ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge']
+      : ['workspace_read', 'git_read']
+    const mcp = await deps.buildMcpTools(userId, enabledMcpToolIds, conv.approvals, effectivePermissionMode, { allowedEffects, abortSignal })
+    tools = mcp.tools
     toolApproval = mcp.toolApproval
     close = mcp.close
-    if (enabledMcpToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
+    if (enabledMcpToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok', { 'chat.mode': agentTurn ? 'agent' : 'chat' })
 
-    if (workspacePath) {
-      const subagentInput: SubagentToolInput = {
-        userId,
-        parentSessionId: conv.id,
-        authority: {
-          tools: enabledMcpToolIds,
-          effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation'],
-          working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace',
-          model_policy: 'default',
-          workspace_root: workspacePath
-        },
-        model: deps.getChatModel(provider, modelInfo.modelId),
-        enabledToolIds: enabledMcpToolIds,
-        approvals: conv.approvals,
-        permissionMode: conv.permissionMode,
-        abortSignal
+    if (agentTurn) {
+      const internalTools = {
+        task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }),
+        orchestrator_plan: buildOrchestratorPlanTool({ userId, conversationId: conv.id, parentSessionId: conv.id })
       }
-      tools['delegate_task'] = deps.subagent.build(subagentInput)
-      telemetry?.event('chat.subagent.dispatch', 'ok')
-      Object.assign(tools, deps.subagent.buildBackground(subagentInput))
-      Object.assign(tools, deps.subagent.buildOrchestration(subagentInput))
+      tools = composeAgentTools(internalTools, tools)
+
+      if (workspacePath) {
+        const subagentInput: SubagentToolInput = {
+          userId,
+          parentSessionId: conv.id,
+          authority: {
+            tools: enabledMcpToolIds,
+            effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : allowedEffects,
+            working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace',
+            model_policy: 'default',
+            workspace_root: workspacePath
+          },
+          model: deps.getChatModel(provider, modelInfo.modelId),
+          enabledToolIds: enabledMcpToolIds,
+          approvals: conv.approvals,
+          permissionMode: conv.permissionMode,
+          abortSignal
+        }
+        tools['delegate_task'] = deps.subagent.build(subagentInput)
+        telemetry?.event('chat.subagent.dispatch', 'ok')
+        Object.assign(tools, deps.subagent.buildBackground(subagentInput))
+        Object.assign(tools, deps.subagent.buildOrchestration(subagentInput))
+      }
     }
   }
 
@@ -148,10 +162,10 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     abortSignal.addEventListener('abort', () => telemetry?.event('chat.stream.abort', 'cancelled', { 'provider.type': provider.type }), { once: true })
   }
 
-  if (!agentTurn) {
-    // Chat mode has no coding-tool execution of its own. Its dedicated
-    // network tools remain managed by LangGraph; remote MCP coding tools are
-    // available only in Agent Mode.
+  if (!toolTurn) {
+    // Without the configured terminal relay, Chat remains a plain model chat.
+    // Persisted Agent state is intentionally ignored here so a stale
+    // conversation can never retain write authority after terminal loss.
     const systemPrompt = buildWorkspaceSystemPrompt()
     const langgraphModel = deps.getLanggraphModel(provider, modelInfo.modelId, resolvedConfig.maxOutputTokens)
     return deps.streamLangGraphChat({

@@ -28,9 +28,16 @@ if (process.env.NUXT_OTEL_ENABLED === 'true') {
     'deployment.environment': process.env.NODE_ENV || 'development'
   })
 
-  const traceExporter = new OTLPTraceExporter({
-    url: process.env.NUXT_OTEL_JAEGER_ENDPOINT || 'http://localhost:4317'
-  })
+  const configuredTraceEndpoint = process.env.NUXT_OTEL_JAEGER_ENDPOINT || 'http://localhost:4317'
+  // Backward-compatible runtime migration: older deployed containers may
+  // still carry the legacy Compose hostname `jaeger` in their immutable
+  // environment. The shared observability stack now runs Tempo. Normalize
+  // only that exact legacy hostname; arbitrary configured endpoints are
+  // preserved unchanged.
+  const traceEndpoint = configuredTraceEndpoint === 'http://jaeger:4317'
+    ? 'http://shared-tempo:4317'
+    : configuredTraceEndpoint
+  const traceExporter = new OTLPTraceExporter({ url: traceEndpoint })
 
   // SimpleSpanProcessor, not Batch — see server/plugins/otel.server.ts's
   // comment on the same decision for the logs side; the same

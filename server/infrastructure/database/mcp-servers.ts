@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, lt } from 'drizzle-orm'
 import { useDb } from './connection'
 import { conflict, internal, notFound } from '#server/core/errors/http'
 import { safeDiagnostic } from '#server/core/errors/safe-diagnostic'
-import { mcpServers } from '../../database/schema'
+import { mcpOauthFlows, mcpServers } from '../../database/schema'
 import { isUniqueViolation } from './errors'
 import type { McpRemoteConfig, McpStatus, McpTool, McpTransport } from '../../../shared/types/chat'
 
@@ -103,6 +103,77 @@ export async function updateMcpServer(
 
   if (!updated) throw notFound('Server not found')
   return presentServer(updated)
+}
+
+export async function createOAuthPendingMcpServer(userId: string, input: McpRemoteConfig & {
+  id: string
+  oauthAuthorizationServer: string
+  oauthResource: string
+  oauthRedirectUri: string
+  oauthClientInformationEncrypted: string
+  oauthTokensEncrypted: string
+}) {
+  const db = useDb()
+  let server
+  try {
+    [server] = await db.insert(mcpServers).values({
+      id: input.id,
+      userId,
+      name: input.name,
+      description: input.description,
+      transport: input.transport,
+      url: input.url,
+      command: null,
+      status: 'connecting',
+      enabled: true,
+      tools: [],
+      oauthAuthorizationServer: input.oauthAuthorizationServer,
+      oauthResource: input.oauthResource,
+      oauthRedirectUri: input.oauthRedirectUri,
+      oauthClientInformationEncrypted: input.oauthClientInformationEncrypted,
+      oauthTokensEncrypted: input.oauthTokensEncrypted
+    }).returning()
+  } catch (err) {
+    if (isUniqueViolation(err)) throw conflict('Server ID already exists')
+    throw err
+  }
+  if (!server) throw internal(safeDiagnostic('Failed to create OAuth server'))
+  return presentServer(server)
+}
+
+export async function getMcpServerOAuthCredentials(userId: string, id: string) {
+  const server = await getMcpServer(userId, id)
+  if (!server?.oauthAuthorizationServer || !server.oauthResource || !server.oauthRedirectUri || !server.oauthClientInformationEncrypted || !server.oauthTokensEncrypted) return undefined
+  return {
+    authorizationServer: server.oauthAuthorizationServer,
+    resource: server.oauthResource,
+    redirectUri: server.oauthRedirectUri,
+    clientInformationEncrypted: server.oauthClientInformationEncrypted,
+    tokensEncrypted: server.oauthTokensEncrypted
+  }
+}
+
+export async function updateMcpServerOAuthTokens(userId: string, id: string, oauthTokensEncrypted: string) {
+  const db = useDb()
+  const [updated] = await db.update(mcpServers)
+    .set({ oauthTokensEncrypted, updatedAt: new Date() })
+    .where(and(eq(mcpServers.id, id), eq(mcpServers.userId, userId)))
+    .returning({ id: mcpServers.id })
+  if (!updated) throw notFound('Server not found')
+}
+
+export async function createMcpOAuthFlow(input: typeof mcpOauthFlows.$inferInsert) {
+  const db = useDb()
+  await db.delete(mcpOauthFlows).where(lt(mcpOauthFlows.expiresAt, new Date()))
+  await db.insert(mcpOauthFlows).values(input)
+}
+
+export async function consumeMcpOAuthFlow(stateHash: string) {
+  const db = useDb()
+  const [flow] = await db.delete(mcpOauthFlows)
+    .where(eq(mcpOauthFlows.stateHash, stateHash))
+    .returning()
+  return flow
 }
 
 export async function deleteMcpServer(userId: string, id: string) {

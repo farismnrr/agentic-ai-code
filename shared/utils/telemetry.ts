@@ -10,7 +10,10 @@ export const TELEMETRY_EVENT_NAMES = [
   'api.request.success',
   'api.request.error',
   'chat.stream.start',
-  'chat.stream.persist'
+  'chat.stream.persist',
+  'mcp.oauth.start',
+  'mcp.oauth.redirect',
+  'mcp.oauth.callback'
 ] as const
 
 export type TelemetryEventName = typeof TELEMETRY_EVENT_NAMES[number]

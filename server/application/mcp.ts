@@ -1,6 +1,7 @@
-import type { McpOAuthDiscovery, McpRemoteConfig, McpServerUpdateInput } from '#shared/types/chat'
+import type { ChatCapabilities, McpOAuthDiscovery, McpRemoteConfig, McpServerUpdateInput } from '#shared/types/chat'
 
 export class McpOAuthStartError extends Error {}
+export class McpOAuthCallbackError extends Error {}
 
 export class McpConnectionError extends Error {
   constructor() {
@@ -12,9 +13,11 @@ export class McpConnectionError extends Error {
 export interface McpUseCases {
   testMcpServer: (userId: string, id: string) => Promise<unknown>
   discoverOAuth: (url: string) => Promise<McpOAuthDiscovery>
-  startOAuth: (url: string, redirectUrl: string) => Promise<{ authorizationUrl: string }>
+  startOAuth: (userId: string, input: McpRemoteConfig, redirectUrl: string) => Promise<{ authorizationUrl: string }>
+  completeOAuth: (state: string, authorizationCode: string) => Promise<{ id: string }>
   scanServer: (userId: string, input: McpRemoteConfig) => Promise<unknown>
   listServers: (userId: string) => Promise<unknown>
+  getChatCapabilities: (userId: string) => Promise<ChatCapabilities>
   createServer: (userId: string, input: McpRemoteConfig) => Promise<unknown>
   updateServer: (userId: string, id: string, input: McpServerUpdateInput) => Promise<unknown>
   deleteServer: (userId: string, id: string) => Promise<unknown>

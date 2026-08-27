@@ -29,11 +29,17 @@ expect(approvalForCapability(write, undefined, 'plan').outcome === 'denied', 'pl
 const terminal = capabilityFactsForToolCall({
   toolId: 'relay.terminal_exec', toolName: 'terminal_exec', input: { command: 'cat', args: ['src/main.ts'] }, trustedProvenance: 'first-party-relay'
 })
-expect(terminal.effects.includes('process_exec') && terminal.effects.includes('network_read') && terminal.effects.includes('external_mutation'), 'local terminal effects')
-expect(classifyCapability(terminal).risk === 'high', 'local terminal is high risk')
-expect(approvalForCapability(terminal, 'always', 'manual').outcome === 'user-approval', 'remembered terminal always narrows')
-expect(!rememberedApprovalCanAutoAnswer(terminal, 'always', 'manual'), 'narrowed always remains visible')
+expect(terminal.effects.length === 1 && terminal.effects[0] === 'workspace_read', 'reviewed direct terminal read narrows to read-only')
+expect(classifyCapability(terminal).risk === 'low', 'reviewed direct terminal read is low risk')
+expect(approvalForCapability(terminal, undefined, 'manual').outcome === 'approved', 'read-only terminal command needs no approval')
+expect(rememberedApprovalCanAutoAnswer(terminal, 'always', 'manual'), 'read-only terminal command can auto answer')
 expect(rememberedApprovalCanAutoAnswer(terminal, 'never', 'manual'), 'remembered never can answer')
+
+const protectedTerminalRead = capabilityFactsForToolCall({
+  toolId: 'relay.terminal_exec', toolName: 'terminal_exec', input: { command: 'cat', args: ['.env'] }, trustedProvenance: 'first-party-relay'
+})
+expect(protectedTerminalRead.protectedBoundary === true, 'direct terminal read still detects protected credential paths')
+expect(approvalForCapability(protectedTerminalRead, undefined, 'manual').outcome === 'denied', 'protected terminal read remains denied')
 
 const opaque = capabilityFactsForToolCall({
   toolId: 'relay.terminal_exec', toolName: 'terminal_exec', input: { command: 'sh', args: ['-lc', 'cat src/main.ts'] }, trustedProvenance: 'first-party-relay'
@@ -43,9 +49,15 @@ expect(classifyCapability(opaque).opaque === true, 'shell command is opaque')
 const externalSafeName = capabilityFactsForToolCall({
   toolId: 'external.read_file', toolName: 'read_file', input: { path: 'src/main.ts' }, trustedProvenance: 'external'
 })
-expect(classifyCapability(externalSafeName).risk === 'high', 'external safe-looking tool is high risk')
-expect(approvalForCapability(externalSafeName, 'always', 'manual').outcome === 'user-approval', 'manual external tool still asks')
+expect(classifyCapability(externalSafeName).risk === 'high', 'unknown external tool remains mutation-capable')
+expect(approvalForCapability(externalSafeName, 'always', 'manual').outcome === 'user-approval', 'unknown external tool still asks')
 expect(approvalForCapability(externalSafeName, 'never', 'bypass').outcome === 'approved', 'bypass mode overrides remembered prompt answers')
+
+const oauthRead = capabilityFactsForToolCall({
+  toolId: 'oauth.file_read', toolName: 'file_read', input: { path: 'src/main.ts' }, trustedProvenance: 'external'
+})
+expect(classifyCapability(oauthRead).risk === 'low', 'known read-only OAuth MCP tool is low risk')
+expect(approvalForCapability(oauthRead, undefined, 'manual').outcome === 'approved', 'known read-only OAuth MCP tool needs no approval')
 
 const structured = (path: string) => approvalForCapability(capabilityFactsForToolCall({
   toolId: 'relay.file_write', toolName: 'file_write', input: { path, content: 'new' }, trustedProvenance: 'first-party-relay'

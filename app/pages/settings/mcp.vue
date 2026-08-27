@@ -4,8 +4,11 @@ import type { McpServer } from '#shared/types/chat'
 
 useSeoMeta({ title: 'MCP connections' })
 
-const { servers, setEnabled, test, remove } = useMcpServers()
+const { servers, loadAll, setEnabled, test, remove } = useMcpServers()
 const toast = useToast()
+const telemetry = useTelemetry()
+const route = useRoute()
+const router = useRouter()
 
 const dialogOpen = ref(false)
 const dialogServer = ref<McpServer | null>(null)
@@ -14,6 +17,42 @@ const removeCandidate = ref<McpServer | null>(null)
 const removing = ref(false)
 
 const hasConnections = computed(() => servers.value.length > 0)
+
+onMounted(async () => {
+  const oauth = route.query.oauth
+  if (oauth !== 'success' && oauth !== 'error') return
+
+  if (oauth === 'success') {
+    telemetry.logEvent('info', 'mcp.oauth.callback', 'MCP OAuth callback completed', {
+      'operation': 'mcp.oauth.callback',
+      'outcome': 'success',
+      'mcp.stage': 'frontend_callback',
+      'mcp.oauth': true
+    })
+    await loadAll().catch(() => undefined)
+    toast.add({
+      title: 'MCP connected',
+      description: 'OAuth sign-in completed and the server tools are ready.',
+      icon: 'i-lucide-plug-zap',
+      color: 'success'
+    })
+  } else {
+    telemetry.logEvent('error', 'mcp.oauth.callback', 'MCP OAuth callback failed', {
+      'operation': 'mcp.oauth.callback',
+      'outcome': 'error',
+      'mcp.stage': 'frontend_callback',
+      'mcp.oauth': true
+    })
+    toast.add({
+      title: 'MCP OAuth failed',
+      description: 'The authorization callback could not complete. Start the connection again.',
+      icon: 'i-lucide-circle-alert',
+      color: 'error'
+    })
+  }
+
+  await router.replace({ path: '/settings/mcp' })
+})
 
 function openAdd() {
   dialogServer.value = null
