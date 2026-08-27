@@ -33,6 +33,7 @@ import { createChatTurnDependencies } from '../ai/chat-turn-dependencies'
 import * as auth from '../database/auth'
 import * as mcp from '../database/mcp-servers'
 import * as mcpManagement from '../mcp/server-management'
+import { resolveMcpExecutionContext } from '../mcp/capabilities'
 import { startMcpOAuthAuthorization } from '../mcp/oauth-start'
 import { completeMcpOAuthAuthorization } from '../mcp/oauth-complete'
 import * as apiKey from '../auth/api-key'
@@ -104,6 +105,10 @@ export function createApplicationAdapters(requestId: string) {
       completeOAuth: async (state, authorizationCode) => request.withSpan('mcp_server.oauth_callback', {}, () => completeMcpOAuthAuthorization(state, authorizationCode)),
       scanServer: async (userId, input) => request.withSpan('mcp_server.scan', {}, () => mcpManagement.scanMcpServer(userId, input)),
       listServers: mcp.listMcpServers,
+      getChatCapabilities: async (userId) => {
+        const execution = await request.withSpan('mcp_server.chat_capabilities', {}, () => resolveMcpExecutionContext(userId))
+        return { terminal: { available: execution.terminalAvailable } }
+      },
       createServer: async (userId, input) => request.withSpan('mcp_server.create', {}, () => mcpManagement.createVerifiedMcpServer(userId, input)),
       updateServer: async (userId, id, input) => request.withSpan('mcp_server.update', {}, () => mcpManagement.updateVerifiedMcpServer(userId, id, input)),
       deleteServer: async (userId: string, id: string) => request.withSpan('mcp_server.delete', {}, () => mcp.deleteMcpServer(userId, id)),

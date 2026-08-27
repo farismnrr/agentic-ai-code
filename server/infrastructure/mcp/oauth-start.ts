@@ -48,7 +48,12 @@ export async function startMcpOAuthAuthorization(userId: string, config: McpRemo
     throw new McpOAuthStartError('MCP authorization server does not advertise Dynamic Client Registration')
   }
 
-  const scopes = stringScopes(info.resourceMetadata?.scopes_supported ?? metadata.scopes_supported)
+  const resourceScopes = stringScopes(info.resourceMetadata?.scopes_supported)
+  const authorizationScopes = stringScopes(metadata.scopes_supported)
+  const scopes = [...new Set([
+    ...resourceScopes,
+    ...(authorizationScopes.includes('offline_access') ? ['offline_access'] : [])
+  ])]
   const scope = scopes.length > 0 ? scopes.join(' ') : undefined
   const clientInformation = await withInfrastructureSpan(
     'mcp.oauth.external.client_registration',

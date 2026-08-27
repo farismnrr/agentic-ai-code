@@ -9,6 +9,7 @@ import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
 import { getMcpServerOAuthCredentials, updateMcpServerOAuthTokens } from '../database/mcp-servers'
 import { decryptSecret, encryptSecret } from '../security/crypto'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, resolveMcpRequestTimeoutMs, taskPollDelayMs } from './task-reliability'
+import { refreshStoredMcpOAuthAccessToken } from './oauth-refresh'
 
 export interface McpClientConfig {
   userId: string
@@ -353,10 +354,10 @@ class ModernHttpMcpClient implements McpClientLike {
     }, this.requestTimeoutMs)
 
     if (response.status === 401 || response.status === 403) {
-      throw new Error('Remote MCP authorization failed')
+      throw Object.assign(new Error('Remote MCP authorization failed'), { code: response.status })
     }
     if (!response.ok) {
-      throw new Error(`Remote MCP request failed with HTTP ${response.status}`)
+      throw Object.assign(new Error('Remote MCP request failed'), { code: response.status })
     }
 
     let payload: unknown
@@ -511,18 +512,11 @@ export async function createMcpClient(serverConfig: McpClientConfig): Promise<Mc
   } catch (error) {
     await client.close().catch(() => undefined)
 
-    const httpStatus = error instanceof Error && 'code' in error
-      ? Number((error as Error & { code?: unknown }).code)
-      : undefined
-    const canTryModernOAuthHttp = serverConfig.transport === 'http'
-      && authProvider
-      && error instanceof Error
-      && (httpStatus === 400 || /HTTP 400|status code 400/i.test(error.message))
+    const canTryModernOAuthHttp = serverConfig.transport === 'http' && Boolean(authProvider)
+    if (!canTryModernOAuthHttp || !authProvider) throw error
 
-    if (!canTryModernOAuthHttp) throw error
-
-    const tokens = authProvider.tokens()
-    if (!tokens.access_token) throw error
+    const tokens = await Promise.resolve(authProvider.tokens())
+    if (!tokens?.access_token) throw error
 
     const modernClient = new ModernHttpMcpClient(
       url,
@@ -531,8 +525,35 @@ export async function createMcpClient(serverConfig: McpClientConfig): Promise<Mc
       resolveMcpRequestTimeoutMs(undefined),
       'external'
     )
-    await modernClient.connect()
-    return modernClient
+    try {
+      await modernClient.connect()
+      return modernClient
+    } catch (modernError) {
+      await modernClient.close().catch(() => undefined)
+      const modernStatus = modernError instanceof Error && 'code' in modernError
+        ? Number((modernError as Error & { code?: unknown }).code)
+        : undefined
+      const serverId = serverConfig.serverId ?? serverConfig.id
+      if ((modernStatus !== 401 && modernStatus !== 403) || !serverId) throw modernError
+
+      const refreshedAccessToken = await refreshStoredMcpOAuthAccessToken(
+        serverConfig.userId,
+        serverId,
+        url,
+        guardedFetch
+      )
+      if (!refreshedAccessToken) throw modernError
+
+      const refreshedClient = new ModernHttpMcpClient(
+        url,
+        refreshedAccessToken,
+        guardedFetch,
+        resolveMcpRequestTimeoutMs(undefined),
+        'external'
+      )
+      await refreshedClient.connect()
+      return refreshedClient
+    }
   }
 }
 

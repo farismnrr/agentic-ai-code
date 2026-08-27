@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { chatModeItems, modelSupportsReasoning, reasoningEffortItems } from '../../utils/chat-options'
+import { resolveNewChatModelId } from '../../utils/chat-model-selection'
 import type { Conversation } from '#shared/types/chat'
 
 useSeoMeta({ title: 'New chat' })
 
+const toast = useToast()
 const { loaded, activeWorkspaceId, workspaces, setActive } = useWorkspaces()
+const { conversations } = useConversations()
 const settings = useSettings()
 const { models, load: loadModels } = useModels()
+const { capabilities, load: loadCapabilities } = useChatCapabilities()
 
 if (models.value.length === 0) {
   await loadModels()
 }
+await loadCapabilities().catch(() => undefined)
 
 // Belt-and-suspenders alongside layouts/default.vue's own restore: pages
 // and layouts each get their own Suspense boundary in Nuxt, so the
@@ -31,23 +36,41 @@ const { editorRef, syncText, handleKeydown, mentionItems } = useChatEditor(input
 
 const workspaceId = ref<string | undefined>(activeWorkspaceId.value || undefined)
 watch(() => activeWorkspaceId.value, (newId) => {
-  if (newId) {
-    workspaceId.value = newId
-  }
+  if (newId) workspaceId.value = newId
 })
-// Seeded from the saved default so the settings page actually governs this.
-const modelId = ref<string | undefined>(settings.value.defaultModelId ?? undefined)
+
+const modelId = ref<string | undefined>()
+function resolveWorkspaceModel(currentWorkspaceId: string | undefined) {
+  return resolveNewChatModelId({
+    workspaceId: currentWorkspaceId,
+    conversations: conversations.value,
+    validModelIds: models.value.map(model => model.id),
+    defaultModelId: settings.value.defaultModelId
+  })
+}
+
+// A workspace owns the "last used model" preference implicitly through its
+// newest conversation. Re-resolve on workspace changes, while preserving an
+// explicit current selection across unrelated reactive updates.
+watch(
+  [workspaceId, conversations, models, () => settings.value.defaultModelId],
+  ([currentWorkspaceId], previous) => {
+    const previousWorkspaceId = previous?.[0]
+    const currentModelStillValid = Boolean(modelId.value && models.value.some(model => model.id === modelId.value))
+    if (currentWorkspaceId !== previousWorkspaceId || !currentModelStillValid) {
+      modelId.value = resolveWorkspaceModel(currentWorkspaceId)
+    }
+  },
+  { immediate: true }
+)
+
 const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
-// A brand-new conversation has no id to PATCH yet, so capability selection
-// is held locally and sent atomically with conversation creation. This is
-// especially important for terminal relay: Agent Mode must never start with
-// a conversation whose persisted tool set still says the terminal is off.
-const enabledToolIds = ref<string[]>([])
 const permissionMode = ref<Conversation['permissionMode']>('manual')
 
 const modeItems = chatModeItems
 const effortItems = reasoningEffortItems
+const agentAvailable = computed(() => capabilities.value.terminal.available)
 
 const supportsReasoning = computed(() => {
   return modelSupportsReasoning(models.value.find(m => m.id === modelId.value))
@@ -68,7 +91,20 @@ const workspaceItems = computed(() =>
   workspaces.value.map(w => ({ label: w.name, value: w.id }))
 )
 
-const { start } = useNewChatController(input, workspaceId, modelId, mode, reasoningEffort, enabledToolIds, permissionMode)
+const { start } = useNewChatController(input, workspaceId, modelId, mode, reasoningEffort, permissionMode)
+
+function startChat(text: string) {
+  if (!modelId.value) {
+    toast.add({
+      title: 'Choose a model first',
+      description: 'Select one of your configured models before starting this chat.',
+      icon: 'i-lucide-box',
+      color: 'neutral'
+    })
+    return
+  }
+  void start(text)
+}
 </script>
 
 <template>
@@ -95,21 +131,41 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
 
       <UContainer
         v-else
-        class="flex w-full flex-1 flex-col justify-center gap-8 py-10"
+        class="flex w-full flex-1 flex-col justify-center gap-6 py-10"
       >
         <div class="text-center">
           <h1 class="text-2xl font-semibold text-highlighted sm:text-3xl">
             What are we building?
           </h1>
           <p class="mt-2 text-muted">
-            Ask anything. Connected MCP tools are used when they help.
+            Ask anything. Tool access follows your mode and MCP settings.
           </p>
         </div>
+
+        <UAlert
+          v-if="!modelId"
+          icon="i-lucide-box"
+          title="Choose a model to get started"
+          description="Pick a configured model below. AI Code remembers the last model used in each workspace."
+          color="neutral"
+          variant="subtle"
+          class="mx-auto w-full max-w-2xl"
+        >
+          <template #actions>
+            <UButton
+              to="/settings/models"
+              label="Manage models"
+              color="neutral"
+              variant="outline"
+              size="xs"
+            />
+          </template>
+        </UAlert>
 
         <UChatPrompt
           v-model="input"
           :ui="{ footer: 'flex-wrap sm:flex-nowrap justify-start' }"
-          @submit="start(input)"
+          @submit="startChat(input)"
         >
           <template #body="{ submit: promptSubmit, disabled }">
             <UEditor
@@ -131,7 +187,7 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
             </UEditor>
           </template>
 
-          <UChatPromptSubmit />
+          <UChatPromptSubmit :disabled="!modelId" />
 
           <template #footer>
             <USelect
@@ -145,12 +201,12 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
               v-model:model-id="modelId"
               v-model:mode="mode"
               v-model:reasoning-effort="reasoningEffort"
-              v-model:enabled-tool-ids="enabledToolIds"
               v-model:permission-mode="permissionMode"
               :model-items="modelItems"
               :mode-items="modeItems"
               :effort-items="effortItems"
               :supports-reasoning="supportsReasoning"
+              :agent-available="agentAvailable"
             />
           </template>
         </UChatPrompt>
@@ -164,7 +220,8 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
             color="neutral"
             variant="subtle"
             size="sm"
-            @click="start(suggestion.label)"
+            :disabled="!modelId"
+            @click="startChat(suggestion.label)"
           />
         </div>
       </UContainer>

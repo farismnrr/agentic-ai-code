@@ -6,20 +6,13 @@ const props = defineProps<{
   modeItems: Array<{ label: string, value: Conversation['mode'], icon: string }>
   effortItems: Array<{ label: string, value: NonNullable<Conversation['reasoningEffort']> }>
   supportsReasoning: boolean
+  agentAvailable: boolean
 }>()
 
 const mode = defineModel<Conversation['mode']>('mode', { required: true })
 const modelId = defineModel<string | undefined>('modelId', { required: true })
 const reasoningEffort = defineModel<NonNullable<Conversation['reasoningEffort']>>('reasoningEffort', { required: true })
-const enabledToolIds = defineModel<string[]>('enabledToolIds', { default: () => [] })
 const permissionMode = defineModel<Conversation['permissionMode']>('permissionMode', { default: 'manual' })
-
-const { servers } = useMcpServers()
-const usableRemoteTools = computed(() => servers.value
-  .filter(server => server.enabled && server.status === 'connected')
-  .flatMap(server => server.tools))
-const remoteToolsEnabled = computed(() => usableRemoteTools.value.some(tool => enabledToolIds.value.includes(tool.id)))
-const agentAvailable = computed(() => remoteToolsEnabled.value)
 
 const permissionItems = [
   { label: 'Plan mode', value: 'plan' },
@@ -28,25 +21,17 @@ const permissionItems = [
 ] satisfies Array<{ label: string, value: Conversation['permissionMode'] }>
 
 const availableModeItems = computed(() =>
-  props.modeItems.filter(item => item.value !== 'agent' || agentAvailable.value)
+  props.modeItems.filter(item => item.value !== 'agent' || props.agentAvailable)
 )
 
 function enforceAvailableMode() {
-  if (mode.value === 'agent' && !agentAvailable.value) mode.value = 'chat'
+  if (mode.value === 'agent' && !props.agentAvailable) mode.value = 'chat'
 }
 
-watch(agentAvailable, enforceAvailableMode)
+watch(() => props.agentAvailable, enforceAvailableMode, { immediate: true })
 </script>
 
 <template>
-  <USelect
-    v-if="agentAvailable"
-    v-model="permissionMode"
-    :items="permissionItems"
-    icon="i-lucide-shield-check"
-    variant="ghost"
-    size="sm"
-  />
   <USelect
     v-model="mode"
     :items="availableModeItems"
@@ -55,8 +40,17 @@ watch(agentAvailable, enforceAvailableMode)
     size="sm"
   />
   <USelect
+    v-if="mode === 'agent' && agentAvailable"
+    v-model="permissionMode"
+    :items="permissionItems"
+    icon="i-lucide-shield-check"
+    variant="ghost"
+    size="sm"
+  />
+  <USelect
     v-model="modelId"
     :items="modelItems"
+    placeholder="Choose a model"
     icon="i-lucide-box"
     variant="ghost"
     size="sm"
@@ -68,5 +62,4 @@ watch(agentAvailable, enforceAvailableMode)
     variant="ghost"
     size="sm"
   />
-  <ChatToolPicker v-model="enabledToolIds" />
 </template>
