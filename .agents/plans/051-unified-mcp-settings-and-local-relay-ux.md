@@ -1,6 +1,6 @@
 # Plan 051 — Unified MCP Settings and Local Relay UX
 
-**Status:** IMPLEMENTED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RECREATE PENDING
+**Status:** IMPLEMENTED — PR #171 MERGED; POST-MERGE UX REMEDIATION VERIFIED; RELAY DEPLOYMENT AND APP RECREATE VERIFIED
 **Created:** 2026-08-27
 
 ## Execution status — 2026-08-27
@@ -18,7 +18,7 @@ Verified locally after remediation:
 - `pnpm guardrail` — PASS (24/24 web tests; Rust correctly skipped because no Rust/native source changed);
 - `NUXT_SESSION_PASSWORD=<build-only-value> pnpm build` — PASS.
 
-Authenticated visual/mobile interaction and a live third-party remote MCP scan are not claimed because those fixtures are unavailable through the current execution tools. App-container recreation remains pending because the MCP coding sandbox intentionally cannot read the repository `.env` required by Docker Compose.
+Authenticated visual/mobile interaction and a live third-party remote MCP scan are not claimed because those fixtures are unavailable through the current execution tools. The deployment closeout was subsequently completed on 2026-08-27: PR #173 added the smallest supported Rust CLI/config contract for an explicit non-loopback bind host, was merged to `main`, and the installed release binary was restarted through the existing `ai-tools-relay.service` user unit. The existing base unit, wrapper, auth, GitHub, and full-tools drop-ins remain unchanged; a host-only `network-bind.conf` drop-in supplies the bind host and the exact configured browser Origin. The relay is active on the wildcard IPv4 listener, `/health` succeeds, the configured Origin receives matching `Access-Control-Allow-Origin`, and an unrelated Origin is browser-rejected because the response does not reflect it and is not wildcard. `docker compose up -d --build --no-deps --force-recreate app` then recreated only the Nuxt app container; `/` returned 200, unauthenticated `/settings/mcp` redirected to login, and `/settings/local-terminal` redirected to `/settings/mcp`. Authenticated visual/mobile interaction and a live third-party remote MCP scan remain unavailable and are not inferred from these checks.
 
 ## Goal
 
