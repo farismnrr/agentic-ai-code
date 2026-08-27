@@ -90,12 +90,6 @@ async function handleApprovalAnswer({ id, approved, toolId, remember }: { id: st
   addToolApprovalResponse({ id, approved })
 }
 
-function updateApprovals(approvals: Record<string, 'always' | 'never'>) {
-  if (conversation.value) {
-    update(conversation.value.id, { approvals })
-  }
-}
-
 const modelItems = computed(() =>
   models.value.map(model => ({ label: model.label, value: model.id, icon: 'i-lucide-box' }))
 )
@@ -337,9 +331,6 @@ defineShortcuts({
               :mode-items="modeItems"
               :effort-items="effortItems"
               :supports-reasoning="supportsReasoning"
-              :show-tools="mode === 'agent'"
-              :approvals="conversation?.approvals"
-              @update-approvals="updateApprovals"
             />
             <ChatContextUsage
               :conversation-id="conversationId"

@@ -39,12 +39,10 @@ watch(() => activeWorkspaceId.value, (newId) => {
 const modelId = ref<string | undefined>(settings.value.defaultModelId ?? undefined)
 const mode = ref<'chat' | 'agent'>('chat')
 const reasoningEffort = ref<'low' | 'medium' | 'high' | 'max'>('medium')
-// A brand-new conversation has no id to PATCH yet, so there was previously no
-// way to enable a tool (including the native terminal) before the first
-// message — an agent-mode conversation started here always began with zero
-// tools available, silently, which a model can (and did) paper over by
-// fabricating a plausible-sounding answer instead of saying it lacks the
-// capability. Collected here, then applied once the conversation exists.
+// A brand-new conversation has no id to PATCH yet, so capability selection
+// is held locally and sent atomically with conversation creation. This is
+// especially important for terminal relay: Agent Mode must never start with
+// a conversation whose persisted tool set still says the terminal is off.
 const enabledToolIds = ref<string[]>([])
 const permissionMode = ref<Conversation['permissionMode']>('manual')
 
@@ -153,7 +151,6 @@ const { start } = useNewChatController(input, workspaceId, modelId, mode, reason
               :mode-items="modeItems"
               :effort-items="effortItems"
               :supports-reasoning="supportsReasoning"
-              :show-tools="mode === 'agent'"
             />
           </template>
         </UChatPrompt>

@@ -1,5 +1,5 @@
 import type { UIMessage } from '#shared/types/chat'
-import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
+import { NATIVE_LOCAL_TERMINAL_TOOL_ID, isNativeToolId } from '#shared/utils/native-tools'
 import type { ChatTurnDependencies, SubagentToolInput } from './contracts'
 import type { RequestTelemetryContext } from '../observability/contracts'
 import { loadAuthorizedChatContext } from './ownership'
@@ -63,6 +63,9 @@ export async function executeChatTurn(input: ExecuteChatTurnInput) {
 
 async function executeChatTurnInner({ userId, conversationId, trigger, message, abortSignal, deps, telemetry, agentContext }: ExecuteChatTurnInput) {
   const { conversation: conv, model: modelInfo, provider } = await loadAuthorizedChatContext(userId, conversationId, deps.ownership)
+  const localTerminalEnabled = conv.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID)
+  const agentTurn = conv.mode === 'agent' && localTerminalEnabled
+  const enabledMcpToolIds = conv.enabledToolIds.filter(toolId => !isNativeToolId(toolId))
 
   // Bound the query with the compaction cutoff (once one exists) instead of
   // fetching every message in the conversation on every single turn — see
@@ -96,9 +99,12 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     : undefined
   const buildWorkspaceSystemPrompt = () => {
     const workspacePrompt = buildChatWorkspaceSystemPrompt(workspacePath, workspaceName)
-    if (!boundedAgentContext || conv.mode !== 'agent') return workspacePrompt
-    const contextPrompt = `Bounded repository hook context: ${JSON.stringify(boundedAgentContext)}`
-    return workspacePrompt ? `${workspacePrompt}\n${contextPrompt}` : contextPrompt
+    const prompts = [workspacePrompt]
+    if (agentTurn && conv.permissionMode === 'plan') {
+      prompts.push('Plan mode is active. Analyze and produce a concrete implementation plan only. Do not make changes or request mutating capabilities.')
+    }
+    if (boundedAgentContext && agentTurn) prompts.push(`Bounded repository hook context: ${JSON.stringify(boundedAgentContext)}`)
+    return prompts.filter(Boolean).join('\n')
   }
 
   // Resolves conv.enabledToolIds (McpTool ids, `${serverId}.${toolName}`)
@@ -113,66 +119,41 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   let toolApproval: Record<string, unknown> | undefined
   let close: () => Promise<void> = async () => {}
 
-  if (conv.mode === 'agent') {
+  if (agentTurn) {
     const internalTools = {
       task_update: buildTaskUpdateTool({ userId, conversationId: conv.id }),
       orchestrator_plan: buildOrchestratorPlanTool({ userId, conversationId: conv.id, parentSessionId: conv.id })
     }
-    const mcp = await deps.buildMcpTools(userId, conv.enabledToolIds, conv.approvals, conv.permissionMode)
+    const mcp = await deps.buildMcpTools(userId, enabledMcpToolIds, conv.approvals, conv.permissionMode)
     tools = composeAgentTools(internalTools, mcp.tools)
     toolApproval = mcp.toolApproval
     close = mcp.close
-    if (conv.enabledToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
+    if (enabledMcpToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok')
 
-    // Not gated by `conv.enabledToolIds` (no picker toggle for this one —
-    // the Settings → Local Terminal page is already where a user manages
-    // this, so a second on/off switch in the chat Tool Picker was
-    // redundant). Instead: available in every agent-mode conversation the
-    // moment the user has at least one non-revoked paired device, and never
-    // otherwise — the per-call approval gate below is what actually decides
-    // whether any given command runs, same as before. If the paired CLI
-    // happens to be offline right now, the tool still shows up here (the
-    // server has no way to know live connection state, only pairing
-    // metadata) — the client-side error path in
-    // app/composables/useConversationChat.ts's `runApprovedLocalTerminalCall`
-    // already reports "not connected" back to the model in that case.
-    //
-    // Wrapped defensively — a real incident (missing migration, see plan
-    // 026 Phase 9) had this exact query throw because `user_devices` didn't
-    // exist yet, taking down the *entire* chat request (including MCP tools
-    // that had nothing to do with this). A hiccup here should degrade to
-    // "no local terminal this turn", not break agent mode outright.
-    const localTerminalPolicy = await createLocalTerminalPolicy({ userId, approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, permissionMode: conv.permissionMode, localTerminal: deps.localTerminal, telemetry })
-    if (localTerminalPolicy.paired) {
-      // No `execute` here — this makes it a client-executed tool in the AI
-      // SDK's own sense (see node_modules/ai/dist/index.js's onToolCall /
-      // addToolOutput pair). Once approved, streamText has nothing to call
-      // server-side, so it stops the step and streams the tool call to the
-      // client as-is; app/composables/useConversationChat.ts's watcher on
-      // `chat.messages` is what actually runs it (not `onToolCall` — see
-      // that file's comments for why), over the loopback WebSocket to the
-      // user's local relay-agent CLI. This server has no shell-execution
-      // tool of its own at all (the old workspace-sandboxed `terminal` tool
-      // was deliberately removed) — `local_terminal` is the only path, and
-      // it never touches this server: the whole point of plan 026.
-      tools['local_terminal'] = localTerminalPolicy.tool
-      toolApproval = toolApproval ?? {}
-      toolApproval['local_terminal'] = localTerminalPolicy.approval
-      telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
-    }
+    // Terminal relay is an explicit per-conversation capability. The client
+    // additionally requires a live loopback connection before it exposes Agent
+    // Mode; the server enforces the persisted enablement side.
+    const localTerminalPolicy = createLocalTerminalPolicy({ approvals: conv.approvals as Record<string, 'always' | 'never'>, toolId: NATIVE_LOCAL_TERMINAL_TOOL_ID, permissionMode: conv.permissionMode, localTerminal: deps.localTerminal })
+    // No `execute` here — this is a client-executed AI SDK tool. The browser
+    // runs an approved call through its loopback relay; this server never
+    // executes the shell command itself.
+    tools['local_terminal'] = localTerminalPolicy.tool
+    toolApproval = toolApproval ?? {}
+    toolApproval['local_terminal'] = localTerminalPolicy.approval
+    telemetry?.event('chat.tool.local_terminal.dispatch', 'ok')
     if (workspacePath) {
       const subagentInput: SubagentToolInput = {
         userId,
         parentSessionId: conv.id,
         authority: {
-          tools: conv.enabledToolIds,
+          tools: enabledMcpToolIds,
           effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : ['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation'],
           working_mode: conv.permissionMode === 'plan' ? 'read-only' : 'workspace',
           model_policy: 'default',
           workspace_root: workspacePath
         },
         model: deps.getChatModel(provider, modelInfo.modelId),
-        enabledToolIds: conv.enabledToolIds,
+        enabledToolIds: enabledMcpToolIds,
         approvals: conv.approvals,
         permissionMode: conv.permissionMode,
         abortSignal
@@ -194,7 +175,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     abortSignal.addEventListener('abort', () => telemetry?.event('chat.stream.abort', 'cancelled', { 'provider.type': provider.type }), { once: true })
   }
 
-  if (conv.mode === 'chat') {
+  if (!agentTurn) {
     // Chat mode has no shell/file-access tool of its own (curl + search
     // only, see server/infrastructure/ai/langgraph-tools.ts) — the workspace-sandboxed
     // `terminal` tool it used to always wire in was removed; `local_terminal`

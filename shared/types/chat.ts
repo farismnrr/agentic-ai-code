@@ -71,7 +71,7 @@ export interface McpServer {
 
 /** Remembered answer to an approval prompt, scoped to one conversation. */
 export type ApprovalDecision = 'always' | 'never'
-export type PermissionMode = 'plan' | 'workspace' | 'autonomous' | 'manual'
+export type PermissionMode = 'plan' | 'bypass' | 'manual'
 
 export interface Workspace {
   id: string

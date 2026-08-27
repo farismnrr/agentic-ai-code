@@ -183,6 +183,13 @@
       "when": 1787761622357,
       "tag": "0025_spotty_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787797799017,
+      "tag": "0026_terminal_relay_permission_modes",
+      "breakpoints": true
     }
   ]
 }

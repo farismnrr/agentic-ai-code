@@ -39,18 +39,18 @@ assert.equal(approvalForCapability(remoteRead, undefined, 'plan').outcome, 'deni
 
 const push = facts('git_push', { branch: 'feat/example', set_upstream: true }, true, true)
 assert.deepEqual(push.effects, ['git_read', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge'])
-assert.equal(approvalForCapability(push, undefined, 'autonomous').outcome, 'user-approval')
+assert.equal(approvalForCapability(push, undefined, 'bypass').outcome, 'approved')
 
 const prRead = facts('change_request_get', { number: 42 }, false, true)
 assert.deepEqual(prRead.effects, ['network_read', 'privileged_bridge'])
-assert.equal(approvalForCapability(prRead, undefined, 'autonomous').outcome, 'user-approval')
+assert.equal(approvalForCapability(prRead, undefined, 'bypass').outcome, 'approved')
 
 const merge = facts('change_request_merge', { number: 42, expected_head_sha: '0123456789012345678901234567890123456789', strategy: 'squash' }, true, true)
 assert.deepEqual(merge.effects, ['network_read', 'network_write', 'external_mutation', 'privileged_bridge'])
-assert.equal(approvalForCapability(merge, undefined, 'workspace').outcome, 'user-approval')
+assert.equal(approvalForCapability(merge, undefined, 'manual').outcome, 'user-approval')
 
 const malformedMerge = facts('change_request_merge', { number: 42, strategy: 'squash' }, true, true)
 assert.equal(malformedMerge.invalidInput, true)
-assert.equal(approvalForCapability(malformedMerge, undefined, 'autonomous').outcome, 'denied')
+assert.equal(approvalForCapability(malformedMerge, undefined, 'bypass').outcome, 'denied')
 
 console.log('040F delivery integration acceptance: PASS')

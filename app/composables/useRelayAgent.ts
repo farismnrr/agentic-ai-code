@@ -48,10 +48,13 @@ export interface RelayJobSnapshot {
 }
 
 export function useRelayAgent() {
-  const port = ref<number>(47821)
-  const isConnected = ref(false)
-  const isConnecting = ref(false)
-  const error = ref<string | null>(null)
+  // Shared Nuxt state keeps the connection indicator consistent between the
+  // chat controls, tool picker, settings page, and the execution controller.
+  // Network checks still happen only when a caller explicitly requests one.
+  const port = useState<number>('relay-agent-port', () => 47821)
+  const isConnected = useState<boolean>('relay-agent-connected', () => false)
+  const isConnecting = useState<boolean>('relay-agent-connecting', () => false)
+  const error = useState<string | null>('relay-agent-error', () => null)
 
   async function checkConnection(): Promise<boolean> {
     isConnecting.value = true

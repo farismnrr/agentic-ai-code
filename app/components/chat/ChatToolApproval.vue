@@ -106,8 +106,12 @@ function factsFor(candidate: PendingApproval) {
 const pending = computed<PendingApproval | undefined>(() => {
   const c = candidate.value
   if (!c || c.isAutomatic) return undefined
-  const remembered = c.toolId ? props.conversation?.approvals[c.toolId] : undefined
-  if (remembered === 'never' || (remembered === 'always' && c.identity !== 'mcp' && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
+  const mode = props.conversation?.permissionMode ?? 'manual'
+  // The top-level permission selector is authoritative. Bypass deliberately
+  // ignores old per-tool remembered answers that may still exist on a
+  // conversation from Manual mode.
+  const remembered = mode === 'bypass' || !c.toolId ? undefined : props.conversation?.approvals[c.toolId]
+  if (remembered === 'never' || (remembered === 'always' && c.identity !== 'mcp' && rememberedApprovalCanAutoAnswer(factsFor(c), remembered, mode))) return undefined
   return c
 })
 
@@ -120,9 +124,11 @@ const pending = computed<PendingApproval | undefined>(() => {
 const autoAnswerable = computed<{ toolId: string, decision: 'always' | 'never' } | undefined>(() => {
   const c = candidate.value
   if (!c || c.isAutomatic || !c.toolId) return undefined
+  const mode = props.conversation?.permissionMode ?? 'manual'
+  if (mode === 'bypass') return undefined
   const remembered = props.conversation?.approvals[c.toolId]
   if (remembered !== 'always' && remembered !== 'never') return undefined
-  if (remembered === 'always' && (c.identity === 'mcp' || !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, props.conversation?.permissionMode ?? 'manual'))) return undefined
+  if (remembered === 'always' && (c.identity === 'mcp' || !rememberedApprovalCanAutoAnswer(factsFor(c), remembered, mode))) return undefined
   return { toolId: c.toolId, decision: remembered }
 })
 

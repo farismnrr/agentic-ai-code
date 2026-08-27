@@ -59,7 +59,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
  * `mcp_servers` rows — per plan 012 Phase 2. Connections are opened here and
  * must be closed via the returned `close()` once the stream finishes.
  */
-export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'workspace' | 'autonomous' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number, abortSignal?: AbortSignal } = {}): Promise<McpToolComposition & { close: () => Promise<void>, toolCallCount: () => number, subagentStop: (parentSessionId: string, childSessionId: string, status: string) => Promise<boolean> }> {
+export async function buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, 'always' | 'never'>, permissionMode: 'plan' | 'bypass' | 'manual' = 'manual', options: { allowedEffects?: string[], maxToolCalls?: number, abortSignal?: AbortSignal } = {}): Promise<McpToolComposition & { close: () => Promise<void>, toolCallCount: () => number, subagentStop: (parentSessionId: string, childSessionId: string, status: string) => Promise<boolean> }> {
   const clients: McpClientLike[] = []
   const tools: ToolSet = {}
   const toolApproval: McpToolApprovalMap = {}
