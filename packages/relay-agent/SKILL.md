@@ -10,6 +10,9 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Platform:** Linux only for the relay binary; sandboxed execution requires Bubblewrap (`bwrap`).
 - **Privilege:** refuses to start as UID 0/root.
 - **Modes:** `local` (loopback) and `remote` (OAuth-protected resource server).
+- **Listener binding:** `--bind-host` / `RELAY_AGENT_BIND_HOST` defaults to
+  `127.0.0.1`. Local mode remains loopback-only; remote non-loopback binds require
+  an explicit browser Origin and OAuth configuration. `0.0.0.0` is never a client URL.
 - **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root; `--dir` remains an independent starting `cwd`.
 - **Tools:** Full currently exposes 100 tools — sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools (`http_fetch`, `web_search`), bounded native workspace tools (`directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`), local Git inspection/mutation, credential-isolated remote Git, forge-neutral change-request lifecycle, bounded LSP-backed code tools, and bounded alert/workflow tools. Primary is the intentional 31-tool fast-path subset. The exact static catalog contract is frozen under `.agents/contracts/`.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
@@ -104,6 +107,7 @@ Representative invocation:
 ```bash
 ai-tools relay \
   --mode remote \
+  --bind-host 0.0.0.0 \
   --dir /home/relay/workspace \
   --execution-root /home/relay/workspace \
   --origin https://app.example.com \

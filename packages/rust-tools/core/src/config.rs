@@ -3,7 +3,8 @@
 //! The flag set here matches the legacy Node CLI (`packages/relay-agent/bin/cli.mjs`)
 //! exactly, per the frozen audit in `.agents/plans/028-phase0-contract-audit.md`:
 //! `--dir`/`-d`, `--port`/`-p` (default `47821`), `--origin`/`-o` (env fallback
-//! `RELAY_AGENT_ORIGIN`), and a `stop --port <port>` subcommand.
+//! `RELAY_AGENT_ORIGIN`), `--bind-host` (env fallback
+//! `RELAY_AGENT_BIND_HOST`), and a `stop --port <port>` subcommand.
 use crate::error::RelayError;
 use serde::{Deserialize, Serialize};
 mod activity;
@@ -214,6 +215,9 @@ impl ServerConfig {
                 ));
             }
         }
+        let bind_ip = self.bind_host.parse::<std::net::IpAddr>().map_err(|_| {
+            RelayError::InvalidConfig("bind-host must be a valid IPv4 or IPv6 address".to_string())
+        })?;
         if self.mode == SecurityMode::Remote
             && (self.oauth_issuer.is_none()
                 || self.oauth_audience.is_none()
@@ -295,11 +299,9 @@ impl ServerConfig {
                     "remote bind host must not be blank".into(),
                 ));
             }
-            if self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+            if !bind_ip.is_loopback() && self.origin.is_none() {
                 return Err(RelayError::InvalidConfig(
-                    "remote mode must bind to loopback; terminate HTTPS at a trusted local edge \
-                     or secure tunnel and opt in with --trusted-proxy"
-                        .into(),
+                    "non-loopback remote binds require an explicit browser Origin".into(),
                 ));
             }
         }
@@ -308,26 +310,31 @@ impl ServerConfig {
                 "--trusted-proxy is only valid in remote mode".into(),
             ));
         }
-        if self.trusted_proxy {
+        let trusted_proxy_cidr = if self.trusted_proxy {
             let Some(cidr) = self.trusted_proxy_cidr.as_deref() else {
                 return Err(RelayError::InvalidConfig(
                     "--trusted-proxy requires --trusted-proxy-cidr to identify the edge peer"
                         .into(),
                 ));
             };
-            cidr.parse::<ipnet::IpNet>().map_err(|_| {
+            Some(cidr.parse::<ipnet::IpNet>().map_err(|_| {
                 RelayError::InvalidConfig("--trusted-proxy-cidr must be a valid IP CIDR".into())
-            })?;
+            })?)
         } else if self.trusted_proxy_cidr.is_some() {
             return Err(RelayError::InvalidConfig(
                 "--trusted-proxy-cidr requires --trusted-proxy".into(),
             ));
-        }
-        if self.trusted_proxy && self.bind_host != "127.0.0.1" && self.bind_host != "::1" {
+        } else {
+            None
+        };
+        if !bind_ip.is_loopback()
+            && self.trusted_proxy
+            && !trusted_proxy_cidr
+                .expect("trusted proxy CIDR is validated above")
+                .contains(&std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))
+        {
             return Err(RelayError::InvalidConfig(
-                "trusted proxy mode requires a loopback relay bind; forwarded headers from \
-                 public or arbitrary peers are never trusted"
-                    .into(),
+                "non-loopback binds with trusted proxy require a CIDR containing 127.0.0.1".into(),
             ));
         }
         if self.max_running_jobs == 0 {
@@ -416,10 +423,7 @@ impl From<&Cli> for ServerConfig {
             oauth_audience: cli.oauth_audience.clone(),
             oauth_owner_subject: cli.oauth_owner_subject.clone(),
             execution_root: cli.execution_root.clone(),
-            // Remote mode is loopback-first. A local HTTPS edge/tunnel may be
-            // explicitly trusted with --trusted-proxy; remote mode never
-            // exposes a public plaintext listener by default.
-            bind_host: "127.0.0.1".into(),
+            bind_host: cli.bind_host.clone(),
             default_terminal_timeout_ms: cli.default_terminal_timeout_ms,
             max_terminal_timeout_ms: cli.max_terminal_timeout_ms,
             completed_job_ttl_ms: cli.completed_job_ttl_ms,
