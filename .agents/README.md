@@ -63,15 +63,19 @@ An old unchecked item inside the Plan 030 history is not active work. Re-audit c
 
 ## Local quality policy
 
-The repository intentionally has **no CI workflow** and **no unit-test suite**. That makes the local commit gate non-optional.
+The repository intentionally has **no CI workflow**. Tests are normal repository tests rather than plan-specific verification scripts: web tests live under top-level `test/`, while Rust follows Cargo's package-local `tests/` convention.
 
 After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git-hooks.sh) configures Git to use [`.githooks/pre-commit`](../.githooks/pre-commit). Every commit must pass:
 
 ```sh
-pnpm verify:commit
+pnpm guardrail
 ```
 
-That gate runs repository-policy enforcement, agent-doc integrity, all configured lint checks, and all configured type/compile checks. Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path merely to avoid a failing gate.
+The guardrail always checks repository policy, agent-doc integrity, architecture, maintainability, and test layout. It then runs lint, typecheck, and tests only for the web and/or Rust stack touched by the change. Do not make a Nuxt-only change pay for Rust validation, or a Rust-only change pay for Nuxt validation, unless a real shared cross-stack contract changed.
+
+`scripts/` is reserved for guardrails and hook installation. Future plans must add feature-named tests under `test/` or Cargo `tests/`, not `verify-NNN`, `phase-NNN`, or other plan-numbered validation scripts. Historical plan references to removed scripts remain historical evidence only.
+
+Do not use `git commit --no-verify`, disable `core.hooksPath`, or commit through another path merely to avoid a failing applicable gate.
 
 See the current durable policy in [`memories/README.md`](memories/README.md#repository-policy-and-verification).
 

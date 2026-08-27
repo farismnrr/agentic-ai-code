@@ -85,7 +85,7 @@ A healthy tunnel is only the first layer. Check in order:
 Use:
 
 ```bash
-REMOTE_MCP_URL='https://mcp.example.com/mcp' scripts/phase36-public-mcp-smoke.sh
+REMOTE_MCP_URL='https://mcp.example.com/mcp' ops/remote-mcp/public-smoke.sh
 ```
 
 before debugging client UI behavior.

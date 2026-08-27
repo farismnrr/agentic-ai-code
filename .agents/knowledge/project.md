@@ -69,7 +69,7 @@ The final rules are:
 - `server/api/**` handles auth, HTTP parsing/validation, use-case invocation, and response adaptation rather than business/persistence ownership. Concrete adapters are composed at the Nitro application-context/plugin boundary, not imported by routes;
 - `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
 - `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
-- `scripts/check-architecture.sh` (run from `pnpm verify:commit`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
+- `scripts/check-architecture.sh` (run from `pnpm guardrail`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
 - Rust relay transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers, while focused auth, validation, admission, and observability modules remain the policy owners; application execution/workspace, MCP catalog, and CLI-vs-validated-config responsibilities are likewise split behind stable facades;
 - native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs; Plan 039B adds bounded read-only Git intelligence through fixed Git CLI argv/config and a constrained native `apply_patch` mutation primitive that reuses workspace containment/atomic replacement rather than shelling out to `patch`.
@@ -105,7 +105,7 @@ The remediation also restored application ownership boundaries across API compos
 - `.agents/contracts/` — frozen client-visible contract evidence.
 - `.githooks/pre-commit` — mandatory local commit gate.
 
-The repository intentionally has **no CI workflow**. Unit/integration tests, when present, must be standalone files under a dedicated sibling `tests/` directory; production files must not contain inline tests or references to test modules.
+The repository intentionally has **no CI workflow**. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories. Production files must not contain inline test modules.
 
 ## Normal verification
 
@@ -114,20 +114,22 @@ The repository intentionally has **no CI workflow**. Unit/integration tests, whe
 Every normal local commit must pass:
 
 ```sh
-pnpm verify:commit
+pnpm guardrail
 ```
 
 The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-`pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` generates the Nuxt type project, runs direct generated-project Vue typing, and performs warnings-denied Rust `cargo check`. Maintainability policy is implemented by `scripts/check-maintainability.mjs`: >500 maintained-source lines and >15 direct maintained implementation files are hard failures unless an exact-path, reasoned exception exists; >400 lines and 13–15 files are explicit review findings.
+The guardrail always runs repository-policy, agent-doc, architecture, maintainability, and test-layout checks. It then scopes lint/type/test work by changed stack: web changes run `pnpm lint:web`, `pnpm typecheck:web`, and `pnpm test:web`; Rust changes run `pnpm lint:rust`, `pnpm typecheck:rust`, and `pnpm test:rust`. Cross-stack validation is only justified when both stacks or a real shared contract changed.
 
-There is no remote CI safety net. Change-request descriptions must record local verification performed; forge mergeability is not proof of quality.
+`scripts/` contains guardrails only. Feature behavior belongs in feature-named tests, never plan-numbered `verify-*`/`phase-*` scripts. Operational helpers live under `ops/`.
+
+There is no remote CI safety net. Change-request descriptions must record the applicable local verification performed; forge mergeability is not proof of quality.
 
 See [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
 
 ### Web application
 
-`pnpm typecheck` runs `nuxt prepare --dotenv .env.example`, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`, followed by the Rust workspace check. Do not replace the Nuxt/Vue portion with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
+`pnpm typecheck:web` runs `nuxt prepare --dotenv .env.example`, then `vue-tsc -p .nuxt/tsconfig.json --noEmit`. It deliberately does not compile Rust. Do not replace it with bare `nuxt typecheck`; that wrapper previously exited successfully while real generated-project errors remained.
 
 Production bundling remains a separate runtime verification concern. Run `pnpm build` when the change needs bundling/SSR output verified in addition to the mandatory commit gate.
 
@@ -137,13 +139,13 @@ Prefer `pnpm build && pnpm preview` over trusting a long-lived `pnpm dev` when v
 
 ### Rust workspace
 
-The mandatory local gates pin the repository toolchain and cover formatting, warnings-denied `cargo check`, and Clippy. Security-sensitive Rust changes may additionally require `cargo audit` and the relevant deterministic scripts under `scripts/`.
+`pnpm lint:rust`, `pnpm typecheck:rust`, and `pnpm test:rust` cover formatting, Clippy, warnings-denied `cargo check`, and Cargo tests without involving Nuxt. Security-sensitive Rust changes may additionally require `cargo audit`.
 
 The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
 
 ### Test layout and code length
 
-Keep unit/integration tests in standalone files under a dedicated sibling `tests/` directory. Production files must not contain inline tests or references to test modules. `pnpm check:test-layout` enforces this policy and is part of `pnpm verify:commit`. The maintainability checker reports files over 400 lines and fails unexplained files over 500 lines.
+Keep web unit/integration tests under top-level `test/`; keep Rust integration tests in Cargo's package-local `tests/` directories. Production files must not contain inline test modules. `scripts/check-test-layout.mjs` enforces this policy through `pnpm guardrail`. The maintainability checker reports files over 400 lines and fails unexplained files over 500 lines.
 
 ## Runtime/config orientation
 

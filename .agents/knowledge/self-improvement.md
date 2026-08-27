@@ -11,7 +11,7 @@
 5. Remove or amend guidance that became false because of the task.
 6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing memory text just to satisfy process.
 7. Re-check maintainability/ownership after structural changes: no metric-only splits, unexplained hard-budget violations, or stale architecture paths.
-8. Run `pnpm verify:commit` and do not finish with a failing local gate.
+8. Run `pnpm guardrail` and do not finish with a failing applicable local gate.
 
 A task is not documentation-complete when implementation and `.agents/` tell different stories.
 
@@ -58,17 +58,19 @@ Durable docs may summarize implementation facts when needed to orient future age
 
 The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-The repository intentionally has **no CI**. Structural and code-quality enforcement is local, and any standalone unit/integration tests must live under sibling `tests/` directories:
+The repository intentionally has **no CI**. Structural and code-quality enforcement is local. Web tests live under top-level `test/`, while Rust tests use Cargo's package-local `tests/` directories:
 
 - [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
 - [`../../scripts/check-maintainability.mjs`](../../scripts/check-maintainability.mjs) enforces maintained-source/folder budgets and exact reasoned exceptions;
-- [`../../scripts/check-test-layout.mjs`](../../scripts/check-test-layout.mjs) rejects inline tests and test-like files outside dedicated test directories;
-- [`../../scripts/verify-commit.sh`](../../scripts/verify-commit.sh) runs repository policy + agent-doc integrity + architecture + maintainability + `pnpm lint` + `pnpm typecheck`;
-- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the commit gate automatically;
+- [`../../scripts/check-test-layout.mjs`](../../scripts/check-test-layout.mjs) rejects inline tests and test-like files outside approved test directories;
+- [`../../scripts/guardrail.sh`](../../scripts/guardrail.sh) runs repository guardrails plus stack-scoped lint/type/test checks;
+- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the guardrail automatically;
 - [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
+
+Do not create one-off plan-numbered validation scripts. Reusable behavior belongs in feature-named tests; repository-wide structural invariants belong in the small guardrail set.
 
 A failed gate means fix the issue before committing. `git commit --no-verify` and disabling the tracked hook are not acceptable shortcuts.
 
 ## Principle
 
-The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → pass the local commit gate without bypassing it**.
+The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → run focused tests + the stack-aware guardrail without bypassing it**.

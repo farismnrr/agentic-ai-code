@@ -5,18 +5,19 @@
 ## Repository policy and verification
 
 - Human/operator documentation now lives under `docs/`; `README.md` is the concise project landing page, while `.agents/` remains agent-only durable context/contracts/history. Keep these roles separate and update `docs/` when installation/deployment behavior changes.
-- The repository intentionally has **no CI workflow**. Any unit/integration tests must be standalone files under sibling `tests/` directories; production files must not contain inline tests or references to test modules. `pnpm check:test-layout` enforces the layout policy.
-- Every normal local commit must pass the tracked pre-commit gate. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm verify:commit`. Never use `--no-verify` or disable/replace the hook path.
-- `pnpm verify:commit` runs repository-policy checks, agent-doc integrity, architecture-boundary checks, `pnpm lint`, and `pnpm typecheck`. A failure means do not claim the commit is verified.
-- `pnpm lint` covers ESLint plus Rust formatting/Clippy. `pnpm typecheck` runs `nuxt prepare --dotenv .env.example`, direct `vue-tsc -p .nuxt/tsconfig.json --noEmit`, then warnings-denied Rust `cargo check`.
+- The repository intentionally has **no CI workflow**. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories. Production files must not contain inline test modules. `scripts/check-test-layout.mjs` enforces the layout policy.
+- Every normal local commit must pass the tracked pre-commit guardrail. `pnpm install` configures `.githooks`; the pre-commit hook runs `pnpm guardrail`. Never use `--no-verify` or disable/replace the hook path.
+- `pnpm guardrail` always runs repository-policy, agent-doc, architecture, maintainability, and test-layout checks, then runs web and/or Rust lint/type/test only for stacks touched by the change. Nuxt-only work must not compile/test Rust without a real cross-stack reason, and vice versa.
+- `pnpm lint:web` / `pnpm typecheck:web` / `pnpm test:web` are the web gates. `pnpm lint:rust` / `pnpm typecheck:rust` / `pnpm test:rust` are the Rust gates. The combined `pnpm lint`, `pnpm typecheck`, and `pnpm test` commands are explicit full-repository conveniences, not default commit behavior.
+- `scripts/` is reserved for repository guardrails and hook installation. Feature validation belongs in feature-named tests, not plan-numbered `verify-*`/`phase-*` scripts; operational helpers live under `ops/`.
 - Type-aware typescript-eslint linting is intentionally not enabled as a second type system. Type correctness belongs to the explicit generated Nuxt/Vue typecheck gate.
 - Do not replace the Vue gate with bare `nuxt typecheck`; the wrapper previously missed generated-project errors.
-- Production bundling is separate: run `pnpm build` when release/runtime output must be proven. Dependency/security-sensitive changes also require the relevant `pnpm audit`, `cargo audit`, and deterministic scripts.
+- Production bundling is separate: run `pnpm build` when release/runtime output must be proven. Dependency/security-sensitive changes also require the relevant `pnpm audit`, `cargo audit`, and focused tests.
 - Stable releases remain manual/no-CI: promote implementation branch -> `dev` -> `main` by PR, verify the reviewed `main` commit locally, tag that exact commit, publish `ai-tools-x86_64-unknown-linux-gnu` + SHA-256 checksums to GitHub Releases, and publish the web image to GHCR. Release publish scripts must fail closed unless the checkout is clean, on `main`, and exactly at the requested stable tag.
 - The supported stable web-image release platform is **`linux/amd64` only**. `linux/arm64` was removed after the QEMU-emulated Nuxt/Vite release build hit severe swap thrashing on the release host. Reintroduce ARM64 only with a reviewed native/remote ARM64 builder path; do not restore local QEMU multi-arch as the default.
 - The stable line continues the published prerelease history. `v0.0.8` was tagged during the first stable-release attempt, but its GitHub Release stayed draft after the ARM64/QEMU web-image build became impractical; do not rewrite that public tag. The next stable release is **`0.0.9`**, with the web image intentionally amd64-only. Do not reset the stable line to `0.0.1`.
 - GitHub mergeability is not verification. Record only commands actually executed successfully.
-- `scripts/check-architecture.sh` is mandatory through `pnpm verify:commit` and now rejects representative direct, type-only, transitive-facade, and API-bypass violations.
+- `scripts/check-architecture.sh` is mandatory through `pnpm guardrail` and rejects representative direct, type-only, transitive-facade, and API-bypass violations.
 - Browser/Playwright automation may use the shared development database. Never assume browser-test data is isolated unless the environment explicitly provides isolation.
 
 ## Nuxt/application invariants

@@ -15,4 +15,17 @@ if [[ -n "$(git ls-files '.github/workflows/*')" ]]; then
   fail 'tracked CI workflow found under .github/workflows/; this repository is no-CI'
 fi
 
-printf 'repo-policy: OK — no CI workflow tracked; test layout is enforced by check-test-layout.\n'
+allowed_scripts='scripts/check-agent-docs.sh
+scripts/check-architecture.sh
+scripts/check-maintainability.mjs
+scripts/check-repo-policy.sh
+scripts/check-test-layout.mjs
+scripts/guardrail.sh
+scripts/install-git-hooks.sh'
+while IFS= read -r file; do
+  if ! grep -Fxq "$file" <<<"$allowed_scripts"; then
+    fail "scripts/ is guardrails-only; move feature tests to test/ or Rust tests/, and operational helpers to ops/: $file"
+  fi
+done < <(find scripts -type f -print | sort)
+
+printf 'repo-policy: OK — no CI workflow tracked; scripts/ contains guardrails only.\n'

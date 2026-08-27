@@ -68,13 +68,10 @@ be placed in repository files, telemetry, or support output.
 
 ## Deterministic checks
 
-Run the local security guards with:
+Account recovery/session/MFA security coverage is part of the normal web test suite:
 
 ```sh
-pnpm verify:account-recovery
-pnpm verify:account-security
-pnpm verify:account-security-runtime
+pnpm test:web
 ```
 
-These checks are source/runtime contract guards, not a substitute for the
-authorized database-role and deployed-browser acceptance described above.
+The relevant feature tests live under `test/unit/` and are selected by behavior rather than plan-specific verification commands. These tests are not a substitute for the authorized database-role and deployed-browser acceptance described above.

@@ -5,7 +5,6 @@ import path from 'node:path'
 const ROOT = path.resolve(import.meta.dirname, '..')
 const SOURCE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.tsx', '.vue', '.rs'])
 const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents'])
-const TEST_DIRS = new Set(['test', 'tests', '__tests__'])
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -21,8 +20,11 @@ function relative(file) {
   return path.relative(ROOT, file).split(path.sep).join('/')
 }
 
-function isTestDirectory(file) {
-  return relative(file).split('/').some(segment => TEST_DIRS.has(segment))
+function isApprovedTestLocation(file) {
+  const rel = relative(file)
+  const extension = path.extname(file)
+  if (extension === '.rs') return /^packages\/rust-tools\/[^/]+\/tests\//.test(rel)
+  return rel.startsWith('test/')
 }
 
 function lineNumber(source, index) {
@@ -67,8 +69,8 @@ function javascriptFailures(file, source) {
 function check(root = ROOT) {
   const files = walk(root)
   return files.flatMap((file) => {
-    if (isTestDirectory(file)) return []
-    if (testFileName(file)) return [`${relative(file)}: test files must live in a dedicated test folder`]
+    if (isApprovedTestLocation(file)) return []
+    if (testFileName(file)) return [`${relative(file)}: web tests belong under test/; Rust tests belong in package tests/`]
     const source = fs.readFileSync(file, 'utf8')
     if (path.extname(file) === '.rs') return rustFailures(file, source)
     if (['.js', '.mjs', '.ts', '.tsx', '.vue'].includes(path.extname(file))) return javascriptFailures(file, source)
@@ -81,4 +83,4 @@ if (failures.length) {
   console.error(`Test layout guard failed:\n${failures.map(failure => `- ${failure}`).join('\n')}`)
   process.exit(1)
 }
-console.log('Test layout guard passed: unit tests are isolated in dedicated folders')
+console.log('Test layout guard passed: web tests are under test/ and Rust tests are package-local')

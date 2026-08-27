@@ -4,17 +4,25 @@ All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start a
 
 This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
 
-This repository intentionally has **no CI**. Any unit/integration test code must be a standalone file under a dedicated sibling `tests/` directory; production files must not contain inline test modules or references to test modules. Quality enforcement is local and mandatory. Before every normal local commit, all required lint/type gates must pass:
+This repository intentionally has **no CI**. Quality enforcement is local, but validation must stay proportional to the changed subsystem:
+
+- JavaScript/TypeScript/Vue tests live under top-level `test/` and run with `pnpm test:web`.
+- Rust tests use Cargo's normal package-local `tests/` directories and run with `pnpm test:rust`.
+- `scripts/` is reserved for repository guardrails and hook installation. Do not add plan-numbered `verify-*`, `phase-*`, acceptance, or one-off validation scripts.
+- New plans must describe feature tests, not generate a new verification script for the plan number.
+- A Nuxt-only change must not compile, lint, or test Rust unless the change actually touches a shared cross-stack contract; the inverse applies to Rust-only work.
+
+Before every normal local commit, run:
 
 ```sh
-pnpm verify:commit
+pnpm guardrail
 ```
 
-A tracked pre-commit hook runs that command automatically after `pnpm install`. The gate includes architecture and maintainability-budget checks in addition to lint/type verification. Never bypass it with `git commit --no-verify`, and never commit while any gate is failing. Architecture/folder/module changes must synchronize relevant `docs/` and `.agents/` guidance before closure.
+The tracked pre-commit hook runs the same guardrail automatically after `pnpm install`. It always enforces repository/agent/architecture/maintainability/test-layout policy, then runs web or Rust lint/type/test gates only for stacks touched by the change. Never bypass it with `git commit --no-verify`, and never commit while an applicable gate is failing.
 
 Implementation delivery always uses a short-lived branch from `main`: commit the focused change, push the branch, open a pull request into `main`, merge the approved PR, then return to `main` and verify the checkout is clean. Do not implement directly on `main` or treat a pushed branch as delivered without the PR merge.
 
-Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files.
+Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files. Historical references to removed acceptance scripts are evidence of past execution, not templates for new validation.
 
 Before declaring work complete, follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md).
 
