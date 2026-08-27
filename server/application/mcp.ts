@@ -1,4 +1,4 @@
-import type { McpRemoteConfig, McpServerUpdateInput } from '#shared/types/chat'
+import type { McpOAuthDiscovery, McpRemoteConfig, McpServerUpdateInput } from '#shared/types/chat'
 
 export class McpConnectionError extends Error {
   constructor() {
@@ -9,6 +9,7 @@ export class McpConnectionError extends Error {
 
 export interface McpUseCases {
   testMcpServer: (userId: string, id: string) => Promise<unknown>
+  discoverOAuth: (url: string) => Promise<McpOAuthDiscovery>
   scanServer: (userId: string, input: McpRemoteConfig) => Promise<unknown>
   listServers: (userId: string) => Promise<unknown>
   createServer: (userId: string, input: McpRemoteConfig) => Promise<unknown>

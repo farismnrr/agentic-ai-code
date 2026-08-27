@@ -60,6 +60,21 @@ export interface McpScanResult {
   tools: McpDiscoveredTool[]
 }
 
+export interface McpOAuthDiscovery {
+  available: boolean
+  authorizationUrl?: string
+  tokenUrl?: string
+  registrationUrl?: string
+  authorizationServer?: string
+  resource?: string
+  scopes: string[]
+  oidcEnabled: boolean
+  oidcConfigurationUrl?: string
+  oidcUserinfoEndpoint?: string
+  oidcScopesSupported: string[]
+  registrationMethods: Array<'dcr' | 'cimd'>
+}
+
 export type McpServerUpdateInput = Partial<McpRemoteConfig> & { enabled?: boolean }
 
 export type McpStatus = 'connected' | 'connecting' | 'disconnected' | 'error'
