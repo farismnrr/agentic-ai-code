@@ -15,8 +15,8 @@ const reasoningEffort = defineModel<NonNullable<Conversation['reasoningEffort']>
 const enabledToolIds = defineModel<string[]>('enabledToolIds', { default: () => [] })
 const permissionMode = defineModel<Conversation['permissionMode']>('permissionMode', { default: 'manual' })
 
-const { isConnected, checkConnection } = useRelayAgent()
-const terminalEnabled = computed(() => enabledToolIds.value.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
+const { isConfigured, isConnected, checkConnection } = useRelayAgent()
+const terminalEnabled = computed(() => isConfigured.value && enabledToolIds.value.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
 const agentAvailable = computed(() => terminalEnabled.value && isConnected.value)
 
 const permissionItems = [

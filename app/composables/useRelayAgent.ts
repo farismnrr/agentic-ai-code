@@ -1,5 +1,5 @@
 import { friendlyRelayErrorMessage } from '../utils/chat-errors'
-import { LOCAL_RELAY_PORT } from '#shared/utils/local-relay'
+import { LOCAL_RELAY_PORT, LOCAL_RELAY_STORAGE_KEY } from '#shared/utils/local-relay'
 
 const MCP_PROTOCOL_VERSION = '2026-07-28'
 const MCP_CLIENT_INFO = { name: 'AI Code', version: 'local-tool-controller' }
@@ -46,9 +46,50 @@ export function useRelayAgent() {
   // Shared Nuxt state keeps the connection indicator consistent between chat,
   // the tool picker, and Settings → MCP. The relay remains browser-local.
   const port = useState<number>('relay-agent-port', () => LOCAL_RELAY_PORT)
+  const isConfigured = useState<boolean>('relay-agent-configured', () => false)
+  const configurationReady = useState<boolean>('relay-agent-configuration-ready', () => false)
   const isConnected = useState<boolean>('relay-agent-connected', () => false)
   const isConnecting = useState<boolean>('relay-agent-connecting', () => false)
   const error = useState<string | null>('relay-agent-error', () => null)
+
+  onMounted(() => {
+    if (configurationReady.value) return
+    try {
+      isConfigured.value = window.localStorage.getItem(LOCAL_RELAY_STORAGE_KEY) === '1'
+    } catch {
+      isConfigured.value = false
+    } finally {
+      configurationReady.value = true
+    }
+  })
+
+  function addLocalRelay() {
+    isConfigured.value = true
+    configurationReady.value = true
+    if (import.meta.client) {
+      try {
+        window.localStorage.setItem(LOCAL_RELAY_STORAGE_KEY, '1')
+      } catch {
+        // The in-memory connection still works for this tab when browser
+        // storage is unavailable; it simply will not persist after reload.
+      }
+    }
+  }
+
+  function removeLocalRelay() {
+    isConfigured.value = false
+    configurationReady.value = true
+    isConnected.value = false
+    isConnecting.value = false
+    error.value = null
+    if (import.meta.client) {
+      try {
+        window.localStorage.removeItem(LOCAL_RELAY_STORAGE_KEY)
+      } catch {
+        // Nothing else to clear when browser storage is unavailable.
+      }
+    }
+  }
 
   async function checkConnection(): Promise<boolean> {
     isConnecting.value = true
@@ -173,9 +214,13 @@ export function useRelayAgent() {
 
   return {
     port,
+    isConfigured,
+    configurationReady,
     isConnected,
     isConnecting,
     error,
+    addLocalRelay,
+    removeLocalRelay,
     checkConnection,
     exec,
     startSession,

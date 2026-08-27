@@ -1,10 +1,13 @@
 import { strict as assert } from 'node:assert'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { buildLocalRelayCommand, LOCAL_RELAY_BINARY, LOCAL_RELAY_PORT } from '../../shared/utils/local-relay.ts'
+import { buildLocalRelayCommand, LOCAL_RELAY_BINARY, LOCAL_RELAY_DOWNLOAD_URL, LOCAL_RELAY_PORT, LOCAL_RELAY_STORAGE_KEY } from '../../shared/utils/local-relay.ts'
 
 const root = resolve(import.meta.dirname, '../..')
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
+
+assert.match(LOCAL_RELAY_DOWNLOAD_URL, /github\.com\/farismnrr\/agentic-ai-code\/releases/)
+assert.equal(LOCAL_RELAY_STORAGE_KEY, 'ai-code:local-relay-added')
 
 const foreground = buildLocalRelayCommand({ origin: 'http://100.99.88.53:3333' })
 assert.match(foreground, new RegExp(`\\./${LOCAL_RELAY_BINARY} relay`))
@@ -29,6 +32,11 @@ assert.ok(background.includes('--origin http://localhost:3333 \\\n  > relay-agen
 const relay = read('app/composables/useRelayAgent.ts')
 assert.match(relay, /server\/discover/)
 assert.match(relay, /supportedVersions/)
+assert.match(relay, /LOCAL_RELAY_STORAGE_KEY/)
+assert.match(relay, /isConfigured/)
+assert.match(relay, /addLocalRelay/)
+assert.match(relay, /removeLocalRelay/)
+assert.match(relay, /window\.localStorage/)
 assert.match(relay, /if \(name\) headers\['mcp-name'\] = name/)
 assert.doesNotMatch(relay, /startJob|terminal_job_start|terminal_job_get|terminal_job_cancel/)
 
@@ -37,6 +45,8 @@ assert.match(setup, /Install relay/)
 assert.match(setup, /Start relay/)
 assert.match(setup, /Verify connection/)
 assert.match(setup, /Changing this toggle|only changes the generated command|restart an already-running relay/i)
+assert.match(setup, /DevTools reports CORS/)
+assert.doesNotMatch(setup, /onMounted/)
 assert.doesNotMatch(setup, /\/api\/mcp-servers/)
 assert.equal(existsSync(resolve(root, 'app/pages/settings/local-terminal.vue')), false)
 
