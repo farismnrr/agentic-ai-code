@@ -40,6 +40,9 @@ target/
 scratch_*
 docker-compose.override.yml
 
+# Nested user/project checkouts opened by AI Code are not part of this repo.
+workspaces/
+
 # Externally installed agent skills (provenance tracked in ai-self/registry.yaml)
 .agents/skills/context7-cli/
 .agents/skills/git-commit/

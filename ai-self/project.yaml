@@ -5,7 +5,7 @@ aliases:
   - Masih Awam
   - ai-code
 identity:
-  expected_origin: https://github.com/farismnrr/ai-code.git
+  expected_origin: https://github.com/farismnrr/agentic-ai-code.git
   required_markers:
     - Cargo.toml
     - package.json

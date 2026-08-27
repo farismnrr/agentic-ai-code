@@ -90,7 +90,8 @@ export default defineNuxtConfig({
     // The landing page is static and public, so it can be built once at
     // deploy time. This reverses the change made in plan 001, when `/` was
     // the stateful chat screen.
-    '/': { prerender: true }
+    '/': { prerender: true },
+    '/settings/local-terminal': { redirect: '/settings/mcp' }
 
     // /chat/** and /settings/** no longer carry ssr: false.
     //

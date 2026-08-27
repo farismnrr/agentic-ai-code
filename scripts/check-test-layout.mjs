@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const SOURCE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.tsx', '.vue', '.rs'])
-const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents'])
+const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents', 'workspaces'])
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

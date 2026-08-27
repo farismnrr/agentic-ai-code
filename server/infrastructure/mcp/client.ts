@@ -5,10 +5,13 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { assertSafeUrl, createSsrfSafeFetch } from '../security/ssrf-guard'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, resolveMcpRequestTimeoutMs, taskPollDelayMs } from './task-reliability'
-import type { InferSelectModel } from 'drizzle-orm'
-import type { mcpServers } from '../../database/schema'
 
-type McpServerConfig = InferSelectModel<typeof mcpServers>
+export interface McpClientConfig {
+  userId: string
+  name: string
+  transport: string
+  url?: string | null
+}
 
 type RemoteMcpRuntimeConfig = {
   url?: string
@@ -27,6 +30,7 @@ export type McpClientTool = {
   annotations?: {
     readOnlyHint?: boolean
     destructiveHint?: boolean
+    idempotentHint?: boolean
     openWorldHint?: boolean
   }
 }
@@ -83,7 +87,7 @@ function parseConfiguredRemoteUrl(raw: string) {
  * `userId` prevents that user from causing Nitro to attach the laptop owner's
  * bearer token to their requests.
  */
-function resolveFirstPartyRemote(url: URL, serverConfig: McpServerConfig) {
+function resolveFirstPartyRemote(url: URL, serverConfig: McpClientConfig) {
   const configured = getRemoteMcpRuntimeConfig()
   const configuredUrlRaw = configured.url?.trim()
   if (!configuredUrlRaw) return undefined
@@ -205,6 +209,7 @@ class FirstPartyRelayMcpClient implements McpClientLike {
           ? {
               readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
               destructiveHint: typeof tool.annotations.destructiveHint === 'boolean' ? tool.annotations.destructiveHint : undefined,
+              idempotentHint: typeof tool.annotations.idempotentHint === 'boolean' ? tool.annotations.idempotentHint : undefined,
               openWorldHint: typeof tool.annotations.openWorldHint === 'boolean' ? tool.annotations.openWorldHint : undefined
             }
           : undefined
@@ -399,7 +404,7 @@ function taskResult(task: Record<string, unknown>): McpClientCallResult {
  * strict MCP 2026 adapter above, with an externally-issued private Bearer token
  * and the same redirect/DNS SSRF guard used by provider traffic.
  */
-export async function createMcpClient(serverConfig: McpServerConfig): Promise<McpClientLike> {
+export async function createMcpClient(serverConfig: McpClientConfig): Promise<McpClientLike> {
   if (serverConfig.transport === 'stdio') {
     throw new Error(`Server "${serverConfig.name}" uses the stdio transport, which is not enabled for outbound connections (see server/infrastructure/mcp/client.ts)`)
   }

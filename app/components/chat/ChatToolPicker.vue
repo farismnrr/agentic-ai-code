@@ -108,12 +108,12 @@ function toggleServer(serverId: string) {
             />
             <UButton
               v-if="!isConnected"
-              label="Terminal settings"
+              label="MCP settings"
               icon="i-lucide-settings"
               color="neutral"
               variant="link"
               size="xs"
-              to="/settings/local-terminal"
+              to="/settings/mcp"
             />
           </div>
         </div>
