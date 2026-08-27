@@ -27,7 +27,7 @@ export function intersectSubagentAuthority(parent: SubagentAuthority, profile: S
   const tools = [...parentTools].filter((tool) => {
     const canonical = tool.includes('.') ? tool.split('.').at(-1) ?? tool : tool
     if (tool.includes('.') && !profile.mcp_tools.includes(tool)) return false
-    const requiredEffects = toolRequiresEffects(canonical, undefined, canonical === 'terminal_exec' || canonical === 'local_terminal' ? 'first-party-relay' : 'external')
+    const requiredEffects = toolRequiresEffects(canonical, undefined, canonical === 'terminal_exec' ? 'first-party-relay' : 'external')
     return operatorTools.has(tool) && (tool.includes('.') || profile.tools.allow.includes(canonical)) && !profile.tools.deny.includes(canonical)
       && requiredEffects.length > 0 && requiredEffects.every(effect => effects.includes(effect))
   })

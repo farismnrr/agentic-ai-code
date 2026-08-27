@@ -10,7 +10,6 @@ import { findUserModel } from '../database/models'
 import { findUserProvider } from '../database/providers'
 import { findUserWorkspace } from '../../infrastructure/database/workspaces'
 import { resolveWorkspacePath } from '../filesystem/browse'
-import { buildLocalTerminalTool } from './local-terminal-tool'
 import { buildBackgroundTaskTools, buildOrchestratorTools, buildSubagentTool } from './subagent-tool'
 
 /**
@@ -31,7 +30,6 @@ export function createChatTurnDependencies(): ChatTurnDependencies {
     ownership: { findConversation: async (userId, id) => findUserConversation(userId, id) as never, findModel: async (userId, id) => findUserModel(userId, id) as never, findProvider: async (userId, id) => findUserProvider(userId, id) as never, findWorkspace: async (userId, id) => findUserWorkspace(userId, id) as never },
     history: { load: async conversation => loadHistoryMessages(conversation as never), insertUser: insertUserMessage },
     persistence: { findLast: async id => findLastMessage(id), updateAssistant: updateAssistantMessage, insertAssistant: insertAssistantMessage, cacheTokens: cacheLastMeasuredTokens },
-    localTerminal: { buildTool: buildLocalTerminalTool },
     subagent: { build: input => buildSubagentTool(input), buildBackground: input => buildBackgroundTaskTools(input), buildOrchestration: input => buildOrchestratorTools(input) },
     resolveWorkspacePath,
     resolveModelConfig: model => resolveModelConfig(model as Parameters<typeof resolveModelConfig>[0]),

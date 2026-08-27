@@ -69,7 +69,7 @@ const REVIEWED_STRUCTURED_TOOLS = new Set([
   'change_request_create', 'change_request_update', 'change_request_merge',
   'issue_create', 'issue_update', 'issue_comment', 'issue_close', 'issue_reopen',
   'workflow_dispatch', 'workflow_run_rerun', 'workflow_run_cancel',
-  'http_fetch', 'local_terminal'
+  'http_fetch'
 ])
 
 function inputRecord(input: unknown): Record<string, unknown> {
@@ -160,7 +160,7 @@ export function capabilityFactsForToolCall({
     || (['issue_list', 'issue_get', 'issue_create', 'issue_update', 'issue_comment', 'issue_close', 'issue_reopen'].includes(toolName) && 'remote' in values && !hasString(values, 'remote'))
     || (toolName === 'http_fetch' && !hasString(values, 'url'))
     || (toolName === 'web_search' && !hasString(values, 'query'))
-    || (['local_terminal', 'terminal_exec'].includes(toolName) && !hasString(values, 'command'))
+    || (toolName === 'terminal_exec' && !hasString(values, 'command'))
   const path = inputString(values, 'path')
   const cwd = inputString(values, 'cwd')
   const effects = toolEffects(toolName, annotations, trustedProvenance)
@@ -171,8 +171,8 @@ export function capabilityFactsForToolCall({
     domain: inputDomain(values),
     command: inputString(values, 'command'),
     args: inputArgs(values),
-    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'local_terminal' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
-      ? toolName !== 'local_terminal' || effects.includes('network_read')
+    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
+      ? true
       : undefined,
     destructive: annotations?.destructiveHint,
     external: trustedProvenance === 'external',
@@ -232,7 +232,7 @@ export function rememberedApprovalCanAutoAnswer(
 }
 
 export function toolEffects(toolName: string, annotations?: CapabilityAnnotations, trustedProvenance: CapabilityFacts['trustedProvenance'] = 'external'): CapabilityEffect[] {
-  if (toolName === 'local_terminal' || toolName === 'terminal_exec') return ['process_exec', 'workspace_write', 'network_read', 'external_mutation']
+  if (toolName === 'terminal_exec') return ['process_exec', 'workspace_write', 'network_read', 'external_mutation']
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
   if (toolName === 'file_write' || toolName === 'file_edit' || toolName === 'apply_patch') return ['workspace_write']

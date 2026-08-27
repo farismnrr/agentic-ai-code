@@ -1,9 +1,6 @@
 import type { McpRemoteConfig, McpScanResult, McpServer, McpServerUpdateInput, McpTool } from '#shared/types/chat'
 
-/**
- * SSR-safe MCP connection registry for user-scoped remote servers. The local
- * loopback relay intentionally lives in useRelayAgent() instead of this list.
- */
+/** SSR-safe MCP connection registry for user-scoped remote servers. */
 export function useMcpServers() {
   const servers = useState<McpServer[]>('mcp-servers', () => [])
 

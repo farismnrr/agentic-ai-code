@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { getToolOrDynamicToolName, isToolUIPart } from 'ai'
-import { nativeTools } from '#shared/utils/native-tools'
 import type { Conversation, UIMessage } from '#shared/types/chat'
 import { capabilityFactsForToolCall, classifyCapability, rememberedApprovalCanAutoAnswer } from '#shared/utils/capability-policy'
 import { resolveMcpToolFromModelName } from '#shared/utils/mcp-tool-identity'
@@ -21,12 +20,10 @@ import { safeInputSummary } from '../../utils/tool-presentation'
 const props = defineProps<{
   messages: UIMessage[]
   conversation: Conversation | undefined
-  hookApproval?: { input: unknown, token: string }
 }>()
 
 const emit = defineEmits<{
   answer: [{ id: string, approved: boolean, toolId?: string, remember?: 'always' | 'never' }]
-  hookAnswer: [approved: boolean]
 }>()
 
 const { toolsById } = useMcpServers()
@@ -39,7 +36,7 @@ interface PendingApproval {
   toolId?: string
   annotations?: { readOnlyHint?: boolean, destructiveHint?: boolean, openWorldHint?: boolean }
   trustedProvenance?: 'first-party-relay' | 'external'
-  identity: 'native' | 'mcp' | 'unknown'
+  identity: 'mcp' | 'unknown'
 }
 
 interface Candidate extends PendingApproval {
@@ -69,17 +66,16 @@ const candidate = computed<Candidate | undefined>(() => {
 
       const toolName = getToolOrDynamicToolName(part)
       const mcpTool = resolveMcpToolFromModelName(toolName, Object.values(toolsById.value))
-      const nativeTool = nativeTools.find(tool => tool.toolName === toolName)
 
       return {
         approvalId: part.approval.id,
         toolName,
         serverId: mcpTool?.serverId,
         input: part.input,
-        toolId: mcpTool?.id ?? nativeTool?.id,
+        toolId: mcpTool?.id,
         annotations: mcpTool?.annotations,
         trustedProvenance: mcpTool?.trustedProvenance,
-        identity: mcpTool ? 'mcp' : nativeTool ? 'native' : 'unknown',
+        identity: mcpTool ? 'mcp' : 'unknown',
         isAutomatic: part.approval?.isAutomatic === true
       }
     }
@@ -96,7 +92,7 @@ function factsFor(candidate: PendingApproval) {
     // Cached MCP provenance is display metadata only. A request that reached
     // this component is authoritative evidence that the server did not
     // auto-approve it, so MCP is rendered conservatively as external/high-risk.
-    trustedProvenance: candidate.identity === 'native' ? 'native' : 'external'
+    trustedProvenance: 'external'
   })
 }
 
@@ -140,7 +136,6 @@ const open = computed({
 })
 
 const formattedInput = computed(() => safeInputSummary(pending.value?.input))
-const hookInput = computed(() => safeInputSummary(props.hookApproval?.input))
 
 const assessment = computed(() => {
   const current = pending.value
@@ -293,63 +288,6 @@ watch(autoAnswerable, (value) => {
           label="Always allow"
           color="primary"
           @click="answer(true, true)"
-        />
-      </div>
-    </template>
-  </UModal>
-  <UModal
-    :open="Boolean(props.hookApproval)"
-    title="Allow repository hook continuation?"
-    :dismissible="false"
-    :close="false"
-  >
-    <template #body>
-      <p class="text-sm text-muted">
-        A repository security hook requested approval before this already-approved tool call continues.
-      </p>
-      <div
-        v-if="props.hookApproval"
-        class="mt-3 space-y-2 rounded-md bg-elevated p-2 text-xs"
-      >
-        <dl
-          v-if="hookInput.rows.length"
-          class="grid gap-1.5 sm:grid-cols-2"
-        >
-          <div
-            v-for="row in hookInput.rows"
-            :key="row.label"
-          >
-            <dt class="text-dimmed">
-              {{ row.label }}
-            </dt>
-            <dd
-              class="truncate font-mono"
-              :title="row.value"
-            >
-              {{ row.value }}
-            </dd>
-          </div>
-        </dl>
-        <p
-          v-if="hookInput.hiddenFields"
-          class="text-dimmed"
-        >
-          {{ hookInput.hiddenFields }} sensitive/noisy field{{ hookInput.hiddenFields === 1 ? '' : 's' }} hidden.
-        </p>
-      </div>
-    </template>
-    <template #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton
-          label="Deny"
-          color="neutral"
-          variant="ghost"
-          @click="emit('hookAnswer', false)"
-        />
-        <UButton
-          label="Allow once"
-          color="primary"
-          @click="emit('hookAnswer', true)"
         />
       </div>
     </template>

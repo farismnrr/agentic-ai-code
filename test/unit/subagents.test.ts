@@ -11,7 +11,7 @@ import { approvalForCapability, toolRequiresEffects } from '../../shared/utils/c
 import { enforceSubagentStop } from '../../server/application/subagents/lifecycle.ts'
 
 const root = process.cwd()
-const parent: SubagentAuthority = { tools: ['file_read', 'file_write', 'local_terminal', 'terminal_exec'], effects: ['workspace_read', 'workspace_write', 'process_exec', 'network_read', 'external_mutation'], working_mode: 'workspace', model_policy: 'default', workspace_root: root }
+const parent: SubagentAuthority = { tools: ['file_read', 'file_write', 'terminal_exec'], effects: ['workspace_read', 'workspace_write', 'process_exec', 'network_read', 'external_mutation'], working_mode: 'workspace', model_policy: 'default', workspace_root: root }
 const profile = parseAgentProfile(readFileSync(join(root, '.agents/agents/explore.md'), 'utf8'))
 if (intersectSubagentAuthority(parent, profile).effects.includes('workspace_write')) throw new Error('explore widened write authority')
 if (intersectSubagentAuthority({ ...parent, effects: ['workspace_read'] }, parseAgentProfile(readFileSync(join(root, '.agents/agents/general-purpose.md'), 'utf8'))).effects.includes('workspace_write')) throw new Error('profile widened parent deny')

@@ -4,7 +4,7 @@ description: Review changes for correctness, security, architecture, and regress
 model_policy: strong
 tools:
   allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, git_blame, code_symbols, code_definition, code_references, code_hover, code_diagnostics]
-  deny: [file_write, file_edit, apply_patch, local_terminal, http_fetch, web_search]
+  deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, git_read]
   deny: [workspace_write, workspace_delete, process_exec, network_read, network_write, external_mutation, privileged_bridge]

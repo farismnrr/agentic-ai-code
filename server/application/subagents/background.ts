@@ -68,7 +68,7 @@ export class BackgroundTaskManager {
         entry.owner = allocation.owner; entry.branch = allocation.owner.branch; entry.worktree_path = allocation.root
         request = { ...input, parent_authority: { ...input.parent_authority, workspace_root: allocation.root, working_mode: 'workspace' }, cwd: allocation.root }
       } else {
-        request = { ...input, parent_authority: { ...input.parent_authority, effects: ['workspace_read', 'git_read'], tools: input.parent_authority.tools.filter(tool => !['file_write', 'file_edit', 'apply_patch', 'terminal_exec', 'local_terminal'].includes(tool)), working_mode: 'read-only' }, permission_mode: 'plan' }
+        request = { ...input, parent_authority: { ...input.parent_authority, effects: ['workspace_read', 'git_read'], tools: input.parent_authority.tools.filter(tool => !['file_write', 'file_edit', 'apply_patch', 'terminal_exec'].includes(tool)), working_mode: 'read-only' }, permission_mode: 'plan' }
       }
       entry.state = 'running'; entry.progress_summary = 'Child is running.'
       const result = await this.runtime.run({ ...request, abort_signal: entry.controller.signal, allow_concurrent_parent: true })
