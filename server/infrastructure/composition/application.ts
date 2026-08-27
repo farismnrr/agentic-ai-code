@@ -97,6 +97,7 @@ export function createApplicationAdapters(requestId: string) {
     } satisfies AccountDataUseCases,
     mcp: {
       testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, () => mcpManagement.testMcpServer(userId, id)),
+      discoverOAuth: async url => request.withSpan('mcp_server.oauth_discovery', {}, () => mcpManagement.discoverMcpOAuth(url)),
       scanServer: async (userId, input) => request.withSpan('mcp_server.scan', {}, () => mcpManagement.scanMcpServer(userId, input)),
       listServers: mcp.listMcpServers,
       createServer: async (userId, input) => request.withSpan('mcp_server.create', {}, () => mcpManagement.createVerifiedMcpServer(userId, input)),
