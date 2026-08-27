@@ -53,9 +53,15 @@ assert.match(oauthDetails, /OpenID Connect/)
 
 const mcpComposable = read('app/composables/useMcpServers.ts')
 assert.match(mcpComposable, /oauth-discovery/)
+assert.match(mcpComposable, /oauth-start/)
+assert.match(dialog, /startOAuth/)
+assert.match(dialog, /navigateTo\(result\.authorizationUrl, \{ external: true \}\)/)
 
 const oauthDiscovery = read('server/api/mcp-servers/oauth-discovery.post.ts')
+const oauthStart = read('server/api/mcp-servers/oauth-start.post.ts')
 assert.match(oauthDiscovery, /discoverOAuth/)
+assert.match(oauthStart, /application\.mcp\.startOAuth/)
+assert.match(oauthStart, /OAuth client registration rejected the AI Code callback URL/)
 
 const mcpManagement = read('server/infrastructure/mcp/server-management.ts')
 assert.match(mcpManagement, /discoverOAuthServerInfo/)

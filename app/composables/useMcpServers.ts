@@ -1,4 +1,4 @@
-import type { McpOAuthDiscovery, McpRemoteConfig, McpScanResult, McpServer, McpServerUpdateInput, McpTool } from '#shared/types/chat'
+import type { McpOAuthDiscovery, McpOAuthStartResult, McpRemoteConfig, McpScanResult, McpServer, McpServerUpdateInput, McpTool } from '#shared/types/chat'
 
 /** SSR-safe MCP connection registry for user-scoped remote servers. */
 export function useMcpServers() {
@@ -26,6 +26,13 @@ export function useMcpServers() {
 
   async function discoverOAuth(url: string) {
     return $fetch<McpOAuthDiscovery>('/api/mcp-servers/oauth-discovery', {
+      method: 'POST',
+      body: { url }
+    })
+  }
+
+  async function startOAuth(url: string) {
+    return $fetch<McpOAuthStartResult>('/api/mcp-servers/oauth-start', {
       method: 'POST',
       body: { url }
     })
@@ -84,5 +91,5 @@ export function useMcpServers() {
     servers.value = servers.value.filter(server => server.id !== id)
   }
 
-  return { servers, availableTools, toolsById, loadAll, discoverOAuth, scan, create, update, setEnabled, test, remove }
+  return { servers, availableTools, toolsById, loadAll, discoverOAuth, startOAuth, scan, create, update, setEnabled, test, remove }
 }
