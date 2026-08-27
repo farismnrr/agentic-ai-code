@@ -91,7 +91,7 @@ Use the repository's Primary fast-path remote-relay launcher or an equivalent re
 
 ```bash
 export AI_TOOLS_BIN="$PWD/target/release/ai-tools"
-scripts/phase36-start-remote-relay.sh
+ops/remote-mcp/start-relay.sh
 ```
 
 The important effective arguments are:
@@ -138,7 +138,7 @@ public issuer and discovery/JWKS routes must remain stable and must match
 
 ```bash
 export REMOTE_MCP_URL='https://mcp.example.com/mcp'
-scripts/phase36-public-mcp-smoke.sh
+ops/remote-mcp/public-smoke.sh
 ```
 
 A successful unauthenticated run proves:
@@ -160,7 +160,7 @@ umask 077
 printf '%s' "$ACCESS_TOKEN" > /tmp/ai-code-mcp-token
 unset ACCESS_TOKEN
 export REMOTE_MCP_ACCESS_TOKEN_FILE=/tmp/ai-code-mcp-token
-scripts/phase36-public-mcp-smoke.sh
+ops/remote-mcp/public-smoke.sh
 rm -f /tmp/ai-code-mcp-token
 ```
 

@@ -15,7 +15,7 @@ Reference pages:
 
 - **[Architecture](architecture.md)** — trust boundaries and request flows.
 - **[Security](security.md)** — account, session, MFA, HTTP policy, audit, and database operating boundaries.
-- **[Development](development.md)** — repository workflow, maintainability guardrails, local verification, branches, and targeted acceptance scripts.
+- **[Development](development.md)** — repository workflow, stack-aware guardrails, tests, maintainability policy, and branches.
 - **[Releases](releases.md)** — versioning and release artifact publication.
 - **[Troubleshooting](troubleshooting.md)** — common setup and runtime failures.
 

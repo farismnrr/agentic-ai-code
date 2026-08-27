@@ -72,7 +72,7 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 - The native workspace is under `packages/rust-tools/`.
 - Repository development pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
 - `pnpm build:tools` builds the native binaries used by local tool/relay packages.
-- This repository intentionally has **no CI**. Standalone unit/integration tests, when present, live in sibling `tests/` directories; production files contain no inline tests or test-module references.
+- This repository intentionally has **no CI**. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories. Production files contain no inline test modules.
 
 ## Mandatory local commit gate
 
@@ -81,45 +81,33 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 The hook executes:
 
 ```sh
-pnpm verify:commit
+pnpm guardrail
 ```
 
-That command runs repository policy enforcement, agent-doc integrity, architecture checks, deterministic maintainability budgets, `pnpm lint`, and `pnpm typecheck`. If any gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
+That command always runs repository policy enforcement, agent-doc integrity, architecture checks, maintainability budgets, and test-layout policy. It then runs web or Rust lint/type/test commands only when that stack changed. If an applicable gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
 
-`pnpm check:test-layout` is included in the commit gate. It rejects test-like files outside dedicated test directories and inline Rust/JavaScript test markers.
+`scripts/check-test-layout.mjs` is part of the guardrail. It rejects test-like files outside the approved web/Cargo test locations and inline Rust/JavaScript test markers.
 
-For Plan-039 composed agent UX/observability changes, `pnpm verify:039j` is the deterministic focused gate and `scripts/phase-039j-contract.sh` composes it with the current 039H/039I MCP contracts. Focused closure evidence requires three consecutive passes before broader regression gates.
+Plan numbers are not test architecture. Add feature-named tests under `test/` or Cargo `tests/`; do not add `verify-NNN`, `phase-NNN`, or composed per-plan validation scripts.
 
 ## Linting
 
-`pnpm lint` is the repository-wide linter gate:
-
-```sh
-eslint .
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-```
+Use `pnpm lint:web` for JavaScript/TypeScript/Vue and `pnpm lint:rust` for Rust. `pnpm lint` remains an explicit full-repository convenience command, not the default commit behavior.
 
 `pnpm lint:fix` applies ESLint fixes and Rust formatting. Clippy findings still require deliberate code fixes.
 
 ## Type-checking
 
-`pnpm typecheck` is the repository-wide type/compile gate:
+Use `pnpm typecheck:web` for Nuxt/Vue and `pnpm typecheck:rust` for the Cargo workspace. `pnpm typecheck` explicitly runs both when a full-repository check is actually desired.
 
-```sh
-nuxt prepare --dotenv .env.example
-vue-tsc -p .nuxt/tsconfig.json --noEmit
-RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
-```
-
-The dedicated Nuxt prepare step generates the type project without coupling type verification to production bundling. Keep `pnpm build` as a separate runtime/bundling verification command when needed.
+The dedicated Nuxt prepare step generates the type project without coupling web verification to Rust or production bundling. Keep `pnpm build` as a separate runtime/bundling verification command when needed.
 
 Do not simplify the type gate back to plain `nuxt typecheck`: this repository previously observed that wrapper exit successfully while real generated-project errors remained. The rationale and related Nuxt UI slot trap are preserved in the canonical [`../memories/README.md`](../memories/README.md#repository-policy-and-verification).
 
 ## Dependency/security verification
 
-`pnpm audit` is not run by the pre-commit hook because it depends on registry/network state. It remains mandatory for dependency changes before merge. Security-sensitive Rust changes may additionally require `cargo audit` and relevant deterministic acceptance/security scripts under `scripts/`.
+`pnpm audit` is not run by the pre-commit hook because it depends on registry/network state. It remains mandatory for dependency changes before merge. Security-sensitive Rust changes may additionally require `cargo audit` and focused Cargo tests.
 
 ### Maintainability checker
 
-`node scripts/check-maintainability.mjs` is the authoritative repository-native source/file-folder budget check and is part of `pnpm verify:commit`. It reports >400-line files and 13–15-file folders for review, fails unexplained >500-line files and >15-file folders, excludes generated/vendor/build/migration/evidence-style paths explicitly, and rejects wildcard/broad exceptions. `node scripts/check-maintainability.mjs --self-test` proves representative oversized-file and overfull-folder fixtures fail. Do not create a second threshold configuration elsewhere.
+`node scripts/check-maintainability.mjs` is the authoritative repository-native source/file-folder budget check and is part of `pnpm guardrail`. It reports >400-line files and 13–15-file folders for review, fails unexplained >500-line files and >15-file folders, excludes generated/vendor/build/migration/evidence-style paths explicitly, and rejects wildcard/broad exceptions. `node scripts/check-maintainability.mjs --self-test` proves representative oversized-file and overfull-folder fixtures fail. Do not create a second threshold configuration elsewhere.

@@ -5,7 +5,7 @@ const updateSchema = v.object({
   title: v.optional(v.string()),
   modelId: v.optional(v.string()),
   mode: v.optional(v.picklist(['chat', 'agent'])),
-  permissionMode: v.optional(v.picklist(['plan', 'workspace', 'autonomous', 'manual'])),
+  permissionMode: v.optional(v.picklist(['plan', 'bypass', 'manual'])),
   reasoningEffort: v.optional(v.picklist(['low', 'medium', 'high', 'max'])),
   enabledToolIds: v.optional(v.array(v.string())),
   approvals: v.optional(v.record(v.string(), v.union([v.literal('always'), v.literal('never')])))

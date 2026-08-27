@@ -1,6 +1,7 @@
 import { useChat } from '@ai-sdk/vue'
 import { lastAssistantMessageIsCompleteWithApprovalResponses, lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import type { Conversation, UIMessage } from '#shared/types/chat'
+import { NATIVE_LOCAL_TERMINAL_TOOL_ID } from '#shared/utils/native-tools'
 import { friendlyChatErrorMessage } from '../utils/chat-errors'
 import { createAttemptLedger } from './chat/attempt-ledger'
 import { createLocalToolController } from './chat/local-tool-controller'
@@ -40,16 +41,21 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
   // notify consumers when their result actually differs), and
   // `seedMessages` is a snapshot only re-taken when that id changes.
   const conversationId = computed(() => conversation.value?.id)
+  const terminalAgentEnabled = computed(() => conversation.value?.mode === 'agent' && conversation.value.enabledToolIds.includes(NATIVE_LOCAL_TERMINAL_TOOL_ID))
   const seedMessages = shallowRef<UIMessage[]>(conversation.value?.messages ?? [])
   const agentContext = shallowRef<{ repository_identity?: string } | undefined>()
-  const agentSessionReady = ref(conversation.value?.mode !== 'agent')
+  const agentSessionReady = ref(!terminalAgentEnabled.value)
   watch(conversationId, () => {
     seedMessages.value = conversation.value?.messages ?? []
     agentContext.value = undefined
-    agentSessionReady.value = conversation.value?.mode !== 'agent'
+    agentSessionReady.value = !terminalAgentEnabled.value
   })
-  watch(conversationId, (id) => {
-    if (!id || conversation.value?.mode !== 'agent') return
+  watch([conversationId, terminalAgentEnabled], ([id, enabled]) => {
+    if (!id || !enabled) {
+      agentSessionReady.value = true
+      agentContext.value = undefined
+      return
+    }
     agentSessionReady.value = false
     void relayAgent.startSession(id).then((result) => {
       const context = result?.context
@@ -188,7 +194,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
 
   watch(() => chat.status.value, (status, previousStatus) => {
     if (status !== 'streaming') {
-      if (previousStatus === 'streaming' && conversationId.value && conversation.value?.mode === 'agent' && !completionGateInFlight.value) {
+      if (previousStatus === 'streaming' && conversationId.value && terminalAgentEnabled.value && !completionGateInFlight.value) {
         completionGateInFlight.value = true
         void relayAgent.preAgentStop(conversationId.value).then((decision) => {
           if (decision.completion === 'remediation_required' && !stopContinuationUsed.value) {
@@ -206,7 +212,7 @@ export function useConversationChat(conversation: Ref<Conversation | undefined>)
         }).finally(() => {
           completionGateInFlight.value = false
         })
-      } else if (previousStatus !== 'streaming' || conversation.value?.mode !== 'agent') {
+      } else if (previousStatus !== 'streaming' || !terminalAgentEnabled.value) {
         flushMessages()
         if (conversation.value) loadOne(conversation.value.id)
       }

@@ -21,15 +21,15 @@ Implementation branches base from current `main`. The default delivery is always
 
 ## Repository verification policy
 
-This repository intentionally has **no CI workflow**, requires standalone test files under sibling `tests/` directories, and has a **mandatory local pre-commit gate** for normal local commits.
+This repository intentionally has **no CI workflow** and has a **mandatory stack-aware local pre-commit guardrail** for normal local commits. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories.
 
 After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit). Every normal local commit must pass:
 
 ```sh
-pnpm verify:commit
+pnpm guardrail
 ```
 
-The command runs repository policy checks, agent-doc integrity, `pnpm lint`, and `pnpm typecheck`. Lint/typecheck failures mean **do not commit**.
+The guardrail always runs repository/agent/architecture/maintainability/test-layout policy, then runs lint, typecheck, and tests only for the stack(s) touched by the change. An applicable failure means **do not commit**.
 
 Never use `git commit --no-verify`, never change/disable `core.hooksPath` to bypass the gate, and never claim a connector/API-created commit passed a local hook that did not actually run.
 
@@ -39,7 +39,7 @@ See the canonical [`../memories/README.md`](../memories/README.md#repository-pol
 
 ## Test layout policy
 
-Unit/integration test files must live under a dedicated sibling `tests/` directory. Production files must not contain inline tests or references to test modules. Deterministic protocol/security acceptance scripts remain allowed as separate local verification and are not CI.
+Web tests live under top-level `test/`; Rust integration tests live in Cargo package-local `tests/` directories. Production files must not contain inline tests. `scripts/` is reserved for structural guardrails and hook installation, not feature acceptance scripts or plan-numbered verifiers.
 
 ## Working a plan or task
 
@@ -61,7 +61,7 @@ When implementation starts:
 1. Branch from current `main` before changing implementation files.
 2. Implement the bounded change.
 3. Run relevant subsystem verification.
-4. Run `pnpm verify:commit` until it passes.
+4. Run focused tests and `pnpm guardrail` until the applicable gates pass.
 5. Review `git status`; stage only intended files.
 6. Commit only after the local gate is green.
 7. Push the branch and open a PR targeting `main`.
@@ -121,21 +121,21 @@ PRs are for implementation/integration work, not ordinary docs/plan edits.
 
 ```sh
 pnpm audit
-pnpm verify:commit
+pnpm guardrail
 pnpm build
 ```
 
 ## Additional subsystem verification
 
-The pre-commit gate is the minimum, not proof of runtime behavior. UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and deterministic scripts; contract changes need the applicable contract gate.
+The pre-commit guardrail is the minimum, not proof of runtime behavior. UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and focused Cargo tests; contract changes need focused feature tests on each owning stack.
 
-Keep standalone tests and deterministic acceptance checks complementary; neither replaces the repository's explicit local gates.
+Do not create a cross-stack verification script merely to prove a plan. Validate each subsystem through its own test runner and add explicit end-to-end verification only when the product boundary itself requires it.
 
 ## Rules for agents
 
 - For every user-requested change, including docs/plans, use a short-lived branch and PR; never commit directly to `main`.
 - Do not treat a pushed branch as delivered until its PR is merged.
-- Before **every normal local implementation commit**, ensure `pnpm verify:commit` passed; the hook must not be bypassed.
+- Before **every normal local implementation commit**, ensure `pnpm guardrail` passed; the hook must not be bypassed.
 - Never claim connector/API docs commits passed a local hook that did not run.
 - Never use `git push --force` on a shared branch.
 - Do not amend/rebase commits already pushed and under review unless explicitly requested and safe.

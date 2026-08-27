@@ -68,7 +68,9 @@ shared/                 Shared types and schemas
 packages/rust-tools/    Rust workspace and unified ai-tools binary
 packages/*-tool/        TypeScript integration/package surfaces
 packages/relay-agent/   Relay integration guidance
-scripts/                Verification, deployment helpers, and release tooling
+scripts/                Repository guardrails and Git hook installation
+test/                   Web/Node unit and integration tests
+ops/                    Operational, deployment, migration, and release helpers
 docs/                   Human/operator documentation
 .agents/                Agent-only knowledge, plans, memory, contracts, and evidence
 ai-self/                Persistent MCP-assisted repository operating skills/policies
@@ -81,7 +83,8 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - normal Nuxt development port: **3333**
 - integration/release branch: **`main`**
 - implementation work: dedicated feature branch → PR → `main`
-- no hosted CI workflow; standalone tests, when present, live under sibling `tests/` directories and never inline in production files
-- every normal local commit must pass `pnpm verify:commit`, including test-layout and maintainability-budget enforcement
+- no hosted CI workflow; web tests live under `test/`, Rust tests use Cargo package `tests/`, and production files contain no inline tests
+- every normal local commit must pass stack-aware `pnpm guardrail`; Nuxt-only changes do not compile/test Rust unless a real cross-stack contract changed
+- `scripts/` is guardrails-only; feature tests are named for behavior rather than plan numbers
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.
