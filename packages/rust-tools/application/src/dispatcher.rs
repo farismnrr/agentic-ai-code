@@ -15,6 +15,7 @@ pub enum Dispatch {
     AgentSubagentStop,
     ActivityConfigure,
     ActivityStatus,
+    TaskCompleted,
     Unknown(String),
 }
 
@@ -33,6 +34,7 @@ pub fn dispatch(request: &mcp::Request) -> Dispatch {
         "agent/subagent_stop" => Dispatch::AgentSubagentStop,
         "server/activity_configure" => Dispatch::ActivityConfigure,
         "server/activity_status" => Dispatch::ActivityStatus,
+        "server/task_completed" => Dispatch::TaskCompleted,
         other => Dispatch::Unknown(other.to_owned()),
     }
 }

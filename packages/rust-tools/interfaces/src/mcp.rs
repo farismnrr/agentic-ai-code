@@ -240,7 +240,8 @@ impl DiscoverResult {
                 "resources": {},
                 "extensions": {
                     "io.modelcontextprotocol/tasks": {},
-                    "io.masihawam/activity-bootstrap": { "version": "1" }
+                    "io.masihawam/activity-bootstrap": { "version": "1" },
+                    "io.masihawam/task-completion-notifications": { "version": "1", "method": "server/task_completed" }
                 }
             }),
             instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",

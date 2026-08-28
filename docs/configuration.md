@@ -99,6 +99,21 @@ RELAY_ACTIVITY_SPOOL_QUOTA_BYTES=67108864
 RELAY_ACTIVITY_ACK_RETENTION_MS=86400000
 ```
 
+For optional one-message-per-completed-task Telegram delivery, configure the
+fixed recipient only on the relay host. These are server environment values,
+not browser or MCP request fields:
+
+```bash
+RELAY_TELEGRAM_ENABLED=true
+RELAY_TELEGRAM_BOT_TOKEN=<server-environment-secret>
+RELAY_TELEGRAM_CHAT_ID=<fixed-recipient-chat-id>
+```
+
+The relay sends only bounded, redacted plain text through Telegram
+`sendMessage`. A task/plan completion is deduplicated by its logical task ID;
+individual tool calls and activity events do not produce Telegram messages.
+Enabling the feature without both credentials fails closed at startup.
+
 The relay source ID is stable in `source-id` inside the owner-only state
 directory. Sink outages leave encrypted unacknowledged rows queued for retry;
 401/403 stops delivery and reports degraded state without printing the token.

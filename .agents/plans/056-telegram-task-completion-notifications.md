@@ -1,6 +1,6 @@
 # Plan 056 — Task-Level Telegram Completion Notifications
 
-**Status:** PLANNED
+**Status:** IMPLEMENTED — LOCALLY VERIFIED; LIVE TELEGRAM DELIVERY PENDING OPERATOR CONFIGURATION
 **Created:** 2026-08-28
 
 ## Problem
@@ -441,11 +441,38 @@ The plan is complete only when all of the following are true:
 - build/test, authenticated relay capability, and real visible Telegram
   delivery are verified separately.
 
+## Implementation closure
+
+The implementation is now on the short-lived
+`feat/056-telegram-task-notifications` branch. It adds the shared completion
+contract, Nuxt durable outbox, first-party relay handoff, relay-owned SQLite
+dedupe ledger, fixed-recipient Bot API sender, retry worker, and explicit
+`task_completed` completion signal. Telegram remains an internal relay detail;
+there is no generic `telegram_send` tool and no per-tool notification path.
+
+Local proof completed on 2026-08-29:
+
+- `pnpm guardrail:all` passed, including repository policy, architecture,
+  maintainability, test layout, web lint/typecheck/tests, Rust lint/typecheck,
+  and Rust tests.
+- Web unit suite passed 29/29, including the task-completion contract test.
+- Rust workspace tests passed, including six task-notification tests covering
+  bounds/redaction, invalid fields, dedupe/restart recovery, fail-closed
+  configuration, private-method/catalog boundaries, and disabled delivery.
+- No Telegram credential was read, printed, copied, or added to the
+  repository. No real external Telegram message was sent during local
+  validation.
+
+The remaining external proof is deliberately separate: an operator must
+provide the relay's owner-only `RELAY_TELEGRAM_*` environment values and then
+verify authenticated Nuxt handoff plus one visible deduplicated Telegram
+message. Until that is done, this plan must not claim live Telegram delivery.
+
 ## Commit boundary
 
-Keep this plan-only change separate from implementation. Future implementation
-must start from `main` on a fresh short-lived branch, preserve unrelated dirty
-paths, run the applicable guardrails, and follow the repository's required
-commit -> push -> pull request -> merge -> clean `main` lifecycle. This plan
-creation does not authorize enabling production Telegram credentials or sending
-an external message.
+The plan implementation must still complete the repository lifecycle: commit
+the focused branch through the normal guardrail, push it, merge the approved
+pull request into `main`, deploy the reviewed relay binary, restart the
+operator-controlled service, and verify a clean `main` checkout. Production
+Telegram credentials remain outside Git and are not enabled implicitly by this
+implementation.

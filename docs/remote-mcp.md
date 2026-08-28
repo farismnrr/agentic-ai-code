@@ -85,6 +85,26 @@ relay state directory outside `EXECUTION_ROOT`/workspace mounts where
 possible, and set `RELAY_ACTIVITY_MODE=required` when silent pre-execution
 gaps are unacceptable.
 
+### Optional task-completion Telegram notification
+
+The relay can send one plain-text notification after one complete task/plan
+reaches its successful terminal state. This is not a Telegram MCP tool and it
+does not send a message for individual tools, activity rows, or stream chunks.
+Keep the bot credentials only in the relay service environment:
+
+```text
+RELAY_TELEGRAM_ENABLED=true
+RELAY_TELEGRAM_BOT_TOKEN=<server-environment-secret>
+RELAY_TELEGRAM_CHAT_ID=<fixed-recipient-chat-id>
+```
+
+The token and recipient are never accepted in MCP arguments, and the relay
+only calls Telegram's fixed `sendMessage` endpoint. If the values are absent,
+the feature remains disabled. When enabled with incomplete values, relay
+startup fails closed. The durable relay ledger deduplicates by logical
+`taskId`; Nuxt uses a separate server-side outbox so temporary relay
+unavailability does not turn a completed task into a failed task.
+
 ## 4. Start the remote relay
 
 Use the repository's Primary fast-path remote-relay launcher or an equivalent reviewed service definition:

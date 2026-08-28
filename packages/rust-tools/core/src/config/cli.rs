@@ -193,6 +193,12 @@ pub struct Cli {
         default_value_t = 86_400_000
     )]
     pub activity_ack_retention_ms: u64,
+
+    /// Enable the fixed-recipient task completion Telegram notifier. The bot
+    /// token and chat ID are deliberately environment-only server secrets;
+    /// they are not accepted as command-line arguments.
+    #[arg(long, env = "RELAY_TELEGRAM_ENABLED", default_value_t = false)]
+    pub telegram_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]

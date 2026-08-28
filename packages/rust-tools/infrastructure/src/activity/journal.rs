@@ -349,7 +349,7 @@ impl Journal {
     }
 }
 
-pub(super) fn state_dir(config: &ServerConfig) -> Result<PathBuf, JournalError> {
+pub(crate) fn state_dir(config: &ServerConfig) -> Result<PathBuf, JournalError> {
     if let Some(path) = config.activity.state_dir.as_deref() {
         let path = PathBuf::from(path);
         if !path.is_absolute() || path.as_os_str().is_empty() {

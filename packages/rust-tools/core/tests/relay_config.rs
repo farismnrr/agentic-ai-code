@@ -33,6 +33,19 @@ fn cli_accepts_explicit_bind_host_and_preserves_it_in_server_config() {
 }
 
 #[test]
+fn telegram_credentials_are_not_cli_arguments() {
+    let parsed = Cli::try_parse_from([
+        "ai-tools",
+        "--telegram-enabled",
+        "--telegram-bot-token",
+        "token",
+        "--telegram-chat-id",
+        "-100123",
+    ]);
+    assert!(parsed.is_err());
+}
+
+#[test]
 fn local_mode_rejects_non_loopback_bind() {
     let config = ServerConfig {
         bind_host: "0.0.0.0".into(),

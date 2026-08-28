@@ -14,6 +14,10 @@ use relay_interfaces::mcp::{self, Response, ToolCallResult, ToolsCallParams};
 
 #[path = "task_calls.rs"]
 mod task_calls;
+#[path = "task_completion.rs"]
+mod task_completion;
+#[path = "tool_dispatch.rs"]
+mod tool_dispatch;
 #[path = "tool_helpers.rs"]
 mod tool_helpers;
 use tool_helpers::deny_activity;
@@ -458,37 +462,25 @@ pub(super) async fn handle_tools_call(
     {
         return response;
     }
-    let tool_dispatch_started = Instant::now();
-    let dispatch_result = relay_application::execution::dispatch_tool_call(
-        &tool,
-        &call.arguments,
-        &state.config,
-        &state.jobs,
-        &state.lsp,
-        &state.hooks,
-    )
-    .await;
-    let dispatch_ms = tool_dispatch_started.elapsed().as_millis() as u64;
-    tracing::info!(
-        event = "relay.tool.dispatch",
-        outcome = if dispatch_result.is_ok() {
-            "ok"
-        } else {
-            "error"
-        },
-        tool = call.name.as_str(),
-        duration_ms = dispatch_ms,
-    );
-    return tool_helpers::finish_tool_call(tool_helpers::ToolCompletionContext {
+    if call.name == "task_completed" {
+        return task_completion::handle(
+            request,
+            state,
+            &call.arguments,
+            effects,
+            &activity_start,
+            request_started,
+        )
+        .await;
+    }
+    tool_dispatch::handle(
         request,
         state,
-        tool_name: &call.name,
-        arguments: &call.arguments,
+        &tool,
+        &call.arguments,
         effects,
-        activity_start: &activity_start,
-        dispatch_result,
+        &activity_start,
         request_started,
-        dispatch_ms,
-    })
-    .await;
+    )
+    .await
 }
