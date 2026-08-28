@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-mod hermes;
+mod dotenv;
 mod ledger;
 mod telegram;
 pub use ledger::{ClaimedNotification, NotificationLedger, TelegramCredentials};
@@ -188,19 +188,14 @@ impl TaskNotificationService {
             }));
         }
         let ledger = Arc::new(NotificationLedger::open(config)?);
-        let path = config
-            .telegram_hermes_env
-            .as_deref()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(default_hermes_env_path);
-        let credentials = ledger.sync_hermes_credentials(&path)?;
+        let credentials = ledger.load_telegram_credentials()?;
         let sender = credentials.as_ref().and_then(|credentials| {
             ReqwestTelegramSender::new(&credentials.bot_token, &credentials.chat_id)
                 .ok()
                 .map(|sender| Arc::new(sender) as Arc<dyn TelegramSender>)
         });
         if sender.is_none() {
-            tracing::warn!("Telegram notifier is enabled but Hermes credentials are unavailable or do not target a channel; delivery is disabled");
+            tracing::warn!("Telegram notifier is enabled but relay credentials are unavailable or do not target a channel; delivery is disabled");
         }
         Ok(Arc::new(Self {
             ledger: Some(ledger),
@@ -263,13 +258,6 @@ impl TaskNotificationService {
             }
         });
     }
-}
-
-fn default_hermes_env_path() -> std::path::PathBuf {
-    std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .map(|home| home.join(".hermes/.env"))
-        .unwrap_or_else(|| std::path::PathBuf::from(".hermes/.env"))
 }
 
 fn bounded_text(value: String, max: usize) -> Result<String, NotificationError> {

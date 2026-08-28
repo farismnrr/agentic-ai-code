@@ -90,22 +90,29 @@ gaps are unacceptable.
 The relay can send one plain-text notification after one complete task/plan
 reaches its successful terminal state. This is not a Telegram MCP tool and it
 does not send a message for individual tools, activity rows, or stream chunks.
-The relay imports the existing Hermes Telegram configuration from its
-owner-only `.env`:
+The relay uses Telegram credentials provisioned into its owner-only local
+state:
 
 ```text
 RELAY_TELEGRAM_ENABLED=true
-# Optional; default is $HOME/.hermes/.env
-RELAY_TELEGRAM_HERMES_ENV=/home/owner/.hermes/.env
 ```
 
-On each startup, only `TELEGRAM_BOT_TOKEN` and `TELEGRAM_HOME_CHANNEL` are
-imported from Hermes. The token is encrypted in the relay-owned SQLite
-database; the encryption key stays in a separate owner-only relay state file.
-`TELEGRAM_ALLOWED_USERS` is not a delivery target. The home channel must be a
-channel identifier (`-100...` or `@channel_username`); a private Hermes home
-chat is rejected and never used as a fallback. The token and recipient are
-never accepted in MCP arguments, and the relay only calls Telegram's fixed
+Provision that state once with the standalone CLI command below. The input may
+be an existing Hermes `.env`, but this is a one-time migration step; the
+running relay never reads Hermes or depends on its process/code:
+
+```bash
+ai-tools telegram \
+  --env-file /home/owner/.hermes/.env \
+  --state-dir /home/owner/.local/state/ai-tools
+```
+
+Only `TELEGRAM_BOT_TOKEN` and `TELEGRAM_HOME_CHANNEL` are read. The token is
+encrypted in the relay-owned SQLite database; the encryption key stays in a
+separate owner-only relay state file. `TELEGRAM_ALLOWED_USERS` is not a
+delivery target. The channel must be a channel identifier (`-100...` or
+`@channel_username`); a private-chat ID is rejected. The token and recipient
+are never accepted in MCP arguments, and the relay only calls Telegram's fixed
 `sendMessage` endpoint. The durable relay ledger deduplicates by logical
 `taskId`; Nuxt uses a separate server-side outbox so temporary relay
 unavailability does not turn a completed task into a failed task.
