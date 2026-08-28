@@ -18,6 +18,7 @@ pub use validation::transition_allowed;
 pub const CONTRACT_VERSION: &str = "activity.event.v1";
 pub const MAX_TEXT: usize = 256;
 pub const MAX_PATH: usize = 4096;
+pub const MAX_DETAIL: usize = 8192;
 pub const MAX_LIST: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,6 +120,8 @@ pub struct Presentation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
     pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result_detail: Option<String>,
     pub result_class: Option<String>,
     pub evidence: Evidence,
     pub payload_reference: Option<String>,
@@ -186,6 +189,7 @@ pub fn event_for_tool(
             target: target_for_tool(tool_id, arguments, root.as_deref()),
             action: action_for_tool(tool_id, arguments, root.as_deref()),
             summary: Some("operation admitted".into()),
+            result_detail: None,
             result_class: Some("started".into()),
             evidence: Evidence::NotApplicable,
             payload_reference: None,
@@ -199,12 +203,15 @@ pub fn complete_event(
     status: Status,
     duration_ms: u64,
     summary: &str,
+    result_detail: Option<&str>,
     evidence: Evidence,
     payload_reference: Option<String>,
 ) -> ActivityEvent {
     let mut event = start.with_status(status, Some(duration_ms));
     event.occurred_at_ms = now_ms();
     event.presentation.summary = Some(summary.chars().take(MAX_TEXT).collect());
+    event.presentation.result_detail =
+        result_detail.map(|value| value.chars().take(MAX_DETAIL).collect());
     event.presentation.result_class = Some(status_name(status).into());
     event.presentation.evidence = evidence;
     event.presentation.payload_reference = payload_reference;

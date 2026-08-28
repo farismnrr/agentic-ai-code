@@ -18,6 +18,7 @@ export interface ActivityItem {
   deletions?: number
   evidence: ActivityEvidence
   result?: string
+  resultDetail?: string
   complete?: boolean
   diffAvailable?: boolean
 }

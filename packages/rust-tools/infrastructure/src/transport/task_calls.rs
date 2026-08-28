@@ -1,5 +1,6 @@
 use super::super::{err_response, AppState};
-use super::{record_activity_outcome, JsonErr2};
+use super::tool_helpers::{record_activity_outcome, record_activity_outcome_with_detail};
+use super::JsonErr2;
 use axum::{http::StatusCode, Json};
 use relay_application::activity::{ActivityEvent, Evidence, Status};
 use relay_core::error::McpError;
@@ -85,12 +86,14 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
-        record_activity_outcome(
+        let task_detail = serde_json::to_string_pretty(&task.job_json()).unwrap_or_default();
+        let task_summary = format!("task {task_id} accepted");
+        record_activity_outcome_with_detail(
             &state,
             activity_start,
             Status::Running,
             tool_dispatch_started.elapsed().as_millis() as u64,
-            "task accepted for execution",
+            (&task_summary, Some(&task_detail)),
             Evidence::NotApplicable,
             None,
         );
@@ -175,7 +178,13 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
-        record_activity_outcome(
+        let task_detail = relay_core::redaction::redact_credentials(&task.output_text());
+        let task_summary = if call.name == "terminal_job_cancel" {
+            format!("cancel requested · {id}")
+        } else {
+            summarize_task_output(&task_detail)
+        };
+        record_activity_outcome_with_detail(
             &state,
             activity_start,
             if call.name == "terminal_job_cancel" {
@@ -184,11 +193,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 Status::Ok
             },
             tool_dispatch_started.elapsed().as_millis() as u64,
-            if call.name == "terminal_job_cancel" {
-                "task cancellation requested"
-            } else {
-                "task status read"
-            },
+            (&task_summary, Some(&task_detail)),
             Evidence::Summary,
             None,
         );
@@ -276,4 +281,28 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
     }
 
     None
+}
+
+fn summarize_task_output(detail: &str) -> String {
+    let exit = detail.lines().find(|line| line.starts_with("Exit: "));
+    let stdout = detail
+        .split_once("Stdout:")
+        .map(|(_, tail)| tail.split_once("Stderr:").map_or(tail, |(body, _)| body))
+        .and_then(first_nonempty_line);
+    let stderr = detail
+        .split_once("Stderr:")
+        .map(|(_, tail)| tail)
+        .and_then(first_nonempty_line);
+    match (exit, stdout.or(stderr)) {
+        (Some(exit), Some(output)) => {
+            format!("{exit} · {}", output.chars().take(220).collect::<String>())
+        }
+        (Some(exit), None) => exit.to_string(),
+        (None, Some(output)) => output.chars().take(220).collect(),
+        (None, None) => "no output".into(),
+    }
+}
+
+fn first_nonempty_line(value: &str) -> Option<&str> {
+    value.lines().map(str::trim).find(|line| !line.is_empty())
 }

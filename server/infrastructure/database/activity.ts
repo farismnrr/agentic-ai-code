@@ -235,7 +235,7 @@ function validateIngress(event: ActivityIngressEvent) {
   const categories = ['filesystem', 'search', 'terminal', 'git', 'code', 'delegated', 'network', 'workspace', 'other']
   const effects = ['workspace_read', 'workspace_write', 'workspace_delete', 'process_exec', 'network_read', 'network_write', 'git_read', 'external_mutation', 'privileged_bridge']
   const statuses = ['started', 'running', 'ok', 'error', 'denied', 'cancelled', 'interrupted']
-  if (event.contractVersion !== 'activity.event.v1' || !bounded(event.recordId, 320) || !bounded(event.activityId, 256) || !bounded(event.sourceId, 256) || !Number.isSafeInteger(event.sourceSequence) || event.sourceSequence < 1 || event.sourceSequence > 2147483647 || !statuses.includes(event.status) || !bounded(event.toolId, 256) || !categories.includes(event.category) || event.effects.length > 64 || event.effects.some(effect => !effects.includes(effect)) || !bounded(event.actor.label, 256) || !boundedOptional(event.actor.source, 256) || !boundedOptional(event.actor.channel, 256) || !boundedOptional(event.clientInfo?.name, 256) || !boundedOptional(event.clientInfo?.version, 64) || Boolean(event.clientInfo) !== Boolean(event.clientInfo?.name && event.clientInfo?.version) || !Number.isSafeInteger(event.occurredAtMs) || !boundedOptional(event.presentation.target, 4096) || !boundedOptional(event.presentation.action, 256) || !boundedOptional(event.presentation.summary, 256) || !boundedOptional(event.presentation.resultClass, 256) || !boundedOptional(event.presentation.payloadReference, 256) || (event.durationMs !== undefined && event.durationMs !== null && (!Number.isSafeInteger(event.durationMs) || event.durationMs < 0 || event.durationMs > 2147483647)) || (event.workspaceRootFingerprint !== undefined && event.workspaceRootFingerprint !== null && !/^[a-f0-9]{64}$/.test(event.workspaceRootFingerprint))) throw new Error('Activity ingestion rejected')
+  if (event.contractVersion !== 'activity.event.v1' || !bounded(event.recordId, 320) || !bounded(event.activityId, 256) || !bounded(event.sourceId, 256) || !Number.isSafeInteger(event.sourceSequence) || event.sourceSequence < 1 || event.sourceSequence > 2147483647 || !statuses.includes(event.status) || !bounded(event.toolId, 256) || !categories.includes(event.category) || event.effects.length > 64 || event.effects.some(effect => !effects.includes(effect)) || !bounded(event.actor.label, 256) || !boundedOptional(event.actor.source, 256) || !boundedOptional(event.actor.channel, 256) || !boundedOptional(event.clientInfo?.name, 256) || !boundedOptional(event.clientInfo?.version, 64) || Boolean(event.clientInfo) !== Boolean(event.clientInfo?.name && event.clientInfo?.version) || !Number.isSafeInteger(event.occurredAtMs) || !boundedOptional(event.presentation.target, 4096) || !boundedOptional(event.presentation.action, 256) || !boundedOptional(event.presentation.summary, 256) || !boundedMultilineOptional(event.presentation.resultDetail, 8192) || !boundedOptional(event.presentation.resultClass, 256) || !boundedOptional(event.presentation.payloadReference, 256) || (event.durationMs !== undefined && event.durationMs !== null && (!Number.isSafeInteger(event.durationMs) || event.durationMs < 0 || event.durationMs > 2147483647)) || (event.workspaceRootFingerprint !== undefined && event.workspaceRootFingerprint !== null && !/^[a-f0-9]{64}$/.test(event.workspaceRootFingerprint))) throw new Error('Activity ingestion rejected')
   if (!['exact', 'summary', 'unavailable', 'not_applicable'].includes(event.presentation.evidence) || typeof event.presentation.complete !== 'boolean') throw new Error('Activity ingestion rejected')
   if (event.payload && (!bounded(event.payload.kind, 40) || !bounded(event.payload.version, 24) || !Number.isSafeInteger(event.payload.byteCount) || event.payload.byteCount < 0 || event.payload.byteCount > MAX_PAYLOAD_BYTES || !/^[A-Za-z0-9+/]*={0,2}$/.test(event.payload.value))) throw new Error('Activity ingestion rejected')
 }
@@ -248,6 +248,10 @@ function boundedOptional(value: unknown, max: number) {
   return value === undefined || value === null || bounded(value, max)
 }
 
+function boundedMultilineOptional(value: unknown, max: number) {
+  return value === undefined || value === null || (typeof value === 'string' && value.length > 0 && value.length <= max && ![...value].some(character => character < ' ' && !['\n', '\r', '\t'].includes(character)))
+}
+
 function transitionAllowed(from: ActivityStatus, to: ActivityStatus) {
   return from === 'started' ? true : from === 'running' ? to === 'running' || isTerminal(to) : from === to
 }
@@ -257,7 +261,7 @@ function isTerminal(status: ActivityStatus) {
 }
 
 function evidenceMetadata(event: ActivityIngressEvent) {
-  const metadata = { evidence: event.presentation.evidence, complete: event.presentation.complete, action: event.presentation.action ?? undefined, summary: event.presentation.summary ?? undefined, payloadReference: event.presentation.payloadReference ?? undefined, affectedPaths: [] as string[], additions: 0, deletions: 0 }
+  const metadata = { evidence: event.presentation.evidence, complete: event.presentation.complete, action: event.presentation.action ?? undefined, summary: event.presentation.summary ?? undefined, resultDetail: event.presentation.resultDetail ?? undefined, payloadReference: event.presentation.payloadReference ?? undefined, affectedPaths: [] as string[], additions: 0, deletions: 0 }
   if (event.payload && event.presentation.evidence === 'exact') {
     let invalidPath = false
     try {
@@ -287,7 +291,7 @@ function evidenceMetadata(event: ActivityIngressEvent) {
 }
 
 function mapItem(row: ActivityRow): ActivityItem {
-  const evidence = (row.changeEvidence ?? {}) as { evidence?: ActivityEvidence, affectedPaths?: string[], additions?: number, deletions?: number, complete?: boolean, action?: string, summary?: string }
+  const evidence = (row.changeEvidence ?? {}) as { evidence?: ActivityEvidence, affectedPaths?: string[], additions?: number, deletions?: number, complete?: boolean, action?: string, summary?: string, resultDetail?: string }
   return {
     id: row.id,
     occurredAt: row.occurredAt.toISOString(),
@@ -305,6 +309,7 @@ function mapItem(row: ActivityRow): ActivityItem {
     deletions: evidence.deletions,
     evidence: evidence.evidence ?? 'not_applicable',
     result: evidence.summary,
+    resultDetail: evidence.resultDetail,
     complete: evidence.complete ?? isTerminal(row.status),
     diffAvailable: evidence.evidence === 'exact' && Boolean(evidence.affectedPaths?.length)
   }
