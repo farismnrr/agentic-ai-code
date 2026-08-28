@@ -107,12 +107,15 @@ ai-tools telegram \
   --state-dir /home/owner/.local/state/ai-tools
 ```
 
-Only `TELEGRAM_BOT_TOKEN` and `TELEGRAM_HOME_CHANNEL` are read. The token is
-encrypted in the relay-owned SQLite database; the encryption key stays in a
-separate owner-only relay state file. `TELEGRAM_ALLOWED_USERS` is not a
-delivery target. The channel must be a channel identifier (`-100...` or
-`@channel_username`); a private-chat ID is rejected. The token and recipient
-are never accepted in MCP arguments, and the relay only calls Telegram's fixed
+Only `TELEGRAM_BOT_TOKEN`, `TELEGRAM_HOME_CHANNEL`, and the optional
+`TELEGRAM_HOME_CHANNEL_THREAD_ID` are read. The token is encrypted in the
+relay-owned SQLite database; the encryption key stays in a separate owner-only
+relay state file. `TELEGRAM_ALLOWED_USERS` is not a delivery target. The chat
+must be a channel or supergroup identifier (`-100...` or `@channel_username`);
+a private-chat ID is rejected. For a forum supergroup, set
+`TELEGRAM_HOME_CHANNEL_THREAD_ID` to the positive topic ID; leave it empty to
+deliver to the root/general topic. The token, recipient, and topic are never
+accepted in MCP arguments, and the relay only calls Telegram's fixed
 `sendMessage` endpoint. The durable relay ledger deduplicates by logical
 `taskId`; Nuxt uses a separate server-side outbox so temporary relay
 unavailability does not turn a completed task into a failed task.

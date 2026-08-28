@@ -1,6 +1,6 @@
 use super::{
-    dotenv, format_task_completion_message, now_ms, validate_bot_token, NotificationError,
-    TaskCompletionPayload,
+    dotenv, format_task_completion_message, now_ms, validate_bot_token, validate_message_thread_id,
+    NotificationError, TaskCompletionPayload,
 };
 use crate::activity::{crypto, state_dir};
 use relay_core::config::ServerConfig;
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS task_notifications (task_id TEXT PRIMARY KEY, message TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL, sent_at_ms INTEGER); CREATE INDEX IF NOT EXISTS task_notifications_delivery_idx ON task_notifications (status, next_attempt_ms, created_at_ms); CREATE TABLE IF NOT EXISTS telegram_configuration (id INTEGER PRIMARY KEY CHECK (id = 1), bot_token_envelope BLOB NOT NULL, chat_id TEXT NOT NULL, updated_at_ms INTEGER NOT NULL);";
+const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS task_notifications (task_id TEXT PRIMARY KEY, message TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL, sent_at_ms INTEGER); CREATE INDEX IF NOT EXISTS task_notifications_delivery_idx ON task_notifications (status, next_attempt_ms, created_at_ms); CREATE TABLE IF NOT EXISTS telegram_configuration (id INTEGER PRIMARY KEY CHECK (id = 1), bot_token_envelope BLOB NOT NULL, chat_id TEXT NOT NULL, message_thread_id INTEGER, updated_at_ms INTEGER NOT NULL);";
 const MAX_ERROR_CATEGORY_BYTES: usize = 64;
 const TELEGRAM_CONFIG_ID: i64 = 1;
 const TELEGRAM_TOKEN_AAD: &[u8] = b"ai-tools:telegram-bot-token:v1";
@@ -28,6 +28,7 @@ pub struct ClaimedNotification {
 pub struct TelegramCredentials {
     pub bot_token: String,
     pub chat_id: String,
+    pub message_thread_id: Option<i64>,
 }
 
 pub struct NotificationLedger {
@@ -78,6 +79,7 @@ impl NotificationLedger {
         connection
             .execute_batch(SCHEMA)
             .map_err(|_| NotificationError::Database)?;
+        migrate_schema(&connection)?;
         let ledger = Self {
             connection: Mutex::new(connection),
             path: path.to_owned(),
@@ -92,6 +94,7 @@ impl NotificationLedger {
         self.store_telegram_credentials(TelegramCredentials {
             bot_token: credentials.bot_token,
             chat_id: credentials.channel,
+            message_thread_id: credentials.message_thread_id,
         })
     }
 
@@ -104,13 +107,19 @@ impl NotificationLedger {
             .map_err(|_| NotificationError::Database)?;
         let row = connection
             .query_row(
-                "SELECT bot_token_envelope, chat_id FROM telegram_configuration WHERE id = ?1",
+                "SELECT bot_token_envelope, chat_id, message_thread_id FROM telegram_configuration WHERE id = ?1",
                 params![TELEGRAM_CONFIG_ID],
-                |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, String>(1)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                    ))
+                },
             )
             .optional()
             .map_err(|_| NotificationError::Database)?;
-        let Some((envelope, chat_id)) = row else {
+        let Some((envelope, chat_id, message_thread_id)) = row else {
             return Ok(None);
         };
         let plaintext = crypto::open(&self.key, &envelope, TELEGRAM_TOKEN_AAD)
@@ -118,7 +127,12 @@ impl NotificationLedger {
         let bot_token = String::from_utf8(plaintext).map_err(|_| NotificationError::Invalid)?;
         validate_bot_token(&bot_token)?;
         super::validate_channel_target(&chat_id)?;
-        Ok(Some(TelegramCredentials { bot_token, chat_id }))
+        validate_message_thread_id(message_thread_id)?;
+        Ok(Some(TelegramCredentials {
+            bot_token,
+            chat_id,
+            message_thread_id,
+        }))
     }
 
     fn store_telegram_credentials(
@@ -127,6 +141,7 @@ impl NotificationLedger {
     ) -> Result<(), NotificationError> {
         validate_bot_token(&credentials.bot_token)?;
         super::validate_channel_target(&credentials.chat_id)?;
+        validate_message_thread_id(credentials.message_thread_id)?;
         let envelope = crypto::seal(
             &self.key,
             credentials.bot_token.as_bytes(),
@@ -139,8 +154,14 @@ impl NotificationLedger {
             .map_err(|_| NotificationError::Database)?;
         connection
             .execute(
-                "INSERT INTO telegram_configuration (id, bot_token_envelope, chat_id, updated_at_ms) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET bot_token_envelope = excluded.bot_token_envelope, chat_id = excluded.chat_id, updated_at_ms = excluded.updated_at_ms",
-                params![TELEGRAM_CONFIG_ID, envelope, credentials.chat_id, now_ms()],
+                "INSERT INTO telegram_configuration (id, bot_token_envelope, chat_id, message_thread_id, updated_at_ms) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET bot_token_envelope = excluded.bot_token_envelope, chat_id = excluded.chat_id, message_thread_id = excluded.message_thread_id, updated_at_ms = excluded.updated_at_ms",
+                params![
+                    TELEGRAM_CONFIG_ID,
+                    envelope,
+                    credentials.chat_id,
+                    credentials.message_thread_id,
+                    now_ms()
+                ],
             )
             .map_err(|_| NotificationError::Database)?;
         Ok(())
@@ -308,6 +329,32 @@ impl NotificationLedger {
     pub fn database_path(&self) -> &Path {
         &self.path
     }
+}
+
+fn migrate_schema(connection: &Connection) -> Result<(), NotificationError> {
+    let mut statement = connection
+        .prepare("PRAGMA table_info(telegram_configuration)")
+        .map_err(|_| NotificationError::Database)?;
+    let column_names = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|_| NotificationError::Database)?;
+    let mut has_thread_column = false;
+    for column_name in column_names {
+        if column_name.map_err(|_| NotificationError::Database)? == "message_thread_id" {
+            has_thread_column = true;
+            break;
+        }
+    }
+    drop(statement);
+    if !has_thread_column {
+        connection
+            .execute(
+                "ALTER TABLE telegram_configuration ADD COLUMN message_thread_id INTEGER",
+                [],
+            )
+            .map_err(|_| NotificationError::Database)?;
+    }
+    Ok(())
 }
 
 fn load_or_create_key(path: &Path) -> Result<[u8; crypto::KEY_BYTES], NotificationError> {
