@@ -74,6 +74,7 @@ const REVIEWED_STRUCTURED_TOOLS = new Set([
   'change_request_create', 'change_request_update', 'change_request_merge',
   'issue_create', 'issue_update', 'issue_comment', 'issue_close', 'issue_reopen',
   'workflow_dispatch', 'workflow_run_rerun', 'workflow_run_cancel',
+  'task_completed',
   'http_fetch'
 ])
 
@@ -181,7 +182,7 @@ export function capabilityFactsForToolCall({
     domain: inputDomain(values),
     command,
     args,
-    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
+    networkRequested: toolName === 'http_fetch' || toolName === 'web_search' || toolName === 'task_completed' || toolName.startsWith('git_remote_') || toolName === 'git_fetch' || toolName === 'git_push' || toolName.startsWith('change_request_') || toolName.startsWith('issue_') || toolName.startsWith('workflow_')
       ? true
       : undefined,
     destructive: annotations?.destructiveHint,
@@ -244,6 +245,7 @@ export function toolEffects(toolName: string, annotations?: CapabilityAnnotation
   if (toolName === 'terminal_exec') return ['process_exec', 'workspace_write', 'network_read', 'external_mutation']
   if (toolName === 'web_search') return ['network_read']
   if (toolName === 'http_fetch') return ['network_read', 'network_write', 'external_mutation']
+  if (toolName === 'task_completed') return ['network_write', 'external_mutation']
   if (toolName === 'file_write' || toolName === 'file_edit' || toolName === 'apply_patch') return ['workspace_write']
   if (['git_branch_create', 'git_branch_switch', 'git_stage', 'git_unstage', 'git_commit', 'git_merge_start', 'git_merge_continue'].includes(toolName)) return ['workspace_write']
   if (['git_merge_abort', 'git_rebase_start', 'git_rebase_continue', 'git_rebase_abort', 'git_branch_delete'].includes(toolName)) return ['workspace_write', 'workspace_delete']

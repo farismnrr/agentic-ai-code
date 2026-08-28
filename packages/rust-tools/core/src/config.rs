@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 mod activity;
 mod cli;
 mod lsp;
+mod notifications;
 pub use activity::ActivityConfig;
 pub use cli::{ActivityMode, Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
@@ -48,6 +49,14 @@ pub struct ServerConfig {
     pub agent_hooks_config: Option<String>,
     pub tool_profile: ToolProfile,
     pub activity: ActivityConfig,
+    /// Server-only Telegram delivery configuration. These fields are skipped
+    /// when configuration is serialized so diagnostics cannot include them.
+    #[serde(skip)]
+    pub telegram_enabled: bool,
+    #[serde(skip)]
+    pub telegram_bot_token: Option<String>,
+    #[serde(skip)]
+    pub telegram_chat_id: Option<String>,
     #[serde(skip, default = "default_workspaces")]
     pub workspaces: std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>>,
 }
@@ -89,6 +98,9 @@ impl Default for ServerConfig {
             agent_hooks_config: None,
             tool_profile: ToolProfile::Full,
             activity: ActivityConfig::default(),
+            telegram_enabled: false,
+            telegram_bot_token: None,
+            telegram_chat_id: None,
             workspaces: default_workspaces(),
         }
     }
@@ -348,6 +360,7 @@ impl ServerConfig {
             ));
         }
         activity::validate(&self.activity)?;
+        notifications::validate(self)?;
         if self.allow_docker {
             let socket = std::path::Path::new(&self.docker_socket);
             if !socket.is_absolute() {
@@ -447,6 +460,9 @@ impl From<&Cli> for ServerConfig {
                 spool_quota_bytes: cli.activity_spool_quota_bytes,
                 acknowledged_retention_ms: cli.activity_ack_retention_ms,
             },
+            telegram_enabled: cli.telegram_enabled,
+            telegram_bot_token: std::env::var("RELAY_TELEGRAM_BOT_TOKEN").ok(),
+            telegram_chat_id: std::env::var("RELAY_TELEGRAM_CHAT_ID").ok(),
             workspaces: default_workspaces(),
         }
     }

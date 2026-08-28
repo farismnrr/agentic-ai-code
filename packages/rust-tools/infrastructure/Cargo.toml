@@ -31,3 +31,4 @@ opentelemetry_sdk.workspace = true
 opentelemetry-otlp.workspace = true
 rusqlite.workspace = true
 ring.workspace = true
+time.workspace = true

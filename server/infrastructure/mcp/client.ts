@@ -49,6 +49,7 @@ export type McpClientCallResult = {
 
 export type McpClientResource = { uri: string, name: string, description?: string, mimeType?: string }
 export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, mimeType?: string }>, [key: string]: unknown }
+export type TaskCompletionResult = { status: 'queued' | 'already_sent' | 'disabled' }
 
 export interface McpClientLike {
   trustedProvenance?: 'first-party-relay' | 'external'
@@ -61,6 +62,8 @@ export interface McpClientLike {
   supportsActivityBootstrap?(): boolean
   activityStatus?(): Promise<{ configured: boolean, sourceId?: string }>
   configureActivity?(input: { sinkUrl: string, sourceToken: string }): Promise<void>
+  supportsTaskCompletion?(): boolean
+  taskCompleted?(input: { taskId: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult>
 }
 
 function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {
