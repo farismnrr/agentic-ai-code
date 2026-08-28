@@ -10,6 +10,7 @@ export interface ActivityItem {
   category: string
   effects?: string[]
   target?: string
+  action?: string
   status: ActivityStatus
   durationMs?: number
   affectedPaths?: string[]

@@ -1,6 +1,6 @@
 use relay_application::activity::{
-    complete_event, ActivityEvent, ActivityRecorder, Category, Effect, Evidence, Presentation,
-    Status,
+    complete_event, event_for_tool, ActivityEvent, ActivityRecorder, Category, Effect, Evidence,
+    Presentation, Status,
 };
 use relay_core::config::{ActivityMode, ServerConfig};
 use relay_infrastructure::activity::{ActivityRuntime, ReloadableActivityRecorder};
@@ -54,6 +54,7 @@ fn event(activity_id: &str) -> ActivityEvent {
         duration_ms: None,
         presentation: Presentation {
             target: Some("notes.txt".into()),
+            action: Some("Create notes.txt".into()),
             summary: Some("canary".into()),
             result_class: Some("started".into()),
             evidence: Evidence::NotApplicable,
@@ -74,6 +75,25 @@ fn relay_export_contract_excludes_ingestion_owned_timestamp(
         "relay export envelopes must not serialize Nuxt-owned ingestion metadata"
     );
     Ok(())
+}
+
+#[test]
+fn activity_action_summary_is_useful_and_redacts_credentials() {
+    let config = ServerConfig::default();
+    let event = event_for_tool(
+        &config,
+        "terminal_exec",
+        &["process_exec"],
+        &json!({
+            "command": "sh",
+            "args": ["-lc", "curl -H 'Authorization: Bearer activity-secret' https://example.test && echo done"],
+        }),
+        None,
+    );
+    let action = event.presentation.action.expect("terminal action summary");
+    assert!(action.starts_with("sh -lc curl"));
+    assert!(action.contains("Bearer [REDACTED]"));
+    assert!(!action.contains("activity-secret"));
 }
 
 #[tokio::test]

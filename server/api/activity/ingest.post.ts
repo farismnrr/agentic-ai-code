@@ -3,6 +3,7 @@ import { badRequest, forbidden } from '#server/core/errors/http'
 
 const presentationSchema = v.strictObject({
   target: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(4096)))),
+  action: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
   summary: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
   result_class: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
   evidence: v.picklist(['exact', 'summary', 'unavailable', 'not_applicable']),
@@ -96,6 +97,7 @@ export default defineEventHandler(async (event) => {
       durationMs: item.event.duration_ms,
       presentation: {
         target: item.event.presentation.target,
+        action: item.event.presentation.action,
         summary: item.event.presentation.summary,
         resultClass: item.event.presentation.result_class,
         evidence: item.event.presentation.evidence,

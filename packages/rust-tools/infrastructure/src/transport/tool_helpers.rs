@@ -87,6 +87,31 @@ pub(super) fn extract_activity_evidence(
     )
 }
 
+fn activity_result_summary(tool_name: &str, result: &ToolCallResult, preview: bool) -> String {
+    if preview {
+        return "dry-run preview; no workspace mutation was applied".into();
+    }
+    if tool_name == "terminal_exec" {
+        if let Some(first_line) = result
+            .content
+            .first()
+            .and_then(|content| content.text.lines().next())
+            .filter(|line| line.starts_with("Exit: "))
+        {
+            return if result.is_error {
+                format!("{first_line} · command failed")
+            } else {
+                format!("{first_line} · completed")
+            };
+        }
+    }
+    if result.is_error {
+        "tool execution failed".into()
+    } else {
+        "tool execution completed".into()
+    }
+}
+
 pub(super) struct ToolCompletionContext<'a> {
     pub(super) request: &'a mcp::Request,
     pub(super) state: Arc<AppState>,
@@ -127,18 +152,13 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
     } else {
         Status::Ok
     };
+    let activity_summary = activity_result_summary(tool_name, &result, preview);
     record_activity_outcome(
         &state,
         activity_start,
         activity_status,
         dispatch_ms,
-        if preview {
-            "dry-run preview; no workspace mutation was applied"
-        } else if result.is_error {
-            "tool execution failed"
-        } else {
-            "tool execution completed"
-        },
+        &activity_summary,
         evidence,
         payload,
     );
