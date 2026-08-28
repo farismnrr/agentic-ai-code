@@ -1,6 +1,6 @@
 # Plan 056 — Task-Level Telegram Completion Notifications
 
-**Status:** IMPLEMENTED — LOCALLY VERIFIED; LIVE TELEGRAM DELIVERY PENDING OPERATOR CONFIGURATION
+**Status:** IMPLEMENTED — DEPLOYED; LIVE TELEGRAM DELIVERY PENDING OPERATOR CONFIGURATION
 **Created:** 2026-08-28
 
 ## Problem
@@ -443,12 +443,12 @@ The plan is complete only when all of the following are true:
 
 ## Implementation closure
 
-The implementation is now on the short-lived
-`feat/056-telegram-task-notifications` branch. It adds the shared completion
-contract, Nuxt durable outbox, first-party relay handoff, relay-owned SQLite
-dedupe ledger, fixed-recipient Bot API sender, retry worker, and explicit
-`task_completed` completion signal. Telegram remains an internal relay detail;
-there is no generic `telegram_send` tool and no per-tool notification path.
+The implementation is merged into `main` and deployed. It adds the shared
+completion contract, Nuxt durable outbox, first-party relay handoff,
+relay-owned SQLite dedupe ledger, fixed-recipient Bot API sender, retry worker,
+and explicit `task_completed` completion signal. Telegram remains an internal
+relay detail; there is no generic `telegram_send` tool and no per-tool
+notification path.
 
 Local proof completed on 2026-08-29:
 
@@ -463,16 +463,28 @@ Local proof completed on 2026-08-29:
   repository. No real external Telegram message was sent during local
   validation.
 
+Deployment proof completed on 2026-08-29:
+
+- PR 188 was merged into `main` at `c199bd1`, and the feature branch was
+  deleted.
+- Migration `0028` applied successfully; the Nuxt `app` container was rebuilt
+  and recreated from `main`, with root HTTP status `200`.
+- The installed relay binary matches the release build byte-for-byte;
+  `ai-tools-relay.service` is active/running and its `/health` endpoint returns
+  HTTP `200`.
+- The unauthenticated relay MCP smoke check returns HTTP `401`, proving the
+  auth boundary without claiming an authenticated task handoff.
+
 The remaining external proof is deliberately separate: an operator must
 provide the relay's owner-only `RELAY_TELEGRAM_*` environment values and then
 verify authenticated Nuxt handoff plus one visible deduplicated Telegram
 message. Until that is done, this plan must not claim live Telegram delivery.
 
-## Commit boundary
+## Delivery closure
 
-The plan implementation must still complete the repository lifecycle: commit
-the focused branch through the normal guardrail, push it, merge the approved
-pull request into `main`, deploy the reviewed relay binary, restart the
-operator-controlled service, and verify a clean `main` checkout. Production
-Telegram credentials remain outside Git and are not enabled implicitly by this
-implementation.
+The repository lifecycle is complete: the focused implementation passed the
+normal guardrail, was pushed and merged through PR 188, the reviewed relay
+binary was deployed, the operator-controlled service was restarted, the Nuxt
+database migration and container deployment completed, and the final checkout
+is clean on `main`. Production Telegram credentials remain outside Git and are
+not enabled implicitly by this implementation.
