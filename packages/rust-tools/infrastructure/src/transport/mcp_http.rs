@@ -179,6 +179,12 @@ pub(super) async fn handle_mcp(
             relay_application::dispatcher::Dispatch::AgentSubagentStop => {
                 super::subagent_lifecycle::handle_subagent_stop(&request, state).await
             }
+            relay_application::dispatcher::Dispatch::ActivityConfigure => {
+                handle_activity_configure(&request, &state)
+            }
+            relay_application::dispatcher::Dispatch::ActivityStatus => {
+                handle_activity_status(&request, &state)
+            }
             relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
                 StatusCode::NOT_FOUND,
                 Some(request.id.clone()),
@@ -196,6 +202,73 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
         request.id.clone(),
         serde_json::to_value(DiscoverResult::current()).unwrap_or(json!({})),
     );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn handle_activity_status(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+    let (configured, source_id) = state.activity_control.status().map_err(|_| {
+        err_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some(request.id.clone()),
+            &McpError::InvalidRequest("activity status is unavailable".into()),
+        )
+    })?;
+    let response = Response::new(
+        request.id.clone(),
+        json!({ "configured": configured, "sourceId": source_id }),
+    );
+    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
+}
+
+fn handle_activity_configure(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
+    let params = request
+        .params
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidRequest("server/activity_configure params are required".into()),
+            )
+        })?;
+    let sink_url = params
+        .get("sinkUrl")
+        .and_then(Value::as_str)
+        .filter(|value| value.len() <= 4096)
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidRequest("server/activity_configure sinkUrl is invalid".into()),
+            )
+        })?;
+    let source_token = params
+        .get("sourceToken")
+        .and_then(Value::as_str)
+        .filter(|value| {
+            value.len() >= 32 && value.len() <= 512 && !value.chars().any(char::is_control)
+        })
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidRequest(
+                    "server/activity_configure sourceToken is invalid".into(),
+                ),
+            )
+        })?;
+    state
+        .activity_control
+        .configure(sink_url.to_owned(), source_token.to_owned())
+        .map_err(|_| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                Some(request.id.clone()),
+                &McpError::InvalidRequest("activity bootstrap could not be applied".into()),
+            )
+        })?;
+    let response = Response::new(request.id.clone(), json!({ "configured": true }));
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
@@ -232,7 +305,14 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
         request.id.clone(),
         json!({
             "protocolVersion": requested,
-            "capabilities": json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
+            "capabilities": json!({
+                "tools": { "listChanged": false },
+                "resources": {},
+                "extensions": {
+                    "io.modelcontextprotocol/tasks": {},
+                    "io.masihawam/activity-bootstrap": { "version": "1" }
+                }
+            }),
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
         }),

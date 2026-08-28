@@ -44,6 +44,7 @@ import type { AccountDataUseCases } from '../../application/account-data'
 import type { McpUseCases } from '../../application/mcp'
 import { createActivityUseCases } from '../../application/activity'
 import { activityDatabase } from '../database/activity'
+import { bootstrapRelayActivity } from '../activity/bootstrap'
 
 const conversationPort: ConversationPort = {
   find: findUserConversation as ConversationPort['find'],
@@ -102,7 +103,12 @@ export function createApplicationAdapters(requestId: string) {
       testMcpServer: async (userId, id) => request.withSpan('mcp_server.test', {}, () => mcpManagement.testMcpServer(userId, id)),
       discoverOAuth: async url => request.withSpan('mcp_server.oauth_discovery', {}, () => mcpManagement.discoverMcpOAuth(url)),
       startOAuth: async (userId, input, redirectUrl) => request.withSpan('mcp_server.oauth_start', {}, () => startMcpOAuthAuthorization(userId, input, redirectUrl)),
-      completeOAuth: async (state, authorizationCode) => request.withSpan('mcp_server.oauth_callback', {}, () => completeMcpOAuthAuthorization(state, authorizationCode)),
+      completeOAuth: async (state, authorizationCode) => request.withSpan('mcp_server.oauth_callback', {}, async () => {
+        const result = await completeMcpOAuthAuthorization(state, authorizationCode)
+        await bootstrapRelayActivity(result.userId, result.id).catch(error => logger.error('[activity bootstrap] automatic bootstrap failed', error))
+        return { id: result.id }
+      }),
+      bootstrapActivity: async (userId, serverId) => request.withSpan('mcp_server.activity_bootstrap', {}, () => bootstrapRelayActivity(userId, serverId)),
       scanServer: async (userId, input) => request.withSpan('mcp_server.scan', {}, () => mcpManagement.scanMcpServer(userId, input)),
       listServers: mcp.listMcpServers,
       getChatCapabilities: async (userId) => {
@@ -126,8 +132,22 @@ export function createApplicationAdapters(requestId: string) {
 
 const workspacePort: WorkspacePort<Awaited<ReturnType<typeof workspaces.listWorkspaces>>[number]> = {
   list: workspaces.listWorkspaces,
-  create: workspaces.createWorkspace,
-  update: workspaces.updateWorkspace,
+  create: async (userId, name, path) => {
+    const workspace = await workspaces.createWorkspace(userId, name, path)
+    const sources = await activityDatabase.listSources(userId)
+    for (const source of sources.filter(source => source.kind === 'relay' && !source.revokedAt)) {
+      await activityDatabase.bind(userId, source.id, workspace.id)
+    }
+    return workspace
+  },
+  update: async (userId, id, name, path) => {
+    const workspace = await workspaces.updateWorkspace(userId, id, name, path)
+    const sources = await activityDatabase.listSources(userId)
+    for (const source of sources.filter(source => source.kind === 'relay' && !source.revokedAt)) {
+      await activityDatabase.bind(userId, source.id, workspace.id)
+    }
+    return workspace
+  },
   remove: workspaces.deleteWorkspace,
   find: workspaces.findUserWorkspace,
   setActive: account.setActiveWorkspace

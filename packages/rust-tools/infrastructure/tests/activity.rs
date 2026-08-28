@@ -1,8 +1,9 @@
 use relay_application::activity::{
-    complete_event, ActivityEvent, Category, Effect, Evidence, Presentation, Status,
+    complete_event, ActivityEvent, ActivityRecorder, Category, Effect, Evidence, Presentation,
+    Status,
 };
 use relay_core::config::{ActivityMode, ServerConfig};
-use relay_infrastructure::activity::ActivityRuntime;
+use relay_infrastructure::activity::{ActivityRuntime, ReloadableActivityRecorder};
 use rusqlite::Connection;
 use serde_json::json;
 use std::fs;
@@ -60,6 +61,19 @@ fn event(activity_id: &str) -> ActivityEvent {
             complete: false,
         },
     }
+}
+
+#[test]
+fn relay_export_contract_excludes_ingestion_owned_timestamp(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sample = event("activity-contract");
+    sample.ingested_at_ms = Some(123);
+    let value = serde_json::to_value(sample)?;
+    assert!(
+        value.get("ingested_at_ms").is_none(),
+        "relay export envelopes must not serialize Nuxt-owned ingestion metadata"
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -123,5 +137,36 @@ async fn restart_marks_only_unfinished_activity_interrupted(
         interrupted, 1,
         "restart must recover the unfinished activity"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn bootstrap_hot_reload_persists_across_restart() -> Result<(), Box<dyn std::error::Error>> {
+    let state = TempState::new("bootstrap")?;
+    let mut config = ServerConfig::default();
+    config.activity.state_dir = Some(state.0.to_string_lossy().into_owned());
+
+    let recorder = ReloadableActivityRecorder::open(&config)?;
+    assert!(!recorder.status()?.0);
+    recorder.configure(
+        "https://chat.example.test/api/activity/ingest".into(),
+        "activity-source-token-0123456789abcdef".into(),
+    )?;
+    let (configured, source_id) = recorder.status()?;
+    assert!(configured);
+    assert!(source_id.is_some());
+    drop(recorder);
+
+    let reopened = ReloadableActivityRecorder::open(&config)?;
+    let (reopened_configured, reopened_source_id) = reopened.status()?;
+    assert!(reopened_configured);
+    assert_eq!(reopened_source_id, source_id);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = fs::metadata(state.0.join("activity-bootstrap.json"))?;
+        assert_eq!(metadata.permissions().mode() & 0o077, 0);
+    }
     Ok(())
 }

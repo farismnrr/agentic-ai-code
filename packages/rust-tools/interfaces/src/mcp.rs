@@ -235,7 +235,14 @@ impl DiscoverResult {
         Self {
             result_type: "complete",
             supported_versions: vec![PROTOCOL_VERSION],
-            capabilities: json!({ "tools": { "listChanged": false }, "resources": {}, "extensions": { "io.modelcontextprotocol/tasks": {} } }),
+            capabilities: json!({
+                "tools": { "listChanged": false },
+                "resources": {},
+                "extensions": {
+                    "io.modelcontextprotocol/tasks": {},
+                    "io.masihawam/activity-bootstrap": { "version": "1" }
+                }
+            }),
             instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
             ttl_ms: 0,
             cache_scope: "private",

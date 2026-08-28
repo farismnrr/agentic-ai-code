@@ -13,6 +13,8 @@ pub enum Dispatch {
     AgentSessionStart,
     AgentPreStop,
     AgentSubagentStop,
+    ActivityConfigure,
+    ActivityStatus,
     Unknown(String),
 }
 
@@ -29,6 +31,8 @@ pub fn dispatch(request: &mcp::Request) -> Dispatch {
         "agent/session_start" => Dispatch::AgentSessionStart,
         "agent/pre_stop" => Dispatch::AgentPreStop,
         "agent/subagent_stop" => Dispatch::AgentSubagentStop,
+        "server/activity_configure" => Dispatch::ActivityConfigure,
+        "server/activity_status" => Dispatch::ActivityStatus,
         other => Dispatch::Unknown(other.to_owned()),
     }
 }
