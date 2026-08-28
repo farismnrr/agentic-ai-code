@@ -1,6 +1,6 @@
 # Plan 057 — Telegram Forum Topic Routing Implementation Plan
 
-**Status:** Implementation complete; delivery pending
+**Status:** CLOSED / VERIFIED
 **Goal:** Route the existing task-completion Telegram notification through the configured `Masih Awam` forum topic while preserving standalone relay ownership and the no-generic-Telegram-tool boundary.
 **Success Criteria:** A configured `message_thread_id` survives relay-state persistence/restart, task-completion delivery sends it to Telegram, legacy relay state migrates safely, focused Rust tests and `pnpm guardrail` pass, and a live task-notification smoke test is accepted by topic `3775`.
 
@@ -25,10 +25,10 @@
 
 ## Current State
 
-- The relay stores an encrypted Telegram bot token and one fixed `chat_id` in `telegram_configuration`.
-- The deployed target is the verified `Masih Awam` supergroup with base chat ID `-100…`; the prior delivery smoke test reached its root/general chat.
+- The relay stores an encrypted Telegram bot token, one fixed `chat_id`, and an optional `message_thread_id` in `telegram_configuration`.
+- The deployed target is the verified `Masih Awam` forum supergroup with base chat ID `-1003975534063` and topic ID `3775`.
 - The user supplied a forum-topic link ending in `/3775`; the Telegram Bot API accepts `message_thread_id` for forum topics, and a direct smoke test to topic `3775` succeeded with message ID `3776`.
-- `TELEGRAM_HOME_CHANNEL_THREAD_ID` is currently ignored by the dotenv importer, the database schema has no thread column, and the sender posts only `chat_id` plus text.
+- `TELEGRAM_HOME_CHANNEL_THREAD_ID` is parsed only during bootstrap, persisted in relay-owned state, and sent only by the internal task-completion sender.
 - Runtime delivery remains task-level and relay-owned; the completion signal is not a generic Telegram capability.
 
 ## Constraints & Decisions
@@ -147,11 +147,11 @@
 
 **Steps:**
 
-- [ ] Revalidate workspace identity, branch, status, and task-owned paths before Git writes.
-- [ ] Commit only reviewed task-owned source/tests/docs and push the short-lived branch.
-- [ ] Open and merge the PR targeting `main` under repository policy.
-- [ ] Return to `main`, verify clean checkout, build from merged `main`, compare installed/running binary identity, and restart the discovered user service.
-- [ ] Re-seed relay-owned state with the configured channel base ID and topic `3775` through the encrypted application path; do not store plaintext token material.
+- [x] Revalidate workspace identity, branch, status, and task-owned paths before Git writes.
+- [x] Commit only reviewed task-owned source/tests/docs and push the short-lived branch.
+- [x] Open and merge the PR targeting `main` under repository policy.
+- [x] Return to `main`, verify clean checkout, build from merged `main`, compare installed/running binary identity, and restart the discovered user service.
+- [x] Re-seed relay-owned state with the configured channel base ID and topic `3775` through the encrypted application path; do not store plaintext token material.
 
 **Validation:**
 
@@ -172,10 +172,10 @@
 
 **Steps:**
 
-- [ ] Enqueue one clearly labeled bounded smoke-test notification through the relay delivery path.
-- [ ] Confirm the ledger status is `sent` with no retry/error category.
-- [ ] Confirm the sent message ID is accepted for topic `3775`; do not claim visual/UI proof unless independently observed.
-- [ ] Record the live evidence in this plan without logging token material.
+- [x] Enqueue one clearly labeled bounded smoke-test notification through the relay delivery path.
+- [x] Confirm the ledger status is `sent` with no retry/error category.
+- [x] Confirm the sent message was accepted for topic `3775`; do not claim visual/UI proof unless independently observed.
+- [x] Record the live evidence in this plan without logging token material.
 
 **Validation:**
 
@@ -184,6 +184,20 @@
 - Service remains active with no restart increment.
 
 **Commit boundary:** No source commit expected.
+
+### Deployment Evidence
+
+- PR #193 was squash-merged into `main` at `4c72804`.
+- The release binary was built from merged `main` and installed at
+  `/home/farismnrr/.local/bin/ai-tools`; the build and installed binary both
+  had SHA-256 `782e9bd9c0f4c32f1003f2fd00c36b6cd1f92aebaf1ab614e9087b33f936469e`.
+- Relay-owned state contains one Telegram configuration row with the verified
+  `Masih Awam` base chat and topic `3775`; no credential value is recorded here.
+- `ai-tools-relay.service` restarted successfully with `MainPID=3847556`,
+  `NRestarts=0`, and `/health` returned HTTP 200.
+- A synthetic task notification queued after the restart was marked
+  `status='sent'`, `attempts=0`, with no error category, proving the deployed
+  worker accepted the topic-targeted Telegram request.
 
 ## Risks & Rollback
 
@@ -195,13 +209,13 @@
 
 ## Final Acceptance Criteria
 
-- [ ] `TELEGRAM_HOME_CHANNEL_THREAD_ID=3775` is parsed, validated, persisted, and loaded after restart.
-- [ ] A configured topic request contains `message_thread_id=3775`; an unset topic omits the field.
-- [ ] Existing root/general configurations remain compatible.
-- [ ] No generic Telegram/HTTP MCP tool or per-tool notification is introduced.
-- [ ] Focused Rust tests and `pnpm guardrail` pass.
-- [ ] PR is merged, checkout returns cleanly to `main`, and the deployed binary matches merged `main`.
-- [ ] Live relay delivery marks one topic-targeted synthetic task notification `sent`.
+- [x] `TELEGRAM_HOME_CHANNEL_THREAD_ID=3775` is parsed, validated, persisted, and loaded after restart.
+- [x] A configured topic request contains `message_thread_id=3775`; an unset topic omits the field.
+- [x] Existing root/general configurations remain compatible.
+- [x] No generic Telegram/HTTP MCP tool or per-tool notification is introduced.
+- [x] Focused Rust tests and `pnpm guardrail` pass.
+- [x] PR is merged, checkout returns cleanly to `main`, and the deployed binary matches merged `main`.
+- [x] Live relay delivery marks one topic-targeted synthetic task notification `sent`.
 
 ## Execution Handoff
 
