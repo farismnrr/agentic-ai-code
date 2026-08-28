@@ -2,7 +2,8 @@ import { strict as assert } from 'node:assert'
 import {
   completionTransitionWasNewlyReached,
   formatTaskCompletionMessage,
-  sanitizeTaskCompletion
+  sanitizeTaskCompletion,
+  taskCompletionInputForGraph
 } from '../../server/application/task-notifications.ts'
 import { ModernHttpMcpClient } from '../../server/infrastructure/mcp/modern-http-client.ts'
 import { approvalForCapability, capabilityFactsForToolCall } from '../../shared/utils/capability-policy.ts'
@@ -12,6 +13,7 @@ import { resolve } from 'node:path'
 const valid = {
   source: 'external-mcp' as const,
   taskId: 'og_123',
+  workspace: 'ai-code',
   title: 'Ship Telegram completion notice',
   summary: 'Implemented the feature and ran the focused tests.',
   completedAt: '2026-08-28T16:00:00.000Z',
@@ -22,7 +24,7 @@ const payload = sanitizeTaskCompletion(valid)
 assert.equal(payload.contractVersion, '1')
 assert.equal(payload.taskId, valid.taskId)
 assert.equal(payload.source, valid.source)
-assert.equal(formatTaskCompletionMessage(payload), '✅ Ship Telegram completion notice\nImplemented the feature and ran the focused tests.\nResult: https://ai-code.example/tasks/og_123')
+assert.equal(formatTaskCompletionMessage(payload), '✅ Ship Telegram completion notice\nWorkspace: ai-code\nReport: Implemented the feature and ran the focused tests.\nResult: https://ai-code.example/tasks/og_123')
 
 const unsafe = sanitizeTaskCompletion({
   ...valid,
@@ -37,6 +39,7 @@ assert.equal(unsafe.summary.includes('\u001b'), false)
 assert.doesNotMatch(unsafe.summary, /\nNEXT\t/)
 
 assert.throws(() => sanitizeTaskCompletion({ ...valid, taskId: '' }), /taskId/)
+assert.throws(() => sanitizeTaskCompletion({ ...valid, workspace: '' }), /workspace/)
 assert.throws(() => sanitizeTaskCompletion({ ...valid, title: 'x'.repeat(161) }), /title/)
 assert.throws(() => sanitizeTaskCompletion({ ...valid, summary: 'x'.repeat(2001) }), /summary/)
 assert.throws(() => sanitizeTaskCompletion({ ...valid, resultUrl: 'http://ai-code.example/task' }), /resultUrl/)
@@ -45,6 +48,29 @@ assert.equal(completionTransitionWasNewlyReached('active', 'completed'), true)
 assert.equal(completionTransitionWasNewlyReached('completed', 'completed'), false)
 assert.equal(completionTransitionWasNewlyReached('blocked', 'completed'), false)
 assert.equal(completionTransitionWasNewlyReached('active', 'failed'), false)
+
+const graphPayload = sanitizeTaskCompletion(taskCompletionInputForGraph({
+  graph_id: 'og_report',
+  generation: 'generation',
+  parent_session_id: 'session',
+  status: 'completed',
+  nodes: [{
+    id: 'report-task',
+    role: 'writer',
+    objective: 'Implement a workspace-aware completion report',
+    depends_on: [],
+    budget_class: 'small',
+    status: 'completed',
+    attempt: 1,
+    evidence_refs: [],
+    blocked_by: [],
+    updated_at: 1
+  }],
+  ready: [],
+  updated_at: 1
+}, 'situm-explore'))
+assert.match(formatTaskCompletionMessage(graphPayload), /Workspace: situm-explore/)
+assert.match(formatTaskCompletionMessage(graphPayload), /report-task \[completed\]: Implement a workspace-aware completion report/)
 
 const serialized = JSON.stringify(payload)
 assert.doesNotMatch(serialized, /token|chatId|chat_id|bot/i)
@@ -65,6 +91,7 @@ assert.equal(client.supportsTaskCompletion(), true)
 assert.deepEqual(await client.taskCompleted(payload), { status: 'queued' })
 assert.equal(requests[1]?.method, 'server/task_completed')
 assert.equal(requests[1]?.params.taskId, payload.taskId)
+assert.equal(requests[1]?.params.workspace, payload.workspace)
 assert.equal((requests[1]?.params as { _meta?: Record<string, unknown> })._meta?.['io.modelcontextprotocol/clientCapabilities'] !== undefined, true)
 await client.close()
 
