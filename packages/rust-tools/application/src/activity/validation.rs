@@ -99,6 +99,9 @@ impl ActivityEvent {
                 )?;
             }
         }
+        if let Some(detail) = &self.presentation.result_detail {
+            bounded_multiline(detail, MAX_DETAIL, "result_detail")?;
+        }
         if !legal_status(self.status) {
             return Err("illegal lifecycle status".into());
         }
@@ -108,6 +111,18 @@ impl ActivityEvent {
 
 fn bounded(value: &str, max: usize, name: &str) -> Result<(), String> {
     if value.is_empty() || value.len() > max || value.chars().any(char::is_control) {
+        return Err(format!("invalid {name}"));
+    }
+    Ok(())
+}
+
+fn bounded_multiline(value: &str, max: usize, name: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value.len() > max
+        || value
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
         return Err(format!("invalid {name}"));
     }
     Ok(())

@@ -1,5 +1,6 @@
 //! Deferred lifecycle completion for MCP task-backed tool calls.
 
+use super::tools::{activity_result_detail, activity_result_summary};
 use super::AppState;
 use relay_application::activity::{self, ActivityEvent, Evidence, Status};
 use relay_application::hooks::HookEvent;
@@ -15,7 +16,8 @@ pub(super) fn observe(
     activity_start: ActivityEvent,
 ) {
     tokio::spawn(async move {
-        let (event, success, status) = match state.jobs.wait(&task_id).await {
+        let waited = state.jobs.wait(&task_id).await;
+        let (event, success, status) = match &waited {
             Ok(snapshot) => {
                 let failed = !matches!(
                     snapshot.state,
@@ -43,22 +45,32 @@ pub(super) fn observe(
             }
             Err(_) => (HookEvent::ToolError, false, Status::Interrupted),
         };
-        let duration_ms = state
-            .jobs
-            .get(&task_id)
-            .await
+        let snapshot = waited.as_ref().ok();
+        let duration_ms = snapshot
             .and_then(|snapshot| snapshot.execution_duration_ms)
             .unwrap_or(0);
+        let arguments = json!({ "cwd": cwd.clone() });
+        let result_detail = snapshot
+            .and_then(|snapshot| snapshot.result.as_ref())
+            .and_then(|result| activity_result_detail(result, &arguments))
+            .or_else(|| {
+                snapshot.map(|snapshot| {
+                    relay_core::redaction::redact_credentials(&snapshot.output_text())
+                })
+            });
+        let result_summary = snapshot
+            .and_then(|snapshot| snapshot.result.as_ref())
+            .map(|result| {
+                activity_result_summary(&tool_id, result, false, result_detail.as_deref())
+            })
+            .unwrap_or_else(|| summarize_deferred_result(result_detail.as_deref(), success));
         let _ = state.activity.record_outcome(
             activity::complete_event(
                 &activity_start,
                 status,
                 duration_ms,
-                if success {
-                    "task completed"
-                } else {
-                    "task failed"
-                },
+                &result_summary,
+                result_detail.as_deref(),
                 Evidence::Summary,
                 None,
             ),
@@ -79,4 +91,17 @@ pub(super) fn observe(
             )
             .await;
     });
+}
+
+fn summarize_deferred_result(detail: Option<&str>, success: bool) -> String {
+    detail
+        .and_then(|detail| detail.lines().map(str::trim).find(|line| !line.is_empty()))
+        .map(|line| line.chars().take(220).collect())
+        .unwrap_or_else(|| {
+            if success {
+                "completed".into()
+            } else {
+                "failed".into()
+            }
+        })
 }

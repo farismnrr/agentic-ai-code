@@ -10,6 +10,7 @@ const hasKey = (value: unknown, key: string): boolean => {
 
 const contract = JSON.parse(read('.agents/contracts/050-activity-event-v1.json'))
 assert.equal(contract.properties.contract_version.const, 'activity.event.v1')
+assert.equal(contract.properties.presentation.properties.result_detail.maxLength, 8192)
 assert.equal(contract.additionalProperties, false)
 assert.equal(contract.properties.activity_id.maxLength, 256)
 assert.equal(contract.properties.source_sequence.minimum, 1)
@@ -31,6 +32,7 @@ assert.ok(database.includes('accepted.push(event.recordId)'))
 assert.ok(database.includes('evidence.evidence = \'unavailable\''))
 assert.ok(database.includes('if (event.payload && payloadSecret)'))
 assert.ok(database.includes('action: event.presentation.action ?? undefined'))
+assert.ok(database.includes('resultDetail: event.presentation.resultDetail ?? undefined'))
 
 for (const file of [
   'server/api/activity/ingest.post.ts',
@@ -51,6 +53,7 @@ const ingress = read('server/api/activity/ingest.post.ts')
 assert.ok(ingress.includes('strictObject'))
 assert.ok(ingress.includes('MAX_BATCH_BYTES'))
 assert.ok(ingress.includes('readBoundedJson'))
+assert.ok(ingress.includes('result_detail: v.optional'))
 
 const routeAuth = read('app/middleware/auth.global.ts')
 assert.ok(routeAuth.includes('if (to.path.startsWith(\'/api/\')) return'), 'browser route auth must not redirect API callers before endpoint-owned authentication')
@@ -66,9 +69,23 @@ const modernMcpClient = read('server/infrastructure/mcp/modern-http-client.ts')
 assert.ok(modernMcpClient.includes('\'io.masihawam/activity-bootstrap\''))
 assert.ok(modernMcpClient.includes('this.request(\'server/activity_configure\''))
 
+const activityPresentation = read('packages/rust-tools/application/src/activity/presentation.rs')
+assert.ok(activityPresentation.includes('"terminal_exec" | "terminal_job_start" => terminal_action'))
+assert.ok(activityPresentation.includes('name => generic_action(name, arguments, root)'))
+assert.ok(activityPresentation.includes('sensitive_argument_key'))
+
+const activityToolHelpers = read('packages/rust-tools/infrastructure/src/transport/tool_helpers.rs')
+assert.ok(activityToolHelpers.includes('relay_core::redaction::redact_credentials'))
+assert.ok(activityToolHelpers.includes('activity_result_detail'))
+assert.ok(activityToolHelpers.includes('Stdout:'))
+assert.ok(activityToolHelpers.includes('Stderr:'))
+
 const ui = read('app/components/workspace/WorkspaceActivityView.vue')
-assert.ok(ui.includes('What happened'))
+assert.ok(ui.includes('Action'))
+assert.ok(ui.includes('Result'))
 assert.ok(ui.includes('displayAction(item)'))
+assert.ok(ui.includes('displayResult(item)'))
+assert.ok(ui.includes('displayResultDetail(selected)'))
 assert.ok(ui.includes('Technical details'))
 assert.ok(ui.includes('Load historical diff'))
 assert.ok(ui.includes('Load older activity'))
