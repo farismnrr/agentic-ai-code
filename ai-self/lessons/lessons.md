@@ -74,3 +74,9 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: Treat a failed delegated-agent call as potentially side-effectful. A transport/orchestration error does not prove that the delegated CLI made no workspace mutations before the failure surfaced. Before retrying delegation or editing the same files directly, inspect process state plus Git status/diff and reread touched files; reconcile valid partial work instead of blindly overwriting it, then rerun the full task validation.
 - Applies to: Masih Awam MCP `agent_delegate`, coding-CLI orchestration, and any tool that can mutate a workspace before its outer RPC result is known.
 - Action taken: Detected partial account-recovery edits after the failed delegation, verified no delegate process remained, audited and reconciled those changes with direct granular tools, removed an unrelated partial build-script change, and reran focused tests, full regression tests, and the local security gate.
+
+- Date: 2026-08-28
+- Context: Recovering the remote relay after its graceful SIGTERM shutdown.
+- Lesson: A relay that intentionally exits with status 0 after SIGTERM is not recovered by systemd `Restart=on-failure`; an unexpected or direct process termination therefore needs a narrowly scoped `Restart=always` drop-in. Validate this with a controlled signal, replacement PID, listener and health checks, and one authenticated MCP call whose activity record is acknowledged by the sink.
+- Applies to: User-level systemd services supervising graceful MCP relays and their asynchronous activity exporters.
+- Action taken: Added the tracked `ops/systemd/ai-tools-relay.service.d/restart-on-termination.conf` drop-in and verified the replacement process, public edge, MCP connector, and activity acknowledgement.
