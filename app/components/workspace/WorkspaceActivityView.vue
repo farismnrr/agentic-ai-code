@@ -21,10 +21,39 @@ const filters = reactive({ text: String(route.query.q ?? ''), category: String(r
 const categories = computed<string[]>(() => ['all', ...new Set(items.value.map(item => item.category))])
 const visibleItems = computed(() => items.value.filter((item) => {
   const text = filters.text.trim().toLowerCase()
-  return (!text || [item.operation, item.target, item.actor?.label, item.actor?.source, item.clientInfo?.name, item.clientInfo?.version, ...(item.affectedPaths ?? [])].some(value => value?.toLowerCase().includes(text))) && (filters.category === 'all' || item.category === filters.category) && (filters.status === 'all' || item.status === filters.status)
+  return (!text || [item.action, item.operation, item.target, item.result, item.actor?.label, item.actor?.source, item.clientInfo?.name, item.clientInfo?.version, ...(item.affectedPaths ?? [])].some(value => value?.toLowerCase().includes(text))) && (filters.category === 'all' || item.category === filters.category) && (filters.status === 'all' || item.status === filters.status)
 }))
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let queryTimer: ReturnType<typeof setTimeout> | undefined
+
+function displayAction(item: ActivityItem) {
+  if (item.action) return item.action
+  const target = item.target && item.target !== 'Workspace operation' ? item.target : undefined
+  const fallback: Record<string, string> = {
+    terminal_exec: 'Ran terminal command',
+    file_read: 'Read workspace file',
+    file_write: 'Wrote workspace file',
+    file_edit: 'Edited workspace file',
+    apply_patch: 'Applied workspace patch',
+    directory_list: 'Listed workspace directory',
+    text_search: 'Searched workspace text',
+    file_search: 'Searched workspace files',
+    http_fetch: 'Called remote endpoint'
+  }
+  const base = fallback[item.operation] || item.operation.replaceAll('_', ' ')
+  return target ? `${base} · ${target}` : base
+}
+
+function statusLabel(item: ActivityItem) {
+  if (item.result && !['operation admitted', 'tool execution completed'].includes(item.result)) return item.result
+  if (item.status === 'ok') return 'Completed successfully'
+  if (item.status === 'error') return 'Execution failed'
+  if (item.status === 'denied') return 'Blocked by policy'
+  if (item.status === 'cancelled') return 'Cancelled'
+  if (item.status === 'interrupted') return 'Interrupted'
+  return item.status === 'running' ? 'Running' : 'Started'
+}
+
 function queryUpdate() {
   void router.replace({ query: { ...route.query, q: filters.text || undefined, category: filters.category === 'all' ? undefined : filters.category, status: filters.status === 'all' ? undefined : filters.status } })
   void reloadFilter()
@@ -225,13 +254,22 @@ watch(() => props.initialData, (data) => {
             :name="item.status === 'running' ? 'i-lucide-loader-circle' : item.status === 'ok' ? 'i-lucide-check-circle' : 'i-lucide-circle-alert'"
             class="mt-0.5 size-5 shrink-0"
             :class="item.status === 'running' ? 'animate-spin text-primary' : 'text-muted'"
-          /><span class="min-w-0 flex-1"><span class="flex flex-wrap items-center gap-x-2 gap-y-1"><strong class="text-sm text-highlighted">{{ item.operation }}</strong><span class="text-xs text-muted">{{ item.actor?.label || 'External MCP client' }}</span><span
-            v-if="item.actor?.source"
-            class="text-xs text-dimmed"
-          >via {{ item.actor.source }}</span><span class="rounded-full bg-elevated px-2 py-0.5 text-xs text-muted">{{ item.status }}</span></span><span class="mt-1 block truncate text-sm text-muted">{{ item.target || 'Workspace operation' }}</span><span class="mt-2 flex flex-wrap gap-3 text-xs text-dimmed"><span>{{ new Date(item.occurredAt).toLocaleString() }}</span><span v-if="item.durationMs !== undefined">{{ item.durationMs }} ms</span><span v-if="item.affectedPaths?.length">{{ item.affectedPaths.length }} path{{ item.affectedPaths.length === 1 ? '' : 's' }}</span><span
-            v-if="item.additions || item.deletions"
-            class="text-primary"
-          >+{{ item.additions || 0 }} / -{{ item.deletions || 0 }}</span><span>{{ item.evidence.replace('_', ' ') }}</span></span></span><UIcon
+          /><span class="min-w-0 flex-1">
+            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <strong class="break-words text-sm text-highlighted">{{ displayAction(item) }}</strong>
+              <span class="rounded-full bg-elevated px-2 py-0.5 text-xs text-muted">{{ item.status }}</span>
+            </span>
+            <span class="mt-1 block text-sm text-muted">{{ statusLabel(item) }}</span>
+            <span class="mt-2 flex flex-wrap gap-3 text-xs text-dimmed">
+              <span>{{ new Date(item.occurredAt).toLocaleString() }}</span>
+              <span v-if="item.durationMs !== undefined">{{ item.durationMs }} ms</span>
+              <span v-if="item.affectedPaths?.length">{{ item.affectedPaths.length }} file{{ item.affectedPaths.length === 1 ? '' : 's' }}</span>
+              <span
+                v-if="item.additions || item.deletions"
+                class="text-primary"
+              >+{{ item.additions || 0 }} / -{{ item.deletions || 0 }}</span>
+            </span>
+          </span><UIcon
             name="i-lucide-chevron-right"
             class="size-4 text-dimmed"
           />
@@ -263,30 +301,51 @@ watch(() => props.initialData, (data) => {
         v-else-if="selected"
         class="space-y-4 text-sm"
       >
-        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-          <dt class="text-muted">
-            Actor
-          </dt><dd>
-            {{ selected.actor?.label || 'External MCP client' }}<span
-              v-if="selected.actor?.source"
-              class="ml-1 text-muted"
-            >via {{ selected.actor.source }}</span>
-            <span
-              v-if="selected.clientInfo"
-              class="ml-1 text-muted"
-            >({{ selected.clientInfo.name }} {{ selected.clientInfo.version }})</span>
-          </dd><dt class="text-muted">
-            Operation
-          </dt><dd>{{ selected.operation }}</dd><dt class="text-muted">
-            Target
-          </dt><dd class="break-words">
-            {{ selected.target || 'Workspace operation' }}
-          </dd><dt class="text-muted">
-            Evidence
-          </dt><dd>{{ selected.evidence.replace('_', ' ') }}</dd><dt class="text-muted">
-            Result
-          </dt><dd>{{ selected.result || 'No additional result details.' }}</dd>
-        </dl><UButton
+        <section class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-wide text-dimmed">
+            What happened
+          </p>
+          <pre class="whitespace-pre-wrap break-words rounded-lg bg-elevated p-3 font-mono text-sm leading-6 text-highlighted">{{ displayAction(selected) }}</pre>
+          <p
+            v-if="!selected.action"
+            class="text-xs text-muted"
+          >
+            This older activity was recorded before detailed action summaries were available.
+          </p>
+        </section>
+        <section class="rounded-lg border border-default p-3">
+          <div class="flex items-center justify-between gap-3">
+            <span class="font-medium text-highlighted">{{ statusLabel(selected) }}</span>
+            <span class="rounded-full bg-elevated px-2 py-0.5 text-xs text-muted">{{ selected.status }}</span>
+          </div>
+          <p class="mt-2 text-xs text-muted">
+            {{ new Date(selected.occurredAt).toLocaleString() }}<span v-if="selected.durationMs !== undefined"> · {{ selected.durationMs }} ms</span>
+          </p>
+        </section>
+        <section
+          v-if="selected.affectedPaths?.length"
+          class="space-y-2"
+        >
+          <p class="text-xs font-medium uppercase tracking-wide text-dimmed">
+            Files changed
+          </p>
+          <div class="rounded-lg bg-elevated p-3">
+            <p
+              v-for="path in selected.affectedPaths"
+              :key="path"
+              class="break-all font-mono text-xs text-highlighted"
+            >
+              {{ path }}
+            </p>
+            <p
+              v-if="selected.additions || selected.deletions"
+              class="mt-2 text-xs text-primary"
+            >
+              +{{ selected.additions || 0 }} / -{{ selected.deletions || 0 }} lines
+            </p>
+          </div>
+        </section>
+        <UButton
           v-if="selected.evidence === 'exact'"
           label="Load historical diff"
           icon="i-lucide-file-diff"
@@ -312,12 +371,37 @@ watch(() => props.initialData, (data) => {
             v-for="(hunk, index) in file.hunks"
             :key="index"
           >{{ hunk }}{{ '\n' }}</span></code></pre>
-        </div><p
-          v-else-if="selected.evidence !== 'exact'"
-          class="rounded-lg bg-elevated p-3 text-muted"
-        >
-          An exact diff is not available for this activity. The recorded evidence is intentionally limited to a {{ selected.evidence }}.
-        </p>
+        </div>
+        <details class="rounded-lg border border-default p-3 text-xs text-muted">
+          <summary class="cursor-pointer select-none font-medium text-highlighted">
+            Technical details
+          </summary>
+          <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+            <dt>
+              Tool
+            </dt><dd class="font-mono">
+              {{ selected.operation }}
+            </dd>
+            <dt>
+              Client
+            </dt><dd>
+              {{ selected.clientInfo ? `${selected.clientInfo.name} ${selected.clientInfo.version}` : (selected.actor?.label || 'External MCP client') }}
+            </dd>
+            <dt v-if="selected.target">
+              Target
+            </dt><dd
+              v-if="selected.target"
+              class="break-all font-mono"
+            >
+              {{ selected.target }}
+            </dd>
+            <dt>
+              Evidence
+            </dt><dd>
+              {{ selected.evidence.replace('_', ' ') }}
+            </dd>
+          </dl>
+        </details>
       </div>
     </template>
   </USlideover>

@@ -4,6 +4,7 @@ export type ActivityEvidence = 'exact' | 'summary' | 'unavailable' | 'not_applic
 
 export interface ActivityPresentation {
   target?: string | null
+  action?: string | null
   summary?: string | null
   resultClass?: string | null
   evidence: ActivityEvidence
@@ -46,6 +47,7 @@ export interface ActivityItem {
   category: string
   effects: string[]
   target?: string
+  action?: string
   status: ActivityStatus
   durationMs?: number
   affectedPaths?: string[]
