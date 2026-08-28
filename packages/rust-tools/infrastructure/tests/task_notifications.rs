@@ -1,8 +1,8 @@
 use relay_application::dispatcher::{dispatch, Dispatch};
 use relay_core::config::ServerConfig;
 use relay_infrastructure::notifications::{
-    format_task_completion_message, sanitize_task_completion, NotificationLedger,
-    TaskCompletionPayload,
+    format_task_completion_message, sanitize_task_completion, validate_channel_target,
+    NotificationLedger, TaskCompletionPayload,
 };
 use relay_interfaces::mcp::{tool_catalog_for_profile, DiscoverResult};
 use std::fs;
@@ -79,22 +79,127 @@ fn ledger_deduplicates_and_recovers_inflight_rows() {
 }
 
 #[test]
-fn telegram_config_fails_closed_when_enabled_without_credentials() {
+fn hermes_telegram_credentials_are_imported_encrypted_and_survive_restart() {
+    let directory =
+        std::env::temp_dir().join(format!("ai-tools-telegram-import-{}", Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("temp directory");
+    let database = directory.join("notifications.sqlite3");
+    let hermes_env = directory.join("hermes.env");
+    fs::write(
+        &hermes_env,
+        "TELEGRAM_BOT_TOKEN=123456:HermesSecret\nTELEGRAM_ALLOWED_USERS=123456789\nTELEGRAM_HOME_CHANNEL=-1001234567890\n",
+    )
+    .expect("Hermes env");
+
+    let ledger = NotificationLedger::open_at(&database).expect("ledger");
+    ledger
+        .import_hermes_credentials(&hermes_env)
+        .expect("import credentials");
+    let stored = ledger
+        .load_telegram_credentials()
+        .expect("load credentials")
+        .expect("stored credentials");
+    assert_eq!(stored.chat_id, "-1001234567890");
+    assert_eq!(stored.bot_token, "123456:HermesSecret");
+    drop(ledger);
+
+    let raw_database = fs::read(&database).expect("database bytes");
+    assert!(!String::from_utf8_lossy(&raw_database).contains("HermesSecret"));
+    let reopened = NotificationLedger::open_at(&database).expect("reopen ledger");
+    assert_eq!(
+        reopened
+            .load_telegram_credentials()
+            .expect("load after restart")
+            .expect("credentials after restart")
+            .bot_token,
+        "123456:HermesSecret"
+    );
+    fs::remove_dir_all(directory).expect("remove temp directory");
+}
+
+#[test]
+fn hermes_credentials_refresh_on_startup_and_invalid_updates_fail_closed() {
+    let directory = std::env::temp_dir().join(format!("ai-tools-telegram-sync-{}", Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("temp directory");
+    let database = directory.join("notifications.sqlite3");
+    let hermes_env = directory.join("hermes.env");
+    fs::write(
+        &hermes_env,
+        "TELEGRAM_BOT_TOKEN=123456:FirstSecret\nTELEGRAM_HOME_CHANNEL=-1001234567890\n",
+    )
+    .expect("first Hermes env");
+
+    let ledger = NotificationLedger::open_at(&database).expect("ledger");
+    assert_eq!(
+        ledger
+            .sync_hermes_credentials(&hermes_env)
+            .expect("first sync")
+            .expect("first credentials")
+            .chat_id,
+        "-1001234567890"
+    );
+
+    fs::write(
+        &hermes_env,
+        "TELEGRAM_BOT_TOKEN=123456:SecondSecret\nTELEGRAM_HOME_CHANNEL=@release_updates\n",
+    )
+    .expect("second Hermes env");
+    let refreshed = ledger
+        .sync_hermes_credentials(&hermes_env)
+        .expect("refresh sync")
+        .expect("refreshed credentials");
+    assert_eq!(refreshed.bot_token, "123456:SecondSecret");
+    assert_eq!(refreshed.chat_id, "@release_updates");
+
+    fs::write(
+        &hermes_env,
+        "TELEGRAM_BOT_TOKEN=123456:InvalidSecret\nTELEGRAM_HOME_CHANNEL=123456789\n",
+    )
+    .expect("invalid Hermes env");
+    assert!(ledger
+        .sync_hermes_credentials(&hermes_env)
+        .expect("invalid sync should fail closed")
+        .is_none());
+    fs::remove_dir_all(directory).expect("remove temp directory");
+}
+
+#[test]
+fn hermes_user_chat_is_rejected_as_a_notification_target() {
+    let directory = std::env::temp_dir().join(format!("ai-tools-telegram-dm-{}", Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("temp directory");
+    let database = directory.join("notifications.sqlite3");
+    let hermes_env = directory.join("hermes.env");
+    fs::write(
+        &hermes_env,
+        "TELEGRAM_BOT_TOKEN=123456:HermesSecret\nTELEGRAM_ALLOWED_USERS=123456789\nTELEGRAM_HOME_CHANNEL=123456789\n",
+    )
+    .expect("Hermes env");
+
+    assert!(validate_channel_target("123456789").is_err());
+    let ledger = NotificationLedger::open_at(&database).expect("ledger");
+    assert!(ledger.import_hermes_credentials(&hermes_env).is_err());
+    assert!(ledger
+        .load_telegram_credentials()
+        .expect("load missing credentials")
+        .is_none());
+    fs::remove_dir_all(directory).expect("remove temp directory");
+}
+
+#[test]
+fn telegram_config_keeps_credentials_out_of_serialized_server_config() {
     let mut config = ServerConfig {
         dir: Some(env!("CARGO_MANIFEST_DIR").to_string()),
         execution_root: Some(env!("CARGO_MANIFEST_DIR").to_string()),
         telegram_enabled: true,
         ..ServerConfig::default()
     };
+    assert!(config.validate().is_ok());
+    config.telegram_hermes_env = Some(String::new());
     assert!(config.validate().is_err());
-
-    config.telegram_bot_token = Some("token".into());
-    config.telegram_chat_id = Some("-100123".into());
+    config.telegram_hermes_env = Some("/tmp/hermes.env".into());
     assert!(config.validate().is_ok());
     let serialized = serde_json::to_string(&config).expect("config serialization");
-    assert!(!serialized.contains("telegram_bot_token"));
-    assert!(!serialized.contains("telegram_chat_id"));
-    assert!(!serialized.contains("-100123"));
+    assert!(!serialized.contains("telegram_hermes_env"));
 }
 
 #[test]

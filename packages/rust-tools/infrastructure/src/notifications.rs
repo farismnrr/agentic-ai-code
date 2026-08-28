@@ -13,9 +13,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
+mod hermes;
 mod ledger;
 mod telegram;
-pub use ledger::{ClaimedNotification, NotificationLedger};
+pub use ledger::{ClaimedNotification, NotificationLedger, TelegramCredentials};
 use telegram::ReqwestTelegramSender;
 pub use telegram::{DeliveryError, TelegramSender};
 
@@ -25,6 +26,40 @@ pub const MAX_TITLE_BYTES: usize = 160;
 pub const MAX_SUMMARY_BYTES: usize = 2_000;
 pub const MAX_RESULT_URL_BYTES: usize = 2_048;
 pub const MAX_MESSAGE_BYTES: usize = 4_096;
+
+pub fn validate_channel_target(chat_id: &str) -> Result<(), NotificationError> {
+    let valid_numeric_channel = chat_id.strip_prefix("-100").is_some_and(|suffix| {
+        !suffix.is_empty() && suffix.len() <= 16 && suffix.chars().all(|ch| ch.is_ascii_digit())
+    });
+    let valid_username = chat_id.strip_prefix('@').is_some_and(|username| {
+        (5..=32).contains(&username.len())
+            && username
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    });
+    if valid_numeric_channel || valid_username {
+        Ok(())
+    } else {
+        Err(NotificationError::Invalid)
+    }
+}
+
+pub(crate) fn validate_bot_token(token: &str) -> Result<(), NotificationError> {
+    let Some((bot_id, secret)) = token.split_once(':') else {
+        return Err(NotificationError::Invalid);
+    };
+    if bot_id.is_empty()
+        || secret.is_empty()
+        || token.len() > 512
+        || !bot_id.chars().all(|ch| ch.is_ascii_digit())
+        || !secret
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+    {
+        return Err(NotificationError::Invalid);
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskCompletionPayload {
@@ -152,19 +187,24 @@ impl TaskNotificationService {
                 sender: None,
             }));
         }
-        let token = config
-            .telegram_bot_token
-            .as_deref()
-            .ok_or(NotificationError::Invalid)?;
-        let chat_id = config
-            .telegram_chat_id
-            .as_deref()
-            .ok_or(NotificationError::Invalid)?;
         let ledger = Arc::new(NotificationLedger::open(config)?);
-        let sender = Arc::new(ReqwestTelegramSender::new(token, chat_id)?);
+        let path = config
+            .telegram_hermes_env
+            .as_deref()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(default_hermes_env_path);
+        let credentials = ledger.sync_hermes_credentials(&path)?;
+        let sender = credentials.as_ref().and_then(|credentials| {
+            ReqwestTelegramSender::new(&credentials.bot_token, &credentials.chat_id)
+                .ok()
+                .map(|sender| Arc::new(sender) as Arc<dyn TelegramSender>)
+        });
+        if sender.is_none() {
+            tracing::warn!("Telegram notifier is enabled but Hermes credentials are unavailable or do not target a channel; delivery is disabled");
+        }
         Ok(Arc::new(Self {
             ledger: Some(ledger),
-            sender: Some(sender),
+            sender,
         }))
     }
 
@@ -175,6 +215,9 @@ impl TaskNotificationService {
         let Some(ledger) = &self.ledger else {
             return Ok(QueueResult::Disabled);
         };
+        if self.sender.is_none() {
+            return Ok(QueueResult::Disabled);
+        }
         let payload = sanitize_task_completion(payload)?;
         let inserted = ledger.enqueue(&payload)?;
         if !inserted {
@@ -206,7 +249,7 @@ impl TaskNotificationService {
     }
 
     pub fn spawn_worker(self: &Arc<Self>) {
-        if self.ledger.is_none() {
+        if self.ledger.is_none() || self.sender.is_none() {
             return;
         }
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
@@ -220,6 +263,13 @@ impl TaskNotificationService {
             }
         });
     }
+}
+
+fn default_hermes_env_path() -> std::path::PathBuf {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .map(|home| home.join(".hermes/.env"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".hermes/.env"))
 }
 
 fn bounded_text(value: String, max: usize) -> Result<String, NotificationError> {
