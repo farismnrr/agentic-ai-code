@@ -29,7 +29,7 @@ After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-comm
 pnpm guardrail
 ```
 
-The guardrail always runs repository/agent/architecture/maintainability/test-layout policy, then runs lint, typecheck, and tests only for the stack(s) touched by the change. An applicable failure means **do not commit**.
+The default guardrail always runs repository/agent/architecture/maintainability/test-layout policy, then runs lint, typecheck, and tests only for the stack(s) touched by the change. Use `pnpm guardrail:nuxt` for an explicit Nuxt-only closure, `pnpm guardrail:rust` for an explicit Rust-only closure, and `pnpm guardrail:all` when a reviewed cross-stack contract is intentionally changing. An applicable failure means **do not commit**.
 
 Never use `git commit --no-verify`, never change/disable `core.hooksPath` to bypass the gate, and never claim a connector/API-created commit passed a local hook that did not actually run.
 
