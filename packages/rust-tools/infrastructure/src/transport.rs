@@ -47,6 +47,7 @@ use std::sync::Arc;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
+use crate::activity::ReloadableActivityRecorder;
 use crate::auth;
 use crate::auth::{CachedJwks, Claims};
 use crate::observability::{CorrelationId, RequestId};
@@ -111,6 +112,9 @@ pub struct AppState {
     /// Durable relay-boundary activity recorder. Required mode is opened
     /// before the router is returned, so a failed journal cannot admit calls.
     pub activity: SharedActivityRecorder,
+    /// Private control plane for reloading the recorder after an authenticated
+    /// first-party activity bootstrap. This is never exposed through tools/list.
+    pub activity_control: Arc<ReloadableActivityRecorder>,
 }
 
 impl AppState {
@@ -191,8 +195,9 @@ pub fn create_router_with_jobs_and_hooks(
         relay_application::lsp::LspSessionManager::new(unconfigured)
             .expect("LSP session manager with no configured servers must construct")
     });
-    let activity = crate::activity::ActivityRuntime::open(&config)
+    let activity_control = crate::activity::ReloadableActivityRecorder::open(&config)
         .expect("required activity journal must be available before relay startup");
+    let activity: SharedActivityRecorder = activity_control.clone();
     let state = Arc::new(AppState {
         config: config.clone(),
         jobs,
@@ -201,6 +206,7 @@ pub fn create_router_with_jobs_and_hooks(
         request_admission: Arc::new(RequestAdmission::configured()),
         jwks_cache: tokio::sync::RwLock::new(None),
         activity,
+        activity_control,
     });
 
     let mcp_router = Router::new().route("/mcp", post(mcp_http::handle_mcp));

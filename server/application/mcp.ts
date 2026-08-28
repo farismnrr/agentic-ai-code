@@ -15,6 +15,7 @@ export interface McpUseCases {
   discoverOAuth: (url: string) => Promise<McpOAuthDiscovery>
   startOAuth: (userId: string, input: McpRemoteConfig, redirectUrl: string) => Promise<{ authorizationUrl: string }>
   completeOAuth: (state: string, authorizationCode: string) => Promise<{ id: string }>
+  bootstrapActivity: (userId: string, serverId: string) => Promise<{ supported: boolean, configured: boolean }>
   scanServer: (userId: string, input: McpRemoteConfig) => Promise<unknown>
   listServers: (userId: string) => Promise<unknown>
   getChatCapabilities: (userId: string) => Promise<ChatCapabilities>
