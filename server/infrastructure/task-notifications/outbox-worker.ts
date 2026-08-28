@@ -29,6 +29,7 @@ export async function drainTaskNotificationOutbox() {
       try {
         const result = await relay.taskCompleted({
           taskId: row.taskId,
+          workspace: row.workspace,
           title: row.title,
           summary: row.summary,
           completedAt: row.completedAt.toISOString(),

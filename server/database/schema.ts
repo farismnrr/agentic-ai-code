@@ -430,6 +430,7 @@ export const taskNotificationOutbox = aiCode.table('task_notification_outbox', {
   id: uuid('id').primaryKey().defaultRandom(),
   source: varchar('source', { length: 16 }).notNull(),
   taskId: varchar('task_id', { length: 128 }).notNull(),
+  workspace: varchar('workspace', { length: 160 }).notNull(),
   title: varchar('title', { length: 160 }).notNull(),
   summary: varchar('summary', { length: 2000 }).notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),

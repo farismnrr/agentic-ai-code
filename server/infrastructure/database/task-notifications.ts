@@ -14,6 +14,7 @@ export const taskNotificationDatabase = {
     await useDb().insert(taskNotificationOutbox).values({
       source: payload.source,
       taskId: payload.taskId,
+      workspace: payload.workspace,
       title: payload.title,
       summary: payload.summary,
       completedAt: new Date(payload.completedAt),

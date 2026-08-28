@@ -83,7 +83,7 @@ export class ModernHttpMcpClient implements McpClientLike {
     return this.taskCompletionSupported
   }
 
-  async taskCompleted(input: { taskId: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult> {
+  async taskCompleted(input: { taskId: string, workspace: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult> {
     if (!this.taskCompletionSupported) throw new Error('Remote MCP server does not support task completion notifications')
     const result = await this.request('server/task_completed', input)
     if (!isJsonRecord(result) || !['queued', 'already_sent', 'disabled'].includes(result.status as string)) {

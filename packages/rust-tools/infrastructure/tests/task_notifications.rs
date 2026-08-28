@@ -13,6 +13,7 @@ use uuid::Uuid;
 fn payload() -> TaskCompletionPayload {
     TaskCompletionPayload {
         task_id: "og_123".into(),
+        workspace: "ai-code".into(),
         title: "Ship Telegram completion notice".into(),
         summary: "Implemented the feature and ran the focused tests.".into(),
         completed_at: "2026-08-28T16:00:00.000Z".into(),
@@ -27,7 +28,7 @@ fn completion_payload_is_bounded_and_redacted() {
     assert_eq!(sanitized.title, "Ship Telegram completion notice");
     assert_eq!(
         format_task_completion_message(&sanitized),
-        "✅ Ship Telegram completion notice\nImplemented the feature and ran the focused tests.\nResult: https://ai-code.example/tasks/og_123"
+        "✅ Ship Telegram completion notice\nWorkspace: ai-code\nReport: Implemented the feature and ran the focused tests.\nResult: https://ai-code.example/tasks/og_123"
     );
 
     let mut unsafe_payload = payload();
@@ -44,6 +45,10 @@ fn completion_payload_rejects_invalid_fields() {
     let mut missing_id = payload();
     missing_id.task_id.clear();
     assert!(sanitize_task_completion(missing_id).is_err());
+
+    let mut missing_workspace = payload();
+    missing_workspace.workspace.clear();
+    assert!(sanitize_task_completion(missing_workspace).is_err());
 
     let mut invalid_url = payload();
     invalid_url.result_url = Some("http://example.test/task".into());
@@ -304,6 +309,7 @@ fn completion_signal_is_bounded_and_private_method_is_not_a_telegram_tool() {
         .expect("primary profile exposes the completion signal");
     let schema = tool.input_schema.to_string();
     assert!(schema.contains("taskId"));
+    assert!(schema.contains("workspace"));
     assert!(schema.contains("summary"));
     assert!(!schema.contains("chatId"));
     assert!(!schema.contains("botToken"));

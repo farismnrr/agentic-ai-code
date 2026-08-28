@@ -120,6 +120,19 @@ accepted in MCP arguments, and the relay only calls Telegram's fixed
 `taskId`; Nuxt uses a separate server-side outbox so temporary relay
 unavailability does not turn a completed task into a failed task.
 
+The resulting message is a bounded report, not a tool-activity stream:
+
+```text
+✅ <task title>
+Workspace: <workspace name>
+Report: <task-specific result and validation summary>
+Result: <optional HTTPS result URL>
+```
+
+The completion payload requires the display-safe workspace name. Orchestration
+completion summaries include a bounded list of task nodes, while the local
+filesystem path and credential-shaped values are never sent to Telegram.
+
 ## 4. Start the remote relay
 
 Use the repository's Primary fast-path remote-relay launcher or an equivalent reviewed service definition:

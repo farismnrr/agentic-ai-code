@@ -5,16 +5,17 @@ pub(super) fn tool() -> Tool {
     Tool {
         name: "task_completed",
         title: Some("Task Completed"),
-        description: "Signal once that the entire implementation task or plan has completed successfully. This is not a progress, activity, or per-tool notification; call it at most once for the logical task.",
+        description: "Signal once that the entire implementation task or plan has completed successfully. Include the workspace name and a concise report covering the result, validation, and remaining risks when applicable. This is not a progress, activity, or per-tool notification; call it at most once for the logical task.",
         input_schema: json!({
             "type": "object",
             "properties": {
                 "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 160 },
                 "title": { "type": "string", "minLength": 1, "maxLength": 160 },
                 "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "resultUrl": { "type": "string", "format": "uri", "maxLength": 2048 }
             },
-            "required": ["taskId", "title", "summary"],
+            "required": ["taskId", "workspace", "title", "summary"],
             "additionalProperties": false
         }),
         annotations: Some(ToolAnnotations {
