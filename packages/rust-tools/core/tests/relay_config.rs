@@ -46,6 +46,23 @@ fn telegram_credentials_are_not_cli_arguments() {
 }
 
 #[test]
+fn telegram_hermes_path_is_carried_into_server_config() {
+    let cli = Cli::try_parse_from([
+        "ai-tools",
+        "--telegram-enabled",
+        "--telegram-hermes-env",
+        "/home/owner/.hermes/.env",
+    ])
+    .expect("Hermes path should be a supported relay option");
+
+    let config = ServerConfig::from(&cli);
+    assert_eq!(
+        config.telegram_hermes_env.as_deref(),
+        Some("/home/owner/.hermes/.env")
+    );
+}
+
+#[test]
 fn local_mode_rejects_non_loopback_bind() {
     let config = ServerConfig {
         bind_host: "0.0.0.0".into(),

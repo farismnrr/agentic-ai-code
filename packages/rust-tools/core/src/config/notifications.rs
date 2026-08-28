@@ -5,19 +5,13 @@ pub(super) fn validate(config: &ServerConfig) -> Result<(), RelayError> {
     if !config.telegram_enabled {
         return Ok(());
     }
-    let token_valid = config.telegram_bot_token.as_deref().is_some_and(|token| {
-        !token.is_empty() && token.len() <= 512 && !token.chars().any(char::is_control)
-    });
-    let chat_id_valid = config.telegram_chat_id.as_deref().is_some_and(|chat_id| {
-        !chat_id.is_empty()
-            && chat_id.len() <= 128
-            && chat_id.chars().all(|ch| ch.is_ascii_graphic())
-    });
-    if token_valid && chat_id_valid {
-        return Ok(());
+    if let Some(path) = config.telegram_hermes_env.as_deref() {
+        if path.is_empty() || path.chars().any(char::is_control) {
+            return Err(RelayError::InvalidConfig(
+                "RELAY_TELEGRAM_HERMES_ENV must be a non-empty path without control characters"
+                    .into(),
+            ));
+        }
     }
-    Err(RelayError::InvalidConfig(
-        "Telegram notifier is enabled but its server-side credentials are incomplete or invalid"
-            .into(),
-    ))
+    Ok(())
 }
