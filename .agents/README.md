@@ -71,7 +71,7 @@ After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git
 pnpm guardrail
 ```
 
-The guardrail always checks repository policy, agent-doc integrity, architecture, maintainability, and test layout. It then runs lint, typecheck, and tests only for the web and/or Rust stack touched by the change. Do not make a Nuxt-only change pay for Rust validation, or a Rust-only change pay for Nuxt validation, unless a real shared cross-stack contract changed.
+The default `pnpm guardrail` checks repository policy, agent-doc integrity, architecture, maintainability, and test layout, then auto-selects lint, typecheck, and tests for the web and/or Rust stack touched by the change. Explicit service gates are available as `pnpm guardrail:nuxt` and `pnpm guardrail:rust`; use `pnpm guardrail:all` only for a deliberate cross-stack contract change. Do not make a Nuxt-only change pay for Rust validation, or a Rust-only change pay for Nuxt validation.
 
 `scripts/` is reserved for guardrails and hook installation. Future plans must add feature-named tests under `test/` or Cargo `tests/`, not `verify-NNN`, `phase-NNN`, or other plan-numbered validation scripts. Historical plan references to removed scripts remain historical evidence only.
 

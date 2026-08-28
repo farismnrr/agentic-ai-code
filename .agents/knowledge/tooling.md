@@ -78,11 +78,17 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 
 `pnpm install` runs [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh), which makes [`.githooks/pre-commit`](../../.githooks/pre-commit) executable and configures local `core.hooksPath=.githooks`.
 
-The hook executes:
+The hook executes the auto-scoped gate:
 
 ```sh
 pnpm guardrail
 ```
+
+For service-isolated verification, use `pnpm guardrail:nuxt` or
+`pnpm guardrail:rust`. `pnpm guardrail:all` is reserved for a deliberate
+cross-stack contract change. The explicit gates still run repository-wide
+policy/architecture checks, but only the selected service's lint, typecheck,
+tests, and test-layout scan.
 
 That command always runs repository policy enforcement, agent-doc integrity, architecture checks, maintainability budgets, and test-layout policy. It then runs web or Rust lint/type/test commands only when that stack changed. If an applicable gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
 

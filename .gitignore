@@ -22,6 +22,7 @@ logs
 # Tool caches
 .eslintcache
 *.tsbuildinfo
+.pnpm-store/
 
 # Local env files
 .env
@@ -42,6 +43,9 @@ docker-compose.override.yml
 
 # Nested user/project checkouts opened by AI Code are not part of this repo.
 workspaces/
+
+# Local linked worktrees are operational state, not repository source.
+.worktrees/
 
 # Externally installed agent skills (provenance tracked in ai-self/registry.yaml)
 .agents/skills/context7-cli/
