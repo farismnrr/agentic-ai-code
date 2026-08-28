@@ -13,6 +13,7 @@ assert.equal(contract.properties.contract_version.const, 'activity.event.v1')
 assert.equal(contract.additionalProperties, false)
 assert.equal(contract.properties.activity_id.maxLength, 256)
 assert.equal(contract.properties.source_sequence.minimum, 1)
+assert.equal(contract.properties.presentation.properties.action.maxLength, 256)
 for (const field of contract.forbidden) {
   assert.equal(hasKey(contract.properties, field), false, `forbidden field appears in contract properties: ${field}`)
 }
@@ -29,6 +30,7 @@ assert.ok(database.includes('if (!binding) {'))
 assert.ok(database.includes('accepted.push(event.recordId)'))
 assert.ok(database.includes('evidence.evidence = \'unavailable\''))
 assert.ok(database.includes('if (event.payload && payloadSecret)'))
+assert.ok(database.includes('action: event.presentation.action ?? undefined'))
 
 for (const file of [
   'server/api/activity/ingest.post.ts',
@@ -65,6 +67,9 @@ assert.ok(modernMcpClient.includes('\'io.masihawam/activity-bootstrap\''))
 assert.ok(modernMcpClient.includes('this.request(\'server/activity_configure\''))
 
 const ui = read('app/components/workspace/WorkspaceActivityView.vue')
+assert.ok(ui.includes('What happened'))
+assert.ok(ui.includes('displayAction(item)'))
+assert.ok(ui.includes('Technical details'))
 assert.ok(ui.includes('Load historical diff'))
 assert.ok(ui.includes('Load older activity'))
 assert.ok(ui.includes('setInterval'))

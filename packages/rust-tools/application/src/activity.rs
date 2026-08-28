@@ -10,7 +10,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+mod presentation;
 mod validation;
+use presentation::{action_for_tool, target_for_tool};
 pub use validation::transition_allowed;
 
 pub const CONTRACT_VERSION: &str = "activity.event.v1";
@@ -114,6 +116,8 @@ fn external_actor() -> String {
 #[serde(deny_unknown_fields)]
 pub struct Presentation {
     pub target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
     pub summary: Option<String>,
     pub result_class: Option<String>,
     pub evidence: Evidence,
@@ -180,6 +184,7 @@ pub fn event_for_tool(
         duration_ms: None,
         presentation: Presentation {
             target: target_for_tool(tool_id, arguments, root.as_deref()),
+            action: action_for_tool(tool_id, arguments, root.as_deref()),
             summary: Some("operation admitted".into()),
             result_class: Some("started".into()),
             evidence: Evidence::NotApplicable,
@@ -215,29 +220,6 @@ fn workspace_root(config: &relay_core::config::ServerConfig, cwd: Option<&str>) 
     let guard = config.workspaces.read().ok()?;
     let cwd = relay_core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, cwd).ok()?;
     guard.containing_root(&cwd).map(Path::to_path_buf)
-}
-
-fn target_for_tool(tool_id: &str, arguments: &Value, root: Option<&Path>) -> Option<String> {
-    let raw = arguments.get("path").and_then(Value::as_str).or_else(|| {
-        (tool_id == "http_fetch")
-            .then(|| arguments.get("url").and_then(Value::as_str))
-            .flatten()
-    });
-    let raw = raw.or_else(|| (tool_id.starts_with("git_")).then_some("repository"))?;
-    let target = if let Some(root) = root.filter(|_| Path::new(raw).is_absolute()) {
-        Path::new(raw)
-            .strip_prefix(root)
-            .map(|path| path.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| "workspace target".into())
-    } else if tool_id == "http_fetch" {
-        url::Url::parse(raw)
-            .ok()
-            .map(|url| format!("{}{}", url.host_str().unwrap_or("remote"), url.path()))
-            .unwrap_or_else(|| "remote endpoint".into())
-    } else {
-        raw.into()
-    };
-    bounded_display(&target, MAX_PATH)
 }
 
 fn category_for_tool(tool_id: &str) -> Category {
