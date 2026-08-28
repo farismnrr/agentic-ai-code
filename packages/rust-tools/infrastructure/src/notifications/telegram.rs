@@ -1,4 +1,4 @@
-use super::NotificationError;
+use super::{validate_channel_target, NotificationError};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::json;
@@ -31,6 +31,7 @@ impl ReqwestTelegramSender {
         if token.is_empty() || chat_id.is_empty() {
             return Err(NotificationError::Invalid);
         }
+        validate_channel_target(chat_id)?;
         Ok(Self {
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))

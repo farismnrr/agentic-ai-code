@@ -54,9 +54,7 @@ pub struct ServerConfig {
     #[serde(skip)]
     pub telegram_enabled: bool,
     #[serde(skip)]
-    pub telegram_bot_token: Option<String>,
-    #[serde(skip)]
-    pub telegram_chat_id: Option<String>,
+    pub telegram_hermes_env: Option<String>,
     #[serde(skip, default = "default_workspaces")]
     pub workspaces: std::sync::Arc<std::sync::RwLock<crate::workspace_path::WorkspaceAllowlist>>,
 }
@@ -99,8 +97,7 @@ impl Default for ServerConfig {
             tool_profile: ToolProfile::Full,
             activity: ActivityConfig::default(),
             telegram_enabled: false,
-            telegram_bot_token: None,
-            telegram_chat_id: None,
+            telegram_hermes_env: None,
             workspaces: default_workspaces(),
         }
     }
@@ -461,8 +458,7 @@ impl From<&Cli> for ServerConfig {
                 acknowledged_retention_ms: cli.activity_ack_retention_ms,
             },
             telegram_enabled: cli.telegram_enabled,
-            telegram_bot_token: std::env::var("RELAY_TELEGRAM_BOT_TOKEN").ok(),
-            telegram_chat_id: std::env::var("RELAY_TELEGRAM_CHAT_ID").ok(),
+            telegram_hermes_env: cli.telegram_hermes_env.clone(),
             workspaces: default_workspaces(),
         }
     }
