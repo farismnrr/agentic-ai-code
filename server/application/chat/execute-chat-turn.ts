@@ -131,6 +131,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
         const subagentInput: SubagentToolInput = {
           userId,
           parentSessionId: conv.id,
+          workspaceName: workspaceName ?? '',
           authority: {
             tools: enabledMcpToolIds,
             effects: conv.permissionMode === 'plan' ? ['workspace_read', 'git_read'] : allowedEffects,

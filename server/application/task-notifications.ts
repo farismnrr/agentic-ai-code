@@ -3,6 +3,7 @@ import type { OrchestratorGraphSnapshot } from '../../shared/types/orchestration
 export const TASK_NOTIFICATION_CONTRACT_VERSION = '1' as const
 export const TASK_NOTIFICATION_LIMITS = {
   taskId: 128,
+  workspace: 160,
   title: 160,
   summary: 2000,
   resultUrl: 2048,
@@ -14,6 +15,7 @@ export type TaskCompletionSource = 'nuxt' | 'chatgpt'
 export interface TaskCompletionInput {
   source: TaskCompletionSource
   taskId: string
+  workspace: string
   title: string
   summary: string
   completedAt?: string
@@ -30,13 +32,26 @@ export interface TaskCompletionNotificationPort {
   enqueue(input: TaskCompletionInput): Promise<void>
 }
 
-export function taskCompletionInputForGraph(graph: OrchestratorGraphSnapshot): TaskCompletionInput {
+const TASK_REPORT_MAX_NODES = 8
+const TASK_REPORT_OBJECTIVE_BYTES = 180
+
+export function taskCompletionInputForGraph(graph: OrchestratorGraphSnapshot, workspace: string): TaskCompletionInput {
   const completedNodes = graph.nodes.filter(node => node.status === 'completed').length
+  const visibleNodes = graph.nodes.slice(0, TASK_REPORT_MAX_NODES)
+  const taskLines = visibleNodes.map(node => `- ${node.id} [${node.status}]: ${truncateUtf8(node.objective, TASK_REPORT_OBJECTIVE_BYTES)}`)
+  const omittedNodes = graph.nodes.length - visibleNodes.length
+  const summary = [
+    `Completed the implementation plan with ${completedNodes} of ${graph.nodes.length} tasks completed.`,
+    'Task report:',
+    ...taskLines,
+    ...(omittedNodes > 0 ? [`- ... ${omittedNodes} additional task(s) omitted`] : [])
+  ].join('\n')
   return {
     source: 'nuxt',
     taskId: graph.graph_id,
+    workspace,
     title: 'Implementation task completed',
-    summary: `Completed the implementation plan with ${completedNodes} of ${graph.nodes.length} nodes settled successfully.`
+    summary: truncateUtf8(summary, TASK_NOTIFICATION_LIMITS.summary)
   }
 }
 
@@ -50,24 +65,25 @@ const BEARER_CREDENTIAL = /\b(Bearer)\s+[^\s,;]+/gi
 const CREDENTIAL_ASSIGNMENT = /\b(authorization|cookie|password|passwd|secret|token|api[_-]?key)\s*([:=])\s*(?:(Bearer)\s+)?[^\s,;]+/gi
 const ENV_CREDENTIAL_ASSIGNMENT = /\b[A-Z][A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*\s*=\s*[^\s,;]+/g
 
-function cleanText(value: string) {
-  return value
+function cleanText(value: string, preserveNewlines = false) {
+  const cleaned = value
     .replace(ANSI_SEQUENCE, '')
     .replace(CONTROL_CHARACTER, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return (preserveNewlines
+    ? cleaned.replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n')
+    : cleaned.replace(/\s+/g, ' ')).trim()
 }
 
-function redactText(value: string) {
-  return cleanText(value)
+function redactText(value: string, preserveNewlines = false) {
+  return cleanText(value, preserveNewlines)
     .replace(BEARER_CREDENTIAL, '$1 [REDACTED]')
     .replace(CREDENTIAL_ASSIGNMENT, (_match, key: string, delimiter: string, bearer?: string) => `${key}${delimiter}${bearer ? ` ${bearer} ` : ''}[REDACTED]`)
     .replace(ENV_CREDENTIAL_ASSIGNMENT, match => `${match.slice(0, match.indexOf('='))}=[REDACTED]`)
 }
 
-function requireBoundedText(field: 'taskId' | 'title' | 'summary', value: unknown, max: number) {
+function requireBoundedText(field: 'taskId' | 'workspace' | 'title' | 'summary', value: unknown, max: number) {
   if (typeof value !== 'string') throw new Error(`${field} is required`)
-  const cleaned = redactText(value)
+  const cleaned = redactText(value, field === 'summary')
   if (!cleaned || cleaned.length > max) throw new Error(`${field} is invalid`)
   return cleaned
 }
@@ -100,6 +116,7 @@ export function sanitizeTaskCompletion(input: TaskCompletionInput): SanitizedTas
     contractVersion: TASK_NOTIFICATION_CONTRACT_VERSION,
     source: input.source,
     taskId: requireBoundedText('taskId', input.taskId, TASK_NOTIFICATION_LIMITS.taskId),
+    workspace: requireBoundedText('workspace', input.workspace, TASK_NOTIFICATION_LIMITS.workspace),
     title: requireBoundedText('title', input.title, TASK_NOTIFICATION_LIMITS.title),
     summary: requireBoundedText('summary', input.summary, TASK_NOTIFICATION_LIMITS.summary),
     completedAt: normalizeTimestamp(input.completedAt),
@@ -116,7 +133,7 @@ function truncateUtf8(value: string, maxBytes: number) {
 
 export function formatTaskCompletionMessage(event: SanitizedTaskCompletion) {
   const resultLine = event.resultUrl ? `\nResult: ${event.resultUrl}` : ''
-  const prefix = `✅ ${event.title}\n`
+  const prefix = `✅ ${event.title}\nWorkspace: ${event.workspace}\nReport: `
   const available = TASK_NOTIFICATION_LIMITS.message - new TextEncoder().encode(`${prefix}${resultLine}`).byteLength
   const summary = truncateUtf8(event.summary, Math.max(0, available))
   let message = `${prefix}${summary}${resultLine}`

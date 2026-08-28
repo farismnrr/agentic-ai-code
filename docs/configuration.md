@@ -134,6 +134,22 @@ calls and activity events do not produce Telegram messages. An invalid or
 unsupported target disables notification delivery without falling back to a
 private chat.
 
+Each completion message is a small report in this shape:
+
+```text
+✅ <task title>
+Workspace: <workspace name>
+Report: <task-specific result and validation summary>
+Result: <optional HTTPS result URL>
+```
+
+The workspace name is required for new completion events and identifies which
+project the report belongs to. The local filesystem path is intentionally not
+sent to Telegram. Orchestration reports also include a bounded list of the
+completed task nodes; long reports are truncated safely at the notification
+limit. Existing outbox rows from before workspace support use the explicit
+`Workspace unavailable` compatibility label only so they can finish delivery.
+
 The relay source ID is stable in `source-id` inside the owner-only state
 directory. Sink outages leave encrypted unacknowledged rows queued for retry;
 401/403 stops delivery and reports degraded state without printing the token.

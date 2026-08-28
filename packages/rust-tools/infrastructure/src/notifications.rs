@@ -22,6 +22,7 @@ pub use telegram::{telegram_send_message_body, DeliveryError, TelegramSender};
 
 pub const CONTRACT_VERSION: &str = "1";
 pub const MAX_TASK_ID_BYTES: usize = 128;
+pub const MAX_WORKSPACE_BYTES: usize = 160;
 pub const MAX_TITLE_BYTES: usize = 160;
 pub const MAX_SUMMARY_BYTES: usize = 2_000;
 pub const MAX_RESULT_URL_BYTES: usize = 2_048;
@@ -73,6 +74,7 @@ pub(crate) fn validate_bot_token(token: &str) -> Result<(), NotificationError> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskCompletionPayload {
     pub task_id: String,
+    pub workspace: String,
     pub title: String,
     pub summary: String,
     pub completed_at: String,
@@ -113,9 +115,10 @@ pub fn sanitize_task_completion(
     if payload.source != "nuxt" && payload.source != "chatgpt" {
         return Err(NotificationError::Invalid);
     }
-    payload.task_id = bounded_text(payload.task_id, MAX_TASK_ID_BYTES)?;
-    payload.title = bounded_text(payload.title, MAX_TITLE_BYTES)?;
-    payload.summary = bounded_text(payload.summary, MAX_SUMMARY_BYTES)?;
+    payload.task_id = bounded_text(payload.task_id, MAX_TASK_ID_BYTES, false)?;
+    payload.workspace = bounded_text(payload.workspace, MAX_WORKSPACE_BYTES, false)?;
+    payload.title = bounded_text(payload.title, MAX_TITLE_BYTES, false)?;
+    payload.summary = bounded_text(payload.summary, MAX_SUMMARY_BYTES, true)?;
     payload.completed_at = bounded_timestamp(payload.completed_at)?;
     payload.result_url = payload.result_url.map(bounded_result_url).transpose()?;
     Ok(payload)
@@ -127,7 +130,10 @@ pub fn format_task_completion_message(payload: &TaskCompletionPayload) -> String
         .as_deref()
         .map(|url| format!("\nResult: {url}"))
         .unwrap_or_default();
-    let prefix = format!("✅ {}\n", payload.title);
+    let prefix = format!(
+        "✅ {}\nWorkspace: {}\nReport: ",
+        payload.title, payload.workspace
+    );
     let prefix_and_result = format!("{prefix}{result_line}");
     let available = MAX_MESSAGE_BYTES.saturating_sub(prefix_and_result.len());
     let summary = truncate_utf8(&payload.summary, available);
@@ -158,6 +164,10 @@ pub fn payload_from_arguments(
         .get("taskId")
         .and_then(Value::as_str)
         .ok_or(NotificationError::Invalid)?;
+    let workspace = object
+        .get("workspace")
+        .and_then(Value::as_str)
+        .ok_or(NotificationError::Invalid)?;
     let title = object
         .get("title")
         .and_then(Value::as_str)
@@ -175,6 +185,7 @@ pub fn payload_from_arguments(
         .map_err(|_| NotificationError::Invalid)?;
     sanitize_task_completion(TaskCompletionPayload {
         task_id: task_id.to_owned(),
+        workspace: workspace.to_owned(),
         title: title.to_owned(),
         summary: summary.to_owned(),
         completed_at,
@@ -273,8 +284,12 @@ impl TaskNotificationService {
     }
 }
 
-fn bounded_text(value: String, max: usize) -> Result<String, NotificationError> {
-    let value = redact_text(&value);
+fn bounded_text(
+    value: String,
+    max: usize,
+    preserve_newlines: bool,
+) -> Result<String, NotificationError> {
+    let value = redact_text(&value, preserve_newlines);
     if value.is_empty() || value.len() > max {
         return Err(NotificationError::Invalid);
     }
@@ -305,13 +320,27 @@ fn bounded_result_url(value: String) -> Result<String, NotificationError> {
     Ok(value)
 }
 
-fn redact_text(value: &str) -> String {
+fn redact_text(value: &str, preserve_newlines: bool) -> String {
     let mut result = value
         .replace('\u{1b}', "")
         .chars()
-        .map(|ch| if ch.is_control() { ' ' } else { ch })
+        .map(|ch| {
+            if ch.is_control() && !(preserve_newlines && ch == '\n') {
+                ' '
+            } else {
+                ch
+            }
+        })
         .collect::<String>();
-    result = result.split_whitespace().collect::<Vec<_>>().join(" ");
+    result = if preserve_newlines {
+        result
+            .split('\n')
+            .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        result.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
     redact_bearer(&mut result);
     for keyword in [
         "authorization",

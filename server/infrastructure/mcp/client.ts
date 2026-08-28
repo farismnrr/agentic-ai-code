@@ -63,7 +63,7 @@ export interface McpClientLike {
   activityStatus?(): Promise<{ configured: boolean, sourceId?: string }>
   configureActivity?(input: { sinkUrl: string, sourceToken: string }): Promise<void>
   supportsTaskCompletion?(): boolean
-  taskCompleted?(input: { taskId: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult>
+  taskCompleted?(input: { taskId: string, workspace: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult>
 }
 
 function getRemoteMcpRuntimeConfig(): RemoteMcpRuntimeConfig {

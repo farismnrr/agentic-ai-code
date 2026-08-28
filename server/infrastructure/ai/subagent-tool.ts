@@ -127,7 +127,7 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
 export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build']>[0]) {
   const notifyIfCompleted = (previous: ReturnType<typeof getOrchestratorGraph>, current: ReturnType<typeof getOrchestratorGraph>) => {
     if (!input.taskNotifications || !previous || !current || !completionTransitionWasNewlyReached(previous.status, current.status)) return
-    void input.taskNotifications.enqueue(taskCompletionInputForGraph(current)).catch(() => undefined)
+    void input.taskNotifications.enqueue(taskCompletionInputForGraph(current, input.workspaceName)).catch(() => undefined)
   }
   const port = {
     capacity: (parentSessionId: string) => backgroundTasks.capacity(parentSessionId),
