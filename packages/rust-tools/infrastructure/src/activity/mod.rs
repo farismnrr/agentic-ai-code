@@ -4,7 +4,7 @@
 //! only sees `ActivityRecorder`; SQLite, key files, encryption, and HTTP
 //! delivery never cross that boundary.
 
-mod crypto;
+pub(crate) mod crypto;
 mod journal;
 
 use journal::Journal;

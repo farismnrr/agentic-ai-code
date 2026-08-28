@@ -194,11 +194,15 @@ pub struct Cli {
     )]
     pub activity_ack_retention_ms: u64,
 
-    /// Enable the fixed-recipient task completion Telegram notifier. The bot
-    /// token and chat ID are deliberately environment-only server secrets;
-    /// they are not accepted as command-line arguments.
+    /// Enable the fixed-recipient task completion Telegram notifier. The
+    /// bot token and channel are imported from Hermes' owner-only .env and
+    /// stored in the relay's encrypted local database.
     #[arg(long, env = "RELAY_TELEGRAM_ENABLED", default_value_t = false)]
     pub telegram_enabled: bool,
+
+    /// Optional Hermes .env path. Defaults to `$HOME/.hermes/.env`.
+    #[arg(long, env = "RELAY_TELEGRAM_HERMES_ENV")]
+    pub telegram_hermes_env: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
