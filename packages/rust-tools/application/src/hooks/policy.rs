@@ -14,6 +14,7 @@ pub fn effect_classes(
             "external_mutation",
         ],
         "http_fetch" => vec!["network_read", "network_write", "external_mutation"],
+        "task_completed" => vec!["network_write", "external_mutation"],
         "web_search" => vec!["network_read"],
         "file_write" | "file_edit" | "apply_patch" => vec!["workspace_write"],
         "workspace_add" | "workspace_remove" => vec!["workspace_write"],

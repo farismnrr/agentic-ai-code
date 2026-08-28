@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::time::{sleep, Duration};
 
+pub(crate) use journal::state_dir;
 pub use journal::JournalSnapshot;
 
 const MAX_EXPORT_RECORDS: usize = 25;

@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
-import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, taskPollDelayMs } from './task-reliability'
-import type { McpClientCallResult, McpClientLike, McpClientTool } from './client'
+import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
+import type { McpClientCallResult, McpClientLike, McpClientTool, TaskCompletionResult } from './client'
 
 const MODERN_MCP_VERSION = '2026-07-28'
 const MCP_CLIENT_INFO = { name: 'ai-code', version: '1.0.0' } as const
@@ -24,9 +24,10 @@ function encodeMcpHeaderValue(value: string) {
  * The repository still carries the monolithic MCP SDK v1 for unrelated
  * third-party integrations and the legacy inbound Nuxt MCP endpoint. Rather
  * than weaken the Rust relay or make its modern path depend on a legacy SDK
- * lifecycle, this adapter speaks only the three RPCs ai-code needs against its
- * own relay: `server/discover`, `tools/list`, `tools/call`, and optional
- * explicit resource list/read calls. Resources are never fetched implicitly.
+ * lifecycle, this adapter speaks only the RPCs ai-code needs against its own
+ * relay: `server/discover`, `tools/list`, `tools/call`, task completion, and
+ * optional explicit resource list/read calls. Resources are never fetched
+ * implicitly.
  *
  * It is intentionally not a generic replacement for the MCP SDK. When the
  * repository can migrate the outbound client to `@modelcontextprotocol/client`
@@ -36,14 +37,26 @@ function encodeMcpHeaderValue(value: string) {
 export class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
   private activityBootstrapSupported = false
+  private taskCompletionSupported = false
+  private readonly url: URL
+  private readonly accessToken: string
+  private readonly fetchImpl: typeof fetch
+  private readonly requestTimeoutMs: number
+  readonly trustedProvenance: 'first-party-relay' | 'external'
 
   constructor(
-    private readonly url: URL,
-    private readonly accessToken: string,
-    private readonly fetchImpl: typeof fetch,
-    private readonly requestTimeoutMs: number,
-    readonly trustedProvenance: 'first-party-relay' | 'external'
-  ) {}
+    url: URL,
+    accessToken: string,
+    fetchImpl: typeof fetch,
+    requestTimeoutMs: number,
+    trustedProvenance: 'first-party-relay' | 'external'
+  ) {
+    this.url = url
+    this.accessToken = accessToken
+    this.fetchImpl = fetchImpl
+    this.requestTimeoutMs = requestTimeoutMs
+    this.trustedProvenance = trustedProvenance
+  }
 
   async connect() {
     const result = await this.request('server/discover', {})
@@ -56,10 +69,27 @@ export class ModernHttpMcpClient implements McpClientLike {
     const extensions = capabilities && isJsonRecord(capabilities.extensions) ? capabilities.extensions : undefined
     const bootstrap = extensions?.['io.masihawam/activity-bootstrap']
     this.activityBootstrapSupported = isJsonRecord(bootstrap) && bootstrap.version === '1'
+    const taskCompletion = extensions?.['io.masihawam/task-completion-notifications']
+    this.taskCompletionSupported = isJsonRecord(taskCompletion)
+      && taskCompletion.version === '1'
+      && taskCompletion.method === 'server/task_completed'
   }
 
   supportsActivityBootstrap() {
     return this.activityBootstrapSupported
+  }
+
+  supportsTaskCompletion() {
+    return this.taskCompletionSupported
+  }
+
+  async taskCompleted(input: { taskId: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult> {
+    if (!this.taskCompletionSupported) throw new Error('Remote MCP server does not support task completion notifications')
+    const result = await this.request('server/task_completed', input)
+    if (!isJsonRecord(result) || !['queued', 'already_sent', 'disabled'].includes(result.status as string)) {
+      throw new Error('Remote MCP task completion result is invalid')
+    }
+    return { status: result.status as TaskCompletionResult['status'] }
   }
 
   async activityStatus() {
@@ -206,7 +236,7 @@ export class ModernHttpMcpClient implements McpClientLike {
     return isJsonRecord(result) && result.allowed === true
   }
 
-  private async request(method: 'server/discover' | 'server/activity_status' | 'server/activity_configure' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
+  private async request(method: 'server/discover' | 'server/activity_status' | 'server/activity_configure' | 'server/task_completed' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
     const id = `ai-code-${++this.requestSequence}`
     const requestParams = {
       ...params,
