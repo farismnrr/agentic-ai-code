@@ -8,20 +8,166 @@ mod crypto;
 mod journal;
 
 use journal::Journal;
-use relay_application::activity::{
-    ActivityError, ActivityEvent, ActivityRecorder, SharedActivityRecorder, Status,
-};
+use relay_application::activity::{ActivityError, ActivityEvent, ActivityRecorder, Status};
 use relay_core::config::{ActivityMode, ServerConfig};
 use ring::rand::SecureRandom;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::time::{sleep, Duration};
 
 pub use journal::JournalSnapshot;
 
 const MAX_EXPORT_RECORDS: usize = 25;
 const MAX_EXPORT_BYTES: usize = 512 * 1024;
+const BOOTSTRAP_CONFIG_FILE: &str = "activity-bootstrap.json";
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct PersistedActivityBootstrap {
+    sink_url: String,
+    source_token: String,
+}
+
+#[derive(Clone)]
+pub struct ReloadableActivityRecorder {
+    base_config: ServerConfig,
+    inner: Arc<RwLock<Arc<ActivityRuntime>>>,
+}
+
+impl ReloadableActivityRecorder {
+    pub fn open(config: &ServerConfig) -> Result<Arc<Self>, ActivityError> {
+        let effective = persisted_activity_config(config).unwrap_or_else(|| config.clone());
+        let inner = ActivityRuntime::open(&effective)?;
+        Ok(Arc::new(Self {
+            base_config: config.clone(),
+            inner: Arc::new(RwLock::new(inner)),
+        }))
+    }
+
+    pub fn configure(&self, sink_url: String, source_token: String) -> Result<(), ActivityError> {
+        let mut effective = self.base_config.clone();
+        effective.activity.mode = ActivityMode::Required;
+        effective.activity.sink_url = Some(sink_url.clone());
+        effective.activity.source_token = Some(source_token.clone());
+        effective
+            .validate()
+            .map_err(|_| ActivityError::InvalidEvent)?;
+        persist_bootstrap(
+            &effective,
+            &PersistedActivityBootstrap {
+                sink_url,
+                source_token,
+            },
+        )?;
+        let runtime = ActivityRuntime::open(&effective)?;
+        let mut guard = self
+            .inner
+            .write()
+            .map_err(|_| ActivityError::StorageUnavailable)?;
+        *guard = runtime;
+        Ok(())
+    }
+
+    pub fn status(&self) -> Result<(bool, Option<String>), ActivityError> {
+        let runtime = self.current()?;
+        Ok((
+            runtime.journal.is_some()
+                && runtime.sink_url.is_some()
+                && runtime.source_token.is_some(),
+            runtime.source_id.clone(),
+        ))
+    }
+
+    fn current(&self) -> Result<Arc<ActivityRuntime>, ActivityError> {
+        self.inner
+            .read()
+            .map(|guard| Arc::clone(&guard))
+            .map_err(|_| ActivityError::StorageUnavailable)
+    }
+}
+
+impl ActivityRecorder for ReloadableActivityRecorder {
+    fn required(&self) -> bool {
+        self.current()
+            .map(|recorder| recorder.required())
+            .unwrap_or(true)
+    }
+
+    fn record_start(
+        &self,
+        event: ActivityEvent,
+        payload: Option<Vec<u8>>,
+    ) -> Result<ActivityEvent, ActivityError> {
+        self.current()?.record_start(event, payload)
+    }
+
+    fn record_outcome(
+        &self,
+        event: ActivityEvent,
+        payload: Option<Vec<u8>>,
+    ) -> Result<(), ActivityError> {
+        self.current()?.record_outcome(event, payload)
+    }
+}
+
+fn persisted_activity_config(config: &ServerConfig) -> Option<ServerConfig> {
+    let path = bootstrap_path(config).ok()?;
+    if !path.exists() {
+        return None;
+    }
+    let metadata = fs::symlink_metadata(&path).ok()?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o077 != 0 {
+            return None;
+        }
+    }
+    let persisted: PersistedActivityBootstrap =
+        serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    let mut effective = config.clone();
+    effective.activity.mode = ActivityMode::Required;
+    effective.activity.sink_url = Some(persisted.sink_url);
+    effective.activity.source_token = Some(persisted.source_token);
+    effective.validate().ok()?;
+    Some(effective)
+}
+
+fn persist_bootstrap(
+    config: &ServerConfig,
+    persisted: &PersistedActivityBootstrap,
+) -> Result<(), ActivityError> {
+    let path = bootstrap_path(config).map_err(|_| ActivityError::StorageUnavailable)?;
+    let parent = path.parent().ok_or(ActivityError::StorageUnavailable)?;
+    fs::create_dir_all(parent).map_err(|_| ActivityError::StorageUnavailable)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .map_err(|_| ActivityError::StorageUnavailable)?;
+    }
+    let bytes = serde_json::to_vec(persisted).map_err(|_| ActivityError::StorageUnavailable)?;
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, bytes).map_err(|_| ActivityError::StorageUnavailable)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600))
+            .map_err(|_| ActivityError::StorageUnavailable)?;
+    }
+    fs::rename(&temporary, &path).map_err(|_| ActivityError::StorageUnavailable)?;
+    Ok(())
+}
+
+fn bootstrap_path(config: &ServerConfig) -> Result<PathBuf, journal::JournalError> {
+    Ok(journal::state_dir(config)?.join(BOOTSTRAP_CONFIG_FILE))
+}
 
 #[derive(Clone)]
 pub struct ActivityRuntime {
@@ -33,7 +179,7 @@ pub struct ActivityRuntime {
 }
 
 impl ActivityRuntime {
-    pub fn open(config: &ServerConfig) -> Result<SharedActivityRecorder, ActivityError> {
+    pub fn open(config: &ServerConfig) -> Result<Arc<Self>, ActivityError> {
         if config.activity.mode == ActivityMode::Off {
             return Ok(Arc::new(Self {
                 journal: None,
@@ -128,19 +274,7 @@ impl ActivityRuntime {
         let body = json!({
             "contractVersion": relay_application::activity::CONTRACT_VERSION,
             "sourceId": self.source_id,
-            "events": records.iter().map(|record| json!({
-                "recordId": record.record_id,
-                "event": record.event,
-                "payload": record.payload.as_ref().map(|payload| json!({
-                    "kind": "activity_evidence",
-                    "version": "v1",
-                    "value": base64::Engine::encode(
-                        &base64::engine::general_purpose::STANDARD,
-                        payload,
-                    ),
-                    "byteCount": payload.len()
-                }))
-            })).collect::<Vec<_>>()
+            "events": records.iter().map(export_record).collect::<Vec<_>>()
         });
         let response = match client
             .post(url)
@@ -182,6 +316,25 @@ impl ActivityRuntime {
         let _ = journal.prune_acknowledged();
         FlushResult::Delivered
     }
+}
+
+fn export_record(record: &journal::PendingRecord) -> serde_json::Value {
+    let mut value = json!({
+        "recordId": record.record_id,
+        "event": record.event,
+    });
+    if let Some(payload) = record.payload.as_ref() {
+        value["payload"] = json!({
+            "kind": "activity_evidence",
+            "version": "v1",
+            "value": base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                payload,
+            ),
+            "byteCount": payload.len()
+        });
+    }
+    value
 }
 
 #[derive(Debug, serde::Deserialize)]

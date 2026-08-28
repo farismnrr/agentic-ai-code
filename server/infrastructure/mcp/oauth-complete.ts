@@ -97,7 +97,7 @@ export async function completeMcpOAuthAuthorization(state: string, authorization
       () => testMcpServer(userId, id)
     )
     if (!verified) throw new McpOAuthCallbackError('OAuth MCP connection could not be verified')
-    return { id }
+    return { id, userId }
   } catch (error) {
     try {
       await withInfrastructureSpan(

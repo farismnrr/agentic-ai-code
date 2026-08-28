@@ -136,6 +136,7 @@ pub struct ActivityEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_info: Option<ClientInfo>,
     pub occurred_at_ms: i64,
+    #[serde(skip_serializing)]
     pub ingested_at_ms: Option<i64>,
     pub duration_ms: Option<u64>,
     pub presentation: Presentation,

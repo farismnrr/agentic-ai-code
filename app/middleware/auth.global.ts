@@ -16,6 +16,12 @@ const PUBLIC_ROUTES = ['/', '/login', '/register']
  * rendering workaround.
  */
 export default defineNuxtRouteMiddleware((to) => {
+  // API handlers own their authentication boundary. Applying the browser
+  // navigation guard to `/api/**` turns non-browser callers (for example the
+  // relay activity exporter) into HTML login redirects before the server
+  // handler can validate its own bearer credential.
+  if (to.path.startsWith('/api/')) return
+
   const { isAuthenticated } = useAuth()
   const isPublic = PUBLIC_ROUTES.includes(to.path)
 

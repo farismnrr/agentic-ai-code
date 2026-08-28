@@ -472,51 +472,17 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     </template>
 
     <template #footer>
-      <div class="flex w-full items-center justify-between gap-3">
-        <UButton
-          label="Cancel"
-          color="neutral"
-          variant="ghost"
-          @click="open = false"
-        />
-
-        <div v-if="!isEditing">
-          <UButton
-            label="Create"
-            icon="i-lucide-plus"
-            type="submit"
-            form="mcp-connection-form"
-            :loading="scanning || saving"
-            :disabled="!canCreate"
-          />
-        </div>
-
-        <div
-          v-else
-          class="flex gap-2"
-        >
-          <UButton
-            :label="scanFresh ? 'Scan again' : 'Scan tools'"
-            icon="i-lucide-scan-search"
-            color="neutral"
-            variant="outline"
-            type="submit"
-            form="mcp-connection-form"
-            :loading="scanning"
-            :disabled="saving"
-            @click="submitIntent = 'scan'"
-          />
-          <UButton
-            label="Save changes"
-            icon="i-lucide-save"
-            type="submit"
-            form="mcp-connection-form"
-            :loading="saving"
-            :disabled="!canSave || scanning"
-            @click="submitIntent = 'save'"
-          />
-        </div>
-      </div>
+      <SettingsMcpConnectionDialogFooter
+        :is-editing="isEditing"
+        :scanning="scanning"
+        :saving="saving"
+        :can-create="canCreate"
+        :can-save="canSave"
+        :scan-fresh="scanFresh"
+        @cancel="open = false"
+        @scan="submitIntent = 'scan'"
+        @save="submitIntent = 'save'"
+      />
     </template>
   </UModal>
 </template>

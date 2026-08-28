@@ -25,12 +25,17 @@ for (const table of ['relay_activity_sources', 'relay_activity_workspace_binding
 assert.ok(database.includes('encryptActivityPayload'))
 assert.ok(database.includes('assertWorkspaceOwner'))
 assert.ok(database.includes('clearThroughSequence'))
+assert.ok(database.includes('if (!binding) {'))
+assert.ok(database.includes('accepted.push(event.recordId)'))
+assert.ok(database.includes('evidence.evidence = \'unavailable\''))
+assert.ok(database.includes('if (event.payload && payloadSecret)'))
 
 for (const file of [
   'server/api/activity/ingest.post.ts',
   'server/api/activity/sources/index.post.ts',
   'server/api/activity/sources/[id].delete.ts',
   'server/api/activity/bindings.post.ts',
+  'server/api/mcp-servers/[id]/activity-bootstrap.post.ts',
   'server/api/workspaces/[id]/activity.get.ts',
   'server/api/workspaces/[id]/activity/[activityId].get.ts',
   'server/api/workspaces/[id]/activity/[activityId]/diff.get.ts',
@@ -44,6 +49,20 @@ const ingress = read('server/api/activity/ingest.post.ts')
 assert.ok(ingress.includes('strictObject'))
 assert.ok(ingress.includes('MAX_BATCH_BYTES'))
 assert.ok(ingress.includes('readBoundedJson'))
+
+const routeAuth = read('app/middleware/auth.global.ts')
+assert.ok(routeAuth.includes('if (to.path.startsWith(\'/api/\')) return'), 'browser route auth must not redirect API callers before endpoint-owned authentication')
+
+const bootstrap = read('server/infrastructure/activity/bootstrap.ts')
+assert.ok(bootstrap.includes('serverUrl.hostname.toLowerCase() === `mcp.${operatorSuffix}`'))
+assert.ok(bootstrap.includes('client.supportsActivityBootstrap?.()'))
+assert.ok(bootstrap.includes('activityDatabase.enroll'))
+assert.ok(bootstrap.includes('bindAllWorkspaces'))
+assert.equal(read('server/api/mcp-servers/[id]/activity-bootstrap.post.ts').includes('sourceToken'), false, 'source token must never cross the browser API')
+
+const modernMcpClient = read('server/infrastructure/mcp/modern-http-client.ts')
+assert.ok(modernMcpClient.includes('\'io.masihawam/activity-bootstrap\''))
+assert.ok(modernMcpClient.includes('this.request(\'server/activity_configure\''))
 
 const ui = read('app/components/workspace/WorkspaceActivityView.vue')
 assert.ok(ui.includes('Load historical diff'))

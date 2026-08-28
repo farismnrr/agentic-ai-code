@@ -83,8 +83,19 @@ export const activityDatabase: ActivityPort = {
           continue
         }
         const [binding] = await tx.select({ workspaceId: relayActivityWorkspaceBindings.workspaceId, clearThroughSequence: relayActivityWorkspaceBindings.clearThroughSequence }).from(relayActivityWorkspaceBindings).where(and(eq(relayActivityWorkspaceBindings.sourceId, source.id), eq(relayActivityWorkspaceBindings.rootFingerprint, rootFingerprint))).limit(1)
-        if (!binding || event.sourceSequence <= binding.clearThroughSequence) {
-          if (!binding) throw new Error('Activity ingestion rejected')
+        // A relay can legitimately execute inside temporary worktrees or
+        // other authorized roots that are not represented by an AI Code
+        // workspace. The source credential is already authenticated above;
+        // an unknown root fingerprint therefore means "not part of this
+        // workspace read model", not "revoke/poison the whole source".
+        // Acknowledge and discard that record so it cannot be mapped to an
+        // owned workspace, while allowing later bound events in the same
+        // batch to continue exporting.
+        if (!binding) {
+          accepted.push(event.recordId)
+          continue
+        }
+        if (event.sourceSequence <= binding.clearThroughSequence) {
           accepted.push(event.recordId)
           continue
         }
@@ -94,7 +105,15 @@ export const activityDatabase: ActivityPort = {
           continue
         }
         if (current && !transitionAllowed(current.status, event.status)) throw new Error('Activity lifecycle transition rejected')
+        const payloadSecret = event.payload ? activitySecretOrUndefined() : undefined
         const evidence = evidenceMetadata(event)
+        if (event.presentation.evidence === 'exact' && (!event.payload || !payloadSecret)) {
+          evidence.evidence = 'unavailable'
+          evidence.complete = false
+          evidence.affectedPaths = []
+          evidence.additions = 0
+          evidence.deletions = 0
+        }
         const values = {
           sourceId: source.id,
           activityId: event.activityId,
@@ -124,7 +143,7 @@ export const activityDatabase: ActivityPort = {
           ;[activityRow] = await tx.insert(workspaceActivity).values(values).returning({ id: workspaceActivity.id })
         }
         if (!activityRow) throw new Error('Activity ingestion failed')
-        if (event.payload) await savePayload(tx, activityRow.id, source.id, event.activityId, event.payload)
+        if (event.payload && payloadSecret) await savePayload(tx, activityRow.id, source.id, event.activityId, event.payload, payloadSecret)
         accepted.push(event.recordId)
       }
       await tx.update(relayActivitySources).set({ lastSeenAt: new Date() }).where(eq(relayActivitySources.id, source.id))
@@ -160,7 +179,9 @@ export const activityDatabase: ActivityPort = {
     const payload = await useDb().select().from(workspaceActivityPayloads).where(and(eq(workspaceActivityPayloads.activityId, row.id), eq(workspaceActivityPayloads.payloadKind, 'activity_evidence'))).orderBy(desc(workspaceActivityPayloads.createdAt)).limit(1)
     if (!payload[0]) return { files: [], complete: false }
     try {
-      const plaintext = decryptActivityPayload(payload[0].encryptedEnvelope, activitySecret(), `${row.sourceId}:${row.activityId}:activity_evidence`)
+      const secret = activitySecretOrUndefined()
+      if (!secret) throw new Error('Activity diff unavailable')
+      const plaintext = decryptActivityPayload(payload[0].encryptedEnvelope, secret, `${row.sourceId}:${row.activityId}:activity_evidence`)
       const raw = Buffer.from(plaintext, 'utf8')
       if (raw.length !== payload[0].byteCount || createHash('sha256').update(raw).digest('hex') !== payload[0].checksum) throw new Error('Activity payload integrity check failed')
       const evidence = JSON.parse(plaintext) as { complete?: boolean, files?: Array<{ path: string, before?: string, after?: string }> }
@@ -201,12 +222,12 @@ async function assertWorkspaceOwner(userId: string, workspaceId: string) {
 
 type ActivityTransaction = Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0]
 
-async function savePayload(tx: ActivityTransaction, rowId: string, sourceId: string, activityId: string, payload: NonNullable<ActivityIngressEvent['payload']>) {
+async function savePayload(tx: ActivityTransaction, rowId: string, sourceId: string, activityId: string, payload: NonNullable<ActivityIngressEvent['payload']>, secret: string) {
   const raw = Buffer.from(payload.value, 'base64')
   if (raw.toString('base64') !== payload.value) throw new Error('Activity payload encoding is invalid')
   if (raw.length > MAX_PAYLOAD_BYTES || raw.length !== payload.byteCount) throw new Error('Activity payload exceeds allowed bounds')
   const checksum = createHash('sha256').update(raw).digest('hex')
-  const envelope = encryptActivityPayload(raw.toString('utf8'), activitySecret(), `${sourceId}:${activityId}:${payload.kind}`)
+  const envelope = encryptActivityPayload(raw.toString('utf8'), secret, `${sourceId}:${activityId}:${payload.kind}`)
   await tx.insert(workspaceActivityPayloads).values({ activityId: rowId, payloadKind: payload.kind.slice(0, 40), payloadVersion: payload.version.slice(0, 24), encryptedEnvelope: envelope, checksum, byteCount: raw.length }).onConflictDoUpdate({ target: [workspaceActivityPayloads.activityId, workspaceActivityPayloads.payloadKind, workspaceActivityPayloads.chunkIndex], set: { encryptedEnvelope: envelope, checksum, byteCount: raw.length, createdAt: new Date() } })
 }
 
@@ -288,10 +309,9 @@ function mapItem(row: ActivityRow): ActivityItem {
   }
 }
 
-function activitySecret() {
+function activitySecretOrUndefined() {
   const secret = useRuntimeConfig().activityPayloadSecret
-  if (typeof secret !== 'string' || secret.length < 32) throw new Error('Activity payload encryption is not configured')
-  return secret
+  return typeof secret === 'string' && secret.length >= 32 ? secret : undefined
 }
 
 function escapeLike(value: string) {
