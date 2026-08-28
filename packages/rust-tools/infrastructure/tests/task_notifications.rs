@@ -1,10 +1,12 @@
 use relay_application::dispatcher::{dispatch, Dispatch};
 use relay_core::config::ServerConfig;
 use relay_infrastructure::notifications::{
-    format_task_completion_message, sanitize_task_completion, validate_channel_target,
-    NotificationLedger, TaskCompletionPayload,
+    format_task_completion_message, sanitize_task_completion, telegram_send_message_body,
+    validate_channel_target, validate_message_thread_id, NotificationLedger, TaskCompletionPayload,
 };
 use relay_interfaces::mcp::{tool_catalog_for_profile, DiscoverResult};
+use rusqlite::Connection;
+use serde_json::json;
 use std::fs;
 use uuid::Uuid;
 
@@ -101,6 +103,7 @@ fn env_telegram_credentials_are_imported_encrypted_and_survive_restart() {
         .expect("stored credentials");
     assert_eq!(stored.chat_id, "-1001234567890");
     assert_eq!(stored.bot_token, "123456:EnvSecret");
+    assert_eq!(stored.message_thread_id, None);
     drop(ledger);
 
     let raw_database = fs::read(&database).expect("database bytes");
@@ -153,6 +156,7 @@ fn stored_credentials_are_not_refreshed_or_replaced_at_runtime() {
         .expect("stored credentials");
     assert_eq!(stored.bot_token, "123456:FirstSecret");
     assert_eq!(stored.chat_id, "-1001234567890");
+    assert_eq!(stored.message_thread_id, None);
 
     fs::write(
         &env_file,
@@ -161,6 +165,100 @@ fn stored_credentials_are_not_refreshed_or_replaced_at_runtime() {
     .expect("invalid env file");
     assert!(ledger.import_env_credentials(&env_file).is_err());
     fs::remove_dir_all(directory).expect("remove temp directory");
+}
+
+#[test]
+fn telegram_forum_topic_id_is_imported_and_survives_restart() {
+    let directory =
+        std::env::temp_dir().join(format!("ai-tools-telegram-topic-{}", Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("temp directory");
+    let database = directory.join("notifications.sqlite3");
+    let env_file = directory.join("telegram.env");
+    fs::write(
+        &env_file,
+        "TELEGRAM_BOT_TOKEN=123456:TopicSecret\nTELEGRAM_HOME_CHANNEL=-1001234567890\nTELEGRAM_HOME_CHANNEL_THREAD_ID=3775\n",
+    )
+    .expect("env file");
+
+    let ledger = NotificationLedger::open_at(&database).expect("ledger");
+    ledger
+        .import_env_credentials(&env_file)
+        .expect("import credentials");
+    assert_eq!(
+        ledger
+            .load_telegram_credentials()
+            .expect("load credentials")
+            .expect("stored credentials")
+            .message_thread_id,
+        Some(3775)
+    );
+    drop(ledger);
+
+    let reopened = NotificationLedger::open_at(&database).expect("reopen ledger");
+    let stored = reopened
+        .load_telegram_credentials()
+        .expect("load after restart")
+        .expect("credentials after restart");
+    assert_eq!(stored.chat_id, "-1001234567890");
+    assert_eq!(stored.message_thread_id, Some(3775));
+    let raw_database = fs::read(&database).expect("database bytes");
+    assert!(!String::from_utf8_lossy(&raw_database).contains("TopicSecret"));
+    fs::remove_dir_all(directory).expect("remove temp directory");
+}
+
+#[test]
+fn legacy_telegram_schema_migrates_with_topic_column() {
+    let directory =
+        std::env::temp_dir().join(format!("ai-tools-telegram-migration-{}", Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("temp directory");
+    let database = directory.join("notifications.sqlite3");
+    let env_file = directory.join("telegram.env");
+    let connection = Connection::open(&database).expect("legacy database");
+    connection
+        .execute_batch(
+            "CREATE TABLE telegram_configuration (id INTEGER PRIMARY KEY CHECK (id = 1), bot_token_envelope BLOB NOT NULL, chat_id TEXT NOT NULL, updated_at_ms INTEGER NOT NULL);",
+        )
+        .expect("legacy schema");
+    drop(connection);
+    fs::write(
+        &env_file,
+        "TELEGRAM_BOT_TOKEN=123456:MigrationSecret\nTELEGRAM_HOME_CHANNEL=-1001234567890\nTELEGRAM_HOME_CHANNEL_THREAD_ID=3775\n",
+    )
+    .expect("env file");
+
+    let ledger = NotificationLedger::open_at(&database).expect("migrated ledger");
+    ledger
+        .import_env_credentials(&env_file)
+        .expect("import after migration");
+    let stored = ledger
+        .load_telegram_credentials()
+        .expect("load migrated credentials")
+        .expect("stored migrated credentials");
+    assert_eq!(stored.message_thread_id, Some(3775));
+    fs::remove_dir_all(directory).expect("remove directory");
+}
+
+#[test]
+fn telegram_forum_topic_id_validation_is_bounded() {
+    for valid in [None, Some(1), Some(3775), Some(i32::MAX as i64)] {
+        assert!(validate_message_thread_id(valid).is_ok());
+    }
+    for invalid in [Some(-1), Some(0), Some(i32::MAX as i64 + 1)] {
+        assert!(validate_message_thread_id(invalid).is_err());
+    }
+}
+
+#[test]
+fn telegram_send_payload_targets_only_configured_topic() {
+    let root_payload = telegram_send_message_body("-1001234567890", None, "root");
+    assert_eq!(root_payload["chat_id"], json!("-1001234567890"));
+    assert_eq!(root_payload["text"], json!("root"));
+    assert!(root_payload.get("message_thread_id").is_none());
+
+    let topic_payload = telegram_send_message_body("-1001234567890", Some(3775), "topic");
+    assert_eq!(topic_payload["chat_id"], json!("-1001234567890"));
+    assert_eq!(topic_payload["text"], json!("topic"));
+    assert_eq!(topic_payload["message_thread_id"], json!(3775));
 }
 
 #[test]

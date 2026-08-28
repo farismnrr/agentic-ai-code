@@ -18,7 +18,7 @@ mod ledger;
 mod telegram;
 pub use ledger::{ClaimedNotification, NotificationLedger, TelegramCredentials};
 use telegram::ReqwestTelegramSender;
-pub use telegram::{DeliveryError, TelegramSender};
+pub use telegram::{telegram_send_message_body, DeliveryError, TelegramSender};
 
 pub const CONTRACT_VERSION: &str = "1";
 pub const MAX_TASK_ID_BYTES: usize = 128;
@@ -26,6 +26,7 @@ pub const MAX_TITLE_BYTES: usize = 160;
 pub const MAX_SUMMARY_BYTES: usize = 2_000;
 pub const MAX_RESULT_URL_BYTES: usize = 2_048;
 pub const MAX_MESSAGE_BYTES: usize = 4_096;
+pub const MAX_MESSAGE_THREAD_ID: i64 = i32::MAX as i64;
 
 pub fn validate_channel_target(chat_id: &str) -> Result<(), NotificationError> {
     let valid_numeric_channel = chat_id.strip_prefix("-100").is_some_and(|suffix| {
@@ -41,6 +42,14 @@ pub fn validate_channel_target(chat_id: &str) -> Result<(), NotificationError> {
         Ok(())
     } else {
         Err(NotificationError::Invalid)
+    }
+}
+
+pub fn validate_message_thread_id(message_thread_id: Option<i64>) -> Result<(), NotificationError> {
+    match message_thread_id {
+        None => Ok(()),
+        Some(id) if (1..=MAX_MESSAGE_THREAD_ID).contains(&id) => Ok(()),
+        Some(_) => Err(NotificationError::Invalid),
     }
 }
 
@@ -190,12 +199,16 @@ impl TaskNotificationService {
         let ledger = Arc::new(NotificationLedger::open(config)?);
         let credentials = ledger.load_telegram_credentials()?;
         let sender = credentials.as_ref().and_then(|credentials| {
-            ReqwestTelegramSender::new(&credentials.bot_token, &credentials.chat_id)
-                .ok()
-                .map(|sender| Arc::new(sender) as Arc<dyn TelegramSender>)
+            ReqwestTelegramSender::new(
+                &credentials.bot_token,
+                &credentials.chat_id,
+                credentials.message_thread_id,
+            )
+            .ok()
+            .map(|sender| Arc::new(sender) as Arc<dyn TelegramSender>)
         });
         if sender.is_none() {
-            tracing::warn!("Telegram notifier is enabled but relay credentials are unavailable or do not target a channel; delivery is disabled");
+            tracing::warn!("Telegram notifier is enabled but relay credentials are unavailable or invalid; delivery is disabled");
         }
         Ok(Arc::new(Self {
             ledger: Some(ledger),
