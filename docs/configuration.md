@@ -100,27 +100,36 @@ RELAY_ACTIVITY_ACK_RETENTION_MS=86400000
 ```
 
 For optional one-message-per-completed-task Telegram delivery, configure the
-fixed recipient only on the relay host. The relay imports the existing Hermes
-Telegram configuration from its owner-only `.env`; these are server
-environment values, not browser or MCP request fields:
+fixed recipient only on the relay host. These are server environment values,
+not browser or MCP request fields:
 
 ```bash
 RELAY_TELEGRAM_ENABLED=true
-# Optional; default is $HOME/.hermes/.env
-RELAY_TELEGRAM_HERMES_ENV=/home/owner/.hermes/.env
 ```
 
-On each startup, the relay reads only `TELEGRAM_BOT_TOKEN` and
-`TELEGRAM_HOME_CHANNEL` from Hermes, validates that the destination is a
-Telegram channel (`-100...` or `@channel_username`), and stores the token
-encrypted in the relay-owned SQLite database. `TELEGRAM_ALLOWED_USERS` remains
-an inbound Hermes allowlist and is never used as the notification destination.
+Before enabling the service, provision the relay-owned database once from a
+compatible owner-controlled dotenv file. An existing Hermes `.env` can be
+used as that input; the relay reads only `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_HOME_CHANNEL` during this explicit bootstrap command and never reads
+Hermes at runtime:
+
+```bash
+ai-tools telegram \
+  --env-file /home/owner/.hermes/.env \
+  --state-dir /home/owner/.local/state/ai-tools
+```
+
+The command validates that the destination is a Telegram channel (`-100...`
+or `@channel_username`) and stores the token encrypted in the relay-owned
+SQLite database. `TELEGRAM_ALLOWED_USERS` remains an inbound Hermes allowlist
+and is never used as the notification destination. The running relay reads
+only its own database and never depends on Hermes code, process, or files.
 The encryption key is kept in a separate owner-only relay state file. The
 relay sends only bounded, redacted plain text through Telegram `sendMessage`.
 A task/plan completion is deduplicated by its logical task ID; individual tool
 calls and activity events do not produce Telegram messages. An invalid or
-non-channel Hermes target disables notification delivery without falling back
-to a private chat.
+non-channel input disables notification delivery without falling back to a
+private chat.
 
 The relay source ID is stable in `source-id` inside the owner-only state
 directory. Sink outages leave encrypted unacknowledged rows queued for retry;

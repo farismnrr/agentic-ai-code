@@ -1,5 +1,5 @@
 use super::{
-    format_task_completion_message, hermes, now_ms, validate_bot_token, NotificationError,
+    dotenv, format_task_completion_message, now_ms, validate_bot_token, NotificationError,
     TaskCompletionPayload,
 };
 use crate::activity::{crypto, state_dir};
@@ -87,30 +87,12 @@ impl NotificationLedger {
         Ok(ledger)
     }
 
-    pub fn import_hermes_credentials(&self, path: &Path) -> Result<(), NotificationError> {
-        let credentials = hermes::load_credentials(path)?;
+    pub fn import_env_credentials(&self, path: &Path) -> Result<(), NotificationError> {
+        let credentials = dotenv::load_credentials(path)?;
         self.store_telegram_credentials(TelegramCredentials {
             bot_token: credentials.bot_token,
-            chat_id: credentials.home_channel,
+            chat_id: credentials.channel,
         })
-    }
-
-    pub fn sync_hermes_credentials(
-        &self,
-        path: &Path,
-    ) -> Result<Option<TelegramCredentials>, NotificationError> {
-        match hermes::load_credentials(path) {
-            Ok(credentials) => {
-                self.store_telegram_credentials(TelegramCredentials {
-                    bot_token: credentials.bot_token,
-                    chat_id: credentials.home_channel,
-                })?;
-                self.load_telegram_credentials()
-            }
-            Err(NotificationError::Io) => self.load_telegram_credentials(),
-            Err(NotificationError::Invalid) => Ok(None),
-            Err(NotificationError::Database) => Err(NotificationError::Database),
-        }
     }
 
     pub fn load_telegram_credentials(

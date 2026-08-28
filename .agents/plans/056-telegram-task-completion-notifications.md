@@ -22,9 +22,9 @@ The current repository has the following relevant boundaries:
   This is the closest existing Nuxt-side representation of “one task = one
   plan”, but it currently has no notification observer or durable completion
   event.
-- The Rust relay has no Telegram capability today. The installed Hermes setup
-  already has a Telegram gateway, but its Telegram profile is the polling
-  owner; Hermes is not currently a configured HTTP notification bridge.
+- The Rust relay has no Telegram capability today. An existing local Telegram
+  setup provides a compatible dotenv source for a one-time credential import;
+  the relay must not become coupled to that setup's code, process, or state.
 
 ## Goal
 
@@ -39,12 +39,12 @@ The first version will:
   duplicate requests, and relay restarts;
 - support Nuxt orchestration completion and an explicit ChatGPT/relay
   `task_completed` finalization call through the same relay notifier;
-- import the bot token and fixed recipient from Hermes into the relay's
-  owner-only encrypted state;
+- import the bot token and fixed recipient from an owner-controlled dotenv file
+  into the relay's owner-only encrypted state;
 - send a bounded, redacted summary rather than prompts, tool arguments, raw
   command output, credentials, environment values, or full transcripts;
-- leave Hermes gateway code, profiles, session stores, and polling ownership
-  unchanged.
+- leave any existing Telegram gateway code, profiles, session stores, and
+  polling ownership unchanged; the relay runtime is standalone.
 
 The initial outbound policy is success-only. `failed`, `blocked`, `cancelled`,
 and `budget_exhausted` states remain visible to the task owner but do not send
@@ -60,9 +60,10 @@ Telegram messages in this plan.
 - Using the UI task ledger, activity journal, last tool result, conversation
   close, or assistant response completion as a substitute for an explicit
   task/plan completion event.
-- Reconfiguring or upgrading Hermes, changing its Telegram gateway, or reading
-  its session databases/logs. The relay reads only the two outbound Telegram
-  keys from Hermes' owner-only `.env`.
+- Reconfiguring or upgrading another Telegram gateway, changing its polling
+  ownership, or reading its session databases/logs. A one-time bootstrap may
+  read the two outbound Telegram keys from an owner-controlled dotenv file,
+  but the relay runtime must not depend on that source.
 - Copying secrets into the repository, browser runtime, Nuxt public runtime
   config, logs, telemetry attributes, or test fixtures.
 
@@ -86,8 +87,8 @@ ChatGPT finalization tool ──────┘       -> relay outbox/dedupe
 This keeps the Telegram bot token on the laptop-side relay, avoids adding a
 Telegram secret to the Nuxt deployment, and gives both callers identical
 retry/idempotency behavior. Direct Bot API sending is appropriate for this
-outbound-only use case; the existing Hermes gateway can continue owning
-Telegram polling independently.
+outbound-only use case; any existing Telegram gateway can continue its own
+polling independently, but the relay runtime has no dependency on it.
 
 ## Event contract
 
@@ -184,18 +185,17 @@ notification.
 
 **Steps:**
 
-1. Add server-only configuration loaded from the relay environment:
-   `RELAY_TELEGRAM_ENABLED` and an optional
-   `RELAY_TELEGRAM_HERMES_ENV` path. On startup, read only
-   `TELEGRAM_BOT_TOKEN` and `TELEGRAM_HOME_CHANNEL` from that owner-only
-   Hermes file. Never accept the token or target as a CLI argument or MCP
-   argument.
+1. Add the server-only `RELAY_TELEGRAM_ENABLED` switch. Provide a separate
+   one-time CLI bootstrap that reads only `TELEGRAM_BOT_TOKEN` and
+   `TELEGRAM_HOME_CHANNEL` from an owner-controlled dotenv file and persists
+   the result into relay state. Never accept the token or target as an MCP
+   argument, and do not read the source file during service startup.
 2. Add an owner-only, permissioned local SQLite outbox/ledger under the
    existing relay state directory. Keep it separate from the activity schema
    so task notification retention and activity delivery cannot alter each
    other's state. Use WAL/full-sync behavior, owner-only directory/file modes,
    a unique `taskId` constraint, and a separate owner-only AES-GCM key file
-   for the imported bot token.
+   for the bootstrapped bot token.
 3. Store only the sanitized bounded message, task ID, timestamps, attempt
    count, next-attempt time, and a sanitized delivery error category. Recover
    an in-flight row to retryable state after a process crash.
@@ -333,7 +333,7 @@ notification.
 ### 5. Configuration, documentation, and operator-safe rollout
 
 **Outcome:** The feature can be enabled deliberately on the existing laptop
-  deployment without changing Hermes ownership or exposing secrets.
+  deployment with a standalone relay and without exposing secrets.
 
 **Likely files:**
 
@@ -347,23 +347,22 @@ notification.
 
 **Steps:**
 
-1. Document that Hermes remains the source of the real bot token and channel;
-   the relay imports them from the owner-only Hermes `.env`, then stores only
-   the encrypted token and fixed channel in relay state. Neither is committed
-   or printed.
-2. Keep the existing Hermes `tele-agent` as the only Telegram polling owner.
-   The relay uses outbound `sendMessage` and must not start a second polling
-   gateway with the same bot token.
+1. Document that the real bot token and fixed channel are provisioned once
+   from an owner-controlled dotenv file, then stored as relay-owned state.
+   Neither is committed or printed.
+2. Keep any existing Telegram polling owner unchanged. The relay uses only
+   outbound `sendMessage` and must not start a second polling gateway with the
+   same bot token.
 3. Add a safe operator check that reports only `enabled/configured/disabled`
    and never echoes a token, chat ID, request header, or full Telegram error.
-   A non-channel Hermes target must report disabled and must not fall back to
-   `TELEGRAM_ALLOWED_USERS` or an older private-chat configuration.
+   A non-channel bootstrap target must report disabled and must not fall back
+   to an allowlist value or an older private-chat configuration.
 4. Document the user-visible message shape and the exact semantic boundary:
    one message after the whole plan is done, not one message per tool.
 5. Treat enabling the relay notifier, restarting the relay, and sending a real
    Telegram message as explicit operator/production actions. The notifier may
-   be enabled after the Hermes source has a valid channel target, but a real
-   message still requires separate live verification.
+   be enabled after the bootstrap source has a valid channel target, but a
+   real message still requires separate live verification.
 
 **Validation:**
 
@@ -373,8 +372,8 @@ notification.
   extension, authenticated Nuxt handoff, one visible Telegram message, and
   exactly one message after repeating the same completion event.
 - The check also verifies that individual tool calls and activity events do
-  not produce Telegram messages, and that Hermes Telegram polling remains
-  owned by the existing profile without a duplicate-token polling process.
+  not produce Telegram messages, and that any existing Telegram polling
+  process remains unchanged without a duplicate-token polling process.
 
 ## Verification gates
 
@@ -415,8 +414,9 @@ evidence that a Telegram message was delivered.
   completed task.
 - **Telegram rate limiting or API failure:** bounded worker retries transient
   failures and stops retrying permanent request/auth errors.
-- **Hermes polling conflict:** Hermes remains unchanged; only the relay's
-  outbound Bot API call is added, with no second `getUpdates`/webhook owner.
+- **Polling conflict:** any existing Telegram gateway remains unchanged; only
+  the relay's outbound Bot API call is added, with no second
+  `getUpdates`/webhook owner.
 - **Old relay binary:** Nuxt capability-detects the versioned private method
   and records unsupported delivery rather than claiming success.
 - **In-memory orchestration lifecycle:** the Nuxt outbox is written at the
@@ -429,8 +429,9 @@ Disable the relay notification flag and stop the notification worker through
 the normal operator-controlled service configuration. Completed tasks remain
 completed; undelivered outbox rows remain inspectable for later retry or
 operator-directed cleanup. Restore the previous relay binary if necessary,
-without deleting the notification database or Hermes state. Any schema rollback
-must be additive/recoverable and must not drop task or activity data.
+without deleting the notification database or any external Telegram setup
+state. Any schema rollback must be additive/recoverable and must not drop task
+or activity data.
 
 ## Final acceptance
 
@@ -444,8 +445,8 @@ The plan is complete only when all of the following are true:
   UI task update, or assistant stream chunk;
 - no bot token, chat ID, prompt, raw tool payload, or credential appears in
   browser output, persisted raw payloads, logs, telemetry, or errors;
-- Hermes remains unchanged and continues to be the only configured Telegram
-  polling owner;
+- any existing Telegram polling setup remains unchanged and the relay does not
+  create a second polling owner;
 - build/test, authenticated relay capability, and real visible Telegram
   delivery are verified separately.
 
@@ -465,12 +466,12 @@ Local proof completed on 2026-08-29:
   and Rust tests.
 - Web unit suite passed 29/29, including the task-completion contract test.
 - Rust workspace tests passed, including nine task-notification tests covering
-  bounds/redaction, invalid fields, dedupe/restart recovery, Hermes import and
-  encryption, channel-only validation, credential refresh, private-method /
-  catalog boundaries, and disabled delivery.
-- Hermes credential values were read only by the local importer, never printed,
-  copied into the repository, or included in test output. No real external
-  Telegram message was sent during local validation.
+  bounds/redaction, invalid fields, dedupe/restart recovery, dotenv import and
+  encryption, channel-only validation, standalone runtime state, private-method
+  / catalog boundaries, and disabled delivery.
+- Source credential values were read only by the one-time local importer, never
+  printed, copied into the repository, or included in test output. No real
+  external Telegram message was sent during local validation.
 
 Deployment proof completed on 2026-08-29:
 
@@ -484,7 +485,7 @@ Deployment proof completed on 2026-08-29:
 - The unauthenticated relay MCP smoke check returns HTTP `401`, proving the
   auth boundary without claiming an authenticated task handoff.
 
-The remaining external proof is deliberately separate: the configured Hermes
+The remaining external proof is deliberately separate: the provisioned
 `TELEGRAM_HOME_CHANNEL` must identify a channel, then an operator must verify
 authenticated Nuxt handoff plus one visible deduplicated Telegram message.
 Until that is done, this plan must not claim live Telegram delivery.
@@ -495,6 +496,6 @@ The repository lifecycle is complete: the focused implementation passed the
 normal guardrail, was pushed and merged through PR 188, the reviewed relay
 binary was deployed, the operator-controlled service was restarted, the Nuxt
 database migration and container deployment completed, and the final checkout
-is clean on `main`. The Hermes source, relay encrypted credential database, and
-key file remain outside Git; delivery is not claimed until the configured
-Hermes target is a channel and a visible message is verified.
+is clean on `main`. The source dotenv file, relay encrypted credential
+database, and key file remain outside Git; delivery is not claimed until the
+provisioned target is a channel and a visible message is verified.

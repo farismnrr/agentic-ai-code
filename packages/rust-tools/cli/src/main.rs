@@ -23,6 +23,8 @@ enum Commands {
     Searxng(commands::searxng::Args),
     /// Run an executable command within the workspace directory
     Terminal(commands::terminal::Args),
+    /// Provision relay-owned Telegram credentials from an owner-controlled env file
+    Telegram(commands::telegram::Args),
 }
 
 #[tokio::main]
@@ -39,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Relay(_) => "relay",
         Commands::Searxng(_) => "searxng",
         Commands::Terminal(_) => "terminal",
+        Commands::Telegram(_) => "telegram",
     };
     let command_span = tracing::info_span!("ai_tools.command", command = command_name);
     let _ = command_span.set_parent(extract_ai_tools_traceparent());
@@ -57,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 commands::terminal::run(args).await;
                 Ok(())
             }
+            Commands::Telegram(args) => commands::telegram::run(args),
         }
     }
     .instrument(command_span)
