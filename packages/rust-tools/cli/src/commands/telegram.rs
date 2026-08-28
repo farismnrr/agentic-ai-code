@@ -5,7 +5,8 @@ use std::path::PathBuf;
 #[derive(clap::Args, Debug)]
 pub struct Args {
     /// Owner-controlled dotenv file containing the Telegram bootstrap values.
-    /// Only TELEGRAM_BOT_TOKEN and TELEGRAM_HOME_CHANNEL are read.
+    /// Only TELEGRAM_BOT_TOKEN, TELEGRAM_HOME_CHANNEL, and the optional
+    /// TELEGRAM_HOME_CHANNEL_THREAD_ID are read.
     #[arg(long, value_name = "PATH")]
     pub env_file: PathBuf,
 

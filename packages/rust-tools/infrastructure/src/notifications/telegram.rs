@@ -1,4 +1,4 @@
-use super::{validate_channel_target, NotificationError};
+use super::{validate_channel_target, validate_message_thread_id, NotificationError};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::json;
@@ -24,14 +24,20 @@ pub(super) struct ReqwestTelegramSender {
     client: reqwest::Client,
     endpoint: String,
     chat_id: String,
+    message_thread_id: Option<i64>,
 }
 
 impl ReqwestTelegramSender {
-    pub(super) fn new(token: &str, chat_id: &str) -> Result<Self, NotificationError> {
+    pub(super) fn new(
+        token: &str,
+        chat_id: &str,
+        message_thread_id: Option<i64>,
+    ) -> Result<Self, NotificationError> {
         if token.is_empty() || chat_id.is_empty() {
             return Err(NotificationError::Invalid);
         }
         validate_channel_target(chat_id)?;
+        validate_message_thread_id(message_thread_id)?;
         Ok(Self {
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
@@ -39,6 +45,7 @@ impl ReqwestTelegramSender {
                 .map_err(|_| NotificationError::Io)?,
             endpoint: format!("https://api.telegram.org/bot{token}/sendMessage"),
             chat_id: chat_id.to_owned(),
+            message_thread_id,
         })
     }
 }
@@ -52,7 +59,11 @@ impl TelegramSender for ReqwestTelegramSender {
             let response = self
                 .client
                 .post(&self.endpoint)
-                .json(&json!({ "chat_id": self.chat_id, "text": message }))
+                .json(&telegram_send_message_body(
+                    &self.chat_id,
+                    self.message_thread_id,
+                    message,
+                ))
                 .send()
                 .await
                 .map_err(|_| DeliveryError::Retryable)?;
@@ -77,6 +88,18 @@ impl TelegramSender for ReqwestTelegramSender {
             }
         })
     }
+}
+
+pub fn telegram_send_message_body(
+    chat_id: &str,
+    message_thread_id: Option<i64>,
+    message: &str,
+) -> serde_json::Value {
+    let mut body = json!({ "chat_id": chat_id, "text": message });
+    if let Some(message_thread_id) = message_thread_id {
+        body["message_thread_id"] = json!(message_thread_id);
+    }
+    body
 }
 
 #[derive(Deserialize)]
