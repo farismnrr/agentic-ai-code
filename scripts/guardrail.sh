@@ -4,6 +4,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+requested_scope="${1:-auto}"
+if (($# > 1)); then
+  printf 'usage: %s [auto|nuxt|rust|all]\n' "$0" >&2
+  exit 2
+fi
+
+case "$requested_scope" in
+  auto|nuxt|web|rust|all) ;;
+  *)
+    printf 'guardrail: invalid scope %q; expected auto, nuxt, rust, or all\n' "$requested_scope" >&2
+    exit 2
+    ;;
+esac
+
 mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMRD)
 if ((${#staged[@]})); then
   changed=("${staged[@]}")
@@ -19,23 +33,50 @@ printf 'guardrail: architecture boundaries\n'
 bash scripts/check-architecture.sh
 printf 'guardrail: maintainability budgets\n'
 node scripts/check-maintainability.mjs
-printf 'guardrail: test layout\n'
-node scripts/check-test-layout.mjs
 
 web=0
 rust=0
-for path in "${changed[@]}"; do
-  case "$path" in
-    app/*|server/*|shared/*|packages/curl-tool/*|packages/searxng-search-tool/*|packages/terminal-tool/*|packages/relay-agent/*|test/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|nuxt.config.ts|tsconfig.json|eslint.config.mjs|drizzle.config.ts)
-      web=1
-      ;;
+if [[ "$requested_scope" == "auto" ]]; then
+  for path in "${changed[@]}"; do
+    case "$path" in
+      app/*|server/*|shared/*|packages/curl-tool/*|packages/searxng-search-tool/*|packages/terminal-tool/*|packages/relay-agent/*|test/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|nuxt.config.ts|tsconfig.json|eslint.config.mjs|drizzle.config.ts)
+        web=1
+        ;;
+    esac
+    case "$path" in
+      packages/rust-tools/*|Cargo.toml|Cargo.lock)
+        rust=1
+        ;;
+    esac
+  done
+else
+  case "$requested_scope" in
+    nuxt|web) web=1 ;;
+    rust) rust=1 ;;
+    all) web=1; rust=1 ;;
   esac
-  case "$path" in
-    packages/rust-tools/*|Cargo.toml|Cargo.lock)
-      rust=1
-      ;;
-  esac
-done
+fi
+
+case "$requested_scope" in
+  auto)
+    if ((web && rust)); then
+      layout_scope=all
+    elif ((web)); then
+      layout_scope=nuxt
+    elif ((rust)); then
+      layout_scope=rust
+    else
+      layout_scope=all
+    fi
+    ;;
+  all) layout_scope=all ;;
+  nuxt|web) layout_scope=nuxt ;;
+  rust) layout_scope=rust ;;
+esac
+
+printf 'guardrail: selected stacks (nuxt=%s rust=%s scope=%s)\n' "$web" "$rust" "$requested_scope"
+printf 'guardrail: test layout (scope=%s)\n' "$layout_scope"
+node scripts/check-test-layout.mjs "$layout_scope"
 
 if ((web)); then
   printf 'guardrail: web lint\n'

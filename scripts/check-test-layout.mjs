@@ -4,7 +4,13 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const SOURCE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.tsx', '.vue', '.rs'])
-const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents', 'workspaces'])
+const requestedScope = process.argv[2] ?? 'all'
+if (!new Set(['all', 'nuxt', 'rust']).has(requestedScope)) {
+  console.error(`Test layout guard: invalid scope ${requestedScope}; expected all, nuxt, or rust`)
+  process.exit(2)
+}
+
+const SKIP_DIRS = new Set(['.git', '.nuxt', '.output', 'node_modules', 'target', 'dist', 'generated', 'migrations', '.agents', 'workspaces', '.worktrees', '.pnpm-store'])
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -25,6 +31,13 @@ function isApprovedTestLocation(file) {
   const extension = path.extname(file)
   if (extension === '.rs') return /^packages\/rust-tools\/[^/]+\/tests\//.test(rel)
   return rel.startsWith('test/')
+}
+
+function belongsToScope(file) {
+  if (requestedScope === 'all') return true
+  return requestedScope === 'rust'
+    ? path.extname(file) === '.rs'
+    : path.extname(file) !== '.rs'
 }
 
 function lineNumber(source, index) {
@@ -67,7 +80,7 @@ function javascriptFailures(file, source) {
 }
 
 function check(root = ROOT) {
-  const files = walk(root)
+  const files = walk(root).filter(belongsToScope)
   return files.flatMap((file) => {
     if (isApprovedTestLocation(file)) return []
     if (testFileName(file)) return [`${relative(file)}: web tests belong under test/; Rust tests belong in package tests/`]
@@ -83,4 +96,4 @@ if (failures.length) {
   console.error(`Test layout guard failed:\n${failures.map(failure => `- ${failure}`).join('\n')}`)
   process.exit(1)
 }
-console.log('Test layout guard passed: web tests are under test/ and Rust tests are package-local')
+console.log(`Test layout guard passed (${requestedScope}): web tests are under test/ and Rust tests are package-local`)
