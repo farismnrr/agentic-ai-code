@@ -461,11 +461,12 @@ notification path.
 
 Local proof completed on 2026-08-29:
 
-- `pnpm guardrail:all` passed, including repository policy, architecture,
-  maintainability, test layout, web lint/typecheck/tests, Rust lint/typecheck,
-  and Rust tests.
+- `pnpm guardrail` passed for the standalone Rust-only follow-up, including
+  repository policy, architecture, maintainability, test layout, Rust lint,
+  Rust typecheck, and Rust tests. The earlier cross-stack implementation gate
+  also remains recorded below.
 - Web unit suite passed 29/29, including the task-completion contract test.
-- Rust workspace tests passed, including nine task-notification tests covering
+- Rust workspace tests passed, including ten task-notification tests covering
   bounds/redaction, invalid fields, dedupe/restart recovery, dotenv import and
   encryption, channel-only validation, standalone runtime state, private-method
   / catalog boundaries, and disabled delivery.
@@ -475,15 +476,27 @@ Local proof completed on 2026-08-29:
 
 Deployment proof completed on 2026-08-29:
 
-- PR 188 was merged into `main` at `c199bd1`, and the feature branch was
-  deleted.
+- PR 188 was merged into `main` at `c199bd1` for the original cross-stack
+  feature; PR 190 added encrypted relay credential storage and PR 191 removed
+  the Hermes runtime dependency. The latest merge is `d309fbb`; all feature
+  branches were deleted.
 - Migration `0028` applied successfully; the Nuxt `app` container was rebuilt
   and recreated from `main`, with root HTTP status `200`.
-- The installed relay binary matches the release build byte-for-byte;
-  `ai-tools-relay.service` is active/running and its `/health` endpoint returns
-  HTTP `200`.
-- The unauthenticated relay MCP smoke check returns HTTP `401`, proving the
-  auth boundary without claiming an authenticated task handoff.
+- The release binary built from `main` `d309fbb` has SHA-256
+  `ec136f09668e75a63959c21ff4164d32b677071ec81e9ddbfa2286304a0aecaf` and
+  matches the effective installed `/home/farismnrr/.local/bin/ai-tools` byte
+  for byte. `ai-tools-relay.service` is active/running with `NRestarts=0`, and
+  `/health` returns HTTP `200`.
+- The unauthenticated relay MCP smoke check remains rejected (`403` on the
+  remote profile), proving the auth boundary without claiming an authenticated
+  task handoff.
+- The one-time bootstrap was attempted against the existing owner-controlled
+  source env. It rejected the current private/user target, stored no
+  credential row (`telegram_configuration` count `0`), and left the standalone
+  service running with delivery disabled.
+- The deployed binary contains no Hermes reference, and the systemd
+  environment contains only `RELAY_TELEGRAM_ENABLED`; no Hermes path or raw
+  Telegram credential is part of runtime configuration.
 
 The remaining external proof is deliberately separate: the provisioned
 `TELEGRAM_HOME_CHANNEL` must identify a channel, then an operator must verify
@@ -492,10 +505,11 @@ Until that is done, this plan must not claim live Telegram delivery.
 
 ## Delivery closure
 
-The repository lifecycle is complete: the focused implementation passed the
-normal guardrail, was pushed and merged through PR 188, the reviewed relay
-binary was deployed, the operator-controlled service was restarted, the Nuxt
-database migration and container deployment completed, and the final checkout
-is clean on `main`. The source dotenv file, relay encrypted credential
-database, and key file remain outside Git; delivery is not claimed until the
-provisioned target is a channel and a visible message is verified.
+The repository lifecycle is complete: the focused implementation and
+standalone follow-up passed the normal guardrail, were pushed and merged through
+PRs 188, 190, and 191, the reviewed relay binary was deployed, the
+operator-controlled service was restarted, the Nuxt database migration and
+container deployment completed, and the final checkout is clean on `main`.
+The source dotenv file, relay encrypted credential database, and key file
+remain outside Git; delivery is not claimed until the provisioned target is a
+channel and a visible message is verified.
