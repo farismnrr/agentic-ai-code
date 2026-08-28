@@ -17,6 +17,7 @@ mod task_calls;
 #[path = "tool_helpers.rs"]
 mod tool_helpers;
 use tool_helpers::deny_activity;
+pub(super) use tool_helpers::{activity_result_detail, activity_result_summary};
 use tool_helpers::{
     agent_session_from_params, bounded_tool_error, client_supports_tasks, record_activity_outcome,
     requires_idempotency_key,

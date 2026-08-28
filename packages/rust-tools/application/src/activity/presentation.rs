@@ -42,7 +42,11 @@ pub(super) fn action_for_tool(
     root: Option<&Path>,
 ) -> Option<String> {
     let action = match tool_id {
-        "terminal_exec" => terminal_action(arguments, root),
+        "terminal_exec" | "terminal_job_start" => terminal_action(arguments, root),
+        "terminal_job_get" => identifier_action("Get terminal job", arguments, "taskId", root),
+        "terminal_job_cancel" => {
+            identifier_action("Cancel terminal job", arguments, "taskId", root)
+        }
         "file_read" => {
             let target = target_for_tool(tool_id, arguments, root)
                 .unwrap_or_else(|| "workspace file".into());
@@ -85,20 +89,35 @@ pub(super) fn action_for_tool(
                 if count == 1 { "" } else { "s" }
             )
         }
-        "apply_patch" => "Apply bounded workspace patch".into(),
+        "apply_patch" => patch_action(arguments, root),
         "directory_list" => {
             let target = target_for_tool(tool_id, arguments, root).unwrap_or_else(|| ".".into());
             format!("List {target}")
         }
-        "text_search" | "file_search" => {
+        "text_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(Value::as_str)
+                .map(|value| sanitize_action_text(value, root));
             let scope = arguments
                 .get("glob")
-                .or_else(|| arguments.get("pattern"))
-                .and_then(Value::as_str);
-            match scope {
-                Some(scope) => format!("Search workspace · {}", sanitize_action_text(scope, root)),
-                None => "Search workspace".into(),
+                .and_then(Value::as_str)
+                .map(|value| sanitize_action_text(value, root));
+            match (query, scope) {
+                (Some(query), Some(scope)) => format!("Search text · {query} · {scope}"),
+                (Some(query), None) => format!("Search text · {query}"),
+                (None, Some(scope)) => format!("Search text · {scope}"),
+                (None, None) => "Search text".into(),
             }
+        }
+        "file_search" => {
+            let pattern = arguments
+                .get("pattern")
+                .and_then(Value::as_str)
+                .map(|value| sanitize_action_text(value, root));
+            pattern
+                .map(|pattern| format!("Search files · {pattern}"))
+                .unwrap_or_else(|| "Search files".into())
         }
         "http_fetch" => {
             let method = arguments
@@ -110,7 +129,7 @@ pub(super) fn action_for_tool(
             format!("{method} {target}")
         }
         name if name.starts_with("git_") => git_action(name, arguments, root),
-        name => friendly_tool_name(name),
+        name => generic_action(name, arguments, root),
     };
     bounded_display(&action, MAX_TEXT)
 }
@@ -148,6 +167,92 @@ fn terminal_action(arguments: &Value, root: Option<&Path>) -> String {
         }
     }
     parts.join(" ")
+}
+
+fn patch_action(arguments: &Value, root: Option<&Path>) -> String {
+    let Some(patch) = arguments.get("patch").and_then(Value::as_str) else {
+        return "Apply patch".into();
+    };
+    let mut paths = Vec::new();
+    for line in patch.lines() {
+        let candidate = line
+            .strip_prefix("*** Update File: ")
+            .or_else(|| line.strip_prefix("--- a/"))
+            .or_else(|| line.strip_prefix("+++ b/"));
+        if let Some(path) = candidate {
+            let path = sanitize_action_text(path, root);
+            if !path.is_empty() && !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+        if paths.len() >= 3 {
+            break;
+        }
+    }
+    if paths.is_empty() {
+        "Apply patch".into()
+    } else {
+        format!("Patch {}", paths.join(", "))
+    }
+}
+
+fn identifier_action(label: &str, arguments: &Value, key: &str, root: Option<&Path>) -> String {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(|value| format!("{label} · {}", sanitize_action_text(value, root)))
+        .unwrap_or_else(|| label.into())
+}
+
+fn generic_action(tool_id: &str, arguments: &Value, root: Option<&Path>) -> String {
+    let mut action = friendly_tool_name(tool_id);
+    let Some(object) = arguments.as_object() else {
+        return action;
+    };
+    let mut details = Vec::new();
+    for (key, value) in object {
+        if details.len() >= 4
+            || sensitive_argument_key(key)
+            || matches!(
+                key.as_str(),
+                "content" | "data" | "headers" | "edits" | "patch"
+            )
+        {
+            continue;
+        }
+        let rendered = match value {
+            Value::String(value) => Some(sanitize_action_text(value, root)),
+            Value::Number(value) => Some(value.to_string()),
+            Value::Bool(value) => Some(value.to_string()),
+            _ => None,
+        };
+        if let Some(rendered) = rendered.filter(|value| !value.is_empty()) {
+            details.push(format!("{key}={rendered}"));
+        }
+    }
+    if !details.is_empty() {
+        action.push_str(" · ");
+        action.push_str(&details.join(" · "));
+    }
+    action
+}
+
+fn sensitive_argument_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    [
+        "password",
+        "passwd",
+        "token",
+        "secret",
+        "authorization",
+        "cookie",
+        "api_key",
+        "apikey",
+        "access_key",
+        "client_secret",
+    ]
+    .iter()
+    .any(|candidate| key.contains(candidate))
 }
 
 fn git_action(tool_id: &str, arguments: &Value, root: Option<&Path>) -> String {

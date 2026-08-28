@@ -56,6 +56,7 @@ fn event(activity_id: &str) -> ActivityEvent {
             target: Some("notes.txt".into()),
             action: Some("Create notes.txt".into()),
             summary: Some("canary".into()),
+            result_detail: None,
             result_class: Some("started".into()),
             evidence: Evidence::NotApplicable,
             payload_reference: None,
@@ -96,6 +97,35 @@ fn activity_action_summary_is_useful_and_redacts_credentials() {
     assert!(!action.contains("activity-secret"));
 }
 
+#[test]
+fn activity_actions_include_specific_arguments_for_non_terminal_tools() {
+    let config = ServerConfig::default();
+    let event = event_for_tool(
+        &config,
+        "code_hover",
+        &["workspace_read"],
+        &json!({"path":"src/main.ts","line":12,"column":4}),
+        None,
+    );
+    let action = event.presentation.action.expect("specific action");
+    assert!(action.contains("code hover"));
+    assert!(action.contains("path=src/main.ts"));
+    assert!(action.contains("line=12"));
+}
+
+#[test]
+fn terminal_job_start_uses_the_actual_command() {
+    let config = ServerConfig::default();
+    let event = event_for_tool(
+        &config,
+        "terminal_job_start",
+        &["process_exec"],
+        &json!({"command":"cat","args":["file.txt"]}),
+        None,
+    );
+    assert_eq!(event.presentation.action.as_deref(), Some("cat file.txt"));
+}
+
 #[tokio::test]
 async fn journal_persists_start_and_outcome_without_plaintext_payload(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -113,6 +143,7 @@ async fn journal_persists_start_and_outcome_without_plaintext_payload(
             Status::Ok,
             3,
             "canary complete",
+            Some("full result"),
             Evidence::Summary,
             None,
         ),

@@ -6,6 +6,7 @@ export interface ActivityPresentation {
   target?: string | null
   action?: string | null
   summary?: string | null
+  resultDetail?: string | null
   resultClass?: string | null
   evidence: ActivityEvidence
   payloadReference?: string | null
@@ -55,6 +56,7 @@ export interface ActivityItem {
   deletions?: number
   evidence: ActivityEvidence
   result?: string
+  resultDetail?: string
   complete: boolean
   diffAvailable: boolean
 }

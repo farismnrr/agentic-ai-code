@@ -17,11 +17,33 @@ pub(super) fn record_activity_outcome(
     evidence: Evidence,
     payload: Option<Vec<u8>>,
 ) {
+    record_activity_outcome_with_detail(
+        state,
+        start,
+        status,
+        duration_ms,
+        (summary, None),
+        evidence,
+        payload,
+    );
+}
+
+pub(super) fn record_activity_outcome_with_detail(
+    state: &AppState,
+    start: &ActivityEvent,
+    status: Status,
+    duration_ms: u64,
+    presentation: (&str, Option<&str>),
+    evidence: Evidence,
+    payload: Option<Vec<u8>>,
+) {
+    let (summary, result_detail) = presentation;
     let event = activity::complete_event(
         start,
         status,
         duration_ms,
         summary,
+        result_detail,
         evidence,
         payload.as_ref().map(|_| "activity_evidence:v1".into()),
     );
@@ -87,29 +109,123 @@ pub(super) fn extract_activity_evidence(
     )
 }
 
-fn activity_result_summary(tool_name: &str, result: &ToolCallResult, preview: bool) -> String {
+pub(crate) fn activity_result_detail(result: &ToolCallResult, arguments: &Value) -> Option<String> {
+    let raw = result
+        .content
+        .iter()
+        .map(|content| content.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if raw.trim().is_empty() {
+        return None;
+    }
+    let formatted = serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|value| serde_json::to_string_pretty(&value).ok())
+        .unwrap_or(raw);
+    let mut detail = relay_core::redaction::redact_credentials(&formatted);
+    if let Some(cwd) = arguments
+        .get("cwd")
+        .and_then(Value::as_str)
+        .filter(|cwd| !cwd.is_empty())
+    {
+        detail = detail.replace(cwd, ".");
+    }
+    let detail = detail
+        .chars()
+        .filter(|character| !character.is_control() || matches!(character, '\n' | '\r' | '\t'))
+        .take(relay_application::activity::MAX_DETAIL)
+        .collect::<String>();
+    (!detail.trim().is_empty()).then_some(detail)
+}
+
+pub(crate) fn activity_result_summary(
+    tool_name: &str,
+    result: &ToolCallResult,
+    preview: bool,
+    detail: Option<&str>,
+) -> String {
     if preview {
         return "dry-run preview; no workspace mutation was applied".into();
     }
-    if tool_name == "terminal_exec" {
-        if let Some(first_line) = result
-            .content
-            .first()
-            .and_then(|content| content.text.lines().next())
-            .filter(|line| line.starts_with("Exit: "))
-        {
-            return if result.is_error {
-                format!("{first_line} · command failed")
-            } else {
-                format!("{first_line} · completed")
-            };
+    if let Some(detail) = detail {
+        if tool_name == "terminal_exec" {
+            let exit = detail.lines().find(|line| line.starts_with("Exit: "));
+            let stdout = detail
+                .split_once("Stdout:")
+                .map(|(_, tail)| tail.split_once("Stderr:").map_or(tail, |(body, _)| body))
+                .and_then(first_nonempty_line);
+            let stderr = detail
+                .split_once("Stderr:")
+                .map(|(_, tail)| tail)
+                .and_then(first_nonempty_line);
+            if let Some(exit) = exit {
+                let useful = if result.is_error {
+                    stderr.or(stdout)
+                } else {
+                    stdout.or(stderr)
+                };
+                return useful
+                    .map(|line| format!("{exit} · {}", truncate_summary(line)))
+                    .unwrap_or_else(|| exit.to_string());
+            }
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(detail) {
+            if let Some(summary) = json_result_summary(&value, 0) {
+                return truncate_summary(summary);
+            }
+        }
+        if let Some(line) = first_nonempty_line(detail) {
+            return truncate_summary(line);
         }
     }
     if result.is_error {
         "tool execution failed".into()
     } else {
-        "tool execution completed".into()
+        "completed".into()
     }
+}
+
+fn json_result_summary(value: &Value, depth: usize) -> Option<&str> {
+    if depth > 3 {
+        return None;
+    }
+    match value {
+        Value::String(value) => first_nonempty_line(value),
+        Value::Array(values) => values
+            .iter()
+            .find_map(|value| json_result_summary(value, depth + 1)),
+        Value::Object(object) => {
+            for key in [
+                "message", "text", "content", "result", "status", "path", "output",
+            ] {
+                if let Some(summary) = object
+                    .get(key)
+                    .and_then(|value| json_result_summary(value, depth + 1))
+                {
+                    return Some(summary);
+                }
+            }
+            object
+                .iter()
+                .filter(|(key, _)| {
+                    !matches!(
+                        key.as_str(),
+                        "meta" | "_meta" | "timing" | "structuredContent"
+                    )
+                })
+                .find_map(|(_, value)| json_result_summary(value, depth + 1))
+        }
+        _ => None,
+    }
+}
+
+fn first_nonempty_line(value: &str) -> Option<&str> {
+    value.lines().map(str::trim).find(|line| !line.is_empty())
+}
+
+fn truncate_summary(value: &str) -> String {
+    value.chars().take(220).collect()
 }
 
 pub(super) struct ToolCompletionContext<'a> {
@@ -152,13 +268,15 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
     } else {
         Status::Ok
     };
-    let activity_summary = activity_result_summary(tool_name, &result, preview);
-    record_activity_outcome(
+    let activity_detail = activity_result_detail(&result, arguments);
+    let activity_summary =
+        activity_result_summary(tool_name, &result, preview, activity_detail.as_deref());
+    record_activity_outcome_with_detail(
         &state,
         activity_start,
         activity_status,
         dispatch_ms,
-        &activity_summary,
+        (&activity_summary, activity_detail.as_deref()),
         evidence,
         payload,
     );
