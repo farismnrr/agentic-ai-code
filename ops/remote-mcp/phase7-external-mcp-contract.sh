@@ -11,7 +11,7 @@
 # Plan-039C v3 is retained as historical evidence by phase-039c-contract.sh.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 catalog="$root/.agents/contracts/039b-tool-catalog-v2.json"
 catalog_hash_file="$root/.agents/contracts/039b-tool-catalog-v2.sha256"
 legacy_catalog="$root/.agents/contracts/029-tool-catalog-v1.json"

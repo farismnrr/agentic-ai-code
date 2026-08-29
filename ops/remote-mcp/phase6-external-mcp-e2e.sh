@@ -4,7 +4,7 @@ set -euo pipefail
 # external MCP client/public-MCP acceptance harness. Static checks always run; live
 # deployment evidence is opt-in because this repository cannot drive a user's
 # external MCP client workspace or provision the external tunnel/Authorization Server.
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 required=(
   "$root/packages/rust-tools/interfaces/src/mcp.rs"
