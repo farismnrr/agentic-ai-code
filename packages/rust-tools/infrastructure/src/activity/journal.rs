@@ -156,19 +156,23 @@ impl Journal {
         &self,
         max_records: usize,
         max_bytes: usize,
+        respect_retry_delay: bool,
     ) -> Result<Vec<PendingRecord>, JournalError> {
         let connection = self.connection.lock().map_err(|_| JournalError::Database)?;
         let mut statement = connection
-            .prepare("SELECT record_id, activity_id, envelope, checksum FROM activity_journal WHERE acknowledged = 0 AND next_attempt_ms <= ?1 ORDER BY source_sequence ASC, record_id ASC LIMIT ?2")
+            .prepare("SELECT record_id, activity_id, envelope, checksum FROM activity_journal WHERE acknowledged = 0 AND (?2 = 0 OR next_attempt_ms <= ?1) ORDER BY source_sequence ASC, record_id ASC LIMIT ?3")
             .map_err(|_| JournalError::Database)?;
         let rows = statement
-            .query_map(params![now_ms(), max_records as i64], |row| {
-                let record_id: String = row.get(0)?;
-                let activity_id: String = row.get(1)?;
-                let envelope: Vec<u8> = row.get(2)?;
-                let stored_checksum: String = row.get(3)?;
-                Ok((record_id, activity_id, envelope, stored_checksum))
-            })
+            .query_map(
+                params![now_ms(), i64::from(respect_retry_delay), max_records as i64],
+                |row| {
+                    let record_id: String = row.get(0)?;
+                    let activity_id: String = row.get(1)?;
+                    let envelope: Vec<u8> = row.get(2)?;
+                    let stored_checksum: String = row.get(3)?;
+                    Ok((record_id, activity_id, envelope, stored_checksum))
+                },
+            )
             .map_err(|_| JournalError::Database)?;
         let mut result = Vec::new();
         let mut bytes = 0usize;
@@ -308,7 +312,10 @@ impl Journal {
     }
 
     fn recover_stale(&self) -> Result<(), JournalError> {
-        let pending = self.pending(256, 1024 * 1024)?;
+        // A retry backoff is an exporter concern. It must not prevent startup
+        // recovery from closing an activity whose relay process disappeared
+        // before it emitted a terminal outcome.
+        let pending = self.pending(256, 1024 * 1024, false)?;
         let mut latest = HashMap::new();
         for record in pending {
             latest.insert(record.event.activity_id.clone(), record);
