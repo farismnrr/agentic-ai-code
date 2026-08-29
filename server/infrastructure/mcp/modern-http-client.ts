@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
-import { asMcpTaskEnvelope, fetchWithMcpDeadline, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
+import { asMcpTaskEnvelope, fetchWithMcpDeadline, McpRoundTripTimeoutError, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
 import type { McpClientCallResult, McpClientLike, McpClientTool, TaskCompletionResult } from './client'
+import { redactSecrets } from '../observability/sanitize.ts'
 
 const MODERN_MCP_VERSION = '2026-07-28'
 const MCP_CLIENT_INFO = { name: 'ai-code', version: '1.0.0' } as const
@@ -173,7 +174,15 @@ export class ModernHttpMcpClient implements McpClientLike {
     })
     if (!isJsonRecord(result) || !Array.isArray(result.content)) {
       const task = asMcpTaskEnvelope(result)
-      if (task) return this.awaitTask(task, signal)
+      if (task) {
+        // An explicit async call is an acceptance operation. Return the
+        // durable task identity immediately so the model can poll the latest
+        // state instead of keeping an AI step open until its timeout.
+        if (params.arguments?.execution_mode === 'async') {
+          return taskProgressResult(task, 'Task accepted asynchronously. Use terminal_job_get with this taskId to read the latest status and output; do not start the command again.')
+        }
+        return this.awaitTask(task, signal)
+      }
       throw new Error('Remote MCP server returned an invalid tools/call result')
     }
     return {
@@ -185,38 +194,40 @@ export class ModernHttpMcpClient implements McpClientLike {
 
   private async awaitTask(initialTask: Record<string, unknown> & { taskId: string }, signal?: AbortSignal): Promise<McpClientCallResult> {
     const taskId = initialTask.taskId
+    let latestTask = initialTask
     let delayMs = taskPollDelayMs(initialTask)
     for (;;) {
       if (signal?.aborted) {
-        const current = await this.request('tasks/get', { taskId })
+        let current: unknown
+        try {
+          current = await this.request('tasks/get', { taskId })
+        } catch (error) {
+          if (error instanceof McpRoundTripTimeoutError) {
+            return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+          }
+          throw error
+        }
         if (!isJsonRecord(current)) throw new Error('Remote MCP task returned an invalid result')
         if (current.status !== 'working') return taskResult(current)
-        await this.cancelTask(taskId)
-        throw new Error('First-party relay task was cancelled')
+        return taskProgressResult(current, 'The request ended while the task was working. The relay task continues; use terminal_job_get with this taskId to resume from the latest output. Do not start the command again.')
       }
-      const task = await this.request('tasks/get', { taskId })
+      let task: unknown
+      try {
+        task = await this.request('tasks/get', { taskId })
+      } catch (error) {
+        if (error instanceof McpRoundTripTimeoutError) {
+          return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+        }
+        throw error
+      }
       if (!isJsonRecord(task)) throw new Error('Remote MCP task returned an invalid result')
+      latestTask = task
       const status = typeof task.status === 'string' ? task.status : ''
       if (status === 'input_required') throw new Error('Remote MCP task requires additional input')
       if (status !== 'working') return taskResult(task)
       delayMs = taskPollDelayMs(task, delayMs)
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
-  }
-
-  private async cancelTask(taskId: string) {
-    await this.request('tasks/cancel', { taskId })
-    const deadline = Date.now() + 5000
-    let delayMs = 250
-    while (Date.now() < deadline) {
-      const task = await this.request('tasks/get', { taskId })
-      if (isJsonRecord(task) && task.status !== 'working') return
-      if (isJsonRecord(task)) delayMs = taskPollDelayMs(task, delayMs)
-      const remainingMs = deadline - Date.now()
-      if (remainingMs <= 0) break
-      await new Promise(resolve => setTimeout(resolve, Math.min(delayMs, remainingMs)))
-    }
-    throw new Error('First-party relay task cancellation did not settle')
   }
 
   close() {
@@ -301,15 +312,50 @@ export class ModernHttpMcpClient implements McpClientLike {
 
 function taskResult(task: Record<string, unknown>): McpClientCallResult {
   const status = typeof task.status === 'string' ? task.status : ''
-  if (status === 'failed') return { content: [{ type: 'text', text: 'Tool execution failed' }], isError: true }
-  if (status === 'cancelled') return { content: [{ type: 'text', text: 'Tool execution cancelled' }], isError: true }
+  if (status === 'failed') return taskProgressResult(task, 'Task execution failed. Use terminal_job_get with this taskId to inspect the retained output.', true)
+  if (status === 'cancelled') return taskProgressResult(task, 'Task execution was cancelled. Use terminal_job_get with this taskId to inspect the retained output.', true)
+  if (task.executionStatus === 'timed_out') return taskProgressResult(task, 'Task execution timed out. The retained output below is the last known log; do not start the command again unless a new execution is intentional.', true)
 
   const result = isJsonRecord(task.result) ? task.result : undefined
   if (!result || !Array.isArray(result.content)) {
-    return { content: [{ type: 'text', text: 'Tool execution returned no result' }], isError: true }
+    return taskProgressResult(task, 'Task returned no result. Use terminal_job_get with this taskId to inspect the retained output.', true)
   }
   return {
     content: result.content,
     ...(typeof result.isError === 'boolean' && { isError: result.isError })
   }
+}
+
+function taskProgressResult(task: Record<string, unknown>, message: string, isError = false): McpClientCallResult {
+  const progress: Record<string, unknown> = {
+    resultType: 'task',
+    taskId: typeof task.taskId === 'string' ? task.taskId : '',
+    status: typeof task.status === 'string' ? task.status : 'working',
+    message
+  }
+  for (const key of ['executionStatus', 'createdAt', 'lastUpdatedAt', 'pollIntervalMs']) {
+    if (task[key] !== undefined) progress[key] = task[key]
+  }
+  const output = taskOutput(task)
+  if (output) progress.output = output
+  return {
+    content: [{ type: 'text', text: JSON.stringify(progress) }],
+    ...(isError && { isError: true })
+  }
+}
+
+function taskOutput(task: Record<string, unknown>) {
+  if (!isJsonRecord(task.output)) return undefined
+  const output = task.output
+  return {
+    stdout: boundedRedactedText(output.stdout),
+    stderr: boundedRedactedText(output.stderr),
+    omittedBytes: typeof output.omittedBytes === 'number' && Number.isFinite(output.omittedBytes) ? output.omittedBytes : 0,
+    exitCode: typeof output.exitCode === 'number' || output.exitCode === null ? output.exitCode : null
+  }
+}
+
+function boundedRedactedText(value: unknown) {
+  if (typeof value !== 'string') return ''
+  return redactSecrets(value.slice(0, 65_536))
 }
