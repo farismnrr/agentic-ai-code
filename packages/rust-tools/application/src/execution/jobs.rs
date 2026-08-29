@@ -1,6 +1,7 @@
 use super::{process, ToolInvocation};
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
+use relay_core::redaction::redact_credentials;
 use relay_interfaces::mcp::ToolCallResult;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -56,15 +57,18 @@ pub struct JobSnapshot {
 
 impl JobSnapshot {
     pub fn create_task_json(&self) -> Value {
-        json!({
+        let mut value = json!({
             "resultType": "task",
             "taskId": self.job_id,
             "status": self.task_status(),
             "createdAt": format_timestamp(self.created_at),
             "lastUpdatedAt": format_timestamp(self.last_updated_at),
             "ttlMs": Value::Null,
-            "pollIntervalMs": 1000
-        })
+            "pollIntervalMs": 1000,
+            "output": self.task_output_json()
+        });
+        self.add_execution_status(&mut value);
+        value
     }
 
     pub fn task_json(&self, completed_retention_ms: u64) -> Value {
@@ -83,6 +87,8 @@ impl JobSnapshot {
             "ttlMs": ttl_ms,
             "pollIntervalMs": 1000
         });
+        value["output"] = self.task_output_json();
+        self.add_execution_status(&mut value);
         if let Some(duration_ms) = self.execution_duration_ms {
             value["executionDurationMs"] = json!(duration_ms);
         }
@@ -127,6 +133,21 @@ impl JobSnapshot {
 
     fn task_status(&self) -> &'static str {
         self.state.task_status()
+    }
+
+    fn add_execution_status(&self, value: &mut Value) {
+        if self.state == JobState::TimedOut {
+            value["executionStatus"] = json!("timed_out");
+        }
+    }
+
+    fn task_output_json(&self) -> Value {
+        json!({
+            "stdout": redact_credentials(&self.stdout),
+            "stderr": redact_credentials(&self.stderr),
+            "omittedBytes": self.omitted_bytes,
+            "exitCode": self.exit_code
+        })
     }
 
     fn job_status(&self) -> &'static str {
