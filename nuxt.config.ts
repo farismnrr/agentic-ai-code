@@ -132,7 +132,8 @@ export default defineNuxtConfig({
             && log.id?.includes('/.nuxt/dist/server/')
         const nuxtUnusedH3Import
           = level === 'warn'
-            && log.message.includes('"H3Error" and "H3Event"')
+            && log.message.includes('"H3Error"')
+            && log.message.includes('"H3Event"')
             && log.message.includes('but never used in')
 
         if (generatedAnnotationWarning || nuxtUnusedH3Import) {
