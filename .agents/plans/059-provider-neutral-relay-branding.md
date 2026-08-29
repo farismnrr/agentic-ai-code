@@ -1,6 +1,6 @@
 # Provider-Neutral Relay Branding Implementation Plan
 
-**Status:** IMPLEMENTED — WRITABLE REMOTE HISTORY AND RELEASE METADATA VALIDATED; PR PENDING REVIEW
+**Status:** COMPLETE — MERGED TO MAIN; WRITABLE REMOTE HISTORY AND RELEASE METADATA VALIDATED
 **Goal:** Make the repository present a provider-neutral MCP relay identity across product copy, operational guidance, evidence paths, and external-client task reporting while preserving required protocol and SDK compatibility.
 **Success Criteria:** No provider-specific product branding remains in user-facing or agent-facing copy; external task completion uses a generic source identity; provider adapters and persisted compatibility values continue to work; local policy and stack-aware verification pass.
 
@@ -119,11 +119,11 @@
 - [x] Required provider adapters and persisted compatibility contracts remain intact.
 - [x] Focused tests and `pnpm guardrail` pass.
 - [x] Writable remote branch/tag history and release metadata were updated; hidden PR-ref limits are recorded.
-- [x] Working tree contains only task-owned changes and the branch is ready for review.
+- [x] Working tree contains only task-owned changes and the completed work is merged to `main`.
 
 ## Execution Handoff
 
 - Execute TASK-001 before TASK-002 because source/test contract changes establish the terminology used by guidance.
 - TASK-002 is mostly mechanical and can be reviewed file-by-file after the source contract is stable.
 - TASK-003 blocks commit and any later PR action.
-- Remote branch/tag rewrite and release metadata update are complete; PR review/merge and deployment remain separate approval checkpoints.
+- Remote branch/tag rewrite, release metadata update, and PR #199 merge are complete; deployment remains a separate approval checkpoint.
