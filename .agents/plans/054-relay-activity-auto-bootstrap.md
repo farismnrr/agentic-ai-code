@@ -5,7 +5,7 @@
 
 ## Problem
 
-Workspace Logs is backed by the Plan 050 activity ledger, not by OpenTelemetry. The live relay currently runs with no `RELAY_ACTIVITY_*` configuration, and the application database has no enrolled relay activity source, no workspace bindings, and no activity rows. Therefore both Nuxt-originated and external external MCP client-originated relay calls execute successfully but leave the workspace activity UI empty.
+Workspace Logs is backed by the Plan 050 activity ledger, not by OpenTelemetry. The live relay currently runs with no `RELAY_ACTIVITY_*` configuration, and the application database has no enrolled relay activity source, no workspace bindings, and no activity rows. Therefore both Nuxt-originated and external-client-originated relay calls execute successfully but leave the workspace activity UI empty.
 
 The existing configuration requires manual source enrollment, one-time secret transfer, workspace binding, and relay process environment changes. That is deployment-oriented plumbing rather than acceptable product UX for a relay already connected through authenticated MCP.
 
@@ -16,7 +16,7 @@ Make activity capture self-configuring for the first-party relay while preservin
 - Nuxt enrolls an owned activity source and binds owned workspaces.
 - Nuxt sends the activity sink + one-time source credential to the already-authenticated first-party relay over a private MCP protocol extension.
 - The relay stores the bootstrap config owner-only, activates the activity recorder/exporter without requiring a process restart, and reloads the persisted bootstrap on future restarts.
-- Activity remains recorded at relay execution time, so calls from both Nuxt and external MCP clients such as external MCP client appear in the same workspace Logs view.
+- Activity remains recorded at relay execution time, so calls from both Nuxt and external MCP clients appear in the same workspace Logs view.
 - Arbitrary third-party MCP servers are never offered or sent the activity bootstrap credential.
 
 ## Security constraints

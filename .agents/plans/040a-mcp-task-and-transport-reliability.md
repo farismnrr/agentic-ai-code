@@ -3,7 +3,7 @@
 **Status:** CLOSED / VERIFIED / MERGED
 **Parent:** [Plan 040](040-git-github-delivery-roadmap.md)
 **Depends on:** Plan 039 CLOSED / VERIFIED / MERGED
-**Operator runtime rule:** Follow [Plans 040–042 execution guide](../roadmap-execution-guide-040-042.md). Do not restart/redeploy the relay or resync/recreate the external MCP client connector/action. Batch source/build/deterministic work first; when a genuine live-runtime proof requires a new runtime, stop and give the user the exact reviewed restart/deploy command(s) and external MCP client resync steps. Only continue live proof after the user performs that checkpoint.
+**Operator runtime rule:** Follow [Plans 040–042 execution guide](../roadmap-execution-guide-040-042.md). Do not restart/redeploy the relay or resync/recreate the external MCP connector/action. Batch source/build/deterministic work first; when a genuine live-runtime proof requires a new runtime, stop and give the user the exact reviewed restart/deploy command(s) and external MCP client resync steps. Only continue live proof after the user performs that checkpoint.
 
 ## Goal
 

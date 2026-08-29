@@ -160,7 +160,7 @@ Before closure, run fresh source-level and black-box attacks across the composed
 - third-party tool description/result prompt injection;
 - write tool incorrectly annotated read-only;
 - resources exposing arbitrary home paths;
-- direct external MCP client call bypassing Nuxt approval assumptions.
+- direct external MCP call bypassing Nuxt approval assumptions.
 
 ## End-to-end acceptance scenarios
 
@@ -176,7 +176,7 @@ At minimum prove these workflows in the first-party app and, where relevant, dir
 8. **Hook enforcement** — file change triggers deterministic formatter/check; hard-deny cannot be overridden.
 9. **Large repository result** — continuation works without flooding context.
 10. **Long command + cancellation** — existing Plan-037 lifecycle still works alongside new policy/hooks/subagents.
-11. **Direct external MCP client MCP** — new relay tools/resources remain OAuth-protected and hard policy applies even without Nuxt approval UI.
+11. **Direct external MCP** — new relay tools/resources remain OAuth-protected and hard policy applies even without Nuxt approval UI.
 
 ## Documentation
 
@@ -185,7 +185,7 @@ Update only authoritative current docs/knowledge:
 - `README.md` tool/capability summary where appropriate;
 - `docs/architecture.md`;
 - `docs/getting-started.md` / configuration/security docs for new operator settings;
-- `docs/external-mcp.md` for remote-client truthfulness;
+- `docs/mcp-client.md` for remote-client truthfulness;
 - `packages/relay-agent/SKILL.md`;
 - `.agents/knowledge/project.md`;
 - `.agents/knowledge/tooling.md`;
@@ -242,7 +242,7 @@ The implementation adds category-driven bounded tool presentation, sensitivity-a
 The following boundaries were exercised before the final Bubblewrap/Git protected-path hardening and are retained as historical context. The latest release-specific evidence follows immediately below.
 
 - a production Nuxt instance completed authentication/session setup and streamed a controlled external HTTPS provider response through `/api/chat`: **PASS**;
-- direct external MCP client → remote MCP discovery/tool invocation reached the deployed `ai-tools 0.0.11` relay: **PASS**;
+- direct external MCP → remote MCP discovery/tool invocation reached the deployed `ai-tools 0.0.11` relay: **PASS**;
 - a live protected-credential probe against `.env` was denied by relay workspace policy while `.env.example` remained readable: **PASS**; this live probe exposed and drove a credential-filename policy regression fix before closure;
 - production container composition now includes only the bounded runtime agent profiles/skills required by delegation; duplicate skill aliases resolving to the same canonical file are deduplicated while genuine ambiguity remains fail-closed: **PASS**;
 - long-running job cancellation through the remote MCP lifecycle reached `cancelled`: **PASS**;
@@ -251,7 +251,7 @@ The following boundaries were exercised before the final Bubblewrap/Git protecte
 
 Latest local remediation additionally canonicalizes protected-path handling across Git/text search, blocks protected rename/copy lineage and Git object-store escapes, and hardens Bubblewrap nested/symlink masking. The exact final release artifact `dist/v0.0.11/ai-tools-x86_64-unknown-linux-gnu` was built, installed, and verified byte-for-byte with SHA256 `7719caa8cd92f08b339afd2c1c0aa4238be7097793bfba72d0d01777f52e9be2`. Exact-binary local MCP proof passed for direct protected reads, `.env.example`, terminal masking, and cancellation. The full workspace-v1 integration acceptance passed against that exact installed binary, covering protected native/Git boundaries, Git pagination, synthetic cargo/node toolchains, and explicit network policy.
 
-The public edge returned health `200` and the expected OAuth/Bearer challenge after deployment. The current authenticated external MCP client MCP connector exposed the Masih Awam native tool catalog and successfully executed `git_status` on this repository; a protected `.env` read was denied by workspace policy while `.env.example` remained readable. This is authenticated end-to-end connector evidence; no operator token was inspected. Host verification found the enabled `ai-tools-relay.service` active/running on port `47821`, executing the exact installed release binary with SHA256 `7719caa8cd92f08b339afd2c1c0aa4238be7097793bfba72d0d01777f52e9be2`.
+The public edge returned health `200` and the expected OAuth/Bearer challenge after deployment. The current authenticated external MCP connector exposed the Masih Awam native tool catalog and successfully executed `git_status` on this repository; a protected `.env` read was denied by workspace policy while `.env.example` remained readable. This is authenticated end-to-end connector evidence; no operator token was inspected. Host verification found the enabled `ai-tools-relay.service` active/running on port `47821`, executing the exact installed release binary with SHA256 `7719caa8cd92f08b339afd2c1c0aa4238be7097793bfba72d0d01777f52e9be2`.
 
 ## Final acceptance criteria
 
@@ -260,8 +260,8 @@ The public edge returned health `200` and the expected OAuth/Bearer challenge af
 - [x] Agent-native semantic telemetry reuses the existing allowlist sanitizer and confidentiality contract.
 - [x] Deterministic composed security/regression matrix has no observed P0/P1 failure, and a fresh independent read-only review reports zero unresolved P0/P1 findings.
 - [x] Existing Plan-035/036/037/038 security and execution contracts exercised in this pass have no regression.
-- [x] Direct-client hard safety remains relay-authoritative and is proven by direct external MCP client remote-MCP invocation plus live protected-credential denial.
+- [x] Direct-client hard safety remains relay-authoritative and is proven by direct external MCP remote-MCP invocation plus live protected-credential denial.
 - [x] Documentation and durable agent knowledge were reconciled to the current implementation.
 - [x] No custom vector DB/RAG/plugin marketplace/parallel agent framework was introduced.
 - [x] Mandatory local/build/security acceptance is passing; latest-release local MCP, protected-path/Git, toolchain, cancellation, network-policy, health, and OAuth-boundary checks are verified.
-- [x] Authenticated MCP catalog/tool invocation is proven through the current external MCP client connector; no token file access was required.
+- [x] Authenticated MCP catalog/tool invocation is proven through the current external MCP connector; no token file access was required.

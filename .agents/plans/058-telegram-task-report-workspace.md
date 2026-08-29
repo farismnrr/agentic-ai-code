@@ -33,7 +33,7 @@
 
 - `workspace` means the user-visible workspace name, not the local path. It is mandatory for new completion events and bounded/redacted like other notification text.
 - Existing Nuxt outbox rows created before this change must remain deliverable; the database migration will assign a clear `Workspace unavailable` compatibility value only to those legacy rows. New enqueue calls reject missing workspace data.
-- The relay formats the final message from structured fields so both Nuxt-originated and external MCP client-originated completion signals have the same report shape.
+- The relay formats the final message from structured fields so both Nuxt-originated and external-client-originated completion signals have the same report shape.
 - The task graph report is bounded to the existing notification limits and includes each node ID, status, and objective in a compact form.
 - A result URL remains optional and must continue to be HTTPS-only.
 - No raw workspace path, token, chat ID, or credential material is added to the message or durable project documentation.
@@ -128,7 +128,7 @@
 - [x] Generate a compact task report from node ID, status, and objective.
 - [x] Bound the number and size of task entries under the existing 2000-byte summary contract.
 - [x] Keep the one-notification-per-logical-task transition and deduplication invariant unchanged.
-- [x] Update completion signal guidance so external MCP client supplies a useful report covering changes, validation, and remaining risks when applicable.
+- [x] Update completion signal guidance so an external MCP client supplies a useful report covering changes, validation, and remaining risks when applicable.
 
 **Validation:**
 

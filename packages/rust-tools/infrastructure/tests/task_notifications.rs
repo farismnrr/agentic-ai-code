@@ -18,7 +18,7 @@ fn payload() -> TaskCompletionPayload {
         summary: "Implemented the feature and ran the focused tests.".into(),
         completed_at: "2026-08-28T16:00:00.000Z".into(),
         result_url: Some("https://ai-code.example/tasks/og_123".into()),
-        source: "external-mcp".into(),
+        source: "external_mcp".into(),
     }
 }
 

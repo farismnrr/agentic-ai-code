@@ -15,7 +15,7 @@ const CANARY = 'sk-canary-SECRET-9f3a7c21'
 const cases = [
   { label: 'filesystem-path', err: new Error(`ENOENT: no such file or directory, open '/home/deploy/ai-code/data/${CANARY}/settings.db'`) },
   { label: 'db-style', err: new Error(`SQLITE_CONSTRAINT: UNIQUE constraint failed: workspaces.path (conn=${CANARY})`) },
-  { label: 'provider-style', err: new Error(`upstream provider request failed: 401 invalid api key ${CANARY} for https://api.openai.com/v1/chat/completions`) },
+  { label: 'provider-style', err: new Error(`upstream provider request failed: 401 invalid api key ${CANARY} for https://provider.example/v1/chat/completions`) },
   { label: 'secret-canary-only', err: new Error(`leaked secret token=${CANARY}`) }
 ]
 

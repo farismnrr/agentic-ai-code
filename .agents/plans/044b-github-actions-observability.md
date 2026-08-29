@@ -240,7 +240,7 @@ All six are read-only model-facing operations. They use validated repository ide
 
 **Files:**
 - Modify: `packages/rust-tools/README.md`
-- Modify: `docs/external-mcp.md`
+- Modify: `docs/mcp-client.md`
 - Modify: this plan and parent Plan 044
 - Modify `.agents/memories/README.md` only for durable redaction/architecture changes introduced by TASK-004.
 

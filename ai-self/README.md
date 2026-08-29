@@ -1,6 +1,6 @@
 # ai-self
 
-Persistent self-improvement workspace for external MCP client + Masih Awam MCP. It stores procedural knowledge and policy, not user-memory data or custom RAG.
+Persistent self-improvement workspace for an MCP client + Masih Awam MCP. It stores procedural knowledge and policy, not user-memory data or custom RAG.
 
 ## Authority
 
@@ -38,11 +38,11 @@ Read `CONSTITUTION.md` first when policy matters. In short: platform/user constr
 - Use Context7 as a secondary discovery/documentation provider.
 - Externally installed skill directories are local dependencies and are ignored by Git; canonical sources are recorded in `registry.yaml`.
 
-This directory intentionally does not duplicate external MCP client native Memory.
+This directory intentionally does not duplicate native client memory.
 
 ## Project identity and workspace isolation
 
-`BOOTSTRAP.md` contains the global external MCP client Custom Instructions needed to enforce workspace isolation before any project-local skill is selected.
+`BOOTSTRAP.md` contains the global MCP client instructions needed to enforce workspace isolation before any project-local skill is selected.
 
 `project.yaml` identifies this repository using stable Git/project evidence. Before repository mutation, use `skills/workspace-scope/SKILL.md` to resolve and verify the requested project and establish an ephemeral task-local workspace lock.
 

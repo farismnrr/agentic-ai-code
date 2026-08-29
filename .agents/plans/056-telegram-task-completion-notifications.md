@@ -37,7 +37,7 @@ The first version will:
 - notify only after the whole task/plan reaches `completed`;
 - produce at most one Telegram message for a `taskId`, including across retry,
   duplicate requests, and relay restarts;
-- support Nuxt orchestration completion and an explicit external MCP client/relay
+- support Nuxt orchestration completion and an explicit external MCP relay
   `task_completed` finalization call through the same relay notifier;
 - import the bot token and fixed recipient from an owner-controlled dotenv file
   into the relay's owner-only encrypted state;
@@ -71,7 +71,7 @@ Telegram messages in this plan.
 
 The Rust relay will own the Telegram outbound adapter and its durable
 deduplication ledger. Nuxt will publish a durable task-completion outbox entry
-to the relay through an authenticated private MCP method. external MCP client-facing relay
+to the relay through an authenticated private MCP method. external-client-facing relay
 clients will use a narrowly scoped `task_completed` MCP tool that submits the
 same event shape. Both paths converge on one relay-side queue and one fixed
 Telegram recipient:
@@ -105,7 +105,7 @@ MCP JSON fields equivalent to:
   2,048 characters, with no credentials, query tokens, or fragments.
 
 The caller must not provide a bot token, chat ID, parse mode, arbitrary Bot API
-method, or free-form destination. The source (`nuxt` or `external-mcp`) should be
+method, or free-form destination. The source (`nuxt` or `external_mcp`) should be
 assigned by the authenticated entry point rather than trusted from user
 input. A missing stable `taskId` is rejected; it must never be synthesized
 from a conversation ID or the last tool call.
@@ -226,9 +226,9 @@ notification.
 - A fake Telegram server test proves one request for repeated completion calls,
   retry on transient errors, and no retry storm on permanent errors.
 
-### 3. Expose one explicit completion entry point for external MCP client/relay tasks
+### 3. Expose one explicit completion entry point for external MCP relay tasks
 
-**Outcome:** A external MCP client agent can signal “this whole plan is complete” once,
+**Outcome:** An external MCP client can signal “this whole plan is complete” once,
   while the relay still owns authorization, bounds, dedupe, and delivery.
 
 **Likely files:**
@@ -440,7 +440,7 @@ The plan is complete only when all of the following are true:
 - one completed implementation plan creates one logical completion event;
 - the same event retried concurrently or after restart produces no more than
   one Telegram message;
-- Nuxt and external MCP client/relay completion paths use the same fixed-recipient sender;
+- Nuxt and external MCP relay completion paths use the same fixed-recipient sender;
 - no Telegram message is produced by an individual tool call, activity event,
   UI task update, or assistant stream chunk;
 - no bot token, chat ID, prompt, raw tool payload, or credential appears in

@@ -1,6 +1,6 @@
 # Plan 037 — Long-Running MCP Execution, Streaming, and Task Lifecycle
 
-**Status:** CLOSED / VERIFIED — server/runtime Phases 9–11 pass, and a fresh external MCP client action snapshot now exposes the six-tool catalog with no client-side `terminal_exec.timeout_ms` maximum; live fallback polling/cancellation also passes.
+**Status:** CLOSED / VERIFIED — server/runtime Phases 9–11 pass, and a fresh action snapshot from an external MCP client now exposes the six-tool catalog with no client-side `terminal_exec.timeout_ms` maximum; live fallback polling/cancellation also passes.
 
 ## Goal
 
@@ -16,7 +16,7 @@ The finished system must support:
 6. standards-based MCP task/progress behavior where the connected client supports it;
 7. a clean fallback lifecycle for clients that do not support the current MCP Tasks extension;
 8. a first-party Nuxt UX that can present live command progress like a coding tool/terminal without inventing fake percentage progress;
-9. truthful behavior for external MCP client and other third-party clients whose rendering/UI is controlled by the client rather than this repository;
+9. truthful behavior for external MCP clients and other third-party clients whose rendering/UI is controlled by the client rather than this repository;
 10. a **home-scoped coding workspace** for the single-user laptop relay: the effective execution root should be the canonical non-root user home (for example `/home/user`), not one repository/project directory, so one connected MCP server can work across projects under that home without reconfiguration.
 
 This plan is about **execution lifecycle and protocol ergonomics**, not about weakening command authorization, adding a remote shell bypass, or broadening the sandbox.
@@ -427,7 +427,7 @@ MCP evolves quickly. Before implementing Tasks, re-read the current official MCP
 - client capability advertisement;
 - any current restrictions around stateless Streamable HTTP.
 
-Also re-check current OpenAI/external MCP client MCP documentation.
+Also re-check current external MCP documentation.
 
 Do not copy protocol details from this plan if the current official specification has changed.
 
@@ -530,7 +530,7 @@ Do not require the Nuxt page to keep the original `tools/call` HTTP request open
 
 The relay can control protocol semantics, task state, progress data, and tool results.
 
-It cannot control whether external MCP client's native tool card chooses to render every raw stdout chunk like a terminal.
+It cannot control whether a client's native tool card chooses to render every raw stdout chunk like a terminal.
 
 Therefore acceptance must distinguish:
 
@@ -545,9 +545,9 @@ Therefore acceptance must distinguish:
 
 ### external MCP client UI proof
 
-Record only what the current external MCP client client actually displays.
+Record only what the current external client actually displays.
 
-Do not mark "external MCP client-like streaming UI" complete merely because the MCP server internally emits progress.
+Do not mark "external coding CLI-like streaming UI" complete merely because the MCP server internally emits progress.
 
 ---
 
@@ -616,7 +616,7 @@ Command stdout/stderr intentionally returned as the tool result is distinct from
 
 - [x] Re-read `AGENTS.md`, relevant `.agents/knowledge/*`, canonical memory, Plan 036, and this Plan 037.
 - [x] Re-audit current MCP Tasks/progress/cancellation specification from official sources.
-- [x] Re-audit current OpenAI/external MCP client MCP capability behavior from official OpenAI sources.
+- [x] Re-audit current external MCP capability behavior from authoritative sources.
 - [x] Map current execution flow from MCP schema -> transport -> application dispatch -> Bubblewrap -> `ai-tools terminal` -> child process.
 - [x] Confirm all current timeout/output/concurrency limits and document which are security boundaries vs accidental implementation limits.
 - [x] Freeze the backward-compatible tool contract before edits.
@@ -687,7 +687,7 @@ Acceptance:
 
 Acceptance:
 
-- existing short external MCP client `terminal_exec` calls continue working;
+- existing short `terminal_exec` calls from external MCP clients continue working;
 - a normal 30-second/default call behaves as before from the client's perspective;
 - configured long timeout is accepted according to server policy.
 
@@ -779,7 +779,7 @@ The first reviewer pass intentionally did not modify production code. It re-ran 
 2. **The MCP Tasks wire contract is not conformant to the current `io.modelcontextprotocol/tasks` extension.** Current `tasks/get` lacks `resultType: "complete"`; task timestamps are epoch-millisecond strings instead of ISO-8601; `tasks/update` and `tasks/cancel` return full task objects instead of empty acknowledgements; and task/tool failure state mapping must distinguish a completed tool result with `isError: true` from a JSON-RPC-level task failure. Re-audit TTL semantics at the same time: the current completed-job retention duration is advertised as task lifetime from creation, which is unsuitable for genuinely long-running work.
 3. **Polling does not expose output while a job is running.** Pipes are drained continuously into bounded buffers, but those buffers are copied into the public `JobSnapshot` only at `finish()`. Runtime proof with `printf first; sleep 1; printf second` returned `status=working` with empty stdout, then exposed all output only after completion. The first-party polling UI therefore is not yet a live coding-terminal UX.
 4. **The deployed safe toolchain allowlist is incomplete.** Normal non-login commands receive only the fixed system PATH. `RELAY_TOOLCHAIN_PATH` is unset in the operator profile, so the owner-home relay cannot find the installed Cargo, Node, or pnpm toolchains through the reviewed allowlist. Do not use login-shell startup files or arbitrary inherited host PATH as the fix; configure explicit canonical owner-home toolchain directories.
-5. **The current external MCP client-side action catalog is stale relative to the rebuilt server.** The live server/local `tools/list` exposes the fallback job tools and the new terminal timeout schema, while the already-connected app snapshot in this chat still exposes the earlier three-tool catalog and five-minute client-side maximum. After the next rebuild/restart, refresh/rescan the app actions and validate from a fresh chat before making a external MCP client compatibility claim.
+5. **The current external-client-side action catalog is stale relative to the rebuilt server.** The live server/local `tools/list` exposes the fallback job tools and the new terminal timeout schema, while the already-connected app snapshot in this chat still exposes the earlier three-tool catalog and five-minute client-side maximum. After the next rebuild/restart, refresh/rescan the app actions and validate from a fresh chat before making an external MCP compatibility claim.
 6. **The explicit Job Manager shutdown hook is not wired.** `JobManager::shutdown()` exists, but the relay graceful-shutdown path does not call it. Runtime descendant cleanup still passed because the current process/Bubblewrap lifecycle killed descendants, but the source-level Plan 037 shutdown contract must have one explicit authoritative cleanup path rather than relying on `--die-with-parent` alone.
 
 ### Reviewer evidence that already passed
@@ -823,13 +823,13 @@ Remaining closure step: restart the persistent user service, then re-prove live 
 
 ## Reviewer round 2 post-restart evidence (2026-08-16)
 
-The persistent relay was restarted onto the reviewed staged `ai-tools 0.0.8` binary/config and re-proved live through the authenticated external MCP client connector. Live deployed results: sibling-project `cwd=/home/farismnrr/Projects/Sensio`; UID 1000; Cargo, Node, and pnpm resolve only from the fixed system PATH plus the explicit reviewed Cargo/fnm allowlist; `.ssh` and `.docker` are masked; `/tmp` is rejected outside the canonical home execution root; `timeout_ms=0` completes normally; and `sh -c 'exit 7'` is surfaced as an MCP tool error with the real exit code 7. The staged operator binary hash matches `target/release/ai-tools`.
+The persistent relay was restarted onto the reviewed staged `ai-tools 0.0.8` binary/config and re-proved live through the authenticated external MCP connector. Live deployed results: sibling-project `cwd=/home/farismnrr/Projects/Sensio`; UID 1000; Cargo, Node, and pnpm resolve only from the fixed system PATH plus the explicit reviewed Cargo/fnm allowlist; `.ssh` and `.docker` are masked; `/tmp` is rejected outside the canonical home execution root; `timeout_ms=0` completes normally; and `sh -c 'exit 7'` is surfaced as an MCP tool error with the real exit code 7. The staged operator binary hash matches `target/release/ai-tools`.
 
-Final-state deterministic evidence also passes: `CI=true pnpm verify:commit`, `scripts/phase4-black-box.sh`, `scripts/phase7-external-mcp-contract.sh`, `scripts/verify-rust-phase3-telemetry.sh`, and `cargo audit`. The telemetry harness was reconciled to the repository's pinned Node 24 native TypeScript support because the obsolete `tsx` executable is no longer a dependency; the acceptance result confirms first-party Rust spans export while dependency noise, filesystem paths, and the canary remain absent.
+Final-state deterministic evidence also passes: `CI=true pnpm verify:commit`, `scripts/phase4-black-box.sh`, `scripts/phase7-client-contract.sh`, `scripts/verify-rust-phase3-telemetry.sh`, and `cargo audit`. The telemetry harness was reconciled to the repository's pinned Node 24 native TypeScript support because the obsolete `tsx` executable is no longer a dependency; the acceptance result confirms first-party Rust spans export while dependency noise, filesystem paths, and the canary remain absent.
 
-The only remaining closure blocker was external/client-side: the already-open reviewer external MCP client connection still exposed the pre-refresh frozen three-tool catalog and a client-side `terminal_exec.timeout_ms` maximum of 300000, while the reviewed server/frozen repository catalog contained six tools and no terminal maximum. This was not a relay regression.
+The only remaining closure blocker was external/client-side: the already-open reviewer connection still exposed the pre-refresh frozen three-tool catalog and a client-side `terminal_exec.timeout_ms` maximum of 300000, while the reviewed server/frozen repository catalog contained six tools and no terminal maximum. This was not a relay regression.
 
-### Fresh external MCP client client closeout evidence (2026-08-16)
+### Fresh external client closeout evidence (2026-08-16)
 
 A fresh external MCP client conversation loaded the refreshed Masih Awam MCP action snapshot and resolved the final external compatibility blocker:
 

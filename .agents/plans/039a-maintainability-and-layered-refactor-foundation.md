@@ -403,7 +403,7 @@ Do not move a file until its target owner is clear.
 - `interfaces/src/mcp.rs` is now a 307-line protocol/result module with one `mcp/catalog.rs` owner (369) for tool names, descriptions, annotations, OAuth schemes, JSON schemas, lookup, and argument validation. Existing public re-exports preserve callers and `tools/list`.
 - `core/src/config.rs` is now 394 lines; Clap CLI declarations/security-mode/stop-command ownership moved cohesively to `config/cli.rs` (151) behind stable re-exports. `ServerConfig` defaults, conversion, execution-root validation, trusted-proxy/host/OAuth/socket/toolchain fail-closed checks remain single-source.
 - No maintained Rust production file remains above 500 lines after Phases 02–03.
-- Validation PASS: `cargo fmt --all -- --check`; warnings-denied workspace Cargo check; workspace Clippy; `cargo test --workspace --locked`; `scripts/phase4-black-box.sh`; `scripts/phase7-external-mcp-contract.sh`; `scripts/phase8-zero-bypass.sh`; `scripts/verify-workspace-v1-integration.sh`; and `pnpm verify:commit`.
+- Validation PASS: `cargo fmt --all -- --check`; warnings-denied workspace Cargo check; workspace Clippy; `cargo test --workspace --locked`; `scripts/phase4-black-box.sh`; `scripts/phase7-client-contract.sh`; `scripts/phase8-zero-bypass.sh`; `scripts/verify-workspace-v1-integration.sh`; and `pnpm verify:commit`.
 - Adversarial review found no broadened authorization, config, catalog, or execution boundary. No new crate/framework/dependency was introduced.
 
 **Phase-03 status:** CLOSED / VERIFIED.
@@ -581,7 +581,7 @@ Extract only duplicated **knowledge** with one real owner.
 - Application/core dependency review found no concrete infrastructure types leaking into application/core contracts; existing application dependency objects remain capability/use-case scoped rather than service locators.
 - Post-split Rust facades remain intentionally small/stable while cohesive submodules own real responsibilities; no one-file-per-function fragmentation, DI container, event bus, generic repository/service framework, or speculative plugin layer was introduced.
 - Tiny API/adapter/facade modules were reviewed and retained only where they enforce a transport/layer/public boundary; no compatibility wrapper was removed merely to reduce module count.
-- Independent read-only external MCP client review of the uncommitted Plan-039A diff reported no DRY/layering/sandbox/OAuth/Nuxt P0/P1 regression. It raised maintainability-check coverage concerns handled in Phase-07: stylesheet-family coverage was broadened; its claimed root `tests/` gap was not applicable because the repository has no tracked/root `tests/` tree and the checker’s contract is maintained production source.
+- Independent read-only external coding CLI review of the uncommitted Plan-039A diff reported no DRY/layering/sandbox/OAuth/Nuxt P0/P1 regression. It raised maintainability-check coverage concerns handled in Phase-07: stylesheet-family coverage was broadened; its claimed root `tests/` gap was not applicable because the repository has no tracked/root `tests/` tree and the checker’s contract is maintained production source.
 
 **Phase-06 status:** CLOSED / VERIFIED. The final architecture has fewer mixed-responsibility hotspots without speculative indirection.
 
@@ -782,7 +782,7 @@ Record in the master roadmap:
 - `bash scripts/verify-workspace-path-security.sh` PASS;
 - `bash scripts/verify-workspace-v1-integration.sh` PASS, including direct-argv regressions proving leading `--help`, `--locked`, and background `--job-flag` values are passed verbatim;
 - `bash scripts/phase4-black-box.sh` PASS;
-- `bash scripts/phase7-external-mcp-contract.sh` PASS with frozen catalog hash `ab5b01984b62362bd493052eb7e5d91be0e409172bb5bc6174bdf1c95fb6e456`;
+- `bash scripts/phase7-client-contract.sh` PASS with frozen catalog hash `ab5b01984b62362bd493052eb7e5d91be0e409172bb5bc6174bdf1c95fb6e456`;
 - `bash scripts/phase8-zero-bypass.sh` PASS;
 - `node scripts/verify-mcp-tool-result-error-confidentiality.mjs` PASS;
 - `node scripts/check-maintainability.mjs --self-test` PASS;

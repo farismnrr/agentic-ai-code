@@ -242,7 +242,7 @@ function onSubmit() {
 
 ## Conversation sidebar
 
-Combine with dashboard layout for a external MCP client-like interface:
+Combine with dashboard layout for a client-like interface:
 
 ```vue [layouts/dashboard.vue]
 <template>

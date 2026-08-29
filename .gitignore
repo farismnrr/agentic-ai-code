@@ -31,8 +31,8 @@ logs
 
 target/
 
-# Local external MCP client Code session runtime (not repository-owned agent guidance)
-.external-mcp/
+# Local external coding-client session runtime (not repository-owned agent guidance)
+.client-session/
 
 # Local SQLite databases
 *.db

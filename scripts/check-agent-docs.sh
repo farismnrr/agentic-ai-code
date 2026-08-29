@@ -12,16 +12,20 @@ fail() {
 }
 
 # AGENTS.md + .agents/ are the only repository-owned agent guidance surfaces.
-# Checked against git tracking, not raw filesystem existence: local tooling
-# (for example an untracked .external-mcp/ runtime directory used by a external MCP client Code
-# session) may legitimately exist on disk without being repository-owned.
-for path in EXTERNAL MCP CLIENT.md GEMINI.md .external-mcp .gemini; do
-  if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
-    fail "vendor-specific agent path must not be tracked: $path"
-  fi
-done
+# Checked against git tracking, not raw filesystem existence: local tooling may
+# legitimately create untracked client-session paths on disk.
+while IFS= read -r path; do
+  case "$path" in
+    */*|AGENTS.md|README.md|LICENSE|.gitignore|.gitattributes)
+      continue
+      ;;
+    *.md)
+      fail "client-specific agent path must not be tracked: $path"
+      ;;
+  esac
+done < <(git ls-files)
 
-# Canonical/shared guidance and top-level skills stay client/vendor neutral.
+# Canonical/shared guidance and top-level skills stay client/provider neutral.
 # Skill reference material may document factual interoperability flags for
 # external tools, so references are intentionally outside this guidance scan.
 if grep -RInE \
@@ -31,10 +35,10 @@ if grep -RInE \
   --exclude-dir='node_modules' \
   --exclude-dir='.nuxt' \
   --exclude-dir='.output' \
-  '([Cc]laude|EXTERNAL MCP CLIENT\.md|\.external-mcp/|GEMINI\.md|\.gemini/|Gemini/Antigravity)' \
+  '([Cc]lient-specific|[Pp]rovider-specific)[[:space:]-]+(agent|guidance|instruction)' \
   README.md AGENTS.md .agents/knowledge .agents/memories .agents/plans .agents/contracts \
   .agents/skills/*/SKILL.md packages/*/SKILL.md 2>/dev/null; then
-  fail 'vendor-specific agent guidance/reference found; use general agent wording instead'
+  fail 'client-specific agent guidance/reference found; use general agent wording instead'
 fi
 
 # Durable memory is intentionally compacted to one canonical Markdown file.

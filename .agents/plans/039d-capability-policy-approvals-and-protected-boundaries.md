@@ -11,7 +11,7 @@ Turn the existing tool-level approval behavior and relay sandbox controls into o
 
 ## Current state
 
-- `ai-self/policies/default.yaml` already expresses durable external MCP client/MCP operating approval policy for repository work.
+- `ai-self/policies/default.yaml` already expresses durable external MCP operating approval policy for repository work.
 - The Nuxt application persists conversation-scoped MCP approval decisions as `always` / `never` and uses AI SDK tool-approval mechanisms.
 - Current application MCP decisions are primarily per-tool ID, not a general argument-aware policy language.
 - The Rust relay uses OAuth `relay.coding`, tool annotations, execution-root containment, safe PATH, and Bubblewrap.
@@ -36,7 +36,7 @@ Server-enforced, non-interactive constraints for every MCP client:
 - network mode constraints;
 - OAuth/owner/scope.
 
-A direct external MCP client cannot click the Nuxt approval UI, so anything that must *always* be forbidden belongs here.
+A direct external MCP cannot click the Nuxt approval UI, so anything that must *always* be forbidden belongs here.
 
 ### First-party approval policy
 
@@ -50,7 +50,7 @@ Interactive policy evaluated by the Nuxt app before approved tool execution:
 
 ### External client approval
 
-external MCP client/other MCP clients decide their own prompts based on their product policy and MCP metadata. The relay cannot assume those prompts exist. It still enforces hard server policy.
+External and other MCP clients decide their own prompts based on their product policy and MCP metadata. The relay cannot assume those prompts exist. It still enforces hard server policy.
 
 ## Capability/effect taxonomy
 
@@ -248,7 +248,7 @@ Attempt bypasses with:
 - `pnpm release:build v0.0.10` passed the mandatory commit gate, Nuxt production build, locked x86_64 Rust release build, version check, and release checksum verification.
 - Exact release binary was staged at `/home/farismnrr/.local/share/ai-code/bin/ai-tools`; release/deployed SHA-256 is `8953cd6f718d416ff8ce7fc92bace2bd27953363db5b59d226feb99b919e6281`.
 - `ai-tools-relay.service` restarted and remained active/running with the canonical remote OAuth, loopback trusted-proxy, repository working directory, home execution root, and port `47821` configuration.
-- Acceptance passed: capability policy boundary/behavior, Plan-039B/039C MCP contracts, zero-bypass, protected workspace paths, Git/patch safety, full phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke. The public authenticated smoke was not attempted because no access-token file was provided; no external MCP client/MCP client resync was performed.
+- Acceptance passed: capability policy boundary/behavior, Plan-039B/039C MCP contracts, zero-bypass, protected workspace paths, Git/patch safety, full phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke. The public authenticated smoke was not attempted because no access-token file was provided; no external MCP client resync was performed.
 
 ## Acceptance criteria
 

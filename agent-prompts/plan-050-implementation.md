@@ -10,7 +10,7 @@ Complete Plan 050 to production-quality standards. Do not merely make checklist 
 
 Plan 050 now also includes two execution-runtime requirements that supersede older delegated-agent wording in this brief:
 
-1. **Remove the product/runtime `agent_delegate` feature** and the provider-specific external MCP client/AGY/external MCP client-style coding-CLI plumbing that exists only to support it. This is separate from your ability to use platform-native sub-agents while implementing/reviewing the plan.
+1. **Remove the product/runtime `agent_delegate` feature** and the provider-specific coding-CLI plumbing that exists only to support it. This is separate from your ability to use platform-native sub-agents while implementing/reviewing the plan.
 2. **Add agent-controlled reliable execution:** eligible tools accept caller-selected bounded `timeout_ms` and explicit `execution_mode: sync | async | auto`, with standard resumable/cancellable MCP Tasks for async execution so accepted work does not restart merely because one RPC/client session times out.
 
 Do not create `050A`, `050B`, or other child plan files. Keep Plan 050 as one numbered plan with phases inside it.
@@ -63,7 +63,7 @@ The current product/runtime delegation feature is intentionally being removed.
 
 Remove `agent_delegate` from the current Full/Primary MCP catalog and runtime, including task/normal dispatch, hook/effect policy, capability filtering, current contracts, current acceptance scripts, operator/client docs, and provider-specific configuration/discovery/sandbox/auth-root code that exists only to launch external coding CLIs.
 
-Do not leave a hidden alias that still launches external MCP client/AGY/external MCP client-style provider CLIs. Preserve historical Plan 046/048 records as historical truth; update current contracts/docs rather than rewriting history.
+Do not leave a hidden alias that still launches provider-specific coding CLIs. Preserve historical Plan 046/048 records as historical truth; update current contracts/docs rather than rewriting history.
 
 This does **not** mean you should avoid sub-agents while implementing Plan 050. Platform-native sub-agents used for bounded engineering/review work are separate from the removed MCP `agent_delegate` product surface. Do not remove unrelated first-party multi-agent/sub-agent functionality unless source tracing proves it is only another path into the same deprecated provider-CLI launcher.
 
@@ -107,7 +107,7 @@ Required caller/execution coverage includes:
 - first-party Nuxt MCP;
 - paired/local terminal;
 - remote MCP clients;
-- direct external MCP client MCP where current connector/deployment access permits live verification;
+- direct external MCP where current connector/deployment access permits live verification;
 - synchronous native tools;
 - task/job lifecycle;
 - Git and code/LSP operations;
@@ -181,7 +181,7 @@ Keep these separate:
 
 `clientInfo` is display metadata only and never grants authority.
 
-Show `external MCP client` only if actual request metadata or another reviewed verifiable mapping supports it. Otherwise display a generic label such as `External MCP client`; never infer client identity from timing, User-Agent heuristics, or assumptions.
+Show a specific external-client label only if actual request metadata or another reviewed verifiable mapping supports it. Otherwise display the generic label `External MCP client`; never infer client identity from timing, User-Agent heuristics, or assumptions.
 
 Ensure paired/local relay requests send the first-party clientInfo consistently.
 
@@ -413,7 +413,7 @@ Execute representative first-party MCP activity against the target workspace, in
 
 When current authenticated connector/deployment access and operator authorization permit, execute a harmless direct external MCP read/search and optionally a controlled mutation. Confirm the activity reaches the same workspace history without Nuxt being the execution origin.
 
-Inspect actual delivered client metadata. Display external MCP client only if evidence supports it; otherwise keep generic external-client labeling and mark exact actor identity `UNPROVEN`.
+Inspect actual delivered client metadata. Display a specific client label only if evidence supports it; otherwise keep generic external-client labeling and mark exact actor identity `UNPROVEN`.
 
 If deployment/restart/credential/operator action is required and not authorized, do not fabricate the result. Finish all local work and mark only that live case `UNPROVEN`.
 
@@ -510,7 +510,7 @@ Plan 050 is ready for closure only when current evidence proves all applicable p
 - per-workspace Logs UI with filtering/pagination/live/detail/diff behavior;
 - deterministic retention/clear-history semantics;
 - local-terminal and first-party MCP end-to-end evidence;
-- external/external MCP client activity evidence when access permits, otherwise explicit `UNPROVEN` for that exact live case;
+- external MCP activity evidence when access permits, otherwise explicit `UNPROVEN` for that exact live case;
 - generic MCP compatibility;
 - relevant existing security regressions green;
 - fresh independent review with zero unresolved P0/P1 findings;

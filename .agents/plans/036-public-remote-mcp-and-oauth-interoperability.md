@@ -79,16 +79,16 @@ Therefore Plan 036 is not a new remote-shell architecture. It is a standards/int
 
 ## External protocol targets
 
-Implementation must re-check the current official specifications at task start because MCP/OpenAI interoperability evolves quickly. As of this plan's creation, the intended targets are:
+Implementation must re-check the current official specifications at task start because MCP interoperability evolves quickly. As of this plan's creation, the intended targets are:
 
 - MCP Streamable HTTP over a stable public HTTPS endpoint;
 - MCP authorization using OAuth Protected Resource Metadata and a separate Authorization Server;
 - OAuth Authorization Code flow with PKCE for interactive clients;
 - resource/audience binding for the MCP resource;
 - standards-compliant client discovery/registration behavior supported by current MCP clients;
-- external MCP client remote MCP compatibility using the same endpoint, not a external MCP client-only proprietary transport.
+- external MCP compatibility using the same endpoint, not an external-client-only proprietary transport.
 
-Do not freeze implementation details merely because this plan names a currently documented mechanism. Re-read the official MCP authorization/transport specification and current OpenAI MCP/external MCP client documentation before implementation.
+Do not freeze implementation details merely because this plan names a currently documented mechanism. Re-read the official MCP authorization/transport specification and current external-client documentation before implementation.
 
 ---
 
@@ -104,7 +104,7 @@ This plan does **not** initially aim to:
 - weaken single-owner authorization to make external clients easier to connect;
 - introduce a generic DI framework, service locator, or new server architecture;
 - introduce a unit-test suite or CI workflow;
-- make OpenAI Secure MCP Tunnel the canonical transport, because the same endpoint must also be usable by the custom Nuxt application and other MCP clients.
+- make a secure standards-based MCP tunnel the canonical transport, because the same endpoint must also be usable by the custom Nuxt application and other MCP clients.
 
 A brokered multi-device architecture may be a future plan if requirements grow beyond one owner's laptop/relay endpoint.
 
@@ -162,7 +162,7 @@ Do not replace owner binding with UI filtering or client trust.
 
 ### 4. One standards-compliant MCP resource for all clients
 
-Nuxt and external MCP client should consume the same MCP resource contract.
+Nuxt and external MCP clients should consume the same MCP resource contract.
 
 Avoid separate protocol forks such as:
 
@@ -188,14 +188,14 @@ Before editing implementation:
 - [ ] Re-read `.agents/README.md`, current canonical memory, Rust/MCP knowledge, and current source on the implementation branch.
 - [ ] Re-read official current MCP transport specification.
 - [ ] Re-read official current MCP authorization specification.
-- [ ] Re-read current OpenAI/external MCP client remote MCP authentication and connection documentation.
+- [ ] Re-read current external MCP authentication and connection documentation.
 - [ ] Confirm current client-registration/discovery expectations (for example CIMD/DCR/pre-registered client support if still applicable).
 - [ ] Confirm whether external MCP client requires any compatibility behavior beyond standard MCP + OAuth.
 - [ ] Inventory current relay endpoint behavior against the official protocol rather than historical Plan 028/029 claims.
 - [ ] Re-run/inspect the existing frozen tool catalog and published security metadata.
 - [ ] Record a concise compatibility matrix in this plan before implementation starts.
 
-Deliverable: an explicit matrix of `current relay` vs `MCP spec` vs `Nuxt client` vs `external MCP client client`, with gaps categorized as transport, OAuth, deployment, client integration, or documentation.
+Deliverable: an explicit matrix of `current relay` vs `MCP spec` vs `Nuxt client` vs `external client`, with gaps categorized as transport, OAuth, deployment, client integration, or documentation.
 
 ---
 
@@ -259,7 +259,7 @@ Acceptance evidence should include:
 
 Integrate a separate standards-compliant Authorization Server rather than implementing OAuth issuance inside the relay.
 
-Required capabilities, subject to current official MCP/OpenAI requirements at implementation time:
+Required capabilities, subject to current official MCP requirements at implementation time:
 
 - [ ] Authorization endpoint.
 - [ ] Token endpoint.
@@ -270,7 +270,7 @@ Required capabilities, subject to current official MCP/OpenAI requirements at im
 - [ ] Ability to issue access tokens for the public MCP resource/audience.
 - [ ] Ability to issue `relay.coding` scope.
 - [ ] Stable subject claim usable by `OAUTH_OWNER_SUBJECT`.
-- [ ] Client identification/registration compatible with both Nuxt and external MCP client.
+- [ ] Client identification/registration compatible with both Nuxt and external MCP clients.
 - [ ] Redirect URI validation appropriate to each OAuth client.
 
 Explicitly decide whether the Authorization Server is:
@@ -463,7 +463,7 @@ Tasks:
 - [ ] Distinguish public MCP edge failures, OAuth failures, tunnel-offline failures, and actual tool execution failures using bounded classifications.
 - [ ] Ensure public-domain route logging follows the existing low-cardinality/privacy policy.
 
-external MCP client is a third-party client; do not require or invent internal trace propagation through external MCP client.
+An external MCP client is a third-party client; do not require or invent internal trace propagation through it.
 
 ---
 

@@ -32,7 +32,7 @@ Plan 044 is successful only when the live authenticated MCP connector can perfor
 4. controlled Actions mutation: rerun, cancel, and explicit `workflow_dispatch` only;
 5. no secret value, GitHub credential, auth header, protected credential path, raw provider error, or unbounded action log reaches model-visible output;
 6. repository identity is always derived from a validated GitHub remote rather than arbitrary owner/repository arguments;
-7. the final MCP contract is versioned and deterministic, the operator relay is rebuilt/restarted from the reviewed merged commit, and external MCP client connector rediscovery proves the new tools live.
+7. the final MCP contract is versioned and deterministic, the operator relay is rebuilt/restarted from the reviewed merged commit, and external MCP connector rediscovery proves the new tools live.
 
 The planned public tool surface adds 23 tools to the current 77-tool v8 catalog, producing an expected 100-tool v9 catalog if no tool is added or removed during reviewed implementation.
 
@@ -146,7 +146,7 @@ If current code cannot express a truthful safe presentation without a small new 
 - [ ] restart `ai-tools-relay.service`
 - [ ] health/OAuth challenge proof
 - [ ] authenticated live MCP proof
-- [ ] external MCP client connector rediscovery proof
+- [ ] external MCP connector rediscovery proof
 - [ ] documentation + canonical-memory reconciliation
 
 ## Planned tool surface
@@ -265,7 +265,7 @@ Plan 044 closes only when all of the following are true:
 - [ ] exact merged commit is release-built, installed, and binary identity/hash recorded.
 - [ ] `ai-tools-relay.service` is restarted from that reviewed binary and healthy.
 - [ ] live authenticated MCP catalog and representative Plan-044 calls succeed.
-- [ ] external MCP client connector rediscovery exposes the new tool surface.
+- [ ] external MCP connector rediscovery exposes the new tool surface.
 - [ ] docs, Plan 044 status, and `.agents/memories/README.md` are reconciled with actual live state.
 
 ## Explicit non-goals

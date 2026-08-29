@@ -102,7 +102,7 @@ Model prompts and skills may guide behavior but never constitute a security boun
 - **First-party Nuxt approval policy:** can present user approval prompts and persist scoped decisions.
 - **Third-party MCP client approval policy:** remains controlled by that client; the relay provides accurate MCP annotations/metadata while still enforcing its own hard boundary.
 
-Do not pretend a first-party approval UI protects direct external MCP client/other-client relay calls.
+Do not pretend a first-party approval UI protects direct external MCP/other-client relay calls.
 
 ### 4. Least privilege and narrowing inheritance
 
@@ -186,7 +186,7 @@ Verified handoff facts for 039C:
 - `apply_patch` performs bounded all-target preflight, no-follow/path/protected-entry validation, stale-target detection, atomic replacement, post-rename commit-state tracking, and best-effort rollback with truthful incomplete-rollback reporting;
 - final source validation and an independent read-only security/architecture review are green; the review of the exact committed implementation range returned `NO MATERIAL FINDINGS`;
 - the reviewed `ai-tools 0.0.10` release artifact SHA-256 is `03d3ca5cad6add61eee91b02676f4b70dcc96ac1ac0a3632852d5f8e2295aa10`, matching the manually installed relay binary; the restarted user service reported `active`;
-- refreshed external MCP client MCP discovery exposed all 18 tools and live authenticated acceptance exercised the complete catalog, including a disposable Git/patch workflow, schema rejection before dispatch, containment rejection, background-job cancellation, and exact canary cleanup; the primary worktree was clean afterward;
+- refreshed external MCP discovery exposed all 18 tools and live authenticated acceptance exercised the complete catalog, including a disposable Git/patch workflow, schema rejection before dispatch, containment rejection, background-job cancellation, and exact canary cleanup; the primary worktree was clean afterward;
 - continuation/pagination remains intentionally deferred to Plan 039H (039C's `code_*` tools implement a minimal, self-contained offset-based continuation in the interim, not an incompatible scheme).
 
 ## 039C verified closure baseline (2026-08-17, branch `feat/039c-lsp-foundation`)
@@ -195,7 +195,7 @@ Plan 039C is **CLOSED / VERIFIED**. Final independent implementation/security/ar
 
 ## 039D verified operational closure (2026-08-17, branch `feat/039c-lsp-foundation`)
 
-Plan 039D is **CLOSED / VERIFIED**. The exact reviewed HEAD `18bebfa6cdfedbb7a6798839cc9cf7bd7d5d40b2` passed `pnpm release:build v0.0.10`; the release artifact and deployed `/home/farismnrr/.local/share/ai-code/bin/ai-tools` both hash to `8953cd6f718d416ff8ce7fc92bace2bd27953363db5b59d226feb99b919e6281`. The restarted `ai-tools-relay.service` is active/running with the canonical remote OAuth/loopback configuration. Capability-policy behavior, frozen MCP contracts, zero-bypass, workspace/Git safety, phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke all passed. Public authenticated discovery was not attempted without an operator token file, and no external MCP client/MCP client resync was performed.
+Plan 039D is **CLOSED / VERIFIED**. The exact reviewed HEAD `18bebfa6cdfedbb7a6798839cc9cf7bd7d5d40b2` passed `pnpm release:build v0.0.10`; the release artifact and deployed `/home/farismnrr/.local/share/ai-code/bin/ai-tools` both hash to `8953cd6f718d416ff8ce7fc92bace2bd27953363db5b59d226feb99b919e6281`. The restarted `ai-tools-relay.service` is active/running with the canonical remote OAuth/loopback configuration. Capability-policy behavior, frozen MCP contracts, zero-bypass, workspace/Git safety, phase-4 relay black-box, and public HTTPS/OAuth metadata/Bearer-challenge smoke all passed. Public authenticated discovery was not attempted without an operator token file, and no external MCP client resync was performed.
 
 ## Explicit non-goals
 

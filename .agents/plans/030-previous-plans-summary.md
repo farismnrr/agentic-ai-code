@@ -34,7 +34,7 @@ The historical plans collectively produced the current architecture:
 
 | Plan | Historical outcome |
 | --- | --- |
-| **001 — Chat UI** | Established the initial external MCP client-like frontend chat experience and core interaction structure. |
+| **001 — Chat UI** | Established the initial client-like frontend chat experience and core interaction structure. |
 | **002 — Landing/Auth Interactive** | Connected landing/login/app navigation and closed early interaction gaps. |
 | **003 — Instrument Design** | Established the product's visual identity and design direction. |
 | **004 — UI Responsiveness** | Audited/resolved responsive behavior from small mobile layouts through large desktop screens. |
@@ -62,8 +62,8 @@ The historical plans collectively produced the current architecture:
 | **026 — Local CLI Relay Agent** | First-generation local browser-to-relay plan. Its Node/WebSocket and weaker boundary assumptions were later superseded by the Rust relay in Plan 028. |
 | **027 — CLI Rust Refactor** | Migrated terminal/curl/SearXNG standalone executable CLIs to Rust with parity, process-safety, SSRF, supply-chain, benchmark, release, and zero-JS-CLI cutover work. |
 | **028 — Relay Agent Rust Rewrite** | Replaced the legacy Node/WebSocket relay with the native Rust MCP relay. Phase 12 removed the legacy relay surface; Phase 19 hardened Bubblewrap filesystem/process/privilege/OAuth security. |
-| **029 — external MCP client Native MCP Integration** | Froze the stateless `POST /mcp` target, external OAuth Resource Server model, `relay.coding`, tool contract, protected-resource metadata, and deterministic conformance/security gates. |
-| **029b — MCP Production Hardening** | Hardened trusted proxy handling, OAuth challenges/metadata, rate/admission controls, runtime tool snapshots, correlation metadata, MCP result conformance, and external MCP client-facing OAuth metadata. Docker stayed safely disabled without an isolated backend; live external external MCP client/OAuth acceptance was historically unverified. **Closed here for planning refresh.** |
+| **029 — External MCP Native Integration** | Froze the stateless `POST /mcp` target, external OAuth Resource Server model, `relay.coding`, tool contract, protected-resource metadata, and deterministic conformance/security gates. |
+| **029b — MCP Production Hardening** | Hardened trusted proxy handling, OAuth challenges/metadata, rate/admission controls, runtime tool snapshots, correlation metadata, MCP result conformance, and external-client-facing OAuth metadata. Docker stayed safely disabled without an isolated backend; live external MCP client/OAuth acceptance was historically unverified. **Closed here for planning refresh.** |
 
 ## Important supersessions
 

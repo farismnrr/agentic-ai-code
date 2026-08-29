@@ -1,6 +1,6 @@
 # Skills
 
-Local skills are reusable procedures that external MCP client can load through Masih Awam MCP and expose through `.agents/skills/` when useful.
+Local skills are reusable procedures that an external MCP client can load through Masih Awam MCP and expose through `.agents/skills/` when useful.
 
 ## Authoring rules
 
