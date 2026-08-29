@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const valid = {
-  source: 'external-mcp' as const,
+  source: 'external_mcp' as const,
   taskId: 'og_123',
   workspace: 'ai-code',
   title: 'Ship Telegram completion notice',

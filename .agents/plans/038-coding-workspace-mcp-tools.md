@@ -656,7 +656,7 @@ new path beneath external symlinked ancestor
 - `README.md`
 - `docs/getting-started.md`
 - `docs/architecture.md`
-- `docs/external-mcp.md`
+- `docs/mcp-client.md`
 - `packages/rust-tools/README.md`
 
 Only modify documents where the information naturally belongs.
@@ -687,7 +687,7 @@ Clarify that terminal remains the correct escape hatch for builds, tests, packag
 - Documentation options match tool schemas.
 - README/tool inventory matches `tools/list`.
 
-**Evidence:** `scripts/verify-workspace-docs.sh` checks the 12-tool inventory and Workspace v1 defaults against the frozen runtime `tools/list` contract; `scripts/phase7-external-mcp-contract.sh` verifies that frozen catalog against a freshly built relay.
+**Evidence:** `scripts/verify-workspace-docs.sh` checks the 12-tool inventory and Workspace v1 defaults against the frozen runtime `tools/list` contract; `scripts/phase7-client-contract.sh` verifies that frozen catalog against a freshly built relay.
 
 **Commit boundary:** `docs(relay): document native coding workspace tools`
 

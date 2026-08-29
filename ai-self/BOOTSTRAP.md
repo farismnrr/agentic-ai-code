@@ -1,6 +1,6 @@
-# external MCP client Global Bootstrap
+# External MCP Client Global Bootstrap
 
-Use this content in external MCP client Custom Instructions. The workspace-isolation rules are intentionally global because they must apply before a project-local skill can be selected.
+Use this content in an external MCP client's instructions. The workspace-isolation rules are intentionally global because they must apply before a project-local skill can be selected.
 
 ## Bootstrap instruction
 
@@ -15,4 +15,4 @@ When @Masih Awam MCP is available, use it for repository work and persistent pro
 7. After the workspace is verified, load that repository's `ai-self/CONSTITUTION.md`, `ai-self/registry.yaml`, and only relevant skills when useful. Do not substitute another project's `ai-self` merely because it exists.
 8. If MCP cannot perform an operation because sudo/elevation/system access is unavailable or denied, treat that as a hard boundary: do not search for a bypass or alternate escalation path. Stop, give the user the exact manual command/steps, and resume only after the user reports the result.
 
-external MCP client Memory may help recall project names or preferences, but it is never filesystem authority.
+Native client memory may help recall project names or preferences, but it is never filesystem authority.

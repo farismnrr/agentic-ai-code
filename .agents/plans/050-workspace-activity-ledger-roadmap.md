@@ -5,7 +5,7 @@
 
 ## Goal
 
-Deliver an industry-standard, persistent, per-workspace activity ledger that truthfully records every workspace-scoped operation mediated by `ai-tools relay`, regardless of whether the caller is the first-party Nuxt application, the paired/local-terminal path, external MCP client through remote MCP, another MCP client, or a task/background execution path.
+Deliver an industry-standard, persistent, per-workspace activity ledger that truthfully records every workspace-scoped operation mediated by `ai-tools relay`, regardless of whether the caller is the first-party Nuxt application, the paired/local-terminal path, an external MCP client through remote MCP, another MCP client, or a task/background execution path.
 
 At the same time, simplify and harden the coding execution surface: remove the provider-specific `agent_delegate`/coding-CLI delegation feature, and let agents choose bounded execution timeout plus sync/async behavior for eligible tools so long-running work can be polled/resumed instead of timing out and being restarted from scratch.
 
@@ -18,7 +18,7 @@ Plan 050 is intentionally one plan file. Its implementation is divided into phas
 Plan 050 is complete only when:
 
 1. every relay-mediated workspace operation resolves to one authoritative canonical workspace root and one owned Nuxt workspace binding without trusting a client-supplied workspace UUID;
-2. first-party Nuxt MCP, paired/local-terminal calls, direct external MCP client remote MCP, generic MCP clients, and sync/async task/job execution all use the same activity contract;
+2. first-party Nuxt MCP, paired/local-terminal calls, direct external MCP, generic MCP clients, and sync/async task/job execution all use the same activity contract;
 3. the relay durably records a workspace operation locally before execution when activity logging is configured as required, so Nuxt/network outages do not create silent gaps;
 4. relay delivery to Nuxt is authenticated, idempotent, retryable, bounded, and crash-safe;
 5. PostgreSQL stores one chronological workspace activity history with ownership-enforced cursor queries, bounded retention, and explicit deletion semantics;
@@ -83,7 +83,7 @@ Verified in the working tree on 2026-08-26:
 ### Out of scope
 
 - hidden model reasoning or chain-of-thought;
-- reintroducing provider-specific external coding-CLI delegation or parsing provider-private transcripts after `agent_delegate` removal;
+- reintroducing provider-specific coding-CLI delegation or parsing provider-private transcripts after `agent_delegate` removal;
 - replacing OTel/Loki operational telemetry;
 - persisting arbitrary terminal stdout/stderr, raw MCP request/response bodies, prompts/model messages, auth headers, cookies, environment variables, or provider secrets;
 - syscall-level surveillance of arbitrary non-relay processes;
@@ -121,7 +121,7 @@ Nested `cwd` values map to their containing authorized root. Global relay admini
 
 Persist separate facts for transport/source channel, bounded client-reported `clientInfo`, source identity/binding, and optional opaque OAuth client fingerprint when justified. `clientInfo` is display metadata only.
 
-If identifying metadata is absent or untrusted, the UI shows **External MCP client** rather than guessing. A `external MCP client` label is used only when actual reviewed metadata supports it.
+If identifying metadata is absent or untrusted, the UI shows **External MCP client** rather than guessing. A specific client label is used only when actual reviewed metadata supports it.
 
 ### AD-007 — Exact diffs only where they are provable
 
@@ -149,7 +149,7 @@ V1 uses append-oriented durable journaling, authenticated ingestion, immutable o
 
 ### AD-013 — Remove provider-specific coding-CLI delegation
 
-The current `agent_delegate` MCP feature is removed from Full/Primary catalogs and runtime execution. Provider-specific external coding-CLI discovery, allowlisting, auth-root/sandbox mounting, configuration, docs, and current acceptance contracts that exist only to support `agent_delegate` must be deleted or retired after dependency review. Do not keep a hidden compatibility alias that still launches those CLIs.
+The current `agent_delegate` MCP feature is removed from Full/Primary catalogs and runtime execution. Provider-specific coding-CLI discovery, allowlisting, auth-root/sandbox mounting, configuration, docs, and current acceptance contracts that exist only to support `agent_delegate` must be deleted or retired after dependency review. Do not keep a hidden compatibility alias that still launches those CLIs.
 
 This removal does **not** prohibit the coding agent implementing this plan from using platform-native sub-agents for bounded parallel work/review, and it does not remove unrelated first-party multi-agent/sub-agent orchestration unless source inspection proves it is merely another entrypoint into the same deprecated provider-CLI delegation path.
 
@@ -416,7 +416,7 @@ Do not create a `verify:050` command or Plan-050-specific verification script. E
 
 ### A. Remove `agent_delegate` and provider-only coding-CLI plumbing
 
-**Required outcome:** current runtime/tooling no longer exposes or launches provider-specific external coding CLIs through `agent_delegate`.
+**Required outcome:** current runtime/tooling no longer exposes or launches provider-specific coding CLIs through `agent_delegate`.
 
 **Requirements:**
 - remove `agent_delegate` from Full/Primary MCP catalogs, profile counts/contracts, task dispatch, normal dispatch, hook/effect policy, capability filtering, and current user/operator docs;
@@ -854,8 +854,8 @@ Use real `local-tool-controller` → `useRelayAgent` → loopback relay path wit
 ### First-party Nuxt MCP
 Use configured first-party MCP against target workspace for representative read plus safe structured mutation. Confirm one activity per real tool operation and exact diff for structured mutation, with no duplicate from chat UI/telemetry.
 
-### Direct external MCP / external MCP client
-When deployment/connector is available and separately authorized, execute harmless read/search and optional controlled structured mutation. Confirm the operation appears without Nuxt being the caller. Inspect actual `clientInfo`: show `external MCP client` only when real metadata supports it; otherwise display `External MCP client` and mark exact actor identification UNPROVEN.
+### Direct external MCP client
+When deployment/connector is available and separately authorized, execute harmless read/search and optional controlled structured mutation. Confirm the operation appears without Nuxt being the caller. Inspect actual `clientInfo`: show a specific client label only when real metadata supports it; otherwise display `External MCP client` and mark exact actor identification UNPROVEN.
 
 ### Generic client
 Exercise standards-compliant MCP with and without optional clientInfo; both must work under existing auth/policy and differ only in presentation metadata.
@@ -938,7 +938,7 @@ Local evidence completed:
 
 The `verify:050` / `verify:commit` / plan-numbered script names above are historical evidence of what was run on 2026-08-26. They were intentionally removed from the active repository model on 2026-08-27 in favor of feature-named Node/Cargo tests and the stack-aware `pnpm guardrail`; future agents must not recreate them.
 
-The following acceptance remains explicitly **UNPROVEN**, not inferred: live PostgreSQL migration/ingestion against an enrolled source, paired/local-terminal end-to-end activity, first-party Nuxt MCP activity, browser acceptance against persisted Logs, direct external MCP/external MCP client connector activity, generic-client live compatibility, adversarial database/connector/canary sweeps, and measured performance/backlog behavior. The local environment had no activity payload secret, authorized enrollment/source fixture, or available browser runtime; no shared database mutation or deployment was performed. These are external/environmental blockers for live closure and require an authorized operator fixture and deployment/runtime access.
+The following acceptance remains explicitly **UNPROVEN**, not inferred: live PostgreSQL migration/ingestion against an enrolled source, paired/local-terminal end-to-end activity, first-party Nuxt MCP activity, browser acceptance against persisted Logs, direct external MCP connector activity, generic-client live compatibility, adversarial database/connector/canary sweeps, and measured performance/backlog behavior. The local environment had no activity payload secret, authorized enrollment/source fixture, or available browser runtime; no shared database mutation or deployment was performed. These are external/environmental blockers for live closure and require an authorized operator fixture and deployment/runtime access.
 
 ## Deployment-boundary follow-up — 2026-08-27
 

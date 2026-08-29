@@ -298,7 +298,7 @@ The planned source changes are Nuxt/Vue/TypeScript/server-web changes. Do not co
 
 **Commit boundary:** `refactor(settings): unify mcp connection presentation`
 
-### TASK-005 — Implement the external MCP client-style Add MCP flow
+### TASK-005 — Implement the client-neutral Add MCP flow
 
 **Outcome:** remote connection creation is a focused configure/scan/review/create flow rather than create-first/test-later.
 

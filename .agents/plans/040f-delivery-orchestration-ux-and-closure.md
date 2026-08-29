@@ -85,7 +85,7 @@ Use a disposable/test repository or safe feature branch where practical, then au
 8. merge with supported strategy under policy;
 9. remote feature branch cleanup;
 10. local integration sync and local/remote parity proof;
-11. direct external MCP client MCP invocation of new read/write tools with hard relay policy intact.
+11. direct external MCP invocation of new read/write tools with hard relay policy intact.
 
 ## Closure review
 

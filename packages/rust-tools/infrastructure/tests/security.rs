@@ -41,7 +41,7 @@ fn allows_configured_browser_origin() {
 #[test]
 fn rejects_mismatched_browser_origin() {
     assert!(enforce_local_access_policy(
-        &headers(Some("https://external-mcp.com"), "127.0.0.1:47821"),
+        &headers(Some("https://external-client.example"), "127.0.0.1:47821"),
         &config(Some("http://localhost:3333")),
     )
     .is_err());

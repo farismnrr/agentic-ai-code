@@ -47,7 +47,7 @@ async function withMcpSpan<T>(operation: string, attributes: Record<string, unkn
 // callers cast to `ToolApprovalConfiguration<ToolSet, never>` only at the
 // `streamText`/`generateText` call site, once nothing further mutates it.
 /**
- * OpenAI-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/; the shared
+ * Provider-shaped tool names must match /^[a-zA-Z0-9_-]{1,64}$/; the shared
  * identity helper is the reverse-lookup contract used by the approval UI.
  */
 /**

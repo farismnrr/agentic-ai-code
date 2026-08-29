@@ -267,7 +267,7 @@ Do not implement update endpoints in this plan. Remediation occurs through norma
 
 **Files:**
 - Modify: `packages/rust-tools/README.md`
-- Modify: `docs/external-mcp.md`
+- Modify: `docs/mcp-client.md`
 - Modify: this plan and parent Plan 044
 - Modify `.agents/memories/README.md` with the durable secret-scanning double-barrier invariant.
 

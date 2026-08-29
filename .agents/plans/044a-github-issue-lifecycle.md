@@ -223,7 +223,7 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 
 **Files:**
 - Modify: `packages/rust-tools/README.md`
-- Modify: `docs/external-mcp.md`
+- Modify: `docs/mcp-client.md`
 - Modify: this plan
 - Modify parent Plan 044 status table/todo
 - Modify `.agents/memories/README.md` only if a durable security/architecture invariant changed beyond what source/docs already state.

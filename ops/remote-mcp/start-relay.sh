@@ -81,7 +81,7 @@ else
   command -v "$ai_tools_bin" >/dev/null
 fi
 
-# This repository wrapper is the external MCP client-facing remote deployment path. Pin
+# This repository wrapper is the external-client remote deployment path. Pin
 # it to Primary explicitly, even if a caller inherited Full. Capabilities that
 # need the public fast path (such as authenticated delegation) are promoted
 # explicitly instead of widening the endpoint; the Rust CLI keeps Full as its

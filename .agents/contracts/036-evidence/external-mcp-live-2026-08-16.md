@@ -1,4 +1,4 @@
-# Plan 036 — Live external MCP client MCP evidence (2026-08-16)
+# Plan 036 — Live external MCP evidence (2026-08-16)
 
 This file records only evidence observed in the live external MCP client session. It intentionally excludes tokens, OAuth codes, subjects, credentials, private configuration values, and other secrets.
 

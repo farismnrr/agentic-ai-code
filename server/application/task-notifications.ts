@@ -10,7 +10,7 @@ export const TASK_NOTIFICATION_LIMITS = {
   message: 4096
 } as const
 
-export type TaskCompletionSource = 'nuxt' | 'external-mcp'
+export type TaskCompletionSource = 'nuxt' | 'external_mcp'
 
 export interface TaskCompletionInput {
   source: TaskCompletionSource
@@ -110,7 +110,7 @@ function normalizeResultUrl(value: unknown) {
 }
 
 export function sanitizeTaskCompletion(input: TaskCompletionInput): SanitizedTaskCompletion {
-  if (!input || typeof input !== 'object' || !['nuxt', 'external-mcp'].includes(input.source)) throw new Error('source is invalid')
+  if (!input || typeof input !== 'object' || !['nuxt', 'external_mcp'].includes(input.source)) throw new Error('source is invalid')
   const resultUrl = normalizeResultUrl(input.resultUrl)
   return {
     contractVersion: TASK_NOTIFICATION_CONTRACT_VERSION,

@@ -112,7 +112,7 @@ impl QueueResult {
 pub fn sanitize_task_completion(
     mut payload: TaskCompletionPayload,
 ) -> Result<TaskCompletionPayload, NotificationError> {
-    if payload.source != "nuxt" && payload.source != "external-mcp" {
+    if payload.source != "nuxt" && payload.source != "external_mcp" {
         return Err(NotificationError::Invalid);
     }
     payload.task_id = bounded_text(payload.task_id, MAX_TASK_ID_BYTES, false)?;

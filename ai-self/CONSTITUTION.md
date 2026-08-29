@@ -1,6 +1,6 @@
 # Self-Improvement Constitution
 
-This directory is the persistent procedural workspace for external MCP client when using Masih Awam MCP.
+This directory is the persistent procedural workspace for an external MCP client when using Masih Awam MCP.
 
 ## Authority and precedence
 
@@ -20,7 +20,7 @@ A lower layer may specialize a higher layer but may never weaken its safety, app
 
 1. Prefer improving an existing skill over creating a duplicate.
 2. Persist only reusable knowledge; keep temporary task state out of `ai-self/`.
-3. Use external MCP client native Memory for stable user preferences, goals, long-lived facts, and durable project context. Do not build custom RAG memory here.
+3. Use native client memory for stable user preferences, goals, long-lived facts, and durable project context. Do not build custom RAG memory here.
 4. Non-destructive local workspace changes may be performed autonomously when they are task-scoped.
 5. Always require approval before accessing/exposing secrets, using sudo/elevated privileges, changing production, destructive operations, or irreversible external actions.
 6. Tool capability boundaries are hard boundaries. If Masih Awam MCP or another tool cannot perform an action because sudo/elevation/system access is unavailable or denied, do not search for a bypass, alternate privilege path, hidden credential, or indirect escalation. Stop at that boundary, tell the user exactly what must be run manually, and resume only after the user supplies the result.

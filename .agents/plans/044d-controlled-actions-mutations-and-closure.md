@@ -13,7 +13,7 @@ is unavailable.
 
 ## Goal
 
-Add only the three GitHub Actions mutations needed for practical engineering control, then perform the composed Plan-044 security review, contract versioning, integration, release build, relay restart, live MCP verification, and external MCP client connector rediscovery required to close the entire Plan 044 family.
+Add only the three GitHub Actions mutations needed for practical engineering control, then perform the composed Plan-044 security review, contract versioning, integration, release build, relay restart, live MCP verification, and external MCP connector rediscovery required to close the entire Plan 044 family.
 
 ## Success criteria
 
@@ -363,7 +363,7 @@ After integration, the complete planned Plan-044 surface contains 23 new tools o
 - [ ] retain deterministic hostile provider canary as the mandatory proof even when live secret-scanning is unavailable/empty.
 - [ ] confirm ordinary `terminal_exec` still cannot read GitHub credential stores/environment.
 
-## PHASE-08 — external MCP client connector rediscovery and documentation closure
+## PHASE-08 — external MCP connector rediscovery and documentation closure
 
 **Goal:** Close the client side and durable repository state, not merely the server deployment.
 
@@ -386,7 +386,7 @@ After integration, the complete planned Plan-044 surface contains 23 new tools o
 **Files:**
 - Modify: Plan 044 master and 044A–044D statuses/checklists.
 - Modify: `.agents/memories/README.md` with durable final invariants only.
-- Modify: `packages/rust-tools/README.md`, `docs/external-mcp.md`, and other directly affected operator docs.
+- Modify: `packages/rust-tools/README.md`, `docs/mcp-client.md`, and other directly affected operator docs.
 - Modify current contract references/hash documentation.
 
 **Steps:**
@@ -418,7 +418,7 @@ After integration, the complete planned Plan-044 surface contains 23 new tools o
 - [ ] exact merged binary is release-built/installed with hash parity.
 - [ ] relay restarted and healthy.
 - [ ] authenticated live MCP contract matches v9.
-- [ ] external MCP client connector rediscovery exposes Plan-044 tools.
+- [ ] external MCP connector rediscovery exposes Plan-044 tools.
 - [ ] docs/memory/plan files are truthful.
 - [ ] linked Plan-044 GitHub issue, if any, is closed only after actual completion.
 

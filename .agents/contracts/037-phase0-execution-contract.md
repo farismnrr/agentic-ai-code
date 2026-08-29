@@ -19,9 +19,8 @@ Sources reviewed:
 - https://tasks.extensions.modelcontextprotocol.io/specification/draft/tasks
 - https://modelcontextprotocol.io/seps/2663-tasks-extension
 - https://blog.modelcontextprotocol.io/posts/2026-07-28/
-- https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-external-mcp-beta
 
-external MCP client/OpenAI documentation describes custom MCP apps and write-action
+External MCP client documentation describes custom MCP apps and write-action
 approval, but does not promise a terminal-style rendering of arbitrary task
 progress or stdout chunks. The relay therefore exposes truthful protocol
 state; client rendering remains a separate acceptance claim.

@@ -1,6 +1,6 @@
 # Local Tools
 
-Reusable local helpers created by external MCP client live here.
+Reusable local helpers for an external MCP client live here.
 
 Rules:
 - keep tools narrowly scoped,

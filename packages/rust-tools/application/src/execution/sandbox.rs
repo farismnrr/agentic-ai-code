@@ -212,7 +212,7 @@ fn spawn_with_profile(
         // Executable resolution preserves the configured path so shims keep
         // their argv[0] semantics. Mount the configured symlink directory at
         // that same path as well as its canonical target; otherwise a
-        // provider such as fnm-managed external MCP client resolves successfully during
+        // provider such as an fnm-managed coding CLI resolves successfully during
         // capability discovery but is absent from the Bubblewrap namespace.
         let configured_value = configured.to_string_lossy().into_owned();
         if configured != canonical {

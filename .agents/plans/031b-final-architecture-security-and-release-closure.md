@@ -714,7 +714,7 @@ The completed source inventory and finding disposition are recorded in
 - [x] Implement deliberate 301/302/303/307/308 method/body semantics or explicitly reject unsupported replay cases.
 - [x] Ensure the policy is used by OpenAI-compatible discovery + chat SDK paths.
 - [x] Ensure the policy is used by Anthropic-compatible discovery + chat SDK paths.
-- [x] Ensure LangGraph/OpenAI/Anthropic client hooks use the same policy.
+- [x] Ensure LangGraph/model-provider client hooks use the same policy.
 - [x] Confirm Vertex path is unaffected unless it actually uses user-controlled base URLs.
 - [x] Do not leak `Authorization`, `x-api-key`, arbitrary custom headers, cookies, or future unknown secret headers to another origin.
 
@@ -992,8 +992,8 @@ Run and record every applicable deterministic script. At minimum inspect/run:
 - [x] architecture negative/positive acceptance added by 031B;
 - [x] provider SSRF/redirect acceptance added/repaired by 031B;
 - [x] `scripts/phase4-black-box.sh`;
-- [x] `scripts/phase6-external-mcp-e2e.sh` applicable deterministic/static portion;
-- [x] `scripts/phase7-external-mcp-contract.sh`;
+- [x] `scripts/phase6-external-client-e2e.sh` applicable deterministic/static portion;
+- [x] `scripts/phase7-client-contract.sh`;
 - [x] `scripts/phase8-zero-bypass.sh`;
 - [x] any other existing Rust/native security acceptance script affected by touched code.
 

@@ -35,7 +35,7 @@ Rules:
 8. If a later child uncovers an earlier-foundation defect, remediate/reverify the foundation before continuing.
 9. **Do not restart or redeploy the relay merely because a phase/child plan finished.** Batch implementation and deterministic verification against source/test binaries first. Preserve the currently running relay unless a live-runtime proof truly requires loading a new binary/configuration.
 10. **Relay restart/redeployment is operator-owned.** Agents/assistants must not run `systemctl --user restart`, kill/relaunch the relay, replace the installed live binary, mutate the user service, or otherwise disrupt the active connector on their own. When a restart becomes necessary, stop at that boundary and give the user the exact reviewed commands to run.
-11. **external MCP client connector/action resync is operator-owned too.** Do not attempt to force/recreate/resync the user's external MCP client MCP connection. If the MCP catalog/schema/runtime needs a fresh external MCP client snapshot, provide the exact resync/reconnect steps only when the new runtime is ready for live proof.
+11. **external MCP connector/action resync is operator-owned too.** Do not attempt to force/recreate/resync the user's external MCP connection. If the MCP catalog/schema/runtime needs a fresh external MCP client snapshot, provide the exact resync/reconnect steps only when the new runtime is ready for live proof.
 12. Prefer a **single coordinated restart/resync checkpoint** after the largest safe batch of implementation is complete, rather than one restart per phase. Multiple restarts require a concrete reason (for example incompatible runtime state or a live regression that cannot be tested otherwise).
 
 ## Operator-owned restart/resync checkpoint
@@ -50,7 +50,7 @@ implement child/phase work
   -> reach a genuine live-runtime proof boundary
   -> STOP and hand the operator exact restart/deploy commands
   -> operator restarts/redeploys relay
-  -> STOP and hand the operator external MCP client connector/action resync steps if catalog/schema changed
+  -> STOP and hand the operator external MCP connector/action resync steps if catalog/schema changed
   -> operator resyncs/reconnects external MCP client
   -> resume live proof against the exact installed/runtime artifact
 ```
@@ -61,7 +61,7 @@ A plan must never mark a live-runtime criterion passed using stale runtime state
 
 | Known gap / deferred capability | Owner | Reason / disposition |
 | --- | --- | --- |
-| external MCP client/MCP calls can appear stuck or time out around slow operations | **040A** | Separate short HTTP request lifetime from durable task lifetime; explicit deadlines, cancellation, retained result and reconnect/retrieval |
+| external MCP calls can appear stuck or time out around slow operations | **040A** | Separate short HTTP request lifetime from durable task lifetime; explicit deadlines, cancellation, retained result and reconnect/retrieval |
 | First-party task polling currently uses a fixed 50 ms loop | **040A** | Replace with bounded adaptive/server-hinted polling and backoff |
 | First-party MCP fetch round trips lack explicit per-request deadline/AbortSignal semantics | **040A** | Add HTTP deadline discipline distinct from task execution deadline |
 | Client advertises JSON + SSE while current path primarily parses JSON | **040A** | Make advertised Streamable HTTP behavior match implemented consumption/resumption behavior |

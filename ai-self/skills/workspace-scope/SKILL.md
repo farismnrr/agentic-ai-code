@@ -21,7 +21,7 @@ Use this precedence when identifying the target project:
 3. Unambiguous project identity established in the current conversation.
 4. Read-only discovery of candidate repositories.
 
-external MCP client Memory and prior conversations may provide hints for discovery but never authorize a filesystem write target by themselves.
+Native client memory and prior conversations may provide hints for discovery but never authorize a filesystem write target by themselves.
 
 If more than one candidate remains plausible, do not write. Report the ambiguity or resolve it through read-only repository identity checks.
 

@@ -106,7 +106,7 @@ export function useConversations() {
   }
 
   /**
-   * Derive a title from the first user message. external MCP client does this server-side
+   * Derive a title from the first user message. The relay does this server-side
    * with a model call; without a backend the first line is a good stand-in.
    */
   function titleFrom(text: string): string {

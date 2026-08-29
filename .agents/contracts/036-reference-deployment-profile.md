@@ -11,7 +11,7 @@ Plan 036 keeps the protocol and security boundaries provider-neutral, but implem
 - MCP Resource Server: the existing Rust `ai-tools relay`;
 - canonical resource: `https://mcp.farismunir.my.id/mcp`;
 - hosted application client: Nuxt/Nitro using the first-party MCP 2026 adapter;
-- external interactive client: external MCP client using its MCP OAuth flow.
+- external interactive client: an external MCP client using its MCP OAuth flow.
 
 Cloudflare and Keycloak are the current concrete operator providers, not protocol dependencies. Another tunnel or Authorization Server is acceptable only if it preserves the same contracts below.
 
@@ -20,7 +20,7 @@ Cloudflare and Keycloak are the current concrete operator providers, not protoco
 The laptop must create the public path outbound-only:
 
 ```text
-external MCP client / hosted Nuxt
+External MCP client / hosted Nuxt
         |
         | HTTPS
         v
@@ -76,7 +76,7 @@ Operational rules:
 - do not create a router/NAT port-forward to `47821`;
 - do not change relay bind host to `0.0.0.0`;
 - do not point cloudflared at another LAN address;
-- do not put a Cloudflare Access login page in front of `/mcp` or the OAuth well-known routes: MCP OAuth must remain discoverable directly by external MCP client and other MCP clients;
+- do not put a Cloudflare Access login page in front of `/mcp` or the OAuth well-known routes: MCP OAuth must remain discoverable directly by external MCP clients;
 - WAF, DDoS controls, request-size limits, and rate controls may protect the edge as long as they preserve MCP HTTP semantics and OAuth discovery/challenges;
 - prefer a cache-bypass rule for `/mcp` and `/.well-known/oauth-protected-resource*` so authorization metadata changes are observed immediately during rollout;
 - keep tunnel credentials outside the repository.
@@ -99,7 +99,7 @@ ops/remote-mcp/start-relay.sh
 ```
 
 The repository wrapper explicitly supplies `RELAY_TOOL_PROFILE=primary` for the
-external MCP client-facing remote relay, overriding an inherited `full` setting so the
+external-client-facing remote relay, overriding an inherited `full` setting so the
 client keeps the reviewed fast-path catalog. Primary deliberately includes the
 capability-filtered `agent_delegate` tool without widening to the Full catalog;
 the Rust CLI keeps `full` as the canonical default for direct and other deployments.
@@ -131,8 +131,8 @@ Required Authorization Server behavior:
 - `relay.coding` is an allowed/requestable scope;
 - the interactive owner's token has the stable `sub` configured as `OAUTH_OWNER_SUBJECT`;
 - authorization code + PKCE S256 is enabled for external MCP client;
-- the `resource` value sent by external MCP client is honored/bound to the resulting access token audience;
-- external MCP client client identification uses a supported standard path (prefer CIMD when the tenant/profile supports it; a predefined client or DCR is acceptable when intentionally configured);
+- the `resource` value sent by an external MCP client is honored/bound to the resulting access token audience;
+- external client identification uses a supported standard path (prefer CIMD when the tenant/profile supports it; a predefined client or DCR is acceptable when intentionally configured);
 - only the callback URI shown by the current external MCP client connection UI is allowlisted; do not guess or permanently hardcode a callback identifier from another connection.
 
 The relay remains generic and contains no provider-specific token parsing. Tokens from the selected Authorization Server must satisfy the relay's normal issuer, audience, signature, time, owner-subject, and `relay.coding` checks.
@@ -158,7 +158,7 @@ The token and owner binding remain private runtime config. They are never writte
 
 This is the first deployable single-owner path, not the final token-lifecycle solution. Short-lived access-token expiry/rotation remains operational work until a reviewed refresh/linking flow is implemented. Do not work around expiry by issuing an effectively permanent bearer token.
 
-external MCP client does not use the Nuxt token. external MCP client independently performs OAuth against the same Authorization Server and presents its own owner-authorized access token to the same MCP Resource Server.
+An external MCP client does not use the Nuxt token. It independently performs OAuth against the same Authorization Server and presents its own owner-authorized access token to the same MCP Resource Server.
 
 ## Acceptance order
 
@@ -172,7 +172,7 @@ Provisioning should be proven in this order so failures stay attributable:
 6. issue an owner token and run `ops/remote-mcp/public-smoke.sh` with `REMOTE_MCP_ACCESS_TOKEN_FILE`;
 7. configure hosted Nuxt with the same resource, the single owner's ai-code user id, and an owner token, then use Settings -> MCP servers -> Test from that owner account;
 8. verify a different ai-code user cannot use the first-party credential even if they create an MCP row containing the same public URL;
-9. connect external MCP client in developer mode, complete OAuth, inspect tools, then test a safe tool call before terminal execution;
+9. connect an external MCP client in developer mode, complete OAuth, inspect tools, then test a safe tool call before terminal execution;
 10. only after those pass, run a deliberately approved `terminal_exec` inside the configured execution root.
 
 A metadata-only pass is not external MCP client interoperability evidence, and a successful tool list is not terminal-execution evidence.
@@ -207,8 +207,13 @@ of this contract.
 Keycloak's public OIDC dynamic-registration endpoint is enabled for MCP
 compatibility. Anonymous registration is consent-protected, limited to the
 requested `relay.coding` scope, and has a trusted-host policy allowing the
-external MCP client callback hosts (`external-mcp.com` and `chat.openai.com`) while rejecting an
-untrusted synthetic redirect. An interactive external MCP client connection was subsequently completed on 2026-08-16 and the live session successfully discovered the relay tools and invoked `terminal_exec`. That proves the connected client/tool path, but this repository does not expose the callback exchange or decoded token claims, so detailed callback/resource/audience assertions remain separately unproven.
+configured external MCP client callback hosts while rejecting an untrusted
+synthetic redirect. An interactive external MCP client connection was
+subsequently completed on 2026-08-16 and the live session successfully
+discovered the relay tools and invoked `terminal_exec`. That proves the
+connected client/tool path, but this repository does not expose the callback
+exchange or decoded token claims, so detailed callback/resource/audience
+assertions remain separately unproven.
 
 ## Remaining external evidence
 
@@ -220,4 +225,4 @@ This contract does not claim any of the following until they are observed agains
 - correct `NUXT_REMOTE_MCP_OWNER_USER_ID` ownership binding in the hosted deployment;
 - hosted Nuxt -> public relay execution;
 - negative proof that another ai-code user cannot consume the owner credential;
-- independently captured external MCP client OAuth callback/token-claim evidence beyond the successful connected session.
+- independently captured external-client OAuth callback/token-claim evidence beyond the successful connected session.
