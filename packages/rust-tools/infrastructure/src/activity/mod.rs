@@ -250,7 +250,7 @@ impl ActivityRuntime {
         let Some(journal) = &self.journal else {
             return FlushResult::Empty;
         };
-        let records = match journal.pending(MAX_EXPORT_RECORDS, MAX_EXPORT_BYTES) {
+        let records = match journal.pending(MAX_EXPORT_RECORDS, MAX_EXPORT_BYTES, true) {
             Ok(records) => records,
             Err(_) => return FlushResult::Retry(Duration::from_secs(10)),
         };

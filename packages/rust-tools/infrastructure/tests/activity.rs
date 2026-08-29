@@ -192,6 +192,39 @@ async fn restart_marks_only_unfinished_activity_interrupted(
 }
 
 #[tokio::test]
+async fn restart_recovers_unfinished_activity_even_when_retry_is_backed_off(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let state = TempState::new("restart-backed-off")?;
+    let config = state.config();
+
+    let runtime = ActivityRuntime::open(&config)?;
+    let _ = runtime.record_start(event("activity-backed-off"), None)?;
+    drop(runtime);
+
+    let database = state.0.join("activity.sqlite3");
+    let connection = Connection::open(&database)?;
+    connection.execute(
+        "UPDATE activity_journal SET attempts = 8, next_attempt_ms = 9999999999999 WHERE status = 'started'",
+        [],
+    )?;
+    drop(connection);
+
+    drop(ActivityRuntime::open(&config)?);
+
+    let connection = Connection::open(database)?;
+    let interrupted: u64 = connection.query_row(
+        "SELECT COUNT(*) FROM activity_journal WHERE status = 'interrupted'",
+        [],
+        |row| row.get(0),
+    )?;
+    assert_eq!(
+        interrupted, 1,
+        "restart must recover unfinished activity even when its retry is backed off"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn bootstrap_hot_reload_persists_across_restart() -> Result<(), Box<dyn std::error::Error>> {
     let state = TempState::new("bootstrap")?;
     let mut config = ServerConfig::default();
