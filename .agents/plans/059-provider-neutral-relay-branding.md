@@ -1,6 +1,6 @@
 # Provider-Neutral Relay Branding Implementation Plan
 
-**Status:** IMPLEMENTED — LOCAL VALIDATION PASSED; REMOTE HISTORY/DELIVERY PENDING
+**Status:** IMPLEMENTED — WRITABLE REMOTE HISTORY AND RELEASE METADATA VALIDATED; PR PENDING REVIEW
 **Goal:** Make the repository present a provider-neutral MCP relay identity across product copy, operational guidance, evidence paths, and external-client task reporting while preserving required protocol and SDK compatibility.
 **Success Criteria:** No provider-specific product branding remains in user-facing or agent-facing copy; external task completion uses a generic source identity; provider adapters and persisted compatibility values continue to work; local policy and stack-aware verification pass.
 
@@ -12,12 +12,12 @@
 - Replace the external task-completion source discriminator with `external_mcp`.
 - Preserve the standard `OpenAI Compatible` / `Anthropic Compatible` provider labels while retaining persisted compatibility values and adapter behavior.
 - Remove provider-specific names from comments, examples, test fixtures, and internal evidence filenames where they are not runtime contracts.
-- Keep a clean branch and record exact validation before any pull request or remote history operation.
+- Keep a clean branch and record exact validation before pull request review and merge.
 
 ### Out of scope
 
 - Replacing stable third-party SDK package names, wire headers, protocol fields, or persisted provider type values that are required for runtime compatibility.
-- Rewriting published remote Git history, tags, releases, pull requests, forks, caches, or other external copies in this implementation branch.
+- Rewriting hidden GitHub pull-request refs, forks, caches, or other external copies that are outside normal writable repository refs.
 - Deploying or restarting any runtime service.
 
 ## Current State
@@ -27,6 +27,8 @@
 - Product and agent-facing text contained provider-specific client names in current guidance and historical plans.
 - The task-completion contract now distinguishes `nuxt` and the generic `external_mcp` source.
 - Provider adapters use stable SDK and wire identifiers that must remain compatible.
+- Writable branch/tag history and GitHub release metadata were separately updated after explicit approval.
+- GitHub hidden pull-request refs remain outside normal force-update controls and retain historical copies.
 
 ## Constraints & Decisions
 
@@ -108,7 +110,7 @@
 - Changing the task source discriminator can affect old queued rows or consumers → use the pre-change Git bundle and keep the change scoped; inspect all current producers/consumers before commit.
 - Overgeneralizing technical compatibility identifiers can break provider selection → preserve SDK imports, wire headers, migrations, and persisted values; validate focused tests.
 - Historical guidance may contain factual client-specific evidence → rewrite labels only and retain the original evidence status and limitations.
-- A repository rewrite cannot erase external clones or forge audit/history data → keep remote history actions out of this branch until separately authorized.
+- A repository rewrite cannot erase external clones or hidden forge history → report those limits explicitly and keep backups for rollback.
 
 ## Final Acceptance Criteria
 
@@ -116,6 +118,7 @@
 - [x] External task completion source is `external_mcp` end to end.
 - [x] Required provider adapters and persisted compatibility contracts remain intact.
 - [x] Focused tests and `pnpm guardrail` pass.
+- [x] Writable remote branch/tag history and release metadata were updated; hidden PR-ref limits are recorded.
 - [x] Working tree contains only task-owned changes and the branch is ready for review.
 
 ## Execution Handoff
@@ -123,4 +126,4 @@
 - Execute TASK-001 before TASK-002 because source/test contract changes establish the terminology used by guidance.
 - TASK-002 is mostly mechanical and can be reviewed file-by-file after the source contract is stable.
 - TASK-003 blocks commit and any later PR action.
-- Remote force-push, tag/release recreation, merge, and deployment are separate approval checkpoints.
+- Remote branch/tag rewrite and release metadata update are complete; PR review/merge and deployment remain separate approval checkpoints.
