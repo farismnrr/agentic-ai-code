@@ -116,6 +116,32 @@ export default defineNuxtConfig({
 
   nitro: {
     errorHandler: '~~/server/core/errors/index',
+    // Nuxt's fnv1a-64 dependency uses BigInt literals (for example, 32n).
+    // Keep the server bundle target aligned with that ES2020 language feature
+    // instead of asking esbuild to warn about code it cannot lower to ES2019.
+    esbuild: {
+      options: {
+        target: 'es2020'
+      }
+    },
+    rollupConfig: {
+      onLog(level, log, defaultHandler) {
+        const generatedAnnotationWarning
+          = level === 'warn'
+            && log.code === 'INVALID_ANNOTATION'
+            && log.id?.includes('/.nuxt/dist/server/')
+        const nuxtUnusedH3Import
+          = level === 'warn'
+            && log.message.includes('"H3Error" and "H3Event"')
+            && log.message.includes('but never used in')
+
+        if (generatedAnnotationWarning || nuxtUnusedH3Import) {
+          return
+        }
+
+        defaultHandler(level, log)
+      }
+    },
     externals: {
       traceInclude: ['@opentelemetry'],
       external: [
@@ -129,6 +155,19 @@ export default defineNuxtConfig({
         '@opentelemetry/instrumentation',
         '@opentelemetry/instrumentation-http'
       ]
+    }
+  },
+
+  vite: {
+    build: {
+      // These diagnostics describe Nuxt/Rolldown's generated dependency
+      // graph, not application code. Keep other build warnings enabled.
+      rolldownOptions: {
+        checks: {
+          invalidAnnotation: false,
+          pluginTimings: false
+        }
+      }
     }
   },
 
