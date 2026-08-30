@@ -5,11 +5,8 @@ pub fn effect_classes_for_call(
     tool_id: &str,
     destructive_hint: bool,
     open_world_hint: bool,
-    arguments: &serde_json::Value,
+    _arguments: &serde_json::Value,
 ) -> Vec<&'static str> {
-    if tool_id == "terminal_exec" && relay_core::terminal_policy::is_ssh_request(arguments) {
-        return vec!["process_exec", "network_read", "privileged_bridge"];
-    }
     effect_classes(tool_id, destructive_hint, open_world_hint)
 }
 
@@ -25,6 +22,7 @@ pub fn effect_classes(
             "network_read",
             "external_mutation",
         ],
+        "ssh_readonly_exec" => vec!["process_exec", "network_read", "privileged_bridge"],
         "http_fetch" => vec!["network_read", "network_write", "external_mutation"],
         "task_completed" => vec!["network_write", "external_mutation"],
         "web_search" => vec!["network_read"],

@@ -109,8 +109,12 @@ pub(super) fn extract_activity_evidence(
     )
 }
 
-pub(crate) fn activity_result_detail(result: &ToolCallResult, arguments: &Value) -> Option<String> {
-    if relay_core::terminal_policy::is_ssh_request(arguments) {
+pub(crate) fn activity_result_detail(
+    tool_name: &str,
+    result: &ToolCallResult,
+    arguments: &Value,
+) -> Option<String> {
+    if tool_name == "ssh_readonly_exec" {
         return None;
     }
     let raw = result
@@ -271,7 +275,7 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
     } else {
         Status::Ok
     };
-    let activity_detail = activity_result_detail(&result, arguments);
+    let activity_detail = activity_result_detail(tool_name, &result, arguments);
     let activity_summary =
         activity_result_summary(tool_name, &result, preview, activity_detail.as_deref());
     record_activity_outcome_with_detail(
@@ -422,8 +426,11 @@ pub(super) fn client_supports_tasks(params: Option<&Value>) -> bool {
 }
 
 pub(super) fn requires_idempotency_key(tool: &str, arguments: &Value) -> bool {
+    if tool == "ssh_readonly_exec" {
+        return false;
+    }
     if tool == "terminal_exec" {
-        return !relay_core::terminal_policy::is_ssh_request(arguments);
+        return true;
     }
     if tool != "http_fetch" {
         return false;

@@ -13,12 +13,12 @@ fn fixture_config() -> ServerConfig {
 }
 
 #[test]
-fn ssh_terminal_effects_are_read_only_remote_diagnostics() {
+fn dedicated_ssh_effects_are_read_only_remote_diagnostics() {
     let effects = hooks::effect_classes_for_call(
-        "terminal_exec",
+        "ssh_readonly_exec",
+        false,
         true,
-        true,
-        &json!({"command":"ssh fixture docker logs api --tail 20"}),
+        &json!({"alias":"fixture","command":"docker","args":["logs","api","--tail","20"]}),
     );
     assert_eq!(
         effects,
@@ -40,11 +40,13 @@ fn ssh_terminal_effects_are_read_only_remote_diagnostics() {
 #[test]
 fn ssh_activity_persists_metadata_not_remote_query_literals() {
     let arguments = json!({
-        "command":"ssh prod docker exec postgres psql -d app -c 'SELECT email FROM users WHERE email=\"secret@example.com\"'"
+        "alias":"prod",
+        "command":"docker",
+        "args":["exec","postgres","psql","-d","app","-c","SELECT email FROM users WHERE email=\"secret@example.com\""]
     });
     let event = activity::event_for_tool(
         &fixture_config(),
-        "terminal_exec",
+        "ssh_readonly_exec",
         &["process_exec", "network_read", "privileged_bridge"],
         &arguments,
         None,
@@ -57,9 +59,72 @@ fn ssh_activity_persists_metadata_not_remote_query_literals() {
 }
 
 #[tokio::test]
+async fn dedicated_ssh_tool_fails_closed_when_operator_capability_is_disabled() {
+    use relay_application::execution::{start_tool_task, JobManager};
+    use relay_interfaces::mcp::find_tool;
+
+    let config = fixture_config();
+    let manager = JobManager::new(config.clone());
+    let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
+    let error = start_tool_task(
+        &tool,
+        &json!({"alias":"fixture","command":"docker","args":["ps"]}),
+        &config,
+        &manager,
+        None,
+        "disabled-ssh".into(),
+    )
+    .await
+    .expect_err("disabled SSH capability must fail before spawn");
+    assert!(error.to_string().contains("SSH diagnostics are disabled"));
+}
+
+#[tokio::test]
+async fn generic_terminal_rejects_direct_ssh_before_spawn() {
+    use relay_application::execution::{start_terminal_job, JobManager};
+
+    let config = fixture_config();
+    let manager = JobManager::new(config.clone());
+    let error = start_terminal_job(
+        &json!({"command":"ssh","args":["example","uptime"]}),
+        &config,
+        &manager,
+    )
+    .await
+    .expect_err("generic terminal must reject direct SSH");
+    assert!(error.to_string().contains("ssh_readonly_exec"));
+}
+
+#[tokio::test]
+async fn generic_terminal_shell_cannot_reach_masked_ssh_clients() {
+    use relay_application::execution::{start_terminal_job, JobManager, JobState};
+
+    let mut config = fixture_config();
+    config.allow_terminal_network = true;
+    let manager = JobManager::new(config.clone());
+    let task = start_terminal_job(
+        &json!({
+            "command": "sh",
+            "args": ["-lc", "test ! -x /usr/bin/ssh && test ! -x /usr/bin/scp && test ! -x /usr/bin/sftp"]
+        }),
+        &config,
+        &manager,
+    )
+    .await
+    .expect("generic shell job admitted");
+    let snapshot = manager
+        .wait(&task)
+        .await
+        .expect("generic shell job completed");
+    assert_eq!(snapshot.state, JobState::Completed);
+    assert_eq!(snapshot.exit_code, Some(0));
+}
+
+#[tokio::test]
 #[ignore = "requires an operator-provided disposable key-only SSH fixture"]
 async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
-    use relay_application::execution::{start_terminal_job, JobManager, JobState};
+    use relay_application::execution::{start_tool_task, JobManager, JobState};
+    use relay_interfaces::mcp::find_tool;
     use std::time::Duration;
 
     let ssh_root = std::env::var("RELAY_SSH_SMOKE_ROOT")
@@ -80,10 +145,14 @@ async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
         .expect("valid disposable SSH fixture config");
 
     let manager = JobManager::new(config.clone());
-    let task = start_terminal_job(
-        &json!({"command": format!("ssh {alias} docker ps"), "timeout_ms": 30_000}),
+    let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
+    let task = start_tool_task(
+        &tool,
+        &json!({"alias": alias, "command": "docker", "args": ["ps"], "timeout_ms": 30_000}),
         &config,
         &manager,
+        None,
+        "ssh-smoke".into(),
     )
     .await
     .expect("SSH smoke job admitted");

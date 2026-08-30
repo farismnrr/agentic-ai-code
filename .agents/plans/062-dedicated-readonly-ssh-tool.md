@@ -1,6 +1,6 @@
 # Plan 062 — Dedicated Read-Only SSH MCP Tool
 
-**Status:** PLANNED / NOT IMPLEMENTED
+**Status:** CLOSED / LOCAL ACCEPTANCE PASSED (2026-08-30)
 **Goal:** Promote the Plan 061 read-only SSH backend into a first-class, client-portable MCP tool named `ssh_readonly_exec`, while removing the hidden SSH special-case from `terminal_exec` so every MCP client receives one explicit, self-describing SSH capability with one authoritative Rust security path.
 **Success Criteria:** Any conforming MCP client (Nuxt, OpenWebUI, ChatGPT, or another client) can discover `ssh_readonly_exec` through ordinary `tools/list` without client-specific SSH logic; calls use a bounded schema such as `{ alias, command, args, timeout_ms, execution_mode }`; the relay retains the Plan 061 sanitized SSH-config parser, exact credential mounts, pinned system OpenSSH, strict host-key and non-interactive key-only authentication, semantic remote read-only policy, database/Docker hardening, output bounds, redaction, activity, and job lifecycle; `terminal_exec` no longer contains SSH-specific routing/effects/idempotency/activity behavior and cannot be used as an alternate SSH execution path; focused Rust contract/security tests and `pnpm guardrail` pass; implementation stops at local commit unless push/PR/merge/deployment is separately authorized; no systemd relay action occurs during implementation.
 
@@ -129,16 +129,16 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - package-local catalog/profile tests or existing acceptance coverage
 
 **Steps:**
-- [ ] Add `ssh_readonly_exec` with the bounded schema defined above.
-- [ ] Give it static read-only/open-world annotations and optional task support.
-- [ ] Include it in both Full and Primary tool profiles unless evidence says otherwise.
-- [ ] Keep raw SSH options/config/key fields absent from the schema.
-- [ ] Update catalog/profile expected counts/contracts through existing feature/contract mechanisms; do not add plan-numbered verifier scripts.
-- [ ] Ensure descriptions explicitly say that alias/config/key resolution is server-owned and mutation is rejected.
+- [x] Add `ssh_readonly_exec` with the bounded schema defined above.
+- [x] Give it static read-only/open-world annotations and optional task support.
+- [x] Include it in both Full and Primary tool profiles unless evidence says otherwise.
+- [x] Keep raw SSH options/config/key fields absent from the schema.
+- [x] Update catalog/profile expected counts/contracts through existing feature/contract mechanisms; do not add plan-numbered verifier scripts.
+- [x] Ensure descriptions explicitly say that alias/config/key resolution is server-owned and mutation is rejected.
 
 **Validation:**
-- [ ] Catalog discovery test proves the tool is present in intended profiles and validates schema shape.
-- [ ] Schema rejects unknown/raw SSH option fields.
+- [x] Catalog discovery test proves the tool is present in intended profiles and validates schema shape.
+- [x] Schema rejects unknown/raw SSH option fields.
 
 ### TASK-002: Freeze one canonical SSH authority owner
 
@@ -150,11 +150,11 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `packages/rust-tools/application/src/execution/ssh.rs`
 
 **Steps:**
-- [ ] Preserve `ssh_policy::resolve_connection_spec`, `openssh_args`, and remote semantic validation as the single security implementation.
-- [ ] Preserve SSH root ownership/canonicalization and exact credential-file containment.
-- [ ] Preserve pinned `/usr/bin/ssh` or `/bin/ssh` selection, strict host trust, BatchMode/key-only/no-agent/no-forwarding/no-PTY controls.
-- [ ] Refactor only the public request translation layer needed to consume `{ alias, command, args, ... }` directly.
-- [ ] Do not introduce a second parser or client-visible OpenSSH argument path.
+- [x] Preserve `ssh_policy::resolve_connection_spec`, `openssh_args`, and remote semantic validation as the single security implementation.
+- [x] Preserve SSH root ownership/canonicalization and exact credential-file containment.
+- [x] Preserve pinned `/usr/bin/ssh` or `/bin/ssh` selection, strict host trust, BatchMode/key-only/no-agent/no-forwarding/no-PTY controls.
+- [x] Refactor only the public request translation layer needed to consume `{ alias, command, args, ... }` directly.
+- [x] Do not introduce a second parser or client-visible OpenSSH argument path.
 
 ## PHASE-02 — Dedicated execution path
 
@@ -170,19 +170,19 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `packages/rust-tools/application/src/execution/sandbox/ssh_material.rs`
 
 **Steps:**
-- [ ] Add a dedicated request builder for `ssh_readonly_exec`; do not route through terminal command parsing.
-- [ ] Convert `command + args` into the existing validated remote-command representation with deterministic token/rendering rules.
-- [ ] Require `RELAY_ALLOW_SSH=true` and the existing reviewed SSH config/principal configuration.
-- [ ] Retain the SSH-specific 60-second maximum unless a current review justifies changing it.
-- [ ] Reuse `InvocationSecurity::Ssh` or rename it to a clearer dedicated type if that improves ownership without broad refactoring.
-- [ ] Reuse read-only workspace/no-local-privileged-sockets/exact-credential mounts and null stdin.
-- [ ] Keep auth/host-key/connect failure normalization and credential redaction.
-- [ ] Preserve cancellation/process-group cleanup and bounded output.
+- [x] Add a dedicated request builder for `ssh_readonly_exec`; do not route through terminal command parsing.
+- [x] Convert `command + args` into the existing validated remote-command representation with deterministic token/rendering rules.
+- [x] Require `RELAY_ALLOW_SSH=true` and the existing reviewed SSH config/principal configuration.
+- [x] Retain the SSH-specific 60-second maximum unless a current review justifies changing it.
+- [x] Reuse `InvocationSecurity::Ssh` or rename it to a clearer dedicated type if that improves ownership without broad refactoring.
+- [x] Reuse read-only workspace/no-local-privileged-sockets/exact-credential mounts and null stdin.
+- [x] Keep auth/host-key/connect failure normalization and credential redaction.
+- [x] Preserve cancellation/process-group cleanup and bounded output.
 
 **Validation:**
-- [ ] Application integration test proves the dedicated call reaches the SSH invocation path with no generic terminal parsing.
-- [ ] Disabled SSH capability fails before spawn.
-- [ ] Oversized timeout/args/invalid alias fail before spawn.
+- [x] Application integration test proves the dedicated call reaches the SSH invocation path with no generic terminal parsing.
+- [x] Disabled SSH capability fails before spawn.
+- [x] Oversized timeout/args/invalid alias fail before spawn.
 
 ### TASK-004: Support standard sync/async/auto lifecycle
 
@@ -196,10 +196,10 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `packages/rust-tools/infrastructure/src/transport/tools.rs`
 
 **Steps:**
-- [ ] Make `ssh_readonly_exec` task-capable using the same JobManager process job as other task-supported execution tools.
-- [ ] Because the tool is technically read-only, do not require mutation idempotency keys for async execution.
-- [ ] Keep fallback job APIs backward-compatible; do not create `ssh_job_start/get/cancel` tools.
-- [ ] Ensure sync/async/auto admission has one implementation rather than SSH-specific transport duplication.
+- [x] Make `ssh_readonly_exec` task-capable using the same JobManager process job as other task-supported execution tools.
+- [x] Because the tool is technically read-only, do not require mutation idempotency keys for async execution.
+- [x] Keep fallback job APIs backward-compatible; do not create `ssh_job_start/get/cancel` tools.
+- [x] Ensure sync/async/auto admission has one implementation rather than SSH-specific transport duplication.
 
 ## PHASE-03 — Restore generic `terminal_exec`
 
@@ -217,13 +217,13 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - Plan 061 tests that currently exercise SSH through `terminal_exec`
 
 **Steps:**
-- [ ] Remove `is_ssh_request` as a cross-layer capability classifier once no legitimate caller remains.
-- [ ] Remove `command == ssh` dispatch from generic terminal request building.
-- [ ] Remove SSH-specific dynamic effects from generic terminal hook/activity policy.
-- [ ] Remove SSH-specific mutation-idempotency exception from `terminal_exec`.
-- [ ] Remove SSH-specific activity rendering from generic terminal presentation.
-- [ ] Restore generic terminal job/task behavior to its pre-Plan-061 semantics.
-- [ ] Move any still-useful SSH normalization/redaction helpers to the dedicated tool owner rather than deleting security logic.
+- [x] Remove `is_ssh_request` as a cross-layer capability classifier once no legitimate caller remains.
+- [x] Remove `command == ssh` dispatch from generic terminal request building.
+- [x] Remove SSH-specific dynamic effects from generic terminal hook/activity policy.
+- [x] Remove SSH-specific mutation-idempotency exception from `terminal_exec`.
+- [x] Remove SSH-specific activity rendering from generic terminal presentation.
+- [x] Restore generic terminal job/task behavior to its pre-Plan-061 semantics.
+- [x] Move any still-useful SSH normalization/redaction helpers to the dedicated tool owner rather than deleting security logic.
 
 ### TASK-006: Block alternate SSH execution through generic terminal
 
@@ -234,10 +234,10 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `packages/rust-tools/core/tests/terminal_policy.rs`
 
 **Steps:**
-- [ ] Reject exact `ssh` and reviewed alternate SSH client/file-transfer executables from generic terminal (`ssh`, `scp`, `sftp`, and equivalent names already relevant to this runtime).
-- [ ] Return a bounded stable error: use `ssh_readonly_exec` for remote diagnostics.
-- [ ] Ensure shell wrappers cannot trivially regain SSH by using a generic `sh -lc 'ssh ...'` path if terminal policy currently allows arbitrary shells. If shell execution remains intentionally supported for local coding, enforce the SSH executable boundary at the sandbox/executable/network layer rather than pretending string matching is sufficient. Choose the smallest technically sound boundary after implementation review.
-- [ ] Do not weaken ordinary terminal behavior for unrelated local coding tools.
+- [x] Reject exact `ssh` and reviewed alternate SSH client/file-transfer executables from generic terminal (`ssh`, `scp`, `sftp`, and equivalent names already relevant to this runtime).
+- [x] Return a bounded stable error: use `ssh_readonly_exec` for remote diagnostics.
+- [x] Ensure shell wrappers cannot trivially regain SSH by using a generic `sh -lc 'ssh ...'` path if terminal policy currently allows arbitrary shells. If shell execution remains intentionally supported for local coding, enforce the SSH executable boundary at the sandbox/executable/network layer rather than pretending string matching is sufficient. Choose the smallest technically sound boundary after implementation review.
+- [x] Do not weaken ordinary terminal behavior for unrelated local coding tools.
 
 **Security note:** The purpose is canonicalization, not to claim that string-level shell denylisting can secure arbitrary shell execution. If `terminal_exec` with a network-enabled shell could invoke `/usr/bin/ssh`, the implementation must prevent that by namespace/executable exposure or another authoritative mechanism. Document the exact chosen boundary in the plan when implemented.
 
@@ -253,11 +253,11 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `packages/rust-tools/infrastructure/src/transport/tool_helpers.rs`
 
 **Steps:**
-- [ ] Add static dedicated effects `process_exec + network_read + privileged_bridge`.
-- [ ] Never report workspace write/external mutation for admitted `ssh_readonly_exec` calls.
-- [ ] Activity target/action must persist only bounded alias + diagnostic family (for example `SSH read-only · smart-meeting · docker logs`), never raw SQL literals, full command payloads, key/config paths, or credentials.
-- [ ] Result detail/output keeps existing bounded credential redaction.
-- [ ] Dedicated tool denials remain actionable and stable without exposing host credential details.
+- [x] Add static dedicated effects `process_exec + network_read + privileged_bridge`.
+- [x] Never report workspace write/external mutation for admitted `ssh_readonly_exec` calls.
+- [x] Activity target/action must persist only bounded alias + diagnostic family (for example `SSH read-only · smart-meeting · docker logs`), never raw SQL literals, full command payloads, key/config paths, or credentials.
+- [x] Result detail/output keeps existing bounded credential redaction.
+- [x] Dedicated tool denials remain actionable and stable without exposing host credential details.
 
 ### TASK-008: Keep clients generic
 
@@ -270,10 +270,10 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - relevant web tests/docs
 
 **Steps:**
-- [ ] Do not add `ssh` command parsing to Nuxt/shared capability policy.
-- [ ] Verify existing generic MCP tool composition can discover the new tool from stored relay inventory.
-- [ ] If first-party Nuxt’s static effect policy needs a generic update for the new tool name, derive it from ordinary dedicated tool identity/annotations rather than parsing SSH input. Prefer no web change if existing external-tool annotations already work.
-- [ ] Verify an external MCP server cannot gain first-party trust simply by naming a tool `ssh_readonly_exec`; existing provenance rules remain authoritative.
+- [x] Do not add `ssh` command parsing to Nuxt/shared capability policy.
+- [x] Verify existing generic MCP tool composition can discover the new tool from stored relay inventory.
+- [x] If first-party Nuxt’s static effect policy needs a generic update for the new tool name, derive it from ordinary dedicated tool identity/annotations rather than parsing SSH input. Prefer no web change if existing external-tool annotations already work.
+- [x] Verify an external MCP server cannot gain first-party trust simply by naming a tool `ssh_readonly_exec`; existing provenance rules remain authoritative.
 
 ## PHASE-05 — Security and compatibility validation
 
@@ -289,30 +289,30 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - infrastructure/catalog/profile tests as appropriate
 
 **Required matrix:**
-- [ ] dedicated tool schema/discovery in Full + Primary;
-- [ ] safe alias + `docker ps/logs/stats/top/inspect` normalization;
-- [ ] nested read-only DB/Redis clients with least-privilege identities;
-- [ ] read-only host/Git/HTTP diagnostic families;
-- [ ] bare/interactive semantics impossible by schema;
-- [ ] password/passphrase/keyboard-interactive behavior remains non-interactive/fail-closed;
-- [ ] unknown/changed host keys remain fail-closed;
-- [ ] raw SSH flags/config/key path injection impossible through schema;
-- [ ] Docker mutation, shell/interpreter escape, process signaling, Git mutation, writable SQL/Redis, streaming/follow, metadata curl, sensitive path reads remain denied;
-- [ ] activity does not retain query literals/credentials;
-- [ ] generic `terminal_exec` no longer gets SSH-specific effects/idempotency/activity behavior;
-- [ ] direct SSH via `terminal_exec` is rejected through the chosen canonical-path technical boundary;
-- [ ] ordinary unrelated terminal execution retains existing behavior;
-- [ ] ordinary non-SSH terminal network setting semantics remain unchanged.
+- [x] dedicated tool schema/discovery in Full + Primary;
+- [x] safe alias + `docker ps/logs/stats/top/inspect` normalization;
+- [x] nested read-only DB/Redis clients with least-privilege identities;
+- [x] read-only host/Git/HTTP diagnostic families;
+- [x] bare/interactive semantics impossible by schema;
+- [x] password/passphrase/keyboard-interactive behavior remains non-interactive/fail-closed;
+- [x] unknown/changed host keys remain fail-closed;
+- [x] raw SSH flags/config/key path injection impossible through schema;
+- [x] Docker mutation, shell/interpreter escape, process signaling, Git mutation, writable SQL/Redis, streaming/follow, metadata curl, sensitive path reads remain denied;
+- [x] activity does not retain query literals/credentials;
+- [x] generic `terminal_exec` no longer gets SSH-specific effects/idempotency/activity behavior;
+- [x] direct SSH via `terminal_exec` is rejected through the chosen canonical-path technical boundary;
+- [x] ordinary unrelated terminal execution retains existing behavior;
+- [x] ordinary non-SSH terminal network setting semantics remain unchanged.
 
 ### TASK-010: Portable MCP acceptance
 
 **Outcome:** The feature is demonstrably usable without a Nuxt-specific adapter.
 
 **Steps:**
-- [ ] Use direct Rust/MCP integration tests to call `tools/list` and `tools/call` for `ssh_readonly_exec` through the real transport/application path.
-- [ ] Keep an opt-in real OpenSSH fixture smoke test if useful, but do not touch production hosts during local closure.
-- [ ] Prove the same tool contract is visible to any standard MCP consumer from `tools/list`; do not encode a client name into runtime behavior.
-- [ ] If catalog snapshots/contracts are versioned, update them deliberately and record the exact new count/hash using existing contract mechanisms.
+- [x] Use direct Rust/MCP integration tests to call `tools/list` and `tools/call` for `ssh_readonly_exec` through the real transport/application path.
+- [x] Keep an opt-in real OpenSSH fixture smoke test if useful, but do not touch production hosts during local closure.
+- [x] Prove the same tool contract is visible to any standard MCP consumer from `tools/list`; do not encode a client name into runtime behavior.
+- [x] If catalog snapshots/contracts are versioned, update them deliberately and record the exact new count/hash using existing contract mechanisms.
 
 ## PHASE-06 — Documentation and closure
 
@@ -324,12 +324,12 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - relevant `docs/configuration.md`, `docs/external-mcp.md`, `docs/mcp-client.md`, `packages/relay-agent/SKILL.md` when their catalog/profile wording is affected
 
 **Steps:**
-- [ ] Replace `terminal_exec(command="ssh ...")` examples with `ssh_readonly_exec`.
-- [ ] Explain that `-F /dev/null` is an internal OpenSSH hardening detail after alias normalization; clients must not provide it.
-- [ ] Explain why `.ssh` being invisible to ordinary terminal/file tools is expected and not evidence that operator SSH config is absent.
-- [ ] Document SSH enable/config variables without exposing secrets.
-- [ ] State that direct SSH through generic terminal is unsupported; use the dedicated tool.
-- [ ] Keep remote mutation/manual-command guidance and defense-in-depth recommendations from Plan 061.
+- [x] Replace `terminal_exec(command="ssh ...")` examples with `ssh_readonly_exec`.
+- [x] Explain that `-F /dev/null` is an internal OpenSSH hardening detail after alias normalization; clients must not provide it.
+- [x] Explain why `.ssh` being invisible to ordinary terminal/file tools is expected and not evidence that operator SSH config is absent.
+- [x] Document SSH enable/config variables without exposing secrets.
+- [x] State that direct SSH through generic terminal is unsupported; use the dedicated tool.
+- [x] Keep remote mutation/manual-command guidance and defense-in-depth recommendations from Plan 061.
 
 ### TASK-012: Reconcile Plan 061 and durable memory
 
@@ -339,26 +339,26 @@ The `privileged_bridge` effect remains appropriate because the relay deliberatel
 - `.agents/memories/README.md`
 
 **Steps:**
-- [ ] Keep Plan 061 as historical implementation truth, but append a supersession note that its `terminal_exec` exposure was replaced by Plan 062.
-- [ ] Record the durable invariant: security-sensitive capabilities with materially different static effects should be first-class MCP tools when portability across generic clients matters; do not require clients to infer hidden input-sensitive semantics of a generic tool.
-- [ ] Record that the SSH backend remains Rust-owned and client-independent.
-- [ ] Follow `.agents/knowledge/self-improvement.md` before closure.
+- [x] Keep Plan 061 as historical implementation truth, but append a supersession note that its `terminal_exec` exposure was replaced by Plan 062.
+- [x] Record the durable invariant: security-sensitive capabilities with materially different static effects should be first-class MCP tools when portability across generic clients matters; do not require clients to infer hidden input-sensitive semantics of a generic tool.
+- [x] Record that the SSH backend remains Rust-owned and client-independent.
+- [x] Follow `.agents/knowledge/self-improvement.md` before closure.
 
 ### TASK-013: Run local closure gates and commit
 
 **Required:**
-- [ ] `cargo fmt --all -- --check`
-- [ ] focused core SSH/config/terminal tests
-- [ ] focused application/infrastructure/catalog tests
-- [ ] `cargo test --workspace --lib --bins --tests --all-features --locked`
-- [ ] `cargo clippy --workspace --lib --bins --tests --all-features --locked -- -D warnings`
-- [ ] `RUSTFLAGS='-D warnings' cargo check --workspace --lib --bins --tests --all-features --locked`
-- [ ] applicable Nuxt tests only if web/shared code actually changes
-- [ ] `pnpm guardrail`
-- [ ] `git diff --check`
-- [ ] re-check maintainability/test-layout after structural moves
-- [ ] local commit(s) on `feat/062-dedicated-readonly-ssh-tool`
-- [ ] clean worktree
+- [x] `cargo fmt --all -- --check`
+- [x] focused core SSH/config/terminal tests
+- [x] focused application/infrastructure/catalog tests
+- [x] `cargo test --workspace --lib --bins --tests --all-features --locked`
+- [x] `cargo clippy --workspace --lib --bins --tests --all-features --locked -- -D warnings`
+- [x] `RUSTFLAGS='-D warnings' cargo check --workspace --lib --bins --tests --all-features --locked`
+- [x] applicable Nuxt tests only if web/shared code actually changes
+- [x] `pnpm guardrail`
+- [x] `git diff --check`
+- [x] re-check maintainability/test-layout after structural moves
+- [x] local commit(s) on `feat/062-dedicated-readonly-ssh-tool`
+- [x] clean worktree
 
 No push, PR, merge, service restart, deployed binary replacement, or real production SSH connection occurs without separate authorization.
 
@@ -396,22 +396,37 @@ Delete only the coupling to generic terminal, not the proven backend.
 
 ## Final acceptance criteria
 
-- [ ] `tools/list` exposes `ssh_readonly_exec` as an explicit read-only/open-world MCP tool in intended profiles.
-- [ ] A generic MCP client requires no Nuxt/OpenWebUI-specific SSH logic to discover or call it.
-- [ ] The public schema has no raw SSH option/config/key path surface.
-- [ ] Existing Plan 061 alias/config/key/auth/host-trust/sandbox/remote semantic policy remains authoritative.
-- [ ] Dedicated safe remote diagnostics reach the existing SSH backend.
-- [ ] Dedicated mutation/confidentiality/availability bypasses remain denied.
-- [ ] `terminal_exec` contains no SSH-specific request routing/effect/idempotency/activity special-case.
-- [ ] Generic terminal cannot be used as a second SSH execution path.
-- [ ] Generic non-SSH terminal behavior is unchanged.
-- [ ] Activity/errors remain bounded and credential-safe.
-- [ ] Standard MCP Tasks/fallback execution lifecycle remains coherent without new SSH job tools.
-- [ ] Profile/catalog contracts and docs reflect the dedicated tool.
-- [ ] Full applicable Rust tests, warnings-denied checks, maintainability/test-layout gates, and `pnpm guardrail` pass.
-- [ ] Plan 061 is marked superseded only at the exposure layer, not falsely rewritten as if its backend never existed.
-- [ ] Plan 062 and canonical memory reflect exact implementation truth.
-- [ ] Local branch is committed and clean.
-- [ ] No systemd relay action occurred.
-- [ ] No production SSH connection occurred.
-- [ ] No push occurred without separate authorization.
+- [x] `tools/list` exposes `ssh_readonly_exec` as an explicit read-only/open-world MCP tool in intended profiles.
+- [x] A generic MCP client requires no Nuxt/OpenWebUI-specific SSH logic to discover or call it.
+- [x] The public schema has no raw SSH option/config/key path surface.
+- [x] Existing Plan 061 alias/config/key/auth/host-trust/sandbox/remote semantic policy remains authoritative.
+- [x] Dedicated safe remote diagnostics reach the existing SSH backend.
+- [x] Dedicated mutation/confidentiality/availability bypasses remain denied.
+- [x] `terminal_exec` contains no SSH-specific request routing/effect/idempotency/activity special-case.
+- [x] Generic terminal cannot be used as a second SSH execution path.
+- [x] Generic non-SSH terminal behavior is unchanged.
+- [x] Activity/errors remain bounded and credential-safe.
+- [x] Standard MCP Tasks/fallback execution lifecycle remains coherent without new SSH job tools.
+- [x] Profile/catalog contracts and docs reflect the dedicated tool.
+- [x] Full applicable Rust tests, warnings-denied checks, maintainability/test-layout gates, and `pnpm guardrail` pass.
+- [x] Plan 061 is marked superseded only at the exposure layer, not falsely rewritten as if its backend never existed.
+- [x] Plan 062 and canonical memory reflect exact implementation truth.
+- [x] Local branch is committed and clean.
+- [x] No systemd relay action occurred.
+- [x] No production SSH connection occurred.
+- [x] No push occurred without separate authorization.
+
+
+## Closure Record — 2026-08-30
+
+- Public MCP exposure is now the first-class `ssh_readonly_exec` tool in Full and Primary; runtime catalog is Full 102 / Primary 33.
+- Frozen static catalog: `.agents/contracts/062-tool-catalog-v12.json`; SHA-256 `e48833e743960a134906927eca4543f3c6b9cad8c45b2fb16dd6aca57bdc3b54`.
+- Generic `terminal_exec` no longer contains Plan 061 SSH routing/effect/idempotency/activity special-cases. Direct `ssh`/`scp`/`sftp` invocation is denied, and installed OpenSSH client binaries are masked from ordinary Bubblewrap execution so shell wrappers do not trivially regain the supported SSH path.
+- The Plan 061 SSH config parser, normalized connection spec, pinned OpenSSH argv, exact read-only credential mounts, strict key-only/non-interactive authentication, semantic remote read-only policy, Docker/database hardening, redaction, and failure normalization remain authoritative.
+- Focused core SSH/config/terminal tests: PASS. Dedicated application SSH tests: 5 passed, 1 ignored operator-only real-client fixture. Interface catalog/schema/snapshot tests: PASS. Infrastructure real MCP `tools/list` → `tools/call` acceptance: PASS with disabled capability failing before spawn.
+- `cargo test --workspace --lib --bins --tests --all-features --locked`: PASS.
+- `cargo clippy --workspace --lib --bins --tests --all-features --locked -- -D warnings`: PASS.
+- No Nuxt/shared runtime source changed; the final stack-aware `pnpm guardrail` nevertheless selected both Nuxt and Rust because repository/docs contract surfaces changed. Web lint, typecheck, and all 40 web unit tests passed; SSH portability itself is verified at the generic MCP transport boundary.
+- The disposable real OpenSSH smoke remains `#[ignore]` and was intentionally not executed; no production SSH connection was made.
+- Final `cargo fmt --all -- --check`, warnings-denied check, `git diff --check`, maintainability/test-layout gates, and `pnpm guardrail` all passed. Maintainability required moving the dedicated SSH catalog builder into `interfaces/src/mcp/catalog/ssh.rs`; `catalog.rs` closes at 499 lines with no exception.
+- No systemd relay action, deployed binary replacement, push, PR, or merge occurred during implementation.

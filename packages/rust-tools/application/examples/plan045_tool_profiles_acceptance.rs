@@ -6,8 +6,8 @@ use relay_interfaces::mcp::{
 fn main() {
     let full = tool_catalog();
     let primary = tool_catalog_for_profile(ToolProfile::Primary);
-    assert_eq!(primary.len(), 31);
-    assert_eq!(PRIMARY_TOOL_NAMES.len(), 31);
+    assert_eq!(primary.len(), 33);
+    assert_eq!(PRIMARY_TOOL_NAMES.len(), 33);
     assert!(full.len() >= primary.len());
     for name in PRIMARY_TOOL_NAMES {
         assert!(find_tool_for_profile(name, ToolProfile::Primary).is_some());

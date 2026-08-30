@@ -62,9 +62,6 @@ pub(super) fn build_terminal_invocation(
     let Some(binary) = parts.first() else {
         return Err(McpError::InvalidRequest("command must not be empty".into()));
     };
-    if binary == "ssh" {
-        return super::ssh::build_invocation(arguments, config, &parts, timeout_ms);
-    }
     let program = resolve_safe_executable(config, binary)?;
     let mut args = parts[1..].to_vec();
     if let Some(arr) = arguments.get("args").and_then(Value::as_array) {

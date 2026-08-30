@@ -14,6 +14,13 @@ pub(super) fn target_for_tool(
             .map(|cwd| relative_display_path(cwd, root))
             .and_then(|cwd| bounded_display(&cwd, MAX_PATH));
     }
+    if tool_id == "ssh_readonly_exec" {
+        return arguments
+            .get("alias")
+            .and_then(Value::as_str)
+            .map(|alias| sanitize_action_text(alias, None))
+            .and_then(|alias| bounded_display(&alias, MAX_PATH));
+    }
     let raw = arguments.get("path").and_then(Value::as_str).or_else(|| {
         (tool_id == "http_fetch")
             .then(|| arguments.get("url").and_then(Value::as_str))
@@ -43,6 +50,7 @@ pub(super) fn action_for_tool(
 ) -> Option<String> {
     let action = match tool_id {
         "terminal_exec" | "terminal_job_start" => terminal_action(arguments, root),
+        "ssh_readonly_exec" => ssh_readonly_action(arguments),
         "terminal_job_get" => identifier_action("Get terminal job", arguments, "taskId", root),
         "terminal_job_cancel" => {
             identifier_action("Cancel terminal job", arguments, "taskId", root)
@@ -135,9 +143,6 @@ pub(super) fn action_for_tool(
 }
 
 fn terminal_action(arguments: &Value, root: Option<&Path>) -> String {
-    if relay_core::terminal_policy::is_ssh_request(arguments) {
-        return ssh_terminal_action(arguments);
-    }
     let command = arguments
         .get("command")
         .and_then(Value::as_str)
@@ -172,32 +177,34 @@ fn terminal_action(arguments: &Value, root: Option<&Path>) -> String {
     parts.join(" ")
 }
 
-fn ssh_terminal_action(arguments: &Value) -> String {
-    let mut tokens = arguments
+fn ssh_readonly_action(arguments: &Value) -> String {
+    let alias = arguments
+        .get("alias")
+        .and_then(Value::as_str)
+        .map(|value| sanitize_action_text(value, None))
+        .unwrap_or_else(|| "remote".into());
+    let command = arguments
         .get("command")
         .and_then(Value::as_str)
-        .and_then(|command| shell_words::split(command).ok())
-        .unwrap_or_default();
-    if let Some(args) = arguments.get("args").and_then(Value::as_array) {
-        tokens.extend(args.iter().filter_map(Value::as_str).map(str::to_owned));
-    }
-    let alias = tokens.get(1).map(String::as_str).unwrap_or("remote");
-    let family = match tokens.get(2).map(String::as_str) {
-        Some("docker") => match tokens.get(3).map(String::as_str) {
-            Some("exec") => tokens
-                .get(5)
+        .unwrap_or("diagnostic");
+    let family = if command == "docker" {
+        let args = arguments.get("args").and_then(Value::as_array);
+        match args
+            .and_then(|values| values.first())
+            .and_then(Value::as_str)
+        {
+            Some("exec") => args
+                .and_then(|values| values.get(2))
+                .and_then(Value::as_str)
                 .map(|nested| format!("docker exec {nested}"))
                 .unwrap_or_else(|| "docker exec".into()),
             Some(subcommand) => format!("docker {subcommand}"),
             None => "docker".into(),
-        },
-        Some(command) => command.to_owned(),
-        None => "diagnostic".into(),
+        }
+    } else {
+        command.to_owned()
     };
-    format!(
-        "SSH read-only · {} · {family}",
-        sanitize_action_text(alias, None)
-    )
+    format!("SSH read-only · {alias} · {family}")
 }
 
 fn patch_action(arguments: &Value, root: Option<&Path>) -> String {

@@ -24,6 +24,12 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
             binary_name
         )));
     }
+    if ["ssh", "scp", "sftp"].contains(&binary_name) {
+        return Err(McpError::InvalidRequest(format!(
+            "execution of '{}' is unavailable through terminal_exec; use ssh_readonly_exec for remote diagnostics",
+            binary_name
+        )));
+    }
     if binary_name == "docker" && !allow_docker {
         return Err(McpError::InvalidRequest(
             "execution of 'docker' is forbidden unless RELAY_ALLOW_DOCKER=true".into(),
@@ -35,17 +41,4 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
         ));
     }
     Ok(())
-}
-
-/// Detect the dedicated SSH terminal shape without granting any authority.
-/// Full alias/remote-command validation remains owned by `ssh_policy`.
-pub fn is_ssh_request(arguments: &serde_json::Value) -> bool {
-    let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
-        return false;
-    };
-    shell_words::split(command)
-        .ok()
-        .and_then(|parts| parts.into_iter().next())
-        .as_deref()
-        == Some("ssh")
 }
