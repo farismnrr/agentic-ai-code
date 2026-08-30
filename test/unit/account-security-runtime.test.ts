@@ -13,6 +13,9 @@ assert(hashSessionSecret(first.secret) !== first.secret, 'browser secrets must n
 assert(isFreshAuth({ secure: { authSession: first } }), 'new browser sessions must be fresh')
 assert(!isFreshAuth({ secure: { authSession: { ...first, freshAuthAt: Date.now() - 10 * 60 * 1000 - 1 } } }), 'fresh authentication must expire')
 assert(!browserSessionFrom({ secure: { authSession: { ...first, type: 'api_key' } } }), 'API-key sessions must not be treated as browser sessions')
+assert(isFreshAuth({ secure: { authSession: { ...first, freshAuthAt: 1_000 } } }, 1_000 + 10 * 60 * 1000), 'fresh auth is valid at the exact maximum age')
+assert(!isFreshAuth({ secure: { authSession: { ...first, freshAuthAt: 2_000 } } }, 1_999), 'future fresh-auth timestamps must fail closed')
+assert(!browserSessionFrom({ secure: { authSession: { id: first.id, secret: first.secret, issuedAt: 'invalid' } } }), 'malformed browser sessions must fail closed')
 
 const codes = generateRecoveryCodes()
 assert(codes.length === 10, 'recovery-code set must be bounded')

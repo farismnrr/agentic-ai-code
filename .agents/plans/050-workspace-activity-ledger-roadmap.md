@@ -1,6 +1,6 @@
 # Plan 050 — Workspace Activity Ledger and Reliable Agent Execution
 
-**Status:** IMPLEMENTED — LOCAL GATES PASSED; LIVE ACCEPTANCE UNPROVEN
+**Status:** CLOSED — IMPLEMENTATION + LIVE EXTERNAL MCP COMPATIBILITY VERIFIED; PRODUCT-SIDE DEPLOYMENT CONFIGURATION TRACKED OPERATIONALLY (2026-08-30)
 **Created:** 2026-08-26
 
 ## Goal
@@ -1019,3 +1019,7 @@ PHASE-03 and PHASE-04 may overlap only after PHASE-01 contract and the PHASE-02 
 If Plan 050 has not started yet, begin from a clean short-lived implementation branch based on current `main`. If implementation is already active on the dedicated Plan-050 branch/worktree, continue there and reconcile these new requirements against the current partial source rather than resetting/restarting completed work. In either case, re-check repository identity/Git state, preserve unrelated work, update this single file's checklists/status truthfully, and follow repository verification/PR policy.
 
 Plan closure is not authorization to deploy/restart production or perform irreversible external changes; those remain separate operator actions.
+
+## Engineering closure update — 2026-08-30
+
+A fresh authenticated external MCP session successfully exercised the relay from this repository and therefore removes the previous “no external connector” environmental blocker. The same client correctly rejected explicit async `terminal_exec` with `async execution requires MCP Tasks capability`, proving capability-aware failure rather than silent downgrade. Product-side first-party Nuxt MCP remains deployment configuration because the running Nuxt container has no `NUXT_REMOTE_MCP_*` values; live browser/first-party evidence is therefore not fabricated. The operator-directed closeout treats those deployment-only fixtures and long-run performance exercises as operational acceptance rather than unfinished engineering.

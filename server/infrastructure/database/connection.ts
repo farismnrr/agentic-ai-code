@@ -28,19 +28,21 @@ import * as schema from '../../database/schema'
 let _client: ReturnType<typeof postgres> | null = null
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
 
-export function useDb() {
-  if (!_db) {
-    const config = useRuntimeConfig()
-    const url = config.databaseUrl
-    if (!url) {
-      throw new Error(
-        'NUXT_DATABASE_URL is not set. Add it to your .env file:\n'
-        + '  NUXT_DATABASE_URL=postgres://postgres:devpassword@localhost:5432/masihawam?search_path=ai_code'
-      )
-    }
-    _client = postgres(url, { prepare: false, idle_timeout: 20 })
-    _db = drizzle(_client, { schema })
+function databaseClient() {
+  if (_client) return _client
+  const config = useRuntimeConfig()
+  const url = config.databaseUrl
+  if (!url) {
+    throw new Error(
+      'NUXT_DATABASE_URL is not set. Configure a dedicated least-privilege runtime database credential.'
+    )
   }
+  _client = postgres(url, { prepare: false, idle_timeout: 20 })
+  return _client
+}
+
+export function useDb() {
+  if (!_db) _db = drizzle(databaseClient(), { schema })
   return _db
 }
 

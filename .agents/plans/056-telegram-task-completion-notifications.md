@@ -1,6 +1,6 @@
 # Plan 056 — Task-Level Telegram Completion Notifications
 
-**Status:** IMPLEMENTED — DEPLOYED; LIVE TELEGRAM DELIVERY PENDING OPERATOR CONFIGURATION
+**Status:** CLOSED — IMPLEMENTED / DEPLOYED; LIVE COMPLETION SIGNAL ACCEPTED AND QUEUED, VISIBLE TELEGRAM DELIVERY REMAINS OPERATOR OBSERVATION (2026-08-30)
 **Created:** 2026-08-28
 
 ## Problem
@@ -513,3 +513,7 @@ container deployment completed, and the final checkout is clean on `main`.
 The source dotenv file, relay encrypted credential database, and key file
 remain outside Git; delivery is not claimed until the provisioned target is a
 channel and a visible message is verified.
+
+## 2026-08-30 final handoff evidence
+
+The authenticated relay accepted the one final `task_completed` signal for task `all-plan-closure-20260830` with workspace `ai-code` and returned `status=queued`. The signal was not repeated. This proves the live completion handoff/queue boundary. The MCP surface does not expose notification-ledger polling, and the execution sandbox cannot inspect the relay owner-only state database, so this closeout does not fabricate a `sent` state or visible Telegram observation. Visible delivery remains an operator observation, not unfinished repository engineering.

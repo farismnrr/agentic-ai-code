@@ -1,5 +1,5 @@
 import { consola } from 'consola'
-import { trace } from '@opentelemetry/api'
+import { trace, type Attributes } from '@opentelemetry/api'
 import { getLogger } from './otel'
 import { redactSecrets, sanitizeAttributes, sanitizeMessage, shouldIncludeStack } from './sanitize'
 import { classifyErrorType, classifyRawCause } from '../../core/errors/classify'
@@ -59,12 +59,12 @@ function emit(severityNumber: number, severityText: string, message: string, att
     if (spanContext?.traceId) correlated.trace_id = spanContext.traceId
     if (spanContext?.spanId) correlated.span_id = spanContext.spanId
 
+    const sanitizedAttributes: Attributes = sanitizeAttributes(correlated)
     getLogger('ai-code-server').emit({
       severityNumber,
       severityText,
       body: sanitizeMessage(message),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      attributes: sanitizeAttributes(correlated) as any
+      attributes: sanitizedAttributes
     })
   } catch {
     // Logging/export must never break the request it is describing —

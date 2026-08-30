@@ -1,6 +1,6 @@
 # Plan 044C — GitHub Security Alert Visibility
 
-**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / PERMISSION-AWARE LIVE VERIFIED (2026-08-30)
 
 Deterministic evidence: `bash scripts/verify-044c-security-alerts.sh` passes,
 including secret-canary and permission-aware behavior. Live provider alert
@@ -312,3 +312,7 @@ Do not implement update endpoints in this plan. Remediation occurs through norma
 ## Handoff
 
 After 044C is merged source-clean, continue to [Plan 044D](044d-controlled-actions-mutations-and-closure.md).
+
+## Live closure evidence — 2026-08-30
+
+Dependabot alert listing succeeded and returned normalized vulnerability metadata. Code-scanning and secret-scanning requests returned bounded provider errors in this repository/token context; no literal secret material was returned. This matches the permission-aware/unavailable contract, with hostile-provider canaries remaining the deterministic confidentiality proof.

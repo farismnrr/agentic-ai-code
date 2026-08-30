@@ -51,20 +51,31 @@ The additive account-security migrations are `0018_mean_lethal_legion.sql`
 and `0019_even_stingray.sql`. They were generated, reviewed, and applied to
 the configured database without destructive statements.
 
-The current configured database connection was inspected read-only on
-2026-08-26 and resolves to a PostgreSQL superuser. This is not an acceptable
-production runtime boundary. Creating/rotating a dedicated non-superuser
-runtime credential, granting only `CONNECT`, schema `USAGE`, table DML, and
-required sequence privileges, separating migration ownership, and updating
-the deployment secret requires an authorized operator/database change. It was
-not performed during this closure pass because it changes external credentials
-and can affect the running application. Plan 049F/G remain externally blocked
-on that exact acceptance item until the authorized role migration is executed
-and verified in a safe environment.
+The configured production database connection inspected on 2026-08-26 was a
+PostgreSQL superuser and remains an external deployment blocker until an
+operator rotates it. The repository now enforces the intended boundary:
+
+- `NUXT_DATABASE_URL` is the application runtime identity and production
+  startup can reject `SUPERUSER`, `CREATEROLE`, `CREATEDB`, `REPLICATION`, or
+  `BYPASSRLS` capabilities;
+- `NUXT_DATABASE_MIGRATION_URL` is the separate Drizzle/migration identity;
+  production migration tooling does not fall back to the runtime credential;
+- `ops/database/least-privilege.sql` grants only `CONNECT`, schema `USAGE`,
+  table `SELECT/INSERT/UPDATE/DELETE`, and required sequence access to the
+  runtime role, including migration-owner default privileges;
+- Docker Compose has no built-in `postgres:postgres` fallback and requires an
+  explicit runtime database URL.
+
+A disposable PostgreSQL 17 acceptance on 2026-08-30 proved the grant contract:
+the runtime role could insert/select application data, could not create a table,
+and had all five forbidden cluster-level privilege flags disabled. This proves
+the repository contract, not the production credential rotation. Production
+Plan 049 closure still requires the authorized operator role/secret migration.
 
 Backups and restores must use a separate privileged operational identity;
-`NUXT_DATABASE_URL` and backup credentials are deployment secrets and must not
-be placed in repository files, telemetry, or support output.
+`NUXT_DATABASE_URL`, `NUXT_DATABASE_MIGRATION_URL`, and backup credentials are
+deployment secrets and must not be placed in repository files, telemetry, or
+support output.
 
 ## Deterministic checks
 

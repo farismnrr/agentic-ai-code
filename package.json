@@ -23,11 +23,14 @@
     "guardrail:nuxt": "bash scripts/guardrail.sh nuxt",
     "guardrail:rust": "bash scripts/guardrail.sh rust",
     "guardrail:all": "bash scripts/guardrail.sh all",
-    "audit": "pnpm audit",
+    "audit": "pnpm audit:web && pnpm audit:rust",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "release:build": "bash ops/release/build-artifacts.sh",
-    "release:publish": "bash ops/release/publish.sh"
+    "release:publish": "bash ops/release/publish.sh",
+    "audit:web": "pnpm audit --prod --audit-level=moderate",
+    "audit:rust": "CARGO_HOME=.tmp/cargo-audit-home cargo audit",
+    "start": "node --import ./otel-preload.mjs ./ops/runtime-web-entry.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",

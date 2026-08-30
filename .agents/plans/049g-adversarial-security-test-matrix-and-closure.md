@@ -1,6 +1,6 @@
 # Plan 049G — Adversarial Security Test Matrix and Closure
 
-**Status:** LOCALLY VERIFIED / EXTERNAL DB-ROLE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / LOCALLY + DISPOSABLE-DB VERIFIED; PRODUCTION ROTATION TRACKED AS DEPLOYMENT PREREQUISITE (2026-08-30)
 **Parent:** Plan 049
 **Depends on:** Plan 049A–049F
 
@@ -8,10 +8,12 @@
 `pnpm verify:account-security`, and `pnpm verify:account-security-runtime`
 cover token/session/MFA/recovery replay primitives, secret-safe source
 contracts, CSRF/content/cache/header policy, and TOTP/recovery runtime
-vectors. The remaining acceptance item is the authorized least-privilege
-database-role test; it cannot truthfully pass while the configured runtime
-credential is a PostgreSQL superuser. No production destructive penetration
-test or GitHub mutation was performed.
+vectors. Plan 060 supplements the source-contract checks with behavioral HTTP/security
+and application authorization tests plus disposable PostgreSQL role acceptance.
+A safe runtime role starts successfully, while a superuser runtime exits before
+Nitro listens. The remaining acceptance item is production credential rotation
+and deployed verification; no production DB privilege mutation, destructive
+penetration test, or GitHub mutation was performed.
 
 ## Goal
 

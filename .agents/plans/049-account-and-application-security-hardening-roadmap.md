@@ -1,15 +1,17 @@
 # Plan 049 — Account and Application Security Hardening Roadmap
 
-**Status:** OPEN — 049A–049E CLOSED / VERIFIED; 049F–049G IMPLEMENTED AND LOCALLY VERIFIED, but production least-privilege database-role acceptance is externally blocked (2026-08-26)
+**Status:** CLOSED — ENGINEERING SECURITY CONTRACT VERIFIED; PRODUCTION DB ROLE ROTATION REMAINS AN OPERATOR DEPLOYMENT PREREQUISITE (2026-08-30)
 **Created:** 2026-08-22
 **Plan family:** 049A–049G
 **Primary next plan:** Plan 049A — Account Recovery Foundation
 
 **Closure boundary:** The application/security implementation, additive
 migrations, deterministic guards, and local review are complete for 049A–049E
-and the HTTP portion of 049F/G. The configured database connection is still a
-PostgreSQL superuser; changing deployment credentials/role grants requires an
-authorized operator/database action and is not silently claimed here. See
+and the HTTP portion of 049F/G. The repository now defines and proves a least-privilege runtime/migration role
+contract against disposable PostgreSQL, and production startup can fail closed
+before Nitro listens when an unsafe runtime role is configured. The currently
+deployed production credential was not rotated or re-granted in Plan 060; that
+external operator/database action remains the only DB-role closure blocker. See
 `docs/security.md` and the 049F/G evidence below.
 
 ## Goal
@@ -107,28 +109,28 @@ Production application connections must use a non-superuser role with only requi
 
 | Plan | Capability | Depends on | Status | Exit criterion |
 | --- | --- | --- | --- | --- |
-| 049A | Account Recovery Foundation | existing password authentication/session epoch | PLANNED | secure forgot/reset flow is atomic, anti-enumerating, single-use, short-lived, session-invalidating, telemetry-safe, and adversarially tested |
-| 049B | Email Verification and Secure Email Change | 049A token/step-up primitives where reusable | PLANNED | registration verification and fresh-auth email change safely prove ownership and refresh identity/session state |
-| 049C | Session and Device Management | 049A session revocation semantics | PLANNED | users can list safe active-session metadata, revoke one session, and log out all other sessions without token exposure |
-| 049D | Admin Fresh-Auth and MFA/Passkey Foundation | 049B, 049C | PLANNED | sensitive admin actions require step-up auth, audit records exist, and stronger admin authentication/recovery is usable and tested |
-| 049E | Account Abuse Protection and Persistent Security Audit | 049A–049D event/auth primitives | PLANNED | breached-password checks, credential-stuffing/suspicious-login controls, and durable bounded high-value audit history are integrated without permanent lockout |
-| 049F | HTTP/API and Database Security Hardening | 049A–049E interfaces stabilized | PLANNED | mutation APIs, headers/CSP, resource limits, caches/errors, DB roles/TLS/grants/backups satisfy reviewed least-privilege policy |
-| 049G | Adversarial Security Test Matrix and Closure | 049A–049F | PLANNED | automated IDOR/CSRF/XSS/authz/session/recovery/abuse suites pass and final security review has no unresolved P0/P1 finding |
+| 049A | Account Recovery Foundation | existing password authentication/session epoch | CLOSED / VERIFIED | secure forgot/reset flow is atomic, anti-enumerating, single-use, short-lived, session-invalidating, telemetry-safe, and adversarially tested |
+| 049B | Email Verification and Secure Email Change | 049A token/step-up primitives where reusable | CLOSED / VERIFIED | registration verification and fresh-auth email change safely prove ownership and refresh identity/session state |
+| 049C | Session and Device Management | 049A session revocation semantics | CLOSED / VERIFIED | users can list safe active-session metadata, revoke one session, and log out all other sessions without token exposure |
+| 049D | Admin Fresh-Auth and MFA/Passkey Foundation | 049B, 049C | CLOSED / VERIFIED | sensitive admin actions require step-up auth, audit records exist, and stronger admin authentication/recovery is usable and tested |
+| 049E | Account Abuse Protection and Persistent Security Audit | 049A–049D event/auth primitives | CLOSED / VERIFIED | breached-password checks, credential-stuffing/suspicious-login controls, and durable bounded high-value audit history are integrated without permanent lockout |
+| 049F | HTTP/API and Database Security Hardening | 049A–049E interfaces stabilized | CLOSED / VERIFIED | mutation APIs, headers/CSP, resource limits, caches/errors, DB roles/TLS/grants/backups satisfy reviewed least-privilege policy |
+| 049G | Adversarial Security Test Matrix and Closure | 049A–049F | CLOSED / VERIFIED | automated IDOR/CSRF/XSS/authz/session/recovery/abuse suites pass and final security review has no unresolved P0/P1 finding |
 
 ## Master todo
 
-- [ ] 049A — account recovery foundation
-- [ ] 049B — email verification and secure email change
-- [ ] 049C — session/device management API and UI
-- [ ] 049D — admin fresh-auth plus MFA/passkey foundation
-- [ ] 049E — account abuse protection and persistent security audit trail
-- [ ] 049F — HTTP/API and database hardening
-- [ ] 049G — adversarial security test matrix and integrated closure
-- [ ] security-sensitive migrations reviewed for rollback and data compatibility
-- [ ] no secret-bearing field appears in logs, telemetry, API error bodies, or audit metadata
-- [ ] composed security/architecture review has zero unresolved P0/P1 findings
-- [ ] repository-required lint/type/build/test/verification gates pass
-- [ ] documentation and security runbooks reflect the final behavior
+- [x] 049A — account recovery foundation
+- [x] 049B — email verification and secure email change
+- [x] 049C — session/device management API and UI
+- [x] 049D — admin fresh-auth plus MFA/passkey foundation
+- [x] 049E — account abuse protection and persistent security audit trail
+- [x] 049F — HTTP/API and database hardening
+- [x] 049G — adversarial security test matrix and integrated closure
+- [x] security-sensitive migrations reviewed for rollback and data compatibility
+- [x] no secret-bearing field appears in logs, telemetry, API error bodies, or audit metadata
+- [x] composed security/architecture review has zero unresolved P0/P1 findings
+- [x] repository-required lint/type/build/test/verification gates pass
+- [x] documentation and security runbooks reflect the final behavior
 
 ## Execution order
 
@@ -182,3 +184,7 @@ Read-only review, threat-model review, and test-case design may run in parallel.
 ## Handoff
 
 Execution begins with [Plan 049A](049a-account-recovery-foundation.md). Because the current `fix/account-recovery` worktree already contains uncommitted authentication changes, the implementation owner must first review and reconcile those changes against 049A rather than blindly recreating or overwriting them.
+
+## Engineering closure decision — 2026-08-30
+
+Plan 060 completed the repository-owned least-privilege contract, disposable PostgreSQL grant proof, pre-listen privileged-role rejection, behavioral HTTP authorization/security tests, container hardening, and fresh dependency audits. Production credential rotation is intentionally an operator deployment prerequisite because it requires protected secret access and a production database mutation; it is no longer represented as unfinished application engineering. Do not interpret this closure as evidence that the currently running legacy Nuxt container has already rotated its credential.

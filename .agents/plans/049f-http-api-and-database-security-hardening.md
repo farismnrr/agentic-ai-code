@@ -1,15 +1,16 @@
 # Plan 049F — HTTP/API and Database Security Hardening
 
-**Status:** IMPLEMENTED / LOCALLY VERIFIED / EXTERNAL DB-ROLE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / REPOSITORY + DISPOSABLE-DB VERIFIED; PRODUCTION ROTATION TRACKED AS DEPLOYMENT PREREQUISITE (2026-08-30)
 **Parent:** Plan 049
 **Depends on:** Plan 049A–049E
 
 **Closure evidence:** Central headers, no-store policy, same-origin checks,
 JSON mutation content-type enforcement, generic error handling, CSS-defined
 landing animation timing, bounded existing model/relay execution, and additive
-migrations are implemented and locally verified. Read-only database inspection
-showed the configured connection is `postgres` with superuser privileges;
-runtime-role separation, grant proof, and credential rotation require an
+migrations are implemented and locally verified. Plan 060 added separate migration/runtime credential configuration, a reviewed
+least-privilege grant contract, disposable PostgreSQL positive/negative proof,
+and a pre-listen production runtime-role check. The deployed production
+credential itself was not rotated or re-granted because that remains an
 authorized deployment/database boundary change. See `docs/security.md`.
 
 ## Goal

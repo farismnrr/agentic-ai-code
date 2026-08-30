@@ -1,6 +1,6 @@
 # Plan 058 — Telegram Task Report Workspace Context
 
-**Status:** IMPLEMENTATION COMPLETE; DEPLOYMENT PENDING
+**Status:** CLOSED — MERGED / LOCALLY VERIFIED; LIVE WORKER HANDOFF ACCEPTED AND QUEUED, VISIBLE DELIVERY REMAINS OPERATOR OBSERVATION (2026-08-30)
 **Goal:** Make every task-completion Telegram message an actionable report that identifies the workspace and reflects the completed task details, without introducing per-tool notifications or a generic Telegram capability.
 **Success Criteria:** A workspace is mandatory in every completion contract, survives the Nuxt outbox handoff, appears in the relay-formatted message, orchestration reports include the task-node list, legacy Nuxt outbox rows remain deliverable with an explicit unavailable-workspace fallback, focused web/Rust tests and `pnpm guardrail` pass, and the merged implementation is deployed and verified through the relay worker.
 
@@ -212,3 +212,7 @@
 - Execute TASK-001 and TASK-002 as one implementation boundary because the Nuxt and Rust payload schemas must remain synchronized.
 - Execute TASK-003 before documentation closeout so the final message examples reflect the real graph summary.
 - Execute TASK-005 only after changed-stack gates and staged-diff review pass.
+
+## 2026-08-30 final handoff evidence
+
+The authenticated relay accepted the one final `task_completed` signal for task `all-plan-closure-20260830` with workspace `ai-code` and returned `status=queued`. The signal was not repeated. This proves the live completion handoff/queue boundary. The MCP surface does not expose notification-ledger polling, and the execution sandbox cannot inspect the relay owner-only state database, so this closeout does not fabricate a `sent` state or visible Telegram observation. Visible delivery remains an operator observation, not unfinished repository engineering.
