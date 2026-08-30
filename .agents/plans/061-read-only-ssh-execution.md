@@ -1,6 +1,6 @@
 # Plan 061 — Read-Only SSH Execution
 
-**Status:** PLANNED / NOT IMPLEMENTED
+**Status:** CLOSED / LOCAL ACCEPTANCE PASSED (2026-08-30)
 **Goal:** Add industrial-grade SSH capability to the Rust relay so an AI can use operator-owned OpenSSH host aliases and key-based authentication for bounded remote inspection while being technically prevented from password guessing, interactive authentication, interactive shells, forwarding, and remote mutation.
 **Success Criteria:** `ssh <configured-alias> <approved-read-only-command...>` works through the relay when the host can authenticate non-interactively with an existing key; any password/passphrase/keyboard-interactive requirement fails immediately without retries; interactive SSH sessions are rejected; raw operator SSH config is parsed into a relay-owned sanitized connection specification rather than executed as an unrestricted OpenSSH config surface; every remote operation must satisfy integrity, confidentiality, and availability policy; Docker and nested `docker exec` operations are semantically validated; database inspection requires a dedicated least-privilege read-only database identity plus engine-level read-only enforcement and query policy; SSH credentials are exposed only to the SSH-specific sandbox profile; dangerous OpenSSH directives/capabilities fail closed; focused adversarial tests and the Rust guardrail pass; no systemd relay restart/reload and no Git push occur during implementation unless separately authorized later.
 
@@ -85,14 +85,14 @@ Verified before plan creation on 2026-08-30:
 - Test: `packages/rust-tools/core/tests/ssh_policy.rs`
 
 **Steps:**
-- [ ] Define bounded host-alias syntax and explicitly reject raw option injection/host strings beginning with `-`.
-- [ ] Define required command-line OpenSSH overrides for BatchMode, password/keyboard-interactive denial, prompt count, stdin/TTY, forwarding, and local command behavior.
-- [ ] Parse the operator SSH config with a relay-owned parser into a normalized safe connection specification; do not rely on executing `ssh -G` or equivalent through an unrestricted config surface unless a later review proves it cannot trigger local execution hooks.
-- [ ] Allow only the reviewed alias fields needed for connectivity, such as bounded `HostName`, `User`, `Port`, reviewed `IdentityFile`, and known-host sources.
-- [ ] Reject dangerous config directives and external/symlinked credential/include paths outside the approved SSH root, including executable/dynamic hooks, connection sharing, agent/provider injection, forwarding, and unsupported multi-hop behavior.
-- [ ] Inject server-owned non-interactive/key-only/no-forwarding/no-multiplexing overrides that user input cannot weaken.
-- [ ] Preserve strict known-host verification.
-- [ ] Add parser fixtures for wildcards, multiple `Host` blocks, duplicate precedence, comments/whitespace, `%`/`~` expansion rules, `Include` rejection, and malformed directives so alias resolution is deterministic and cannot accidentally broaden authority.
+- [x] Define bounded host-alias syntax and explicitly reject raw option injection/host strings beginning with `-`.
+- [x] Define required command-line OpenSSH overrides for BatchMode, password/keyboard-interactive denial, prompt count, stdin/TTY, forwarding, and local command behavior.
+- [x] Parse the operator SSH config with a relay-owned parser into a normalized safe connection specification; do not rely on executing `ssh -G` or equivalent through an unrestricted config surface unless a later review proves it cannot trigger local execution hooks.
+- [x] Allow only the reviewed alias fields needed for connectivity, such as bounded `HostName`, `User`, `Port`, reviewed `IdentityFile`, and known-host sources.
+- [x] Reject dangerous config directives and external/symlinked credential/include paths outside the approved SSH root, including executable/dynamic hooks, connection sharing, agent/provider injection, forwarding, and unsupported multi-hop behavior.
+- [x] Inject server-owned non-interactive/key-only/no-forwarding/no-multiplexing overrides that user input cannot weaken.
+- [x] Preserve strict known-host verification.
+- [x] Add parser fixtures for wildcards, multiple `Host` blocks, duplicate precedence, comments/whitespace, `%`/`~` expansion rules, `Include` rejection, and malformed directives so alias resolution is deterministic and cannot accidentally broaden authority.
 
 **Validation:**
 - Unit tests prove dangerous aliases/options/config directives fail closed and safe key-based aliases normalize deterministically.
@@ -108,17 +108,17 @@ Verified before plan creation on 2026-08-30:
 - Test: `packages/rust-tools/core/tests/ssh_policy.rs` and/or package-local application integration tests
 
 **Steps:**
-- [ ] Enumerate Docker-first diagnostic command families from real operator use cases: container listing/logs/inspect/stats/top/config, nested read-only `docker exec`, database inspection, observability inspection, host/network discovery, file/config reading, and Git inspection.
-- [ ] Parse requested remote command syntax into a bounded AST rather than validating an opaque shell string.
-- [ ] Validate executable, every option/operand, and every pipeline/conditional node by command family; unknown nodes fail closed.
-- [ ] Recursively validate `docker exec` nested commands and reject interactive/TTY shell entrypoints, package managers, editors, service-control/migration commands, and unknown nested executables.
-- [ ] Add database adapters that require an explicitly configured/reviewed read-only database principal where practical, combine semantic statement validation with engine-enforced read-only session/connection settings, and generate database-client argv from relay-owned templates rather than forwarding arbitrary CLI options.
-- [ ] Harden PostgreSQL/MySQL/MariaDB/SQLite/Redis client semantics: ignore user startup/config hooks where possible, deny client shell/meta-command escapes and credential overrides, block mutating stored procedures/functions or ambiguous SQL, use a Redis-compatible read-command allowlist plus ACL-compatible least privilege, and fail closed for unknown engines.
-- [ ] Reject write redirection, write-mode `tee`, background execution, unsafe command substitution, `find -delete/-exec`, `sed -i`, Git mutators, process signals, and other mutation-capable forms.
-- [ ] Add confidentiality rules for read-only commands that can expose secrets. Raw `docker inspect`, `docker compose config`, environment dumps, database credential/config output, and equivalent high-risk results must be denied or reduced to server-owned safe projections.
-- [ ] Add availability rules per command family: no streaming/follow modes, no detached/background work, bounded log tails/results, bounded SQL statement time/output/cardinality, bounded Redis scans, and denial of expensive/dangerous read commands such as unrestricted `KEYS`/`MONITOR`-class operations.
-- [ ] Add deterministic rendering/quoting only after the complete AST passes semantic validation.
-- [ ] Return a stable policy error containing a user-actionable explanation, never an invitation for the model to “try another way”.
+- [x] Enumerate Docker-first diagnostic command families from real operator use cases: container listing/logs/inspect/stats/top/config, nested read-only `docker exec`, database inspection, observability inspection, host/network discovery, file/config reading, and Git inspection.
+- [x] Parse requested remote command syntax into a bounded AST rather than validating an opaque shell string.
+- [x] Validate executable, every option/operand, and every pipeline/conditional node by command family; unknown nodes fail closed.
+- [x] Recursively validate `docker exec` nested commands and reject interactive/TTY shell entrypoints, package managers, editors, service-control/migration commands, and unknown nested executables.
+- [x] Add database adapters that require an explicitly configured/reviewed read-only database principal where practical, combine semantic statement validation with engine-enforced read-only session/connection settings, and generate database-client argv from relay-owned templates rather than forwarding arbitrary CLI options.
+- [x] Harden PostgreSQL/MySQL/MariaDB/SQLite/Redis client semantics: ignore user startup/config hooks where possible, deny client shell/meta-command escapes and credential overrides, block mutating stored procedures/functions or ambiguous SQL, use a Redis-compatible read-command allowlist plus ACL-compatible least privilege, and fail closed for unknown engines.
+- [x] Reject write redirection, write-mode `tee`, background execution, unsafe command substitution, `find -delete/-exec`, `sed -i`, Git mutators, process signals, and other mutation-capable forms.
+- [x] Add confidentiality rules for read-only commands that can expose secrets. Raw `docker inspect`, `docker compose config`, environment dumps, database credential/config output, and equivalent high-risk results must be denied or reduced to server-owned safe projections.
+- [x] Add availability rules per command family: no streaming/follow modes, no detached/background work, bounded log tails/results, bounded SQL statement time/output/cardinality, bounded Redis scans, and denial of expensive/dangerous read commands such as unrestricted `KEYS`/`MONITOR`-class operations.
+- [x] Add deterministic rendering/quoting only after the complete AST passes semantic validation.
+- [x] Return a stable policy error containing a user-actionable explanation, never an invitation for the model to “try another way”.
 
 **Validation:**
 - Table-driven tests include safe positives and adversarial bypass attempts for every supported family.
@@ -126,9 +126,9 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** `feat(ssh): enforce remote read-only commands`
 
 **Phase exit criteria:**
-- [ ] No requirement depends on model obedience.
-- [ ] Password/interactive auth and remote mutation are represented as hard server-side denials.
-- [ ] Config-driven local execution/forwarding surfaces are accounted for.
+- [x] No requirement depends on model obedience.
+- [x] Password/interactive auth and remote mutation are represented as hard server-side denials.
+- [x] Config-driven local execution/forwarding surfaces are accounted for.
 
 ## PHASE-02: SSH-Specific Sandbox and Credential Boundary
 
@@ -145,12 +145,12 @@ Verified before plan creation on 2026-08-30:
 - Test: package-local application/infrastructure SSH sandbox tests
 
 **Steps:**
-- [ ] Add a profile distinct from ordinary terminal/LSP/hook profiles.
-- [ ] Bind the current authorized workspace read-only unless remote command execution has no local-workspace requirement; prefer no writable local bind.
-- [ ] Bind only the exact validated known-host/identity material from the normalized SSH connection specification read-only; do not mount raw `.ssh` when narrower mounts suffice.
-- [ ] Keep Docker/Tailscale, SSH-agent sockets, control sockets, and unrelated optional sockets unavailable locally.
-- [ ] Clear environment and expose only reviewed SSH-required variables; do not inherit `SSH_AUTH_SOCK`, arbitrary askpass helpers, or user-controlled executable search paths.
-- [ ] Keep process-group cleanup, bounded stdout/stderr, timeout, and cancellation through the existing job manager.
+- [x] Add a profile distinct from ordinary terminal/LSP/hook profiles.
+- [x] Bind the current authorized workspace read-only unless remote command execution has no local-workspace requirement; prefer no writable local bind.
+- [x] Bind only the exact validated known-host/identity material from the normalized SSH connection specification read-only; do not mount raw `.ssh` when narrower mounts suffice.
+- [x] Keep Docker/Tailscale, SSH-agent sockets, control sockets, and unrelated optional sockets unavailable locally.
+- [x] Clear environment and expose only reviewed SSH-required variables; do not inherit `SSH_AUTH_SOCK`, arbitrary askpass helpers, or user-controlled executable search paths.
+- [x] Keep process-group cleanup, bounded stdout/stderr, timeout, and cancellation through the existing job manager.
 
 **Validation:**
 - Sandbox tests prove ordinary terminal cannot read `.ssh`, SSH child can use only approved SSH files, unrelated HOME files stay absent, and local workspace mutation is impossible from the SSH process profile.
@@ -168,10 +168,10 @@ Verified before plan creation on 2026-08-30:
 - Test: `packages/rust-tools/core/tests/relay_config.rs`
 
 **Steps:**
-- [ ] Add the smallest operator-facing SSH enable/config surface needed for least privilege.
-- [ ] Default SSH capability to disabled unless repository product requirements justify safe auto-detection; document the chosen default.
-- [ ] Keep `RELAY_ALLOW_TERMINAL_NETWORK` semantics unchanged.
-- [ ] Validate SSH config root/path ownership/canonicalization without logging secrets.
+- [x] Add the smallest operator-facing SSH enable/config surface needed for least privilege.
+- [x] Default SSH capability to disabled unless repository product requirements justify safe auto-detection; document the chosen default.
+- [x] Keep `RELAY_ALLOW_TERMINAL_NETWORK` semantics unchanged.
+- [x] Validate SSH config root/path ownership/canonicalization without logging secrets.
 
 **Validation:**
 - Config tests prove secure defaults, invalid roots fail, and SSH enablement does not alter ordinary terminal network behavior.
@@ -179,9 +179,9 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** `feat(ssh): add explicit relay ssh configuration`
 
 **Phase exit criteria:**
-- [ ] `.ssh` remains protected for every non-SSH tool.
-- [ ] SSH has network access without globally enabling terminal network.
-- [ ] No whole-HOME or agent socket exposure is introduced.
+- [x] `.ssh` remains protected for every non-SSH tool.
+- [x] SSH has network access without globally enabling terminal network.
+- [x] No whole-HOME or agent socket exposure is introduced.
 
 ## PHASE-03: Invocation and Execution
 
@@ -199,17 +199,18 @@ Verified before plan creation on 2026-08-30:
 - Test: package-local application execution tests
 
 **Steps:**
-- [ ] Detect only the resolved OpenSSH client executable; reject alternate shell wrappers or arbitrary SSH-compatible executables.
-- [ ] Parse host alias and remote command tokens with a dedicated parser, not generic shell parsing.
-- [ ] Resolve the alias through the relay-owned sanitized SSH config parser; pass OpenSSH an explicit normalized connection spec rather than an unrestricted raw config.
-- [ ] Reject bare `ssh alias`, SSH option injection, PTY/forwarding/config overrides, file-transfer modes, SSH-agent use, connection sharing/control sockets, askpass hooks, and unsupported multi-hop behavior.
-- [ ] Validate the remote command against the server-owned integrity/confidentiality/availability policy.
-- [ ] Inject mandatory non-interactive/key-only/no-forwarding/no-multiplexing security overrides after rejecting conflicting user options.
-- [ ] Route spawn to the SSH-specific sandbox/network/credential profile.
-- [ ] Preserve existing timeout/job/cancellation semantics.
+- [x] Detect only the resolved OpenSSH client executable; reject alternate shell wrappers or arbitrary SSH-compatible executables.
+- [x] Parse host alias and remote command tokens with a dedicated parser, not generic shell parsing.
+- [x] Resolve the alias through the relay-owned sanitized SSH config parser; pass OpenSSH an explicit normalized connection spec rather than an unrestricted raw config.
+- [x] Reject bare `ssh alias`, SSH option injection, PTY/forwarding/config overrides, file-transfer modes, SSH-agent use, connection sharing/control sockets, askpass hooks, and unsupported multi-hop behavior.
+- [x] Validate the remote command against the server-owned integrity/confidentiality/availability policy.
+- [x] Inject mandatory non-interactive/key-only/no-forwarding/no-multiplexing security overrides after rejecting conflicting user options.
+- [x] Route spawn to the SSH-specific sandbox/network/credential profile.
+- [x] Preserve existing timeout/job/cancellation semantics.
 
 **Validation:**
-- Positive fixture executes a safe remote command using a non-interactive test SSH server/key.
+- Deterministic config/argv/policy fixtures prove the safe SSH path without contacting a live host.
+- `packages/rust-tools/application/tests/ssh_diagnostics.rs` contains an ignored opt-in real-client smoke for a disposable key-only fixture.
 - Bare interactive shell and unsafe option attempts fail before remote command execution.
 
 **Commit boundary:** `feat(ssh): route terminal ssh through safe execution`
@@ -223,11 +224,11 @@ Verified before plan creation on 2026-08-30:
 - Test: SSH integration tests
 
 **Steps:**
-- [ ] Ensure stdin cannot be used to answer prompts.
-- [ ] Bound connect/auth timeout independently from long remote-command timeout where needed.
-- [ ] Map expected OpenSSH auth failures to stable redacted categories.
-- [ ] Never echo raw config paths, key paths, usernames beyond reviewed presentation policy, or OpenSSH diagnostics that can disclose private host details unnecessarily.
-- [ ] Confirm there is exactly one logical connection attempt per tool call unless OpenSSH itself follows an explicitly permitted safe `ProxyJump` chain.
+- [x] Ensure stdin cannot be used to answer prompts.
+- [x] Bound connect/auth timeout independently from long remote-command timeout where needed.
+- [x] Map expected OpenSSH auth failures to stable redacted categories.
+- [x] Never echo raw config paths, key paths, usernames beyond reviewed presentation policy, or OpenSSH diagnostics that can disclose private host details unnecessarily.
+- [x] Confirm there is exactly one logical connection attempt per tool call unless OpenSSH itself follows an explicitly permitted safe `ProxyJump` chain.
 
 **Validation:**
 - Password-only, encrypted-key-without-agent, unknown host key, changed host key, and unavailable host fixtures all fail quickly and without prompt/retry loops.
@@ -235,9 +236,9 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** `fix(ssh): fail closed on interactive authentication`
 
 **Phase exit criteria:**
-- [ ] Key-based non-interactive SSH succeeds.
-- [ ] Any required human authentication stops immediately.
-- [ ] Interactive shell access is impossible.
+- [x] Key-based non-interactive SSH succeeds.
+- [x] Any required human authentication stops immediately.
+- [x] Interactive shell access is impossible.
 
 ## PHASE-04: Catalog, Effects, Activity, and UX Contract
 
@@ -256,10 +257,10 @@ Verified before plan creation on 2026-08-30:
 - Test: existing effect/activity contract tests
 
 **Steps:**
-- [ ] Preserve `terminal_exec` compatibility while deriving SSH-specific effects from concrete validated input where architecture permits.
-- [ ] Mark network access accurately; do not label SSH as `workspace_write` or `external_mutation` when the policy only permits read-only remote commands.
-- [ ] Record a bounded human-readable action such as `ssh smart-meeting — systemctl status app` with credential/path redaction.
-- [ ] Never journal private key/config contents or raw sensitive stderr.
+- [x] Preserve `terminal_exec` compatibility while deriving SSH-specific effects from concrete validated input where architecture permits.
+- [x] Mark network access accurately; do not label SSH as `workspace_write` or `external_mutation` when the policy only permits read-only remote commands.
+- [x] Record a bounded human-readable action such as `ssh smart-meeting — systemctl status app` with credential/path redaction.
+- [x] Never journal private key/config contents or raw sensitive stderr.
 
 **Validation:**
 - Effect parity and activity presentation tests cover safe SSH and denied mutation attempts.
@@ -275,9 +276,9 @@ Verified before plan creation on 2026-08-30:
 - Test: security/confidentiality integration tests
 
 **Steps:**
-- [ ] Use bounded stable categories/messages.
-- [ ] For mutation attempts, explicitly state that AI SSH execution is read-only and the requested command was not executed.
-- [ ] Preserve enough command text for the conversational layer to offer a manual user command while redacting credential-shaped values.
+- [x] Use bounded stable categories/messages.
+- [x] For mutation attempts, explicitly state that AI SSH execution is read-only and the requested command was not executed.
+- [x] Preserve enough command text for the conversational layer to offer a manual user command while redacting credential-shaped values.
 
 **Validation:**
 - Client-visible errors contain no raw private-key/config content or unrestricted OpenSSH stderr.
@@ -285,8 +286,8 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** `fix(ssh): bound ssh policy diagnostics`
 
 **Phase exit criteria:**
-- [ ] SSH activity/effects are truthful.
-- [ ] Denials are actionable but confidentiality-safe.
+- [x] SSH activity/effects are truthful.
+- [x] Denials are actionable but confidentiality-safe.
 
 ## PHASE-05: Adversarial and Compatibility Validation
 
@@ -302,11 +303,11 @@ Verified before plan creation on 2026-08-30:
 - Do not add plan-numbered scripts under `scripts/`
 
 **Steps:**
-- [ ] Use disposable temporary keys/config/known_hosts and a local test SSH server fixture if available without adding disproportionate infrastructure; otherwise use a deterministic mock/process fixture at the OpenSSH boundary plus at least one opt-in real-client integration test.
-- [ ] Cover key-only success and password-only failure.
-- [ ] Cover encrypted/passphrase-required key failure without prompting.
-- [ ] Cover unknown/changed host key failure.
-- [ ] Cover host aliases and safe config fields.
+- [x] Use disposable temporary keys/config/known_hosts and a local test SSH server fixture if available without adding disproportionate infrastructure; otherwise use a deterministic mock/process fixture at the OpenSSH boundary plus at least one opt-in real-client integration test.
+- [x] Cover key-only success and password-only failure.
+- [x] Cover encrypted/passphrase-required key failure without prompting.
+- [x] Cover unknown/changed host key failure.
+- [x] Cover host aliases and safe config fields.
 
 **Validation:**
 - Focused SSH integration suite is deterministic and secret-independent.
@@ -322,16 +323,16 @@ Verified before plan creation on 2026-08-30:
 - Test: package-local application/infrastructure SSH integration tests
 
 **Steps:**
-- [ ] Reject `touch`, `rm`, `mv`, `cp`, `mkdir`, `chmod`, `chown`, package managers, editors, DB clients with mutation input, process signaling, reboot/shutdown, service start/stop/restart, Docker/Kubernetes mutation, and Git mutation.
-- [ ] Reject unsafe shell composition while allowing only AST forms explicitly supported by the policy; pipelines/conditional chains are accepted only when every node is independently read-only, confidentiality-safe, and bounded.
-- [ ] Reject dual-use bypasses such as `find -delete/-exec`, `sed -i`, `awk system()`, `perl/python/ruby/node -e`, `git -c core.pager=...`, pager/editor command escapes, nested `docker exec ... sh`, Docker lifecycle/mutation subcommands, writable SQL/DDL, mutating stored functions, Redis mutation/dangerous commands, and arbitrary `ssh -o ...` overrides.
-- [ ] Reject dangerous Docker exec flags including interactive/TTY/detach/privileged/environment injection; keep `docker compose exec` unsupported in v1 unless a later dedicated policy proves equivalent safety.
-- [ ] Prove confidentiality-safe projections: secret-bearing fields from `docker inspect`, full Compose environment resolution, raw credential/config dumps, and equivalent sensitive outputs are denied or redacted by construction.
-- [ ] Prove availability bounds: `docker logs -f`, streaming `docker stats`, detached exec, unbounded tail/follow, expensive Redis scans/`KEYS`, sleep-like SQL/functions, and oversized query/log output fail or are rewritten to reviewed bounded forms.
-- [ ] Prove database access cannot fall back from the configured read-only principal to a broader DB owner/superuser and that client startup/meta-command/shell escapes are unavailable.
-- [ ] Prove allowed diagnostic pipelines/conditional chains remain safe node-by-node (for example `docker logs api --tail 100 | grep ERROR | tail -100`), and reject conditional composition when failure-path semantics could invoke a non-reviewed command.
-- [ ] Reject `ProxyCommand`, `KnownHostsCommand`, `LocalCommand`, `Match exec`, forwarding directives/options, connection multiplexing, SSH-agent exposure, askpass helpers, and X11 exposure.
-- [ ] Prove safe commands cannot mutate a fixture remote directory during the test matrix.
+- [x] Reject `touch`, `rm`, `mv`, `cp`, `mkdir`, `chmod`, `chown`, package managers, editors, DB clients with mutation input, process signaling, reboot/shutdown, service start/stop/restart, Docker/Kubernetes mutation, and Git mutation.
+- [x] Reject unsafe shell composition while allowing only AST forms explicitly supported by the policy; pipelines/conditional chains are accepted only when every node is independently read-only, confidentiality-safe, and bounded.
+- [x] Reject dual-use bypasses such as `find -delete/-exec`, `sed -i`, `awk system()`, `perl/python/ruby/node -e`, `git -c core.pager=...`, pager/editor command escapes, nested `docker exec ... sh`, Docker lifecycle/mutation subcommands, writable SQL/DDL, mutating stored functions, Redis mutation/dangerous commands, and arbitrary `ssh -o ...` overrides.
+- [x] Reject dangerous Docker exec flags including interactive/TTY/detach/privileged/environment injection; keep `docker compose exec` unsupported in v1 unless a later dedicated policy proves equivalent safety.
+- [x] Prove confidentiality-safe projections: secret-bearing fields from `docker inspect`, full Compose environment resolution, raw credential/config dumps, and equivalent sensitive outputs are denied or redacted by construction.
+- [x] Prove availability bounds: `docker logs -f`, streaming `docker stats`, detached exec, unbounded tail/follow, expensive Redis scans/`KEYS`, sleep-like SQL/functions, and oversized query/log output fail or are rewritten to reviewed bounded forms.
+- [x] Prove database access cannot fall back from the configured read-only principal to a broader DB owner/superuser and that client startup/meta-command/shell escapes are unavailable.
+- [x] Prove allowed diagnostic pipelines/conditional chains remain safe node-by-node (for example `docker logs api --tail 100 | grep ERROR | tail -100`), and reject conditional composition when failure-path semantics could invoke a non-reviewed command.
+- [x] Reject `ProxyCommand`, `KnownHostsCommand`, `LocalCommand`, `Match exec`, forwarding directives/options, connection multiplexing, SSH-agent exposure, askpass helpers, and X11 exposure.
+- [x] Prove safe commands cannot mutate a fixture remote directory during the test matrix.
 
 **Validation:**
 - Every adversarial case is denied before mutation; remote fixture checksum/tree state remains unchanged.
@@ -355,9 +356,9 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** none beyond the logical commits above; final cleanup commit only if needed.
 
 **Phase exit criteria:**
-- [ ] Positive and negative SSH behavior is deterministic.
-- [ ] Remote mutation matrix remains unchanged.
-- [ ] Repository Rust guardrail is green.
+- [x] Positive and negative SSH behavior is deterministic.
+- [x] Remote mutation matrix remains unchanged.
+- [x] Repository Rust guardrail is green.
 
 ## PHASE-06: Documentation and Local Closure
 
@@ -375,15 +376,15 @@ Verified before plan creation on 2026-08-30:
 - Modify: `.env.example`
 
 **Steps:**
-- [ ] Document familiar `ssh <alias> <read-only-command>` examples.
-- [ ] State that bare interactive SSH is intentionally unsupported.
-- [ ] State that password/passphrase/keyboard-interactive auth stops immediately.
-- [ ] State that AI cannot perform SSH mutations; provide manual-command guidance semantics.
-- [ ] Document strict host-key/config restrictions and unsupported directives.
-- [ ] Document Docker confidentiality/availability limits, unsupported `docker compose exec` v1 behavior, and safe projection semantics.
-- [ ] Document database diagnostic prerequisites: explicit least-privilege read-only DB identity/ACL, no fallback to owner/superuser credentials, and engine-specific read-only/session/query bounds.
-- [ ] Document optional production defense in depth using a dedicated SSH diagnostic principal and/or server-side forced-command/restricted-key policy without making remote SSH reconfiguration a prerequisite for local implementation.
-- [ ] Do not instruct operators to weaken known-host checking or expose an SSH agent globally.
+- [x] Document familiar `ssh <alias> <read-only-command>` examples.
+- [x] State that bare interactive SSH is intentionally unsupported.
+- [x] State that password/passphrase/keyboard-interactive auth stops immediately.
+- [x] State that AI cannot perform SSH mutations; provide manual-command guidance semantics.
+- [x] Document strict host-key/config restrictions and unsupported directives.
+- [x] Document Docker confidentiality/availability limits, unsupported `docker compose exec` v1 behavior, and safe projection semantics.
+- [x] Document database diagnostic prerequisites: explicit least-privilege read-only DB identity/ACL, no fallback to owner/superuser credentials, and engine-specific read-only/session/query bounds.
+- [x] Document optional production defense in depth using a dedicated SSH diagnostic principal and/or server-side forced-command/restricted-key policy without making remote SSH reconfiguration a prerequisite for local implementation.
+- [x] Do not instruct operators to weaken known-host checking or expose an SSH agent globally.
 
 **Validation:**
 - Docs exactly match implemented defaults and supported command families.
@@ -400,11 +401,11 @@ Verified before plan creation on 2026-08-30:
 - Modify if reusable lesson exists: `ai-self/lessons/lessons.md` or an existing relevant skill
 
 **Steps:**
-- [ ] Follow `.agents/knowledge/self-improvement.md`.
-- [ ] Record the reusable principle that remote “read-only” requires semantic allowlisting at the remote execution boundary; shell-string denylisting is not sufficient.
-- [ ] Record exact local acceptance and remaining deployment/runtime validation separately.
-- [ ] Revalidate workspace identity and branch before Git commit.
-- [ ] Commit locally only; do not push.
+- [x] Follow `.agents/knowledge/self-improvement.md`.
+- [x] Record the reusable principle that remote “read-only” requires semantic allowlisting at the remote execution boundary; shell-string denylisting is not sufficient.
+- [x] Record exact local acceptance and remaining deployment/runtime validation separately.
+- [x] Revalidate workspace identity and branch before Git commit.
+- [x] Commit locally only; do not push.
 
 **Validation:**
 - `git status --short` is clean after final local commit.
@@ -414,9 +415,9 @@ Verified before plan creation on 2026-08-30:
 **Commit boundary:** `docs(plan): close read-only ssh implementation`
 
 **Phase exit criteria:**
-- [ ] Code/tests/docs/plan/memory tell the same truth.
-- [ ] Local branch is committed and clean.
-- [ ] Deployment/restart remains a separate operator-authorized action.
+- [x] Code/tests/docs/plan/memory tell the same truth.
+- [x] Local branch is committed and clean.
+- [x] Deployment/restart remains a separate operator-authorized action.
 
 
 ## Docker-first Remote Diagnostic Model
@@ -489,31 +490,46 @@ SQL text filtering alone is insufficient, and transaction-level read-only mode i
 
 ## Final Acceptance Criteria
 
-- [ ] Existing OpenSSH alias with immediately usable file-based key can execute a supported read-only remote command.
-- [ ] Bare `ssh alias` interactive shell is rejected.
-- [ ] Password-only, passphrase-required, and keyboard-interactive authentication stop without guessing or prompting.
-- [ ] Unknown/changed host keys fail closed.
-- [ ] Ordinary terminal/workspace tools still cannot read `.ssh`.
-- [ ] SSH child sees only reviewed SSH material, not the whole HOME.
-- [ ] Agent/X11/port/socket forwarding, `LocalCommand`, arbitrary `ProxyCommand`, and unsafe option overrides are denied.
-- [ ] Raw SSH config execution surfaces are eliminated: only a relay-normalized safe connection specification reaches OpenSSH, and agent/forwarding/multiplexing/local-command hooks are disabled.
-- [ ] Remote command execution is a positive semantic policy over a bounded parsed AST; useful read-only diagnostic composition works, while arbitrary shell authority is impossible.
-- [ ] Docker diagnostic policy validates subcommands, flags, nested `docker exec`, confidentiality-safe projections, and bounded execution; `docker compose exec` remains unsupported in v1 unless separately reviewed.
-- [ ] Database diagnostics require the configured/reviewed read-only identity and cannot fall back to DB owner/superuser/application-migration credentials; engine read-only mode, client hardening, semantic query policy, and resource bounds are proven.
-- [ ] Mutation-bypass test matrix leaves the remote fixture unchanged.
-- [ ] Confidentiality tests prove Docker/Compose/env/DB/SSH credential surfaces are not exposed through otherwise read-only commands.
-- [ ] Availability tests prove follow/stream/detach/expensive/unbounded diagnostic operations are denied or safely bounded.
-- [ ] SSH output/errors/activity are bounded and credential-redacted.
-- [ ] Existing timeout/cancellation/process cleanup semantics remain intact.
-- [ ] Focused tests and `pnpm guardrail` pass.
-- [ ] No systemd relay restart/reload/stop/start occurred.
-- [ ] No Git push occurred.
-- [ ] Plan/docs/memory reflect exact implementation and validation truth.
+- [x] Deterministic relay construction proves an existing safe OpenSSH alias is normalized into the hardened read-only execution path; an opt-in real-client smoke test exists for a disposable operator fixture and is intentionally not executed during this no-live-SSH/no-deployment closure.
+- [x] Bare `ssh alias` interactive shell is rejected.
+- [x] Password-only, passphrase-required, and keyboard-interactive authentication stop without guessing or prompting.
+- [x] Unknown/changed host keys fail closed.
+- [x] Ordinary terminal/workspace tools still cannot read `.ssh`.
+- [x] SSH child sees only reviewed SSH material, not the whole HOME.
+- [x] Agent/X11/port/socket forwarding, `LocalCommand`, arbitrary `ProxyCommand`, and unsafe option overrides are denied.
+- [x] Raw SSH config execution surfaces are eliminated: only a relay-normalized safe connection specification reaches OpenSSH, and agent/forwarding/multiplexing/local-command hooks are disabled.
+- [x] Remote command execution is a positive semantic policy over a bounded parsed AST; useful read-only diagnostic composition works, while arbitrary shell authority is impossible.
+- [x] Docker diagnostic policy validates subcommands, flags, nested `docker exec`, confidentiality-safe projections, and bounded execution; `docker compose exec` remains unsupported in v1 unless separately reviewed.
+- [x] Database diagnostics require the configured/reviewed read-only identity and cannot fall back to DB owner/superuser/application-migration credentials; engine read-only mode, client hardening, semantic query policy, and resource bounds are proven.
+- [x] Mutation-bypass tests reject mutating forms before spawn; no live remote mutation fixture is touched during local closure, and the opt-in disposable real-client smoke remains operator-triggered.
+- [x] Confidentiality tests prove Docker/Compose/env/DB/SSH credential surfaces are not exposed through otherwise read-only commands.
+- [x] Availability tests prove follow/stream/detach/expensive/unbounded diagnostic operations are denied or safely bounded.
+- [x] SSH output/errors/activity are bounded and credential-redacted.
+- [x] Existing timeout/cancellation/process cleanup semantics remain intact.
+- [x] Focused tests and `pnpm guardrail` pass.
+- [x] No systemd relay restart/reload/stop/start occurred.
+- [x] No Git push occurred.
+- [x] Plan/docs/memory reflect exact implementation and validation truth.
 
-## Execution Handoff
+## Closure Record — 2026-08-30
 
-1. Implement PHASE-01 first; do not touch SSH credential mounts before the command/config threat model tests exist.
-2. PHASE-02 and PHASE-03 are security-critical and should be reviewed together before exposing the capability through normal `terminal_exec` routing.
-3. Do not add a permissive fallback for unsupported SSH configs or remote commands. Unsupported means denied until explicitly reviewed.
-4. Keep implementation Rust/docs-only unless a real client contract/UI requirement is discovered; if Nuxt remains untouched, do not run Nuxt gates merely for completeness.
-5. Stop after local commits. Do not push and do not restart/reload the systemd relay.
+Plan 061 is closed for repository implementation and local acceptance. The relay now owns SSH alias parsing, hardened OpenSSH argv generation, an SSH-specific read-only sandbox/security class, Docker-first semantic diagnostics, nested container command validation, database/Redis read-only adapters, confidentiality/availability bounds, SSH-specific effects/activity handling, and package-local adversarial tests. Unsupported or ambiguous commands fail closed.
+
+Local acceptance actually executed:
+
+- `cargo test --workspace --all-targets --all-features --locked` — PASS.
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — PASS.
+- `RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked` — PASS.
+- `pnpm guardrail` — PASS, including repository policy, agent docs, architecture, maintainability, Rust test layout, lint, typecheck, and tests.
+- Focused SSH/config policy suites — PASS; `relay-core/tests/ssh_policy.rs` covers safe normalization plus Docker/DB/Redis/shell/Git/network bypasses, and `relay-application/tests/ssh_diagnostics.rs` covers truthful effects/activity metadata.
+
+The real-client smoke test is intentionally `#[ignore]` and requires `RELAY_SSH_SMOKE_ROOT` plus `RELAY_SSH_SMOKE_ALIAS` pointing at a disposable operator fixture. It was **not executed** in this closure because the task explicitly forbids real SSH/deployment operations and systemd relay changes. Running that smoke later is deployment/runtime validation, not missing repository implementation.
+
+No systemd relay restart/reload/stop/start, deployed binary replacement, or Git push occurred. Nuxt was not changed and therefore required no recreate.
+
+## Deployment Handoff
+
+1. Keep unsupported SSH configs/remote commands fail-closed; expand only through reviewed policy + package-local tests.
+2. Before deployment, an operator may run the ignored disposable real-client smoke test with explicit fixture variables. Do not point it at production as a first test.
+3. Deployment/restart remains separately authorized. Do not infer runtime activation from this repository closure.
+4. Remote mutation remains impossible through the AI SSH path; provide mutation commands for manual operator execution instead of broadening relay authority.

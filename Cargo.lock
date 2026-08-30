@@ -1770,8 +1770,10 @@ version = "0.0.12"
 dependencies = [
  "clap",
  "ipnet",
+ "libc",
  "serde",
  "serde_json",
+ "shell-words",
  "thiserror 1.0.69",
  "url",
 ]

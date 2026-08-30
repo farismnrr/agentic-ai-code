@@ -9,7 +9,9 @@ use crate::error::RelayError;
 use serde::{Deserialize, Serialize};
 mod activity;
 mod cli;
+mod conversion;
 mod lsp;
+mod ssh;
 pub use activity::ActivityConfig;
 pub use cli::{ActivityMode, Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
@@ -37,6 +39,11 @@ pub struct ServerConfig {
     pub max_retained_output_bytes: usize,
     pub max_running_jobs: usize,
     pub allow_terminal_network: bool,
+    pub allow_ssh: bool,
+    pub ssh_root: Option<String>,
+    pub ssh_config: Option<String>,
+    pub ssh_readonly_db_user: Option<String>,
+    pub ssh_readonly_redis_user: Option<String>,
     pub allow_docker: bool,
     pub docker_socket: String,
     pub allow_tailscale: bool,
@@ -83,6 +90,11 @@ impl Default for ServerConfig {
             max_retained_output_bytes: 1_048_576,
             max_running_jobs: 16,
             allow_terminal_network: false,
+            allow_ssh: false,
+            ssh_root: None,
+            ssh_config: None,
+            ssh_readonly_db_user: None,
+            ssh_readonly_redis_user: None,
             allow_docker: false,
             docker_socket: "/var/run/docker.sock".into(),
             allow_tailscale: false,
@@ -353,6 +365,43 @@ impl ServerConfig {
             ));
         }
         activity::validate(&self.activity)?;
+        if self.allow_ssh {
+            if self
+                .ssh_config
+                .as_deref()
+                .is_some_and(|path| !std::path::Path::new(path).is_absolute())
+            {
+                return Err(RelayError::InvalidConfig(
+                    "ssh-config must be an absolute path beneath the approved SSH credential root"
+                        .into(),
+                ));
+            }
+            let _ = self.resolved_ssh_root()?;
+            let _ = self.resolved_ssh_config()?;
+            for (label, value) in [
+                ("ssh-readonly-db-user", self.ssh_readonly_db_user.as_deref()),
+                (
+                    "ssh-readonly-redis-user",
+                    self.ssh_readonly_redis_user.as_deref(),
+                ),
+            ] {
+                if let Some(value) = value {
+                    if !ssh::valid_diagnostic_principal(value) {
+                        return Err(RelayError::InvalidConfig(format!(
+                            "{label} must be a bounded database identity name"
+                        )));
+                    }
+                }
+            }
+        } else if self.ssh_root.is_some()
+            || self.ssh_config.is_some()
+            || self.ssh_readonly_db_user.is_some()
+            || self.ssh_readonly_redis_user.is_some()
+        {
+            return Err(RelayError::InvalidConfig(
+                "SSH-specific configuration requires --allow-ssh".into(),
+            ));
+        }
         if self.allow_docker {
             let socket = std::path::Path::new(&self.docker_socket);
             if !socket.is_absolute() {
@@ -411,51 +460,6 @@ fn dirs_home() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .filter(|s| !s.is_empty())
         .map(std::path::PathBuf::from)
-}
-
-impl From<&Cli> for ServerConfig {
-    fn from(cli: &Cli) -> Self {
-        Self {
-            port: cli.port,
-            mode: cli.mode,
-            trusted_proxy: cli.trusted_proxy,
-            trusted_proxy_cidr: cli.trusted_proxy_cidr.clone(),
-            dir: cli.dir.clone(),
-            origin: cli.origin.clone(),
-            allowed_hosts: cli.allowed_hosts.clone(),
-            oauth_secret: cli.oauth_secret.clone(),
-            oauth_issuer: cli.oauth_issuer.clone(),
-            oauth_audience: cli.oauth_audience.clone(),
-            oauth_owner_subject: cli.oauth_owner_subject.clone(),
-            execution_root: cli.execution_root.clone(),
-            bind_host: cli.bind_host.clone(),
-            default_terminal_timeout_ms: cli.default_terminal_timeout_ms,
-            max_terminal_timeout_ms: cli.max_terminal_timeout_ms,
-            completed_job_ttl_ms: cli.completed_job_ttl_ms,
-            max_retained_output_bytes: cli.max_retained_output_bytes,
-            max_running_jobs: cli.max_running_jobs,
-            allow_terminal_network: cli.allow_terminal_network,
-            allow_docker: cli.allow_docker,
-            docker_socket: cli.docker_socket.clone(),
-            allow_tailscale: cli.allow_tailscale,
-            tailscale_socket: cli.tailscale_socket.clone(),
-            toolchain_paths: cli.toolchain_paths.clone(),
-            lsp_servers: cli.lsp_servers.clone(),
-            enable_agent_hooks: cli.enable_agent_hooks,
-            agent_hooks_config: cli.agent_hooks_config.clone(),
-            tool_profile: cli.tool_profile,
-            activity: ActivityConfig {
-                mode: cli.activity_mode,
-                state_dir: cli.activity_state_dir.clone(),
-                sink_url: cli.activity_sink_url.clone(),
-                source_token: cli.activity_source_token.clone(),
-                spool_quota_bytes: cli.activity_spool_quota_bytes,
-                acknowledged_retention_ms: cli.activity_ack_retention_ms,
-            },
-            telegram_enabled: cli.telegram_enabled,
-            workspaces: default_workspaces(),
-        }
-    }
 }
 
 /// Parse a Host header/configuration entry into a normalized host and exact

@@ -1,6 +1,18 @@
 use relay_core::error::McpError;
 use std::path::{Path, PathBuf};
 
+pub fn effect_classes_for_call(
+    tool_id: &str,
+    destructive_hint: bool,
+    open_world_hint: bool,
+    arguments: &serde_json::Value,
+) -> Vec<&'static str> {
+    if tool_id == "terminal_exec" && relay_core::terminal_policy::is_ssh_request(arguments) {
+        return vec!["process_exec", "network_read", "privileged_bridge"];
+    }
+    effect_classes(tool_id, destructive_hint, open_world_hint)
+}
+
 pub fn effect_classes(
     tool_id: &str,
     destructive_hint: bool,

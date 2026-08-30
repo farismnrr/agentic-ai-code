@@ -1,6 +1,6 @@
 //! One Bubblewrap construction path for application-owned subprocesses.
 
-use super::{InvocationProgram, ToolInvocation};
+use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
 use relay_core::config::ServerConfig;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
 use tokio::process::{Child, Command};
 
 mod paths;
+mod ssh_material;
 
 #[derive(Clone, Copy)]
 pub(crate) enum WorkspaceAccess {
@@ -48,22 +49,29 @@ pub(super) fn spawn(
     invocation: &ToolInvocation,
     workspace_access: WorkspaceAccess,
 ) -> Result<Child, std::io::Error> {
-    // Network authority is translated into each invocation by its owning
-    // request path and is never inferred from the selected sandbox profile.
-    let network_access = if invocation.allow_network {
+    // SSH is a distinct execution class: it gets host networking but never a
+    // writable workspace or local privileged sockets. Other invocation classes
+    // continue to derive network authority only from their owning request path.
+    let ssh = matches!(invocation.security, InvocationSecurity::Ssh { .. });
+    let network_access = if ssh || invocation.allow_network {
         NetworkAccess::Host
     } else {
         NetworkAccess::Isolated
     };
-    let writable = matches!(workspace_access, WorkspaceAccess::Writable);
+    let effective_workspace_access = if ssh {
+        WorkspaceAccess::ReadOnly
+    } else {
+        workspace_access
+    };
+    let writable = matches!(effective_workspace_access, WorkspaceAccess::Writable);
     spawn_with_profile(
         config,
         invocation,
         SandboxProfile {
-            workspace_access,
+            workspace_access: effective_workspace_access,
             network_access,
-            expose_optional_sockets: writable && invocation.expose_optional_sockets,
-            expose_runtime_extras: writable,
+            expose_optional_sockets: !ssh && writable && invocation.expose_optional_sockets,
+            expose_runtime_extras: !ssh && writable,
             workspace_root: None,
         },
     )
@@ -89,6 +97,7 @@ pub(crate) fn spawn_lsp(
             allow_network: false,
             expose_optional_sockets: false,
             expose_authorized_siblings: false,
+            security: InvocationSecurity::Standard,
         },
         SandboxProfile {
             workspace_access: WorkspaceAccess::ReadOnly,
@@ -120,6 +129,7 @@ pub(crate) fn spawn_hook(
             allow_network: false,
             expose_optional_sockets: false,
             expose_authorized_siblings: false,
+            security: InvocationSecurity::Standard,
         },
         SandboxProfile {
             workspace_access,
@@ -265,6 +275,19 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    if let InvocationSecurity::Ssh {
+        identity_file,
+        known_hosts_file,
+    } = &invocation.security
+    {
+        ssh_material::add_material(
+            &mut args,
+            config,
+            &host_home,
+            identity_file,
+            known_hosts_file,
+        )?;
+    }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false)?;
@@ -302,10 +325,14 @@ fn spawn_with_profile(
         .env("PATH", safe_path)
         .env("LANG", "C.UTF-8")
         .env("TMPDIR", "/tmp")
-        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    if matches!(invocation.security, InvocationSecurity::Ssh { .. }) {
+        command.stdin(Stdio::null());
+    } else {
+        command.stdin(Stdio::piped());
+    }
     if let Some(rustup_home) = rustup_home {
         command.env("RUSTUP_HOME", rustup_home);
     }

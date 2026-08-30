@@ -3,7 +3,7 @@ use super::now_ms;
 use super::paths::resolve_authorized_cwd;
 use super::process::{drain_pipe, kill_process_group, OutputBuffer};
 use super::sandbox;
-use super::{InvocationProgram, ToolInvocation};
+use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
 use crate::workspace::reject_protected_target;
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -62,6 +62,9 @@ pub(super) fn build_terminal_invocation(
     let Some(binary) = parts.first() else {
         return Err(McpError::InvalidRequest("command must not be empty".into()));
     };
+    if binary == "ssh" {
+        return super::ssh::build_invocation(arguments, config, &parts, timeout_ms);
+    }
     let program = resolve_safe_executable(config, binary)?;
     let mut args = parts[1..].to_vec();
     if let Some(arr) = arguments.get("args").and_then(Value::as_array) {
@@ -91,6 +94,7 @@ pub(super) fn build_terminal_invocation(
         allow_network: config.allow_terminal_network,
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
+        security: InvocationSecurity::Standard,
     })
 }
 
@@ -259,6 +263,7 @@ fn build_text_search_invocation(
             allow_network: false,
             expose_optional_sockets: true,
             expose_authorized_siblings: true,
+            security: InvocationSecurity::Standard,
         },
         max_results,
     ))
@@ -453,6 +458,7 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         allow_network: true,
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
+        security: InvocationSecurity::Standard,
     })
 }
 
@@ -474,5 +480,6 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         allow_network: true,
         expose_optional_sockets: true,
         expose_authorized_siblings: true,
+        security: InvocationSecurity::Standard,
     }
 }

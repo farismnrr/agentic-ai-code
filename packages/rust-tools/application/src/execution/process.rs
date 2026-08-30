@@ -191,11 +191,24 @@ pub(super) async fn run_process(
     let _ = err_task.await;
     let out = stdout.lock().await;
     let err = stderr.lock().await;
+    let exit_code = wait_result.0.code().unwrap_or(-1);
+    let mut stdout_text = String::from_utf8_lossy(&out.bytes).into_owned();
+    let mut stderr_text = String::from_utf8_lossy(&err.bytes).into_owned();
+    if matches!(invocation.security, super::InvocationSecurity::Ssh { .. }) {
+        stdout_text = relay_core::redaction::redact_credentials(&stdout_text);
+        stderr_text = relay_core::redaction::redact_credentials(&stderr_text);
+        if exit_code != 0 {
+            if let Some(message) = super::ssh::normalized_failure(&stderr_text) {
+                stdout_text.clear();
+                stderr_text = message.into();
+            }
+        }
+    }
     Ok(ProcessResult {
         state: wait_result.1,
-        exit_code: wait_result.0.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&out.bytes).into_owned(),
-        stderr: String::from_utf8_lossy(&err.bytes).into_owned(),
+        exit_code,
+        stdout: stdout_text,
+        stderr: stderr_text,
         omitted: out.omitted + err.omitted,
         result: None,
     })

@@ -135,6 +135,9 @@ pub(super) fn action_for_tool(
 }
 
 fn terminal_action(arguments: &Value, root: Option<&Path>) -> String {
+    if relay_core::terminal_policy::is_ssh_request(arguments) {
+        return ssh_terminal_action(arguments);
+    }
     let command = arguments
         .get("command")
         .and_then(Value::as_str)
@@ -167,6 +170,34 @@ fn terminal_action(arguments: &Value, root: Option<&Path>) -> String {
         }
     }
     parts.join(" ")
+}
+
+fn ssh_terminal_action(arguments: &Value) -> String {
+    let mut tokens = arguments
+        .get("command")
+        .and_then(Value::as_str)
+        .and_then(|command| shell_words::split(command).ok())
+        .unwrap_or_default();
+    if let Some(args) = arguments.get("args").and_then(Value::as_array) {
+        tokens.extend(args.iter().filter_map(Value::as_str).map(str::to_owned));
+    }
+    let alias = tokens.get(1).map(String::as_str).unwrap_or("remote");
+    let family = match tokens.get(2).map(String::as_str) {
+        Some("docker") => match tokens.get(3).map(String::as_str) {
+            Some("exec") => tokens
+                .get(5)
+                .map(|nested| format!("docker exec {nested}"))
+                .unwrap_or_else(|| "docker exec".into()),
+            Some(subcommand) => format!("docker {subcommand}"),
+            None => "docker".into(),
+        },
+        Some(command) => command.to_owned(),
+        None => "diagnostic".into(),
+    };
+    format!(
+        "SSH read-only · {} · {family}",
+        sanitize_action_text(alias, None)
+    )
 }
 
 fn patch_action(arguments: &Value, root: Option<&Path>) -> String {

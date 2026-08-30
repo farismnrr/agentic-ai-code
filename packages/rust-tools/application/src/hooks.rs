@@ -20,8 +20,8 @@ mod runner;
 mod session;
 pub(crate) use payload::bounded_context;
 use payload::{bounded_payload, bounded_string};
-pub use policy::effect_classes;
 use policy::{canonical_repository_root, contained_config_path, repository_identity};
+pub use policy::{effect_classes, effect_classes_for_call};
 
 pub const MAX_CONFIG_BYTES: usize = 64 * 1024;
 pub const MAX_HANDLERS: usize = 32;

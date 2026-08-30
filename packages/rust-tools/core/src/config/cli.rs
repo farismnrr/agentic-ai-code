@@ -110,6 +110,31 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ALLOW_TERMINAL_NETWORK", default_value_t = false)]
     pub allow_terminal_network: bool,
 
+    /// Explicit SSH diagnostic capability. This enables only the dedicated
+    /// read-only SSH path; it does not widen ordinary terminal networking.
+    #[arg(long, env = "RELAY_ALLOW_SSH", default_value_t = false)]
+    pub allow_ssh: bool,
+
+    /// Operator-owned SSH credential root. Defaults to ~/.ssh. A custom root
+    /// is useful for a dedicated diagnostic key/config and deterministic tests.
+    #[arg(long, env = "RELAY_SSH_ROOT")]
+    pub ssh_root: Option<String>,
+
+    /// Operator-owned OpenSSH config. When SSH is enabled and this is omitted,
+    /// the relay uses <ssh-root>/config.
+    #[arg(long, env = "RELAY_SSH_CONFIG")]
+    pub ssh_config: Option<String>,
+
+    /// Dedicated least-privilege PostgreSQL/MySQL diagnostic principal.
+    /// This is an identity name only, never a password or secret.
+    #[arg(long, env = "RELAY_SSH_DB_READONLY_USER")]
+    pub ssh_readonly_db_user: Option<String>,
+
+    /// Dedicated least-privilege Redis ACL diagnostic principal.
+    /// This is an identity name only, never a password or secret.
+    #[arg(long, env = "RELAY_SSH_REDIS_READONLY_USER")]
+    pub ssh_readonly_redis_user: Option<String>,
+
     /// Explicit local-development access to a host Docker daemon socket.
     /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
