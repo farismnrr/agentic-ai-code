@@ -110,6 +110,9 @@ pub(super) fn extract_activity_evidence(
 }
 
 pub(crate) fn activity_result_detail(result: &ToolCallResult, arguments: &Value) -> Option<String> {
+    if relay_core::terminal_policy::is_ssh_request(arguments) {
+        return None;
+    }
     let raw = result
         .content
         .iter()
@@ -420,7 +423,7 @@ pub(super) fn client_supports_tasks(params: Option<&Value>) -> bool {
 
 pub(super) fn requires_idempotency_key(tool: &str, arguments: &Value) -> bool {
     if tool == "terminal_exec" {
-        return true;
+        return !relay_core::terminal_policy::is_ssh_request(arguments);
     }
     if tool != "http_fetch" {
         return false;

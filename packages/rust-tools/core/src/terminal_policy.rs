@@ -36,3 +36,16 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
     }
     Ok(())
 }
+
+/// Detect the dedicated SSH terminal shape without granting any authority.
+/// Full alias/remote-command validation remains owned by `ssh_policy`.
+pub fn is_ssh_request(arguments: &serde_json::Value) -> bool {
+    let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    shell_words::split(command)
+        .ok()
+        .and_then(|parts| parts.into_iter().next())
+        .as_deref()
+        == Some("ssh")
+}

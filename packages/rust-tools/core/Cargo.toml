@@ -11,3 +11,5 @@ serde_json.workspace = true
 url.workspace = true
 ipnet.workspace = true
 clap.workspace = true
+shell-words.workspace = true
+libc.workspace = true

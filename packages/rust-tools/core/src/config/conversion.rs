@@ -1,0 +1,51 @@
+use super::{default_workspaces, ActivityConfig, Cli, ServerConfig};
+
+impl From<&Cli> for ServerConfig {
+    fn from(cli: &Cli) -> Self {
+        Self {
+            port: cli.port,
+            mode: cli.mode,
+            trusted_proxy: cli.trusted_proxy,
+            trusted_proxy_cidr: cli.trusted_proxy_cidr.clone(),
+            dir: cli.dir.clone(),
+            origin: cli.origin.clone(),
+            allowed_hosts: cli.allowed_hosts.clone(),
+            oauth_secret: cli.oauth_secret.clone(),
+            oauth_issuer: cli.oauth_issuer.clone(),
+            oauth_audience: cli.oauth_audience.clone(),
+            oauth_owner_subject: cli.oauth_owner_subject.clone(),
+            execution_root: cli.execution_root.clone(),
+            bind_host: cli.bind_host.clone(),
+            default_terminal_timeout_ms: cli.default_terminal_timeout_ms,
+            max_terminal_timeout_ms: cli.max_terminal_timeout_ms,
+            completed_job_ttl_ms: cli.completed_job_ttl_ms,
+            max_retained_output_bytes: cli.max_retained_output_bytes,
+            max_running_jobs: cli.max_running_jobs,
+            allow_terminal_network: cli.allow_terminal_network,
+            allow_ssh: cli.allow_ssh,
+            ssh_root: cli.ssh_root.clone(),
+            ssh_config: cli.ssh_config.clone(),
+            ssh_readonly_db_user: cli.ssh_readonly_db_user.clone(),
+            ssh_readonly_redis_user: cli.ssh_readonly_redis_user.clone(),
+            allow_docker: cli.allow_docker,
+            docker_socket: cli.docker_socket.clone(),
+            allow_tailscale: cli.allow_tailscale,
+            tailscale_socket: cli.tailscale_socket.clone(),
+            toolchain_paths: cli.toolchain_paths.clone(),
+            lsp_servers: cli.lsp_servers.clone(),
+            enable_agent_hooks: cli.enable_agent_hooks,
+            agent_hooks_config: cli.agent_hooks_config.clone(),
+            tool_profile: cli.tool_profile,
+            activity: ActivityConfig {
+                mode: cli.activity_mode,
+                state_dir: cli.activity_state_dir.clone(),
+                sink_url: cli.activity_sink_url.clone(),
+                source_token: cli.activity_source_token.clone(),
+                spool_quota_bytes: cli.activity_spool_quota_bytes,
+                acknowledged_retention_ms: cli.activity_ack_retention_ms,
+            },
+            telegram_enabled: cli.telegram_enabled,
+            workspaces: default_workspaces(),
+        }
+    }
+}

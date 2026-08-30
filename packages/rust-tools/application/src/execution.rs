@@ -11,6 +11,7 @@ mod paths;
 mod process;
 mod requests;
 pub(crate) mod sandbox;
+mod ssh;
 mod toolchain;
 pub(crate) use process::kill_process_group;
 #[derive(Clone)]
@@ -18,6 +19,16 @@ enum InvocationProgram {
     SelfBinary,
     Direct(PathBuf),
 }
+
+#[derive(Clone)]
+pub(crate) enum InvocationSecurity {
+    Standard,
+    Ssh {
+        identity_file: PathBuf,
+        known_hosts_file: PathBuf,
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct ToolInvocation {
     program: InvocationProgram,
@@ -27,6 +38,7 @@ pub(crate) struct ToolInvocation {
     allow_network: bool,
     expose_optional_sockets: bool,
     expose_authorized_siblings: bool,
+    security: InvocationSecurity,
 }
 
 pub(super) use jobs::{now_ms, render_output, JobKind};

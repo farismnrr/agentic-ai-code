@@ -118,12 +118,13 @@ pub(super) async fn handle_tools_call(
     }
 
     let agent_session = agent_session_from_params(request.params.as_ref());
-    let effects = relay_application::hooks::effect_classes(
+    let effects = relay_application::hooks::effect_classes_for_call(
         call.name.as_str(),
         tool.annotations
             .as_ref()
             .is_some_and(|a| a.destructive_hint),
         tool.annotations.as_ref().is_some_and(|a| a.open_world_hint),
+        &call.arguments,
     );
     let client_info = request
         .params
