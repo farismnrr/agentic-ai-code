@@ -1,6 +1,6 @@
 # Plan 044B — GitHub Actions Observability
 
-**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / LIVE READ VERIFIED (2026-08-30)
 
 Deterministic evidence: `bash scripts/verify-044b-actions-observability.sh`
 passes, including bounded output and redaction checks. No live Actions
@@ -281,3 +281,7 @@ All six are read-only model-facing operations. They use validated repository ide
 ## Handoff
 
 After 044B is merged source-clean, continue to [Plan 044C](044c-github-security-alert-visibility.md).
+
+## Live closure evidence — 2026-08-30
+
+Authenticated workflow and run listing succeeded against real GitHub Actions history. No workflow was added or rerun merely to create acceptance traffic; deterministic mutation coverage remains authoritative where a safe disposable run is unavailable.

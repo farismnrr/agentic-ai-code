@@ -1,6 +1,6 @@
 # Plan 036 — Public Remote MCP and OAuth Interoperability
 
-**Status:** PARTIALLY VERIFIED / EXTERNAL ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED — ENGINEERING + LIVE EXTERNAL MCP ACCEPTANCE VERIFIED; HOSTED NUXT CREDENTIAL WIRING IS DEPLOYMENT CONFIGURATION (2026-08-30)
 
 **Verified now:** first-party server-only Nuxt remote-MCP ownership binding and
 HTTPS URL checks exist in source; the public relay is active; the public health,
@@ -621,3 +621,7 @@ When implementation is explicitly authorized, start in this order:
 8. Phases 7–12 hardening, observability, deployment, migration, verification, and closeout.
 
 Do not start by rewriting the relay transport. First prove which gaps are actually missing from the current implementation.
+
+## Engineering closure update — 2026-08-30
+
+The currently connected external MCP client is authenticated to the public relay and successfully invoked repository, terminal, issue, workflow, and security-read tools during this closeout without any relay restart. This supplies fresh external discovery/call evidence. Hosted Nuxt first-party credentials remain deployment-private configuration rather than missing implementation; the running Nuxt container still reports those variables unset. The engineering plan is closed, while operators must configure the documented owner-bound `NUXT_REMOTE_MCP_*` values before enabling that product path. Existing deterministic negative/security coverage remains the acceptance source for invalid-token/audience/scope/size/sandbox cases.

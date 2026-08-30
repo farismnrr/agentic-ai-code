@@ -1,6 +1,6 @@
 # Plan 044A — GitHub Issue Lifecycle
 
-**Status:** MERGED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / LIVE VERIFIED (2026-08-30)
 
 Deterministic evidence: `bash scripts/verify-044a-issue-contract.sh`,
 `verify-044a-issue-reads.sh`, `verify-044a-issue-transitions.sh`, and
@@ -269,3 +269,7 @@ Read tools are bounded network reads through the privileged forge bridge. Mutati
 ## Handoff
 
 After 044A is merged source-clean, continue to [Plan 044B](044b-github-actions-observability.md). Do not deploy/restart solely for 044A unless the operator explicitly asks for an intermediate deployment.
+
+## Live closure evidence — 2026-08-30
+
+Disposable issue #203 in the validated repository passed create, get, update, comment, close, reopen, and final close through the authenticated MCP connector. The fixture was left closed.

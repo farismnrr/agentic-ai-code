@@ -1,6 +1,6 @@
 # Plan 044 — GitHub Repository Operations and Security Visibility Roadmap
 
-**Status:** PARTIALLY VERIFIED / EXTERNAL ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / VERIFIED — DETERMINISTIC SUITE + LIVE AUTHENTICATED GITHUB ACCEPTANCE (2026-08-30)
 
 **Verified now:** Plans 044A–044D source is present in merged history through
 `78f7f9e`, the deterministic issue/actions/security/mutation guards and the
@@ -286,3 +286,7 @@ Plan 044 closes only when all of the following are true:
 ## Handoff
 
 Execution begins with [Plan 044A](044a-github-issue-lifecycle.md). The implementation owner must create a short-lived branch from the then-current `main`, preserve unrelated local changes, and must not begin 044B until 044A source acceptance is green.
+
+## Final live closure evidence — 2026-08-30
+
+Using the authenticated external MCP connector, GitHub repository identity resolved to `farismnrr/agentic-ai-code`; live issue lifecycle acceptance used disposable issue #203 and passed create/get/update/comment/close/reopen/final-close. Workflow list/run reads succeeded against real Actions history. Dependabot alert reads succeeded with normalized metadata; code/secret-scanning endpoints returned bounded provider errors rather than secret-bearing output. No Actions rerun/cancel/dispatch was manufactured solely for proof; the operator-directed closeout accepts deterministic mutation coverage where no safe disposable workflow fixture is available.

@@ -1,6 +1,6 @@
 # Plan 060 — Industrial-Grade Closure and Hardening
 
-**Status:** IMPLEMENTED / LOCAL ACCEPTANCE PASSED — FINAL COMMIT PENDING
+**Status:** CLOSED / LOCAL ACCEPTANCE PASSED / COMMITTED (2026-08-30)
 **Goal:** Close the remaining repository quality, security, testing, runtime-hardening, documentation, and operational-hygiene gaps identified by the 2026-08-30 deep review without restarting the systemd relay or pushing any Git branch.
 **Success Criteria:** The repository reaches a defensible industrial-grade local closure state: least-privilege database behavior is implemented and regression-tested without mutating production credentials, critical web security flows are behaviorally tested rather than source-inspected only, Plan 050 and related runtime paths receive the strongest available local/Nuxt E2E acceptance, Docker/runtime hardening is improved, Rust dependency auditing is reproducible, high-value maintainability hotspots are reduced only where responsibility boundaries justify it, stale plan state is reconciled truthfully, and the final branch is clean with all task-owned changes committed locally and not pushed.
 
@@ -531,7 +531,7 @@ Verified on 2026-08-30 before Plan 060 creation:
 - Docker production image builds successfully as non-root `node`, uses `pnpm install --frozen-lockfile`, prunes devDependencies, and preserves only the production dependency tree needed by Nitro plus standalone OTel preload.
 - Candidate-container HTTP E2E returned root `200`, missing/cross-origin mutation `403`, invalid content type `400`, and same-origin unauthenticated mutation `401`; static landing headers were present.
 - `pnpm audit --prod --audit-level=moderate` reports no known vulnerabilities. Fresh `cargo audit` with a workspace-local Cargo home reports no security vulnerabilities; it reports one upstream yanked-package warning for `chacha20 0.10.1` via `rand 0.10.2`.
-- Plans 036 and 044 remain externally blocked because no authenticated external fixture was fabricated. Plan 049 repository/disposable acceptance is now stronger but production credential rotation remains operator-controlled. Plan 058 is confirmed merged through squash commit `cd1e608`; deployment/live worker acceptance remains pending. Plan 056 remains deployed with visible completion delivery pending operator configuration.
+- Follow-up closeout on 2026-08-30 used the authenticated external MCP connector to prove live repository/GitHub calls and disposable issue #203 lifecycle acceptance. Plan 049 production credential rotation remains a protected operator deployment prerequisite. The final `task_completed` handoff was accepted with `status=queued`; visible Telegram delivery was not fabricated.
 - No systemd relay action, production database role/credential mutation, Git push, PR, merge, release, or remote mutation occurred.
 
 ## Final Acceptance Criteria
@@ -549,11 +549,11 @@ Verified on 2026-08-30 before Plan 060 creation:
 - [x] Runtime dependency packaging is no broader than required by the verified Nitro/OTel contract.
 - [x] Fresh JS and Rust dependency audits complete.
 - [x] Targeted maintainability changes are responsibility-driven and pass architecture/maintainability gates.
-- [ ] `pnpm guardrail:all` passes on final state.
+- [x] `pnpm guardrail:all` passes on final state.
 - [x] Nuxt app/container may be recreated for E2E and remains healthy.
 - [x] No systemd relay restart/reload/stop/start/redeploy occurs.
 - [x] No production database privilege/credential mutation occurs without separate approval.
-- [ ] Final worktree is clean after local commit(s).
+- [x] Final worktree was clean after the Plan-060 local commit; this later documentation-only closeout is committed separately.
 - [x] No Git push, PR, merge, release, or remote mutation occurs.
 
 ## Execution Handoff
@@ -563,3 +563,7 @@ Verified on 2026-08-30 before Plan 060 creation:
 - Keep the already-running systemd relay untouched for the entire initiative.
 - Production database role/credential changes remain a separate operator action requiring explicit approval; Plan 060 should make the repository and disposable acceptance ready for that deployment boundary without performing it.
 - Delivery ends after local commit(s) on `fix/060-industrial-grade-closure`; do not push.
+
+## Final commit evidence — 2026-08-30
+
+Plan 060 was committed locally on `fix/060-industrial-grade-closure` as `9a242e14ceb8d3232242159ed7b9bd04f3f21a3b` after the full guardrail, dependency audits, final candidate Docker build, least-privilege/superuser startup E2E, HTTP security E2E, and `git diff --check` passed. No push or relay systemd action was performed.

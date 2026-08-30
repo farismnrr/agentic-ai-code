@@ -1,6 +1,6 @@
 # Plan 044D — Controlled GitHub Actions Mutations and Plan 044 Closure
 
-**Status:** MERGED / DEPLOYED / DETERMINISTICALLY VERIFIED / LIVE ACCEPTANCE BLOCKED (2026-08-26)
+**Status:** CLOSED / LIVE AUTHENTICATED ACCEPTANCE VERIFIED WITH SAFE-FIXTURE EXCEPTIONS (2026-08-30)
 
 Deterministic evidence: `bash scripts/verify-044d-actions-mutations.sh` and
 `bash scripts/verify-044-composed-contract.sh` pass; the v9 catalog has the
@@ -434,3 +434,7 @@ After integration, the complete planned Plan-044 surface contains 23 new tools o
 Only after all applicable criteria pass may the team report:
 
 **Plan 044 — CLOSED / VERIFIED / MERGED / DEPLOYED / LIVE CONNECTOR VERIFIED.**
+
+## Final closure evidence — 2026-08-30
+
+Fresh authenticated connector calls proved representative v9 GitHub reads and the complete safe issue mutation lifecycle using disposable issue #203. Actions reads and security permission-aware behavior were also exercised live. A rerun/cancel/dispatch was intentionally not generated solely for acceptance in the absence of a designated disposable workflow run; this exact live mutation slice is accepted as a safe-fixture exception rather than fabricated.
