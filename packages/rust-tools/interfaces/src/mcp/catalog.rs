@@ -1,12 +1,11 @@
 mod file_edit;
 mod forge;
+mod ssh;
 mod task_completion;
 use relay_core::error::McpError;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-/// A single MCP tool definition: stable name, human description, and a
-/// JSON Schema 2020-12-compatible `inputSchema`.
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
     pub name: &'static str,
@@ -50,9 +49,7 @@ fn coding_security_scheme() -> Vec<ToolSecurityScheme> {
     }]
 }
 
-/// The canonical MCP tool catalog, mapping 1:1 onto the Plan 027 Rust CLI
-/// binaries. Execution is deliberately not wired here (Phase 3) — this only
-/// describes the surface a client can discover and validate calls against.
+/// Canonical client-visible MCP tool catalog.
 pub fn tool_catalog() -> Vec<Tool> {
     let mut tools = vec![
         Tool {
@@ -102,6 +99,7 @@ pub fn tool_catalog() -> Vec<Tool> {
             security_schemes: coding_security_scheme(),
             execution: Some(json!({ "taskSupport": "optional" })),
         },
+        ssh::tool(),
         Tool {
             name: "http_fetch",
             title: Some("HTTP Fetch"),
@@ -424,6 +422,7 @@ pub fn tool_catalog() -> Vec<Tool> {
 
 pub const PRIMARY_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
+    "ssh_readonly_exec",
     "task_completed",
     "terminal_job_start",
     "terminal_job_get",

@@ -287,6 +287,8 @@ fn spawn_with_profile(
             identity_file,
             known_hosts_file,
         )?;
+    } else {
+        mask_generic_ssh_clients(&mut args)?;
     }
     add_protected_paths(&mut args, sandbox_root, true)?;
     if sandbox_root != execution_root {
@@ -350,6 +352,27 @@ fn spawn_with_profile(
     #[cfg(unix)]
     command.process_group(0);
     command.spawn()
+}
+
+fn mask_generic_ssh_clients(args: &mut Vec<String>) -> Result<(), std::io::Error> {
+    let mut masked = std::collections::BTreeSet::new();
+    for candidate in [
+        "/usr/bin/ssh",
+        "/bin/ssh",
+        "/usr/bin/scp",
+        "/bin/scp",
+        "/usr/bin/sftp",
+        "/bin/sftp",
+    ] {
+        let path = Path::new(candidate);
+        let Ok(canonical) = std::fs::canonicalize(path) else {
+            continue;
+        };
+        if masked.insert(canonical.clone()) {
+            mask_protected_file(args, &canonical)?;
+        }
+    }
+    Ok(())
 }
 
 fn mask_protected_file(args: &mut Vec<String>, path: &Path) -> Result<(), std::io::Error> {

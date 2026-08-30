@@ -1,6 +1,15 @@
 use relay_core::terminal_policy::validate_executable;
 
 #[test]
+fn generic_terminal_rejects_ssh_client_executables() {
+    for binary in ["ssh", "scp", "sftp"] {
+        let error = relay_core::terminal_policy::validate_executable(binary, false)
+            .expect_err("SSH client must use dedicated tool");
+        assert!(error.to_string().contains("ssh_readonly_exec"));
+    }
+}
+
+#[test]
 fn privilege_escalation_commands_remain_forbidden() {
     for command in ["sudo", "su", "doas", "pkexec", "runas"] {
         assert!(validate_executable(command, true).is_err(), "{command}");

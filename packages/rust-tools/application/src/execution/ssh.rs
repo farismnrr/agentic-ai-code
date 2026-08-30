@@ -1,7 +1,5 @@
-//! Translation from the familiar `terminal_exec` SSH shape into the dedicated
-//! read-only SSH execution class.
+//! Dedicated translation for the first-class `ssh_readonly_exec` MCP tool.
 
-use super::paths::resolve_authorized_cwd;
 use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
 use relay_core::config::ServerConfig;
 use relay_core::error::McpError;
@@ -10,24 +8,42 @@ use serde_json::Value;
 const MAX_EXEC_ARGS: usize = 100;
 const MAX_EXEC_ARG_BYTES: usize = 64 * 1024;
 const MAX_SSH_TIMEOUT_MS: u64 = 60_000;
+const MAX_ALIAS_BYTES: usize = 255;
+const MAX_COMMAND_BYTES: usize = 255;
 
 pub(super) fn build_invocation(
     arguments: &Value,
     config: &ServerConfig,
-    command_parts: &[String],
-    requested_timeout_ms: u64,
 ) -> Result<ToolInvocation, McpError> {
     if !config.allow_ssh {
         return Err(McpError::InvalidRequest(
             "SSH diagnostics are disabled; set RELAY_ALLOW_SSH=true explicitly".into(),
         ));
     }
-    let timeout_ms = if requested_timeout_ms == 0 {
+
+    let alias = required_bounded_string(arguments, "alias", MAX_ALIAS_BYTES)?;
+    relay_core::ssh_policy::validate_alias(alias)?;
+    let command = required_bounded_string(arguments, "command", MAX_COMMAND_BYTES)?;
+    if command.chars().any(char::is_whitespace) {
+        return Err(McpError::InvalidRequest(
+            "SSH diagnostic command must be one executable name".into(),
+        ));
+    }
+
+    let timeout_ms = arguments
+        .get("timeout_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(
+            config
+                .default_terminal_timeout_ms
+                .clamp(1, MAX_SSH_TIMEOUT_MS),
+        );
+    let timeout_ms = if timeout_ms == 0 {
         config
             .default_terminal_timeout_ms
             .clamp(1, MAX_SSH_TIMEOUT_MS)
     } else {
-        requested_timeout_ms
+        timeout_ms
     };
     if timeout_ms > MAX_SSH_TIMEOUT_MS {
         return Err(McpError::InvalidRequest(
@@ -35,19 +51,9 @@ pub(super) fn build_invocation(
         ));
     }
 
-    let mut tokens = command_parts[1..].to_vec();
-    append_explicit_args(arguments, &mut tokens)?;
-    let alias = tokens
-        .first()
-        .ok_or_else(|| McpError::InvalidRequest("bare interactive SSH is forbidden".into()))?;
-    relay_core::ssh_policy::validate_alias(alias)?;
-    let remote_tokens = &tokens[1..];
-    if remote_tokens.is_empty() {
-        return Err(McpError::InvalidRequest(
-            "bare interactive SSH is forbidden; a validated diagnostic command is required".into(),
-        ));
-    }
-    let remote_raw = render_remote_request(remote_tokens);
+    let mut remote_tokens = vec![command.to_owned()];
+    append_explicit_args(arguments, &mut remote_tokens)?;
+    let remote_raw = render_remote_request(&remote_tokens);
     let remote = relay_core::ssh_policy::validate_remote_command(
         &remote_raw,
         config.ssh_readonly_db_user.as_deref(),
@@ -61,7 +67,16 @@ pub(super) fn build_invocation(
         .map_err(|_| McpError::InvalidRequest("SSH config is unavailable".into()))?;
     let spec = relay_core::ssh_policy::resolve_connection_spec(&ssh_root, &ssh_config, alias)?;
     let args = relay_core::ssh_policy::openssh_args(&spec, &remote);
-    let cwd = resolve_authorized_cwd(arguments, config)?;
+    let cwd = config
+        .resolved_dir()
+        .and_then(|path| {
+            std::fs::canonicalize(path).map_err(|_| {
+                relay_core::error::RelayError::InvalidConfig(
+                    "workspace directory is unavailable".into(),
+                )
+            })
+        })
+        .map_err(|_| McpError::InvalidRequest("workspace directory is unavailable".into()))?;
 
     Ok(ToolInvocation {
         program: InvocationProgram::Direct(resolve_openssh_client()?),
@@ -76,6 +91,18 @@ pub(super) fn build_invocation(
             known_hosts_file: spec.known_hosts_file,
         },
     })
+}
+
+fn required_bounded_string<'a>(
+    arguments: &'a Value,
+    key: &str,
+    max_bytes: usize,
+) -> Result<&'a str, McpError> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= max_bytes)
+        .ok_or_else(|| McpError::InvalidRequest(format!("{key} is required and must be bounded")))
 }
 
 fn resolve_openssh_client() -> Result<std::path::PathBuf, McpError> {
@@ -125,7 +152,7 @@ fn append_explicit_args(arguments: &Value, args: &mut Vec<String>) -> Result<(),
         let mut bytes = args.iter().map(String::len).sum::<usize>();
         for value in arr {
             let arg = value.as_str().ok_or_else(|| {
-                McpError::InvalidRequest("terminal args must contain only strings".into())
+                McpError::InvalidRequest("SSH diagnostic args must contain only strings".into())
             })?;
             bytes = bytes.saturating_add(arg.len());
             if bytes > MAX_EXEC_ARG_BYTES {
@@ -166,9 +193,6 @@ pub(super) fn normalized_failure(stderr: &str) -> Option<&'static str> {
 }
 
 fn render_remote_request(tokens: &[String]) -> String {
-    if tokens.len() == 1 && tokens[0].chars().any(char::is_whitespace) {
-        return tokens[0].clone();
-    }
     tokens
         .iter()
         .map(|token| match token.as_str() {

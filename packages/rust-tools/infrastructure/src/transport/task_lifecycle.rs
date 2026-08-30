@@ -50,14 +50,18 @@ pub(super) fn observe(
             .and_then(|snapshot| snapshot.execution_duration_ms)
             .unwrap_or(0);
         let arguments = json!({ "cwd": cwd.clone() });
-        let result_detail = snapshot
-            .and_then(|snapshot| snapshot.result.as_ref())
-            .and_then(|result| activity_result_detail(result, &arguments))
-            .or_else(|| {
-                snapshot.map(|snapshot| {
-                    relay_core::redaction::redact_credentials(&snapshot.output_text())
+        let result_detail = if tool_id == "ssh_readonly_exec" {
+            None
+        } else {
+            snapshot
+                .and_then(|snapshot| snapshot.result.as_ref())
+                .and_then(|result| activity_result_detail(&tool_id, result, &arguments))
+                .or_else(|| {
+                    snapshot.map(|snapshot| {
+                        relay_core::redaction::redact_credentials(&snapshot.output_text())
+                    })
                 })
-            });
+        };
         let result_summary = snapshot
             .and_then(|snapshot| snapshot.result.as_ref())
             .map(|result| {

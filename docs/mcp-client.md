@@ -117,7 +117,7 @@ The relay separates the HTTP round-trip deadline from execution lifetime:
 
 - `timeout_ms: 0` means no terminal command deadline unless the operator set
   `RELAY_MAX_TERMINAL_TIMEOUT_MS`;
-- task-capable clients may use MCP Tasks for `terminal_exec`, `web_search`, and
+- task-capable clients may use MCP Tasks for `terminal_exec`, `ssh_readonly_exec`, `web_search`, and
   read-like `http_fetch` calls;
 - eligible tools accept `execution_mode: sync | async | auto`; `auto` selects
   async only when the client advertises Tasks, while explicit async fails
