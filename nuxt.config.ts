@@ -26,6 +26,9 @@ export default defineNuxtConfig({
     // postgres.js connection string — read via useRuntimeConfig().databaseUrl
     // in server/utils/db.ts. Never expose this to the client.
     databaseUrl: '',
+    // Production startup rejects privileged runtime DB credentials by default.
+    // Set false only for disposable/local acceptance where production grants are unavailable.
+    databaseEnforceLeastPrivilege: process.env.NODE_ENV === 'production',
     routerBaseUrl: 'http://localhost:20128/v1',
     routerApiKey: '',
     modelProviderSecretKey: '',
@@ -90,7 +93,19 @@ export default defineNuxtConfig({
     // The landing page is static and public, so it can be built once at
     // deploy time. This reverses the change made in plan 001, when `/` was
     // the stateful chat screen.
-    '/': { prerender: true },
+    '/': {
+      prerender: true,
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Resource-Policy': 'same-origin',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy': `frame-ancestors 'none'; base-uri 'self'; object-src 'none'`
+      }
+    },
     '/settings/local-terminal': { redirect: '/settings/mcp' }
 
     // /chat/** and /settings/** no longer carry ssr: false.

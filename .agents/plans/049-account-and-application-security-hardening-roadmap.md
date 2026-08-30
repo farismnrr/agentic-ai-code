@@ -1,15 +1,17 @@
 # Plan 049 — Account and Application Security Hardening Roadmap
 
-**Status:** OPEN — 049A–049E CLOSED / VERIFIED; 049F–049G IMPLEMENTED AND LOCALLY VERIFIED, but production least-privilege database-role acceptance is externally blocked (2026-08-26)
+**Status:** OPEN — 049A–049E CLOSED / VERIFIED; 049F–049G REPOSITORY + DISPOSABLE-DB VERIFIED; production credential rotation/deployment acceptance remains externally blocked (2026-08-30)
 **Created:** 2026-08-22
 **Plan family:** 049A–049G
 **Primary next plan:** Plan 049A — Account Recovery Foundation
 
 **Closure boundary:** The application/security implementation, additive
 migrations, deterministic guards, and local review are complete for 049A–049E
-and the HTTP portion of 049F/G. The configured database connection is still a
-PostgreSQL superuser; changing deployment credentials/role grants requires an
-authorized operator/database action and is not silently claimed here. See
+and the HTTP portion of 049F/G. The repository now defines and proves a least-privilege runtime/migration role
+contract against disposable PostgreSQL, and production startup can fail closed
+before Nitro listens when an unsafe runtime role is configured. The currently
+deployed production credential was not rotated or re-granted in Plan 060; that
+external operator/database action remains the only DB-role closure blocker. See
 `docs/security.md` and the 049F/G evidence below.
 
 ## Goal

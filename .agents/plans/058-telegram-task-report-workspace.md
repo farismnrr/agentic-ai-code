@@ -1,6 +1,6 @@
 # Plan 058 — Telegram Task Report Workspace Context
 
-**Status:** IMPLEMENTATION COMPLETE; DEPLOYMENT PENDING
+**Status:** MERGED / LOCALLY VERIFIED; DEPLOYMENT + LIVE WORKER ACCEPTANCE PENDING
 **Goal:** Make every task-completion Telegram message an actionable report that identifies the workspace and reflects the completed task details, without introducing per-tool notifications or a generic Telegram capability.
 **Success Criteria:** A workspace is mandatory in every completion contract, survives the Nuxt outbox handoff, appears in the relay-formatted message, orchestration reports include the task-node list, legacy Nuxt outbox rows remain deliverable with an explicit unavailable-workspace fallback, focused web/Rust tests and `pnpm guardrail` pass, and the merged implementation is deployed and verified through the relay worker.
 

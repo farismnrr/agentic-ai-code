@@ -116,8 +116,7 @@ export function runLanggraphChat({
 
   return createUIMessageStream({
     async execute({ writer }) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parts: any[] = []
+      const parts: UIMessage['parts'] = []
       let currentText = ''
       let textIndex = 0
       // Declared outside the try so the catch block below can clear it too —
