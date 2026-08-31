@@ -143,8 +143,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
           enabledToolIds: enabledMcpToolIds,
           approvals: conv.approvals,
           permissionMode: conv.permissionMode,
-          abortSignal,
-          taskNotifications: deps.taskNotifications
+          abortSignal
         }
         tools['delegate_task'] = deps.subagent.build(subagentInput)
         telemetry?.event('chat.subagent.dispatch', 'ok')

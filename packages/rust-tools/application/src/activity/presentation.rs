@@ -49,6 +49,10 @@ pub(super) fn action_for_tool(
     root: Option<&Path>,
 ) -> Option<String> {
     let action = match tool_id {
+        // The Telegram body is an operator-facing free-text payload. Keep it
+        // out of the activity journal altogether instead of relying only on
+        // credential-shaped redaction for a potentially sensitive message.
+        "telegram_send_message" => "Send Telegram message".into(),
         "terminal_exec" | "terminal_job_start" => terminal_action(arguments, root),
         "ssh_readonly_exec" => ssh_readonly_action(arguments),
         "terminal_job_get" => identifier_action("Get terminal job", arguments, "taskId", root),

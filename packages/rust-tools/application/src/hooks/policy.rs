@@ -24,7 +24,7 @@ pub fn effect_classes(
         ],
         "ssh_readonly_exec" => vec!["process_exec", "network_read", "privileged_bridge"],
         "http_fetch" => vec!["network_read", "network_write", "external_mutation"],
-        "task_completed" => vec!["network_write", "external_mutation"],
+        "telegram_send_message" => vec!["network_write", "external_mutation"],
         "web_search" => vec!["network_read"],
         "file_write" | "file_edit" | "apply_patch" => vec!["workspace_write"],
         "workspace_add" | "workspace_remove" => vec!["workspace_write"],

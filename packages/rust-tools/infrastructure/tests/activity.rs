@@ -114,6 +114,26 @@ fn activity_actions_include_specific_arguments_for_non_terminal_tools() {
 }
 
 #[test]
+fn telegram_activity_action_omits_message_and_working_directory() {
+    let config = ServerConfig::default();
+    let event = event_for_tool(
+        &config,
+        "telegram_send_message",
+        &["network_write", "external_mutation"],
+        &json!({
+            "working_directory": "/authorized/project",
+            "message": "private deployment notes token=activity-secret",
+        }),
+        None,
+    );
+    let action = event.presentation.action.expect("telegram action");
+    assert_eq!(action, "Send Telegram message");
+    assert!(!action.contains("private deployment notes"));
+    assert!(!action.contains("activity-secret"));
+    assert!(!action.contains("/authorized/project"));
+}
+
+#[test]
 fn terminal_job_start_uses_the_actual_command() {
     let config = ServerConfig::default();
     let event = event_for_tool(

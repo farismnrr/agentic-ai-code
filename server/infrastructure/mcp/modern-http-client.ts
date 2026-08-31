@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, McpRoundTripTimeoutError, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
-import type { McpClientCallResult, McpClientLike, McpClientTool, TaskCompletionResult } from './client'
+import type { McpClientCallResult, McpClientLike, McpClientTool } from './client'
 import { redactSecrets } from '../observability/sanitize.ts'
 
 const MODERN_MCP_VERSION = '2026-07-28'
@@ -26,7 +26,7 @@ function encodeMcpHeaderValue(value: string) {
  * third-party integrations and the legacy inbound Nuxt MCP endpoint. Rather
  * than weaken the Rust relay or make its modern path depend on a legacy SDK
  * lifecycle, this adapter speaks only the RPCs ai-code needs against its own
- * relay: `server/discover`, `tools/list`, `tools/call`, task completion, and
+ * relay: `server/discover`, `tools/list`, `tools/call`, task lifecycle, and
  * optional explicit resource list/read calls. Resources are never fetched
  * implicitly.
  *
@@ -38,7 +38,6 @@ function encodeMcpHeaderValue(value: string) {
 export class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
   private activityBootstrapSupported = false
-  private taskCompletionSupported = false
   private readonly url: URL
   private readonly accessToken: string
   private readonly fetchImpl: typeof fetch
@@ -70,27 +69,10 @@ export class ModernHttpMcpClient implements McpClientLike {
     const extensions = capabilities && isJsonRecord(capabilities.extensions) ? capabilities.extensions : undefined
     const bootstrap = extensions?.['io.masihawam/activity-bootstrap']
     this.activityBootstrapSupported = isJsonRecord(bootstrap) && bootstrap.version === '1'
-    const taskCompletion = extensions?.['io.masihawam/task-completion-notifications']
-    this.taskCompletionSupported = isJsonRecord(taskCompletion)
-      && taskCompletion.version === '1'
-      && taskCompletion.method === 'server/task_completed'
   }
 
   supportsActivityBootstrap() {
     return this.activityBootstrapSupported
-  }
-
-  supportsTaskCompletion() {
-    return this.taskCompletionSupported
-  }
-
-  async taskCompleted(input: { taskId: string, workspace: string, title: string, summary: string, completedAt?: string, resultUrl?: string }): Promise<TaskCompletionResult> {
-    if (!this.taskCompletionSupported) throw new Error('Remote MCP server does not support task completion notifications')
-    const result = await this.request('server/task_completed', input)
-    if (!isJsonRecord(result) || !['queued', 'already_sent', 'disabled'].includes(result.status as string)) {
-      throw new Error('Remote MCP task completion result is invalid')
-    }
-    return { status: result.status as TaskCompletionResult['status'] }
   }
 
   async activityStatus() {
@@ -247,7 +229,7 @@ export class ModernHttpMcpClient implements McpClientLike {
     return isJsonRecord(result) && result.allowed === true
   }
 
-  private async request(method: 'server/discover' | 'server/activity_status' | 'server/activity_configure' | 'server/task_completed' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
+  private async request(method: 'server/discover' | 'server/activity_status' | 'server/activity_configure' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'tasks/get' | 'tasks/cancel' | 'agent/subagent_stop', params: Record<string, unknown>) {
     const id = `ai-code-${++this.requestSequence}`
     const requestParams = {
       ...params,

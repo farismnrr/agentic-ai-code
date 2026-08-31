@@ -14,7 +14,6 @@ import { BackgroundTaskManager } from '../../application/subagents/background'
 import { classifyOutput, putResultRef } from '../../application/task-context-output'
 import { parsePresentationSafeSubagentResult, presentationSafeBackgroundTask } from './subagent-result'
 import { readRuntimeInstruction } from './runtime-instructions'
-import { completionTransitionWasNewlyReached, taskCompletionInputForGraph } from '../../application/task-notifications'
 
 function readProfileInstruction(name: string) {
   const loaded = readRuntimeInstruction(process.cwd(), ['.agents', 'agents'], [`${name}.md`])
@@ -125,10 +124,6 @@ export function buildBackgroundTaskTools(input: Parameters<SubagentToolPort['bui
 }
 
 export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build']>[0]) {
-  const notifyIfCompleted = (previous: ReturnType<typeof getOrchestratorGraph>, current: ReturnType<typeof getOrchestratorGraph>) => {
-    if (!input.taskNotifications || !previous || !current || !completionTransitionWasNewlyReached(previous.status, current.status)) return
-    void input.taskNotifications.enqueue(taskCompletionInputForGraph(current, input.workspaceName)).catch(() => undefined)
-  }
   const port = {
     capacity: (parentSessionId: string) => backgroundTasks.capacity(parentSessionId),
     prepare: (node: Parameters<typeof requirementsFitAuthority>[0], parentAuthority: Parameters<typeof requirementsFitAuthority>[1]) => {
@@ -173,11 +168,8 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
       description: 'Dispatch dependency-ready orchestration nodes through the existing bounded background/subagent runtime. Writer nodes use isolated worktrees; other roles stay read-only.',
       inputSchema: z.object({ generation: z.string().uuid() }),
       execute: async ({ generation }) => {
-        const beforePoll = getOrchestratorGraph(input.userId, input.parentSessionId)
-        const polled = orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
-        notifyIfCompleted(beforePoll, polled)
+        orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
         const result = orchestratorScheduler.dispatchReady({ userId: input.userId, conversationId: input.parentSessionId, generation, parentSessionId: input.parentSessionId, parentAuthority: input.authority, port })
-        notifyIfCompleted(polled, result.graph)
         logger.info('chat.orchestrator.dispatch', { 'operation': 'chat.orchestrator.dispatch', 'outcome': 'ok', 'orchestration.run_id': generation, 'orchestration.started.count': result.started.length, 'orchestration.denied.count': result.denied.length, 'orchestration.ready.count': result.graph.ready.length })
         return result
       }
@@ -186,9 +178,7 @@ export function buildOrchestratorTools(input: Parameters<SubagentToolPort['build
       description: 'Refresh parent-owned orchestration state from bounded child task results without starting new work.',
       inputSchema: z.object({ generation: z.string().uuid() }),
       execute: async ({ generation }) => {
-        const beforePoll = getOrchestratorGraph(input.userId, input.parentSessionId)
         const graph = orchestratorScheduler.poll({ userId: input.userId, conversationId: input.parentSessionId, generation, port })
-        notifyIfCompleted(beforePoll, graph)
         logger.info('chat.orchestrator.poll', { 'operation': 'chat.orchestrator.poll', 'outcome': graph.status, 'orchestration.run_id': generation, 'orchestration.state': graph.status, 'orchestration.ready.count': graph.ready.length, 'orchestration.running.count': graph.nodes.filter(node => node.status === 'running').length })
         return graph
       }

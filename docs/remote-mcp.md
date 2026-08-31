@@ -85,12 +85,11 @@ relay state directory outside `EXECUTION_ROOT`/workspace mounts where
 possible, and set `RELAY_ACTIVITY_MODE=required` when silent pre-execution
 gaps are unacceptable.
 
-### Optional task-completion Telegram notification
+### Optional explicit Telegram message tool
 
-The relay can send one plain-text notification after one complete task/plan
-reaches its successful terminal state. This is not a Telegram MCP tool and it
-does not send a message for individual tools, activity rows, or stream chunks.
-The relay uses Telegram credentials provisioned into its owner-only local
+The relay can expose one explicit MCP tool named `telegram_send_message`. It is
+not tied to task or orchestration completion; the caller chooses when to invoke
+it. The relay keeps Telegram credentials and the destination in owner-only local
 state:
 
 ```text
@@ -98,8 +97,8 @@ RELAY_TELEGRAM_ENABLED=true
 ```
 
 Provision that state once with the standalone CLI command below. The input may
-be an existing Hermes `.env`, but this is a one-time migration step; the
-running relay never reads Hermes or depends on its process/code:
+be an existing Hermes `.env`, but this is a one-time migration/bootstrap step;
+the running relay never reads Hermes or depends on its process/code:
 
 ```bash
 ai-tools telegram \
@@ -109,29 +108,43 @@ ai-tools telegram \
 
 Only `TELEGRAM_BOT_TOKEN`, `TELEGRAM_HOME_CHANNEL`, and the optional
 `TELEGRAM_HOME_CHANNEL_THREAD_ID` are read. The token is encrypted in the
-relay-owned SQLite database; the encryption key stays in a separate owner-only
-relay state file. `TELEGRAM_ALLOWED_USERS` is not a delivery target. The chat
-must be a channel or supergroup identifier (`-100...` or `@channel_username`);
-a private-chat ID is rejected. For a forum supergroup, set
-`TELEGRAM_HOME_CHANNEL_THREAD_ID` to the positive topic ID; leave it empty to
-deliver to the root/general topic. The token, recipient, and topic are never
-accepted in MCP arguments, and the relay only calls Telegram's fixed
-`sendMessage` endpoint. The durable relay ledger deduplicates by logical
-`taskId`; Nuxt uses a separate server-side outbox so temporary relay
-unavailability does not turn a completed task into a failed task.
+relay-owned SQLite database and the encryption key remains in a separate
+owner-only state file. `TELEGRAM_ALLOWED_USERS` is not a delivery target. The
+chat must be a channel or supergroup identifier (`-100...` or
+`@channel_username`); private-chat IDs are rejected. For a forum supergroup, set
+`TELEGRAM_HOME_CHANNEL_THREAD_ID` to the positive topic ID or leave it empty for
+the root/general topic. The tool cannot override the token, recipient, topic,
+endpoint, or Bot API method.
 
-The resulting message is a bounded report, not a tool-activity stream:
+The public tool contract is intentionally small:
 
-```text
-✅ <task title>
-Workspace: <workspace name>
-Report: <task-specific result and validation summary>
-Result: <optional HTTPS result URL>
+```json
+{
+  "working_directory": "/absolute/authorized/workspace",
+  "message": "Finished the requested change and validation."
+}
 ```
 
-The completion payload requires the display-safe workspace name. Orchestration
-completion summaries include a bounded list of task nodes, while the local
-filesystem path and credential-shaped values are never sent to Telegram.
+`working_directory` is required on every call. It must be absolute, canonicalize
+to an existing directory, and belong to the relay's current authorized workspace
+allowlist. The relay prepends that canonical path server-side, so the final
+Telegram body always has this shape:
+
+```text
+Working directory: /absolute/authorized/workspace
+
+<bounded redacted message>
+```
+
+The directory path is therefore intentionally disclosed to the fixed
+operator-controlled Telegram destination. Message text is credential-redacted
+and the final payload stays within Telegram's 4096-byte limit. If the full
+canonical directory plus redacted message cannot fit, the relay rejects the
+call rather than truncating either field. Delivery uses a durable retry queue.
+Each explicit call gets its own delivery identity; repeated identical calls are
+not collapsed. The superseded `task_completed` tool, private
+`server/task_completed` extension, and Nuxt automatic completion outbox are not
+part of the current architecture.
 
 ## 4. Start the remote relay
 

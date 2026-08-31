@@ -414,35 +414,3 @@ export const workspaceActivityPayloads = aiCode.table('workspace_activity_payloa
   chunkCount: integer('chunk_count').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [unique('workspace_activity_payload_unique').on(table.activityId, table.payloadKind, table.chunkIndex)])
-
-// ---------------------------------------------------------------------------
-// Task completion notification outbox
-// ---------------------------------------------------------------------------
-
-export type TaskNotificationDeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed'
-
-/**
- * Server-only handoff from Nuxt's aggregate task lifecycle to the private
- * relay method. This is intentionally separate from both the tool-level
- * activity ledger and the browser-visible task ledger.
- */
-export const taskNotificationOutbox = aiCode.table('task_notification_outbox', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  source: varchar('source', { length: 16 }).notNull(),
-  taskId: varchar('task_id', { length: 128 }).notNull(),
-  workspace: varchar('workspace', { length: 160 }).notNull(),
-  title: varchar('title', { length: 160 }).notNull(),
-  summary: varchar('summary', { length: 2000 }).notNull(),
-  completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
-  resultUrl: varchar('result_url', { length: 2048 }),
-  status: text('status').$type<TaskNotificationDeliveryStatus>().notNull().default('pending'),
-  attempts: integer('attempts').notNull().default(0),
-  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
-  lastError: varchar('last_error', { length: 64 }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  sentAt: timestamp('sent_at', { withTimezone: true })
-}, table => [
-  unique('task_notification_source_task_unique').on(table.source, table.taskId),
-  index('task_notification_delivery_idx').on(table.status, table.nextAttemptAt, table.createdAt)
-])

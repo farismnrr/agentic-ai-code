@@ -1,5 +1,5 @@
 use relay_core::config::{ActivityConfig, ServerConfig};
-use relay_infrastructure::notifications::NotificationLedger;
+use relay_infrastructure::notifications::TelegramMessageLedger;
 use std::path::PathBuf;
 
 #[derive(clap::Args, Debug)]
@@ -24,8 +24,8 @@ pub fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         },
         ..ServerConfig::default()
     };
-    let ledger =
-        NotificationLedger::open(&config).map_err(|_| "failed to open relay notification state")?;
+    let ledger = TelegramMessageLedger::open(&config)
+        .map_err(|_| "failed to open relay notification state")?;
     ledger
         .import_env_credentials(&args.env_file)
         .map_err(|_| "failed to import valid Telegram credentials")?;

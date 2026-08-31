@@ -185,9 +185,6 @@ pub(super) async fn handle_mcp(
             relay_application::dispatcher::Dispatch::ActivityStatus => {
                 handle_activity_status(&request, &state)
             }
-            relay_application::dispatcher::Dispatch::TaskCompleted => {
-                handle_task_completed(&request, &state).await
-            }
             relay_application::dispatcher::Dispatch::Unknown(other) => Err(err_response(
                 StatusCode::NOT_FOUND,
                 Some(request.id.clone()),
@@ -275,33 +272,6 @@ fn handle_activity_configure(request: &mcp::Request, state: &Arc<AppState>) -> J
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-async fn handle_task_completed(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
-    let arguments = request.params.as_ref().ok_or_else(|| {
-        err_response(
-            StatusCode::BAD_REQUEST,
-            Some(request.id.clone()),
-            &McpError::InvalidParams("server/task_completed parameters are required".into()),
-        )
-    })?;
-    let payload =
-        crate::notifications::payload_from_arguments(arguments, "nuxt").map_err(|_| {
-            err_response(
-                StatusCode::BAD_REQUEST,
-                Some(request.id.clone()),
-                &McpError::InvalidParams("invalid task completion payload".into()),
-            )
-        })?;
-    let result = state.notifications.enqueue(payload).await.map_err(|_| {
-        err_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            Some(request.id.clone()),
-            &McpError::Internal("task completion notification is unavailable".into()),
-        )
-    })?;
-    let response = Response::new(request.id.clone(), json!({ "status": result.as_str() }));
-    Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
-}
-
 fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2 {
     let params = request.params.as_ref().and_then(Value::as_object);
     let Some(requested) = params
@@ -340,8 +310,7 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
                 "resources": {},
                 "extensions": {
                     "io.modelcontextprotocol/tasks": {},
-                    "io.masihawam/activity-bootstrap": { "version": "1" },
-                    "io.masihawam/task-completion-notifications": { "version": "1", "method": "server/task_completed" }
+                    "io.masihawam/activity-bootstrap": { "version": "1" }
                 }
             }),
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },

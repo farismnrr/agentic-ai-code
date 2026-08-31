@@ -12,7 +12,6 @@ import { findUserProvider } from '../database/providers'
 import { findUserWorkspace } from '../../infrastructure/database/workspaces'
 import { resolveWorkspacePath } from '../filesystem/browse'
 import { buildBackgroundTaskTools, buildOrchestratorTools, buildSubagentTool } from './subagent-tool'
-import { taskNotificationDatabase } from '../database/task-notifications'
 
 /**
  * The narrow, explicit dependency contract `executeChatTurn` orchestrates
@@ -43,7 +42,6 @@ export function createChatTurnDependencies(): ChatTurnDependencies {
     convertTurnMessages: (messages, tools) => convertTurnMessages(messages, tools as Parameters<typeof convertTurnMessages>[1]),
     prepareAiSdkModel: (model, thinkingEnabled) => prepareAiSdkModel(model as Parameters<typeof prepareAiSdkModel>[0], thinkingEnabled),
     streamAiSdkAgent: input => streamAiSdkAgent(input as Parameters<typeof streamAiSdkAgent>[0]),
-    streamLangGraphChat: input => streamLangGraphChat(input as Parameters<typeof streamLangGraphChat>[0]),
-    taskNotifications: taskNotificationDatabase
+    streamLangGraphChat: input => streamLangGraphChat(input as Parameters<typeof streamLangGraphChat>[0])
   }
 }

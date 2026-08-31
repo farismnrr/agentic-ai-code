@@ -1,33 +1,30 @@
-//! Outbound task-completion notifications.
+//! Outbound Telegram message delivery.
 //!
-//! Telegram is deliberately an implementation detail of the relay. This
-//! module exposes one task-completion enqueue operation, a fixed configured
-//! recipient, and a durable deduplication ledger; it does not expose a
-//! generic Telegram or HTTP tool to MCP callers.
+//! Telegram is a first-class MCP capability, but credentials, destination,
+//! topic, and endpoint remain relay-owned. Callers provide only an authorized
+//! absolute working directory plus bounded message text.
 
 use relay_core::config::ServerConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 
 mod dotenv;
 mod ledger;
 mod telegram;
-pub use ledger::{ClaimedNotification, NotificationLedger, TelegramCredentials};
+pub use ledger::{ClaimedTelegramMessage, TelegramCredentials, TelegramMessageLedger};
 use telegram::ReqwestTelegramSender;
 pub use telegram::{telegram_send_message_body, DeliveryError, TelegramSender};
 
-pub const CONTRACT_VERSION: &str = "1";
-pub const MAX_TASK_ID_BYTES: usize = 128;
-pub const MAX_WORKSPACE_BYTES: usize = 160;
-pub const MAX_TITLE_BYTES: usize = 160;
-pub const MAX_SUMMARY_BYTES: usize = 2_000;
-pub const MAX_RESULT_URL_BYTES: usize = 2_048;
+pub const CONTRACT_VERSION: &str = "2";
+pub const MAX_WORKING_DIRECTORY_BYTES: usize = 4_096;
+pub const MAX_USER_MESSAGE_BYTES: usize = 4_000;
 pub const MAX_MESSAGE_BYTES: usize = 4_096;
 pub const MAX_MESSAGE_THREAD_ID: i64 = i32::MAX as i64;
+const TELEGRAM_MESSAGE_PREFIX: &str = "Working directory: ";
+const TELEGRAM_MESSAGE_SEPARATOR: &str = "\n\n";
 
 pub fn validate_channel_target(chat_id: &str) -> Result<(), NotificationError> {
     let valid_numeric_channel = chat_id.strip_prefix("-100").is_some_and(|suffix| {
@@ -72,14 +69,9 @@ pub(crate) fn validate_bot_token(token: &str) -> Result<(), NotificationError> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskCompletionPayload {
-    pub task_id: String,
-    pub workspace: String,
-    pub title: String,
-    pub summary: String,
-    pub completed_at: String,
-    pub result_url: Option<String>,
-    pub source: String,
+pub struct TelegramMessagePayload {
+    pub working_directory: String,
+    pub message: String,
 }
 
 #[derive(Debug)]
@@ -92,7 +84,6 @@ pub enum NotificationError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueueResult {
     Queued,
-    AlreadySent,
     Disabled,
 }
 
@@ -100,106 +91,93 @@ impl QueueResult {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Queued => "queued",
-            Self::AlreadySent => "already_sent",
             Self::Disabled => "disabled",
         }
     }
 }
 
-/// Validates, normalizes, and redacts an event before it can reach the
-/// durable ledger. `source` is assigned by the authenticated entry point and
-/// is never taken from arbitrary MCP tool arguments.
-pub fn sanitize_task_completion(
-    mut payload: TaskCompletionPayload,
-) -> Result<TaskCompletionPayload, NotificationError> {
-    if payload.source != "nuxt" && payload.source != "external_mcp" {
+pub fn sanitize_telegram_message(
+    mut payload: TelegramMessagePayload,
+) -> Result<TelegramMessagePayload, NotificationError> {
+    payload.working_directory = bounded_working_directory(payload.working_directory)?;
+    payload.message = bounded_text(payload.message, MAX_USER_MESSAGE_BYTES, true)?;
+    if formatted_message_len(&payload) > MAX_MESSAGE_BYTES {
         return Err(NotificationError::Invalid);
     }
-    payload.task_id = bounded_text(payload.task_id, MAX_TASK_ID_BYTES, false)?;
-    payload.workspace = bounded_text(payload.workspace, MAX_WORKSPACE_BYTES, false)?;
-    payload.title = bounded_text(payload.title, MAX_TITLE_BYTES, false)?;
-    payload.summary = bounded_text(payload.summary, MAX_SUMMARY_BYTES, true)?;
-    payload.completed_at = bounded_timestamp(payload.completed_at)?;
-    payload.result_url = payload.result_url.map(bounded_result_url).transpose()?;
     Ok(payload)
 }
 
-pub fn format_task_completion_message(payload: &TaskCompletionPayload) -> String {
-    let result_line = payload
-        .result_url
-        .as_deref()
-        .map(|url| format!("\nResult: {url}"))
-        .unwrap_or_default();
-    let prefix = format!(
-        "✅ {}\nWorkspace: {}\nReport: ",
-        payload.title, payload.workspace
-    );
-    let prefix_and_result = format!("{prefix}{result_line}");
-    let available = MAX_MESSAGE_BYTES.saturating_sub(prefix_and_result.len());
-    let summary = truncate_utf8(&payload.summary, available);
-    let message = format!("{prefix}{summary}{result_line}");
-    if message.len() <= MAX_MESSAGE_BYTES {
-        return message;
-    }
-    truncate_utf8(
-        &format!(
-            "{prefix}{}",
-            truncate_utf8(
-                &payload.summary,
-                MAX_MESSAGE_BYTES.saturating_sub(prefix.len())
-            )
-        ),
-        MAX_MESSAGE_BYTES,
+pub fn format_telegram_message(payload: &TelegramMessagePayload) -> String {
+    format!(
+        "{TELEGRAM_MESSAGE_PREFIX}{}{TELEGRAM_MESSAGE_SEPARATOR}{}",
+        payload.working_directory, payload.message
     )
 }
 
-/// Parse the bounded public tool/private method argument shape. The source is
-/// supplied by the caller of this function, not accepted from the payload.
+fn formatted_message_len(payload: &TelegramMessagePayload) -> usize {
+    TELEGRAM_MESSAGE_PREFIX.len()
+        + payload.working_directory.len()
+        + TELEGRAM_MESSAGE_SEPARATOR.len()
+        + payload.message.len()
+}
+
+/// Parse and validate the public tool arguments. Workspace authorization is
+/// enforced against the relay's live allowlist; relative paths are rejected
+/// even though other workspace tools may resolve them against the primary root.
 pub fn payload_from_arguments(
     arguments: &Value,
-    source: &'static str,
-) -> Result<TaskCompletionPayload, NotificationError> {
+    config: &ServerConfig,
+) -> Result<TelegramMessagePayload, NotificationError> {
     let object = arguments.as_object().ok_or(NotificationError::Invalid)?;
-    let task_id = object
-        .get("taskId")
+    if object.len() != 2
+        || object
+            .keys()
+            .any(|key| key != "working_directory" && key != "message")
+    {
+        return Err(NotificationError::Invalid);
+    }
+    let working_directory = object
+        .get("working_directory")
         .and_then(Value::as_str)
         .ok_or(NotificationError::Invalid)?;
-    let workspace = object
-        .get("workspace")
-        .and_then(Value::as_str)
-        .ok_or(NotificationError::Invalid)?;
-    let title = object
-        .get("title")
-        .and_then(Value::as_str)
-        .ok_or(NotificationError::Invalid)?;
-    let summary = object
-        .get("summary")
-        .and_then(Value::as_str)
-        .ok_or(NotificationError::Invalid)?;
-    let result_url = object
-        .get("resultUrl")
-        .map(|value| value.as_str().ok_or(NotificationError::Invalid))
-        .transpose()?;
-    let completed_at = OffsetDateTime::now_utc()
-        .format(&Rfc3339)
+    if working_directory.len() > MAX_WORKING_DIRECTORY_BYTES
+        || !Path::new(working_directory).is_absolute()
+    {
+        return Err(NotificationError::Invalid);
+    }
+    config
+        .ensure_workspaces_initialized()
         .map_err(|_| NotificationError::Invalid)?;
-    sanitize_task_completion(TaskCompletionPayload {
-        task_id: task_id.to_owned(),
-        workspace: workspace.to_owned(),
-        title: title.to_owned(),
-        summary: summary.to_owned(),
-        completed_at,
-        result_url: result_url.map(str::to_owned),
-        source: source.to_owned(),
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| NotificationError::Invalid)?;
+    let canonical = relay_core::workspace_path::resolve_contained_cwd_in_allowlist(
+        &guard,
+        Some(working_directory),
+    )
+    .map_err(|_| NotificationError::Invalid)?;
+    let canonical = canonical
+        .to_str()
+        .ok_or(NotificationError::Invalid)?
+        .to_owned();
+    drop(guard);
+    let message = object
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or(NotificationError::Invalid)?;
+    sanitize_telegram_message(TelegramMessagePayload {
+        working_directory: canonical,
+        message: message.to_owned(),
     })
 }
 
-pub struct TaskNotificationService {
-    ledger: Option<Arc<NotificationLedger>>,
+pub struct TelegramMessageService {
+    ledger: Option<Arc<TelegramMessageLedger>>,
     sender: Option<Arc<dyn TelegramSender>>,
 }
 
-impl TaskNotificationService {
+impl TelegramMessageService {
     pub fn open(config: &ServerConfig) -> Result<Arc<Self>, NotificationError> {
         if !config.telegram_enabled {
             return Ok(Arc::new(Self {
@@ -207,7 +185,7 @@ impl TaskNotificationService {
                 sender: None,
             }));
         }
-        let ledger = Arc::new(NotificationLedger::open(config)?);
+        let ledger = Arc::new(TelegramMessageLedger::open(config)?);
         let credentials = ledger.load_telegram_credentials()?;
         let sender = credentials.as_ref().and_then(|credentials| {
             ReqwestTelegramSender::new(
@@ -219,7 +197,7 @@ impl TaskNotificationService {
             .map(|sender| Arc::new(sender) as Arc<dyn TelegramSender>)
         });
         if sender.is_none() {
-            tracing::warn!("Telegram notifier is enabled but relay credentials are unavailable or invalid; delivery is disabled");
+            tracing::warn!("Telegram messaging is enabled but relay credentials are unavailable or invalid; delivery is disabled");
         }
         Ok(Arc::new(Self {
             ledger: Some(ledger),
@@ -229,7 +207,7 @@ impl TaskNotificationService {
 
     pub async fn enqueue(
         &self,
-        payload: TaskCompletionPayload,
+        payload: TelegramMessagePayload,
     ) -> Result<QueueResult, NotificationError> {
         let Some(ledger) = &self.ledger else {
             return Ok(QueueResult::Disabled);
@@ -237,11 +215,8 @@ impl TaskNotificationService {
         if self.sender.is_none() {
             return Ok(QueueResult::Disabled);
         }
-        let payload = sanitize_task_completion(payload)?;
-        let inserted = ledger.enqueue(&payload)?;
-        if !inserted {
-            return Ok(QueueResult::AlreadySent);
-        }
+        let payload = sanitize_telegram_message(payload)?;
+        let _message_id = ledger.enqueue(&payload)?;
         let _ = self.process_once().await;
         Ok(QueueResult::Queued)
     }
@@ -254,15 +229,17 @@ impl TaskNotificationService {
             return Ok(false);
         };
         match sender.send(&claimed.message).await {
-            Ok(()) => ledger.mark_sent(&claimed.task_id)?,
+            Ok(()) => ledger.mark_sent(&claimed.message_id)?,
             Err(DeliveryError::Retryable) => {
                 let delay = backoff(claimed.attempts);
-                ledger.mark_retry(&claimed.task_id, "transient", delay)?;
+                ledger.mark_retry(&claimed.message_id, "transient", delay)?;
             }
             Err(DeliveryError::RateLimited(delay)) => {
-                ledger.mark_retry(&claimed.task_id, "rate_limited", delay)?;
+                ledger.mark_retry(&claimed.message_id, "rate_limited", delay)?;
             }
-            Err(DeliveryError::Permanent) => ledger.mark_failed(&claimed.task_id, "permanent")?,
+            Err(DeliveryError::Permanent) => {
+                ledger.mark_failed(&claimed.message_id, "permanent")?
+            }
         }
         Ok(true)
     }
@@ -284,6 +261,17 @@ impl TaskNotificationService {
     }
 }
 
+fn bounded_working_directory(value: String) -> Result<String, NotificationError> {
+    if value.is_empty()
+        || value.len() > MAX_WORKING_DIRECTORY_BYTES
+        || value.chars().any(char::is_control)
+        || !Path::new(&value).is_absolute()
+    {
+        return Err(NotificationError::Invalid);
+    }
+    Ok(value)
+}
+
 fn bounded_text(
     value: String,
     max: usize,
@@ -291,30 +279,6 @@ fn bounded_text(
 ) -> Result<String, NotificationError> {
     let value = redact_text(&value, preserve_newlines);
     if value.is_empty() || value.len() > max {
-        return Err(NotificationError::Invalid);
-    }
-    Ok(value)
-}
-
-fn bounded_timestamp(value: String) -> Result<String, NotificationError> {
-    if value.is_empty() || value.len() > 64 || value.chars().any(char::is_control) {
-        return Err(NotificationError::Invalid);
-    }
-    Ok(value)
-}
-
-fn bounded_result_url(value: String) -> Result<String, NotificationError> {
-    if value.is_empty() || value.len() > MAX_RESULT_URL_BYTES {
-        return Err(NotificationError::Invalid);
-    }
-    let parsed = url::Url::parse(&value).map_err(|_| NotificationError::Invalid)?;
-    if parsed.scheme() != "https"
-        || parsed.username() != ""
-        || parsed.password().is_some()
-        || parsed.query().is_some()
-        || parsed.fragment().is_some()
-        || parsed.as_str() != value
-    {
         return Err(NotificationError::Invalid);
     }
     Ok(value)
@@ -424,17 +388,6 @@ fn redact_assignment(value: &mut String, keyword: &str) {
         }
         value.replace_range(secret_start..secret_end, "[REDACTED]");
     }
-}
-
-fn truncate_utf8(value: &str, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value.to_owned();
-    }
-    let mut end = max_bytes.min(value.len());
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    value[..end].trim_end().to_owned()
 }
 
 fn backoff(attempts: u32) -> Duration {

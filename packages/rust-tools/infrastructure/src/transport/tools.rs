@@ -14,8 +14,8 @@ use relay_interfaces::mcp::{self, Response, ToolCallResult, ToolsCallParams};
 
 #[path = "task_calls.rs"]
 mod task_calls;
-#[path = "task_completion.rs"]
-mod task_completion;
+#[path = "telegram_message.rs"]
+mod telegram_message;
 #[path = "tool_dispatch.rs"]
 mod tool_dispatch;
 #[path = "tool_helpers.rs"]
@@ -463,8 +463,8 @@ pub(super) async fn handle_tools_call(
     {
         return response;
     }
-    if call.name == "task_completed" {
-        return task_completion::handle(
+    if call.name == "telegram_send_message" {
+        return telegram_message::handle(
             request,
             state,
             &call.arguments,

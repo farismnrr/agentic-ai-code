@@ -50,7 +50,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::activity::ReloadableActivityRecorder;
 use crate::auth;
 use crate::auth::{CachedJwks, Claims};
-use crate::notifications::TaskNotificationService;
+use crate::notifications::TelegramMessageService;
 use crate::observability::{CorrelationId, RequestId};
 use relay_application::activity::SharedActivityRecorder;
 use relay_application::admission::RequestAdmission;
@@ -116,9 +116,9 @@ pub struct AppState {
     /// Private control plane for reloading the recorder after an authenticated
     /// first-party activity bootstrap. This is never exposed through tools/list.
     pub activity_control: Arc<ReloadableActivityRecorder>,
-    /// Relay-owned task completion queue. Telegram is intentionally not a
-    /// generic MCP capability and never accepts a caller-supplied destination.
-    pub notifications: Arc<TaskNotificationService>,
+    /// Relay-owned explicit Telegram message queue. Credentials and destination remain
+    /// fixed server-side and never come from MCP arguments.
+    pub notifications: Arc<TelegramMessageService>,
 }
 
 impl AppState {
@@ -202,8 +202,8 @@ pub fn create_router_with_jobs_and_hooks(
     let activity_control = crate::activity::ReloadableActivityRecorder::open(&config)
         .expect("required activity journal must be available before relay startup");
     let activity: SharedActivityRecorder = activity_control.clone();
-    let notifications = TaskNotificationService::open(&config)
-        .expect("enabled task notification ledger must be available before relay startup");
+    let notifications = TelegramMessageService::open(&config)
+        .expect("enabled Telegram message ledger must be available before relay startup");
     notifications.spawn_worker();
     let state = Arc::new(AppState {
         config: config.clone(),
