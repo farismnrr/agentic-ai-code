@@ -3,7 +3,6 @@ use relay_application::activity::{transition_allowed, ActivityEvent, Status};
 use relay_core::config::ServerConfig;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -157,10 +156,16 @@ impl Journal {
         max_records: usize,
         max_bytes: usize,
         respect_retry_delay: bool,
+        latest_per_activity: bool,
     ) -> Result<Vec<PendingRecord>, JournalError> {
         let connection = self.connection.lock().map_err(|_| JournalError::Database)?;
+        let query = if latest_per_activity {
+            "SELECT candidate.record_id, candidate.activity_id, candidate.envelope, candidate.checksum FROM activity_journal AS candidate WHERE candidate.acknowledged = 0 AND NOT EXISTS (SELECT 1 FROM activity_journal AS newer WHERE newer.activity_id = candidate.activity_id AND newer.source_sequence > candidate.source_sequence) AND (?2 = 0 OR candidate.next_attempt_ms <= ?1) ORDER BY candidate.source_sequence ASC, candidate.record_id ASC LIMIT ?3"
+        } else {
+            "SELECT record_id, activity_id, envelope, checksum FROM activity_journal WHERE acknowledged = 0 AND (?2 = 0 OR next_attempt_ms <= ?1) ORDER BY source_sequence ASC, record_id ASC LIMIT ?3"
+        };
         let mut statement = connection
-            .prepare("SELECT record_id, activity_id, envelope, checksum FROM activity_journal WHERE acknowledged = 0 AND (?2 = 0 OR next_attempt_ms <= ?1) ORDER BY source_sequence ASC, record_id ASC LIMIT ?3")
+            .prepare(query)
             .map_err(|_| JournalError::Database)?;
         let rows = statement
             .query_map(
@@ -315,13 +320,9 @@ impl Journal {
         // A retry backoff is an exporter concern. It must not prevent startup
         // recovery from closing an activity whose relay process disappeared
         // before it emitted a terminal outcome.
-        let pending = self.pending(256, 1024 * 1024, false)?;
-        let mut latest = HashMap::new();
-        for record in pending {
-            latest.insert(record.event.activity_id.clone(), record);
-        }
-        for record in latest
-            .into_values()
+        let pending = self.pending(256, 1024 * 1024, false, true)?;
+        for record in pending
+            .into_iter()
             .filter(|record| matches!(record.event.status, Status::Started | Status::Running))
         {
             let mut event = record.event;
