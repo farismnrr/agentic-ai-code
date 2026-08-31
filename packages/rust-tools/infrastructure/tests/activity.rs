@@ -245,6 +245,46 @@ async fn restart_recovers_unfinished_activity_even_when_retry_is_backed_off(
 }
 
 #[tokio::test]
+async fn restart_recovery_uses_latest_activity_state_beyond_pending_bound(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let state = TempState::new("restart-latest-state")?;
+    let config = state.config();
+
+    let runtime = ActivityRuntime::open(&config)?;
+    let completed = runtime.record_start(event("activity-already-complete"), None)?;
+    for index in 0..255 {
+        let _ = runtime.record_start(event(&format!("activity-pending-{index}")), None)?;
+    }
+    runtime.record_outcome(
+        complete_event(
+            &completed,
+            Status::Ok,
+            3,
+            "complete before relay restart",
+            None,
+            Evidence::Summary,
+            None,
+        ),
+        None,
+    )?;
+    drop(runtime);
+
+    drop(ActivityRuntime::open(&config)?);
+
+    let connection = Connection::open(state.0.join("activity.sqlite3"))?;
+    let interrupted: u64 = connection.query_row(
+        "SELECT COUNT(*) FROM activity_journal WHERE activity_id = ?1 AND status = 'interrupted'",
+        ["activity-already-complete"],
+        |row| row.get(0),
+    )?;
+    assert_eq!(
+        interrupted, 0,
+        "restart recovery must not recover an activity whose terminal event is beyond the pending batch bound"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn bootstrap_hot_reload_persists_across_restart() -> Result<(), Box<dyn std::error::Error>> {
     let state = TempState::new("bootstrap")?;
     let mut config = ServerConfig::default();
