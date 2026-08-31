@@ -275,6 +275,16 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    let ssh_root = if matches!(&invocation.security, InvocationSecurity::Ssh { .. }) {
+        Some(config.resolved_ssh_root().map_err(std::io::Error::other)?)
+    } else {
+        mask_generic_ssh_clients(&mut args)?;
+        None
+    };
+    add_protected_paths(&mut args, sandbox_root, true, ssh_root.as_deref())?;
+    if sandbox_root != execution_root {
+        add_protected_paths(&mut args, &execution_root, false, ssh_root.as_deref())?;
+    }
     if let InvocationSecurity::Ssh {
         identity_file,
         known_hosts_file,
@@ -287,12 +297,6 @@ fn spawn_with_profile(
             identity_file,
             known_hosts_file,
         )?;
-    } else {
-        mask_generic_ssh_clients(&mut args)?;
-    }
-    add_protected_paths(&mut args, sandbox_root, true)?;
-    if sandbox_root != execution_root {
-        add_protected_paths(&mut args, &execution_root, false)?;
     }
     let _ = config.ensure_workspaces_initialized();
     if invocation.expose_authorized_siblings {
@@ -304,7 +308,7 @@ fn spawn_with_profile(
                 {
                     let val = ws.to_string_lossy().into_owned();
                     args.extend([root_bind.into(), val.clone(), val]);
-                    add_protected_paths(&mut args, &ws, false)?;
+                    add_protected_paths(&mut args, &ws, false, None)?;
                 }
             }
         }
@@ -419,13 +423,14 @@ fn add_protected_paths(
     args: &mut Vec<String>,
     execution_root: &Path,
     recursive: bool,
+    skip: Option<&Path>,
 ) -> Result<(), std::io::Error> {
     let paths = if recursive {
         discover_protected_paths(execution_root)?
     } else {
         relay_core::protected_paths::protected_paths(execution_root).collect()
     };
-    for path in paths {
+    for path in paths.into_iter().filter(|p| skip != Some(p.as_path())) {
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
             continue;
         };
