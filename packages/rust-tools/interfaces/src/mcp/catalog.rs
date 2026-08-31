@@ -1,7 +1,7 @@
 mod file_edit;
 mod forge;
 mod ssh;
-mod task_completion;
+mod telegram_message;
 use relay_core::error::McpError;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -369,7 +369,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool { name: "code_hover", title: Some("Code Hover"), description: "Bounded plain/markdown hover (type/docs) text for a symbol at a UTF-8 file position. Server-provided markdown is treated as inert text, never rendered as executable HTML.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"line":{"type":"integer","minimum":0},"column":{"type":"integer","minimum":0}},"required":["path","line","column"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "code_diagnostics", title: Some("Code Diagnostics"), description: "Bounded normalized diagnostics for one contained source file, including severity, stable diagnostic code when available, source, and document version (when the server reports one), so a stale result can be detected.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"severity":{"type":"integer","minimum":1,"maximum":4},"max_results":{"type":"integer","minimum":1,"maximum":128,"default":50},"continuation":{"type":"string","maxLength":64}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "code_rename_preview", title: Some("Code Rename Preview"), description: "Preview-only bounded rename: normalizes the language server's WorkspaceEdit into per-file text replacements without applying anything. Apply the result yourself through apply_patch/file_edit after review. Rejects edits outside the contained workspace, protected paths, unsafe symlinks, and any unsupported resource operation (file create/rename/delete).", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"line":{"type":"integer","minimum":0},"column":{"type":"integer","minimum":0},"new_name":{"type":"string","minLength":1,"maxLength":4096}},"required":["path","line","column","new_name"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
-        task_completion::tool(),
+        telegram_message::tool(),
         Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
@@ -423,7 +423,7 @@ pub fn tool_catalog() -> Vec<Tool> {
 pub const PRIMARY_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
     "ssh_readonly_exec",
-    "task_completed",
+    "telegram_send_message",
     "terminal_job_start",
     "terminal_job_get",
     "terminal_job_cancel",

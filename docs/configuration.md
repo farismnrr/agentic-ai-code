@@ -99,9 +99,9 @@ RELAY_ACTIVITY_SPOOL_QUOTA_BYTES=67108864
 RELAY_ACTIVITY_ACK_RETENTION_MS=86400000
 ```
 
-For optional one-message-per-completed-task Telegram delivery, configure the
-fixed recipient only on the relay host. These are server environment values,
-not browser or MCP request fields:
+For optional explicit Telegram messaging, configure the fixed recipient only on
+the relay host. These are server environment values, not browser or MCP request
+fields:
 
 ```bash
 RELAY_TELEGRAM_ENABLED=true
@@ -125,30 +125,34 @@ The command validates that the destination is a Telegram channel or supergroup
 relay-owned SQLite database. For a forum supergroup, the optional thread ID
 selects the topic; an empty value uses the root/general topic.
 `TELEGRAM_ALLOWED_USERS` remains an inbound Hermes allowlist and is never used
-as the notification destination. The running relay reads only its own
-database and never depends on Hermes code, process, or files. The encryption
-key is kept in a separate owner-only relay state file. The relay sends only
-bounded, redacted plain text through Telegram `sendMessage`.
-A task/plan completion is deduplicated by its logical task ID; individual tool
-calls and activity events do not produce Telegram messages. An invalid or
-unsupported target disables notification delivery without falling back to a
-private chat.
+as the destination. The running relay reads only its own database and never
+depends on Hermes code, process, or files. The encryption key is kept in a
+separate owner-only relay state file.
 
-Each completion message is a small report in this shape:
+When enabled, MCP discovery exposes `telegram_send_message`. Every call requires
+exactly two fields: an absolute `working_directory` and a non-empty `message`.
+The relay canonicalizes the directory and requires it to be inside the current
+authorized workspace allowlist before queueing any delivery. Token, chat ID,
+topic ID, Bot API endpoint, and arbitrary Telegram methods are not accepted as
+tool arguments.
+
+The final plain-text message is formatted server-side as:
 
 ```text
-✅ <task title>
-Workspace: <workspace name>
-Report: <task-specific result and validation summary>
-Result: <optional HTTPS result URL>
+Working directory: /absolute/authorized/workspace
+
+<bounded redacted message>
 ```
 
-The workspace name is required for new completion events and identifies which
-project the report belongs to. The local filesystem path is intentionally not
-sent to Telegram. Orchestration reports also include a bounded list of the
-completed task nodes; long reports are truncated safely at the notification
-limit. Existing outbox rows from before workspace support use the explicit
-`Workspace unavailable` compatibility label only so they can finish delivery.
+The working directory is intentionally sent to the fixed operator-controlled
+Telegram destination on every explicit call. Message text remains bounded to
+Telegram's 4096-byte limit and credential-shaped values are redacted. If the
+full canonical directory plus redacted message cannot fit, the relay rejects the
+call rather than truncating either field. Calls are queued independently, so two
+legitimate identical explicit sends are not deduplicated merely because their
+text matches. Legacy automatic task-completion
+rows are not replayed by the new explicit-message queue. Orchestration lifecycle
+completion no longer emits Telegram messages automatically.
 
 The relay source ID is stable in `source-id` inside the owner-only state
 directory. Sink outages leave encrypted unacknowledged rows queued for retry;

@@ -1,6 +1,9 @@
 # Plan 056 — Task-Level Telegram Completion Notifications
 
 **Status:** CLOSED — IMPLEMENTED / DEPLOYED; LIVE COMPLETION SIGNAL ACCEPTED AND QUEUED, VISIBLE TELEGRAM DELIVERY REMAINS OPERATOR OBSERVATION (2026-08-30)
+
+
+> **Superseded live architecture:** Plan 063 replaces this completion-coupled design with the explicit `telegram_send_message` MCP tool. This file is retained as historical implementation/evidence only.
 **Created:** 2026-08-28
 
 ## Problem

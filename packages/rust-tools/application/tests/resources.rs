@@ -2,6 +2,28 @@ use relay_application::resources::{list, read, RESOURCE_NAMES};
 use relay_core::config::ServerConfig;
 use std::{fs, path::PathBuf, process::Command};
 
+// Git hooks export these repository-local variables to child processes. The
+// fixture deliberately creates an independent repository, so preserve the same
+// isolation that Git documents for a command invoked outside the current repo.
+const GIT_LOCAL_ENV_VARS: &[&str] = &[
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_DIR",
+    "GIT_GRAFT_FILE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_INTERNAL_SUPER_PREFIX",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+];
+
 struct TempRepo(PathBuf);
 
 impl TempRepo {
@@ -14,11 +36,12 @@ impl TempRepo {
             ))
             .join("ai-code");
         fs::create_dir_all(&root).unwrap();
-        let status = Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&root)
-            .status()
-            .unwrap();
+        let mut command = Command::new("git");
+        command.args(["init", "--quiet"]).current_dir(&root);
+        for variable in GIT_LOCAL_ENV_VARS {
+            command.env_remove(variable);
+        }
+        let status = command.status().unwrap();
         assert!(status.success(), "resource fixture git init must succeed");
         Self(root)
     }

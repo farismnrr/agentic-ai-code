@@ -1,15 +1,20 @@
-use relay_core::config::ServerConfig;
+use relay_core::config::{ActivityConfig, ServerConfig};
 use relay_infrastructure::transport::create_router;
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
+use uuid::Uuid;
 
-fn fixture_config(port: u16) -> ServerConfig {
+fn fixture_config(port: u16, activity_state_dir: &std::path::Path) -> ServerConfig {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     ServerConfig {
         port,
         origin: Some("http://localhost:3333".into()),
         dir: Some(root.to_string_lossy().into_owned()),
         execution_root: Some(root.to_string_lossy().into_owned()),
+        activity: ActivityConfig {
+            state_dir: Some(activity_state_dir.to_string_lossy().into_owned()),
+            ..ActivityConfig::default()
+        },
         ..ServerConfig::default()
     }
 }
@@ -41,7 +46,10 @@ async fn dedicated_ssh_tool_is_discoverable_and_reaches_application_path() {
         .await
         .expect("loopback listener");
     let port = listener.local_addr().expect("listener address").port();
-    let config = fixture_config(port);
+    let activity_state_dir =
+        std::env::temp_dir().join(format!("ai-tools-ssh-transport-{}", Uuid::new_v4()));
+    fs::create_dir_all(&activity_state_dir).expect("activity state directory");
+    let config = fixture_config(port, &activity_state_dir);
     let router = create_router(config);
     let server = tokio::spawn(async move {
         axum::serve(listener, router)
@@ -105,4 +113,6 @@ async fn dedicated_ssh_tool_is_discoverable_and_reaches_application_path() {
     assert!(text.contains("SSH diagnostics are disabled"));
 
     server.abort();
+    let _ = server.await;
+    fs::remove_dir_all(activity_state_dir).expect("remove activity state directory");
 }

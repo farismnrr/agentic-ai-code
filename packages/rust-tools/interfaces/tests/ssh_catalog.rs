@@ -23,12 +23,12 @@ fn dedicated_ssh_tool_is_portable_and_present_in_both_profiles() {
 }
 
 #[test]
-fn catalog_v12_snapshot_matches_current_static_surface() {
+fn catalog_v13_snapshot_matches_current_static_surface() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
-        .join(".agents/contracts/062-tool-catalog-v12.json");
-    let expected = std::fs::read_to_string(root).expect("catalog v12 snapshot");
-    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v12");
+        .join(".agents/contracts/063-tool-catalog-v13.json");
+    let expected = std::fs::read_to_string(root).expect("catalog v13 snapshot");
+    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v13");
     let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
     assert_eq!(actual, expected);
 }

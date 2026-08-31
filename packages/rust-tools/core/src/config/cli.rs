@@ -219,7 +219,7 @@ pub struct Cli {
     )]
     pub activity_ack_retention_ms: u64,
 
-    /// Enable the fixed-recipient task completion Telegram notifier. Its
+    /// Enable the fixed-recipient explicit Telegram message capability. Its
     /// credentials are provisioned into the relay's encrypted local database.
     #[arg(long, env = "RELAY_TELEGRAM_ENABLED", default_value_t = false)]
     pub telegram_enabled: bool,

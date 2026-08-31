@@ -1,6 +1,6 @@
 use super::{
-    dotenv, format_task_completion_message, now_ms, validate_bot_token, validate_message_thread_id,
-    NotificationError, TaskCompletionPayload,
+    dotenv, format_telegram_message, now_ms, validate_bot_token, validate_message_thread_id,
+    NotificationError, TelegramMessagePayload,
 };
 use crate::activity::{crypto, state_dir};
 use relay_core::config::ServerConfig;
@@ -10,16 +10,23 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
+use uuid::Uuid;
 
-const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS task_notifications (task_id TEXT PRIMARY KEY, message TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL, sent_at_ms INTEGER); CREATE INDEX IF NOT EXISTS task_notifications_delivery_idx ON task_notifications (status, next_attempt_ms, created_at_ms); CREATE TABLE IF NOT EXISTS telegram_configuration (id INTEGER PRIMARY KEY CHECK (id = 1), bot_token_envelope BLOB NOT NULL, chat_id TEXT NOT NULL, message_thread_id INTEGER, updated_at_ms INTEGER NOT NULL);";
+// Keep the legacy task_notifications table untouched for state-file backward
+// compatibility. Plan 063 writes only to telegram_messages so pending rows from
+// the superseded automatic completion pipeline can never be replayed as new
+// explicit messages after upgrade.
+const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS telegram_messages (message_id TEXT PRIMARY KEY, message TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL, sent_at_ms INTEGER); CREATE INDEX IF NOT EXISTS telegram_messages_delivery_idx ON telegram_messages (status, next_attempt_ms, created_at_ms); CREATE TABLE IF NOT EXISTS telegram_configuration (id INTEGER PRIMARY KEY CHECK (id = 1), bot_token_envelope BLOB NOT NULL, chat_id TEXT NOT NULL, message_thread_id INTEGER, updated_at_ms INTEGER NOT NULL);";
 const MAX_ERROR_CATEGORY_BYTES: usize = 64;
 const TELEGRAM_CONFIG_ID: i64 = 1;
 const TELEGRAM_TOKEN_AAD: &[u8] = b"ai-tools:telegram-bot-token:v1";
+// The existing filename is intentionally retained because it encrypts the
+// already-provisioned Telegram credential envelope.
 const TELEGRAM_KEY_FILE: &str = "telegram-task-notifications.key";
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
-pub struct ClaimedNotification {
-    pub task_id: String,
+pub struct ClaimedTelegramMessage {
+    pub message_id: String,
     pub message: String,
     pub attempts: u32,
 }
@@ -31,17 +38,19 @@ pub struct TelegramCredentials {
     pub message_thread_id: Option<i64>,
 }
 
-pub struct NotificationLedger {
+pub struct TelegramMessageLedger {
     connection: Mutex<Connection>,
     path: PathBuf,
     key: [u8; crypto::KEY_BYTES],
 }
 
-impl NotificationLedger {
+impl TelegramMessageLedger {
     pub fn open(config: &ServerConfig) -> Result<Self, NotificationError> {
         let directory = state_dir(config).map_err(|_| NotificationError::Io)?;
         std::fs::create_dir_all(&directory).map_err(|_| NotificationError::Io)?;
         set_owner_only(&directory, true)?;
+        // Keep the established state database path so credential provisioning
+        // survives the contract migration without an operator re-import.
         let path = directory.join("telegram-task-notifications.sqlite3");
         let key_path = directory.join(TELEGRAM_KEY_FILE);
         Self::open_at_with_key(&path, &key_path)
@@ -167,37 +176,38 @@ impl NotificationLedger {
         Ok(())
     }
 
-    pub fn enqueue(&self, payload: &TaskCompletionPayload) -> Result<bool, NotificationError> {
-        let message = format_task_completion_message(payload);
+    pub fn enqueue(&self, payload: &TelegramMessagePayload) -> Result<String, NotificationError> {
+        let message = format_telegram_message(payload);
         if message.is_empty() || message.len() > super::MAX_MESSAGE_BYTES {
             return Err(NotificationError::Invalid);
         }
+        let message_id = Uuid::new_v4().to_string();
         let connection = self
             .connection
             .lock()
             .map_err(|_| NotificationError::Database)?;
         let now = now_ms();
-        let inserted = connection
+        connection
             .execute(
-                "INSERT INTO task_notifications (task_id, message, status, created_at_ms, updated_at_ms) VALUES (?1, ?2, 'pending', ?3, ?3) ON CONFLICT(task_id) DO NOTHING",
-                params![payload.task_id, message, now],
+                "INSERT INTO telegram_messages (message_id, message, status, created_at_ms, updated_at_ms) VALUES (?1, ?2, 'pending', ?3, ?3)",
+                params![message_id, message, now],
             )
             .map_err(|_| NotificationError::Database)?;
-        Ok(inserted == 1)
+        Ok(message_id)
     }
 
-    pub fn pending(&self, limit: usize) -> Result<Vec<ClaimedNotification>, NotificationError> {
+    pub fn pending(&self, limit: usize) -> Result<Vec<ClaimedTelegramMessage>, NotificationError> {
         let connection = self
             .connection
             .lock()
             .map_err(|_| NotificationError::Database)?;
         let mut statement = connection
-            .prepare("SELECT task_id, message, attempts FROM task_notifications WHERE status = 'pending' ORDER BY created_at_ms, task_id LIMIT ?1")
+            .prepare("SELECT message_id, message, attempts FROM telegram_messages WHERE status = 'pending' ORDER BY created_at_ms, message_id LIMIT ?1")
             .map_err(|_| NotificationError::Database)?;
         let rows = statement
             .query_map(params![limit.min(64) as i64], |row| {
-                Ok(ClaimedNotification {
-                    task_id: row.get(0)?,
+                Ok(ClaimedTelegramMessage {
+                    message_id: row.get(0)?,
                     message: row.get(1)?,
                     attempts: row.get::<_, i64>(2)?.max(0) as u32,
                 })
@@ -207,7 +217,10 @@ impl NotificationLedger {
             .collect()
     }
 
-    pub fn claim_next(&self, now: i64) -> Result<Option<ClaimedNotification>, NotificationError> {
+    pub fn claim_next(
+        &self,
+        now: i64,
+    ) -> Result<Option<ClaimedTelegramMessage>, NotificationError> {
         let connection = self
             .connection
             .lock()
@@ -217,11 +230,11 @@ impl NotificationLedger {
             .map_err(|_| NotificationError::Database)?;
         let candidate = transaction
             .query_row(
-                "SELECT task_id, message, attempts FROM task_notifications WHERE status = 'pending' AND next_attempt_ms <= ?1 ORDER BY created_at_ms, task_id LIMIT 1",
+                "SELECT message_id, message, attempts FROM telegram_messages WHERE status = 'pending' AND next_attempt_ms <= ?1 ORDER BY created_at_ms, message_id LIMIT 1",
                 params![now],
                 |row| {
-                    Ok(ClaimedNotification {
-                        task_id: row.get(0)?,
+                    Ok(ClaimedTelegramMessage {
+                        message_id: row.get(0)?,
                         message: row.get(1)?,
                         attempts: row.get::<_, i64>(2)?.max(0) as u32,
                     })
@@ -237,8 +250,8 @@ impl NotificationLedger {
         };
         transaction
             .execute(
-                "UPDATE task_notifications SET status = 'sending', updated_at_ms = ?1 WHERE task_id = ?2 AND status = 'pending'",
-                params![now, candidate.task_id],
+                "UPDATE telegram_messages SET status = 'sending', updated_at_ms = ?1 WHERE message_id = ?2 AND status = 'pending'",
+                params![now, candidate.message_id],
             )
             .map_err(|_| NotificationError::Database)?;
         transaction
@@ -247,13 +260,13 @@ impl NotificationLedger {
         Ok(Some(candidate))
     }
 
-    pub fn mark_sent(&self, task_id: &str) -> Result<(), NotificationError> {
-        self.update_status(task_id, "sent", None, true)
+    pub fn mark_sent(&self, message_id: &str) -> Result<(), NotificationError> {
+        self.update_status(message_id, "sent", None, true)
     }
 
     pub fn mark_retry(
         &self,
-        task_id: &str,
+        message_id: &str,
         category: &str,
         delay: Duration,
     ) -> Result<(), NotificationError> {
@@ -265,16 +278,16 @@ impl NotificationLedger {
         let now = now_ms();
         connection
             .execute(
-                "UPDATE task_notifications SET status = 'pending', attempts = attempts + 1, next_attempt_ms = ?1, last_error = ?2, updated_at_ms = ?3 WHERE task_id = ?4 AND status = 'sending'",
-                params![now.saturating_add(delay.as_millis().min(i64::MAX as u128) as i64), category, now, task_id],
+                "UPDATE telegram_messages SET status = 'pending', attempts = attempts + 1, next_attempt_ms = ?1, last_error = ?2, updated_at_ms = ?3 WHERE message_id = ?4 AND status = 'sending'",
+                params![now.saturating_add(delay.as_millis().min(i64::MAX as u128) as i64), category, now, message_id],
             )
             .map_err(|_| NotificationError::Database)?;
         Ok(())
     }
 
-    pub fn mark_failed(&self, task_id: &str, category: &str) -> Result<(), NotificationError> {
+    pub fn mark_failed(&self, message_id: &str, category: &str) -> Result<(), NotificationError> {
         self.update_status(
-            task_id,
+            message_id,
             "failed",
             Some(&bounded_error_category(category)),
             false,
@@ -283,7 +296,7 @@ impl NotificationLedger {
 
     fn update_status(
         &self,
-        task_id: &str,
+        message_id: &str,
         status: &str,
         error: Option<&str>,
         sent: bool,
@@ -296,15 +309,15 @@ impl NotificationLedger {
         if sent {
             connection
                 .execute(
-                    "UPDATE task_notifications SET status = 'sent', last_error = NULL, sent_at_ms = ?1, updated_at_ms = ?1 WHERE task_id = ?2 AND status = 'sending'",
-                    params![now, task_id],
+                    "UPDATE telegram_messages SET status = 'sent', last_error = NULL, sent_at_ms = ?1, updated_at_ms = ?1 WHERE message_id = ?2 AND status = 'sending'",
+                    params![now, message_id],
                 )
                 .map_err(|_| NotificationError::Database)?;
         } else {
             connection
                 .execute(
-                    "UPDATE task_notifications SET status = ?1, last_error = ?2, updated_at_ms = ?3 WHERE task_id = ?4 AND status = 'sending'",
-                    params![status, error, now, task_id],
+                    "UPDATE telegram_messages SET status = ?1, last_error = ?2, updated_at_ms = ?3 WHERE message_id = ?4 AND status = 'sending'",
+                    params![status, error, now, message_id],
                 )
                 .map_err(|_| NotificationError::Database)?;
         }
@@ -318,7 +331,7 @@ impl NotificationLedger {
             .map_err(|_| NotificationError::Database)?;
         connection
             .execute(
-                "UPDATE task_notifications SET status = 'pending', next_attempt_ms = 0, updated_at_ms = ?1 WHERE status = 'sending'",
+                "UPDATE telegram_messages SET status = 'pending', next_attempt_ms = 0, updated_at_ms = ?1 WHERE status = 'sending'",
                 params![now_ms()],
             )
             .map_err(|_| NotificationError::Database)?;

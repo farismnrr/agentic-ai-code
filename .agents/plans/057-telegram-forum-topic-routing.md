@@ -1,6 +1,9 @@
 # Plan 057 — Telegram Forum Topic Routing Implementation Plan
 
 **Status:** CLOSED / VERIFIED
+
+
+> **Superseded live architecture:** Plan 063 replaces this completion-coupled design with the explicit `telegram_send_message` MCP tool. This file is retained as historical implementation/evidence only.
 **Goal:** Route the existing task-completion Telegram notification through the configured `Masih Awam` forum topic while preserving standalone relay ownership and the no-generic-Telegram-tool boundary.
 **Success Criteria:** A configured `message_thread_id` survives relay-state persistence/restart, task-completion delivery sends it to Telegram, legacy relay state migrates safely, focused Rust tests and `pnpm guardrail` pass, and a live task-notification smoke test is accepted by topic `3775`.
 

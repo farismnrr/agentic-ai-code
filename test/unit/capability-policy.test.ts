@@ -120,6 +120,21 @@ expect(network.domain === 'example.test' && network.networkRequested === true, '
 expect(approvalForCapability(network, undefined, 'manual').outcome === 'user-approval', 'manual network asks')
 expect(approvalForCapability(network, undefined, 'bypass').outcome === 'approved', 'bypass network skips prompt')
 
+const telegramMessage = capabilityFactsForToolCall({
+  toolId: 'relay.telegram_send_message',
+  toolName: 'telegram_send_message',
+  input: { working_directory: '/workspace/ai-code', message: 'explicit status update' },
+  annotations: { destructiveHint: false, openWorldHint: true },
+  trustedProvenance: 'first-party-relay'
+})
+expect(JSON.stringify(telegramMessage.effects) === JSON.stringify(['network_write', 'external_mutation']), 'Telegram effects remain an external mutation')
+expect(telegramMessage.networkRequested === true, 'Telegram send is a network request')
+expect(approvalForCapability(telegramMessage, undefined, 'manual').outcome === 'user-approval', 'manual Telegram sends require approval')
+const malformedTelegramMessage = capabilityFactsForToolCall({
+  toolId: 'relay.telegram_send_message', toolName: 'telegram_send_message', input: { message: 'missing directory' }, trustedProvenance: 'first-party-relay'
+})
+expect(malformedTelegramMessage.invalidInput === true && approvalForCapability(malformedTelegramMessage, undefined, 'bypass').outcome === 'denied', 'Telegram input without working directory fails closed')
+
 const mcpCatalog = [
   { id: 'server-a.read_file', serverId: 'server-a', name: 'read_file', description: '', sampleInput: {} },
   { id: 'server-b.read_file', serverId: 'server-b', name: 'read_file', description: '', sampleInput: {} }
