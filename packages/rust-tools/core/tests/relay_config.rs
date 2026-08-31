@@ -159,3 +159,61 @@ fn ssh_database_principals_are_bounded_identity_names() {
     assert!(config.validate().is_err());
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn explicit_toolchain_paths_may_be_outside_the_execution_root() {
+    let (mut config, root) = ssh_fixture();
+    let toolchain = root.join("toolchain");
+    std::fs::create_dir(&toolchain).unwrap();
+    #[cfg(unix)]
+    chmod(&toolchain, 0o700);
+    config.toolchain_paths = vec![toolchain.to_string_lossy().into_owned()];
+
+    assert!(config.validate().is_ok());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn protected_ssh_directory_at_execution_root_boundary_is_allowed() {
+    let root = std::env::temp_dir().join(format!(
+        "relay-config-home-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let ssh_root = root.join(".ssh");
+    let workspace = root.join("workspace");
+    std::fs::create_dir_all(&ssh_root).unwrap();
+    std::fs::create_dir(&workspace).unwrap();
+    #[cfg(unix)]
+    for path in [&root, &ssh_root, &workspace] {
+        chmod(path, 0o700);
+    }
+    let config_path = ssh_root.join("config");
+    let key = ssh_root.join("id_ed25519");
+    let known = ssh_root.join("known_hosts");
+    std::fs::write(&key, "dummy").unwrap();
+    std::fs::write(&known, "dummy").unwrap();
+    std::fs::write(
+        &config_path,
+        "Host fixture\n HostName example.invalid\n User diagnostic\n IdentityFile id_ed25519\n UserKnownHostsFile known_hosts\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    for path in [&config_path, &key, &known] {
+        chmod(path, 0o600);
+    }
+    let config = ServerConfig {
+        dir: Some(workspace.to_string_lossy().into_owned()),
+        execution_root: Some(root.to_string_lossy().into_owned()),
+        allow_ssh: true,
+        ssh_root: Some(ssh_root.to_string_lossy().into_owned()),
+        ssh_config: Some(config_path.to_string_lossy().into_owned()),
+        ..ServerConfig::default()
+    };
+
+    assert!(config.validate().is_ok());
+    let _ = std::fs::remove_dir_all(root);
+}

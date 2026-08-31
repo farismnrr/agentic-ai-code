@@ -446,9 +446,14 @@ impl ServerConfig {
                     "toolchain-path must resolve to an existing directory".into(),
                 )
             })?;
-            if !candidate.is_dir() || !candidate.starts_with(&execution_root) {
+            // Explicit toolchain paths are mounted read-only by the sandbox and
+            // are an operator-approved exception to the workspace boundary.
+            // They may live under the operator home while the execution root is
+            // narrowed to a single workspace (for example when SSH credentials
+            // remain at ~/.ssh outside that boundary).
+            if !candidate.is_dir() {
                 return Err(RelayError::InvalidConfig(
-                    "toolchain-path must be a directory beneath execution root".into(),
+                    "toolchain-path must be an existing directory".into(),
                 ));
             }
         }

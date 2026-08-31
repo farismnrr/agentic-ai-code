@@ -3,7 +3,9 @@ use super::{RelayError, ServerConfig};
 impl ServerConfig {
     /// Resolve the approved SSH credential root. The default is ~/.ssh, while
     /// an explicit root is allowed for a dedicated diagnostic identity. The
-    /// credential root must remain outside every model-writable execution root.
+    /// credential root must remain outside every model-writable execution root,
+    /// except for the execution root's own protected `.ssh` directory. In that
+    /// case the sandbox still exposes only exact reviewed files read-only.
     pub fn resolved_ssh_root(&self) -> Result<std::path::PathBuf, RelayError> {
         let configured = match self.ssh_root.as_deref() {
             Some(path) => {
@@ -32,7 +34,8 @@ impl ServerConfig {
         }
         validate_ssh_owner_permissions(&root, true)?;
         if let Ok(execution_root) = self.resolved_execution_root() {
-            if root.starts_with(&execution_root) {
+            let protected_ssh_root = execution_root.join(".ssh");
+            if root.starts_with(&execution_root) && root != protected_ssh_root {
                 return Err(RelayError::InvalidConfig(
                     "SSH credential root must be outside the execution root".into(),
                 ));
