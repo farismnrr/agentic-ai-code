@@ -9,6 +9,10 @@ mod patch;
 mod protected;
 mod read;
 mod search;
+#[cfg(target_os = "linux")]
+mod secure;
+#[cfg(not(target_os = "linux"))]
+#[path = "workspace/secure_portable.rs"]
 mod secure;
 
 pub use allowlist::*;

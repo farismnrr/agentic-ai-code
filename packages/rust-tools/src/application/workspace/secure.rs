@@ -1,8 +1,12 @@
 //! Linux no-follow directory traversal and atomic mutation primitives.
-
 use crate::core::error::McpError;
-use std::ffi::{CStr, CString, OsStr};
+#[cfg(target_os = "linux")]
+use std::ffi::OsStr;
+#[cfg(target_os = "linux")]
+use std::ffi::{CStr, CString};
+#[cfg(target_os = "linux")]
 use std::io::Write;
+#[cfg(target_os = "linux")]
 use std::path::Path;
 
 fn inaccessible_directory_error() -> McpError {
