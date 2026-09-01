@@ -16,7 +16,7 @@ const POLICY = Object.freeze({
   folder: { reviewMin: 13, hard: 15 },
   exceptions: {
     files: new Map([
-      ['packages/rust-tools/application/examples/hooks_acceptance.rs', 'single deterministic Plan 039E acceptance entrypoint keeps adversarial lifecycle and approval coverage together so the gate exercises one real hook runtime']
+      ['packages/rust-tools/examples/hooks_acceptance.rs', 'single deterministic Plan 039E acceptance entrypoint keeps adversarial lifecycle and approval coverage together so the gate exercises one real hook runtime']
     ]),
     folders: new Map([
       ['app/composables', 'Nuxt public use* auto-import entrypoints form one framework-owned API surface; splitting or wrapper re-exports would add indirection without reducing responsibility.']

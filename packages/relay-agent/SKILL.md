@@ -61,7 +61,7 @@ pnpm build:tools
 Or directly:
 
 ```bash
-cargo build --manifest-path packages/rust-tools/cli/Cargo.toml --release --locked --bin ai-tools
+cargo build --manifest-path packages/rust-tools/Cargo.toml --release --locked --bin ai-tools
 ```
 
 The repository pins Rust 1.95.0. Current local verification/release policy is documented in [`../rust-tools/README.md`](../rust-tools/README.md).
@@ -71,7 +71,7 @@ The repository pins Rust 1.95.0. Current local verification/release policy is do
 Local mode is the default and binds to loopback. Supply the project directory and browser/Nuxt origin explicitly:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- relay \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- relay \
   --mode local \
   --dir /home/user/project \
   --execution-root /home/user \

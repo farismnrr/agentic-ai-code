@@ -1,6 +1,6 @@
 // Plan 035 P1 remediation (round 4): bounded, static classification of a
 // raw/untrusted exception's likely cause — mirrors the Rust
-// `classify_reqwest_error()` pattern (packages/rust-tools/infrastructure/src/
+// `classify_reqwest_error()` pattern (packages/rust-tools/src/infrastructure/
 // observability.rs): map the error's SHAPE (a driver/runtime error code, a
 // well-known constructor name) to a fixed vocabulary of safe labels, never
 // echo the error's own free-text `.message`. That free text can carry

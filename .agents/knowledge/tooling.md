@@ -72,7 +72,7 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 - The native workspace is under `packages/rust-tools/`.
 - Repository development pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
 - `pnpm build:tools` builds the native binaries used by local tool/relay packages.
-- This repository intentionally has **no CI**. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories. Production files contain no inline test modules.
+- This repository intentionally has **no CI**. Web tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`. Production files contain no inline test modules.
 
 ## Mandatory local commit gate
 

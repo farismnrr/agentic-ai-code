@@ -1,6 +1,6 @@
 # Rust Tools
 
-This workspace contains the native implementation of the unified `ai-tools` binary, which provides:
+This package contains the native implementation of the unified `ai-tools` binary, which provides:
 
 - `terminal`
 - `curl`
@@ -86,10 +86,10 @@ cargo build --manifest-path Cargo.toml --release --locked --bin ai-tools
 
 ## Mandatory commit verification
 
-The repository has **no CI** and **no unit-test suite**. Rust quality is part of the mandatory local commit gate:
+The repository has **no hosted CI**. Rust integration tests live under `packages/rust-tools/tests/`, and Rust quality is part of the mandatory local commit gate:
 
 ```bash
-pnpm verify:commit
+pnpm guardrail
 ```
 
 The root commands include:
@@ -100,7 +100,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 RUSTFLAGS='-D warnings' cargo check --workspace --all-targets --all-features --locked
 ```
 
-Security-sensitive relay/MCP changes may additionally require `cargo audit`, `scripts/phase8-zero-bypass.sh`, and the deterministic acceptance scripts relevant to the current relay/MCP contract.
+Security-sensitive relay/MCP changes may additionally require `cargo audit` and focused Cargo tests/examples relevant to the affected contract. Repository-wide structural checks remain owned by `pnpm guardrail`; do not recreate plan-numbered verification scripts.
 
 The old JavaScript parity harness is obsolete and is not a current verification source of truth.
 
@@ -127,6 +127,6 @@ Package-level TypeScript tool factories under sibling `packages/*/` are still ap
 
 Use each binary's `--help` as the command-line source of truth.
 
-## Internal ownership after Plan 039A
+## Internal ownership
 
-The crate boundaries are unchanged. Within them, large implementation surfaces are grouped by responsibility behind stable facades: application execution/workspace submodules, infrastructure transport access/MCP/tool handlers, interface protocol vs catalog/schema ownership, and core validated config vs CLI declaration. Do not collapse those responsibilities back into giant facade files when adding capabilities; extend the cohesive owner that already represents the reason to change.
+The native implementation is intentionally one Cargo package. Large implementation surfaces remain grouped by responsibility behind stable module facades: `application` execution/workspace submodules, `infrastructure` transport access/MCP/tool handlers, `interfaces` protocol vs catalog/schema ownership, and `core` validated config vs CLI declaration. Do not collapse those responsibilities into giant facade files when adding capabilities; extend the cohesive owner that already represents the reason to change. `scripts/check-architecture.sh` replaces the former inter-crate dependency graph as the repository-enforced layer-direction guard.

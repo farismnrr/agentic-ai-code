@@ -36,7 +36,7 @@ pnpm build:tools
 For development, invoke the current Rust CLI directly:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- terminal \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- terminal \
   --cwd /path/to/workspace \
   --allow-command ls \
   ls -la
@@ -54,7 +54,7 @@ The CLI accepts:
 Use the binary help as the authoritative CLI reference:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- terminal --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- terminal --help
 ```
 
 Do **not** document or rely on `npx @ai-code/terminal-tool ...`; the package no longer exposes an npm CLI bin mapping.

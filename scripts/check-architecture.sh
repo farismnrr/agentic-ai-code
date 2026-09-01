@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 application_root="${ARCHITECTURE_APPLICATION_ROOT:-$repo_root/server/application}"
 api_root="${ARCHITECTURE_API_ROOT:-$repo_root/server/api}"
 core_root="${ARCHITECTURE_CORE_ROOT:-$repo_root/server/core}"
+rust_package_root="$repo_root/packages/rust-tools"
+rust_root="${ARCHITECTURE_RUST_ROOT:-$rust_package_root/src}"
 
 fail_matches() {
   local message="$1"
@@ -18,12 +20,42 @@ fail_matches() {
   fi
 }
 
-# The protocol core must not acquire HTTP/transport dependencies.
-if rg -n '^[[:space:]]*(use|pub[[:space:]]+use).*(axum|transport::|super::transport)' \
-  "$repo_root/packages/rust-tools/interfaces/src/mcp.rs"; then
-  echo 'architecture: mcp.rs must remain transport-independent' >&2
+# The native implementation is intentionally one Cargo package. Reintroducing
+# nested package manifests would recreate the packaging boundary Plan 064 removes.
+nested_rust_manifests="$(find "$rust_package_root" -mindepth 2 -name Cargo.toml -print 2>/dev/null || true)"
+if [[ -n "$nested_rust_manifests" ]]; then
+  printf 'architecture: packages/rust-tools must remain one Cargo package; nested manifests are forbidden\n%s\n' "$nested_rust_manifests" >&2
   exit 1
 fi
+
+legacy_rust_namespaces="$(rg -n --glob '*.rs' 'relay_(core|application|infrastructure|interfaces)::' "$rust_root" 2>/dev/null || true)"
+if [[ -n "$legacy_rust_namespaces" ]]; then
+  printf 'architecture: legacy internal relay-* crate namespaces are forbidden in the single-crate tree\n%s\n' "$legacy_rust_namespaces" >&2
+  exit 1
+fi
+
+check_rust_boundaries() {
+  local root="$1"
+  fail_matches 'rust core must not depend on application/interfaces/infrastructure' \
+    "$root/core" \
+    '(crate::|ai_tools::|super::)(application|interfaces|infrastructure)(::|[[:space:];,{])' || return 1
+  fail_matches 'rust interfaces must not depend on application/infrastructure' \
+    "$root/interfaces" \
+    '(crate::|ai_tools::|super::)(application|infrastructure)(::|[[:space:];,{])' || return 1
+  fail_matches 'rust application must not depend on infrastructure' \
+    "$root/application" \
+    '(crate::|ai_tools::|super::)infrastructure(::|[[:space:];,{])' || return 1
+
+  # The protocol core must not acquire HTTP/transport dependencies.
+  if [[ -f "$root/interfaces/mcp.rs" ]] && rg -n \
+    '^[[:space:]]*(use|pub[[:space:]]+use).*(axum|transport::|super::transport)' \
+    "$root/interfaces/mcp.rs"; then
+    echo 'architecture: interfaces/mcp.rs must remain transport-independent' >&2
+    return 1
+  fi
+}
+
+check_rust_boundaries "$rust_root"
 
 # Application code depends on application/shared contracts only. Keep this
 # import-level check deliberately broad: it catches value, type-only, aliased,
@@ -124,8 +156,34 @@ run_fixture_checks() {
   printf "import { useCase } from '../application/use-case'\n" > "$fixture_dir/api/application-route.ts"
   ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" ARCHITECTURE_CORE_ROOT="$fixture_dir/core" \
     "$0" --skip-fixtures >/dev/null
-  ARCHITECTURE_APPLICATION_ROOT="$fixture_dir/application" ARCHITECTURE_API_ROOT="$fixture_dir/api" ARCHITECTURE_CORE_ROOT="$fixture_dir/core" \
-    "$0" --skip-fixtures >/dev/null
+
+  # Single-crate Rust layering must replace the compile-time crate graph with
+  # deterministic repository enforcement. Exercise the same checker against
+  # positive and negative fixtures so a regex regression cannot silently pass.
+  mkdir -p "$fixture_dir/rust/core" "$fixture_dir/rust/interfaces" "$fixture_dir/rust/application" "$fixture_dir/rust/infrastructure"
+  printf 'pub fn core_ok() {}\n' > "$fixture_dir/rust/core/positive.rs"
+  printf 'use crate::core::error::McpError;\n' > "$fixture_dir/rust/interfaces/positive.rs"
+  printf 'use crate::core::error::McpError; use crate::interfaces::mcp;\n' > "$fixture_dir/rust/application/positive.rs"
+  printf 'use crate::application::dispatcher;\n' > "$fixture_dir/rust/infrastructure/positive.rs"
+  check_rust_boundaries "$fixture_dir/rust" >/dev/null
+
+  for fixture in core-application core-interfaces core-infrastructure interfaces-application interfaces-infrastructure application-infrastructure; do
+    rm -f "$fixture_dir/rust/core/negative.rs" "$fixture_dir/rust/interfaces/negative.rs" "$fixture_dir/rust/application/negative.rs"
+    case "$fixture" in
+      core-application) printf 'use crate::application::dispatcher;\n' > "$fixture_dir/rust/core/negative.rs" ;;
+      core-interfaces) printf 'use crate::interfaces::mcp;\n' > "$fixture_dir/rust/core/negative.rs" ;;
+      core-infrastructure) printf 'use crate::infrastructure::transport;\n' > "$fixture_dir/rust/core/negative.rs" ;;
+      interfaces-application) printf 'use crate::application::dispatcher;\n' > "$fixture_dir/rust/interfaces/negative.rs" ;;
+      interfaces-infrastructure) printf 'use crate::infrastructure::transport;\n' > "$fixture_dir/rust/interfaces/negative.rs" ;;
+      application-infrastructure) printf 'use crate::infrastructure::transport;\n' > "$fixture_dir/rust/application/negative.rs" ;;
+    esac
+    if check_rust_boundaries "$fixture_dir/rust" >/dev/null 2>&1; then
+      echo "architecture: negative Rust fixture '$fixture' was not rejected" >&2
+      return 1
+    fi
+  done
+  rm -f "$fixture_dir/rust/core/negative.rs" "$fixture_dir/rust/interfaces/negative.rs" "$fixture_dir/rust/application/negative.rs"
+  check_rust_boundaries "$fixture_dir/rust" >/dev/null
 }
 
 if [[ "${1:-}" != "--skip-fixtures" && -z "${ARCHITECTURE_SKIP_FIXTURES:-}" ]]; then

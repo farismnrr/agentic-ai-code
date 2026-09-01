@@ -7,7 +7,7 @@ This is the **only repository agent entrypoint**. Do not add client/vendor-speci
 This repository intentionally has **no CI**. Quality enforcement is local, but validation must stay proportional to the changed subsystem:
 
 - JavaScript/TypeScript/Vue tests live under top-level `test/` and run with `pnpm test:web`.
-- Rust tests use Cargo's normal package-local `tests/` directories and run with `pnpm test:rust`.
+- Rust tests live under the single native package at `packages/rust-tools/tests/` and run with `pnpm test:rust`.
 - `scripts/` is reserved for repository guardrails and hook installation. Do not add plan-numbered `verify-*`, `phase-*`, acceptance, or one-off validation scripts.
 - New plans must describe feature tests, not generate a new verification script for the plan number.
 - A Nuxt-only change must not compile, lint, or test Rust unless the change actually touches a shared cross-stack contract; the inverse applies to Rust-only work.

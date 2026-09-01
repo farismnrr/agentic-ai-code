@@ -8,7 +8,7 @@ The stable line uses `0.0.x` semantic versions. Continue from the current
 stable tag recorded by the repository rather than rewriting published tags or
 resetting versioning.
 
-Keep the root web/package version, Cargo workspace/CLI version, stable Git tag, and release assets aligned.
+Keep the root web/package version, `ai-tools` Cargo package version, stable Git tag, and release assets aligned.
 
 ## Promotion flow
 

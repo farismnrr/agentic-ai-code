@@ -29,7 +29,7 @@ function relative(file) {
 function isApprovedTestLocation(file) {
   const rel = relative(file)
   const extension = path.extname(file)
-  if (extension === '.rs') return /^packages\/rust-tools\/[^/]+\/tests\//.test(rel)
+  if (extension === '.rs') return rel.startsWith('packages/rust-tools/tests/')
   return rel.startsWith('test/')
 }
 
@@ -83,7 +83,7 @@ function check(root = ROOT) {
   const files = walk(root).filter(belongsToScope)
   return files.flatMap((file) => {
     if (isApprovedTestLocation(file)) return []
-    if (testFileName(file)) return [`${relative(file)}: web tests belong under test/; Rust tests belong in package tests/`]
+    if (testFileName(file)) return [`${relative(file)}: web tests belong under test/; Rust tests belong under packages/rust-tools/tests/`]
     const source = fs.readFileSync(file, 'utf8')
     if (path.extname(file) === '.rs') return rustFailures(file, source)
     if (['.js', '.mjs', '.ts', '.tsx', '.vue'].includes(path.extname(file))) return javascriptFailures(file, source)
@@ -96,4 +96,4 @@ if (failures.length) {
   console.error(`Test layout guard failed:\n${failures.map(failure => `- ${failure}`).join('\n')}`)
   process.exit(1)
 }
-console.log(`Test layout guard passed (${requestedScope}): web tests are under test/ and Rust tests are package-local`)
+console.log(`Test layout guard passed (${requestedScope}): web tests are under test/ and Rust tests are under packages/rust-tools/tests/`)

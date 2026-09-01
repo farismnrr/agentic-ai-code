@@ -13,7 +13,7 @@ This repository intentionally has no hosted CI workflow. Local quality is split 
 
 `scripts/` is reserved for guardrails and hook installation. Do not add plan-numbered `verify-*`, `phase-*`, acceptance, or one-off feature validation scripts there.
 
-Web/Node tests live under top-level `test/`. Rust tests use Cargo's package-local `tests/` directories. Production files do not contain inline test modules.
+Web/Node tests live under top-level `test/`. Rust tests live under `packages/rust-tools/tests/`. Production files do not contain inline test modules. The native implementation itself is a single Cargo package under `packages/rust-tools/`; architectural layers are modules under `packages/rust-tools/src/`.
 
 ## Mandatory local guardrail
 
@@ -40,7 +40,7 @@ Use feature/behavior names, not plan numbers. Examples:
 ```text
 test/unit/capability-policy.test.ts
 test/unit/mcp-task-reliability.test.ts
-packages/rust-tools/infrastructure/tests/activity.rs
+packages/rust-tools/tests/activity.rs
 ```
 
 Use Node's native test runner for repository web tests and Cargo for Rust. No new third-party test framework is required for ordinary coverage.

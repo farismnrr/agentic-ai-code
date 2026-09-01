@@ -58,7 +58,7 @@ Durable docs may summarize implementation facts when needed to orient future age
 
 The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
 
-The repository intentionally has **no CI**. Structural and code-quality enforcement is local. Web tests live under top-level `test/`, while Rust tests use Cargo's package-local `tests/` directories:
+The repository intentionally has **no CI**. Structural and code-quality enforcement is local. Web tests live under top-level `test/`, while Rust tests live under `packages/rust-tools/tests/`:
 
 - [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
 - [`../../scripts/check-maintainability.mjs`](../../scripts/check-maintainability.mjs) enforces maintained-source/folder budgets and exact reasoned exceptions;

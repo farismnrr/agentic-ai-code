@@ -148,13 +148,15 @@ systemd/host service and has no dependency on the Nuxt container.
 
 ## Internal module ownership and maintainability
 
-The runtime trust boundaries above are unchanged by the maintainability refactor. Internally, the Rust relay now keeps stable crate facades while grouping implementation by responsibility:
+The runtime trust boundaries above are unchanged by the single-crate consolidation. The Rust relay is one `ai-tools` Cargo package, while architectural ownership remains explicit through `core`, `interfaces`, `application`, and `infrastructure` modules:
 
 - `application::execution` owns job lifecycle/result state and delegates process execution, request translation, and Bubblewrap construction to cohesive submodules;
 - `application::workspace` owns the workspace capability facade and delegates secure path/no-follow primitives, listing, searching, reading, and atomic mutation to focused submodules;
-- infrastructure transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers;
-- the MCP interface keeps protocol/result types separate from the canonical tool catalog and schemas;
-- core configuration keeps validated server configuration separate from the CLI declaration surface.
+- `infrastructure::transport` keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers;
+- `interfaces::mcp` keeps protocol/result types separate from the canonical tool catalog and schemas;
+- `core::config` keeps validated server configuration separate from the CLI declaration surface.
+
+The former Cargo package graph is intentionally replaced by `scripts/check-architecture.sh`, which fails on forbidden Rust layer directions and self-tests those negative cases. Nested Cargo manifests under `packages/rust-tools/` are also rejected so packaging does not silently fragment again.
 
 These splits are responsibility boundaries, not extension frameworks. Existing auth, sandbox, workspace-containment, cancellation, output-retention, Docker/Tailscale opt-in, and public MCP contracts remain authoritative in their existing policy owners.
 

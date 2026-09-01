@@ -7,16 +7,16 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 required=(
-  "$root/packages/rust-tools/interfaces/src/mcp.rs"
-  "$root/packages/rust-tools/infrastructure/src/transport.rs"
-  "$root/packages/rust-tools/application/src/execution.rs"
-  "$root/packages/rust-tools/infrastructure/src/security.rs"
-  "$root/packages/rust-tools/infrastructure/src/auth.rs"
+  "$root/packages/rust-tools/src/interfaces/mcp.rs"
+  "$root/packages/rust-tools/src/infrastructure/transport.rs"
+  "$root/packages/rust-tools/src/application/execution.rs"
+  "$root/packages/rust-tools/src/infrastructure/security.rs"
+  "$root/packages/rust-tools/src/infrastructure/auth.rs"
 )
 for file in "${required[@]}"; do test -f "$file"; done
 
-transport="$root/packages/rust-tools/infrastructure/src/transport.rs"
-protocol="$root/packages/rust-tools/interfaces/src/mcp.rs"
+transport="$root/packages/rust-tools/src/infrastructure/transport.rs"
+protocol="$root/packages/rust-tools/src/interfaces/mcp.rs"
 
 # Keep the published endpoint on the stateless 2026 transport. Legacy
 # compatibility may still exist in code, but the canonical protocol constant
