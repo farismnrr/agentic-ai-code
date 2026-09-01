@@ -35,14 +35,14 @@ pnpm build:tools
 Run the current Rust CLI during development:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- curl \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- curl \
   https://example.com
 ```
 
 POST example:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- curl \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- curl \
   https://httpbin.org/post \
   --request POST \
   --header 'Content-Type: application/json' \
@@ -57,7 +57,7 @@ Use the binary help as the authoritative CLI reference:
 
 ```bash
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- curl --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- curl --help
 ```
 
 Do **not** document or rely on `npx @ai-code/curl-tool ...`; the package no longer exposes an npm CLI bin mapping.

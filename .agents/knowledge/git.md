@@ -21,7 +21,7 @@ Implementation branches base from current `main`. The default delivery is always
 
 ## Repository verification policy
 
-This repository intentionally has **no CI workflow** and has a **mandatory stack-aware local pre-commit guardrail** for normal local commits. Web tests live under top-level `test/`; Rust tests use Cargo's package-local `tests/` directories.
+This repository intentionally has **no CI workflow** and has a **mandatory stack-aware local pre-commit guardrail** for normal local commits. Web tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`.
 
 After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit). Every normal local commit must pass:
 
@@ -39,7 +39,7 @@ See the canonical [`../memories/README.md`](../memories/README.md#repository-pol
 
 ## Test layout policy
 
-Web tests live under top-level `test/`; Rust integration tests live in Cargo package-local `tests/` directories. Production files must not contain inline tests. `scripts/` is reserved for structural guardrails and hook installation, not feature acceptance scripts or plan-numbered verifiers.
+Web tests live under top-level `test/`; Rust integration tests live under `packages/rust-tools/tests/`. Production files must not contain inline tests. `scripts/` is reserved for structural guardrails and hook installation, not feature acceptance scripts or plan-numbered verifiers.
 
 ## Working a plan or task
 

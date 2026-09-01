@@ -32,14 +32,14 @@ pnpm build:tools
 Run a search with the current Rust CLI:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- searxng \
   'how to build a web scraper'
 ```
 
 Specify another SearXNG endpoint with `--base-url`:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng \
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- searxng \
   'Nuxt documentation' \
   --base-url https://searx.example.com
 ```
@@ -49,7 +49,7 @@ The CLI default remains `http://127.0.0.1:8888`. It requests `/search?q=...&form
 Use the binary help as the authoritative CLI reference:
 
 ```bash
-cargo run --manifest-path packages/rust-tools/cli/Cargo.toml --bin ai-tools -- searxng --help
+cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- searxng --help
 ```
 
 Do **not** document or rely on `npx @ai-code/searxng-search-tool ...`; the package no longer exposes an npm CLI bin mapping.

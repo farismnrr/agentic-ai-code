@@ -45,7 +45,7 @@ pnpm exec nuxt build --dotenv .env.example
 
 printf 'release-build: building ai-tools %s for %s...\n' "$version" "$target"
 cargo build \
-  --manifest-path packages/rust-tools/cli/Cargo.toml \
+  --manifest-path packages/rust-tools/Cargo.toml \
   --release \
   --locked \
   --target "$target" \

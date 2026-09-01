@@ -1,0 +1,69 @@
+[package]
+name = "ai-tools"
+version = "0.0.13"
+edition = "2021"
+rust-version = "1.88.0"
+
+[features]
+# Non-default feature used only by deterministic GitHub provider fixtures.
+test-gh-provider = []
+
+[[bin]]
+name = "ai-tools"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5.17", features = ["derive", "env"] }
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "charset", "macos-system-configuration", "http2"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+url = "2.5"
+thiserror = "1.0"
+shell-words = "1.1.1"
+ipnet = "2.12.1"
+libc = "0.2.189"
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower = { version = "0.5", features = ["limit"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["formatting"] }
+base64 = "0.22"
+ring = "0.17"
+rusqlite = { version = "0.37", features = ["bundled"] }
+jsonschema = { version = "0.49.9", default-features = false }
+jsonwebtoken = { version = "11.0.0", features = ["aws_lc_rs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.33"
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = ["grpc-tonic", "trace"] }
+
+[[example]]
+name = "capability_policy_check"
+path = "examples/core/capability_policy_check.rs"
+
+[[example]]
+name = "workspace_path_check"
+path = "examples/core/workspace_path_check.rs"
+
+[[example]]
+name = "plan044a_issue_reads_acceptance"
+path = "examples/plan044a/issue_reads_acceptance.rs"
+required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044a_issue_mutations_acceptance"
+path = "examples/plan044a/issue_mutations_acceptance.rs"
+required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044a_issue_transitions_acceptance"
+path = "examples/plan044a/issue_transitions_acceptance.rs"
+required-features = ["test-gh-provider"]
+
+[[example]]
+name = "plan044b_actions_acceptance"
+path = "examples/plan044b_actions_acceptance.rs"
+required-features = ["test-gh-provider"]

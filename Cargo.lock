@@ -26,6 +26,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai-tools"
+version = "0.0.13"
+dependencies = [
+ "axum",
+ "base64",
+ "clap",
+ "ipnet",
+ "jsonschema",
+ "jsonwebtoken",
+ "libc",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "reqwest",
+ "ring",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "shell-words",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -332,31 +364,6 @@ name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
-
-[[package]]
-name = "cli"
-version = "0.0.13"
-dependencies = [
- "axum",
- "base64",
- "clap",
- "libc",
- "opentelemetry",
- "opentelemetry_sdk",
- "relay-application",
- "relay-core",
- "relay-infrastructure",
- "relay-interfaces",
- "reqwest",
- "serde",
- "serde_json",
- "shell-words",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
-]
 
 [[package]]
 name = "cmake"
@@ -1744,84 +1751,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "relay-application"
-version = "0.0.13"
-dependencies = [
- "base64",
- "libc",
- "relay-core",
- "relay-interfaces",
- "ring",
- "serde",
- "serde_json",
- "shell-words",
- "time",
- "tokio",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "relay-core"
-version = "0.0.13"
-dependencies = [
- "clap",
- "ipnet",
- "libc",
- "serde",
- "serde_json",
- "shell-words",
- "thiserror 1.0.69",
- "url",
-]
-
-[[package]]
-name = "relay-infrastructure"
-version = "0.0.13"
-dependencies = [
- "axum",
- "base64",
- "clap",
- "ipnet",
- "jsonwebtoken",
- "libc",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "relay-application",
- "relay-core",
- "relay-interfaces",
- "reqwest",
- "ring",
- "rusqlite",
- "serde",
- "serde_json",
- "shell-words",
- "time",
- "tokio",
- "tower",
- "tower-http 0.5.2",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "relay-interfaces"
-version = "0.0.13"
-dependencies = [
- "axum",
- "base64",
- "jsonschema",
- "relay-core",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "reqwest"
