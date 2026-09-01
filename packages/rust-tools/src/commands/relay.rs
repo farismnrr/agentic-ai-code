@@ -1,18 +1,25 @@
+#[cfg(target_os = "linux")]
 use ai_tools::core::config::{Command, ServerConfig};
+#[cfg(target_os = "linux")]
 use ai_tools::infrastructure::pidfile::Pidfile;
+#[cfg(target_os = "linux")]
 use ai_tools::infrastructure::transport::create_router_with_jobs_and_hooks;
+#[cfg(target_os = "linux")]
 use std::net::SocketAddr;
+#[cfg(target_os = "linux")]
 use std::sync::Arc;
+#[cfg(target_os = "linux")]
 use tokio::signal;
 
-// Bubblewrap (bwrap) is a Linux-only tool. Sandboxed execution is not supported
-// on other platforms. Emit a compile-time warning to make this visible.
+// Bubblewrap (bwrap) is a Linux-only tool. The portable binaries retain the
+// relay command in their CLI surface for discoverability, but fail explicitly
+// at runtime rather than making the whole binary impossible to build.
 #[cfg(not(target_os = "linux"))]
-compile_error!(
-    "relay-agent sandboxed execution requires Linux (bubblewrap/bwrap). \
-     Build with a *-unknown-linux-gnu target only."
-);
+pub async fn run(_cli: ai_tools::core::config::Cli) -> Result<(), Box<dyn std::error::Error>> {
+    Err("relay-agent sandboxed execution requires Linux (bubblewrap/bwrap)".into())
+}
 
+#[cfg(target_os = "linux")]
 pub async fn run(cli: ai_tools::core::config::Cli) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(unix)]
     if unsafe { libc::geteuid() } == 0 {

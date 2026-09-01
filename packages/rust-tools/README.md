@@ -106,20 +106,39 @@ The old JavaScript parity harness is obsolete and is not a current verification 
 
 ## Release policy
 
-There is **no automated GitHub Actions release workflow**. Native releases are a manual/operator action after local verification.
+There is **no automated GitHub Actions release workflow**. Native releases are
+a manual/operator action after local verification. The native version is
+independent from the Nuxt web beta version; the release bundle records both.
 
-The supported relay release target remains **`x86_64-unknown-linux-gnu`** because production containment requires Linux + Bubblewrap. Do not document macOS/Windows relay support merely because simpler sibling CLI binaries may compile there.
+The unified `ai-tools` binary is packaged for these targets:
+
+- `x86_64-unknown-linux-gnu` as a `.tar.gz` plus the direct binary;
+- `x86_64-apple-darwin` as a `.tar.gz` plus the direct binary;
+- `x86_64-pc-windows-gnu` as a `.zip` plus the `.exe` direct binary.
+
+The `relay` subcommand remains Linux-only because production containment
+requires Bubblewrap. macOS and Windows artifacts provide the portable CLI
+surfaces; their existence does not imply non-Linux relay support.
 
 When publishing native artifacts manually:
 
 - build from the reviewed commit with the pinned Rust toolchain;
+- install the requested Rust targets and `cargo-zigbuild` when the host is not
+  one of those targets;
 - run the mandatory local commit gate plus applicable Rust security checks;
-- build the reviewed release bundle with `pnpm release:build vX.Y.Z`;
-- publish the native archive and generated `SHA256SUMS` from the exact stable tag with `pnpm release:publish vX.Y.Z`;
-- keep publish operations fail-closed to a clean `main` checkout whose requested tag points at `HEAD` and is already present on `origin`;
-- do not weaken sandbox/platform contracts merely to broaden the release matrix.
+- build the reviewed release bundle with `pnpm release:build vX.Y.Z[-beta]`;
+- publish the generated archives, direct binaries, metadata, and `SHA256SUMS`
+  with `pnpm release:publish vX.Y.Z[-beta]`;
+- keep publish operations fail-closed to a clean `main` checkout whose
+  requested web tag points at `HEAD` and is already present on `origin`;
+- do not weaken sandbox/platform contracts merely to broaden the release
+  matrix.
 
-The GitHub Release publishes the direct `ai-tools-x86_64-unknown-linux-gnu` asset required by the UI, a `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` archive, and `SHA256SUMS`. The same publish command builds and pushes the web image to GHCR for `linux/amd64` only. ARM64 is not part of the supported web-image release matrix unless a native/remote ARM64 builder is introduced and reviewed.
+The same publish command builds and pushes the web image to GHCR for
+`linux/amd64` only. Stable web images use `vX.Y.Z`, `X.Y.Z`, and `latest`;
+beta images use the `vX.Y.Z[-beta]` and `X.Y.Z[-beta]` version tags and do not
+move `latest`. ARM64 is not part of the supported web-image release matrix
+unless a native/remote ARM64 builder is introduced and reviewed.
 
 ## CLI notes
 
