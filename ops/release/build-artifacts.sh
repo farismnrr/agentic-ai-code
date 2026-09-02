@@ -13,18 +13,12 @@ tag="${1:-}"
 [[ "$#" -eq 1 ]] || fail 'usage: ops/release/build-artifacts.sh vX.Y.Z[-prerelease]'
 [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?)$ ]] \
   || fail 'usage: ops/release/build-artifacts.sh vX.Y.Z[-prerelease]'
-nuxt_version="${BASH_REMATCH[1]}"
+cli_version="${BASH_REMATCH[1]}"
 
 target_list=(
   x86_64-unknown-linux-gnu
   x86_64-apple-darwin
   x86_64-pc-windows-gnu
-)
-web_manifests=(
-  package.json
-  packages/curl-tool/package.json
-  packages/searxng-search-tool/package.json
-  packages/terminal-tool/package.json
 )
 native_manifests=(
   packages/relay-agent/package.json
@@ -34,12 +28,6 @@ native_manifests=(
 package_version() {
   node -p "require('./$1').version"
 }
-
-for manifest in "${web_manifests[@]}"; do
-  actual="$(package_version "$manifest")"
-  [[ "$actual" == "$nuxt_version" ]] \
-    || fail "$manifest version is $actual, expected Nuxt version $nuxt_version"
-done
 
 metadata_json="$(cargo metadata \
   --manifest-path packages/rust-tools/Cargo.toml \
@@ -61,8 +49,10 @@ rust_package_name="$(printf '%s' "$metadata_json" | node --input-type=module -e 
   process.stdout.write(packages[0].name)
 ')" || fail 'unable to resolve the ai-tools Cargo package'
 [[ "$rust_package_name" == "ai-tools" ]] || fail 'the native release package must be named ai-tools'
-[[ "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || fail "ai-tools version must be stable semver, got $rust_version"
+[[ "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] \
+  || fail "ai-tools version must be semver, got $rust_version"
+[[ "$rust_version" == "$cli_version" ]] \
+  || fail "ai-tools version is $rust_version, expected CLI release version $cli_version"
 
 for manifest in "${native_manifests[@]}"; do
   actual="$(package_version "$manifest")"
@@ -85,19 +75,12 @@ done
 host_target="$(rustc -vV | sed -n 's/^host: //p')"
 [[ -n "$host_target" ]] || fail 'unable to determine the active Rust host target'
 
-printf 'release-build: verifying web and native gates...\n'
-pnpm exec nuxt prepare --dotenv .env.example
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm guardrail
-pnpm audit:web
+printf 'release-build: verifying native CLI gates...\n'
+pnpm lint:rust
+pnpm typecheck:rust
+pnpm test:rust
+pnpm guardrail:rust
 pnpm audit:rust
-
-printf 'release-build: building Nuxt %s...\n' "$nuxt_version"
-NUXT_SESSION_PASSWORD='build-only-session-password-not-for-runtime' \
-NUXT_DATABASE_ENFORCE_LEAST_PRIVILEGE=false \
-  pnpm exec nuxt build --dotenv .env.example
 
 build_target() {
   local target="$1"
@@ -222,7 +205,7 @@ head="$(git rev-parse HEAD)"
 metadata_path="$release_dir/RELEASE-METADATA.json"
 node --input-type=module -e '
   import fs from "node:fs"
-  const [path, releaseTag, nuxtVersion, rustVersion, commit, ...targets] = process.argv.slice(1)
+  const [path, releaseTag, rustVersion, commit, ...targets] = process.argv.slice(1)
   const artifacts = targets.map((target) => {
     const windows = target === "x86_64-pc-windows-gnu"
     return {
@@ -234,13 +217,12 @@ node --input-type=module -e '
   fs.writeFileSync(path, JSON.stringify({
     schemaVersion: 1,
     releaseTag,
-    nuxtVersion,
     aiToolsVersion: rustVersion,
     commit,
     targets,
     artifacts,
   }, null, 2) + "\n")
-' "$metadata_path" "$tag" "$nuxt_version" "$rust_version" "$head" "${target_list[@]}"
+' "$metadata_path" "$tag" "$rust_version" "$head" "${target_list[@]}"
 release_files+=("RELEASE-METADATA.json")
 
 (
@@ -250,8 +232,7 @@ release_files+=("RELEASE-METADATA.json")
 )
 
 printf 'release-build: created release bundle for tag %s\n' "$tag"
-printf '  Nuxt: %s\n' "$nuxt_version"
-printf '  ai-tools: %s\n' "$rust_version"
+printf '  ai-tools CLI: %s\n' "$rust_version"
 printf '  commit: %s\n' "$head"
 for file in "${release_files[@]}" SHA256SUMS; do
   printf '  %s\n' "$release_dir/$file"
