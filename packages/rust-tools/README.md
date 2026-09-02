@@ -107,8 +107,10 @@ The old JavaScript parity harness is obsolete and is not a current verification 
 ## Release policy
 
 There is **no automated GitHub Actions release workflow**. Native releases are
-a manual/operator action after local verification. The native version is
-independent from the Nuxt web beta version; the release bundle records both.
+a manual/operator action after local verification. The native `ai-tools`
+version is independent from the Nuxt web version and is published through a
+GitHub Release containing only the CLI artifacts. The Nuxt application is
+published separately as a Docker image to GHCR.
 
 The unified `ai-tools` binary is packaged for these targets:
 
@@ -126,19 +128,20 @@ When publishing native artifacts manually:
 - install the requested Rust targets and `cargo-zigbuild` when the host is not
   one of those targets;
 - run the mandatory local commit gate plus applicable Rust security checks;
-- build the reviewed release bundle with `pnpm release:build vX.Y.Z[-beta]`;
+- build the reviewed CLI bundle with `pnpm release:build vX.Y.Z[-beta]`;
 - publish the generated archives, direct binaries, metadata, and `SHA256SUMS`
-  with `pnpm release:publish vX.Y.Z[-beta]`;
-- keep publish operations fail-closed to a clean `main` checkout whose
-  requested web tag points at `HEAD` and is already present on `origin`;
+  with `pnpm release:publish:cli vX.Y.Z[-beta]`;
+- keep the CLI publisher fail-closed to a clean `main` checkout whose
+  requested CLI tag points at `HEAD` and is already present on `origin`;
 - do not weaken sandbox/platform contracts merely to broaden the release
   matrix.
 
-The same publish command builds and pushes the web image to GHCR for
-`linux/amd64` only. Stable web images use `vX.Y.Z`, `X.Y.Z`, and `latest`;
-beta images use the `vX.Y.Z[-beta]` and `X.Y.Z[-beta]` version tags and do not
-move `latest`. ARM64 is not part of the supported web-image release matrix
-unless a native/remote ARM64 builder is introduced and reviewed.
+The separate `pnpm release:publish:container vX.Y.Z[-beta]` command builds and
+pushes the Nuxt web image to GHCR for `linux/amd64` and `linux/arm64`. Docker
+Desktop on Windows and macOS runs this Linux-based image; native Windows and
+macOS executables remain CLI release artifacts. Stable web images use
+`vX.Y.Z`, `X.Y.Z`, and `latest`; beta images use the `vX.Y.Z[-beta]` and
+`X.Y.Z[-beta]` version tags and do not move `latest`.
 
 ## CLI notes
 

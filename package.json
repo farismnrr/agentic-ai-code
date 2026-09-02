@@ -1,6 +1,6 @@
 {
   "name": "ai-code",
-  "version": "0.1.0-beta",
+  "version": "0.1.1-beta",
   "private": true,
   "type": "module",
   "scripts": {
@@ -28,6 +28,8 @@
     "db:migrate": "drizzle-kit migrate",
     "release:build": "bash ops/release/build-artifacts.sh",
     "release:publish": "bash ops/release/publish.sh",
+    "release:publish:cli": "bash ops/release/publish.sh",
+    "release:publish:container": "bash ops/release/publish-container.sh",
     "audit:web": "pnpm audit --prod --audit-level=moderate",
     "audit:rust": "CARGO_HOME=.tmp/cargo-audit-home cargo audit",
     "start": "node --import ./otel-preload.mjs ./ops/runtime-web-entry.mjs"

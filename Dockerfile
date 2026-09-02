@@ -1,10 +1,13 @@
-FROM node:22-slim AS base
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+FROM --platform=$BUILDPLATFORM node:22-slim AS build-base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV CI=true
 RUN corepack enable
 
-FROM base AS runtime-tools
+FROM node:22-slim AS runtime-tools
 # node:22-slim ships almost nothing beyond coreutils/findutils/grep/sed/awk —
 # the terminal tool's own system prompt (see buildWorkspaceSystemPrompt in
 # server/api/chat.post.ts) tells the model to use `tree`, `grep`/`rg`, `git`,
@@ -21,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-FROM base AS build
+FROM --platform=$BUILDPLATFORM build-base AS build
 WORKDIR /app
 # The native Rust workspace, relay, and native-tool adapter packages are
 # deliberately excluded by .dockerignore. Rust is deployed as the separate
@@ -32,9 +35,18 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile --config.ignore-scripts=true
 RUN NUXT_SESSION_PASSWORD="build-only-session-password-not-for-runtime" NUXT_DATABASE_ENFORCE_LEAST_PRIVILEGE=false pnpm build
-# Runtime keeps only declared production dependencies; build/lint/type tooling
-# must not expand the deployed attack surface.
-RUN pnpm prune --prod --config.ignore-scripts=true
+
+# Install production dependencies for the target image architecture. The
+# application compile above is JavaScript-only and runs on BUILDPLATFORM, so
+# arm64/other targets do not need to execute the Nuxt compiler through QEMU.
+FROM node:22-slim AS runtime-deps
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV CI=true
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --prod --filter . --frozen-lockfile --config.ignore-scripts=true
 
 FROM runtime-tools AS runtime
 ARG VERSION=dev
@@ -53,9 +65,9 @@ COPY --chown=node:node --from=build /app/.output ./.output
 # ever loads, entirely outside Nitro's bundler — so Nitro's dependency
 # tracer never sees its imports and won't copy @opentelemetry/* into
 # .output/server/node_modules the way it does for packages the app itself
-# imports. Copy the full node_modules from the build stage instead, so both
-# the preload script and the app resolve everything the normal Node way.
-COPY --chown=node:node --from=build /app/node_modules ./node_modules
+# imports. Copy the target-platform production node_modules separately, so
+# both the preload script and the app resolve everything the normal Node way.
+COPY --chown=node:node --from=runtime-deps /app/node_modules ./node_modules
 # Agent profiles and approved skill instructions are runtime inputs for the
 # bounded subagent executor. Keep only these reviewed instruction roots in the
 # production image; plans/contracts/history remain build-time repository data.
