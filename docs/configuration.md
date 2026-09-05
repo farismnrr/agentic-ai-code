@@ -188,9 +188,9 @@ See [security](security.md#terminal-filesystem-and-credential-boundary).
 
 Tools use dedicated MCP capabilities first for operations they cover. Terminal
 is the fallback for builds, tests, package managers, interpreters, scripts,
-pipelines and unsupported CLI operations. `systemctl --user` / `journalctl
---user` can be invoked, but HOME scope does not expose the host user bus or
-journals. Controlling host services requires a separately reviewed capability.
+pipelines and unsupported CLI operations. Host `systemctl --user` / `journalctl
+--user` operations are intentionally unavailable through generic terminal
+execution: HOME scope does not expose the host user bus or journals.
 
 The Rust relay accepts CLI flags and matching environment variables. Important remote-mode values include:
 

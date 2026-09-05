@@ -1,12 +1,12 @@
 # Plan 065 — Broad User-Space Terminal and MCP-First Tool Routing
 
-**Status:** IMPLEMENTED / LOCALLY VERIFIED — host user-service bridge intentionally deferred
+**Status:** CLOSED / LOCALLY VERIFIED — host user-service bridge intentionally excluded
 **Goal:** Make the relay terminal behave like a practical operator-user shell across the configured execution root while preserving hard credential and privilege boundaries, and make coding agents prefer dedicated MCP tools before falling back to terminal execution.
 
 **Success Criteria:**
 - A relay configured with `--execution-root "$HOME"` can run normal user-space workflows from any non-protected path beneath the operator home instead of being restricted to one repository sandbox root.
 - `terminal_exec` remains bounded by the configured execution root / authorized workspace roots; this plan does not create unrestricted root-filesystem write authority.
-- Standard user-space workflows work through terminal execution where no dedicated MCP capability is appropriate: builds, tests, package managers, interpreters, repository scripts, process inspection, user services, and ordinary network commands when terminal networking is already enabled by operator policy.
+- Standard user-space workflows work through terminal execution where no dedicated MCP capability is appropriate: builds, tests, package managers, interpreters, repository scripts, process inspection, sandbox-local service commands, and ordinary network commands when terminal networking is already enabled by operator policy.
 - Privilege escalation remains impossible through direct execution and through shell wrapping; at minimum `sudo`, `su`, `doas`, `pkexec`, and `runas` remain denied, and the sandbox must not expose an equivalent root-capable bridge by accident.
 - Credential-bearing files/directories remain unreadable and unwritable from terminal execution, including current protected-path families such as `.ssh`, `.gnupg`, `.aws`, `.config/gcloud`, `.config/gh`, `.docker`, `.kube`, `.npmrc`, `.netrc`, `.pypirc`, `.git-credentials`, Cargo credentials, and `.env*` except the existing non-secret `.env.example` exception.
 - Relay terminal children continue to receive a scrubbed environment rather than inheriting operator secrets, and credential-agent/keyring sockets remain unavailable unless a separately reviewed dedicated capability intentionally exposes narrowly scoped material.
@@ -154,7 +154,7 @@ Use this selection order whenever the active tool set contains a suitable dedica
 2. **Structured Git tools (`git_*`)** for Git operations they cover.
 3. **Code-intelligence tools (`code_*`)** for symbols/definitions/references/hover/diagnostics/rename preview.
 4. **Dedicated network/integration tools** such as `web_search`, `http_fetch`, forge/change-request tools, `ssh_readonly_exec`, and `telegram_send_message`.
-5. **Terminal** for build/test/package-manager/interpreter/script/process/user-service/composite-shell workflows, or when no active dedicated tool fully covers the required operation.
+5. **Terminal** for build/test/package-manager/interpreter/script/process/sandbox-local-service/composite-shell workflows, or when no active dedicated tool fully covers the required operation.
 
 A dedicated tool should win when it provides equivalent semantics because it is more bounded, structured, observable, and policy-aware.
 
@@ -304,7 +304,7 @@ If any serialized tool description changes, follow the repository’s existing s
   - `telegram_send_message`;
   - terminal and terminal-job tools.
 - [ ] Generate guidance only for categories actually present in the active tool set.
-- [ ] State the terminal fallback cases positively and narrowly: build, test, package manager, interpreter, script, process/user-service inspection, composite shell workflow, or no equivalent dedicated tool.
+- [ ] State the terminal fallback cases positively and narrowly: build, test, package manager, interpreter, script, process/sandbox-local-service inspection, composite shell workflow, or no equivalent dedicated tool.
 - [ ] State that a dedicated tool should be used when it fully covers the requested operation even if terminal could also do it.
 - [ ] State specifically that Git operations covered by active `git_*` tools should not be executed via terminal.
 - [ ] Keep the generated prompt bounded and stable; do not dump full JSON schemas into the system prompt.
@@ -391,7 +391,7 @@ If any serialized tool description changes, follow the repository’s existing s
 **Steps:**
 - [ ] Change `terminal_exec` description to say it is for shell/CLI workflows when no dedicated MCP tool fully covers the operation.
 - [ ] Remove the current wording that advertises Git as a normal generic terminal use case.
-- [ ] Add explicit examples that remain terminal-native: builds, tests, package managers, interpreters, scripts, process/user-service commands.
+- [ ] Add explicit examples that remain terminal-native: builds, tests, package managers, interpreters, scripts, process/sandbox-local-service commands.
 - [ ] Apply equivalent fallback wording to `terminal_job_start` so long-running terminal jobs follow the same policy.
 - [ ] Keep schema and annotations unchanged unless a separately justified implementation need arises.
 - [ ] If serialized catalog output changed, create the next immutable snapshot according to existing test convention; keep v13 byte-for-byte historical.
@@ -614,7 +614,7 @@ If any serialized tool description changes, follow the repository’s existing s
   - `file_read`/`text_search` instead of `cat`/`rg` when the structured tool covers the need;
   - `code_definition`/`code_references` instead of grep-based semantic guessing;
   - `ssh_readonly_exec` instead of generic SSH;
-  - terminal for `cargo test`, `pnpm`, interpreters, scripts, `systemctl --user`, `journalctl --user`, and other terminal-native workflows.
+  - terminal for `cargo test`, `pnpm`, interpreters, scripts, and other terminal-native workflows that do not require a host privileged/session bridge.
 - [ ] Clarify that terminal fallback is allowed when the active dedicated surface does not cover the operation.
 - [ ] Clarify that using a dedicated tool is a routing preference, while privilege/credential boundaries are hard enforcement.
 
@@ -883,7 +883,7 @@ If any serialized tool description changes, follow the repository’s existing s
 - [x] Dedicated `git_*` tools are explicitly preferred over terminal Git for covered operations.
 - [x] Structured file/search/edit/code tools are preferred over shell equivalents when they cover the task.
 - [x] Dedicated HTTP/forge/SSH/Telegram capabilities are preferred when present and suitable.
-- [ ] Terminal can perform host `systemctl --user` / `journalctl --user` operations. Deferred: exposing the host user D-Bus or journal would create a Bubblewrap escape into an operator-credentialed user manager; this requires a separately reviewed narrow capability.
+- [x] Host `systemctl --user` / `journalctl --user` operations are intentionally excluded from generic terminal execution by operator decision; no host user D-Bus or journal bridge is mounted.
 - [x] Terminal remains available for builds, tests, package managers, interpreters, scripts, composite shell workflows, and genuinely uncovered operations.
 - [x] Delegated agents receive the same principle derived from effective child authority.
 - [x] No prompt recommends a tool unavailable to that turn/child.

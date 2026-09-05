@@ -28,10 +28,10 @@ fails closed on incomplete traversal or the 500,000-entry limit. Do not bypass
 that failure by pruning still-visible directories. Use narrower authorized
 roots for homes above the bound. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
 
-`systemctl --user` and `journalctl --user` remain terminal-native CLIs, but host
-user-service control and host journals are not exposed: `/run/user`, the host
-session/system bus and host journal mounts remain absent. Opening those
-bridges needs a separately reviewed capability, not a HOME-scope side effect.
+Host `systemctl --user` and `journalctl --user` are intentionally unavailable
+through generic terminal execution: `/run/user`, the host session/system bus,
+and host journal mounts remain absent. They remain excluded from HOME-scope
+terminal authority.
 
 ## Environment and runtime config
 
