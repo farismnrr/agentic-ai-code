@@ -3,10 +3,10 @@
 ## MCP-first tool selection
 
 Use the actual tools supplied for this turn: dedicated MCP capability first,
-terminal fallback second. Prefer `git_status`/`git_diff` and other covered
-`git_*` operations over terminal Git; `file_read`, `text_search`, directory,
-edit and patch tools over equivalent shell commands; and `code_definition` /
-`code_references` for semantic navigation. Prefer active `http_fetch`,
+terminal fallback second. Prefer retained remote Git tools (`git_fetch`,
+`git_push`, `git_remote_*`) over equivalent terminal transport; use
+`file_read`, `text_search`, directory,
+edit and patch tools over equivalent shell commands. Prefer active `http_fetch`,
 `web_search`, forge/change-request tools, `ssh_readonly_exec` and
 `telegram_send_message` for their supported tasks. Availability never grants
 permission to send messages or mutate external state.
@@ -75,7 +75,7 @@ When an agent is operating through the local Masih Awam MCP relay, treat the rel
 
 - The relay binds loopback, but an MCP bridge may preserve an external HTTP `Host` such as `mcp.example.com`. Keep `localhost:<port>` and `127.0.0.1:<port>` implicit, and add only the exact bridge authority with `--allowed-host` / `RELAY_ALLOWED_HOSTS`. Never disable Host validation or trust `X-Forwarded-Host`.
 - Non-browser MCP clients may omit `Origin`. A missing Origin is valid only when the relay has a configured browser Origin policy; when an Origin is present it must still match the configured `--origin` exactly.
-- The relay does not inherit the operator's full `$PATH`. System tools under the fixed safe PATH are available automatically; user-owned runtimes must be exposed explicitly with repeated `--toolchain-path` / `RELAY_TOOLCHAIN_PATH`. Explicit toolchain directories are prepended to the safe PATH so operator-selected runtimes take precedence over default entries. Typical coding directories are `$HOME/.cargo/bin`, `$HOME/.bun/bin`, and the active fnm Node installation `bin` directory. Prefer explicit reviewed directories over inheriting the login-shell PATH.
+- The relay does not inherit the operator's full `$PATH`. System tools under the fixed safe PATH are available automatically, and common user-owned runtime bins are discovered from the owner profile (Cargo/Rust, Node managers, Bun, pnpm/npm prefixes, and bounded Conda environments) only after ownership and permission checks. Explicit `--toolchain-path` / `RELAY_TOOLCHAIN_PATH` entries remain available for other reviewed runtimes; the login-shell PATH is never inherited.
 - Docker and Tailscale are separate authority expansions. Enable them only when the task needs them with `--allow-docker` and `--allow-tailscale`; the relay binds only their configured Unix sockets. Docker daemon access is substantially more privileged than ordinary sandboxed command execution.
 - `terminal_exec` uses direct executable + argv semantics. Argument values are passed verbatim and may begin with `-` or `--`; prefer `command="cargo", args=["--help"]` or `command="cargo", args=["check", "--locked"]` rather than encoding child flags as relay options. The `command` executable itself must resolve from the relay safe PATH: do not use `./script.sh` or another executable path there; run repository scripts through an approved interpreter such as `command="bash", args=["scripts/check.sh"]`. Shell operators such as `&&`, `|`, redirects, glob expansion, and command substitution are not interpreted unless the agent explicitly invokes a shell such as `sh -lc` and doing so remains compatible with the execution policy.
 - For a coding-capable relay, verify the actual runtime after restart instead of assuming configuration worked: a simple command, Node/package manager, Rust toolchain, Tailscale when enabled, and Docker when enabled.

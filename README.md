@@ -42,11 +42,8 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
 - workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
-- Git inspection and bounded local mutation: `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, branch/stage/commit/merge/rebase/conflict primitives;
-- remote Git and forge delivery: validated remote discovery/fetch/push/branch cleanup plus forge-neutral change-request list/get/create/update/checks/merge backed by a reviewed forge adapter;
-- LSP code intelligence: `code_symbols`, `code_definition`, `code_references`, `code_implementations`, `code_hover`, `code_diagnostics`, `code_rename_preview`;
 - execution: `terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`;
-- web: `http_fetch`, `web_search`.
+- Full-only integrations: remote Git transport, `ssh_readonly_exec`, `http_fetch`, `web_search`, forge/issues/workflows, alerts, and Telegram.
 
 The relay also exposes bounded read-only repository resources for manifest, approved agent guidance, Git status, and HEAD metadata. The first-party agent UI renders tool calls by capability category, keeps approval inputs bounded/sensitivity-aware, and surfaces task/context/subagent/background/orchestration state without exposing hidden reasoning. Agent mode can define bounded dependency graphs, dispatch independent child work through the existing subagent/background runtime, require writer worktrees, reconcile child evidence, and gate delivery until reviewed writer work is integrated and high-severity/conflicting findings are cleared.
 
@@ -57,7 +54,7 @@ OpenTelemetry/Loki, and opaque process/Git/delegated work is never presented as
 an exact source diff without relay-owned proof. See
 [configuration](docs/configuration.md#workspace-activity-ledger).
 
-The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem.
+The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem. The public catalog is v15: Primary has 15 core tools and Full has 52 retained tools; dedicated MCP capabilities are preferred and terminal is the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered operations.
 
 ## Repository layout
 

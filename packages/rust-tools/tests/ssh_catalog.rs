@@ -3,75 +3,81 @@ use ai_tools::interfaces::mcp::{find_tool_for_profile, tool_catalog, validate_to
 use serde_json::json;
 
 #[test]
-fn dedicated_ssh_tool_is_portable_and_present_in_both_profiles() {
-    for profile in [ToolProfile::Full, ToolProfile::Primary] {
-        let tool = find_tool_for_profile("ssh_readonly_exec", profile)
-            .expect("dedicated read-only SSH tool must be discoverable");
-        let annotations = tool.annotations.expect("SSH annotations");
-        assert!(annotations.read_only_hint);
-        assert!(!annotations.destructive_hint);
-        assert!(annotations.idempotent_hint);
-        assert!(annotations.open_world_hint);
+fn dedicated_ssh_tool_is_portable_and_full_profile_only() {
+    let tool = find_tool_for_profile("ssh_readonly_exec", ToolProfile::Full)
+        .expect("dedicated read-only SSH tool must be discoverable in Full");
+    let annotations = tool.annotations.expect("SSH annotations");
+    assert!(annotations.read_only_hint);
+    assert!(!annotations.destructive_hint);
+    assert!(annotations.idempotent_hint);
+    assert!(annotations.open_world_hint);
+    assert_eq!(
+        tool.execution
+            .as_ref()
+            .and_then(|value| value.get("taskSupport"))
+            .and_then(serde_json::Value::as_str),
+        Some("optional")
+    );
+    assert!(find_tool_for_profile("ssh_readonly_exec", ToolProfile::Primary).is_none());
+}
+
+#[test]
+fn catalog_v15_snapshot_matches_current_reduced_surface() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(".agents/contracts/067-tool-catalog-v15.json");
+    let expected = std::fs::read_to_string(root).expect("catalog v15 snapshot");
+    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v15");
+    let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
+    assert_eq!(actual, expected);
+    assert_eq!(actual.as_array().map(Vec::len), Some(52));
+}
+
+#[test]
+fn historical_catalog_snapshots_are_immutable() {
+    use ring::digest::{digest, SHA256};
+    for (path, expected_hash) in [
+        (
+            "../../../.agents/contracts/063-tool-catalog-v13.json",
+            "606f16cab046283c77b7c5bf773c2dbfa51cf62d6488b63855705392e25a479e",
+        ),
+        (
+            "../../../.agents/contracts/065-tool-catalog-v14.json",
+            "6db382b1dd0cbce72190d87794470323caa29b9981a225f4dcba95b9457942b8",
+        ),
+    ] {
+        let bytes = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join(path.trim_start_matches("../../../")),
+        )
+        .expect("historical catalog");
+        let actual_hash = digest(&SHA256, &bytes)
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         assert_eq!(
-            tool.execution
-                .as_ref()
-                .and_then(|value| value.get("taskSupport"))
-                .and_then(serde_json::Value::as_str),
-            Some("optional")
+            actual_hash, expected_hash,
+            "historical snapshot changed: {path}"
         );
     }
 }
 
 #[test]
-fn catalog_v14_snapshot_matches_current_static_surface() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(".agents/contracts/065-tool-catalog-v14.json");
-    let expected = std::fs::read_to_string(root).expect("catalog v14 snapshot");
-    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v14");
-    let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn historical_catalog_is_immutable_and_only_terminal_descriptions_change() {
-    use ring::digest::{digest, SHA256};
-    let bytes = include_bytes!("../../../.agents/contracts/063-tool-catalog-v13.json");
-    assert_eq!(
-        digest(&SHA256, bytes)
-            .as_ref()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>(),
-        "606f16cab046283c77b7c5bf773c2dbfa51cf62d6488b63855705392e25a479e"
-    );
-    let mut historical: serde_json::Value = serde_json::from_slice(bytes).unwrap();
-    let actual = serde_json::to_value(tool_catalog()).unwrap();
-    for name in ["terminal_exec", "terminal_job_start"] {
-        let new = actual
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|tool| tool["name"] == name)
-            .unwrap();
-        assert!(new["description"]
-            .as_str()
-            .unwrap()
-            .contains("dedicated MCP tool"));
-        let old = historical
-            .as_array_mut()
-            .unwrap()
-            .iter_mut()
-            .find(|tool| tool["name"] == name)
-            .unwrap();
-        old["description"] = new["description"].clone();
-    }
-    assert_eq!(historical, actual);
+fn primary_profile_contains_only_the_fifteen_core_tools() {
+    let tools = ai_tools::interfaces::mcp::tool_catalog_for_profile(ToolProfile::Primary);
+    assert_eq!(tools.len(), 15);
+    assert!(tools
+        .iter()
+        .all(|tool| ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.contains(&tool.name)));
+    assert!(!tools.iter().any(|tool| tool.name.starts_with("git_")));
+    assert!(!tools.iter().any(|tool| tool.name.starts_with("code_")));
 }
 
 #[test]
 fn dedicated_ssh_schema_accepts_structured_diagnostics_and_rejects_raw_options() {
-    let tool = find_tool_for_profile("ssh_readonly_exec", ToolProfile::Primary)
+    let tool = find_tool_for_profile("ssh_readonly_exec", ToolProfile::Full)
         .expect("dedicated read-only SSH tool");
     validate_tool_arguments(
         &tool,

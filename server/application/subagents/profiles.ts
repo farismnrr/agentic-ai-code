@@ -4,7 +4,19 @@ import { SUBAGENT_BUDGET_LIMITS } from './policy.ts'
 
 const MAX_PROFILE_BYTES = 64 * 1024
 const MAX_LIST = 32
-const TOOL_NAMES = new Set(['directory_list', 'file_search', 'text_search', 'file_read', 'git_status', 'git_diff', 'git_log', 'git_show', 'git_blame', 'code_symbols', 'code_definition', 'code_references', 'code_hover', 'code_diagnostics', 'code_rename_preview', 'web_search', 'http_fetch', 'terminal_exec', 'file_write', 'file_edit', 'apply_patch'])
+const TOOL_NAMES = new Set([
+  'terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel',
+  'directory_list', 'file_search', 'text_search', 'file_read', 'file_write', 'file_edit', 'apply_patch',
+  'workspace_add', 'workspace_list', 'workspace_get', 'workspace_remove',
+  'git_remote_list', 'git_remote_branch_get', 'git_fetch', 'git_push',
+  'ssh_readonly_exec', 'http_fetch', 'web_search', 'telegram_send_message',
+  'change_request_list', 'change_request_get', 'change_request_create', 'change_request_update', 'change_request_checks', 'change_request_merge',
+  'issue_list', 'issue_get', 'issue_create', 'issue_update', 'issue_comment', 'issue_close', 'issue_reopen',
+  'workflow_list', 'workflow_get', 'workflow_run_list', 'workflow_run_get', 'workflow_run_jobs', 'workflow_job_log_preview',
+  'dependabot_alert_list', 'dependabot_alert_get', 'code_scanning_alert_list', 'code_scanning_alert_get',
+  'secret_scanning_alert_list', 'secret_scanning_alert_get', 'secret_scanning_alert_locations',
+  'workflow_dispatch', 'workflow_run_rerun', 'workflow_run_cancel'
+])
 const EFFECT_NAMES = new Set<SubagentEffect>(['workspace_read', 'workspace_write', 'workspace_delete', 'git_read', 'process_exec', 'network_read', 'network_write', 'external_mutation', 'privileged_bridge'])
 const NAME_RE = /^[a-z][a-z0-9-]{0,31}$/
 const SKILL_RE = /^[a-z][a-z0-9-]{0,63}$/

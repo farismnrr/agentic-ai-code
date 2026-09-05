@@ -3,7 +3,7 @@ name: explore
 description: Inspect a workspace and return bounded path, symbol, and Git evidence.
 model_policy: fast
 tools:
-  allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, git_blame, code_symbols, code_definition, code_references, code_hover, code_diagnostics]
+  allow: [directory_list, file_search, text_search, file_read]
   deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, git_read]

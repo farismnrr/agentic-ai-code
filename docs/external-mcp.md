@@ -73,10 +73,11 @@ The relay will fail closed if any of these do not match.
 
 ## 6. Verify tool discovery
 
-The current Plan-040 source catalog exposes 50 tools. In addition to workspace/execution/network/LSP tools, it includes bounded local Git mutation, credential-isolated remote Git, and forge-neutral change-request operations. If the deployed relay has not yet been upgraded to the Plan-040 artifact, live external MCP client discovery may still show the previous catalog until deployment and connector refresh.
+The immutable v15 source catalog exposes 52 retained tools. Primary advertises the 15 core terminal/workspace tools; Full advertises all 52. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Refresh/recreate a client connection after upgrading the relay so `tools/list` is rediscovered.
 
 ```text
 terminal_exec
+ssh_readonly_exec
 http_fetch
 web_search
 directory_list
@@ -85,36 +86,25 @@ file_write
 file_edit
 file_read
 text_search
-git_status
-git_diff
-git_log
-git_show
-git_blame
-git_branch_list
-git_branch_create
-git_branch_switch
-git_stage
-git_unstage
-git_commit
-git_operation_status
-git_merge_start
-git_merge_continue
-git_merge_abort
-git_rebase_start
-git_rebase_continue
-git_rebase_abort
-git_branch_delete
 git_remote_list
 git_remote_branch_get
 git_fetch
 git_push
-git_remote_branch_delete
+workspace_add
+workspace_list
+workspace_get
+workspace_remove
 change_request_list
 change_request_get
 change_request_create
 change_request_update
 change_request_checks
 change_request_merge
+apply_patch
+telegram_send_message
+terminal_job_start
+terminal_job_get
+terminal_job_cancel
 issue_list
 issue_get
 issue_create
@@ -128,84 +118,33 @@ workflow_run_list
 workflow_run_get
 workflow_run_jobs
 workflow_job_log_preview
-apply_patch
-code_symbols
-code_definition
-code_references
-code_implementations
-code_hover
-code_diagnostics
-code_rename_preview
-terminal_job_start
-terminal_job_get
-terminal_job_cancel
+dependabot_alert_list
+dependabot_alert_get
+code_scanning_alert_list
+code_scanning_alert_get
+secret_scanning_alert_list
+secret_scanning_alert_get
+secret_scanning_alert_locations
+workflow_dispatch
+workflow_run_rerun
+workflow_run_cancel
+
 ```
 
-The native workspace contracts are:
+The retained structured contracts include:
 
 ```text
-directory_list(path=".", cwd?, depth=2, max_entries=100)
-file_search(pattern, cwd?, max_results=100)
-text_search(query, cwd?, glob?, regex=false, case_sensitive=true, max_results=50)
-file_read(path, cwd?, offset_line=1, limit_lines=200)
-file_edit(path, old_text, new_text, cwd?, replace_all=false)
-file_write(path, content, cwd?, create_parents=false, overwrite=false)
-apply_patch(patch, cwd?, dry_run=false)
-git_status(cwd?, include_untracked=true)
-git_diff(cwd?, mode=working|staged|refs, base_ref?, head_ref?, path?, context_lines?, max_bytes?)
-git_log(cwd?, ref?, path?, max_results?)
-git_show(cwd?, ref, path?, include_patch=true, max_bytes?)
-git_blame(cwd?, path, start_line?, end_line?)
-git_branch_list(cwd?)
-git_branch_create(cwd?, name, start_point?)
-git_branch_switch(cwd?, name)
-git_stage(cwd?, paths[])
-git_unstage(cwd?, paths[])
-git_commit(cwd?, message)
-git_operation_status(cwd?)
-git_merge_start(cwd?, ref)
-git_merge_continue(cwd?)
-git_merge_abort(cwd?)
-git_rebase_start(cwd?, ref)
-git_rebase_continue(cwd?)
-git_rebase_abort(cwd?)
-git_branch_delete(cwd?, name)
-git_remote_list(cwd?)
-git_remote_branch_get(cwd?, remote="origin", branch)
-git_fetch(cwd?, remote="origin", branch)
-git_push(cwd?, remote="origin", branch, set_upstream=false)
-git_remote_branch_delete(cwd?, remote="origin", branch, expected_sha)
-change_request_list(cwd?, remote="origin", state="open")
-change_request_get(cwd?, remote="origin", number)
-change_request_create(cwd?, remote="origin", head_branch, base_branch, title, body, draft=false)
-change_request_update(cwd?, remote="origin", number, title?, body?, base_branch?)
-change_request_checks(cwd?, remote="origin", number)
-change_request_merge(cwd?, remote="origin", number, expected_head_sha, strategy="squash")
-issue_list(cwd?, remote="origin", state="open", labels=[])
-issue_get(cwd?, remote="origin", number)
-issue_create(cwd?, remote="origin", title, body="", labels=[])
-issue_update(cwd?, remote="origin", number, title?, body?, add_labels=[], remove_labels=[])
-issue_comment(cwd?, remote="origin", number, body)
-issue_close(cwd?, remote="origin", number, reason="completed"|"not_planned"|"duplicate", duplicate_of?, comment?)
-issue_reopen(cwd?, remote="origin", number, comment?)
-workflow_list(cwd?, remote="origin")
-workflow_get(cwd?, remote="origin", workflow_id)
-workflow_run_list(cwd?, remote="origin", workflow_id?, branch?, commit_sha?, status?)
-workflow_run_get(cwd?, remote="origin", run_id)
-workflow_run_jobs(cwd?, remote="origin", run_id)
-workflow_job_log_preview(cwd?, remote="origin", job_id, failed_only=true, max_lines=100)
-code_symbols(path=..., cwd?, max_results?) or code_symbols(query=..., cwd?, max_results?)
-code_definition(...)
-code_references(...)
-code_implementations(...)
-code_hover(...)
-code_diagnostics(...)
-code_rename_preview(...)
+directory_list, file_search, text_search, file_read, file_edit, file_write, apply_patch
+git_remote_list, git_remote_branch_get, git_fetch, git_push
+change_request_*, issue_*, workflow_*
+ssh_readonly_exec, http_fetch, web_search, telegram_send_message
+workspace_add, workspace_list, workspace_get, workspace_remove
+terminal_exec, terminal_job_start, terminal_job_get, terminal_job_cancel
 ```
 
 Server hard limits remain authoritative even when a caller supplies its own limit. `directory_list` caps depth at 4 and returned entries at 100; `file_search` and `text_search` cap returned matches at 100; `file_read` caps a request at 1,000 lines and 256 KiB; `file_edit` and `file_write` cap file/payload content at 1 MiB. Mutation defaults are deliberately conservative: an ambiguous `file_edit` fails, and `file_write` never replaces an existing file unless `overwrite=true`.
 
-Use native Git tools for status/diff/history plus bounded branch/stage/commit/merge/rebase/conflict workflows, remote-Git tools for validated fetch/push/remote-branch operations, `change_request_*` for the GitHub PR lifecycle through the forge-neutral contract, the `code_*` tools for bounded language intelligence/diagnostics, and `apply_patch` for bounded multi-hunk existing-file changes. `code_symbols(query=...)` uses the configured language server's workspace-symbol capability for Rust and TypeScript-family workspaces; unsupported server capabilities fail explicitly rather than falling back to a custom index. Vue document symbols are supported with the reviewed Vue bridge, while Vue definition/references/hover/diagnostics remain bounded-empty with the currently reviewed `@vue/language-server` build and must not be presented as semantic parity. Keep `terminal_exec` for builds, tests, package managers, interpreters, project scripts, and unsupported operations; ordinary terminal execution remains credential-isolated and is not the GitHub delivery bridge. Terminal arguments use direct argv semantics: values beginning with `-` or `--` are valid child-process arguments (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`). The `command` executable must resolve from the relay safe PATH; invoke repository scripts through an approved interpreter, for example `command="bash", args=["scripts/check.sh"]`, rather than using `./scripts/check.sh` as the command. `terminal_exec` also supports the current MCP task lifecycle for clients that negotiate it; the `terminal_job_*` tools use the same argv contract and are the explicit polling/cancellation fallback for first-party or non-Tasks clients.
+Prefer an active dedicated MCP capability when it fully covers the operation: workspace tools for structured file work, remote Git transport for fetch/push, forge/issues/workflows for hosted changes, SSH diagnostics for remote inspection, and HTTP/web/messaging tools for their supported requests. Keep `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and unsupported CLIs. Terminal arguments use direct argv semantics and the same credential, privilege, SSH, and socket boundaries as the synchronous path; `terminal_job_*` provides explicit polling/cancellation for clients without MCP Tasks.
 
 The same MCP endpoint can also advertise the bounded read-only `workspace://<repo-name>/{manifest,agent-guidance,status,head}` resources. Resource availability does not grant arbitrary file browsing.
 
@@ -255,6 +194,6 @@ It does not automatically prove every negative case, hosted-Nuxt token ownership
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a external MCP client routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
 
-Primary currently exposes 33 common coding tools, including local `terminal_exec`, first-class `ssh_readonly_exec`, `terminal_job_start/get/cancel`, workspace list/search/read/edit/write/patch, common local Git inspection/stage/commit, remote fetch/push, change-request reads/checks, and core LSP navigation/diagnostics. Full currently exposes 102 tools. `ssh_readonly_exec` is a normal discoverable MCP tool and does not require client-specific SSH parsing; clients provide only structured alias/command/args while the relay owns SSH config/key resolution and read-only enforcement. Primary does not advertise MCP Tasks; longer generic terminal work can still use `terminal_job_*`. Full retains the canonical task-capable behavior.
+Primary exposes 15 core tools for terminal plus structured workspace work. Full exposes the immutable v15 retained catalog of 52 tools, including remote Git transport, HTTP/web, Full-only SSH diagnostics, forge/issues/workflows, alerts, and Telegram. Local Git and LSP wrappers are not in the public catalog; terminal remains the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered CLI operations. `ssh_readonly_exec` is a normal discoverable Full tool and does not require client-side SSH parsing; clients provide only structured alias/command/args while the relay owns SSH config/key resolution and read-only enforcement. The v15 snapshot is immutable; do not rewrite v13 or v14 snapshots.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where external MCP client Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.

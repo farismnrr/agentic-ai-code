@@ -62,7 +62,7 @@ CLI login. Tool visibility does not weaken OAuth, workspace containment, or
 relay policy.
 
 Start with read-only operations such as `directory_list`, `file_search`,
-`file_read`, `git_status`, or `text_search`. Then use a small bounded command
+`file_read`, `text_search`, or `directory_list`. Then use a small bounded command
 and inspect its result before approving higher-risk operations. Client-side
 confirmation is useful UX, but the relay remains the server-side authority.
 

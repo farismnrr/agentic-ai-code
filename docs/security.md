@@ -120,10 +120,10 @@ credential store; it gets no writable workspace or optional local sockets.
 
 MCP-first selection is advice derived from the final active tool keys in
 primary and child prompts. It cannot grant missing tools, bypass read-only or
-manual approvals, or replace the relay security checks. Covered Git/file/code/
-HTTP/forge/SSH/messaging operations should use their dedicated capabilities;
-terminal remains available for builds, tests, package managers and unsupported
-operations. No blanket Git executable ban or discovery tool is introduced.
+manual approvals, or replace the relay security checks. Covered file, remote
+Git, HTTP/forge/SSH/messaging operations should use their active dedicated
+capabilities; local Git and language-server work remains terminal fallback.
+No blanket Git executable ban or discovery tool is introduced.
 
 ## Deterministic checks
 

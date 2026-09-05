@@ -3,7 +3,7 @@ name: plan
 description: Produce a grounded implementation plan from read-only repository inspection.
 model_policy: default
 tools:
-  allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, git_show, code_symbols, code_definition, code_references, code_hover, code_diagnostics]
+  allow: [directory_list, file_search, text_search, file_read]
   deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, git_read]

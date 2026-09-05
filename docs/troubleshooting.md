@@ -53,7 +53,7 @@ for the exact current CLI surface.
 
 ## Relay command cannot find `node`, `pnpm`, or `cargo`
 
-The relay intentionally does not inherit arbitrary host PATH. Add only the reviewed user-owned toolchain directories with `--toolchain-path` or `RELAY_TOOLCHAIN_PATH`.
+The relay intentionally does not inherit arbitrary host PATH. Common owner runtimes are discovered from safe profile directories automatically; add other reviewed toolchain directories with `--toolchain-path` or `RELAY_TOOLCHAIN_PATH`.
 
 Do not fix this with login-shell startup files that reintroduce the full host environment.
 

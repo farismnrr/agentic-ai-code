@@ -1,7 +1,32 @@
 # Plan 067 — Terminal-First Multi-OS Execution and Context Hardening
 
-**Status:** READY — reviewed for major-change risks, implementation not started
+**Status:** IN PROGRESS — Linux/Bubblewrap and catalog/routing implementation complete; cross-platform backends and full resource-quota matrix remain unverified
 **Baseline:** `main` at `a7e4760a990b8e23afb59149c93d9ec752ebe04a` (Plan 065 closure)
+
+## Implementation update — 2026-09-06
+
+Implemented on branch `plan/067-terminal-first-hardening` from baseline
+`ced531fb44b9b28a9d213b1078ef51bcc2d3cba1`: the public catalog is now the
+immutable v15 52-tool retained surface (SHA-256
+`38e4d27f101fc94679c8f0e4f4f8bc8225c69bc60204c728d97a8c0c12d1af84`), Primary is a 15-tool
+terminal/workspace core, and active primary/child prompts derive MCP-first
+routing advice from the final supplied tool keys. Terminal job starts share
+the validated terminal invocation path, normalized task envelopes,
+owner/session-scoped lookup and cancellation, scoped idempotency identities,
+bounded per-owner admission, and explicit Bubblewrap `--new-session` plus the
+existing no-new-privileges/capability/masking controls. Safe runtime discovery
+now covers common owner-local Node/Cargo/Bun/pnpm/npm/Conda layouts with
+permission checks and narrow read-only mounts. Documentation and agent
+guidance describe the v15 surface, `$HOME` semantics, credential/privilege/SSH
+boundaries, and terminal fallback.
+
+Focused Rust tests and the full Rust workspace suite pass after these changes.
+The macOS/Windows native sandbox backends, OS-specific resource enforcement
+(CPU/memory/process/FD), poll-rate quotas, and live runtime restart proof are
+not implemented or claimed here. The relay remains Linux/Bubblewrap-only and
+must fail closed on unsupported platforms; this plan cannot be marked
+**CLOSED / VERIFIED** until the claimed platform matrix and quota evidence are
+completed or split into an explicitly accepted follow-up.
 
 ## Goal
 
@@ -331,7 +356,7 @@ existing terminal/task tests
 `packages/rust-tools/src/interfaces/mcp/catalog.rs`;
 transport task handlers and Rust task tests
 
-- [ ] Give `terminal_job_start` the same `execution_mode` and
+- [x] Give `terminal_job_start` the same `execution_mode` and
       `idempotency_key` semantics as `terminal_exec`, or make it a thin
       compatibility wrapper over the same validated start function.
 - [ ] Define the exact compatibility response for legacy clients: current
@@ -351,7 +376,7 @@ transport task handlers and Rust task tests
       async calls, so a timeout-triggered async retry resolves the original job
       instead of starting a second process. Remove the identity only according
       to the existing bounded task-retention policy.
-- [ ] Bind every job to the authenticated owner and agent/session scope that
+- [x] Bind every job to the authenticated owner and agent/session scope that
       started it. `tasks/get`, `tasks/cancel`, and `terminal_job_*` must reject
       cross-owner or cross-child access with the same bounded not-found/error
       shape, without revealing whether another owner's task exists.
@@ -380,11 +405,11 @@ request disconnect, owner/session isolation, and no duplicate process execution.
       after context compaction. Never include raw sensitive args.
 - [ ] Ensure timed-out and cancelled tasks retain the last known output and
       explicit state without being presented as successful completion.
-- [ ] Ensure polling after request abort returns the latest task envelope and a
+- [x] Ensure polling after request abort returns the latest task envelope and a
       clear “do not rerun” continuation message.
 - [ ] Ensure unknown/expired tasks produce bounded, non-sensitive errors and do
       not include command text or environment values.
-- [ ] Add URL-aware redaction for Git remote userinfo, bearer/basic-auth URL
+- [x] Add URL-aware redaction for Git remote userinfo, bearer/basic-auth URL
       forms, and credential-shaped command output before it reaches task JSON,
       activity detail, logs, or the model. Keep ordinary non-secret Git URLs
       readable enough for diagnostics.
@@ -495,10 +520,10 @@ tests
 **Files:** `packages/rust-tools/src/application/execution/sandbox.rs`,
 `sandbox/masks.rs`, `sandbox/paths.rs`, Linux security tests
 
-- [ ] Keep Bubblewrap mandatory on Linux; keep isolated namespaces, no-new-privs,
+- [x] Keep Bubblewrap mandatory on Linux; keep isolated namespaces, no-new-privs,
       capability drop, environment clearing, protected-path discovery, generic
       SSH masking, privilege-broker masking, and explicit socket opt-ins.
-- [ ] Audit the generated Bubblewrap argv against the current upstream
+- [x] Audit the generated Bubblewrap argv against the current upstream
       security guidance: use a new session when a TTY is possible, bind a
       parent-death policy, close inherited file descriptors, and apply seccomp
       or equivalent filters where the existing contract requires them. Add a
@@ -508,10 +533,10 @@ tests
       output limits using cgroups/rlimits or the closest supported primitive;
       record each limit in the task's execution status and fail closed when a
       required limit cannot be installed.
-- [ ] Permit `$HOME` as the sandbox root only after bounded recursive masking
+- [x] Permit `$HOME` as the sandbox root only after bounded recursive masking
       succeeds; fail closed on scan overflow, metadata errors, symlinked
       protected entries, or protected-state overlap.
-- [ ] Prove ordinary files work across multiple home subdirectories and nested
+- [x] Prove ordinary files work across multiple home subdirectories and nested
       credential families remain inaccessible.
 
 ## TASK-031 — Add reviewed macOS execution containment
@@ -607,7 +632,7 @@ worktree handling, workspace tools, terminal security tests, active docs
 **Files:** `core/protected_paths.rs`, `sandbox/masks.rs`, platform mask modules,
 Rust security tests
 
-- [ ] Preserve the canonical protected-path source; do not create a second
+- [x] Preserve the canonical protected-path source; do not create a second
       terminal-only list.
 - [ ] Define platform-specific equivalents for credential stores (for example
       Windows `.ssh`/`.gnupg`/`.aws` locations, `%APPDATA%` and `%USERPROFILE%`
@@ -620,30 +645,30 @@ Rust security tests
       dependency/cache trees; if the bounded scan cannot finish, return a safe
       refusal and recommend a narrower execution root. Record benchmark results
       for realistic 100k, 500k, and multi-million-entry home fixtures.
-- [ ] Cover top-level and nested `.env*`, all listed credential families,
+- [x] Cover top-level and nested `.env*`, all listed credential families,
       Cargo credentials, sockets, symlink tricks, and `.env.example` exception.
 
 ## TASK-041 — Shell-wrapped privilege denial
 
 **Files:** `terminal_policy.rs`, sandbox mask/profile modules, security tests
 
-- [ ] Keep direct executable validation for `sudo`, `su`, `doas`, `pkexec`, and
+- [x] Keep direct executable validation for `sudo`, `su`, `doas`, `pkexec`, and
       `runas`.
-- [ ] Mask/deny each broker at every safe-PATH spelling in every backend so
+- [x] Mask/deny each broker at every safe-PATH spelling in every backend so
       `sh -lc`, Bash/Fish, PowerShell, Python, Node, or equivalent wrappers
       cannot invoke it.
-- [ ] Prove no-new-privs/restricted-token behavior and absence of privileged
+- [x] Prove no-new-privs/restricted-token behavior and absence of privileged
       sockets, D-Bus brokers, setuid helpers, or equivalent escalation paths.
 
 ## TASK-042 — Keep SSH and optional sockets separate
 
 **Files:** sandbox profiles, terminal policy, SSH tests, configuration docs
 
-- [ ] Keep generic `ssh`/`scp`/`sftp` unavailable and dedicated
+- [x] Keep generic `ssh`/`scp`/`sftp` unavailable and dedicated
       `ssh_readonly_exec` functional.
-- [ ] Keep Docker/Tailscale exposure opt-in only; do not expose host sockets,
+- [x] Keep Docker/Tailscale exposure opt-in only; do not expose host sockets,
       agent/keyring sockets, or credential helpers through profile discovery.
-- [ ] Keep remote Git network delivery on the credential-isolated dedicated
+- [x] Keep remote Git network delivery on the credential-isolated dedicated
       bridge. Terminal Git may inspect or edit local remote configuration, but
       output containing URL userinfo, PAT-like query fragments, or helper
       credentials must be redacted and terminal Git must not receive bridge
@@ -657,17 +682,17 @@ Rust security tests
 `packages/rust-tools/src/application/execution.rs`, Git/LSP dispatch modules,
 new `.agents/contracts/067-tool-catalog-v15.json`, catalog tests/docs
 
-- [ ] Remove client-visible local Git wrappers and LSP/code-intelligence tools
+- [x] Remove client-visible local Git wrappers and LSP/code-intelligence tools
       from the current catalog while retaining only code used by retained
       capabilities or validation.
-- [ ] Keep terminal lifecycle, workspace authority, structured filesystem,
+- [x] Keep terminal lifecycle, workspace authority, structured filesystem,
       remote Git bridge, forge/integration, SSH, HTTP/web, and Telegram surfaces
       according to the 52-tool target.
-- [ ] Keep primary profile at the agreed 15 core tools; optional integrations
+- [x] Keep primary profile at the agreed 15 core tools; optional integrations
       remain explicitly configurable.
-- [ ] Retain v14 unchanged and add a deterministic v15 snapshot; update only
+- [x] Retain v14 unchanged and add a deterministic v15 snapshot; update only
       the current snapshot pointer/contract.
-- [ ] Make tools removed from the current catalog fail as unknown before
+- [x] Make tools removed from the current catalog fail as unknown before
       dispatch; do not leave a hidden callable path merely because an internal
       dispatcher still recognizes the historical name.
 
@@ -690,15 +715,15 @@ selection APIs and UI, shared tool identity helpers, migration tests
 **Files:** `server/application/chat/tool-selection-policy.ts`,
 `execute-chat-turn.ts`, subagent prompt/runtime, routing tests
 
-- [ ] Keep one shared policy composer derived from the final model-facing tool
+- [x] Keep one shared policy composer derived from the final model-facing tool
       map for primary and delegated agents.
-- [ ] Prefer active structured filesystem, Git, network, SSH, forge, and
+- [x] Prefer active structured filesystem, Git, network, SSH, forge, and
       messaging tools when they fully cover the request.
-- [ ] Describe terminal as the fallback for builds, tests, package managers,
+- [x] Describe terminal as the fallback for builds, tests, package managers,
       interpreters, scripts, process inspection, sandbox-local services,
       pipelines, and uncovered operations. Do not ban legitimate terminal Git
       use globally or imply a host user-bus bridge that is not configured.
-- [ ] Ensure the policy never names a disabled tool, grants authority, changes
+- [x] Ensure the policy never names a disabled tool, grants authority, changes
       approval/effect intersection, or invents a discovery call.
 
 # PHASE-06 — Agent/subagent context and fallback ergonomics
