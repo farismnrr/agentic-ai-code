@@ -19,6 +19,8 @@ pub(super) struct ToolCallContext<'a> {
     pub(super) execute_async: bool,
     pub(super) idempotency_key: Option<&'a str>,
     pub(super) request_fingerprint: String,
+    pub(super) owner: &'a str,
+    pub(super) session: Option<&'a str>,
     pub(super) request_started: Instant,
 }
 
@@ -33,17 +35,36 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
         execute_async,
         idempotency_key,
         request_fingerprint,
+        owner,
+        session,
         request_started,
     } = context;
     if call.name == "terminal_job_start" {
         let tool_dispatch_started = Instant::now();
-        let task_id = match crate::application::execution::start_terminal_job(
-            &call.arguments,
-            &state.config,
-            &state.jobs,
-        )
-        .await
-        {
+        let task_id = match match idempotency_key {
+            Some(key) => {
+                crate::application::execution::start_terminal_job_for_with_idempotency(
+                    &call.arguments,
+                    &state.config,
+                    &state.jobs,
+                    key,
+                    request_fingerprint.clone(),
+                    owner,
+                    session,
+                )
+                .await
+            }
+            None => {
+                crate::application::execution::start_terminal_job_for(
+                    &call.arguments,
+                    &state.config,
+                    &state.jobs,
+                    owner,
+                    session,
+                )
+                .await
+            }
+        } {
             Ok(task_id) => task_id,
             Err(err) => {
                 record_activity_outcome(
@@ -62,7 +83,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 )));
             }
         };
-        let task = match state.jobs.get(&task_id).await {
+        let task = match state.jobs.get_for(&task_id, owner, session).await {
             Some(task) => task,
             None => {
                 record_activity_outcome(
@@ -82,7 +103,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
             }
         };
         let result = mcp::with_timing_meta(
-            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+            task.create_task_json(),
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
@@ -133,7 +154,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
             }
         };
         let task = if call.name == "terminal_job_cancel" {
-            match state.jobs.cancel(id).await {
+            match state.jobs.cancel_for(id, owner, session).await {
                 Ok(task) => task,
                 Err(err) => {
                     record_activity_outcome(
@@ -153,7 +174,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 }
             }
         } else {
-            match state.jobs.get(id).await {
+            match state.jobs.get_for(id, owner, session).await {
                 Some(task) => task,
                 None => {
                     record_activity_outcome(
@@ -174,7 +195,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
             }
         };
         let result = mcp::with_timing_meta(
-            json!({ "resultType": "complete", "content": [{ "type": "text", "text": serde_json::to_string(&task.job_json()).unwrap_or_default() }], "isError": false }),
+            task.task_json(state.config.completed_job_ttl_ms),
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
@@ -205,13 +226,15 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
 
     if execute_async {
         let tool_dispatch_started = Instant::now();
-        let task_id = match crate::application::execution::start_tool_task(
+        let task_id = match crate::application::execution::start_tool_task_for(
             tool,
             &call.arguments,
             &state.config,
             &state.jobs,
             idempotency_key,
             request_fingerprint,
+            owner,
+            session,
         )
         .await
         {
@@ -233,7 +256,7 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 )));
             }
         };
-        let task = match state.jobs.get(&task_id).await {
+        let task = match state.jobs.get_for(&task_id, owner, session).await {
             Some(task) => task,
             None => {
                 record_activity_outcome(

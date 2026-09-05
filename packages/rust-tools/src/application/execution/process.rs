@@ -276,7 +276,11 @@ async fn finish(
     });
     if let Some(job) = manager.jobs.lock().await.get_mut(id) {
         let finished_at = now_ms();
-        job.snapshot.state = state;
+        // Transport cancellation commits the public state before process
+        // reaping completes. A later timeout or exit must not overwrite it.
+        if job.snapshot.state != JobState::Cancelled {
+            job.snapshot.state = state;
+        }
         job.snapshot.finished_at = Some(finished_at);
         job.snapshot.execution_duration_ms = execution_duration_ms;
         job.snapshot.last_updated_at = finished_at;

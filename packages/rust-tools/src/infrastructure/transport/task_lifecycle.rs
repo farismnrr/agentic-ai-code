@@ -1,6 +1,6 @@
 //! Deferred lifecycle completion for MCP task-backed tool calls.
 
-use super::tools::{activity_result_detail, activity_result_summary};
+use super::tools::tool_helpers::{activity_result_detail, activity_result_summary};
 use super::AppState;
 use crate::application::activity::{self, ActivityEvent, Evidence, Status};
 use crate::application::hooks::HookEvent;

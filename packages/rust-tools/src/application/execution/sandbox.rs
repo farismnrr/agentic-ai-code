@@ -297,6 +297,37 @@ fn spawn_with_profile(
             }
         }
     }
+    // Discovered user runtimes (Conda environments, nvm/fnm/Volta/asdf, npm
+    // and pnpm bins) must be visible when the authorized workspace is narrower
+    // than HOME. Mount only the validated executable directory, never its
+    // surrounding profile or credential store.
+    for discovered in super::toolchain::safe_path_entries(config) {
+        let Ok(canonical) = std::fs::canonicalize(&discovered) else {
+            continue;
+        };
+        if canonical.starts_with(sandbox_root)
+            || canonical.starts_with(Path::new("/usr"))
+            || canonical.starts_with(Path::new("/bin"))
+            || canonical.starts_with(Path::new("/sbin"))
+            || canonical.starts_with(Path::new("/lib"))
+            || canonical.starts_with(Path::new("/opt"))
+            || toolchain_roots.contains(&canonical)
+        {
+            continue;
+        }
+        let value = canonical.to_string_lossy().into_owned();
+        args.extend(["--ro-bind".into(), value.clone(), value]);
+        let configured_value = discovered.to_string_lossy().into_owned();
+        if discovered != canonical {
+            paths::add_bwrap_parent_dirs(&mut args, discovered.parent(), &host_home);
+            args.extend([
+                "--symlink".into(),
+                canonical.to_string_lossy().into_owned(),
+                configured_value,
+            ]);
+        }
+        toolchain_roots.insert(canonical);
+    }
     for toolchain_root in &toolchain_roots {
         if !toolchain_root.starts_with(sandbox_root)
             && !toolchain_roots

@@ -18,6 +18,9 @@ pub(super) fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<St
         root.into(),
         root.into(),
         "--unshare-pid".into(),
+        // Keep the command in a fresh session so terminal-native job-control
+        // signals cannot escape into the relay or its parent session.
+        "--new-session".into(),
         "--cap-drop".into(),
         "ALL".into(),
         "--die-with-parent".into(),

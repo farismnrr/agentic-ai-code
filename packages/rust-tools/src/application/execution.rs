@@ -55,6 +55,30 @@ pub async fn start_tool_task(
     idempotency_key: Option<&str>,
     request_fingerprint: String,
 ) -> Result<String, McpError> {
+    start_tool_task_for(
+        tool,
+        arguments,
+        config,
+        manager,
+        idempotency_key,
+        request_fingerprint,
+        "local",
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn start_tool_task_for(
+    tool: &Tool,
+    arguments: &Value,
+    config: &ServerConfig,
+    manager: &Arc<JobManager>,
+    idempotency_key: Option<&str>,
+    request_fingerprint: String,
+    owner: &str,
+    session: Option<&str>,
+) -> Result<String, McpError> {
     if !tool_call_supports_tasks(tool, arguments) {
         return Err(McpError::InvalidRequest(
             "tool does not support task execution".into(),
@@ -75,11 +99,17 @@ pub async fn start_tool_task(
     };
     if let Some(key) = idempotency_key {
         let (job_id, _) = manager
-            .start_with_idempotency_key(key.to_owned(), request_fingerprint, job)
+            .start_with_idempotency_key_for(
+                key.to_owned(),
+                request_fingerprint,
+                job,
+                owner,
+                session,
+            )
             .await?;
         Ok(job_id)
     } else {
-        manager.start(job).await
+        manager.start_for(job, owner, session).await
     }
 }
 
@@ -88,11 +118,43 @@ pub async fn start_terminal_job(
     config: &ServerConfig,
     manager: &Arc<JobManager>,
 ) -> Result<String, McpError> {
+    start_terminal_job_for(arguments, config, manager, "local", None).await
+}
+
+pub async fn start_terminal_job_for(
+    arguments: &Value,
+    config: &ServerConfig,
+    manager: &Arc<JobManager>,
+    owner: &str,
+    session: Option<&str>,
+) -> Result<String, McpError> {
     manager
-        .start(JobKind::Process(requests::build_terminal_invocation(
-            arguments, config, false,
-        )?))
+        .start_for(
+            JobKind::Process(requests::build_terminal_invocation(
+                arguments, config, false,
+            )?),
+            owner,
+            session,
+        )
         .await
+}
+
+pub async fn start_terminal_job_for_with_idempotency(
+    arguments: &Value,
+    config: &ServerConfig,
+    manager: &Arc<JobManager>,
+    key: &str,
+    fingerprint: String,
+    owner: &str,
+    session: Option<&str>,
+) -> Result<String, McpError> {
+    let job = JobKind::Process(requests::build_terminal_invocation(
+        arguments, config, false,
+    )?);
+    let (task_id, _) = manager
+        .start_with_idempotency_key_for(key.to_owned(), fingerprint, job, owner, session)
+        .await?;
+    Ok(task_id)
 }
 
 pub async fn dispatch_tool_call(

@@ -1,6 +1,8 @@
 //! Real Bubblewrap execution against disposable HOME fixtures, never owner secrets.
 #![cfg(target_os = "linux")]
-use ai_tools::application::execution::{start_terminal_job, JobManager, JobSnapshot};
+use ai_tools::application::execution::{
+    start_terminal_job, start_terminal_job_for, JobManager, JobSnapshot,
+};
 use ai_tools::core::config::{ActivityConfig, ServerConfig};
 use serde_json::json;
 use std::{fs, path::Path, process::Command};
@@ -300,4 +302,49 @@ async fn home_fixture_child() {
     let result = shell(&config, &root, "printf must-not-run").await;
     assert_ne!(result.exit_code, Some(0));
     assert!(!result.stdout.contains("must-not-run"));
+}
+
+#[tokio::test]
+async fn background_jobs_are_scoped_to_owner_and_session() {
+    let root = std::env::temp_dir().join(format!("terminal-owner-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let config = ServerConfig {
+        dir: Some(root.to_string_lossy().into()),
+        execution_root: Some(root.to_string_lossy().into()),
+        activity: ActivityConfig {
+            state_dir: Some(root.join("state").to_string_lossy().into()),
+            ..ActivityConfig::default()
+        },
+        ..ServerConfig::default()
+    };
+    fs::create_dir_all(root.join("state")).unwrap();
+    let manager = JobManager::new(config.clone());
+    let id = start_terminal_job_for(
+        &json!({"command":"true", "cwd":root, "timeout_ms":10000}),
+        &config,
+        &manager,
+        "owner-a",
+        Some("session-a"),
+    )
+    .await
+    .unwrap();
+    assert!(manager
+        .get_for(&id, "owner-a", Some("session-a"))
+        .await
+        .is_some());
+    assert!(manager
+        .get_for(&id, "owner-b", Some("session-a"))
+        .await
+        .is_none());
+    assert!(manager
+        .get_for(&id, "owner-a", Some("session-b"))
+        .await
+        .is_none());
+    assert!(manager
+        .cancel_for(&id, "owner-b", Some("session-a"))
+        .await
+        .is_err());
+    let _ = manager.wait(&id).await.unwrap();
+    manager.shutdown().await;
+    fs::remove_dir_all(root).unwrap();
 }
