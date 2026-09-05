@@ -69,7 +69,7 @@ The final rules are:
 - `server/api/**` handles auth, HTTP parsing/validation, use-case invocation, and response adaptation rather than business/persistence ownership. Concrete adapters are composed at the Nitro application-context/plugin boundary, not imported by routes;
 - `server/application/**` owns use-case/business semantics and application-facing contracts without importing concrete infrastructure, Drizzle, H3/Nitro event types, or AI/provider/MCP implementation SDKs;
 - `server/infrastructure/**` implements application contracts and owns concrete DB, provider, AI SDK/LangGraph, MCP, filesystem/network, and similar integrations;
-- `scripts/check-architecture.sh` (run from `pnpm guardrail`) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
+- `scripts/check-architecture.sh` (run from the guardrail lifecycle) enforces application/API import boundaries and representative negative fixtures, including type-only and facade bypasses;
 - frontend components are grouped by feature (`app/components/{chat,workspace,settings,shell}/`), while genuinely cross-feature/landing primitives may remain at the component root;
 - Rust relay transport keeps router/bootstrap composition separate from access-policy/OAuth orchestration and MCP request/tool/task handlers, while focused auth, validation, admission, and observability modules remain the policy owners; application execution/workspace, MCP catalog, and CLI-vs-validated-config responsibilities are likewise split behind stable facades;
 - native Rust remains the executable tool source of truth and sibling TypeScript packages remain integration APIs; Plan 039B adds bounded read-only Git intelligence through fixed Git CLI argv/config and a constrained native `apply_patch` mutation primitive that reuses workspace containment/atomic replacement rather than shelling out to `patch`.
@@ -105,7 +105,7 @@ The remediation also restored application ownership boundaries across API compos
 - `.agents/contracts/` — frozen client-visible contract evidence.
 - `.githooks/pre-commit` — mandatory local commit gate.
 
-The repository intentionally has **no CI workflow**. Web tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`. Production files must not contain inline test modules.
+The repository intentionally has **no CI workflow**. New permanent isolated web unit tests are forbidden; existing `test/unit/` files are legacy/manual coverage. Boundary tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`. Production files must not contain inline test modules.
 
 ## Normal verification
 
@@ -114,12 +114,12 @@ The repository intentionally has **no CI workflow**. Web tests live under top-le
 Every normal local commit must pass:
 
 ```sh
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
 The tracked pre-commit hook runs the same command automatically after `pnpm install`. Never bypass it with `git commit --no-verify` or by disabling `core.hooksPath`.
 
-The guardrail always runs repository-policy, agent-doc, architecture, maintainability, and test-layout checks. It then scopes lint/type/test work by changed stack: web changes run `pnpm lint:web`, `pnpm typecheck:web`, and `pnpm test:web`; Rust changes run `pnpm lint:rust`, `pnpm typecheck:rust`, and `pnpm test:rust`. Cross-stack validation is only justified when both stacks or a real shared contract changed.
+Fast validation runs repository-policy, agent-doc, architecture, test-layout, and touched-stack lint/typecheck checks. `pnpm guardrail:full` adds closure-only maintainability, builds, and declared stack tests; set `AI_CODE_GUARD_RUN_AUDIT=1` for dependency-change audits. `pnpm guardrail:release` adds release builds. Cross-stack validation is only justified when both stacks or a real shared contract changed.
 
 `scripts/` contains guardrails only. Feature behavior belongs in feature-named tests, never plan-numbered `verify-*`/`phase-*` scripts. Operational helpers live under `ops/`.
 
@@ -145,7 +145,7 @@ The production `relay-agent` contract is Linux + Bubblewrap. Do not document mac
 
 ### Test layout and code length
 
-Keep web unit/integration tests under top-level `test/`; keep Rust integration tests under `packages/rust-tools/tests/`. Production files must not contain inline test modules. `scripts/check-test-layout.mjs` enforces this policy through `pnpm guardrail`. The maintainability checker reports files over 400 lines and fails unexplained files over 500 lines.
+Keep web unit/integration tests under top-level `test/`; keep Rust integration tests under `packages/rust-tools/tests/`. Production files must not contain inline test modules. `scripts/check-test-layout.mjs` enforces this policy through the guardrail lifecycle. The maintainability checker is a closure-only gate, reports files over 400 lines, and fails unexplained files over 500 lines.
 
 ## Runtime/config orientation
 

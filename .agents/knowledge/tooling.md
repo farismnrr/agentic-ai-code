@@ -72,25 +72,24 @@ For a general coding relay, prefer `--dir "$HOME"` so the default working direct
 - The native workspace is under `packages/rust-tools/`.
 - Repository development pins **Rust 1.95.0**; `Cargo.toml` separately declares MSRV 1.88.0.
 - `pnpm build:tools` builds the native binaries used by local tool/relay packages.
-- This repository intentionally has **no CI**. Web tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`. Production files contain no inline test modules.
+- This repository intentionally has **no CI**. New permanent isolated web unit tests are forbidden; existing `test/unit/` files are legacy/manual coverage. Boundary tests live under top-level `test/` and `packages/rust-tools/tests/`. Production files contain no inline test modules.
 
-## Mandatory local commit gate
+## Guard lifecycle
 
-`pnpm install` runs [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh), which makes [`.githooks/pre-commit`](../../.githooks/pre-commit) executable and configures local `core.hooksPath=.githooks`.
+`pnpm install` runs [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh), which enables fast pre-commit and main-only full pre-push hooks and configures local `core.hooksPath=.githooks`.
 
-The hook executes the auto-scoped gate:
+The pre-commit hook executes the fast auto-scoped gate:
 
 ```sh
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
-For service-isolated verification, use `pnpm guardrail:nuxt` or
-`pnpm guardrail:rust`. `pnpm guardrail:all` is reserved for a deliberate
-cross-stack contract change. The explicit gates still run repository-wide
-policy/architecture checks, but only the selected service's lint, typecheck,
-tests, and test-layout scan.
+For closure use `pnpm guardrail:full`; for release artifacts use
+`pnpm guardrail:release`. Explicit Nuxt/Rust/all commands remain full gates.
+Fast mode omits builds, audits, and broad test suites; full mode runs only the
+selected/affected stack.
 
-That command always runs repository policy enforcement, agent-doc integrity, architecture checks, maintainability budgets, and test-layout policy. It then runs web or Rust lint/type/test commands only when that stack changed. If an applicable gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
+The lifecycle always runs repository policy enforcement, agent-doc integrity, architecture checks, and test-layout policy. Full/release modes add the closure-only maintainability budget; touched-stack lint/typecheck runs in fast mode, while full mode adds build and declared tests. Dependency audits are explicit with `AI_CODE_GUARD_RUN_AUDIT=1`. If an applicable gate fails, the commit must not be created. Do not use `git commit --no-verify` or alter `core.hooksPath` to bypass it.
 
 `scripts/check-test-layout.mjs` is part of the guardrail. It rejects test-like files outside the approved web/Cargo test locations and inline Rust/JavaScript test markers.
 
@@ -116,4 +115,4 @@ Do not simplify the type gate back to plain `nuxt typecheck`: this repository pr
 
 ### Maintainability checker
 
-`node scripts/check-maintainability.mjs` is the authoritative repository-native source/file-folder budget check and is part of `pnpm guardrail`. It reports >400-line files and 13–15-file folders for review, fails unexplained >500-line files and >15-file folders, excludes generated/vendor/build/migration/evidence-style paths explicitly, and rejects wildcard/broad exceptions. `node scripts/check-maintainability.mjs --self-test` proves representative oversized-file and overfull-folder fixtures fail. Do not create a second threshold configuration elsewhere.
+`node scripts/check-maintainability.mjs` is the authoritative repository-native source/file-folder budget check and runs during full/release closure (or directly through `pnpm guardrail:maintainability`). It reports >400-line files and 13–15-file folders for review, fails unexplained >500-line files and >15-file folders, excludes generated/vendor/build/migration/evidence-style paths explicitly, and rejects wildcard/broad exceptions. `node scripts/check-maintainability.mjs --self-test` proves representative oversized-file and overfull-folder fixtures fail. Do not create a second threshold configuration elsewhere.
