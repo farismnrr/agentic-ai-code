@@ -1,6 +1,9 @@
 use crate::core::error::McpError;
 use std::path::{Path, PathBuf};
 
+pub const PRIVILEGE_BROKERS: &[&str] = &["sudo", "su", "doas", "pkexec", "runas"];
+pub const GENERIC_SSH_CLIENTS: &[&str] = &["ssh", "scp", "sftp"];
+
 pub fn resolve_contained_cwd(
     execution_root: &Path,
     cwd: Option<&str>,
@@ -24,13 +27,13 @@ pub fn validate_executable(binary: &str, allow_docker: bool) -> Result<(), McpEr
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("");
-    if ["sudo", "su", "doas", "pkexec", "runas"].contains(&binary_name) {
+    if PRIVILEGE_BROKERS.contains(&binary_name) {
         return Err(McpError::InvalidRequest(format!(
             "execution of '{}' is forbidden: privilege escalation is not allowed",
             binary_name
         )));
     }
-    if ["ssh", "scp", "sftp"].contains(&binary_name) {
+    if GENERIC_SSH_CLIENTS.contains(&binary_name) {
         return Err(McpError::InvalidRequest(format!(
             "execution of '{}' is unavailable through terminal_exec; use ssh_readonly_exec for remote diagnostics",
             binary_name

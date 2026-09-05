@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { SubagentToolPort } from '../../application/chat/contracts'
 import type { SubagentBudget, SubagentResult } from '#shared/types/subagents'
 import { SubagentRuntime } from '../../application/subagents/runtime'
+import { buildSubagentPrompt } from '../../application/subagents/prompt'
 import { loadAgentProfile, nativeToolMatchesProfile } from '../../application/subagents/profiles'
 import { intersectSubagentAuthority } from '../../application/subagents/policy'
 import { OrchestratorScheduler, ORCHESTRATOR_BUDGETS, ORCHESTRATOR_ROLE_PROFILE, requirementsFitAuthority } from '../../application/orchestration/scheduler'
@@ -49,8 +50,7 @@ const runtime = new SubagentRuntime({
       try {
         const response = await generateText({
           model: model as LanguageModel,
-          system: `${profile.instructions}\n${(context.skill_instructions ?? []).join('\n')}\nReturn JSON with keys status, summary, findings, evidence, validation, remaining_risks. Never include hidden reasoning.`,
-          prompt: JSON.stringify({ ...context, skill_instructions: undefined }),
+          ...buildSubagentPrompt({ instructions: profile.instructions, skills: context.skill_instructions ?? [], context: { ...context, skill_instructions: undefined }, toolNames: Object.keys(tools), maxContextTokens: budget.max_context_tokens }),
           tools,
           toolApproval: scopedMcp.toolApproval,
           toolChoice: 'auto',

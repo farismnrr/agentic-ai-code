@@ -6,10 +6,11 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
 use tokio::process::{Child, Command};
 
+mod masks;
 mod paths;
+use masks::{add_optional_socket, add_protected_paths, mask_protected_file};
 mod ssh_material;
 
 #[derive(Clone, Copy)]
@@ -147,10 +148,6 @@ fn spawn_with_profile(
     profile: SandboxProfile<'_>,
 ) -> Result<Child, std::io::Error> {
     let current_exe = env::current_exe()?;
-    let bin_dir = current_exe
-        .parent()
-        .ok_or_else(|| std::io::Error::other("missing binary directory"))?
-        .to_path_buf();
     let program_path = match &invocation.program {
         InvocationProgram::SelfBinary => current_exe,
         InvocationProgram::Direct(path) => path.clone(),
@@ -175,13 +172,39 @@ fn spawn_with_profile(
     };
     let configured_workspace = std::fs::canonicalize(config.resolved_dir().unwrap_or_default())
         .map_err(|_| std::io::Error::other("invalid workspace directory"))?;
+    // Terminal authority is the containing authorized root, not a repository
+    // guessed from cwd. The execution boundary alone never authorizes siblings.
+    config
+        .ensure_workspaces_initialized()
+        .map_err(|_| std::io::Error::other("workspace authority is unavailable"))?;
+    let authorized_root = if profile.workspace_root.is_none()
+        && invocation.expose_authorized_siblings
+        && !matches!(invocation.security, InvocationSecurity::Ssh { .. })
+    {
+        let guard = config
+            .workspaces
+            .read()
+            .map_err(|_| std::io::Error::other("workspace authority is unavailable"))?;
+        Some(
+            guard
+                .containing_root(invocation.cwd.as_deref().unwrap_or(&configured_workspace))
+                .ok_or_else(|| std::io::Error::other("sandbox root is unauthorized"))?
+                .to_path_buf(),
+        )
+    } else {
+        None
+    };
     let sandbox_root = profile
         .workspace_root
+        .or(authorized_root.as_deref())
         .or(discovered_workspace.as_deref())
         .unwrap_or(&configured_workspace);
-    if sandbox_root == host_home {
+    if sandbox_root == Path::new("/")
+        || !sandbox_root.starts_with(&execution_root)
+        || !config.is_path_contained(sandbox_root)
+    {
         return Err(std::io::Error::other(
-            "workspace directory must not be the runtime HOME",
+            "sandbox root is outside authorized workspace authority",
         ));
     }
     if crate::core::protected_paths::is_protected_path(&execution_root, sandbox_root) {
@@ -200,13 +223,16 @@ fn spawn_with_profile(
     }
     if profile.expose_runtime_extras {
         args.extend(["--ro-bind-try".into(), "/opt".into(), "/opt".into()]);
-        if !bin_dir.starts_with(sandbox_root) {
-            let bin = bin_dir.to_string_lossy().into_owned();
+        if matches!(invocation.program, InvocationProgram::SelfBinary)
+            && !program_path.starts_with(sandbox_root)
+        {
+            let bin = program_path.to_string_lossy().into_owned();
             args.extend(["--ro-bind".into(), bin.clone(), bin]);
         }
     }
     let mut cargo_home = None;
     let mut rustup_home = None;
+    let mut toolchain_roots = std::collections::BTreeSet::new();
     let home_cargo_bin = host_home.join(".cargo/bin");
     let canonical_home_cargo_bin = std::fs::canonicalize(&home_cargo_bin).ok();
     for path in &config.toolchain_paths {
@@ -214,6 +240,7 @@ fn spawn_with_profile(
         let canonical = std::fs::canonicalize(&configured)
             .map_err(|_| std::io::Error::other("invalid toolchain path"))?;
         let canonical_value = canonical.to_string_lossy().into_owned();
+        toolchain_roots.insert(canonical.clone());
         args.extend([
             "--ro-bind".into(),
             canonical_value.clone(),
@@ -225,7 +252,7 @@ fn spawn_with_profile(
         // provider such as an fnm-managed coding CLI resolves successfully during
         // capability discovery but is absent from the Bubblewrap namespace.
         let configured_value = configured.to_string_lossy().into_owned();
-        if configured != canonical {
+        if configured != canonical && !configured.starts_with(sandbox_root) {
             if configured.starts_with(&host_home) {
                 paths::add_bwrap_parent_dirs(&mut args, configured.parent(), &host_home);
                 args.extend([
@@ -242,6 +269,7 @@ fn spawn_with_profile(
             }
         }
         if let Some(toolchain_root) = super::toolchain::reviewed_root(&canonical) {
+            toolchain_roots.insert(toolchain_root.to_path_buf());
             let value = toolchain_root.to_string_lossy().into_owned();
             args.extend(["--ro-bind".into(), value.clone(), value]);
         }
@@ -249,7 +277,10 @@ fn spawn_with_profile(
             let candidate = host_home.join(".cargo");
             if candidate.is_dir() {
                 let value = candidate.to_string_lossy().into_owned();
-                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                if !candidate.starts_with(sandbox_root) {
+                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                    toolchain_roots.insert(candidate.clone());
+                }
                 for file in ["credentials", "credentials.toml"] {
                     mask_protected_file(&mut args, &candidate.join(file))?;
                 }
@@ -258,30 +289,33 @@ fn spawn_with_profile(
             let candidate = host_home.join(".rustup");
             if candidate.is_dir() {
                 let value = candidate.to_string_lossy().into_owned();
-                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                if !candidate.starts_with(sandbox_root) {
+                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                    toolchain_roots.insert(candidate.clone());
+                }
                 rustup_home = Some(value);
             }
         }
     }
-    if profile.expose_optional_sockets {
-        for (enabled, socket, name) in [
-            (config.allow_docker, &config.docker_socket, "Docker"),
-            (
-                config.allow_tailscale,
-                &config.tailscale_socket,
-                "Tailscale",
-            ),
-        ] {
-            add_optional_socket(&mut args, enabled, socket, name)?;
+    for toolchain_root in &toolchain_roots {
+        if !toolchain_root.starts_with(sandbox_root)
+            && !toolchain_roots
+                .iter()
+                .any(|other| other != toolchain_root && toolchain_root.starts_with(other))
+        {
+            add_protected_paths(&mut args, toolchain_root, true, None)?;
+            masks::mask_state(&mut args, config, toolchain_root)?;
         }
     }
     let ssh_root = if matches!(&invocation.security, InvocationSecurity::Ssh { .. }) {
         Some(config.resolved_ssh_root().map_err(std::io::Error::other)?)
     } else {
-        mask_generic_ssh_clients(&mut args)?;
         None
     };
-    add_protected_paths(&mut args, sandbox_root, true, ssh_root.as_deref())?;
+    // A mounted HOME must hide the entire SSH store even for dedicated SSH;
+    // only its exact reviewed material is restored below.
+    add_protected_paths(&mut args, sandbox_root, true, None)?;
+    masks::mask_state(&mut args, config, sandbox_root)?;
     if sandbox_root != execution_root {
         add_protected_paths(&mut args, &execution_root, false, ssh_root.as_deref())?;
     }
@@ -303,14 +337,42 @@ fn spawn_with_profile(
         if let Ok(guard) = config.workspaces.read() {
             for ws in guard.all_roots() {
                 if ws != sandbox_root
-                    && ws != host_home
+                    && !ws.starts_with(sandbox_root)
+                    && !sandbox_root.starts_with(&ws)
                     && !crate::core::protected_paths::is_protected_path(&execution_root, &ws)
                 {
                     let val = ws.to_string_lossy().into_owned();
                     args.extend([root_bind.into(), val.clone(), val]);
-                    add_protected_paths(&mut args, &ws, false, None)?;
+                    add_protected_paths(&mut args, &ws, true, None)?;
+                    masks::mask_state(&mut args, config, &ws)?;
                 }
             }
+        }
+    }
+    if ssh_root.is_none() {
+        masks::mask_executables(
+            &mut args,
+            config,
+            crate::core::terminal_policy::GENERIC_SSH_CLIENTS,
+        )?;
+    }
+    masks::mask_executables(
+        &mut args,
+        config,
+        crate::core::terminal_policy::PRIVILEGE_BROKERS,
+    )?;
+    // Masks run before opt-ins, so a configured socket under HOME cannot bypass
+    // default denial yet can still be exposed by its separate operator grant.
+    if profile.expose_optional_sockets {
+        for (enabled, socket, name) in [
+            (config.allow_docker, &config.docker_socket, "Docker"),
+            (
+                config.allow_tailscale,
+                &config.tailscale_socket,
+                "Tailscale",
+            ),
+        ] {
+            add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
     if let Some(cwd) = &invocation.cwd {
@@ -355,146 +417,16 @@ fn spawn_with_profile(
     }
     #[cfg(unix)]
     command.process_group(0);
+    #[cfg(target_os = "linux")]
+    // SAFETY: prctl is async-signal-safe here and touches no allocator/locks.
+    // Inherited across exec: copied/renamed setuid helpers cannot gain privilege.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
     command.spawn()
-}
-
-fn mask_generic_ssh_clients(args: &mut Vec<String>) -> Result<(), std::io::Error> {
-    let mut masked = std::collections::BTreeSet::new();
-    for candidate in [
-        "/usr/bin/ssh",
-        "/bin/ssh",
-        "/usr/bin/scp",
-        "/bin/scp",
-        "/usr/bin/sftp",
-        "/bin/sftp",
-    ] {
-        let path = Path::new(candidate);
-        let Ok(canonical) = std::fs::canonicalize(path) else {
-            continue;
-        };
-        if masked.insert(canonical.clone()) {
-            mask_protected_file(args, &canonical)?;
-        }
-    }
-    Ok(())
-}
-
-fn mask_protected_file(args: &mut Vec<String>, path: &Path) -> Result<(), std::io::Error> {
-    let Ok(metadata) = std::fs::symlink_metadata(path) else {
-        return Ok(());
-    };
-    if metadata.file_type().is_symlink() {
-        return Err(std::io::Error::other(
-            "protected toolchain credential path is a symbolic link",
-        ));
-    }
-    if metadata.is_file() {
-        args.extend([
-            "--ro-bind".into(),
-            "/dev/null".into(),
-            path.to_string_lossy().into_owned(),
-        ]);
-    }
-    Ok(())
-}
-
-fn add_optional_socket(
-    args: &mut Vec<String>,
-    enabled: bool,
-    configured_path: &str,
-    name: &str,
-) -> Result<(), std::io::Error> {
-    if !enabled {
-        return Ok(());
-    }
-    let socket = Path::new(configured_path);
-    if !socket.exists() {
-        return Err(std::io::Error::other(format!(
-            "{name} access enabled but socket '{}' is unavailable",
-            socket.display()
-        )));
-    }
-    let value = socket.to_string_lossy().into_owned();
-    args.extend(["--bind".into(), value.clone(), value]);
-    Ok(())
-}
-
-fn add_protected_paths(
-    args: &mut Vec<String>,
-    execution_root: &Path,
-    recursive: bool,
-    skip: Option<&Path>,
-) -> Result<(), std::io::Error> {
-    let paths = if recursive {
-        discover_protected_paths(execution_root)?
-    } else {
-        crate::core::protected_paths::protected_paths(execution_root).collect()
-    };
-    for path in paths.into_iter().filter(|p| skip != Some(p.as_path())) {
-        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if metadata.file_type().is_symlink() {
-            return Err(std::io::Error::other(
-                "protected sandbox path is a symbolic link",
-            ));
-        }
-        if metadata.is_dir() {
-            args.extend(["--tmpfs".into(), path.to_string_lossy().into_owned()]);
-        } else {
-            args.extend([
-                "--ro-bind".into(),
-                "/dev/null".into(),
-                path.to_string_lossy().into_owned(),
-            ]);
-        }
-    }
-    Ok(())
-}
-
-const UNSCANNED_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    "target",
-    ".output",
-    ".nuxt",
-    ".cache",
-    ".turbo",
-    ".pnpm-store",
-    ".next",
-    ".venv",
-    "venv",
-    "dist",
-    "build",
-];
-
-fn is_unscanned_dir_name(name: &std::ffi::OsStr) -> bool {
-    name.to_str().is_some_and(|s| UNSCANNED_DIRS.contains(&s))
-}
-
-fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
-    let mut protected = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    let mut scanned = 0usize;
-    while let Some(directory) = stack.pop() {
-        for entry in std::fs::read_dir(&directory)? {
-            let entry = entry?;
-            scanned = scanned.saturating_add(1);
-            if scanned > MAX_PROTECTED_SCAN_ENTRIES {
-                return Err(std::io::Error::other(
-                    "protected-path scan exceeds bounded workspace maximum",
-                ));
-            }
-            let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|_| std::io::Error::other("protected-path scan escaped workspace"))?;
-            if crate::core::protected_paths::is_protected_relative(relative) {
-                protected.push(path);
-            } else if entry.file_type()?.is_dir() && !is_unscanned_dir_name(&entry.file_name()) {
-                stack.push(path);
-            }
-        }
-    }
-    Ok(protected)
 }

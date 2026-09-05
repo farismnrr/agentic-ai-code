@@ -358,26 +358,10 @@ impl Journal {
 }
 
 pub(crate) fn state_dir(config: &ServerConfig) -> Result<PathBuf, JournalError> {
-    if let Some(path) = config.activity.state_dir.as_deref() {
-        let path = PathBuf::from(path);
-        if !path.is_absolute() || path.as_os_str().is_empty() {
-            return Err(JournalError::Io);
-        }
-        if path.exists()
-            && fs::symlink_metadata(&path)
-                .map_err(|_| JournalError::Io)?
-                .file_type()
-                .is_symlink()
-        {
-            return Err(JournalError::Io);
-        }
-        return Ok(path);
-    }
-    let home = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))
-        .ok_or(JournalError::Io)?;
-    Ok(home.join("ai-tools"))
+    config
+        .activity
+        .resolved_state_dir()
+        .map_err(|_| JournalError::Io)
 }
 
 fn load_or_create_source(path: &Path) -> Result<String, JournalError> {

@@ -116,8 +116,8 @@ impl JobSnapshot {
             "createdAt": format_timestamp(self.created_at),
             "lastUpdatedAt": format_timestamp(self.last_updated_at),
             "output": {
-                "stdout": self.stdout,
-                "stderr": self.stderr,
+                "stdout": redact_credentials(&self.stdout),
+                "stderr": redact_credentials(&self.stderr),
                 "omittedBytes": self.omitted_bytes,
                 "exitCode": self.exit_code
             }
@@ -164,8 +164,8 @@ impl JobSnapshot {
     pub fn output_text(&self) -> String {
         render_output(
             self.exit_code.unwrap_or(-1),
-            &self.stdout,
-            &self.stderr,
+            &redact_credentials(&self.stdout),
+            &redact_credentials(&self.stderr),
             self.omitted_bytes,
         )
     }
@@ -317,8 +317,8 @@ impl JobManager {
         };
         let out = stdout.lock().await;
         let err = stderr.lock().await;
-        snapshot.stdout = String::from_utf8_lossy(&out.bytes).into_owned();
-        snapshot.stderr = String::from_utf8_lossy(&err.bytes).into_owned();
+        snapshot.stdout = redact_credentials(&String::from_utf8_lossy(&out.bytes));
+        snapshot.stderr = redact_credentials(&String::from_utf8_lossy(&err.bytes));
         snapshot.omitted_bytes = out.omitted + err.omitted;
         snapshot.last_updated_at = snapshot
             .last_updated_at

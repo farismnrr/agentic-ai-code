@@ -2,7 +2,7 @@
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
-pub const PROTECTED_DIRECTORIES: [&str; 7] = [
+pub const PROTECTED_DIRECTORIES: &[&str] = &[
     ".ssh",
     ".gnupg",
     ".aws",
@@ -10,8 +10,18 @@ pub const PROTECTED_DIRECTORIES: [&str; 7] = [
     ".config/gh",
     ".docker",
     ".kube",
+    ".password-store",
+    ".config/op",
+    ".config/1Password",
+    ".local/share/keyrings",
+    ".local/share/kwalletd",
+    ".mozilla",
+    ".config/chromium",
+    ".config/google-chrome",
+    ".config/BraveSoftware",
+    ".local/state/ai-tools",
 ];
-pub const PROTECTED_FILES: [&str; 7] = [
+pub const PROTECTED_FILES: &[&str] = &[
     ".npmrc",
     ".netrc",
     ".pypirc",
@@ -19,7 +29,26 @@ pub const PROTECTED_FILES: [&str; 7] = [
     ".cargo/credentials",
     ".cargo/credentials.toml",
     ".env",
+    ".codex/auth.json",
+    ".claude/.credentials.json",
 ];
+
+/// Traversal has already rejected protected ancestors. Avoid reconstructing
+/// their component vectors for ordinary build/dependency entries.
+pub fn may_be_protected_entry(name: &OsStr) -> bool {
+    let bytes = name.as_encoded_bytes();
+    bytes == b".env"
+        || (bytes.starts_with(b".env.") && bytes != b".env.example")
+        || PROTECTED_DIRECTORIES
+            .iter()
+            .chain(PROTECTED_FILES.iter())
+            .any(|entry| {
+                entry
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|last| name == OsStr::new(last))
+            })
+}
 
 pub fn is_protected_relative(path: &Path) -> bool {
     let components: Vec<&OsStr> = path
@@ -30,81 +59,34 @@ pub fn is_protected_relative(path: &Path) -> bool {
         })
         .collect();
 
-    components.iter().any(|component| {
-        matches!(
-            component.to_str(),
-            Some(".ssh" | ".gnupg" | ".aws" | ".docker" | ".kube")
-        )
-    }) || components.windows(2).any(|pair| {
-        pair[0] == OsStr::new(".config") && matches!(pair[1].to_str(), Some("gcloud" | "gh"))
-    }) || components.iter().any(|component| {
-        matches!(
-            component.to_str(),
-            Some(".npmrc" | ".netrc" | ".pypirc" | ".git-credentials")
-        )
-    }) || components.windows(2).any(|pair| {
-        pair[0] == OsStr::new(".cargo")
-            && matches!(pair[1].to_str(), Some("credentials" | "credentials.toml"))
-    }) || components.iter().any(|name| {
-        let bytes = name.as_encoded_bytes();
-        bytes == b".env" || (bytes.starts_with(b".env.") && bytes != b".env.example")
-    })
+    PROTECTED_DIRECTORIES
+        .iter()
+        .chain(PROTECTED_FILES.iter())
+        .any(|entry| {
+            components
+                .windows(entry.split('/').count())
+                .any(|window| window.iter().copied().eq(entry.split('/').map(OsStr::new)))
+        })
+        || components.iter().any(|name| {
+            let bytes = name.as_encoded_bytes();
+            bytes == b".env" || (bytes.starts_with(b".env.") && bytes != b".env.example")
+        })
 }
 
 /// Fail-closed detector for Git metadata lines that may quote or prefix paths.
 /// It intentionally accepts mild over-blocking on metadata, but `.env.example`
 /// remains an explicit non-secret exception.
 pub fn contains_protected_path_reference(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    for (index, _) in value.match_indices('.') {
-        let start_ok =
-            index == 0 || matches!(bytes[index - 1], b'/' | b'\\' | b' ' | b'\t' | b'"' | b'\'');
-        if !start_ok {
-            continue;
-        }
-        let tail = &value[index..];
-        let end = tail
-            .find(['/', '\\', ' ', '\t', '"', '\''])
-            .unwrap_or(tail.len());
-        let component = &tail[..end];
-        if matches!(
-            component,
-            ".ssh"
-                | ".gnupg"
-                | ".aws"
-                | ".docker"
-                | ".kube"
-                | ".npmrc"
-                | ".netrc"
-                | ".pypirc"
-                | ".git-credentials"
-        ) || component == ".env"
-            || (component.starts_with(".env.") && component != ".env.example")
-        {
-            return true;
-        }
-        if component == ".config" {
-            let rest = tail.get(end + 1..).unwrap_or("");
-            if rest.starts_with("gcloud/")
-                || rest == "gcloud"
-                || rest.starts_with("gh/")
-                || rest == "gh"
-            {
-                return true;
-            }
-        }
-        if component == ".cargo" {
-            let rest = tail.get(end + 1..).unwrap_or("");
-            if rest.starts_with("credentials/")
-                || rest == "credentials"
-                || rest.starts_with("credentials.toml/")
-                || rest == "credentials.toml"
-            {
-                return true;
-            }
-        }
-    }
-    false
+    let normalized = value.replace('\\', "/");
+    normalized
+        .split(|character: char| {
+            character.is_whitespace()
+                || matches!(
+                    character,
+                    '"' | '\'' | ',' | ';' | ':' | '=' | '(' | ')' | '[' | ']' | '{' | '}'
+                )
+        })
+        .any(|token| is_protected_relative(Path::new(token)))
 }
 
 pub fn is_protected_path(root: &Path, target: &Path) -> bool {

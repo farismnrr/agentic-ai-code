@@ -171,6 +171,27 @@ not authorization: absent or unsupported client identity is shown as
 
 ## Relay configuration
 
+Filesystem authority has two levels: `--execution-root` is the hard ceiling,
+and `--dir` plus explicitly authorized workspaces determine the visible roots.
+Setting both to the canonical `$HOME` enables ordinary user-space work across
+home subdirectories. Setting `--dir` to one project keeps that authorization
+narrow even when the ceiling is HOME. Terminal `cwd` selects a location within
+those roots; it does not reduce a HOME grant to the nearest Git repository.
+
+This profile still uses Bubblewrap and a rebuilt minimal environment. It does
+not inherit login-shell credentials or PATH. Credential files, session/keyring
+stores, relay state and discovered Unix sockets remain masked; `.env.example`
+is the intentional non-secret exception. Discovery must complete within
+500,000 entries per visible tree, including dependency/build/cache directories,
+or execution fails closed. A larger home should use narrower explicit roots.
+See [security](security.md#terminal-filesystem-and-credential-boundary).
+
+Tools use dedicated MCP capabilities first for operations they cover. Terminal
+is the fallback for builds, tests, package managers, interpreters, scripts,
+pipelines and unsupported CLI operations. `systemctl --user` / `journalctl
+--user` can be invoked, but HOME scope does not expose the host user bus or
+journals. Controlling host services requires a separately reviewed capability.
+
 The Rust relay accepts CLI flags and matching environment variables. Important remote-mode values include:
 
 ```text
@@ -210,7 +231,7 @@ explicit async request from an incompatible client is rejected; it is never
 silently converted to sync. Mutating HTTP methods remain synchronous until a
 request-level idempotency layer is available.
 
-Terminal subprocesses use an isolated network namespace by default. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for a trusted workflow that needs network-capable commands such as package installation or remote Git. Dedicated `http_fetch` and `web_search` remain separate network capabilities and are not enabled by this flag.
+Terminal subprocesses use an isolated network namespace by default. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for a trusted workflow that needs network-capable commands such as package installation. Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities and should handle covered operations; they are not enabled by this flag. Generic `ssh`, `scp` and `sftp` remain unavailable; remote diagnostics use `ssh_readonly_exec`.
 
 Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 

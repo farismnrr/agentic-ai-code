@@ -194,14 +194,12 @@ pub(super) async fn run_process(
     let exit_code = wait_result.0.code().unwrap_or(-1);
     let mut stdout_text = String::from_utf8_lossy(&out.bytes).into_owned();
     let mut stderr_text = String::from_utf8_lossy(&err.bytes).into_owned();
-    if matches!(invocation.security, super::InvocationSecurity::Ssh { .. }) {
-        stdout_text = crate::core::redaction::redact_credentials(&stdout_text);
-        stderr_text = crate::core::redaction::redact_credentials(&stderr_text);
-        if exit_code != 0 {
-            if let Some(message) = super::ssh::normalized_failure(&stderr_text) {
-                stdout_text.clear();
-                stderr_text = message.into();
-            }
+    stdout_text = crate::core::redaction::redact_credentials(&stdout_text);
+    stderr_text = crate::core::redaction::redact_credentials(&stderr_text);
+    if matches!(invocation.security, super::InvocationSecurity::Ssh { .. }) && exit_code != 0 {
+        if let Some(message) = super::ssh::normalized_failure(&stderr_text) {
+            stdout_text.clear();
+            stderr_text = message.into();
         }
     }
     Ok(ProcessResult {
