@@ -28,6 +28,35 @@ must fail closed on unsupported platforms; this plan cannot be marked
 **CLOSED / VERIFIED** until the claimed platform matrix and quota evidence are
 completed or split into an explicitly accepted follow-up.
 
+### External E2E audit evidence — 2026-09-06
+
+An isolated local relay process was exercised over the real `POST /mcp` wire
+with a disposable execution root. The modern `2026-07-28` path returned HTTP
+200 health, the 52-tool v15 catalog, ordinary user-space execution, async
+completion and cancellation, `.env`/nested `.ssh` masking, `.env.example`
+readability, direct and shell-wrapped privilege denial, generic SSH denial,
+dedicated SSH fail-closed behavior, and stale task invalidation after a local
+process restart. The process was stopped locally and the fixture was removed;
+the production systemd service was not restarted.
+
+The official [MCP Conformance Test Framework](https://github.com/modelcontextprotocol/conformance)
+was also run against the isolated endpoint. Its active suite currently opens
+the stateful `2025-11-25` handshake, while this relay intentionally exposes the
+stateless `2026-07-28` transport; consequently the suite reported 1/30 checks
+passed (the DNS-rebinding negative check) and 30/30 scenarios did not provide
+valid compatibility evidence for the modern endpoint. This is recorded as a
+coverage gap rather than treated as a product pass: legacy `2025-11-25`
+`tasks/get`/`tasks/result` and stateful session semantics remain unimplemented
+and must be either implemented with conformance coverage or explicitly split
+out of the supported protocol contract.
+
+The audit does not close the platform/resource rows below. There is no
+reviewed macOS or Windows sandbox backend, no enforced CPU/memory/process/FD
+quota matrix, no poll-rate or total-retention quota evidence, no cross-shell
+profile probe matrix, and no first-party persistence proof for a lost initial
+response through model-step timeout/compaction. These remain blocking rows in
+the final acceptance matrix and are intentionally not claimed as verified.
+
 ## Goal
 
 Make one logical terminal capability practical for broad, ordinary user-space
