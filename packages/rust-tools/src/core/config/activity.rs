@@ -25,6 +25,37 @@ impl Default for ActivityConfig {
     }
 }
 
+impl ActivityConfig {
+    /// Canonical state location shared by persistence and execution isolation.
+    pub fn resolved_state_dir(&self) -> Result<std::path::PathBuf, std::io::Error> {
+        use std::path::PathBuf;
+        let path = if let Some(path) = self.state_dir.as_deref() {
+            PathBuf::from(path)
+        } else {
+            std::env::var_os("XDG_STATE_HOME")
+                .map(PathBuf::from)
+                .or_else(|| {
+                    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state"))
+                })
+                .ok_or_else(|| std::io::Error::other("state root unavailable"))?
+                .join("ai-tools")
+        };
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+        {
+            return Err(std::io::Error::other("invalid state root"));
+        }
+        if let Ok(metadata) = std::fs::symlink_metadata(&path) {
+            if metadata.file_type().is_symlink() {
+                return Err(std::io::Error::other("invalid state root"));
+            }
+        }
+        Ok(path)
+    }
+}
+
 pub(super) fn validate(config: &ActivityConfig) -> Result<(), RelayError> {
     if config.spool_quota_bytes < 64 * 1024 {
         return Err(RelayError::InvalidConfig(

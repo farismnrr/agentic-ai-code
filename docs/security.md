@@ -77,6 +77,54 @@ Backups and restores must use a separate privileged operational identity;
 deployment secrets and must not be placed in repository files, telemetry, or
 support output.
 
+## Terminal filesystem and credential boundary
+
+Broad terminal authority means operator-user work within authorized roots.
+`--dir "$HOME" --execution-root "$HOME"` permits ordinary files throughout
+that home; a project grant stays project-scoped. Bubblewrap remains mandatory,
+with read-only system runtime and isolated `/dev`, `/proc`, `/tmp` and PID
+namespace. The child has no effective capabilities and inherits Linux
+`no_new_privs`, preventing setuid/file-capability elevation even for renamed
+or copied helpers. `sudo`, `su`, `doas`, `pkexec`, `runas` and generic SSH clients
+are denied directly and masked at every visible safe-PATH spelling, including
+separately mounted `/bin` and `/usr/bin` aliases.
+
+The canonical `core::protected_paths` policy masks SSH/GPG/cloud/Git/package
+credentials, all `.env` / `.env.*` except `.env.example`, and known browser,
+keyring, password-manager and CLI authentication stores. Relay state uses its
+canonical configured location and is hidden even when placed inside HOME.
+Protected stores are empty private mounts; file masks prevent host reads and
+writes. The child environment is cleared and rebuilt with runtime-only values;
+SSH/GPG/keyring/session-bus variables are not forwarded. Existing output and
+job-retention redaction remains mandatory.
+
+Every visible user tree is scanned before spawn, without following directory
+symlinks. Protected symlinks, traversal/metadata failures and the 500,000-entry
+limit abort execution. Dependency/build/cache directories cannot be skipped
+while still visible: they can contain credentials too. Filesystem Unix sockets
+found in the tree are masked. This is a path-based credential policy, not a
+content classifier for secrets copied into arbitrary ordinary files. Operators
+must keep credential material in protected stores, and must not concurrently
+replace the filesystem being prepared for sandbox execution.
+
+Host `/run/user`, host `/tmp`, host processes, session/system D-Bus and journal
+mounts remain absent. HOME scope never authorizes host-service control.
+Docker/Tailscale sockets remain independent explicit operator opt-ins; Docker
+commonly provides root-equivalent host authority. Network namespace sharing is
+also an independent operator grant, including reachability of host-network
+services; broad filesystem scope does not turn it on.
+
+Generic SSH remains separate from `ssh_readonly_exec`. Dedicated SSH restores
+only its reviewed identity and known-host files read-only after masking the
+credential store; it gets no writable workspace or optional local sockets.
+
+MCP-first selection is advice derived from the final active tool keys in
+primary and child prompts. It cannot grant missing tools, bypass read-only or
+manual approvals, or replace the relay security checks. Covered Git/file/code/
+HTTP/forge/SSH/messaging operations should use their dedicated capabilities;
+terminal remains available for builds, tests, package managers and unsupported
+operations. No blanket Git executable ban or discovery tool is introduced.
+
 ## Deterministic checks
 
 Account recovery/session/MFA security coverage is part of the normal web test suite:

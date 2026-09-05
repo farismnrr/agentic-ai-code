@@ -59,6 +59,18 @@ Do not fix this with login-shell startup files that reintroduce the full host en
 
 ## Relay cannot access `.ssh`, Docker, or cloud credential directories
 
+For broad terminal work, configure both `--dir "$HOME"` and
+`--execution-root "$HOME"`; a home ceiling alone does not authorize sibling
+projects. Credential and privilege boundaries still apply. A protected-path
+discovery failure means the sandbox did not start: check for protected
+symlinks, inaccessible directories or a tree above 500,000 entries. Use
+narrower authorized roots instead of disabling masking or skipping visible
+cache/build directories.
+
+`systemctl --user` failing to connect to a bus is expected in this profile.
+Host user-service control and journal mounts are not implicitly exposed by
+HOME access. Do not mount a host D-Bus socket to work around this boundary.
+
 The owner-home sandbox masks common credential stores by design. This is expected.
 
 Do not unmask credentials just to make a tool call convenient. Use an explicit safer workflow outside the relay when host credentials are genuinely required.

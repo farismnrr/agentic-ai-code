@@ -1,5 +1,38 @@
 # Tooling
 
+## MCP-first tool selection
+
+Use the actual tools supplied for this turn: dedicated MCP capability first,
+terminal fallback second. Prefer `git_status`/`git_diff` and other covered
+`git_*` operations over terminal Git; `file_read`, `text_search`, directory,
+edit and patch tools over equivalent shell commands; and `code_definition` /
+`code_references` for semantic navigation. Prefer active `http_fetch`,
+`web_search`, forge/change-request tools, `ssh_readonly_exec` and
+`telegram_send_message` for their supported tasks. Availability never grants
+permission to send messages or mutate external state.
+
+Terminal remains appropriate for `cargo test`, `pnpm`, interpreters, scripts,
+pipelines and CLIs or Git operations no active dedicated tool fully covers.
+Do not add a tool-discovery round trip: the supplied schemas are the inventory.
+Primary and child prompts share `application/chat/tool-selection-policy.ts`;
+child guidance is composed after authority/effect/ownership filtering and
+counts toward its context budget. Routing advice never changes approvals.
+
+With both `--dir "$HOME"` and `--execution-root "$HOME"`, terminal mounts the
+authorized home tree rather than discovering one Git repository from `cwd`.
+A narrower primary workspace still requires explicit sibling authorization.
+Bubblewrap, scrubbed environment and credential masking remain mandatory;
+direct and shell-wrapped privilege brokers and generic SSH remain unavailable.
+Protected discovery scans visible dependency/cache/build directories too and
+fails closed on incomplete traversal or the 500,000-entry limit. Do not bypass
+that failure by pruning still-visible directories. Use narrower authorized
+roots for homes above the bound. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
+
+Host `systemctl --user` and `journalctl --user` are intentionally unavailable
+through generic terminal execution: `/run/user`, the host session/system bus,
+and host journal mounts remain absent. They remain excluded from HOME-scope
+terminal authority.
+
 ## Environment and runtime config
 
 Copy [`.env.example`](../../.env.example) → `.env` (gitignored) on a fresh clone. **`.env.example` is the environment-key inventory/source of truth**; keep it aligned with `nuxt.config.ts`/runtime consumers when configuration changes instead of maintaining a second exhaustive key list here.
@@ -57,8 +90,6 @@ A representative single-owner local coding profile is:
   --execution-root "$HOME" \
   --origin http://localhost:3333 \
   --allowed-host mcp.example.com \
-  --allow-docker \
-  --allow-tailscale \
   --toolchain-path "$HOME/.cargo/bin" \
   --toolchain-path "$HOME/.bun/bin" \
   --toolchain-path "<active-fnm-node-installation>/bin"

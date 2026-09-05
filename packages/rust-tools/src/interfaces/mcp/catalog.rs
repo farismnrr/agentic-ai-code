@@ -55,7 +55,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "Run a sandboxed executable in the workspace using direct argv semantics. Shell operators such as ;, |, &&, globbing, and redirection are not implicit; use command=sh with args=[\"-lc\", \"...\"] when shell syntax is required. Supports scripts, builds, package managers, Git, and interpreters. Returns stdout, stderr, and exit status.",
+            description: "General CLI fallback inside the authorized execution scope. Prefer an active dedicated MCP tool whenever it fully covers the operation, including structured Git, filesystem, code, and network tools. Use terminal for builds, tests, package managers, interpreters, scripts, process/user-service commands, shell pipelines, and unsupported operations. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -373,7 +373,7 @@ pub fn tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
-            description: "Start a bounded sandboxed terminal job and return its task ID for polling.",
+            description: "Start a bounded sandboxed general CLI fallback job for builds, tests, package managers, interpreters, scripts, or unsupported operations. Prefer an active dedicated MCP tool when it fully covers the operation. Returns a task ID for polling; the same credential, privilege, and SSH boundaries as terminal_exec apply.",
             input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 } }, "required": ["command"], "additionalProperties": false }),
             annotations: Some(ToolAnnotations {
                 read_only_hint: false,

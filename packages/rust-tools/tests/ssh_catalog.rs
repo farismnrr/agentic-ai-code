@@ -23,14 +23,50 @@ fn dedicated_ssh_tool_is_portable_and_present_in_both_profiles() {
 }
 
 #[test]
-fn catalog_v13_snapshot_matches_current_static_surface() {
+fn catalog_v14_snapshot_matches_current_static_surface() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join(".agents/contracts/063-tool-catalog-v13.json");
-    let expected = std::fs::read_to_string(root).expect("catalog v13 snapshot");
-    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v13");
+        .join(".agents/contracts/065-tool-catalog-v14.json");
+    let expected = std::fs::read_to_string(root).expect("catalog v14 snapshot");
+    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v14");
     let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn historical_catalog_is_immutable_and_only_terminal_descriptions_change() {
+    use ring::digest::{digest, SHA256};
+    let bytes = include_bytes!("../../../.agents/contracts/063-tool-catalog-v13.json");
+    assert_eq!(
+        digest(&SHA256, bytes)
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>(),
+        "606f16cab046283c77b7c5bf773c2dbfa51cf62d6488b63855705392e25a479e"
+    );
+    let mut historical: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+    let actual = serde_json::to_value(tool_catalog()).unwrap();
+    for name in ["terminal_exec", "terminal_job_start"] {
+        let new = actual
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap();
+        assert!(new["description"]
+            .as_str()
+            .unwrap()
+            .contains("dedicated MCP tool"));
+        let old = historical
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|tool| tool["name"] == name)
+            .unwrap();
+        old["description"] = new["description"].clone();
+    }
+    assert_eq!(historical, actual);
 }
 
 #[test]

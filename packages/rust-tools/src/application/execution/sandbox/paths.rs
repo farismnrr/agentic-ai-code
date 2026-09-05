@@ -18,6 +18,8 @@ pub(super) fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<St
         root.into(),
         root.into(),
         "--unshare-pid".into(),
+        "--cap-drop".into(),
+        "ALL".into(),
         "--die-with-parent".into(),
     ]);
     args

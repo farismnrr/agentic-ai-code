@@ -9,6 +9,7 @@ import { createAssistantPersister } from './persistence'
 import { buildTaskUpdateTool } from '../task-context-output'
 import { buildOrchestratorPlanTool } from '../orchestration/tool'
 import { composeAgentTools } from './tool-composition'
+import { buildToolSelectionPolicy } from './tool-selection-policy'
 
 export interface ExecuteChatTurnInput {
   userId: string
@@ -184,7 +185,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
 
   return deps.streamAiSdkAgent({
     model: baseModel,
-    system: buildWorkspaceSystemPrompt(),
+    system: [buildWorkspaceSystemPrompt(), buildToolSelectionPolicy(Object.keys(tools))].filter(Boolean).join('\n'),
     messages: await deps.convertTurnMessages(resolvedMessages, tools),
     originalMessages: messages,
     tools,

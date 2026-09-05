@@ -2,6 +2,9 @@ use ai_tools::core::config::ServerConfig;
 use ai_tools::infrastructure::security::enforce_local_access_policy;
 use axum::http::{header::HOST, header::ORIGIN, HeaderMap, HeaderValue};
 
+#[path = "security/terminal_sandbox.rs"]
+mod terminal_sandbox;
+
 fn config(origin: Option<&str>) -> ServerConfig {
     ServerConfig {
         origin: origin.map(str::to_string),
