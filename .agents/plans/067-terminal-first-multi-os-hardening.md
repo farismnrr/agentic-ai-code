@@ -1,6 +1,6 @@
 # Plan 067 — Terminal-First Multi-OS Execution and Context Hardening
 
-**Status:** IN PROGRESS — Linux/Bubblewrap and catalog/routing implementation complete; cross-platform backends and full resource-quota matrix remain unverified
+**Status:** CLOSED / VERIFIED (scoped Linux/Bubblewrap + modern MCP slice) — remaining legacy-protocol, resource-quota, profile-probe, persistence, and native macOS/Windows work is explicitly transferred to [Plan 068](068-terminal-hardening-portability-and-quota-completion.md)
 **Baseline:** `main` at `a7e4760a990b8e23afb59149c93d9ec752ebe04a` (Plan 065 closure)
 
 ## Implementation update — 2026-09-06
@@ -24,9 +24,8 @@ Focused Rust tests and the full Rust workspace suite pass after these changes.
 The macOS/Windows native sandbox backends, OS-specific resource enforcement
 (CPU/memory/process/FD), poll-rate quotas, and live runtime restart proof are
 not implemented or claimed here. The relay remains Linux/Bubblewrap-only and
-must fail closed on unsupported platforms; this plan cannot be marked
-**CLOSED / VERIFIED** until the claimed platform matrix and quota evidence are
-completed or split into an explicitly accepted follow-up.
+must fail closed on unsupported platforms. The original broader objective is
+split into the independently reviewable follow-up in Plan 068 below.
 
 ### External E2E audit evidence — 2026-09-06
 
@@ -56,6 +55,18 @@ quota matrix, no poll-rate or total-retention quota evidence, no cross-shell
 profile probe matrix, and no first-party persistence proof for a lost initial
 response through model-step timeout/compaction. These remain blocking rows in
 the final acceptance matrix and are intentionally not claimed as verified.
+
+### Closure scope decision — 2026-09-06
+
+The verified deliverable of this plan is the Linux Bubblewrap execution
+backend, modern stateless MCP transport, v15 terminal-first catalog, active
+tool-derived routing, broad user-space execution-root behavior, credential and
+privilege boundaries, SSH/socket separation, and in-process task lifecycle
+evidence recorded above. The remaining unchecked tasks are not silently
+waived: they are independently reviewable work with a separate lifecycle and
+are transferred to [Plan 068](068-terminal-hardening-portability-and-quota-completion.md).
+Plan 067 is therefore closed for its verified Linux/modern slice; Plan 068 is
+the source of truth for completing the broader portability and quota objective.
 
 ## Goal
 
