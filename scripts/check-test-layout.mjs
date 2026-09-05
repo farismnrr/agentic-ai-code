@@ -93,10 +93,12 @@ function check(root = ROOT) {
 }
 
 function addedUnitTestFailures() {
+  const bare = execFileSync('git', ['rev-parse', '--is-bare-repository'], { cwd: ROOT, encoding: 'utf8' }).trim() === 'true'
+  const gitArgs = bare ? ['-c', 'core.bare=false', `--work-tree=${ROOT}`, 'diff'] : ['diff']
   const range = process.env.AI_CODE_GUARD_BASE_SHA && process.env.AI_CODE_GUARD_HEAD_SHA
     ? [process.env.AI_CODE_GUARD_BASE_SHA, process.env.AI_CODE_GUARD_HEAD_SHA]
     : ['HEAD']
-  const output = execFileSync('git', ['diff', '--name-only', '--diff-filter=A', ...range], { cwd: ROOT, encoding: 'utf8' })
+  const output = execFileSync('git', [...gitArgs, '--name-only', '--diff-filter=A', ...range], { cwd: ROOT, encoding: 'utf8' })
   return output.split('\n').filter(Boolean).flatMap((file) => {
     const lower = file.toLowerCase()
     const base = lower.split('/').pop() ?? lower

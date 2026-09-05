@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(git rev-parse --show-toplevel)"
+ROOT="$(git -c core.bare=false --work-tree=. rev-parse --show-toplevel)"
 ZERO_SHA="0000000000000000000000000000000000000000"
 while read -r _local_ref local_sha remote_ref remote_sha; do
   [[ "$remote_ref" == refs/heads/main ]] || continue
