@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+ZERO_SHA="0000000000000000000000000000000000000000"
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  [[ "$remote_ref" == refs/heads/main ]] || continue
+  [[ "$local_sha" != "$ZERO_SHA" && "$remote_sha" != "$ZERO_SHA" ]] || { echo 'pre-push: refusing main create/delete without bounded range' >&2; exit 78; }
+  AI_CODE_GUARD_BASE_SHA="$remote_sha" AI_CODE_GUARD_HEAD_SHA="$local_sha" "$ROOT/scripts/guardrail.sh" auto full
+  git diff --check "$remote_sha" "$local_sha"
+done

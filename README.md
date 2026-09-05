@@ -84,7 +84,7 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 - integration/release branch: **`main`**
 - implementation work: dedicated feature branch → PR → `main`
 - no hosted CI workflow; web tests live under `test/`, Rust tests use Cargo package `tests/`, and production files contain no inline tests
-- every normal local commit must pass stack-aware `pnpm guardrail`; it auto-selects the changed stack(s). For explicit service closure, use `pnpm guardrail:nuxt` or `pnpm guardrail:rust`; use `pnpm guardrail:all` for a deliberate cross-stack contract change
+- checkpoint commits use fast `pnpm guardrail:fast`; closure uses `pnpm guardrail:full`, and release preparation uses `pnpm guardrail:release`. The main-only pre-push hook runs the affected full gate against the exact pushed range.
 - `scripts/` is guardrails-only; feature tests are named for behavior rather than plan numbers
 
 For installation and the first runnable setup, continue with **[docs/getting-started.md](docs/getting-started.md)**.

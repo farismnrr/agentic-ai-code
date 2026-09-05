@@ -11,7 +11,7 @@
 5. Remove or amend guidance that became false because of the task.
 6. If nothing durable changed, explicitly acknowledge that conclusion rather than inventing memory text just to satisfy process.
 7. Re-check maintainability/ownership after structural changes: no metric-only splits, unexplained hard-budget violations, or stale architecture paths.
-8. Run `pnpm guardrail` and do not finish with a failing applicable local gate.
+8. Run the applicable fast guard during implementation and `pnpm guardrail:full` before closure; do not finish with a failing local gate.
 
 A task is not documentation-complete when implementation and `.agents/` tell different stories.
 
@@ -63,8 +63,8 @@ The repository intentionally has **no CI**. Structural and code-quality enforcem
 - [`../../scripts/check-agent-docs.sh`](../../scripts/check-agent-docs.sh) verifies vendor-neutral guidance, one canonical memory file, the historical Plan 030 snapshot, and valid future plan numbering;
 - [`../../scripts/check-maintainability.mjs`](../../scripts/check-maintainability.mjs) enforces maintained-source/folder budgets and exact reasoned exceptions;
 - [`../../scripts/check-test-layout.mjs`](../../scripts/check-test-layout.mjs) rejects inline tests and test-like files outside approved test directories;
-- [`../../scripts/guardrail.sh`](../../scripts/guardrail.sh) runs repository guardrails plus stack-scoped lint/type/test checks;
-- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the guardrail automatically;
+- [`../../scripts/guardrail.sh`](../../scripts/guardrail.sh) runs repository guardrails plus lifecycle/scoped stack checks;
+- [`.githooks/pre-commit`](../../.githooks/pre-commit) runs the fast guard automatically, while pre-push applies the full gate only to `main`;
 - [`../../scripts/install-git-hooks.sh`](../../scripts/install-git-hooks.sh) installs the tracked hook through `core.hooksPath` during `pnpm install`.
 
 Do not create one-off plan-numbered validation scripts. Reusable behavior belongs in feature-named tests; repository-wide structural invariants belong in the small guardrail set.
@@ -73,4 +73,4 @@ A failed gate means fix the issue before committing. `git commit --no-verify` an
 
 ## Principle
 
-The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → run focused tests + the stack-aware guardrail without bypassing it**.
+The loop is: **read current knowledge + canonical memory + relevant current plan → do the work → update durable context → run focused tests + the applicable guard lifecycle without bypassing it**.

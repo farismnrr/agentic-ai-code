@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-exec pnpm guardrail
+exec pnpm guardrail:fast

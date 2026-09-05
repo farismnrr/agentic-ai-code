@@ -65,13 +65,13 @@ An old unchecked item inside the Plan 030 history is not active work. Re-audit c
 
 The repository intentionally has **no CI workflow**. Tests are normal repository tests rather than plan-specific verification scripts: web tests live under top-level `test/`, while Rust follows Cargo's package-local `tests/` convention.
 
-After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git-hooks.sh) configures Git to use [`.githooks/pre-commit`](../.githooks/pre-commit). Every commit must pass:
+After `pnpm install`, [`../scripts/install-git-hooks.sh`](../scripts/install-git-hooks.sh) configures Git to use [`.githooks/pre-commit`](../.githooks/pre-commit) and the main-only full [`.githooks/pre-push`](../.githooks/pre-push). Every checkpoint commit must pass:
 
 ```sh
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
-The default `pnpm guardrail` checks repository policy, agent-doc integrity, architecture, maintainability, and test layout, then auto-selects lint, typecheck, and tests for the web and/or Rust stack touched by the change. Explicit service gates are available as `pnpm guardrail:nuxt` and `pnpm guardrail:rust`; use `pnpm guardrail:all` only for a deliberate cross-stack contract change. Do not make a Nuxt-only change pay for Rust validation, or a Rust-only change pay for Nuxt validation.
+The fast `pnpm guardrail:fast` checks repository policy, agent-doc integrity, architecture, and test layout, then auto-selects lint/typecheck for touched stacks. Closure uses `pnpm guardrail:full`; release preparation uses `pnpm guardrail:release`. Explicit service gates are available as `pnpm guardrail:nuxt` and `pnpm guardrail:rust`; use `pnpm guardrail:all` only for a deliberate cross-stack contract change. Do not make a Nuxt-only change pay for Rust validation, or a Rust-only change pay for Nuxt validation.
 
 `scripts/` is reserved for guardrails and hook installation. Future plans must add feature-named tests under `test/` or Cargo `tests/`, not `verify-NNN`, `phase-NNN`, or other plan-numbered validation scripts. Historical plan references to removed scripts remain historical evidence only.
 

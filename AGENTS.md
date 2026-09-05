@@ -6,7 +6,7 @@ This is the **only repository agent entrypoint**. Do not add client/vendor-speci
 
 This repository intentionally has **no CI**. Quality enforcement is local, but validation must stay proportional to the changed subsystem:
 
-- JavaScript/TypeScript/Vue tests live under top-level `test/` and run with `pnpm test:web`.
+- New permanent isolated JavaScript/TypeScript/Vue unit tests are forbidden; temporary unit tests must be removed before staging. Existing `test/unit/` files are legacy/manual coverage, while boundary tests live under top-level `test/`.
 - Rust tests live under the single native package at `packages/rust-tools/tests/` and run with `pnpm test:rust`.
 - `scripts/` is reserved for repository guardrails and hook installation. Do not add plan-numbered `verify-*`, `phase-*`, acceptance, or one-off validation scripts.
 - New plans must describe feature tests, not generate a new verification script for the plan number.
@@ -15,10 +15,10 @@ This repository intentionally has **no CI**. Quality enforcement is local, but v
 Before every normal local commit, run:
 
 ```sh
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
-The tracked pre-commit hook runs the same guardrail automatically after `pnpm install`. It always enforces repository/agent/architecture/maintainability/test-layout policy, then runs web or Rust lint/type/test gates only for stacks touched by the change. Never bypass it with `git commit --no-verify`, and never commit while an applicable gate is failing.
+The tracked pre-commit hook runs the fast guard after `pnpm install`; the pre-push hook runs full validation only for pushes targeting `main`. Never bypass either hook or commit/push while an applicable gate is failing.
 
 Implementation delivery always uses a short-lived branch from `main`: commit the focused change, push the branch, open a pull request into `main`, merge the approved PR, then return to `main` and verify the checkout is clean. Do not implement directly on `main` or treat a pushed branch as delivered without the PR merge.
 

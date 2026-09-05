@@ -21,7 +21,9 @@ scripts/check-maintainability.mjs
 scripts/check-repo-policy.sh
 scripts/check-test-layout.mjs
 scripts/guardrail.sh
-scripts/install-git-hooks.sh'
+scripts/install-git-hooks.sh
+scripts/guardrail-nuxt.sh
+scripts/guardrail-rust.sh'
 while IFS= read -r file; do
   if ! grep -Fxq "$file" <<<"$allowed_scripts"; then
     fail "scripts/ is guardrails-only; move feature tests to test/ or Rust tests/, and operational helpers to ops/: $file"

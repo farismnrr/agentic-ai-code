@@ -17,17 +17,18 @@ Web/Node tests live under top-level `test/`. Rust tests live under `packages/rus
 
 ## Mandatory local guardrail
 
-`pnpm install` configures the tracked `.githooks/pre-commit` hook. Run the same check manually with:
+`pnpm install` configures fast pre-commit and main-only full pre-push hooks. Run the fast checkpoint check manually with:
 
 ```bash
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
-The guardrail always checks repository policy, agent guidance, architecture boundaries, maintainability budgets, and test layout. It then looks at changed paths and runs only the applicable stack:
+The fast guard checks repository policy, agent guidance, architecture boundaries, and test layout, then runs lint/typecheck only for the applicable stack. Full closure uses `pnpm guardrail:full` and adds the closure-only maintainability check, build, and declared stack tests. Dependency audits are enabled explicitly with `AI_CODE_GUARD_RUN_AUDIT=1` so an unrelated existing advisory baseline does not block ordinary feature work:
 
-- web changes: `pnpm lint:web`, `pnpm typecheck:web`, `pnpm test:web`;
-- Rust changes: `pnpm lint:rust`, `pnpm typecheck:rust`, `pnpm test:rust`;
-- cross-stack changes: both sets.
+- web changes: `pnpm lint:web`, `pnpm typecheck:web`;
+- Rust changes: `pnpm lint:rust`, `pnpm typecheck:rust`;
+- surviving legacy web checks: explicit `pnpm test:web:legacy`;
+- full closure: `pnpm guardrail:full`.
 
 A Nuxt-only change must not compile, lint, or test Rust merely because both languages live in the same repository. Rust-only changes follow the same rule in the other direction. Validate both only when both stacks or a real shared contract changed.
 
@@ -48,7 +49,7 @@ Use Node's native test runner for repository web tests and Cargo for Rust. No ne
 Run explicitly:
 
 ```bash
-pnpm test:web
+pnpm test:web:legacy
 pnpm test:rust
 ```
 
@@ -78,16 +79,18 @@ Current guardrails:
 | Rust lint | `pnpm lint:rust` |
 | Web typecheck | `pnpm typecheck:web` |
 | Rust typecheck | `pnpm typecheck:rust` |
-| Web tests | `pnpm test:web` |
+| Surviving legacy web checks (manual) | `pnpm test:web:legacy` |
 | Rust tests | `pnpm test:rust` |
-| Stack-aware commit guardrail | `pnpm guardrail` |
+| Fast checkpoint guardrail | `pnpm guardrail:fast` |
+| Full closure guardrail | `pnpm guardrail:full` |
+| Closure maintainability check | `pnpm guardrail:maintainability` |
 | Dependency audit | `pnpm audit` |
 | Generate DB migration | `pnpm db:generate` |
 | Apply DB migrations | `pnpm db:migrate` |
 
 The combined `pnpm lint`, `pnpm typecheck`, and `pnpm test` commands intentionally run both stacks when a full-repository pass is actually desired.
 
-For final UI/runtime verification, prefer `pnpm build && pnpm preview` over a long-lived dev watcher after branch/file changes. For Rust security-sensitive work, run `cargo audit` when applicable. For dependency changes run at least the applicable tests, `pnpm guardrail`, the relevant audit, and the affected build before merge.
+For final UI/runtime verification, prefer `pnpm build && pnpm preview` over a long-lived dev watcher after branch/file changes. For Rust security-sensitive work, run `cargo audit` when applicable. For dependency changes run at least the applicable tests, `pnpm guardrail:full`, the relevant audit, and the affected build before merge.
 
 Operational/deployment/release helpers live under `ops/`, not `scripts/`.
 

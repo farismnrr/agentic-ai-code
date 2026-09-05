@@ -9,7 +9,7 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 0
 fi
 
-chmod +x .githooks/pre-commit
+chmod +x .githooks/pre-commit .githooks/pre-push
 git config --local core.hooksPath .githooks
 
-printf 'git-hooks: installed .githooks/pre-commit as the local commit gate.\n'
+printf 'git-hooks: installed fast pre-commit and main-only full pre-push gates.\n'

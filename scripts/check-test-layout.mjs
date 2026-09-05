@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
@@ -91,7 +92,20 @@ function check(root = ROOT) {
   })
 }
 
-const failures = check()
+function addedUnitTestFailures() {
+  const range = process.env.AI_CODE_GUARD_BASE_SHA && process.env.AI_CODE_GUARD_HEAD_SHA
+    ? [process.env.AI_CODE_GUARD_BASE_SHA, process.env.AI_CODE_GUARD_HEAD_SHA]
+    : ['HEAD']
+  const output = execFileSync('git', ['diff', '--name-only', '--diff-filter=A', ...range], { cwd: ROOT, encoding: 'utf8' })
+  return output.split('\n').filter(Boolean).flatMap((file) => {
+    const lower = file.toLowerCase()
+    const base = lower.split('/').pop() ?? lower
+    const isUnit = lower.startsWith('test/unit/') || /\.unit\.(test|spec)\.(ts|tsx|js|jsx|mjs)$/.test(base)
+    return isUnit ? [`${file}: permanent isolated unit tests are forbidden; use a boundary-level integration/E2E/contract/smoke/regression test or delete the temporary test before commit`] : []
+  })
+}
+
+const failures = [...check(), ...addedUnitTestFailures()]
 if (failures.length) {
   console.error(`Test layout guard failed:\n${failures.map(failure => `- ${failure}`).join('\n')}`)
   process.exit(1)

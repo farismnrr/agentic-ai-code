@@ -21,15 +21,15 @@ Implementation branches base from current `main`. The default delivery is always
 
 ## Repository verification policy
 
-This repository intentionally has **no CI workflow** and has a **mandatory stack-aware local pre-commit guardrail** for normal local commits. Web tests live under top-level `test/`; Rust tests live under `packages/rust-tools/tests/`.
+This repository intentionally has **no CI workflow**. The fast pre-commit gate is stack-aware; full validation is a closure gate and the pre-push hook runs it only for pushes targeting `main`. New permanent isolated unit tests are forbidden; existing unit files are legacy/manual coverage, while boundary tests live under top-level `test/` and `packages/rust-tools/tests/`.
 
-After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit). Every normal local commit must pass:
+After `pnpm install`, Git uses [`.githooks/pre-commit`](../../.githooks/pre-commit) for fast checks and [`.githooks/pre-push`](../../.githooks/pre-push) for the main integration gate. Normal checkpoint commits run:
 
 ```sh
-pnpm guardrail
+pnpm guardrail:fast
 ```
 
-The default guardrail always runs repository/agent/architecture/maintainability/test-layout policy, then runs lint, typecheck, and tests only for the stack(s) touched by the change. Use `pnpm guardrail:nuxt` for an explicit Nuxt-only closure, `pnpm guardrail:rust` for an explicit Rust-only closure, and `pnpm guardrail:all` when a reviewed cross-stack contract is intentionally changing. An applicable failure means **do not commit**.
+Fast validation runs repository/agent/architecture/test-layout policy plus lint/typecheck for touched stacks. `pnpm guardrail:full` adds closure maintainability/build/tests; dependency audits are explicit with `AI_CODE_GUARD_RUN_AUDIT=1`, and `pnpm guardrail:release` also builds release artifacts. An applicable failure means **do not commit or push**.
 
 Never use `git commit --no-verify`, never change/disable `core.hooksPath` to bypass the gate, and never claim a connector/API-created commit passed a local hook that did not actually run.
 
@@ -61,7 +61,7 @@ When implementation starts:
 1. Branch from current `main` before changing implementation files.
 2. Implement the bounded change.
 3. Run relevant subsystem verification.
-4. Run focused tests and `pnpm guardrail` until the applicable gates pass.
+4. Run focused tests and `pnpm guardrail:full` before closure until the applicable gates pass.
 5. Review `git status`; stage only intended files.
 6. Commit only after the local gate is green.
 7. Push the branch and open a PR targeting `main`.
@@ -121,13 +121,13 @@ PRs are for implementation/integration work, not ordinary docs/plan edits.
 
 ```sh
 pnpm audit
-pnpm guardrail
+pnpm guardrail:fast
 pnpm build
 ```
 
 ## Additional subsystem verification
 
-The pre-commit guardrail is the minimum, not proof of runtime behavior. UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and focused Cargo tests; contract changes need focused feature tests on each owning stack.
+The fast pre-commit guardrail is the checkpoint minimum, not proof of runtime behavior. Closure uses `pnpm guardrail:full`; UI changes may need build/preview/browser verification; Rust/MCP security changes may need `cargo audit` and focused Cargo tests; contract changes need focused feature tests on each owning stack.
 
 Do not create a cross-stack verification script merely to prove a plan. Validate each subsystem through its own test runner and add explicit end-to-end verification only when the product boundary itself requires it.
 
@@ -135,7 +135,7 @@ Do not create a cross-stack verification script merely to prove a plan. Validate
 
 - For every user-requested change, including docs/plans, use a short-lived branch and PR; never commit directly to `main`.
 - Do not treat a pushed branch as delivered until its PR is merged.
-- Before **every normal local implementation commit**, ensure `pnpm guardrail` passed; the hook must not be bypassed.
+- Before closure, ensure `pnpm guardrail:full` passed; the fast pre-commit hook and main-only full pre-push hook must not be bypassed.
 - Never claim connector/API docs commits passed a local hook that did not run.
 - Never use `git push --force` on a shared branch.
 - Do not amend/rebase commits already pushed and under review unless explicitly requested and safe.
