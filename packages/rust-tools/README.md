@@ -49,7 +49,7 @@ The relay exposes native workspace mutation/read tools, bounded Git read intelli
 
 Every workspace tool is scoped to the configured execution root. Relative paths resolve from optional `cwd`; contained absolute paths are permitted. Reads may follow only symlinks whose canonical targets stay contained. Recursive traversal does not follow symlink directories. Mutation paths use no-follow descriptor traversal, reject symlinked mutation parents/final targets, and use same-directory temporary files plus atomic commit semantics.
 
-Prefer native workspace/Git/forge tools for structure, search, read, review, history, local Git mutation, remote synchronization, and change-request lifecycle work. Use `terminal_exec` for builds, tests, package managers, interpreters, repository scripts, and operations without a native contract; ordinary terminal execution is not the credential-bearing GitHub delivery bridge.
+Prefer an active dedicated MCP tool for an operation it fully covers, including workspace inspection/editing, remote Git transport, SSH diagnostics, HTTP/web, forge/issues/workflows, alerts, and messaging. Use `terminal_exec` for builds, tests, package managers, interpreters, repository scripts, shell pipelines, and operations without an active structured contract; ordinary terminal execution is not the credential-bearing GitHub delivery bridge. The v15 public catalog intentionally omits local Git and LSP wrappers, so terminal is the supported path for those operations.
 
 ## Relay security/platform contract
 

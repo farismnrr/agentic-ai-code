@@ -3,7 +3,7 @@ name: verify
 description: Run approved bounded repository validation and report truthful results.
 model_policy: fast
 tools:
-  allow: [directory_list, file_search, text_search, file_read, git_status, git_diff, git_log, code_diagnostics, terminal_exec]
+  allow: [directory_list, file_search, text_search, file_read, terminal_exec]
   deny: [file_write, file_edit, apply_patch, http_fetch, web_search]
 effects:
   allow: [workspace_read, workspace_write, git_read, process_exec, network_read, external_mutation]

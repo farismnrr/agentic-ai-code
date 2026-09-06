@@ -1,17 +1,13 @@
-//! Tool-call authorization adaptation and dispatch for MCP HTTP.
-
 use super::{err_response, AppState, AuthContext, AuthDecision, JsonErr, CODING_SCOPE};
-use axum::{http::StatusCode, Json};
-use serde_json::{json, Value};
-use std::sync::Arc;
-use std::time::Instant;
-
 use crate::application::activity::{self, Evidence, Status};
 use crate::core::error::McpError;
 use crate::infrastructure::auth::bearer_challenge_value;
 use crate::infrastructure::observability::audit;
 use crate::interfaces::mcp::{self, Response, ToolCallResult, ToolsCallParams};
-
+use axum::{http::StatusCode, Json};
+use serde_json::{json, Value};
+use std::sync::Arc;
+use std::time::Instant;
 #[path = "task_calls.rs"]
 mod task_calls;
 #[path = "telegram_message.rs"]
@@ -19,23 +15,19 @@ mod telegram_message;
 #[path = "tool_dispatch.rs"]
 mod tool_dispatch;
 #[path = "tool_helpers.rs"]
-mod tool_helpers;
+pub(super) mod tool_helpers;
 use tool_helpers::deny_activity;
-pub(super) use tool_helpers::{activity_result_detail, activity_result_summary};
 use tool_helpers::{
     agent_session_from_params, bounded_tool_error, client_supports_tasks, record_activity_outcome,
     requires_idempotency_key,
 };
-
 pub(super) type JsonErr2 = Result<Json<Value>, JsonErr>;
-
 pub(super) async fn handle_agent_session_start(
     request: &mcp::Request,
     state: Arc<AppState>,
 ) -> JsonErr2 {
     tool_helpers::handle_agent_session_start(request, state).await
 }
-
 pub(super) async fn handle_agent_pre_stop(
     request: &mcp::Request,
     state: Arc<AppState>,
@@ -97,13 +89,11 @@ pub(super) async fn handle_tools_call(
             &err,
         ));
     }
-
     if let crate::core::config::SecurityMode::Remote = state.config.mode {
         let claims = auth_ctx
             .claims
             .as_ref()
             .expect("authorized remote requests have validated claims");
-
         let subject = claims.sub.as_deref().unwrap_or("unknown");
         audit(
             request_id,
@@ -116,8 +106,13 @@ pub(super) async fn handle_tools_call(
             Some(subject),
         );
     }
-
     let agent_session = agent_session_from_params(request.params.as_ref());
+    let task_owner = auth_ctx
+        .claims
+        .as_ref()
+        .and_then(|claims| claims.sub.as_deref())
+        .unwrap_or("local")
+        .to_owned();
     let effects = crate::application::hooks::effect_classes_for_call(
         call.name.as_str(),
         tool.annotations
@@ -149,21 +144,37 @@ pub(super) async fn handle_tools_call(
         .as_ref()
         .and_then(|claims| claims.sub.as_deref())
         .unwrap_or("local");
+    let idempotency_session = agent_session.as_deref().unwrap_or("none");
     let idempotency_key = idempotency_key
         .filter(|_| {
-            execution_mode == "async"
+            call.name == "terminal_job_start"
+                || execution_mode == "async"
                 || (execution_mode == "auto" && client_has_tasks && tool_has_tasks)
         })
-        .map(|key| format!("{idempotency_scope}:{}:{key}", call.name));
+        .map(|key| {
+            format!(
+                "{idempotency_scope}:{idempotency_session}:{}:{key}",
+                call.name
+            )
+        });
     let request_fingerprint = serde_json::to_string(&call.arguments).unwrap_or_default();
     if let Some(key) = idempotency_key.as_deref() {
         match state
             .jobs
-            .existing_idempotency_key(key, &request_fingerprint)
+            .existing_idempotency_key_for(
+                key,
+                &request_fingerprint,
+                &task_owner,
+                agent_session.as_deref(),
+            )
             .await
         {
             Ok(Some(task_id)) => {
-                let Some(task) = state.jobs.get(&task_id).await else {
+                let Some(task) = state
+                    .jobs
+                    .get_for(&task_id, &task_owner, agent_session.as_deref())
+                    .await
+                else {
                     return bounded_tool_error(
                         &request.id,
                         "accepted task is no longer available",
@@ -446,7 +457,6 @@ pub(super) async fn handle_tools_call(
         );
         return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
     }
-
     if let Some(response) = task_calls::try_handle_task_call(task_calls::ToolCallContext {
         request,
         state: state.clone(),
@@ -457,6 +467,8 @@ pub(super) async fn handle_tools_call(
         execute_async,
         idempotency_key: idempotency_key.as_deref(),
         request_fingerprint,
+        owner: &task_owner,
+        session: agent_session.as_deref(),
         request_started,
     })
     .await

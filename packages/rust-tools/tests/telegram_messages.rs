@@ -218,11 +218,11 @@ fn telegram_destination_contract_remains_fixed_and_bounded() {
 
 #[test]
 fn explicit_telegram_tool_replaces_completion_contract() {
-    let tools = tool_catalog_for_profile(ai_tools::core::config::ToolProfile::Primary);
+    let tools = tool_catalog_for_profile(ai_tools::core::config::ToolProfile::Full);
     let tool = tools
         .iter()
         .find(|tool| tool.name == "telegram_send_message")
-        .expect("primary profile exposes Telegram messaging");
+        .expect("full profile exposes Telegram messaging");
     let schema = tool.input_schema.to_string();
     assert!(schema.contains("working_directory"));
     assert!(schema.contains("message"));

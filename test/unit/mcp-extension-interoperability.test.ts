@@ -16,7 +16,7 @@ name: explore
 description: bounded test profile
 model_policy: default
 tools:
-  allow: [file_read, git_status]
+  allow: [file_read, git_remote_list]
   deny: [terminal_exec]
 effects:
   allow: [workspace_read, git_read, privileged_bridge]

@@ -1,5 +1,6 @@
 mod file_edit;
 mod forge;
+mod profile;
 mod ssh;
 mod telegram_message;
 use crate::core::error::McpError;
@@ -374,7 +375,7 @@ pub fn tool_catalog() -> Vec<Tool> {
             name: "terminal_job_start",
             title: Some("Start Terminal Job"),
             description: "Start a bounded sandboxed general CLI fallback job for builds, tests, package managers, interpreters, scripts, or unsupported operations. Prefer an active dedicated MCP tool when it fully covers the operation. Returns a task ID for polling; the same credential, privilege, and SSH boundaries as terminal_exec apply.",
-            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 } }, "required": ["command"], "additionalProperties": false }),
+            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 }, "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Stable key for retrying one logical legacy job start without running it twice." } }, "required": ["command"], "additionalProperties": false }),
             annotations: Some(ToolAnnotations {
                 read_only_hint: false,
                 destructive_hint: true,
@@ -418,43 +419,12 @@ pub fn tool_catalog() -> Vec<Tool> {
     tools.extend(forge::security_tools());
     tools.extend(forge::action_mutation_tools());
     tools
+        .into_iter()
+        .filter(|tool| RETAINED_TOOL_NAMES.contains(&tool.name))
+        .collect()
 }
 
-pub const PRIMARY_TOOL_NAMES: &[&str] = &[
-    "terminal_exec",
-    "ssh_readonly_exec",
-    "telegram_send_message",
-    "terminal_job_start",
-    "terminal_job_get",
-    "terminal_job_cancel",
-    "directory_list",
-    "file_search",
-    "text_search",
-    "file_read",
-    "file_edit",
-    "file_write",
-    "apply_patch",
-    "git_status",
-    "git_diff",
-    "git_log",
-    "git_show",
-    "git_blame",
-    "git_branch_list",
-    "git_stage",
-    "git_unstage",
-    "git_commit",
-    "git_fetch",
-    "git_push",
-    "git_remote_list",
-    "change_request_list",
-    "change_request_get",
-    "change_request_checks",
-    "code_symbols",
-    "code_definition",
-    "code_references",
-    "code_hover",
-    "code_diagnostics",
-];
+pub use profile::{PRIMARY_TOOL_NAMES, RETAINED_TOOL_NAMES};
 
 pub fn tool_catalog_for_profile(profile: crate::core::config::ToolProfile) -> Vec<Tool> {
     match profile {

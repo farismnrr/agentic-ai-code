@@ -53,7 +53,7 @@ for the exact current CLI surface.
 
 ## Relay command cannot find `node`, `pnpm`, or `cargo`
 
-The relay intentionally does not inherit arbitrary host PATH. Add only the reviewed user-owned toolchain directories with `--toolchain-path` or `RELAY_TOOLCHAIN_PATH`.
+The relay intentionally does not inherit arbitrary host PATH. Common owner runtimes are discovered from safe profile directories automatically; add other reviewed toolchain directories with `--toolchain-path` or `RELAY_TOOLCHAIN_PATH`.
 
 Do not fix this with login-shell startup files that reintroduce the full host environment.
 
@@ -80,6 +80,22 @@ Do not unmask credentials just to make a tool call convenient. Use an explicit s
 Expected. The relay intentionally does not expose `/var/run/docker.sock`.
 
 Run Docker-dependent operations—such as `pnpm release:publish`—from a trusted host shell with Docker configured. Do not use sudo/socket mounts/privileged-container tricks to bypass the relay boundary.
+
+## `ls /etc` works or commands can read `/etc/resolv.conf`
+
+Expected behavior. The Bubblewrap sandbox provides system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) as read-only. This is required so compilers, runtimes, dynamic linkers, and system libraries can read DNS configuration (`/etc/resolv.conf`) and TLS root certificates (`/etc/ssl/certs`).
+
+Attempting to modify or create files in `/etc` fails immediately with `Read-only file system`. Host user secrets, `/tmp`, `/proc`, and `/dev` remain isolated.
+
+## Terminal commands fail with `Network is unreachable` or `curl: (7) Couldn't connect`
+
+Expected default behavior. The terminal sandbox executes with an unshared network namespace (`--unshare-net`) by default. Subprocesses cannot connect to external hosts or local host ports.
+
+If a trusted workflow requires network access (e.g. running `pnpm install`, `cargo build`, or downloading dependencies), set `RELAY_ALLOW_TERMINAL_NETWORK=true` or pass `--allow-terminal-network` to the relay. Dedicated HTTP tools (`http_fetch`, `web_search`) remain available independently.
+
+## Local Git, node, or python work in terminal even though dedicated MCP wrappers are absent
+
+Expected behavior. Local version control operations, script execution, builds, and test runs are intended terminal fallbacks. Removing high-level dedicated MCP wrappers from the public catalog does not ban standard non-privilege-escalating developer CLI tools from running inside the terminal sandbox. Only privilege brokers (`sudo`, `su`), SSH clients (`ssh`, `scp`), and dangerous daemons are blocked.
 
 ## Public MCP `/health` works but a client cannot connect
 

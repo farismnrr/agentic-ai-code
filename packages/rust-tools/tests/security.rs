@@ -2,6 +2,12 @@ use ai_tools::core::config::ServerConfig;
 use ai_tools::infrastructure::security::enforce_local_access_policy;
 use axum::http::{header::HOST, header::ORIGIN, HeaderMap, HeaderValue};
 
+#[path = "security/terminal_discovery.rs"]
+mod terminal_discovery;
+#[path = "security/terminal_filesystem.rs"]
+mod terminal_filesystem;
+#[path = "security/terminal_network.rs"]
+mod terminal_network;
 #[path = "security/terminal_sandbox.rs"]
 mod terminal_sandbox;
 

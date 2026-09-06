@@ -1,6 +1,12 @@
 //! MCP HTTP request parsing, protocol dispatch, tools, and task lifecycle handlers.
-
-use super::{err_response, json_error_response, AppState, AuthContext, JsonErr, TOOLS_LIST_TTL_MS};
+use super::{
+    err_response, json_error_response, AppState, AuthContext, AuthDecision, JsonErr,
+    TOOLS_LIST_TTL_MS,
+};
+use crate::core::error::McpError;
+use crate::infrastructure::observability::{audit, CorrelationId, RequestId};
+use crate::infrastructure::telemetry::extract_traceparent;
+use crate::interfaces::mcp::{self, parse_request, DiscoverResult, Id, Response};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -12,12 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-use crate::core::error::McpError;
-use crate::infrastructure::observability::{audit, CorrelationId, RequestId};
-use crate::infrastructure::telemetry::extract_traceparent;
-use crate::interfaces::mcp::{self, parse_request, DiscoverResult, Id, Response};
-
 pub(super) async fn handle_mcp(
     State(state): State<Arc<AppState>>,
     axum::extract::Extension(auth_ctx): axum::extract::Extension<AuthContext>,
@@ -32,7 +32,6 @@ pub(super) async fn handle_mcp(
     let parent_cx = extract_traceparent(&headers);
     let span = tracing::info_span!("relay.request", request_id = %request_id.as_str());
     let _ = span.set_parent(parent_cx);
-
     async move {
         let started = Instant::now();
         let request_id_str = request_id.as_str();
@@ -60,7 +59,6 @@ pub(super) async fn handle_mcp(
             );
             return response;
         }
-
         // Body size is already bounded by DefaultBodyLimit before this handler
         // runs; parse only after that gate, never before.
         let payload: Value = match serde_json::from_slice(&body) {
@@ -84,7 +82,6 @@ pub(super) async fn handle_mcp(
                 return response;
             }
         };
-
         let request = match parse_request(&payload) {
             Ok(req) => req,
             Err(None) => {
@@ -102,7 +99,6 @@ pub(super) async fn handle_mcp(
                 return json_error_response(err_response(StatusCode::BAD_REQUEST, id, &mcp_err));
             }
         };
-
         // The legacy lifecycle is intentionally the only path that bypasses the
         // modern 2026 routing headers, allowing standard MCP clients to discover
         // this server before switching to the existing request contract.
@@ -111,7 +107,6 @@ pub(super) async fn handle_mcp(
             return handle_initialize(&request, &state)
                 .map_or_else(json_error_response, |body| body.into_response());
         }
-
         // Legacy clients do not send the 2026 request metadata or routing
         // headers on the follow-up tools/list request. Keep this compatibility
         // exception narrow; a tools/list request that presents any modern header
@@ -123,7 +118,6 @@ pub(super) async fn handle_mcp(
             return handle_tools_list(&request, &state)
                 .map_or_else(json_error_response, |body| body.into_response());
         }
-
         if let Err(err) =
             crate::interfaces::transport_validation::validate_routing_headers(&headers, &request)
         {
@@ -134,7 +128,6 @@ pub(super) async fn handle_mcp(
                 &err,
             ));
         }
-
         match crate::application::dispatcher::dispatch(&request) {
             crate::application::dispatcher::Dispatch::Discover => {
                 tracing::info!(event = "relay.mcp.discover");
@@ -162,13 +155,13 @@ pub(super) async fn handle_mcp(
                 handle_resources_read(&request, &state)
             }
             crate::application::dispatcher::Dispatch::TasksGet => {
-                handle_task_get(&request, state).await
+                handle_task_get(&request, state, &auth_ctx).await
             }
             crate::application::dispatcher::Dispatch::TasksUpdate => {
-                handle_task_update(&request, state).await
+                handle_task_update(&request, state, &auth_ctx).await
             }
             crate::application::dispatcher::Dispatch::TasksCancel => {
-                handle_task_cancel(&request, state).await
+                handle_task_cancel(&request, state, &auth_ctx).await
             }
             crate::application::dispatcher::Dispatch::AgentSessionStart => {
                 super::tools::handle_agent_session_start(&request, state).await
@@ -196,7 +189,6 @@ pub(super) async fn handle_mcp(
     .instrument(span)
     .await
 }
-
 fn handle_discover(request: &mcp::Request) -> JsonErr2 {
     let response = Response::new(
         request.id.clone(),
@@ -204,7 +196,6 @@ fn handle_discover(request: &mcp::Request) -> JsonErr2 {
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_activity_status(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let (configured, source_id) = state.activity_control.status().map_err(|_| {
         err_response(
@@ -219,7 +210,6 @@ fn handle_activity_status(request: &mcp::Request, state: &Arc<AppState>) -> Json
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_activity_configure(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let params = request
         .params
@@ -271,7 +261,6 @@ fn handle_activity_configure(request: &mcp::Request, state: &Arc<AppState>) -> J
     let response = Response::new(request.id.clone(), json!({ "configured": true }));
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2 {
     let params = request.params.as_ref().and_then(Value::as_object);
     let Some(requested) = params
@@ -300,7 +289,6 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
             },
         ));
     }
-
     let response = Response::new(
         request.id.clone(),
         json!({
@@ -319,7 +307,6 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let tools = mcp::tool_catalog_for_profile(state.config.tool_profile);
     let response = Response::new(
@@ -333,7 +320,6 @@ fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_resources_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let resources = crate::application::resources::list(&state.config)
         .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
@@ -345,7 +331,6 @@ fn handle_resources_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonE
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 fn handle_resources_read(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
     let uri = request
         .params
@@ -369,13 +354,11 @@ fn handle_resources_read(request: &mcp::Request, state: &Arc<AppState>) -> JsonE
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
-
 /// The three dispatch handlers above return `Json<Value>` on success or a
 /// pre-built `JsonErr` on failure, and are converted to a full
 /// [`AxumResponse`] by `.into_response()` in [`handle_mcp`] — this alias
 /// just keeps their signatures short.
 type JsonErr2 = Result<Json<Value>, JsonErr>;
-
 fn task_id(request: &mcp::Request) -> Result<&str, JsonErr> {
     request
         .params
@@ -390,16 +373,31 @@ fn task_id(request: &mcp::Request) -> Result<&str, JsonErr> {
             )
         })
 }
-
-async fn handle_task_get(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
-    let id = task_id(request)?;
-    let task = state.jobs.get(id).await.ok_or_else(|| {
-        err_response(
-            StatusCode::NOT_FOUND,
+async fn handle_task_get(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+    auth_ctx: &AuthContext,
+) -> JsonErr2 {
+    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
+        return Err(err_response(
+            StatusCode::UNAUTHORIZED,
             Some(request.id.clone()),
-            &McpError::InvalidParams("unknown task".into()),
-        )
-    })?;
+            &McpError::InvalidRequest("authentication is required".into()),
+        ));
+    }
+    let id = task_id(request)?;
+    let (owner, session) = task_context(request, auth_ctx);
+    let task = state
+        .jobs
+        .get_for(id, &owner, session.as_deref())
+        .await
+        .ok_or_else(|| {
+            err_response(
+                StatusCode::NOT_FOUND,
+                Some(request.id.clone()),
+                &McpError::InvalidParams("unknown task".into()),
+            )
+        })?;
     Ok(Json(
         serde_json::to_value(Response::new(
             request.id.clone(),
@@ -408,9 +406,20 @@ async fn handle_task_get(request: &mcp::Request, state: Arc<AppState>) -> JsonEr
         .unwrap_or(json!({})),
     ))
 }
-
-async fn handle_task_update(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
+async fn handle_task_update(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+    auth_ctx: &AuthContext,
+) -> JsonErr2 {
+    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
+        return Err(err_response(
+            StatusCode::UNAUTHORIZED,
+            Some(request.id.clone()),
+            &McpError::InvalidRequest("authentication is required".into()),
+        ));
+    }
     let id = task_id(request)?;
+    let (owner, session) = task_context(request, auth_ctx);
     let has_input_responses = request
         .params
         .as_ref()
@@ -424,7 +433,12 @@ async fn handle_task_update(request: &mcp::Request, state: Arc<AppState>) -> Jso
             &McpError::InvalidParams("inputResponses is required".into()),
         ));
     }
-    if state.jobs.get(id).await.is_none() {
+    if state
+        .jobs
+        .get_for(id, &owner, session.as_deref())
+        .await
+        .is_none()
+    {
         return Err(err_response(
             StatusCode::NOT_FOUND,
             Some(request.id.clone()),
@@ -439,12 +453,23 @@ async fn handle_task_update(request: &mcp::Request, state: Arc<AppState>) -> Jso
         .unwrap_or(json!({})),
     ))
 }
-
-async fn handle_task_cancel(request: &mcp::Request, state: Arc<AppState>) -> JsonErr2 {
+async fn handle_task_cancel(
+    request: &mcp::Request,
+    state: Arc<AppState>,
+    auth_ctx: &AuthContext,
+) -> JsonErr2 {
+    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
+        return Err(err_response(
+            StatusCode::UNAUTHORIZED,
+            Some(request.id.clone()),
+            &McpError::InvalidRequest("authentication is required".into()),
+        ));
+    }
     let id = task_id(request)?;
+    let (owner, session) = task_context(request, auth_ctx);
     state
         .jobs
-        .cancel(id)
+        .cancel_for(id, &owner, session.as_deref())
         .await
         .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
     Ok(Json(
@@ -454,4 +479,21 @@ async fn handle_task_cancel(request: &mcp::Request, state: Arc<AppState>) -> Jso
         ))
         .unwrap_or(json!({})),
     ))
+}
+
+fn task_context(request: &mcp::Request, auth_ctx: &AuthContext) -> (String, Option<String>) {
+    let owner = auth_ctx
+        .claims
+        .as_ref()
+        .and_then(|claims| claims.sub.as_deref())
+        .unwrap_or("local")
+        .to_owned();
+    let session = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("_meta"))
+        .and_then(|meta| meta.get("io.modelcontextprotocol/agentSession"))
+        .and_then(Value::as_str)
+        .map(|value| value.chars().take(128).collect());
+    (owner, session)
 }

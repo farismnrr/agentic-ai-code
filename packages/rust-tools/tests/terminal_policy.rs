@@ -24,6 +24,44 @@ fn docker_requires_explicit_opt_in() {
 
 #[test]
 fn executable_paths_remain_forbidden() {
-    assert!(validate_executable("/usr/bin/docker", true).is_err());
-    assert!(validate_executable("../docker", true).is_err());
+    for path in [
+        "/usr/bin/docker",
+        "/bin/docker",
+        "../docker",
+        "./docker",
+        "/usr/bin/sudo",
+        "/bin/sh",
+        "./script.sh",
+        "nested/binary",
+    ] {
+        assert!(
+            validate_executable(path, true).is_err(),
+            "{path} must be forbidden"
+        );
+    }
+}
+
+#[test]
+fn safe_executable_resolution_permits_developer_tools_and_blocks_brokers() {
+    use ai_tools::application::execution::resolve_safe_executable;
+    use ai_tools::core::config::ServerConfig;
+
+    let config = ServerConfig::default();
+    // Common developer runtimes from safe PATH
+    for cmd in ["sh", "python3", "git"] {
+        assert!(
+            resolve_safe_executable(&config, cmd).is_ok(),
+            "{cmd} should resolve from safe PATH"
+        );
+    }
+
+    // Privilege brokers and SSH clients fail resolution even if present on host
+    for forbidden in [
+        "sudo", "su", "doas", "pkexec", "runas", "ssh", "scp", "sftp",
+    ] {
+        assert!(
+            resolve_safe_executable(&config, forbidden).is_err(),
+            "{forbidden} must fail safe resolution"
+        );
+    }
 }

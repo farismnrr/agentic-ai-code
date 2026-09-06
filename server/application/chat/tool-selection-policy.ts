@@ -19,7 +19,7 @@ export function buildToolSelectionPolicy(toolNames: Iterable<string>): string {
     lines.push(`Prefer active ${label} tools: ${active.slice(0, 2).join(', ')}${active.length > 2 ? ' (and other supplied tools in this family)' : ''}.`)
     if (label === 'structured Git') lines.push('Use these tools for covered Git operations, even when a shell could perform the same operation.')
   }
-  const terminals = names.filter(name => /(?:^|[_.])terminal_(?:exec|job_start)$/.test(name))
+  const terminals = names.filter(name => /(?:^|[_.])terminal_(?:exec|job_start|get|cancel)$/.test(name))
   if (terminals.length) {
     lines.push(`CLI fallback: ${terminals.slice(0, 2).join(', ')}. Use for builds, tests, package managers, interpreters, project scripts, sandbox-local process/service commands, composite shell workflows, or operations no active dedicated tool fully covers. Covered Git/file/network operations should use their dedicated tools first. Do not request an extra tool-discovery call; the supplied schemas are the active inventory.`)
   }
