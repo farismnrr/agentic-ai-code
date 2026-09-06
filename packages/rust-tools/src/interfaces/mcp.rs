@@ -9,7 +9,11 @@ use serde_json::{json, Value};
 use crate::core::error::McpError;
 
 pub const PROTOCOL_VERSION: &str = "2026-07-28";
-pub const LEGACY_PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
+// The relay exposes one fully implemented wire contract. Older stateful MCP
+// versions are intentionally not advertised until their complete session and
+// task lifecycle is implemented in Plan 068; accepting only initialize for an
+// older version would create a misleading half-supported protocol claim.
+pub const LEGACY_PROTOCOL_VERSIONS: &[&str] = &[];
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]

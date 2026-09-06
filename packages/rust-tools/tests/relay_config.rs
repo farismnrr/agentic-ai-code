@@ -1,4 +1,5 @@
 use ai_tools::core::config::{Cli, SecurityMode, ServerConfig};
+use ai_tools::interfaces::mcp::{LEGACY_PROTOCOL_VERSIONS, PROTOCOL_VERSION};
 use clap::Parser;
 
 fn remote_config() -> ServerConfig {
@@ -14,6 +15,12 @@ fn remote_config() -> ServerConfig {
         bind_host: "0.0.0.0".into(),
         ..ServerConfig::default()
     }
+}
+
+#[test]
+fn relay_advertises_only_the_fully_implemented_modern_protocol() {
+    assert_eq!(PROTOCOL_VERSION, "2026-07-28");
+    assert!(LEGACY_PROTOCOL_VERSIONS.is_empty());
 }
 
 #[test]
