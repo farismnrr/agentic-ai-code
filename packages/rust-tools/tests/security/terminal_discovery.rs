@@ -213,6 +213,36 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
 
     let client = reqwest::Client::new();
 
+    // 0. initialize handshake with protocol 2026-07-28
+    let init_res = post_mcp(
+        &client,
+        port,
+        "initialize",
+        None,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2026-07-28",
+                "capabilities": {},
+                "clientInfo": { "name": "e2e-wire-client", "version": "1.0" },
+                "_meta": meta()
+            }
+        }),
+    )
+    .await;
+    assert_eq!(init_res.status(), reqwest::StatusCode::OK);
+    let init_json: Value = init_res.json().await.expect("initialize JSON");
+    assert_eq!(
+        init_json
+            .pointer("/result/protocolVersion")
+            .and_then(Value::as_str),
+        Some("2026-07-28"),
+        "protocolVersion must negotiate 2026-07-28"
+    );
+
+    // 1. tools/list returns exactly 15 tools in Primary
     let list_res = post_mcp(
         &client,
         port,
@@ -220,7 +250,7 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
         None,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "tools/list",
             "params": { "_meta": meta() }
         }),
@@ -238,15 +268,90 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
         "Primary profile must have exactly 15 tools"
     );
 
-    // ssh_readonly_exec is NOT in Primary profile
-    let ssh_call = post_mcp(
+    let tool_names: Vec<&str> = tools
+        .iter()
+        .filter_map(|t| t.get("name").and_then(Value::as_str))
+        .collect();
+
+    // Required Primary tools
+    for required in [
+        "terminal_exec",
+        "terminal_job_start",
+        "terminal_job_get",
+        "terminal_job_cancel",
+        "directory_list",
+        "file_search",
+        "text_search",
+        "file_read",
+        "file_write",
+        "file_edit",
+        "apply_patch",
+        "workspace_add",
+        "workspace_list",
+        "workspace_get",
+        "workspace_remove",
+    ] {
+        assert!(
+            tool_names.contains(&required),
+            "Primary profile must include {required}"
+        );
+    }
+
+    // Full tools that MUST NOT appear in Primary
+    for absent in [
+        "ssh_readonly_exec",
+        "http_fetch",
+        "web_search",
+        "git_remote_list",
+        "git_remote_branch_get",
+        "git_fetch",
+        "git_push",
+        "change_request_list",
+        "change_request_get",
+        "change_request_create",
+        "change_request_update",
+        "change_request_checks",
+        "change_request_merge",
+        "issue_list",
+        "issue_get",
+        "issue_create",
+        "issue_update",
+        "issue_comment",
+        "issue_close",
+        "issue_reopen",
+        "workflow_list",
+        "workflow_get",
+        "workflow_run_list",
+        "workflow_run_get",
+        "workflow_run_jobs",
+        "workflow_job_log_preview",
+        "workflow_dispatch",
+        "workflow_run_rerun",
+        "workflow_run_cancel",
+        "dependabot_alert_list",
+        "dependabot_alert_get",
+        "code_scanning_alert_list",
+        "code_scanning_alert_get",
+        "secret_scanning_alert_list",
+        "secret_scanning_alert_get",
+        "secret_scanning_alert_locations",
+        "telegram_send_message",
+    ] {
+        assert!(
+            !tool_names.contains(&absent),
+            "Primary profile must NOT include {absent}"
+        );
+    }
+
+    // 2. tools/call to tool not in Primary returns 404
+    let missing_call = post_mcp(
         &client,
         port,
         "tools/call",
         Some("ssh_readonly_exec"),
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
+            "id": 3,
             "method": "tools/call",
             "params": {
                 "name": "ssh_readonly_exec",
@@ -259,7 +364,29 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
         }),
     )
     .await;
-    assert_eq!(ssh_call.status(), reqwest::StatusCode::NOT_FOUND);
+    assert_eq!(missing_call.status(), reqwest::StatusCode::NOT_FOUND);
+
+    // 3. tools/call to valid Primary tool succeeds
+    let valid_call = post_mcp(
+        &client,
+        port,
+        "tools/call",
+        Some("workspace_list"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "workspace_list",
+                "arguments": {},
+                "_meta": meta()
+            }
+        }),
+    )
+    .await;
+    assert_eq!(valid_call.status(), reqwest::StatusCode::OK);
+    let valid_json: Value = valid_call.json().await.expect("workspace_list JSON");
+    assert!(valid_json.pointer("/result").is_some());
 
     server.abort();
     let _ = server.await;
