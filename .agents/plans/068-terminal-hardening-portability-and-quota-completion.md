@@ -97,6 +97,34 @@ until it passes the same positive and negative evidence matrix.
   no-rerun instruction and that ambiguous outcomes never trigger an unkeyed
   second execution.
 
+## 2026-09-06 MCP Audit Reconciliation
+
+The 2026-09-06 MCP security audit evaluated terminal execution boundaries, catalog consistency, and capability handling. This reconciliation classifies each finding into expected design invariants, confirmed verified boundaries, and remaining portability/quota scope.
+
+### 1. Expected Design Behaviors (Not Defects)
+
+- **Read-only `/etc` availability:** Inspecting `/etc` (e.g. `ls /etc` or reading `/etc/resolv.conf` / CA certificates) succeeds because Bubblewrap mounts `/usr`, `/lib`, `/etc`, `/bin`, and `/sbin` read-only (`ro-bind`). This is mandatory so toolchains, runtimes, dynamic linkers, and TLS stacks function. Write operations to `/etc` fail read-only (`Read-only file system`).
+- **Terminal network via operator opt-in:** Network commands (e.g. `curl`) succeed only when an operator explicitly passes `--allow-terminal-network` / `RELAY_ALLOW_TERMINAL_NETWORK=true`. By default, network is unshared (`--unshare-net`), blocking all outbound connects and raw sockets. Dedicated HTTP/search tools (`http_fetch`, `web_search`) enforce independent SSRF/allowlist policies.
+- **Developer CLI tools survive catalog simplification:** Standard developer tools (Git, Node.js, Python, Cargo, compilers, build systems) are intended terminal fallbacks. Removing high-level dedicated MCP wrappers (such as local Git or LSP wrappers) from the public MCP catalog does not ban standard developer CLI tools from running inside the terminal sandbox.
+- **Broad `$HOME` execution root:** Setting `--execution-root "$HOME"` intentionally permits ordinary user-space file operations across sibling projects within `$HOME`. It functions as a hard ceiling, not a single-directory jail. System D-Bus, journal, host processes, `/tmp`, and credentials remain isolated.
+
+### 2. Confirmed and Verified Boundaries (Behavior-Named Evidence)
+
+Automated integration tests under `packages/rust-tools/tests/` verify all core terminal boundaries:
+
+- **Network Layer Isolation (`security/terminal_network.rs`):** Verified that sandbox unshares network by default, rejecting outbound TCP/UDP connects and raw sockets; verified that operator opt-in restores loopback/network access; verified that dedicated HTTP policy remains independent.
+- **Filesystem & Ceiling Enforcement (`security/terminal_filesystem.rs`):** Verified read-write within authorized workspace and sibling directories; verified read-only enforcement on `/etc` (`touch /etc/test_file` fails); verified `/tmp` is an isolated tmpfs; verified rejection of paths escaping `execution_root` via cwd or symlink traversal.
+- **Recursive Credential & Socket Masking (`security/terminal_sandbox.rs`, `protected_paths.rs`):** Verified that nested `.ssh`, `.aws`, `.cargo/credentials`, `.env.*` (with `.env.example` readable) and nested Unix domain sockets (`.sock`) at arbitrary directory depths are masked with empty mounts before child spawn; verified child environment only retains minimal runtime keys (`LANG`, `PATH`, `TMPDIR`, `HOME`).
+- **Privilege Escalation Denial (`terminal_policy.rs`, `security/terminal_sandbox.rs`):** Verified direct blocking and safe-PATH masking of `sudo`, `su`, `doas`, `pkexec`, `runas`, and direct SSH clients; verified `CapEff=0000000000000000` and Linux `PR_SET_NO_NEW_PRIVS`.
+- **Wire Discovery & Invocation Consistency (`security/terminal_discovery.rs`):** Verified full modern wire client exchange: Full profile exposes 52 tools, Primary profile exposes 15 tools; tool invocation strictly matches profile allowlist; disabled capabilities return structured `CAPABILITY_REVOKED` errors; unknown tools return 404 errors.
+
+### 3. Retained Scope in Plan 068
+
+- **068-B:** Linux resource controls (cgroups/rlimits for memory, CPU, pids, fds) and lifecycle stress.
+- **068-D:** macOS native containment via App Sandbox/helper architecture; fail-closed refusal until verified.
+- **068-E:** Windows native containment via AppContainer / Job Objects; fail-closed refusal until verified.
+- **068-F:** Client persistence, context recovery, and deterministic task resumption across restarts.
+
 ## Required evidence and closure
 
 Run the repository Rust/web full guards plus the applicable official MCP

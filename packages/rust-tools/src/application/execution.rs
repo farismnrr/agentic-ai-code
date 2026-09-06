@@ -14,6 +14,7 @@ pub(crate) mod sandbox;
 mod ssh;
 mod toolchain;
 pub(crate) use process::kill_process_group;
+pub use toolchain::resolve_safe_executable;
 #[derive(Clone)]
 enum InvocationProgram {
     SelfBinary,

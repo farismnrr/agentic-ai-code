@@ -50,7 +50,7 @@ fn broad_home_sandbox() {
     );
 }
 
-async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> JobSnapshot {
+pub(super) async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> JobSnapshot {
     let manager = JobManager::new(config.clone());
     let id = start_terminal_job(
         &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":10000}),
@@ -101,6 +101,22 @@ async fn home_fixture_child() {
         "project-a/.env",
         "project-b/.env.production",
         "project-a/node_modules/dependency/.env.local",
+        "project-a/deep/.ssh/id_rsa",
+        "project-a/deep/.gnupg/secring.gpg",
+        "project-a/deep/.aws/credentials",
+        "project-a/deep/.config/gcloud/credentials.db",
+        "project-a/deep/.config/gh/hosts.yml",
+        "project-a/deep/.docker/config.json",
+        "project-a/deep/.kube/config",
+        "project-a/deep/.npmrc",
+        "project-a/deep/.netrc",
+        "project-a/deep/.pypirc",
+        "project-a/deep/.git-credentials",
+        "project-a/deep/.cargo/credentials",
+        "project-a/deep/.cargo/credentials.toml",
+        "project-a/deep/.env",
+        "project-a/deep/.env.staging",
+        "project-a/deep/.env.local",
         ".local/share/keyrings/login.keyring",
         ".config/chromium/Default/Cookies",
         ".codex/auth.json",
@@ -118,7 +134,15 @@ async fn home_fixture_child() {
     )
     .unwrap();
     fs::write(root.join("project-a/.env.example"), "public-example").unwrap();
+    fs::write(
+        root.join("project-a/deep/.env.example"),
+        "nested-public-example",
+    )
+    .unwrap();
     let _socket = std::os::unix::net::UnixListener::bind(root.join("agent.sock")).unwrap();
+    let _nested_socket =
+        std::os::unix::net::UnixListener::bind(root.join("project-a/deep/auth_helper.sock"))
+            .unwrap();
     for dir in ["project-a", "project-b", "Downloads"] {
         let result = shell(
             &config,
@@ -134,10 +158,12 @@ async fn home_fixture_child() {
         );
         assert_eq!(result.stdout, "ordinary");
     }
-    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local 2>/dev/null; test ! -S ../agent.sock").await;
+    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat deep/.env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local deep/.env deep/.ssh/id_rsa deep/.aws/credentials 2>/dev/null; test ! -S ../agent.sock; test ! -S deep/auth_helper.sock && echo nested-sock-masked").await;
     assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
     assert!(result.stdout.contains("public-example"));
+    assert!(result.stdout.contains("nested-public-example"));
     assert!(!result.stdout.contains("fixture-protected-canary"));
+    assert!(result.stdout.contains("nested-sock-masked"));
     for path in protected.into_iter().chain(["relay-state/payload.key"]) {
         let result = shell(
             &config,
@@ -302,6 +328,18 @@ async fn home_fixture_child() {
     let result = shell(&config, &root, "printf must-not-run").await;
     assert_ne!(result.exit_code, Some(0));
     assert!(!result.stdout.contains("must-not-run"));
+    fs::remove_file(root.join("project-b/.env.local")).unwrap();
+
+    super::terminal_filesystem::test_filesystem_boundaries(&config, &root).await;
+    super::terminal_network::test_network_boundaries(&mut config, &root).await;
+
+    let env_check = shell(&config, &root, "python3 -c 'print(\"py-ok\")' && env").await;
+    assert_eq!(env_check.exit_code, Some(0));
+    assert!(env_check.stdout.contains("py-ok"));
+    assert!(!env_check.stdout.contains("fixture-secret-only"));
+    assert!(!env_check.stdout.contains("PARENT_SECRET_CANARY"));
+    assert!(!env_check.stdout.contains("SSH_AUTH_SOCK"));
+    assert!(!env_check.stdout.contains("DBUS_SESSION_BUS_ADDRESS"));
 }
 
 #[tokio::test]

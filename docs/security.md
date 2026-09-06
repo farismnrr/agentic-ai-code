@@ -82,21 +82,28 @@ support output.
 Broad terminal authority means operator-user work within authorized roots.
 `--dir "$HOME" --execution-root "$HOME"` permits ordinary files throughout
 that home; a project grant stays project-scoped. Bubblewrap remains mandatory,
-with read-only system runtime and isolated `/dev`, `/proc`, `/tmp` and PID
-namespace. The child has no effective capabilities and inherits Linux
-`no_new_privs`, preventing setuid/file-capability elevation even for renamed
-or copied helpers. `sudo`, `su`, `doas`, `pkexec`, `runas` and generic SSH clients
-are denied directly and masked at every visible safe-PATH spelling, including
-separately mounted `/bin` and `/usr/bin` aliases.
+with read-only system runtime (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) and isolated
+`/dev`, `/proc`, `/tmp` (tmpfs) and PID namespace. System configuration files such
+as `/etc/resolv.conf` or TLS CA bundles are readable by runtime toolchains, but writes
+to `/etc` fail read-only (`Read-only file system`). The child has no effective
+capabilities (`CapEff=0000000000000000`) and inherits Linux `PR_SET_NO_NEW_PRIVS`,
+preventing setuid/file-capability elevation even for renamed or copied helpers.
+`sudo`, `su`, `doas`, `pkexec`, `runas` and generic SSH clients are denied directly
+and masked at every visible safe-PATH spelling, including separately mounted `/bin`
+and `/usr/bin` aliases.
 
 The canonical `core::protected_paths` policy masks SSH/GPG/cloud/Git/package
 credentials, all `.env` / `.env.*` except `.env.example`, and known browser,
 keyring, password-manager and CLI authentication stores. Relay state uses its
 canonical configured location and is hidden even when placed inside HOME.
 Protected stores are empty private mounts; file masks prevent host reads and
-writes. The child environment is cleared and rebuilt with runtime-only values;
-SSH/GPG/keyring/session-bus variables are not forwarded. Existing output and
-job-retention redaction remains mandatory.
+writes. Masking applies recursively to nested credential directories (e.g.
+`deep/.ssh`, `deep/.aws`, `deep/.cargo/credentials`, `deep/.env.*`) and nested
+Unix domain sockets across visible trees. Non-secret templates such as `.env.example`
+remain explicitly readable. The child environment is cleared and rebuilt with
+runtime-only values (`LANG`, `PATH`, `TMPDIR`, `HOME`); host secrets, SSH/GPG/keyring,
+and session-bus variables are never forwarded. Existing output and job-retention
+redaction remains mandatory.
 
 Every visible user tree is scanned before spawn, without following directory
 symlinks. Protected symlinks, traversal/metadata failures and the 500,000-entry
@@ -111,8 +118,11 @@ Host `/run/user`, host `/tmp`, host processes, session/system D-Bus and journal
 mounts remain absent. HOME scope never authorizes host-service control.
 Docker/Tailscale sockets remain independent explicit operator opt-ins; Docker
 commonly provides root-equivalent host authority. Network namespace sharing is
-also an independent operator grant, including reachability of host-network
-services; broad filesystem scope does not turn it on.
+also an independent operator grant (`RELAY_ALLOW_TERMINAL_NETWORK=true`); by
+default, Bubblewrap unshares the network namespace (`--unshare-net`), blocking all
+outbound TCP/UDP connects and raw sockets at the kernel level. Dedicated HTTP and
+search tools (`http_fetch`, `web_search`) enforce their own SSRF, private-network,
+and allowlist policies independent of the terminal network flag.
 
 Generic SSH remains separate from `ssh_readonly_exec`. Dedicated SSH restores
 only its reviewed identity and known-host files read-only after masking the
@@ -122,8 +132,12 @@ MCP-first selection is advice derived from the final active tool keys in
 primary and child prompts. It cannot grant missing tools, bypass read-only or
 manual approvals, or replace the relay security checks. Covered file, remote
 Git, HTTP/forge/SSH/messaging operations should use their active dedicated
-capabilities; local Git and language-server work remains terminal fallback.
-No blanket Git executable ban or discovery tool is introduced.
+capabilities; local Git, interpreters, package managers, and language-server work
+remain legitimate terminal fallbacks. No blanket Git executable ban is introduced,
+and removing dedicated MCP wrappers does not ban CLI developer tools.
+Discovery and invocation are consistent: modern wire clients observe 52 tools in
+Full and 15 in Primary; invoking tools disabled by capability returns structured
+revocation errors (`CAPABILITY_REVOKED`), and unknown tools return 404 errors.
 
 ## Deterministic checks
 

@@ -136,10 +136,7 @@ fn is_safe_directory(metadata: &std::fs::Metadata, allow_system: bool) -> bool {
     }
 }
 
-pub(crate) fn resolve_safe_executable(
-    config: &ServerConfig,
-    binary: &str,
-) -> Result<PathBuf, McpError> {
+pub fn resolve_safe_executable(config: &ServerConfig, binary: &str) -> Result<PathBuf, McpError> {
     crate::core::terminal_policy::validate_executable(binary, config.allow_docker)?;
     let safe_entries = safe_path_entries(config);
     let mut canonical_safe_entries = safe_entries

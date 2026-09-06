@@ -64,3 +64,30 @@ fn git_exclusions_cover_static_protected_files() {
         .iter()
         .any(|item| item == "**/.env.*"));
 }
+
+#[test]
+fn nested_protected_family_entries_are_protected() {
+    for family in [
+        "sub/project/.ssh",
+        "deep/nested/.gnupg",
+        "project/a/.aws",
+        "nested/.config/gcloud",
+        "deep/sub/.config/gh",
+        "a/b/c/.docker",
+        "infra/.kube",
+        "repo/.npmrc",
+        "repo/.netrc",
+        "repo/.pypirc",
+        "repo/.git-credentials",
+        "cargo/nested/.cargo/credentials",
+        "cargo/nested/.cargo/credentials.toml",
+        "app/server/.env",
+        "app/server/.env.staging",
+    ] {
+        assert!(
+            is_protected_relative(Path::new(family)),
+            "{family} must be protected"
+        );
+    }
+    assert!(!is_protected_relative(Path::new("app/server/.env.example")));
+}

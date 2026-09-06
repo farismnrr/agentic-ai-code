@@ -221,6 +221,8 @@ RELAY_ALLOW_TAILSCALE
 RELAY_TAILSCALE_SOCKET
 ```
 
+`EXECUTION_ROOT` defines the hard filesystem ceiling for terminal commands and native workspace tools. In the standard single-user laptop profile, setting `EXECUTION_ROOT=/home/owner` (with `--dir` pointing to an initial workspace) permits broad user-space developer actions—including accessing ordinary sibling projects and tools under `$HOME`—without jailbreaking into host-level services. Commands cannot traverse or symlink escape above `EXECUTION_ROOT`. In addition, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
+
 `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
 
 `terminal_exec`, `http_fetch`, and `web_search` accept `execution_mode`:
@@ -231,7 +233,7 @@ explicit async request from an incompatible client is rejected; it is never
 silently converted to sync. Mutating HTTP methods remain synchronous until a
 request-level idempotency layer is available.
 
-Terminal subprocesses use an isolated network namespace by default. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for a trusted workflow that needs network-capable commands such as package installation. Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities and should handle covered operations; they are not enabled by this flag. Generic `ssh`, `scp` and `sftp` remain unavailable; remote diagnostics use `ssh_readonly_exec`.
+Terminal subprocesses use an isolated network namespace (`--unshare-net`) by default, preventing outbound TCP/UDP connects and raw sockets at the kernel level. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for trusted workflows requiring network-capable CLI commands (e.g. package management, dependency installation, or loopback service communication). Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities subject to their own SSRF, private-network, and domain allowlist policies; they do not require or influence this flag. Generic `ssh`, `scp` and `sftp` remain blocked; remote diagnostics use `ssh_readonly_exec`.
 
 Conversation approval modes are `plan` (read-only), `workspace` (edits with review for risky operations), `autonomous` (low-risk bounded calls may proceed automatically), and `manual` (prompt-oriented). These modes never bypass relay hard boundaries. Remembered `always` decisions are narrowed to low-risk, non-opaque calls; shell/interpreter wrappers, network requests, destructive operations, and unknown commands still require review.
 
