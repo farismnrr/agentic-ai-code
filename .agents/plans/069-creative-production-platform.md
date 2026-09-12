@@ -7,9 +7,16 @@ Updated: 2026-09-13
 
 ## Goal
 
-Build a first-party **Masih Awam Creative Production Platform** that can take one creative brief through reusable Elements, multi-model generation, storyboard/scene direction, Blender production, playable-game construction, animation, visual/temporal/playtest QA, compositing, deployment/export, and reusable project handoff **without depending on Higgsfield accounts, Higgsfield MCP, Higgsfield CLI, Higgsfield APIs, or Higgsfield-hosted generation**.
+Build a first-party **Masih Awam Creative Production Platform** whose MCP layer provides model-agnostic and agent-agnostic creative capabilities, reusable Elements/assets, durable jobs, scene/anime/game production state, Blender/DCC execution, browser-game build/playtest primitives, QA evidence, and export/deploy boundaries **without depending on Higgsfield accounts, Higgsfield MCP, Higgsfield CLI, Higgsfield APIs, or Higgsfield-hosted generation**.
 
-The product benchmark is Higgsfield's public 2026 operating model, not merely its MCP surface: compact skills plus references, live model/workflow discovery, durable generation jobs, Canvas-style graph composition, reusable Elements, Soul/Soul Cast-style identity, Popcorn-style connected storyboards, Cinema Studio-style directing and cinematography controls, game design/build/multiplayer/deploy workflows, visual QA, surgical revisions, and explicit publish gates. Masih Awam should reproduce those **behaviors and product layers** with its own runtime, state, skills, adapters, Blender integration, coding/game runtime, and operator-owned engines.
+The strict interoperability benchmark is the **public Higgsfield MCP surface** documented in 2026: OAuth connection, media generation/edit utilities, reusable characters/Elements, audio operations, upload/import/history reuse, asynchronous jobs/results, quota/cost visibility, and MCP-compatible-client operation. Higgsfield's broader Canvas/Popcorn/Cinema/Games surfaces remain product references for the Scene/Anime/Game tracks, but Masih Awam deliberately does **not** copy Higgsfield's agent/model routing responsibility.
+
+The architectural boundary is non-negotiable:
+
+- **upper layer owns intelligence** — user interaction, interviews, prompt authoring, agent choice, model/provider choice, fallback policy, creative direction, and workflow/graph planning;
+- **Masih Awam MCP owns capabilities and execution state** — validated semantic operations, project/Element/asset state, job lifecycle, graph execution of an already-specified DAG, Blender/DCC primitives, build/playtest/runtime primitives, deterministic/structural QA evidence, and export/deploy policy boundaries;
+- **execution bindings are operator/runtime configuration, not product logic** — MCP may expose compatible opaque execution-binding descriptors so the upper layer can choose one, but MCP never decides that tool/capability A must use provider/model B;
+- **no agent management** — Plan 069 does not add agent registries, agent spawning, role routing, skill auto-triggering, conversational interview logic, or model-selection policy to the MCP server.
 
 Three production tracks are first-class from the architecture stage:
 
@@ -23,16 +30,16 @@ The first integrated release still advances incrementally: prove shared creative
 
 Plan 069 is successful when Masih Awam can eventually demonstrate all of the following through its own first-party contracts:
 
-1. A user can give a text brief plus references and receive a bounded, mode-aware production interview rather than an immediate uncontrolled generation call.
+1. Any MCP-compatible upper layer can submit a fully specified creative operation or manifest and receive deterministic validation of required fields; conversational interviews and missing-information questions remain upper-layer behavior, not MCP behavior.
 2. One **Creative Project** owns reusable Elements and manifests for characters, locations, props, style, audio, scenes/shots, game assets, generated outputs, QA, and provenance.
-3. Skills describe **how to produce** while tools/adapters describe **what the runtime may do**; skills do not hard-code one provider/model as product architecture.
-4. Runtime capability and workflow discovery can report available image/video/audio/3D/DCC/game/build capabilities and validated schemas before a workflow commits to them.
+3. The stable MCP contract is **capability-centric, not agent/model-centric**: no public tool name, project schema, workflow identity, or guidance/resource requires a particular provider/model or agent implementation.
+4. Runtime capability, workflow, and compatible execution-binding discovery can report validated semantic schemas before the upper layer commits to execution; discovery never ranks or auto-selects a model/provider/agent.
 5. Generation/build jobs have first-party create/get/wait/cancel/result semantics, deterministic project ownership, bounded outputs, and retained source metadata.
 6. A Canvas-style production graph can compose typed inputs, Elements, generation/edit nodes, storyboard/scene stages, Blender/DCC stages, game-build stages, QA, and delivery with partial reruns and reusable templates.
 7. Reusable **Elements** provide stable project-scoped identities for Character, Location, Prop, Style, Audio/Voice, 3D Asset, Animation Clip, and approved media revisions; Elements can be reused across scenes, anime shots, and games.
-8. Character identity supports both real-person reference/training adapters when explicitly authorized and **fictional-character creation** comparable to Soul Cast: structured appearance, outfit, archetype/personality/backstory, canonical views, later rig/voice bindings, and cross-scene consistency.
+8. Character identity supports both explicitly authorized real-person identity-capable execution bindings and **fictional-character creation** comparable to Soul Cast: structured appearance, outfit, archetype/personality/backstory, canonical views, later rig/voice bindings, and cross-scene consistency.
 9. A Popcorn-like storyboard layer supports Auto and Manual planning modes, connected multi-frame boards, explicit reference roles, reusable Elements, and continuity of character/location/style/lighting/spatial logic before expensive video or animation work.
-10. A Cinema Studio-like Scene Director can convert a script/brief into editable shots with project-global style/lighting/palette rules and per-shot camera/lens/focal/aperture/movement/framing/tempo controls; the agent drafts settings but generation remains an explicit reviewed action.
+10. A Cinema Studio-like **Scene/Shot contract** can store and execute editable project-global style/lighting/palette rules plus per-shot camera/lens/focal/aperture/movement/framing/tempo controls; any AI Director that derives those settings from a script lives in the upper layer and submits the resulting manifest to MCP.
 11. Blender remains a first-class persistent DCC backend for exact geometry, retopology, UVs, materials, hair/clothing, rigging, facial setup, animation, cameras, lighting, rendering, compositing, import/export, and checkpoints.
 12. A Game Studio path can freeze a game design + STYLE FORMULA + asset manifest, generate 2D/3D/audio assets, build while independent jobs run, verify complete gameplay locally, support single-player and reviewed local/online multiplayer paths, deploy to a playable URL, and keep marketplace/public publication separate.
 13. The system can inspect visual, temporal, structural, and gameplay outputs, reject failed results, and perform narrowly scoped revisions instead of blindly regenerating/rebuilding everything.
@@ -46,10 +53,10 @@ Plan 069 is successful when Masih Awam can eventually demonstrate all of the fol
 
 ### In scope
 
-- first-party creative skill architecture and progressive reference/guidance conventions;
+- optional creative guidance/resources that upper layers may consume, with no MCP-owned skill auto-trigger, agent orchestration, or interview runtime;
 - shared Creative Project state, **Element Library**, asset/provenance/revision manifests, and project-scoped reuse;
-- capability/model/workflow discovery separate from skill logic;
-- provider/engine-neutral generation contracts and local/operator-owned adapter selection;
+- semantic capability/workflow discovery plus opaque compatible execution-binding discovery;
+- provider/model/agent-neutral public contracts; provider/model choice and fallback policy remain above MCP;
 - first-party durable generation/build job lifecycle and reusable outputs;
 - **Canvas-style typed production graphs** with branching, parallel jobs, partial reruns, templates, and eventually a visual editor surface;
 - **Storyboard / SceneBoard** workflow with Auto and Manual planning modes, multi-frame continuity, reference roles, and shot manifests;
@@ -64,7 +71,7 @@ Plan 069 is successful when Masih Awam can eventually demonstrate all of the fol
 - audio/voice/music capability routing shared by scenes, anime, and games;
 - deterministic assembly/compositing/export/deploy where practical;
 - reusable presets/templates analogous to Higgsfield Apps/Canvas recipes without copying vendor-specific implementations;
-- skill evaluations and scene/anime/game production acceptance fixtures;
+- contract/resource evaluations and scene/anime/game production acceptance fixtures;
 - incremental milestones from reusable Elements and storyboards to short scenes, anime sequences, and small playable games.
 
 ### Out of scope for the first implementation
@@ -82,65 +89,67 @@ Plan 069 is successful when Masih Awam can eventually demonstrate all of the fol
 - treating generated hidden views of a character/location as factual ground truth when references do not establish them;
 - silently training on copyrighted/private references beyond the user's authorized production inputs;
 - making one visual style (“anime”, “game”, or “cinematic”) synonymous with one hard-coded shader, model, prompt, engine, or topology recipe;
-- reproducing Higgsfield marketing/product-commerce verticals before the shared creative kernel, scene, anime, and game tracks are proven.
+- reproducing Higgsfield marketing/product-commerce verticals before the shared creative kernel, scene, anime, and game tracks are proven;
+- MCP-owned agent registries, agent spawning, subagent routing, skill auto-triggering, chat interview orchestration, or autonomous creative planning;
+- MCP-owned model/provider ranking, default-model selection, quality/cost fallback routing, or public tools whose identity hard-codes a provider/model.
 
 ## Core product decision
 
-**Blender is not the Higgsfield replacement, and generation engines are not the product.** Blender is one persistent DCC backend; coding/game runtimes are another execution backend; generative engines are interchangeable capability providers. Plan 069 owns the higher-level Creative OS that composes them.
+**Blender is not the Higgsfield replacement, generation engines are not the product, and the MCP server is not an agent/model orchestrator.** Blender is one persistent DCC backend; coding/game runtimes are another execution backend; media/AI providers are replaceable execution bindings chosen outside the MCP decision layer.
 
 ```text
-User / Agent / Creative Director
-              |
-              v
-      Masih Awam Creative Skills
-      | routing, interviews, guides,
-      | style/game/scene methodology
-              |
-              v
-     Creative Project + Element Library
-     | Character | Location | Prop | Style
-     | Audio | 3D Asset | Animation | Media
-              |
-              +-------------------+
-              |                   |
-              v                   v
-        SceneBoard / Director   Canvas Graph
-        storyboard + shots      typed DAG/templates
-              |                   |
-              +---------+---------+
-                        v
-              Capability / Workflow Router
-                        |
-      +-----------------+------------------+------------------+
-      |                 |                  |                  |
-      v                 v                  v                  v
- Image/Video Engine  Audio Engine      3D Bootstrap       Blender DCC
-      |                 |                  |                  |
-      +-----------------+------------------+------------------+
-                        |
-                        +------------------------------+
-                        |                              |
-                        v                              v
-                Scene / Anime Runtime           Game Build Runtime
-                shots, render, composite        code, physics, rooms
-                        |                              |
-                        +---------------+--------------+
-                                        v
-                              QA / Playtest / Analysis
-                                        |
-                                        v
-                           Export / Deploy / Publish Gate
+UPPER LAYER — explicitly outside Plan 069 MCP ownership
+User / Product UI / Agent / Skills / Orchestrator
+  intent, questions, creative reasoning, prompt authoring,
+  agent selection, provider/model selection, fallback policy,
+  workflow/graph planning, subjective review
+                      |
+                      | fully specified semantic request / manifest / graph
+                      v
+================ MASIH AWAM MCP BOUNDARY ================
+Creative Project + Element Library + Assets + Jobs
+                      |
+          +-----------+------------+
+          |                        |
+          v                        v
+ Scene/Shot/Game state       Creative Graph executor
+ validate/store/version      executes caller-specified DAG
+          |                        |
+          +-----------+------------+
+                      v
+             Semantic capabilities
+ image | video | audio | 3D | DCC | build | playtest | deploy
+                      |
+                      v
+          caller-selected execution binding
+         (opaque, operator-registered, validated)
+                      |
+      +---------------+----------------+----------------+
+      |               |                |                |
+ media executor   audio executor   3D executor     Blender / build runtime
+      |               |                |                |
+      +---------------+----------------+----------------+
+                      v
+        Results / deterministic evidence / lineage
+                      |
+                      v
+             Export / Deploy / Publish Gate
+=========================================================
 ```
 
 The important architectural rules are:
 
-> **Skills request capabilities; adapters choose engines.**
+> **Upper layers choose; MCP validates and executes.**
 
-> **Elements are reusable creative identity; graphs and manifests describe production; engines only execute.**
+> **No MCP tool, workflow, Element, or project schema hard-codes a provider/model or assumes a particular agent.**
+
+> **For pluggable executor-backed capabilities, the caller supplies `execution_binding_id`; MCP never ranks, defaults, or auto-selects—even if only one compatible binding is currently registered. Omission fails with `execution_binding_required` and compatible IDs.**
+
+> **Elements are reusable creative identity; graphs and manifests describe production; execution bindings only execute.**
 
 > **Scene and game production share assets/state but own different verification loops.**
 
-A creative skill should ask for semantics such as `image.reference_generate`, `storyboard.sequence`, `scene.direct`, `video.image_to_video`, `audio.voice`, `3d.image_to_mesh`, `dcc.character_rig`, `game.build`, `game.playtest`, or `game.deploy`. It must not make the product architecture depend on a transient vendor/model identifier or one game/render engine.
+An upper layer may request semantics such as `image.reference_generate`, `video.image_to_video`, `audio.voice`, `3d.image_to_mesh`, `dcc.execute`, `game.build`, `game.playtest`, or `game.deploy`, optionally with an explicit compatible `execution_binding_id`. Provider/model identifiers do not appear in the stable semantic contract, and MCP does not choose agents, models, providers, prompts, or creative direction.
 
 ## External benchmark audited on 2026-09-13
 
@@ -181,44 +190,47 @@ The goal is not pixel/UI cloning. It is **behavioral parity for the creative-pro
 
 | Higgsfield public surface | Public behavior audited in 2026 | Masih Awam target | Plan priority |
 | --- | --- | --- | --- |
-| Skills + references | compact trigger/decision skills; detailed on-demand references; explicit route-outs/chaining | first-party creative skills + progressive references + evals | **P0** |
-| Generate | one router across image/video/3D/audio, live model schema, jobs, reusable outputs | semantic capability router + adapter discovery + durable creative jobs | **P0** |
+| Skills + references | compact trigger/decision skills; detailed on-demand references; explicit route-outs/chaining | **upper-layer concern**; MCP may expose optional read-only resources but does not manage agents/skills | **outside MCP core** |
+| Generate | one connector across image/video/3D/audio, live schemas, jobs, reusable outputs | semantic capability surface + execution-binding discovery + durable jobs; upper layer chooses binding | **P0** |
 | Canvas | node-based infinite production board; any model as node; branching/parallel compare; reusable workflow templates; partial execution | typed Creative Graph runtime first, then Nuxt visual graph editor; curated safe nodes; template save/reuse | **P0/P1** |
 | Elements | reusable Characters, Locations, Props, saved outputs/reference media across shots/projects | project Element Library with Character/Location/Prop/Style/Audio/3D/Animation/Media types | **P0** |
-| Soul ID | train/reuse a real-person identity across generation paths | optional authorized identity adapters bound to Character Elements, never the source of truth | **P1** |
+| Soul ID | train/reuse a real-person identity across generation paths | optional authorized identity-capable execution bindings behind Character Elements, never the source of truth | **P1** |
 | Soul Cast | construct fictional actors from structured character dimensions/backstory and reuse them across scenes | Fictional Character Builder -> Character Pack/Element -> canonical views/traits/outfit/personality/rig/voice bindings | **P0/P1** |
 | Popcorn | Auto or Manual connected storyboards; multiple references; sequence-level character/light/atmosphere/spatial consistency; frame edits | SceneBoard with Auto/Manual shot planning, multi-frame board, Element references, continuity constraints, revision lineage | **P0/P1** |
-| Cinema Studio | hero-frame-first filmmaking; script-to-shot AI Director; reusable Elements; global look controls; per-shot camera/lens/focal/aperture/moves; native audio; long/reference-heavy clips | Scene Director with project-global visual rules + per-shot cinematography schema; agent drafts, user/review gate triggers execution; generated-video and Blender backends | **P1** |
+| Cinema Studio | hero-frame-first filmmaking; script-to-shot AI Director; reusable Elements; global look controls; per-shot camera/lens/focal/aperture/moves; native audio; long/reference-heavy clips | MCP stores/validates Scene/Director state and executes caller-authored shots; AI directing stays in the upper layer | **P1 state/execution** |
 | Video Explainer | style lock, script blocks, voice/video dependency ordering, deterministic assembly | generic sequence DAG and audio-first dependency patterns usable by scenes/anime | **P1** |
-| Game Generation / Supercomputer Games | prompt -> game design -> asset manifest/style -> parallel asset generation + code -> local verification -> solo/multiplayer -> deploy -> optional publish | Game Studio owning design, assets, coding, playtest, multiplayer adapter, deploy; publication separate | **P1** |
-| Websites/Apps | scaffold/edit/test/deploy full-stack product; generated media can feed app/site | reuse Masih Awam coding agent + future creative-app/project-site templates | **P3** |
+| Game Generation / Supercomputer Games | prompt -> game design -> asset manifest/style -> parallel asset generation + code -> local verification -> solo/multiplayer -> deploy -> optional publish | Game Studio state/build/playtest/multiplayer/deploy capabilities; design/coding intelligence stays above MCP; publication separate | **P1** |
+| Websites/Apps | scaffold/edit/test/deploy full-stack product; generated media can feed app/site | reuse generic workspace/build/deploy capabilities; whichever upper layer owns coding chooses its own agent/model | **P3** |
 | Brandkit / Photoshoot / Cards / Marketing | domain skills lock identity/style and compile specialist deliverables | later vertical skills built on same Element/Graph/QA kernel | **P3** |
-| Virality Predictor / analysis | analyze completed media instead of generating | optional `creative.analyze`/audience-quality adapters; not required for core scene/anime/game launch | **P3** |
+| Virality Predictor / analysis | analyze completed media instead of generating | optional evaluator/analysis execution bindings; not required for core scene/anime/game launch | **P3** |
 | Apps/effects/templates | one-click packaged workflows | saved Creative Graph templates/presets with typed inputs and bounded outputs | **P1/P2** |
 
 **Parity claim boundary:** Plan 069 aims for near-parity in **workflow architecture and user-visible production capability** for scenes, anime, and browser games. It does not claim access to Higgsfield's proprietary models, identical visual quality, credit system, private prompts, private marketplace implementation, or exact UI.
 
-## Higgsfield MCP parity matrix — must not be hand-waved into adapters
+## Higgsfield MCP parity matrix — must not be hand-waved into implementation bindings
 
 The official MCP surface is narrower than the whole Higgsfield website but broader than generic image/video generation. Plan 069 must explicitly cover the agent-facing glue below so an external MCP client can complete the same class of workflows without hidden manual handoffs.
 
 | Higgsfield MCP behavior | Masih Awam parity contract | Required behavior |
 | --- | --- | --- |
-| OAuth connection; no generation API key exposed to the agent | existing Masih Awam MCP OAuth + operator-owned adapter credentials | creative tools inherit authenticated MCP identity; provider secrets never enter model-visible args or generic terminal authority |
-| All image/video models reachable through one connector | `creative model list/get` plus semantic capability discovery | concrete model inventory is discoverable at runtime; agent may auto-select or honor an explicit user-selected model when compatible |
-| Model parameters available directly through MCP | validated per-model/per-workflow schemas | free parameter selection is bounded by reviewed schema; skills may provide defaults but cannot hide supported user controls |
-| Text, reference-image, and mixed-reference generation | typed media/reference roles | one or multiple references can be attached to a job with explicit roles and adapter compatibility validation |
+| OAuth connection; no generation API key exposed to the agent | existing Masih Awam MCP OAuth + operator-owned execution-binding credentials | creative tools inherit authenticated MCP identity; provider secrets never enter client/model-visible args or generic terminal authority |
+| One account can be connected from multiple MCP-compatible agents/clients | normal OAuth/session concurrency; no agent registry | MCP sessions are client-neutral and owner-scoped; no global “active agent” state or agent-specific runtime lock exists |
+| Higgsfield requires an active subscription | **deliberate N/A** | Masih Awam MCP auth does not require a Higgsfield-like subscription; execution-binding availability/quota is operator/provider configuration and reported independently |
+| Higgsfield Unlimited/free generations do not apply through MCP | **deliberate N/A with equivalent accounting transparency** | Masih Awam does not invent Higgsfield billing semantics; every selected binding reports measurable cost/quota/compute metadata honestly and budget policy applies consistently |
+| All image/video generation options reachable through one connector | semantic capability discovery + `execution_binding.list/get` | MCP exposes compatible opaque execution bindings and schemas; the **upper layer** chooses the provider/model/binding. Stable tool contracts never name or auto-route to a provider/model |
+| Model/tool parameters available directly through MCP | validated semantic schemas + binding-specific namespaced extensions | common capability parameters stay provider/model-neutral; an upper layer may pass a chosen binding's validated extension fields without making those fields part of the stable cross-provider contract |
+| Text, reference-image, and mixed-reference generation | typed media/reference roles | one or multiple references can be attached to a job with explicit roles and selected-binding compatibility validation; parity acceptance includes at least one caller-selected image binding that can produce a 4K-class output without changing MCP schemas |
 | Image upscaling | `image.upscale` | preserve lineage, requested scale/resolution, bounded output and QA |
-| Video upscaling | `video.upscale` | preserve source timing/audio where supported and report adapter limitations honestly |
+| Video upscaling | `video.upscale` | preserve source timing/audio where supported and report selected-binding limitations honestly |
 | Image background removal | `image.remove_background` | transparent/derived asset with parent lineage |
 | Video background removal | `video.remove_background` | alpha/matte or equivalent reviewed output contract; duration/resolution bounds |
 | Image expand/outpaint | `image.outpaint` | aspect/canvas expansion without overwriting accepted parent revision |
-| Video reframe/expand | `video.reframe` | target aspect/resolution with normal job/cost/QA semantics |
+| Video generation duration + reframe/expand | `video.generate` + `video.reframe` | binding descriptors expose duration/aspect bounds; parity acceptance includes at least one caller-selected video binding capable of a >=15-second clip and target reframe without making that binding a default |
 | Motion-control generation | `video.motion_control` / typed motion reference | character/reference image and motion video have distinct roles; timing/source metadata retained |
-| Reusable Soul characters | Character Elements + optional identity adapter | selected character revision can be referenced by name/ID across jobs without re-uploading source photos |
+| Reusable Soul characters | Character Elements + optional identity-capable execution binding | selected character revision can be referenced by name/ID across jobs without re-uploading source photos |
 | Reusable reference Elements for characters, locations, props; several per prompt | Element Library | jobs accept multiple Element IDs/revisions and preserve dependency lineage |
 | Voiceover / speech generation | `audio.speech` / `audio.voice` | language/performance metadata, contained output, timing metadata |
-| Voice cloning | `audio.voice_clone` | explicit authorized reference/audio ingest, provenance, reusable voice Element, adapter-specific artifact hidden behind Element contract |
+| Voice cloning | `audio.voice_clone` | explicit authorized reference/audio ingest, provenance, reusable voice Element, binding-specific artifact hidden behind Element contract |
 | Voice change / conversion | `audio.voice_change` | source voice/audio -> derived audio with parent lineage and consent/usage policy |
 | Video dubbing | `audio.video_dub` | source video + translation/voice plan -> synchronized derived video/audio assets |
 | Personal Clipper / long-video-to-shorts utility | `video.clip_extract` workflow | safe source ingestion, transcript/segment plan where available, selected clips with timestamp lineage; no arbitrary downloader bypass |
@@ -229,25 +241,29 @@ The official MCP surface is narrower than the whole Higgsfield website but broad
 | Reuse a past generation directly | stable Asset IDs + promoted Elements | no forced download/re-upload round trip; one accepted asset can become input to another job/graph/scene |
 | Return finished media to chat while also saving it to Assets | MCP media result + Asset record | tool result includes bounded preview/resource link plus stable Asset ID; durable asset remains queryable after the turn |
 | Generation history tagged by source | provenance/source field | record `mcp`, `canvas`, `scene`, `anime`, `game`, `blender`, `manual/import`, or equivalent audited origin |
-| Credit balance check | `creative budget/status` | local adapters report configured compute/quota state where measurable; paid adapters report remaining quota/cost data only when their API safely provides it |
+| Credit balance check | `creative budget/status` | selected bindings report configured compute/quota state where measurable; paid bindings report remaining quota/cost data only when their API safely provides it |
 | Cost before generation | `creative estimate` | estimate model/workflow cost or local compute class before submit; estimates carry units/source/confidence |
 | “Ask before spending” user workflow | enforceable budget/approval policy | support per-job/batch/session/project thresholds and approval gates; unlike Higgsfield's prompt-only cap, hard limits should fail closed where platform policy can enforce them |
-| Durable create/get/wait/list semantics | first-party creative job lifecycle | `submit/get/wait/list/cancel`, retained status, bounded failures, stable result assets, cross-turn retrieval |
-| Separate workflow catalog from model catalog | `creative workflow list/get` | higher-level chains have schemas/cost inputs/results but still create normal jobs |
-| Full skill-based multi-step production through MCP | first-party skill registry + Creative Graph/Scene/Game orchestration | skills may plan several jobs, reuse Elements/assets, run QA, and return final deliverables without requiring the user to manually bridge stages |
-| Agent auto-selects a model when user does not specify one | selection policy | selection is based on capability, references, duration/resolution, local resources, quality evals, license/cost policy; selected model is reported in lineage |
-| User can force an exact model | explicit model override | honor when active/compatible; otherwise explain precise incompatibility instead of silently substituting |
+| Generation is asynchronous and the connected agent polls/results arrive later | first-party creative job lifecycle | `submit/get/wait/list/cancel`, retained status, bounded failures, stable result assets, cross-turn retrieval; MCP does not require one long blocking agent turn |
+| Separate workflow catalog from model catalog | `workflow.list/get` separate from `execution_binding.list/get` | higher-level chains have schemas/cost inputs/results and create normal jobs; execution bindings are discoverable but never selected by MCP policy |
+| Full multi-step production through an MCP-connected agent | caller-specified Creative Graph + Scene/Game manifests + reusable Assets/Elements | the **upper layer/agent** owns skills, planning, interviews, creative decisions, and graph construction; MCP validates/executes the submitted graph/manifests without managing agents or auto-triggering skills |
+| Website/App building through supported connected agents | existing generic workspace/Git/file/terminal/build/test/deploy capabilities + creative Assets/Elements | upper layer owns design/coding/model/agent choice; MCP supplies editable source/project operations and keeps build/deploy/public-publish authority distinct; no dedicated website agent is introduced |
+| Browser game creation through MCP/Supercomputer surface | Game Manifest + generic workspace/build/playtest/deploy primitives + optional multiplayer binding | upper layer owns game design/code generation; MCP owns durable source/assets/build/playtest/deploy state and verification boundaries |
+| Agent auto-selects a model when user does not specify one | **upper-layer responsibility; intentionally not implemented in MCP** | Higgsfield's own docs attribute this behavior to the connected agent. Masih Awam MCP exposes compatible execution bindings only; the caller supplies one for pluggable executor-backed operations. Omission returns `execution_binding_required`, never server-side selection/defaulting |
+| User can force an exact model/provider in the connected experience | upper layer resolves that request to an explicit `execution_binding_id` | MCP honors the caller-selected compatible binding or rejects it precisely; it never silently substitutes or embeds provider/model names in the semantic tool contract |
 
 ### MCP parity rules
 
-1. **Model catalog, workflow catalog, asset/history catalog, and skill catalog are different concepts.** Do not collapse them into one `creative_capabilities` blob that makes agent discovery ambiguous.
+1. **Semantic capability, execution-binding, workflow, and asset/history catalogs are different concepts.** MCP does not own an agent/skill catalog. Do not collapse discovery into one ambiguous blob, and do not expose provider/model choice as a stable tool identity.
 2. **Every transform is a first-class lineage operation.** Upscale, remove-background, outpaint, reframe, motion control, dubbing, and clip extraction produce child assets rather than overwriting accepted inputs.
 3. **External-client upload is part of the product contract.** Conversation-local attachments alone do not satisfy MCP parity because a generic external MCP client may not be able to pass local file bytes directly.
 4. **Media return and media persistence are separate guarantees.** A user should see/review the result in the current conversation and still be able to find/reuse it later by Asset ID.
 5. **History is queryable state, not log scraping.** Generation/upload history uses project-owned records and typed filters rather than reading raw activity logs.
-6. **Cost/budget behavior is explicit.** Local-first does not mean “free”; jobs may consume GPU time, provider quota, disk, or money, and the agent should be able to estimate and obey hard limits before a batch starts.
+6. **Cost/budget behavior is explicit.** Local-first does not mean “free”; jobs may consume GPU time, provider quota, disk, or money. MCP reports/enforces measurable bounds for the caller-selected execution binding; the upper layer decides whether that cost is acceptable and whether to ask the user.
 7. **Utility/edit operations belong to the same job/QA system as generation.** They must not become ad-hoc shell commands or direct engine calls.
 8. **Client-specific omissions are not platform architecture.** Higgsfield's ChatGPT plugin currently omits some surfaces such as audio/website building; Masih Awam's core MCP contract should remain client-neutral and let each client expose the subset it can render/authorize.
+9. **No agent identity is part of creative state.** Concurrent clients share owner/project state only through normal authorization and stable IDs; Plan 069 never stores an “active agent”, agent persona, model preference, or agent-specific routing state.
+10. **Billing/account semantics are translated, not cloned.** Higgsfield subscription/credit rules are vendor-specific; Masih Awam parity is transparent estimate/quota/budget behavior for the caller-selected execution binding, not imitation of Higgsfield credits.
 
 ### Extended MCP parity backlog — advertised skills/post tools
 
@@ -264,87 +280,83 @@ The official MCP landing/blog material also demonstrates broader packaged workfl
 | motion design / animated infographics | Creative Graph + Scene Director + vector/text/layout/media nodes | P2 |
 | face/character swap | reviewed identity-edit capability with explicit consent/provenance and lineage | P2, safety-gated |
 | lighting/weather/background/object edits | structured image/video edit/inpaint specifications with scoped revision lineage | P2 |
-| restore/stabilize/time-remap/auto-cut | post-production utility adapters under the same job/asset contract | P2 |
-| color grading/reference color match | scene/style color specification + deterministic/post adapter | P2 |
+| restore/stabilize/time-remap/auto-cut | post-production execution bindings under the same job/asset contract | P2 |
+| color grading/reference color match | scene/style color specification + deterministic post-processing binding | P2 |
 | Marketing Studio / ad multiplier | vertical skill/template over Elements + Scene/Audio/Graph; no second job/state system | P3 |
-| Website Building | existing Masih Awam coding lifecycle + creative Asset/Element imports | P3 except game deploy path already P1 |
+| Website Building / Apps | existing generic workspace/Git/file/build/test/deploy/publish lifecycle + creative Asset/Element imports; no managed coding agent | **MCP parity P1 contract reuse**, product templates/UI may remain later |
 
-Any future extended utility must use the existing model/workflow discovery, safe ingest, Asset lineage/history, budget, jobs, QA, and graph authority. “Parity expansion” is not permission to add ad-hoc provider calls.
+Any future extended utility must use the existing semantic capability/execution-binding/workflow discovery, safe ingest, Asset lineage/history, budget, jobs, QA, and graph authority. “Parity expansion” is not permission to add ad-hoc provider/model-specific public tools.
 
 ## What Higgsfield gets right — the operating model to reproduce
 
-Higgsfield's strongest pattern is not any individual model. It separates **decision knowledge** from **execution capability**:
+Higgsfield's strongest pattern is not any individual model. It separates **decision knowledge** from **execution capability**. Plan 069 preserves that separation even more strictly:
 
-- compact `SKILL.md` files keep trigger rules, stage flow, decision trees, UX rules, and route-outs near the agent;
-- detailed model tables, prompts, troubleshooting, and domain knowledge move into on-demand references;
-- skills chain through explicit returned values rather than hidden conversational magic;
-- model/workflow schemas are discovered live instead of assuming static parameters forever;
+- Higgsfield-style skills/references, trigger rules, interviews, prompt strategy, model/provider choice, and creative decision trees are **upper-layer concerns** and may inspire clients/agents, but are not MCP server runtime;
+- MCP exposes typed capability/workflow/execution-binding schemas instead of assuming static parameters forever;
 - media has typed roles and validation before submission;
-- generation creates jobs that can be waited on/retrieved later;
-- domain workflows ask only the questions that materially change the output;
-- expensive generation is gated by concept/style decisions;
-- specialized workflows can own prompt enhancement so the agent does not freehand every production prompt;
-- completed outputs become reusable inputs to later stages;
-- final results are visually inspected where possible;
-- revisions can be surgical and preserve accepted composition/state;
-- deployment/publication is a distinct action from creation and remains explicit.
+- generation/edit/build work creates durable jobs that can be waited on/retrieved later;
+- completed outputs become reusable Assets/Elements for later calls;
+- deterministic/structural evidence is returned by MCP while subjective creative review stays with the upper layer unless it explicitly supplies an evaluator binding;
+- revisions are lineage-preserving child operations rather than in-place mutation;
+- deployment/publication is a distinct action from creation and remains explicit;
+- the MCP server never manages agents or chooses a provider/model on their behalf.
 
-Plan 069 adopts those product patterns while replacing the backend completely.
+Plan 069 adopts those execution/state patterns while leaving intelligence/orchestration above the MCP boundary.
 
 ## 1:1 operating-model comparison
 
 | Higgsfield behavior | Why it matters | Masih Awam equivalent | Scene / Anime / Game use |
 | --- | --- | --- | --- |
-| Skill auto-trigger and `Use when` / `NOT for` boundaries | avoids one giant ambiguous agent prompt | first-party creative skills with explicit trigger/route-out contracts | route character design vs shot production vs rigging vs key art correctly |
-| Small decision-oriented `SKILL.md`, large on-demand `references/` | controls context cost | keep routing/stage logic compact; load detailed anime references only after a path is chosen | anatomy/proportion, topology, toon shading, facial rig, animation principles loaded only when needed |
-| Minimal, mode-specific interviews | gathers only information that changes production | typed intake gates per skill | ask style/character/shot questions once; do not interrogate the user repeatedly |
-| Live `model list/get` | prevents stale model assumptions | `creative_capabilities` / adapter schema discovery | know which reference-image, video, audio, 3D, or resolution features are actually available |
-| Separate `workflow list/get` from model catalog | treats chains as first-class products | first-party workflow registry separate from engine catalog | turnaround generation, image->3D bootstrap, rigging, lipsync, shot render are workflows, not “models” |
-| Media role validation | avoids malformed generation inputs | typed creative asset roles and adapter validation | `character_front`, `character_side`, `style_reference`, `motion_reference`, `voice_reference`, etc. |
+| Skill auto-trigger and `Use when` / `NOT for` boundaries | useful for connected agents, but not MCP execution authority | **upper layer only**; MCP exposes capability/resource metadata but never auto-triggers skills or manages agents | clients may route character/shot/rig/key-art work however they choose |
+| Small decision-oriented `SKILL.md`, large on-demand `references/` | controls agent context cost | optional upper-layer guidance/resources; not an MCP runtime dependency | clients may progressively load anatomy/topology/toon/animation guidance without changing MCP contracts |
+| Minimal, mode-specific interviews | gathers only information that changes production | **upper layer only**; MCP returns typed validation/missing-field errors | any agent/UI can ask the questions in its own style |
+| Live model discovery | prevents stale executor assumptions | `execution_binding.list/get` + semantic capability discovery | upper layer sees compatible bindings/capabilities without MCP ranking or choosing providers/models |
+| Separate workflow discovery from implementation catalog | treats chains as first-class products | first-party workflow registry separate from execution-binding catalog | turnaround, rigging, lipsync, shot render are workflows; caller chooses compatible execution bindings |
+| Media role validation | avoids malformed generation inputs | typed creative asset roles and selected-binding validation | `character_front`, `character_side`, `style_reference`, `motion_reference`, `voice_reference`, etc. |
 | Auto-upload local path / reuse previous job output | lets outputs chain naturally | reviewed workspace materialization + stable asset IDs | concept art -> SceneBoard -> Blender/game asset -> shot/build |
 | Canvas graph | keeps a whole multi-model workflow visible, branchable, reusable, and partially rerunnable | typed Creative Graph + saved templates + graph execution state | compare scene looks, branch anime variants, generate game assets in parallel without losing lineage |
 | Elements | turns accepted characters/locations/props into reusable project assets instead of repeated prompt text | Element Library with typed references and selected revisions | same hero/location/prop reused by Scene Studio, anime shots, and Game Studio |
 | Popcorn Auto/Manual storyboard | sequence consistency is solved before expensive video generation | SceneBoard Auto/Manual planning, connected frames, continuity rules, frame-level revision | direct a cinematic scene, anime board, or game cutscene with shared cast/location/style |
-| Cinema Studio AI Director | script/idea becomes editable shot settings rather than an opaque monolithic generation | Creative Director drafts Scene Manifest + cinematography; user/review gate triggers jobs | global style/lighting plus per-shot lens/focal/aperture/move/tempo for generated video or Blender |
+| Cinema Studio AI Director | script/idea becomes editable shot settings rather than an opaque monolithic generation | upper layer authors the Scene Manifest; MCP validates/stores/executes it | global style/lighting plus per-shot lens/focal/aperture/move/tempo remain engine-neutral state |
 | Hero Frame First | locks composition/cast/location/look before motion makes changes expensive | approved hero frame/storyboard frame required before selected high-cost motion paths | cheaper scene/anime iteration and stronger continuity |
 | Soul ID reusable identity | consistency survives many generations | Character Identity Pack | authorized real-person identity or recurring visual identity across scenes/media |
 | Soul Cast fictional actor builder | invented characters need structured creation, not face training | Fictional Character Builder -> Character Element/Pack | anime/game actors with physique, outfit, traits, archetype/backstory, canonical views and later rig/voice |
 | Brandkit reusable identity system | locks visual system before assets proliferate | Style Bible + World Bible | line language, shape language, color script, shader family, environments, typography/key-art rules |
-| Domain prompt enhancer | encodes specialist production language | first-party prompt/spec compiler owned by skill/workflow | convert approved character/shot manifest into engine-specific prompt/graph parameters |
-| Product Photoshoot mode router | intent chooses workflow, not surface keywords | anime still/key-art mode router | character portrait, full-body key art, action pose, environment still, expression sheet, promo composition |
-| Thumbnail concept gate | concept is selected before costly render | shot/key-art concept gate | silhouette/readability/composition checked at thumbnail/storyboard scale before final generation |
-| Style preset resolve before explainer blocks | one style key stabilizes multi-shot output | locked Style Bible / Style Pack | all shots share line/shape/palette/material/camera language |
-| Generate all narration blocks before video blocks | freezes one modality before dependent generation | dependency-aware shot DAG | lock dialogue/voice timing before lipsync and final animation where appropriate |
+| Domain prompt enhancer | encodes specialist production language | upper layer owns creative prompt/spec authoring; selected execution binding only performs deterministic syntax translation/validation | MCP does not invent creative prompts or choose a model |
+| Product Photoshoot mode router | intent chooses workflow, not surface keywords | upper-layer routing over stable MCP primitives | MCP exposes the operations/state needed for portrait, full-body, action, environment, expression, or promo work but does not classify user intent |
+| Thumbnail concept gate | concept is selected before costly render | upper-layer approval policy using MCP cost estimate + assets/manifests | MCP enforces explicit submit/budget/approval boundaries but does not choose the concept |
+| Style preset resolve before explainer blocks | one style key stabilizes multi-shot output | Style Element/Pack stored by MCP; upper layer selects/locks it | all shots can reference one selected revision without MCP deciding style |
+| Generate narration before dependent video blocks | freezes one modality before dependent generation | caller-specified dependency DAG executed by MCP | ordering comes from the submitted graph/manifest, not MCP creative planning |
 | Explicit job `create/get/wait/list` | generation is durable work, not one RPC | first-party creative job lifecycle | long image/video/3D/audio jobs survive normal agent turns and can be referenced later |
-| Cost query before workflow | prevents uncontrolled spending | resource/compute estimate where an adapter can provide it | estimate local GPU/runtime or paid third-party cost before large batches |
+| Cost query before workflow | prevents uncontrolled spending | estimate for the caller-selected execution binding | MCP reports/enforces measurable limits; upper layer decides whether to proceed/ask user |
 | Multi-variant generation with controlled dimensions | explores deliberately | variant sets with explicit changed fields | vary pose/camera/expression while identity/style remain locked |
-| Post-render visual gate | model output is evidence, not success by assumption | `creative_visual_qa` + model vision/manual review | identity, hands, costume, silhouette, line continuity, text, props, framing |
+| Post-render visual gate | output is evidence, not success by assumption | MCP returns previews/deterministic evidence; upper layer or caller-selected evaluator performs subjective review | identity, hands, costume, silhouette, line continuity, text, props, framing remain outside MCP judgment unless explicitly evaluated |
 | Surgical edit from selected job | preserves good state | revision lineage + mask/scope-aware edits | change expression/background/color/camera without resetting accepted character design |
-| Skill chaining via returned IDs | keeps boundaries explicit | typed project/Element/asset/job references | Character -> SceneBoard -> Blender/Video -> Anime; Style/Assets -> Game Build -> Deploy |
+| Skill chaining via returned IDs | keeps boundaries explicit | typed project/Element/asset/job references usable by any upper-layer agent/orchestrator | no hidden conversational state or MCP-owned skill runtime is required |
 | Game `STYLE FORMULA` + asset manifest | global coherence before parallel asset/code work | Style Bible + Game Design Manifest + Asset Manifest | no game code/visual batch before core loop, controls, performance budget, style, and assets are frozen |
-| Parallel game asset generation + coding | uses idle generation time and treats game build as orchestration | job DAG can run independent image/3D/audio jobs while coding agent builds against stable manifest paths | faster game production without hidden race/asset-name drift |
+| Parallel game asset generation + coding | uses idle generation time and treats game build as orchestration | caller-specified DAG runs independent asset jobs while any upper-layer coding system builds against stable manifest paths | faster game production without MCP managing a coding agent |
 | Game local verification | a generated build is not “done” until complete loop/input/runtime errors are checked | game playtest contract + browser/runtime verification + two-session multiplayer test where applicable | verify win/lose/restart, keyboard/touch/gamepad, responsive render, fixed-step behavior, missing assets, console errors |
 | Deploy separate from publish | a playable private/share URL is not the same as public marketplace publication | `game.deploy` and `game.publish` are different authority/effect boundaries | user may test/share without accidental public listing |
-| Website/app create -> repo edit -> deploy | creation and publication are separate lifecycles | reuse coding-agent project/build/deploy lifecycle | game/site/app source stays editable; deploy/publish remain explicit |
-| Eval scenarios/version sync | skills remain testable products | creative skill eval suite + versioned contracts | prove routing, state preservation, QA/playtest, scene/anime/game benchmarks over time |
+| Website/app create -> repo edit -> deploy | creation and publication are separate lifecycles | reuse generic workspace/build/test/deploy capabilities | any upper-layer coding system may drive them; source stays editable and deploy/publish remain explicit |
+| Eval scenarios/version sync | keeps behavior testable | MCP contract/resource/graph/scene/game evals; agent-routing evals belong to whichever upper layer owns them | prove state preservation, validation, execution, QA evidence, and parity over time |
 
-## 1:1 mapping of the nine Higgsfield skills
+## Upper-layer mapping of the nine public Higgsfield skills — reference only
 
-This is a **behavioral mapping**, not a plan to copy their product names or vendor-specific prompts.
+These are **behavioral examples for clients/agents above MCP**, not Masih Awam MCP-owned skills or agent routing. Plan 069 must provide the state/capabilities they would need, but the MCP server does not auto-trigger, install, select, or execute an agent skill.
 
 | Higgsfield skill | Core mechanic to learn | Masih Awam native counterpart | Priority for target |
 | --- | --- | --- | --- |
-| `higgsfield-generate` | broad media router + live schema discovery + jobs + reusable media | `creative-generate` capability/skill | **P0** shared foundation |
-| `higgsfield-soul-id` | one-time reusable real-person identity training/reference | `character-identity` adapter binding inside Character Element | **P1** when authorized; not required for fictional characters |
-| `higgsfield-brandkit` | lock palette/type/logo/style, dependency-aware revisions | `style-bible` + World/Visual Bible | **P0** shared scene/anime/game visual-system authority |
-| `higgsfield-product-photoshoot` | mode router + short interview + specialist prompt enhancer | `creative-stills` / `anime-key-art` / environment reference workflow | **P2** useful production pattern |
-| `higgsfield-marketplace-cards` | fixed deliverable bundle from one identity | `promo-pack` templates | **P3** after production core |
-| `higgsfield-video-explainer` | style lock + block planning + audio-first dependency + assembly | `scene-sequence` dependency DAG and deterministic assembly | **P1** scene/anime orchestration pattern |
-| `higgsfield-youtube-thumbnail` | truthful concept gate + variants + visual QA + surgical edits | `key-visual` / cover workflow | **P2**; validates concept/QA/revision patterns |
-| `higgsfield-game-generation` | game profile + STYLE FORMULA + asset manifest + parallel generation/build + playtest + deploy/publish split | **`game-production` / Game Studio** | **P1 first-class target**, not a later spinoff |
-| `higgsfield-websites` | scaffold/edit/test/deploy lifecycle and media chaining; public docs now also describe app/game project types | existing Masih Awam coding agent + reviewed web/game project templates | **P1 for game build/deploy**, **P3 for generic sites/apps** |
+| `higgsfield-generate` | broad media work + discovery + jobs + reusable media | upper layer composes semantic media capabilities/jobs/assets | **P0 MCP primitives; routing stays above MCP** |
+| `higgsfield-soul-id` | one-time reusable real-person identity training/reference | Character Element + caller-selected identity-capable execution binding | **P1** when authorized; no MCP model choice |
+| `higgsfield-brandkit` | lock palette/type/logo/style, dependency-aware revisions | Style/World Elements + asset/revision contracts; upper layer authors the creative system | **P0 state primitives** |
+| `higgsfield-product-photoshoot` | mode router + interview + specialist prompt enhancement | upper-layer workflow over image/edit/Element/QA primitives | **P2 upper-layer template** |
+| `higgsfield-marketplace-cards` | fixed deliverable bundle from one identity | upper-layer graph/template over shared Assets/Elements | **P3 upper-layer template** |
+| `higgsfield-video-explainer` | style lock + block planning + audio-first dependency + assembly | caller-specified scene DAG + deterministic assembly | **P1 MCP graph/state primitives; planning stays above** |
+| `higgsfield-youtube-thumbnail` | concept gate + variants + QA + surgical edits | upper-layer concept workflow over Assets/revisions/edit primitives | **P2 upper-layer template** |
+| `higgsfield-game-generation` | game profile + STYLE FORMULA + asset manifest + parallel generation/build + playtest + deploy/publish split | Game Manifest/Assets/Graph/build/playtest/deploy primitives; upper layer authors game design | **P1 first-class MCP execution/state target** |
+| `higgsfield-websites` | scaffold/edit/test/deploy lifecycle and media chaining | existing coding/build/deploy capabilities; whichever upper layer owns coding chooses its agent/model | **P1 for game build/deploy**, **P3 generic sites/apps** |
 
-The first release does **not** need every marketing/business vertical. It does need the shared mechanisms that make Higgsfield feel like one coherent creative platform: skills, Elements, graph/workflow composition, capability discovery, durable jobs, storyboards/scenes, generation, QA/revisions, editable source/project state, game playtest, and explicit deploy/publish boundaries.
+The first release does **not** need every marketing/business vertical or any MCP-owned skill runtime. It does need the shared mechanisms an arbitrary upper-layer agent/client requires to build equivalent experiences: Elements, graph/workflow execution, semantic capability/execution-binding discovery, durable jobs, scene/shot state, generation/edit primitives, QA evidence/revisions, editable source/project state, game playtest, and explicit deploy/publish boundaries.
 
 ## Shared creative state
 
@@ -400,7 +412,7 @@ Rules:
 
 ### Character Identity Pack
 
-Generalize Higgsfield **Soul ID + Soul Cast** into one reusable Character Element/Pack. Real-person identity training is only one optional adapter; invented anime/game actors start from structured character design instead.
+Generalize Higgsfield **Soul ID + Soul Cast** into one reusable Character Element/Pack. Real-person identity preparation is only one optional caller-selected execution capability; invented anime/game actors start from structured character design instead.
 
 - authoritative reference images and their roles;
 - name/ID and design notes;
@@ -418,7 +430,7 @@ Generalize Higgsfield **Soul ID + Soul Cast** into one reusable Character Elemen
 - armature/rig binding when created;
 - facial shape-key/driver binding when created;
 - voice binding when created;
-- generation adapter-specific optional identity artifacts such as embeddings/LoRA/checkpoints, stored as implementation details rather than product identity.
+- execution-binding-specific optional identity artifacts such as embeddings/LoRA/checkpoints, stored as implementation details rather than product identity.
 
 A Character Pack must be usable before model training exists. Reference-image consistency is the minimum viable path; optional training/fine-tuning can be added when measured quality justifies it.
 
@@ -442,7 +454,7 @@ This is the anime equivalent of Higgsfield Brandkit plus explainer style presets
 - typography/key-art rules if promo assets are in scope;
 - negative constraints that protect the chosen style from common drift.
 
-The Style Pack is engine-neutral. Engine adapters translate it into prompts, node graphs, shader setups, or render configuration.
+The Style Pack is execution-binding-neutral. Upper layers author the creative specification; caller-selected bindings may translate validated fields into provider/runtime syntax, shader setups, or render configuration.
 
 ### World / Location Pack
 
@@ -507,7 +519,7 @@ Per-shot fields:
 - continuity constraints;
 - QA state.
 
-The same scene/shot specification may compile into a generative-video request, Blender camera/animation setup, or a game cutscene adapter. Engine-specific syntax does not belong in the manifest.
+The same scene/shot specification may compile into a generated-video execution request, Blender camera/animation setup, or a game cutscene execution path. Binding/provider/model-specific syntax does not belong in the manifest.
 
 ### Game Design / Build Manifest
 
@@ -560,15 +572,15 @@ Graph requirements:
 - cache/reuse of accepted outputs where safe;
 - saved templates with declared inputs/outputs;
 - node status/progress and bounded failure classification;
-- cost/compute estimate metadata where adapters support it;
-- no arbitrary model-supplied executable node/plugin/ComfyUI graph in the initial release;
+- cost/compute estimate metadata where the caller-selected execution binding supports it;
+- no arbitrary caller-supplied provider-native executable graph/plugin/script through ordinary graph nodes in the initial release;
 - a future Nuxt visual editor can render/edit this same graph contract rather than inventing a second workflow model.
 
 ### Audio / Voice Pack
 
 For recurring characters and sequences:
 
-- voice identity/reference or TTS adapter binding;
+- voice identity/reference plus optional caller-selected speech/voice execution binding;
 - language/pronunciation notes;
 - emotional/performance direction;
 - dialogue timing artifacts;
@@ -578,20 +590,20 @@ For recurring characters and sequences:
 
 ## Production gates
 
-The workflow must deliberately slow down at cheap decisions and speed up after approval.
+These are **state/execution preconditions**, not MCP-owned conversations. The upper layer gathers/chooses creative facts and approvals; MCP validates whether the submitted manifests/assets satisfy each gate before high-cost or high-effect execution.
 
 ### Gate A — Brief
 
-Before generation, determine only missing facts that materially change production:
+Before generation, the upper layer should resolve and submit the facts that materially change production:
 
 - what is being made;
 - target duration/format;
 - character count and which references are authoritative;
 - style/reference intent;
 - must-preserve details;
-- autonomy level: user chooses major creative direction vs agent may choose.
+- caller-provided approval/autonomy metadata when the upper layer uses such a concept.
 
-No repeated questions for facts already visible in attachments or conversation.
+MCP does not ask these questions itself. It reports missing/invalid required fields deterministically.
 
 ### Gate B — Elements, style, and identity lock
 
@@ -634,10 +646,10 @@ For game production, before broad asset generation or gameplay implementation:
 
 ### Gate E — Execute only from frozen manifests/graphs
 
-- compile approved Scene/Game/Asset state into engine-specific jobs or editable source;
+- compile approved Scene/Game/Asset state into binding-specific execution requests or editable source without changing the stable semantic manifests;
 - start independent jobs in parallel where safe;
 - partial reruns must preserve unrelated accepted ancestors;
-- agent-generated Director suggestions do not silently trigger expensive generation/publication.
+- storing caller-authored Director state does not silently trigger expensive generation/publication.
 
 ### Gate F — Visual / temporal / structural / playtest review
 
@@ -652,30 +664,31 @@ Never claim production completion from tool exit status alone.
 
 Higgsfield hides specialist prompt assembly behind some domain workflows. Masih Awam should reproduce the **separation of concerns**, not a private prompt.
 
-The skill produces a structured creative specification. An adapter-specific compiler converts that specification into:
+The **upper layer/caller** produces a structured creative specification. A selected execution binding may use a binding-specific compiler to translate that already-specified request into:
 
 - image/video/audio prompt text;
 - reference ordering/roles;
-- model parameters;
-- ComfyUI/workflow parameters if that adapter is selected;
+- validated semantic capability parameters;
+- namespaced binding-native extension parameters when the caller-selected binding requires them;
 - Blender script/template arguments;
 - deterministic compositor/layout parameters.
 
 Rules:
 
-1. User-facing skill logic owns creative intent and invariants.
-2. Adapter compiler owns engine syntax.
-3. Raw vendor prompt details are not the durable project contract.
-4. A revision should change only the intended structured fields when possible.
-5. Prompt/compiler versions must be traceable in generation lineage so a result can be reproduced/explained.
+1. Upper-layer client/agent logic owns creative intent, prompt authoring, workflow planning, model/provider choice, and subjective invariants.
+2. MCP owns semantic request validation, durable state, job execution, and effect/approval boundaries.
+3. The caller-selected execution binding may own deterministic provider syntax translation; it does not own creative model selection.
+4. Raw vendor/model prompt details are not the durable project contract.
+5. A revision should change only the intended structured fields when possible.
+6. Binding/compiler versions must be traceable in job lineage so a result can be reproduced/explained without turning them into stable product semantics.
 
 ## Capability abstraction
 
 Initial semantic capability vocabulary should cover at least:
 
 ```text
-model.list
-model.get
+execution_binding.list
+execution_binding.get
 workflow.list
 workflow.get
 budget.status
@@ -723,13 +736,13 @@ audio.video_dub
 3d.texture
 3d.rig_bootstrap
 
-storyboard.auto
-storyboard.manual
+storyboard.validate
+storyboard.store
 storyboard.revise_frame
-scene.direct
-scene.hero_frame
-scene.shot_compile
-scene.continuity_check
+scene.manifest_validate
+scene.hero_frame_register
+scene.shot_execute
+scene.continuity_evidence
 
 graph.validate
 graph.execute
@@ -744,64 +757,57 @@ dcc.preview
 dcc.render
 dcc.checkpoint
 
-game.design
+game.manifest_validate
 game.build
 game.playtest
 game.multiplayer_local
 game.multiplayer_online
 game.deploy
 game.publish
+
+project.source_inspect
+project.source_mutate
+project.build
+project.test
+project.deploy
+project.publish
 ```
 
 This vocabulary is a planning target, not a requirement to expose one MCP tool per line. The implementation should keep the public surface compact and allow one tool to advertise multiple semantic capabilities through discovery.
 
-## Generation-engine strategy
+## Execution-binding strategy — model/provider agnostic by design
 
-Do not recreate Higgsfield by replacing it with another hard-coded cloud vendor.
+Do not recreate Higgsfield by replacing it with another hard-coded cloud vendor, local engine, or server-side model router.
 
-### V1 decision rule
+An **execution binding** is an opaque operator-registered implementation endpoint for one or more semantic capabilities. A binding may internally represent a local runtime, one provider/model, a remote GPU worker, Blender, a build runtime, or another reviewed executor. Its implementation identity is not the public capability identity.
 
-At implementation time, select the smallest operator-owned media-engine substrate that can satisfy the first scene/anime milestones. **ComfyUI is the preferred media candidate to re-audit** because it can act as a local graph/runtime for multiple image/video/3D workflows, but this plan does not claim it is installed or freeze it without a fresh compatibility/security review. Game source/build/runtime ownership remains with the existing Masih Awam coding/tool workspace plus a reviewed browser-game template/runtime contract; do not force game code execution through the media engine.
+Every execution binding must satisfy:
 
-Any v1 engine adapter must satisfy:
-
-- disabled by default;
-- explicit operator configuration;
+- disabled by default unless explicitly registered/enabled by the operator/runtime owner;
 - bounded/local or explicitly approved endpoint policy;
-- no model-supplied arbitrary endpoint;
-- schema/capability discovery;
-- curated workflow/template selection rather than arbitrary model-supplied executable graphs in the first release;
+- no model/agent-supplied arbitrary endpoint;
+- declared supported semantic capabilities and validated parameter/media-role bounds;
 - bounded job concurrency/timeouts/results;
 - stable project/job/asset lineage;
-- credentials, if any, isolated from generic `terminal_exec`;
-- clear effect classification for generation that writes workspace outputs or uses external services;
-- no claim that every installed third-party custom node is safe merely because the engine is local.
+- credentials isolated from generic `terminal_exec` and from model-visible/client-visible arguments;
+- clear effect classification for workspace writes, network use, billing/quota, host execution, or deployment;
+- no claim that a local/custom executor is safe merely because it runs locally.
 
-### Engine adapters are replaceable
+The MCP exposes **three discovery layers** and no ranking layer:
 
-Future adapters may target local runtimes, user-owned remote GPU workers, or paid providers. Skills must remain unchanged when equivalent capabilities move between adapters.
+1. semantic capability discovery (`image.reference_generate`, `video.motion_control`, etc.);
+2. workflow discovery (`workflow.list/get`) for typed higher-level executable contracts; and
+3. compatible opaque execution-binding discovery (`execution_binding.list/get`) so the **upper layer** can choose an implementation.
 
-The runtime must expose **two discovery layers**:
+An execution-binding descriptor exposes only bounded non-secret facts needed by the caller: stable binding ID, supported semantic capabilities, media/reference roles, parameter extensions/bounds, duration/resolution/aspect constraints, license/usage notes when known, estimate availability, and health/availability classification. Provider/model names may exist as optional operator-facing metadata, but must never be required by the stable semantic contract or encoded into tool names/workflow IDs.
 
-1. semantic capability discovery (`image.reference_generate`, `video.motion_control`, etc.) for durable skill routing; and
-2. concrete model discovery (`model.list/get`) for users/agents that want to inspect or force a specific installed/available model.
+**There is no MCP model-selection policy.**
 
-A model descriptor should expose only bounded non-secret facts needed for routing: stable adapter-local model ID, display name, supported semantic capabilities, media/reference roles, parameter schema/bounds, duration/resolution/aspect constraints, license/usage notes when known, cost/compute estimator availability, and health/availability classification. It must not expose credentials, raw provider config, arbitrary endpoints, or unreviewed executable workflow internals.
-
-Model selection belongs to runtime policy based on:
-
-- required capability;
-- reference/identity support;
-- resolution/duration constraints;
-- latency/resource budget;
-- local hardware availability;
-- user preference or explicit model override;
-- measured quality on scene/anime/game evals;
-- license/usage constraints.
-
-If the user names an exact active model and it supports the request, the runtime must preserve that choice. If it is unavailable or incompatible, fail/explain precisely rather than silently substituting. If no model is specified, auto-selection may choose one and must record the choice in job lineage.
-
-Do not select a default because it is trendy or because Higgsfield currently selects it.
+- If the caller supplies a compatible `execution_binding_id`, MCP validates and uses it.
+- Any semantic operation that needs a pluggable external/media executor requires a caller-selected `execution_binding_id`; even when only one binding is currently registered, MCP does not turn that accident of configuration into model-selection policy.
+- If the caller omits the binding, MCP returns a bounded `execution_binding_required` result with compatible binding IDs; it does not rank, benchmark, default, or auto-select.
+- Provider/model fallback, cost-vs-quality choice, agent choice, and user-preference interpretation belong entirely to the upper layer.
+- Job lineage records the selected binding ID/version and a bounded implementation fingerprint for reproducibility, without making that implementation the durable project contract.
 
 ## Creative job lifecycle
 
@@ -818,14 +824,14 @@ A job record should return bounded metadata:
 - job ID;
 - project ID;
 - workflow/capability ID;
-- adapter ID and adapter version;
+- selected execution-binding ID and binding version/fingerprint;
 - status/progress classification;
 - creation/completion timestamps;
 - safe parameters summary;
 - input asset IDs;
 - output asset IDs;
 - failure classification without raw credential/provider leakage;
-- compute/cost estimate/actual when the adapter can provide it.
+- compute/cost estimate/actual when the selected execution binding can provide it.
 
 Raw prompts, giant workflow JSON, credentials, and unrestricted engine logs must not become routine client-visible metadata.
 
@@ -911,7 +917,7 @@ The first version may use ordered frame/contact-sheet previews before video-nati
 
 ## Creative Graph / Canvas execution model
 
-The graph manifest above is not merely storage. It is the shared orchestration substrate that gives Masih Awam the useful behavior of Higgsfield Canvas while preserving stronger execution boundaries.
+The graph manifest above is not merely storage. It is a caller-authored orchestration contract that gives Masih Awam the useful execution behavior of Higgsfield Canvas while preserving stronger boundaries. MCP executes/validates graphs; it does not invent the graph or choose its agents/models.
 
 ### Required graph behavior
 
@@ -935,12 +941,12 @@ The first release should prefer a reviewed closed-world registry such as:
 
 - `InputText`, `InputAsset`, `ElementRef`, `SelectRevision`;
 - `GenerateImage`, `GenerateVideo`, `GenerateAudio`, `Generate3D`;
-- `EditImage`, `ReframeVideo`, `UpscaleMedia` where active adapters support them;
-- `StoryboardAuto`, `StoryboardManual`, `HeroFrame`;
-- `SceneCompile`, `ShotCompile`, `ContinuityCheck`;
+- `EditImage`, `ReframeVideo`, `UpscaleMedia` where caller-selected bindings support them;
+- `StoryboardStore`, `StoryboardRevise`, `HeroFrameRef`;
+- `SceneManifestValidate`, `ShotExecute`, `ContinuityEvidence`;
 - `BlenderInspect`, `BlenderAuthor`, `BlenderRender`, `BlenderExport` as high-level graph stages backed by the reviewed Blender capability;
 - `GameBuild`, `GamePlaytest`, `GameDeploy`;
-- `VisualQA`, `TemporalQA`, `GameQA`, `UserApproval`;
+- `VisualEvidence`, `TemporalEvidence`, `GameQA`, `ExternalReviewGate`;
 - `AssembleSequence`, `ExportArtifact`.
 
 Do not expose “arbitrary Python”, “arbitrary shell”, or arbitrary third-party custom-node graphs as ordinary Canvas nodes. Privileged underlying tools retain their own approval/effect contracts.
@@ -964,12 +970,16 @@ Real-time multi-user collaboration is later; graph/project identities must still
 
 Scene Studio is the shared narrative-production layer for ordinary cinematic scenes, anime sequences, trailers/cutscenes, and story-driven game content.
 
-### Scene intake modes
+### Scene intake modes — upper-layer provenance, one MCP contract
 
-- **Script/brief mode** — parse a paragraph/script into scenes and candidate shots.
-- **Auto storyboard mode** — derive a bounded connected board from scene intent and Elements.
-- **Manual storyboard mode** — user/agent specifies each frame/shot explicitly.
-- **Existing-board mode** — ingest approved frames and convert them into a Scene/Shot Manifest.
+MCP does not parse a script into shots or run an AI Director. It accepts/validates SceneBoard/Shot state produced by any upper layer and records how it was authored:
+
+- **script/brief-derived** — an upper layer parsed a paragraph/script into scenes/shots before submission;
+- **auto** — an upper-layer agent/tool derived a connected board from scene intent and Elements;
+- **manual** — a user/upper layer specified frames/shots explicitly;
+- **existing-board** — approved frames are imported and registered into a Scene/Shot Manifest.
+
+All modes use the same MCP schema, lineage, validation, and execution primitives.
 
 ### SceneBoard requirements
 
@@ -981,23 +991,20 @@ Scene Studio is the shared narrative-production layer for ordinary cinematic sce
 - frame-level edit/revision without discarding unrelated accepted frames;
 - board can feed hero-frame generation, generative-video jobs, Blender blocking, or game cutscene production.
 
-### Creative Director behavior
+### Director specification boundary
 
-Mirror the useful Cinema Studio contract: the director **suggests and populates settings; it does not silently generate**.
+Mirror the useful Cinema Studio **state contract**, not its internal intelligence. Any upper layer may act as an AI Director and submit:
 
-The Director can:
+- scene/shot decomposition;
+- shot size and composition;
+- camera/lens/focal length/aperture/depth-of-field intent;
+- camera movement and movement speed;
+- project-global genre/style/lighting/color rules;
+- pacing/tempo and edit points;
+- Element bindings;
+- hero-frame choices and required references.
 
-- break scripts/scenes into shots;
-- choose/recommend shot size and composition;
-- propose camera/lens/focal length/aperture/depth-of-field intent;
-- propose camera movement and movement speed;
-- apply project-global genre/style/lighting/color rules;
-- reason about pacing/tempo and edit points;
-- bind Elements to shots;
-- detect missing references/assets before execution;
-- compile one Scene Manifest into adapter-specific generated-video or Blender instructions.
-
-The user or active autonomy policy reviews the populated plan before expensive/high-effect execution.
+MCP validates required fields/references, stores/version-controls the Director specification, estimates/enforces execution bounds, and executes requested shots through caller-selected bindings or Blender. It does **not** invent creative settings, choose an agent/model/provider, or infer an autonomy policy.
 
 ### Hero Frame First
 
@@ -1010,7 +1017,7 @@ For workflows where a still controls subsequent motion, prefer:
 5. visual QA/selection;
 6. only then motion/video/Blender animation.
 
-This is not mandatory for every engine, but it is the default when it materially improves cast/location/composition continuity.
+This is not mandatory for every execution binding. Whether to use Hero Frame First is an upper-layer creative decision recorded in the Scene Manifest, not an MCP default chosen from model heuristics.
 
 ### Scene output levels
 
@@ -1034,18 +1041,20 @@ Game Studio is not a later “spinoff.” It is one of the three primary product
 - **deploy** — produce a shareable playable deployment after QA;
 - **publish** — separate explicit public marketplace/catalog action when/if Masih Awam gains such a surface.
 
-### Full game workflow
+### Full game execution workflow
 
-1. Resolve game profile, delivery context, core loop, win/lose/restart/progression, target devices, inputs, performance budget, language, and player-count mode.
-2. Freeze one Style Element / STYLE FORMULA and `design/assets` manifest before generated visual batches or broad game implementation.
-3. Resolve multiplayer route: solo, local same-screen, or online room/state-sync.
-4. Start independent image/3D/audio generation jobs in parallel.
-5. Build/edit source against stable manifest paths while jobs run; placeholders are explicit and later replaced through manifest identity, not ad-hoc filenames.
-6. For animated 3D assets, validate skeleton/action compatibility; Blender may rig/retarget/create procedural clips where generation adapters are insufficient.
-7. Run the game over HTTP/runtime preview, never claim browser behavior from static source inspection alone.
-8. Verify complete loop, restart, assets, console/runtime errors, responsive rendering, declared keyboard/mouse/touch/gamepad controls, timing/physics behavior, and performance budget.
+The **upper layer** authors game design and chooses execution/coding agents. MCP owns the durable manifests, assets, jobs, build/playtest/deploy primitives:
+
+1. Receive/validate a Game Design/Build Manifest containing delivery context, core loop, win/lose/restart/progression, target devices, inputs, performance budget, language, and player-count mode.
+2. Store/freeze the caller-approved Style Element / STYLE FORMULA and `design/assets` manifest before broad execution.
+3. Receive the caller-selected multiplayer route: solo, local same-screen, or online room/state-sync.
+4. Execute independent image/3D/audio jobs in parallel only when the submitted graph declares that independence.
+5. Let any upper-layer coding system build/edit source against stable manifest paths; MCP/workspace primitives preserve source and asset identity.
+6. For animated 3D assets, expose skeleton/action compatibility evidence and Blender rig/retarget primitives; the upper layer chooses the remedy.
+7. Run the game over HTTP/runtime preview; never claim browser behavior from static source inspection alone.
+8. Verify deterministic complete-loop, restart, assets, console/runtime errors, responsive rendering, declared inputs, timing/physics behavior, and performance budget.
 9. For multiplayer, verify at least two sessions/clients and room/state synchronization behavior.
-10. Deploy only after QA; public publish remains separately authorized.
+10. Deploy only after required QA/evidence gates; public publish remains separately authorized.
 
 ### Game runtime architecture
 
@@ -1055,7 +1064,7 @@ Do not hard-code the product to one frontend/game framework before implementatio
 - 3D web path when needed;
 - platform-owned multiplayer room/state-sync module when online play is enabled;
 - source remains editable in a normal workspace/repository;
-- the coding agent may use ordinary application tooling, tests, browser/runtime preview, and existing safe terminal/build surfaces;
+- whichever upper-layer coding system is selected may use ordinary application tooling, tests, browser/runtime preview, and existing safe terminal/build surfaces; MCP does not select or manage that agent;
 - generated assets are inputs to source, not opaque hosted objects that make the game impossible to continue outside a chat turn.
 
 ### Game QA and failure handling
@@ -1115,7 +1124,7 @@ Do not enable generic outbound stdio MCP in Nuxt and do not spawn the official P
 9. URLs and arbitrary host paths are not asset-import shortcuts;
 10. activity/logging does not persist giant scripts/scene dumps;
 11. attachment ingress is explicit and contained;
-12. the coding agent never restarts the live relay/systemd service as part of source implementation.
+12. no upper-layer coding system or Plan 069 implementation step restarts the live relay/systemd service implicitly.
 
 ### Retained Blender v1 tool surface
 
@@ -1198,11 +1207,13 @@ For the earliest milestone, prove visual-system consistency before solving every
 
 ### 3D bootstrap
 
-The system may choose:
+The **upper layer** may choose:
 
-- image-to-3D bootstrap when an approved adapter supports it;
-- manual/scripted Blender blockout when bootstrap quality is inadequate;
+- image-to-3D bootstrap through a selected compatible execution binding;
+- manual/scripted Blender blockout;
 - hybrid workflows where generated mesh is only a starting point.
+
+MCP validates/executes the requested route but does not rank these options or choose one from quality heuristics.
 
 A generated mesh is never automatically “production ready.” It must pass Blender inspection and cleanup/retopo/UV/material/rig readiness gates.
 
@@ -1234,23 +1245,23 @@ Then compose these capabilities into a 10–30 second scene.
 
 ## Incremental milestone ladder
 
-Do not skip shared foundations merely because one model can output a flashy clip or one coding model can produce a toy game. After the shared core, Scene/Anime/Game tracks may advance partly in parallel.
+Do not skip shared foundations merely because one external model/agent can output a flashy clip or toy game. After the shared core, Scene/Anime/Game tracks may advance partly in parallel while MCP remains neutral to which upper-layer agent/model produced the requests.
 
 ### Shared milestones
 
 | Milestone | Deliverable | Must prove before advancing |
 | --- | --- | --- |
-| C0 | Creative Project + manifests | skills, Elements, assets, scenes/games, provenance, revisions are coherent/versionable |
+| C0 | Creative Project + manifests | Elements, assets, scenes/games, provenance, revisions are coherent/versionable and independent from any agent/model |
 | C1 | Element Library + safe media ingress | accepted Character/Location/Prop/Style/Media revisions can be reused without hidden chat state |
-| C2 | Capability/workflow/job runtime | discovery, durable jobs, result assets, cancellation, bounded effects work without hard-coded vendor names |
+| C2 | Capability/execution-binding/workflow/job runtime | discovery, explicit caller-selected bindings, durable jobs, result assets, cancellation, bounded effects work without hard-coded vendor/model names or MCP auto-selection |
 | C3 | Creative Graph / Canvas runtime | typed DAG validates, branches, executes parallel nodes, partial-reruns, saves templates, preserves lineage |
 
 ### Scene milestones
 
 | Milestone | Deliverable | Must prove before advancing |
 | --- | --- | --- |
-| S1 | SceneBoard | Auto and Manual modes can produce a connected board with reusable Elements and continuity state |
-| S2 | Directed hero frames / shot manifest | global style/light/palette and per-shot cinematography controls are editable and engine-neutral |
+| S1 | SceneBoard contract | upper-layer Auto and Manual experiences submit the same connected-board schema with reusable Elements and continuity state |
+| S2 | Director specification / hero frames / shot manifest | caller-authored global style/light/palette and per-shot cinematography controls are editable and execution-binding-neutral |
 | S3 | 10–30 second cinematic scene | generated-video and/or Blender backend follows shot manifest, audio timing, continuity, visual/temporal QA |
 | S4 | reusable scene template | materially different cast/location can reuse the graph/director workflow without source-code changes |
 
@@ -1280,157 +1291,53 @@ Do not skip shared foundations merely because one model can output a flashy clip
 
 Full anime episodes, large games, broad public marketplaces, and real-time collaborative studio workflows are explicitly **post-benchmark expansion**, not prerequisites for proving the platform kernel.
 
-## Skill architecture
+## Upper-layer guidance compatibility — explicitly outside MCP ownership
 
-The final names should be frozen after runtime ownership is audited, but the logical first-party skill set should mirror Higgsfield's specialization discipline while targeting our three production tracks.
+Higgsfield publishes skills because connected agents need production knowledge. Masih Awam can provide equally useful **optional resources, example graphs, schema docs, and production guides**, but Plan 069 does not create or manage an agent/skill runtime.
 
-### `creative-generate`
+The boundary is:
 
-Equivalent role to Higgsfield Generate:
+- MCP exposes typed capabilities, schemas, Elements/Assets, manifests, jobs, graph execution, Blender/build/playtest/deploy primitives, and bounded resources/documentation;
+- any upper layer may package those primitives as skills, system prompts, UI flows, automation recipes, or human workflows;
+- upper layers own trigger phrases, route-outs, interviews, creative reasoning, prompt enhancement, agent/subagent delegation, model/provider choice, fallback policy, and subjective approval;
+- MCP resources must not contain executable authority or silently trigger jobs;
+- all chaining uses typed project/Element/Asset/job/graph IDs rather than hidden conversational state;
+- provider/model names may appear only in optional execution-binding metadata or upper-layer documentation, never as required MCP tool/workflow identities;
+- changing the upper-layer agent or skill framework must not require a change to Scene/Anime/Game MCP contracts.
 
-- route generic image/video/audio/3D requests;
-- inspect capability/schema before uncertain calls;
-- validate media roles;
-- create/wait/retrieve jobs;
-- expose result assets, not raw engine internals;
-- route scene/anime/game domain work to narrower skills.
+### Optional resource families
 
-### `creative-canvas`
+Plan 069 may expose concise, progressive resources for upper layers, for example:
 
-Equivalent role to Canvas workflow composition:
+- semantic capability and media-role guidance;
+- Character/Style/World/Scene/Game manifest examples;
+- Blender production references;
+- SceneBoard/Director schema examples;
+- game build/playtest checklists;
+- Creative Graph examples/templates;
+- QA evidence interpretation guides;
+- safe upload/import/history/revision examples.
 
-- create/inspect/validate typed Creative Graphs;
-- branch and compare alternatives;
-- run independent nodes in parallel;
-- partial-rerun dirty descendants;
-- promote accepted node outputs into Elements/assets;
-- save/instantiate templates;
-- never use graph composition to bypass underlying tool approvals.
+These resources are convenience surfaces only. They are **not** a skill registry, do not auto-route requests, and do not select an agent/model/provider.
 
-### `element-library`
+## Repository boundary to freeze before implementation
 
-Equivalent role to Cinema Studio Elements:
+Implementation Phase 1 must audit existing `ai-self/skills/`, `.agents/skills/`, subagent/prompt infrastructure, and MCP resources only to ensure Plan 069 does **not** couple itself to them.
 
-- create/update/promote Character, Location, Prop, Style, Media, 3D, Voice, and Animation Elements;
-- resolve selected revision for a scene/game;
-- show dependency impact before changing a reused Element;
-- deliberately import/copy Elements across projects.
+Freeze the following ownership rule:
 
-### `style-bible`
-
-Equivalent methodology to Brandkit plus scene style presets:
-
-- establish/extend visual system;
-- preserve approved palette/shape/line/material/camera/motion rules;
-- maintain dependency-aware revisions;
-- produce a reusable Style Element/Pack rather than disconnected prompts.
-
-### `character-identity`
-
-Generalized Soul ID + Soul Cast:
-
-- create/update Character Element/Pack;
-- ingest authoritative real-person references only when explicitly intended;
-- construct fictional characters from structured design/narrative fields;
-- produce/curate turnaround/expression references;
-- optionally bind adapter-specific identity artifacts;
-- bind later 3D rig/voice assets;
-- never make one training backend the identity source of truth.
-
-### `scene-board`
-
-Equivalent role to Popcorn:
-
-- Auto mode expands one scene brief into a connected bounded storyboard;
-- Manual mode accepts per-frame direction;
-- binds Character/Location/Prop/Style Elements;
-- keeps continuity constraints explicit;
-- supports frame-level revision and hero-frame promotion;
-- emits Scene/Shot Manifest state rather than only loose images.
-
-### `scene-production`
-
-Equivalent role to Cinema Studio / AI Director:
-
-- parse a brief/script into scenes/shots;
-- populate project-global style/lighting/palette and per-shot camera/lens/focal/aperture/move/tempo controls;
-- follow Hero Frame First when useful;
-- compile shots to generated-video, Blender, or mixed backends;
-- preserve user/review gate before expensive execution;
-- assemble previews and run continuity/visual/temporal QA.
-
-### `creative-stills` / `anime-key-art`
-
-Uses Product Photoshoot/Thumbnail methodology:
-
-- classify requested still by production purpose;
-- ask a short mode-specific interview;
-- concept gate before expensive render;
-- controlled variants;
-- visual QA;
-- selected-result surgical edits.
-
-Initial anime-focused modes may include `character_portrait`, `character_full_body`, `character_action`, `expression_sheet`, `turnaround`, `environment_key_art`, and `episode_key_visual`. Scene/game art modes may extend the same skill without duplicating the QA/revision kernel.
-
-### `anime-production`
-
-Anime specialization over the shared scene/Element/Canvas kernel:
-
-- owns character/style/world manifests;
-- coordinates 2D reference, optional 3D bootstrap, Blender cleanup/rig/facial/animation, SceneBoard, shots, audio, QA, composite, and handoff;
-- delegates generic still/scene/generation work rather than duplicating it;
-- exposes current milestone/blocker.
-
-### `game-production`
-
-Equivalent role to Higgsfield Game Generation / Supercomputer Games:
-
-- resolve game profile/core loop/player/input/performance constraints;
-- freeze STYLE FORMULA + Asset Manifest;
-- route game-specific sprite/texture/3D/animation/audio generation;
-- start independent jobs while coding/build work proceeds;
-- preserve existing source architecture during iteration;
-- own browser playtest requirements;
-- own solo/local/online multiplayer route;
-- deploy a verified build;
-- require separate explicit action for public publish.
-
-Later non-core skills can add promo packs, generic project sites/apps, marketing verticals, engagement analysis, and one-click effect templates without changing the shared kernel.
-
-## Skill authoring rules learned from Higgsfield
-
-1. Keep each trigger/decision `SKILL.md` compact; target roughly the same “decision logic only” discipline as Higgsfield's ~300-line guidance, without treating 300 as a repository hard limit unless Masih Awam adopts one deliberately.
-2. Keep heavy tables, prompt patterns, examples, troubleshooting, and anime production guides in references.
-3. Every reference file must be reachable from its owning skill.
-4. Skills are self-contained enough to be reasoned about individually.
-5. Route-outs/`NOT for` boundaries are mandatory for overlapping creative skills.
-6. Chaining passes typed project/asset IDs, not hidden assumptions.
-7. Version skill contracts and evaluate routing before changing major defaults.
-8. Model names belong in capability/adapters or references, not core skill identity.
-9. A skill cannot grant execution authority that the active MCP/tool policy does not provide.
-10. External community skills remain reference material until reviewed; first-party scene/anime/game production logic must be owned and maintained in this repository.
-
-## Repository ownership decision to freeze before implementation
-
-The repository already has both `ai-self/skills/` and `.agents/skills/`, plus runtime instruction-loading code. Do **not** duplicate each creative skill in both trees.
-
-Implementation Phase 1 must audit:
-
-- `ai-self/registry.yaml`;
-- `ai-self/skills/` conventions;
-- `.agents/skills/` conventions;
-- `server/infrastructure/ai/subagent-tool.ts` runtime loading;
-- current prompt/tool-selection composition;
-- MCP resource exposure through `packages/rust-tools/src/application/resources.rs`.
-
-Freeze one primary first-party creative-skill ownership path, then make discovery/resource projection reference it. Avoid compatibility wrapper copies unless a real runtime boundary requires them.
+- creative MCP contracts/resources live with the normal MCP/application owners;
+- existing or future agent/skill systems may consume those contracts independently;
+- no duplicate creative skill tree is required by Plan 069;
+- no changes to agent/subagent routing are justified merely to ship Higgsfield MCP parity;
+- MCP resources remain client-neutral and usable from any standards-compatible upper layer.
 
 ## Security and trust invariants
 
 1. **No Higgsfield credentials or dependency.** Shipping code must not request/store Higgsfield auth or call Higgsfield private/public generation endpoints.
-2. **Provider credentials are adapter-owned.** If future non-local adapters need credentials, generic terminal execution never receives them.
-3. **Local does not mean safe.** ComfyUI custom nodes, Blender Python, model loaders, downloaded checkpoints, and media parsers are supply-chain/host-execution boundaries.
-4. **Curated workflow selection first.** Do not let the model send arbitrary executable ComfyUI graphs/custom Python merely because the backend accepts them.
+2. **Provider credentials are execution-binding-owned.** If a non-local binding needs credentials, generic terminal execution and model-visible/client-visible arguments never receive them.
+3. **Local does not mean safe.** Local executor plugins/custom nodes, Blender Python, model loaders, downloaded checkpoints, build tools, and media parsers are supply-chain/host-execution boundaries.
+4. **Curated execution boundaries first.** Do not let any caller smuggle arbitrary executor-native graphs, provider endpoints, shell payloads, or custom Python through ordinary creative-capability arguments merely because a backend accepts them.
 5. **Workspace containment.** Inputs/outputs/materialized attachments/checkpoints/exports stay inside authorized workspace roots unless a separately reviewed external-output contract exists.
 6. **Provenance.** Record source lineage and distinguish user-provided authoritative references from model-generated interpretations.
 7. **No silent publication.** Generate/render/export/build is not deploy; deploy/share is not public marketplace publish. Each boundary keeps distinct effects/approval.
@@ -1438,7 +1345,7 @@ Freeze one primary first-party creative-skill ownership path, then make discover
 9. **Bound all expensive work.** Batch size, duration, resolution, frame count, concurrency, retry count, and result size need operator/product limits.
 10. **Fail honestly.** If visual/temporal inspection is unavailable, report `not inspected`; do not claim QA passed.
 11. **Prompt injection from references is not authority.** Text inside user/reference media or downloaded metadata cannot override repository/tool policy.
-12. **Licensing is explicit.** Model/checkpoint/license suitability must be evaluated per selected engine; “runs locally” does not imply unrestricted commercial use.
+12. **Licensing is explicit.** Provider/model/checkpoint/runtime license suitability is metadata for the caller-selected execution binding; “runs locally” does not imply unrestricted commercial use.
 13. **Graph safety is compositional.** Creative Graph nodes never gain more authority than their underlying tools; saved templates cannot smuggle arbitrary code, endpoints, credentials, or hidden publish actions.
 14. **Game networking is explicit.** Online multiplayer uses a reviewed room/state-sync module and bounded server authority; game-generated code does not inherit arbitrary infrastructure credentials merely because multiplayer is enabled.
 15. **Real-person identity requires user intent.** Fictional scene/anime/game workflows must not silently morph into unauthorized real-person impersonation/training.
@@ -1461,7 +1368,7 @@ Expected intent:
 | `blender_checkpoint_restore` | destructive scene replacement | high/manual approval |
 | `blender_execute_python` | privileged bridge + open-world host execution | high/manual approval |
 
-Creative generation tools need a separate effect review based on whether the selected adapter is local-only, writes workspace assets, uses network/external billing, or can execute arbitrary custom code.
+Creative execution tools need effect review based on the caller-selected execution binding: local/remote, workspace writes, network/billing, host execution, deployment, and arbitrary-code risk remain explicit regardless of provider/model.
 
 ## Repository baseline and dependency gate
 
@@ -1482,13 +1389,13 @@ The `release/ai-tools-v0.0.15` work carries optional-capability composition that
 Exact new module names are frozen only after the Phase 1 architecture audit, but ownership should follow existing repository layers:
 
 - `packages/rust-tools/src/core/config/` — operator capability config and bounds;
-- `packages/rust-tools/src/application/` — first-party runtime/job/adapter/Blender application logic;
+- `packages/rust-tools/src/application/` — first-party runtime/job/execution-binding/Blender application logic;
 - `packages/rust-tools/src/interfaces/mcp/` — compact MCP tool schemas and capability metadata;
 - `packages/rust-tools/src/application/resources.rs` or its post-v0.0.15 successor — bounded resources/capability guidance;
 - `packages/rust-tools/tests/` — Rust integration/security/contract tests;
 - `server/application/` / `server/infrastructure/` only when product persistence, attachment materialization, or shared policy requires Nuxt ownership;
 - `shared/` only for genuine cross-client/product contracts;
-- one reviewed first-party skill root chosen in Phase 1;
+- optional resources/guidance may live in the repository for upper-layer consumers, but Plan 069 does not establish an MCP-owned skill/agent runtime;
 - `.agents/knowledge/`, canonical memory, operator docs — durable architecture/setup/security guidance.
 
 Do not put a generic arbitrary media-engine process spawner into Nitro and do not reopen stored stdio MCP execution as a shortcut.
@@ -1497,7 +1404,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 | Phase | Goal | Depends on | Exit criteria |
 | --- | --- | --- | --- |
-| PHASE-01 | Reconcile baseline and freeze architecture/contracts | none | skill ownership, Elements/state, capability/job/workflow/graph, scene/game and Blender contracts frozen |
+| PHASE-01 | Reconcile baseline and freeze architecture/contracts | none | upper-layer/MCP boundary, Elements/state, execution-binding/capability/job/workflow/graph, scene/game and Blender contracts frozen |
 | PHASE-02 | Creative Project + Element state + safe media ingress | PHASE-01 | C0/C1 project/Element/materialization contracts proven |
 | PHASE-03 | Capability/workflow registry + creative jobs + graph contract | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate |
 | PHASE-04 | Initial reference-aware media generation | PHASE-02, PHASE-03 | Character/Style still consistency foundation passes A1/A2-quality gate |
@@ -1510,7 +1417,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | PHASE-11 | Sequence assembly/export + anime delivery | PHASE-08, PHASE-09, PHASE-10 | A6 plus contained reusable project delivery passes |
 | PHASE-12 | Game Studio: design/assets/build/playtest | PHASE-02, PHASE-03, PHASE-05 | G1/G2/G3 pass for a small browser game |
 | PHASE-13 | Game multiplayer/deploy + source-preserving iteration | PHASE-12 | selected G4 path passes where applicable and G5 deploy contract passes |
-| PHASE-14 | Creative Graph executor + Canvas-style workspace + skill parity/evals | PHASE-03 and proven scene/game workflows | C3 graph runtime/templates and high-value Higgsfield operating parity pass |
+| PHASE-14 | Creative Graph executor + Canvas-style workspace + MCP parity/resource evals | PHASE-03 and proven scene/game workflows | C3 graph runtime/templates and high-value Higgsfield MCP operating parity pass |
 | PHASE-15 | Triad acceptance and closeout | all required prior phases | fresh Scene S3, Anime A6, and Game G5 benchmarks pass; second-project falsification and repository gates pass |
 
 # PHASE-01 — Reconcile baseline and freeze contracts
@@ -1532,30 +1439,30 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [ ] Re-audit current MCP protocol/tool/resource/task contract.
 - [ ] Re-audit attachment/file ingress and image result support.
 - [ ] Re-audit Blender Lab bridge/version/security docs.
-- [ ] Re-audit the public Higgsfield skill inventory for workflow-pattern changes; do not import vendor dependencies.
+- [ ] Re-audit the official Higgsfield MCP help pages/landing page operation list first; use public skills only as upper-layer/product reference, never as MCP authority.
 
 **Validation:** architecture findings are recorded in this plan or durable knowledge without stale release-branch assumptions.
 
 **Commit boundary:** `docs(plan): reconcile creative platform baseline` only if durable docs materially change.
 
-### TASK-002 — Freeze first-party skill ownership
+### TASK-002 — Freeze the upper-layer / MCP responsibility boundary
 
-**Outcome:** exactly one canonical runtime path owns creative skills.
+**Outcome:** Plan 069 cannot accidentally turn the Masih Awam MCP server into an agent framework or model router.
 
-**Files:** `ai-self/registry.yaml`, `ai-self/skills/`, `.agents/skills/`, `server/infrastructure/ai/subagent-tool.ts`, relevant prompt/tool-selection modules.
+**Files:** MCP catalog/resources, capability policy, creative contracts, and any existing prompt/subagent/skill integration only as boundary-audit inputs.
 
 **Steps:**
 
-- [ ] Map current loading/discovery precedence.
-- [ ] Choose one first-party creative skill root.
-- [ ] Define how skill references are loaded progressively.
-- [ ] Define route-out and chaining metadata.
-- [ ] Define version/eval ownership.
-- [ ] Reject duplicate mirrored skill folders unless runtime compatibility proves unavoidable.
+- [ ] Document that agents, subagents, skill auto-triggering, interviews, creative prompt authoring, workflow planning, provider/model ranking, and fallback policy are outside Plan 069 MCP ownership.
+- [ ] Define the semantic request envelope accepted from any upper layer.
+- [ ] Define opaque `execution_binding_id` discovery/validation without provider/model-specific public tool names.
+- [ ] Define the ambiguity error returned when multiple compatible bindings exist and the caller has not selected one.
+- [ ] Define optional MCP resources/guidance as read-only reference material with no authority to auto-run or route an agent.
+- [ ] Verify existing agent/subagent infrastructure is not extended merely to implement creative MCP parity.
 
-**Validation:** a test/inspection can identify one authoritative source for a creative skill and its references.
+**Validation:** architecture/contract tests can prove that two different upper-layer clients/agents can call the same creative MCP capability with different selected execution bindings and no MCP-owned agent/model-selection path is invoked.
 
-**Commit boundary:** `refactor(skills): establish creative skill ownership` during implementation.
+**Commit boundary:** `docs(creative): freeze agnostic mcp boundary` or the smallest contract commit required during implementation.
 
 ### TASK-003 — Freeze creative project schemas
 
@@ -1574,16 +1481,17 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Commit boundary:** `feat(creative): add production manifest contracts`.
 
-### TASK-004 — Freeze MCP-facing model, workflow, budget, asset, and job contracts
+### TASK-004 — Freeze MCP-facing capability, execution-binding, workflow, budget, asset, and job contracts
 
-**Outcome:** semantic capabilities, concrete model discovery, workflow discovery, budget/cost preflight, asset/history access, job lifecycle, effect policy, and result-media delivery are specified independently from engines.
+**Outcome:** semantic capabilities, opaque execution-binding discovery, workflow discovery, budget/cost preflight, asset/history access, job lifecycle, effect policy, and result-media delivery are specified independently from agents/providers/models.
 
 **Steps:**
 
 - [ ] Freeze semantic capability vocabulary needed through C3/S3/A6/G5 plus MCP utility parity: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub.
-- [ ] Freeze `capability list/get` representation for durable skill routing.
-- [ ] Freeze concrete `model list/get` representation and explicit-model override semantics separately from semantic capabilities.
-- [ ] Freeze workflow `list/get` separately from model inventory.
+- [ ] Freeze `capability.list/get` representation for durable upper-layer discovery.
+- [ ] Freeze opaque `execution_binding.list/get` representation separately from semantic capabilities; provider/model names are optional implementation metadata, never stable contract identity.
+- [ ] Freeze workflow `list/get` separately from execution-binding inventory.
+- [ ] Freeze caller-selected-binding semantics and explicit ambiguity failure; MCP has no automatic model/provider selection or fallback policy.
 - [ ] Freeze asset/upload/history `list/get/search` filters, source tags, stable IDs, and media-result representation.
 - [ ] Freeze secure external-client upload request/complete and bounded URL-import contracts.
 - [ ] Freeze cost/compute estimate plus global/project/session/job budget-status and hard-limit semantics.
@@ -1592,16 +1500,16 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [ ] Freeze external-cost/network vs local-compute effect classifications.
 - [ ] Decide whether existing relay Tasks can own creative long-running jobs directly or need a thin creative domain layer over the same manager.
 
-**Validation:** mock adapters can advertise different engines/models for the same semantic capability without changing skill contracts; the same fixture can auto-select a model, honor an explicit compatible model, preflight cost, submit, list/retrieve the job, and reuse the returned Asset ID.
+**Validation:** mock bindings can advertise different implementations for the same semantic capability without changing MCP contracts; the same fixture can discover compatible binding IDs, require the upper layer to select one when ambiguous, preflight cost for that binding, submit, list/retrieve the job, and reuse the returned Asset ID.
 
 **Commit boundary:** `feat(creative): define capability and job contracts`.
 
 **Phase exit criteria:**
 
 - [ ] no implementation depends on a Higgsfield contract;
-- [ ] one skill root is authoritative;
+- [ ] the upper-layer/MCP boundary is explicit and no agent/model router was added;
 - [ ] creative state schemas are frozen for initial milestones;
-- [ ] adapter/job semantics reuse existing platform primitives where possible;
+- [ ] execution-binding/job semantics reuse existing platform primitives where possible;
 - [ ] Blender remains a separate privileged DCC capability under the master architecture.
 
 # PHASE-02 — Creative Project, Element state, and safe media ingress
@@ -1676,22 +1584,22 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Dependencies:** PHASE-01.
 
-### TASK-008 — Add semantic capability discovery plus concrete model/workflow discovery
+### TASK-008 — Add semantic capability, execution-binding, and workflow discovery
 
-**Outcome:** clients/skills can discover durable semantic capabilities while power users/agents can separately list/get concrete active models and workflows with validated schemas.
+**Outcome:** any client/agent can discover durable semantic capabilities, compatible opaque execution bindings, and workflows with validated schemas without MCP ranking/selecting a provider/model.
 
 **Steps:**
 
 - [ ] Add operator-disabled-by-default creative capability group.
-- [ ] Expose active semantic capabilities independently from concrete models.
-- [ ] Expose bounded `model list/get` descriptors: adapter-local ID, display name, capabilities, reference roles, validated parameter schema/bounds, duration/resolution/aspect constraints, availability/health, known license notes, and cost-estimator support.
-- [ ] Expose workflow IDs and `workflow list/get` separately from models.
-- [ ] Support automatic model selection when unspecified and explicit user model override when compatible.
-- [ ] Return precise incompatibility/unavailable diagnostics instead of silent substitution.
-- [ ] Keep endpoint/credential/raw engine implementation metadata hidden.
+- [ ] Expose active semantic capabilities independently from execution implementations.
+- [ ] Expose bounded `execution_binding.list/get` descriptors: opaque binding ID, capabilities, reference roles, validated extension schema/bounds, duration/resolution/aspect constraints, availability/health, known license notes, and estimator support.
+- [ ] Expose workflow IDs and `workflow.list/get` separately from execution bindings.
+- [ ] Never rank/default/auto-select a binding. For pluggable executor-backed operations, omission returns `execution_binding_required` with compatible binding IDs regardless of how many bindings are currently registered.
+- [ ] Validate an explicit caller-selected binding and return precise incompatibility/unavailable diagnostics instead of silent substitution.
+- [ ] Keep endpoint/credential/raw engine implementation metadata hidden; provider/model display metadata, if exposed at all, is informational and non-contractual.
 - [ ] Return activation/setup hint when disabled.
 
-**Validation:** mock semantic capabilities remain stable while underlying model inventory changes; explicit compatible model selection is preserved and incompatible override fails with a bounded reason.
+**Validation:** semantic capabilities remain stable while underlying provider/model implementations change; the same request works through two caller-selected mock bindings, missing selection always fails with `execution_binding_required`, and incompatible binding selection fails with a bounded reason.
 
 **Commit boundary:** `feat(creative): expose capability discovery`.
 
@@ -1702,7 +1610,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 **Steps:**
 
 - [ ] Reuse existing job/task manager lifecycle and cancellation where possible.
-- [ ] Add `cost.estimate`/compute-estimate semantics before submit when the adapter/workflow can provide meaningful data.
+- [ ] Add `cost.estimate`/compute-estimate semantics before submit when the selected execution binding/workflow can provide meaningful data.
 - [ ] Add `budget.status` for configured provider quota/credits, local compute class/quota, disk/output bounds, and project/session/job hard limits where measurable.
 - [ ] Enforce operator/user-configured thresholds before expensive jobs/batches; approval cannot override an operator hard maximum.
 - [ ] Add domain metadata only where creative workflows need it.
@@ -1711,13 +1619,13 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [ ] Persist/recover only if current platform task semantics cannot satisfy cross-turn retrieval safely.
 - [ ] Keep failure/cost/provider diagnostics redacted/classified.
 
-**Validation:** fake adapters cover queued/running/completed/failed/cancelled, list/retrieve after client reconnect, estimate-before-submit, approval threshold, hard-budget denial, timeout, output bounds, and owner isolation.
+**Validation:** fake execution bindings cover queued/running/completed/failed/cancelled, list/retrieve after client reconnect, estimate-before-submit, approval threshold, hard-budget denial, timeout, output bounds, and owner isolation.
 
 **Commit boundary:** `feat(creative): add generation job lifecycle`.
 
 ### TASK-010 — Add curated workflow registry and Creative Graph contract
 
-**Outcome:** multi-step workflows are discoverable independently from individual engine/model capabilities, and a typed graph can represent their composition before a visual Canvas/executor is added.
+**Outcome:** multi-step workflows are discoverable independently from execution bindings, and a typed graph can represent caller-specified composition before a visual Canvas/executor is added.
 
 Initial candidate workflows to freeze from actual engine support:
 
@@ -1748,7 +1656,7 @@ Initial candidate workflows to freeze from actual engine support:
 
 Steps:
 
-- [ ] Define workflow schemas independently from adapter/model catalogs.
+- [ ] Define workflow schemas independently from execution-binding/provider/model catalogs.
 - [ ] Define typed Creative Graph node/edge/port/revision contract around workflows/jobs/Elements.
 - [ ] Define dirty-descendant and partial-rerun semantics.
 - [ ] Define template input/output contract.
@@ -1760,70 +1668,68 @@ Steps:
 
 **Phase exit criteria:**
 
-- [ ] semantic capability, concrete model, workflow, asset/history, and budget discovery are distinct and queryable;
-- [ ] explicit compatible model selection and auto-selection both work without changing skill contracts;
+- [ ] semantic capability, execution-binding, workflow, asset/history, and budget discovery are distinct and queryable;
+- [ ] explicit caller-selected binding works and omitted execution binding fails without MCP-side ranking/defaulting/auto-selection;
 - [ ] core MCP utility workflows are represented: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub;
 - [ ] job lifecycle is bounded, listable/retrievable across normal turns, and owner/project scoped;
 - [ ] cost/compute preflight and hard budget thresholds can block a batch before execution;
 - [ ] graph/workflow contracts can express scene/anime/game dependencies;
-- [ ] skills can make routing decisions without hard-coded provider IDs.
+- [ ] arbitrary upper layers can make their own routing decisions without hard-coded provider/model IDs in MCP contracts.
 
 # PHASE-04 — Initial reference-aware media generation
 
-**Goal:** prove the reference/identity/style generation substrate through the anime A1/A2 still benchmark before solving full 3D production, while keeping the adapter generic enough for scene/game art.
+**Goal:** prove the reference/identity/style generation substrate through the anime A1/A2 still benchmark before solving full 3D production, while keeping the public MCP contract independent from the conformance execution binding used for the test.
 
 **Dependencies:** PHASE-02, PHASE-03.
 
-### TASK-011 — Select and secure the initial image/media adapter and core image utility surface
+### TASK-011 — Implement the media execution-binding contract and core image utility surface
 
-**Outcome:** one reviewed adapter can perform reference-aware image generation/editing plus the image-side utility operations exposed by the MCP parity matrix.
+**Outcome:** at least one conformance binding can perform reference-aware image generation/editing plus image-side MCP parity utilities, while the public capability contract remains independent of that binding/provider/model.
 
 **Steps:**
 
-- [ ] Re-audit ComfyUI as preferred candidate and compare against direct/local alternatives.
-- [ ] Confirm operator setup, endpoint/loopback policy, executable/custom-node trust model, result format, cancellation, and model/license constraints.
-- [ ] Choose the smallest adapter that satisfies the A1/A2 still/turnaround quality gate while remaining reusable by scene/game art.
-- [ ] Implement/route the supported image capabilities through the same job/lineage contract: generate, reference-generate, edit/inpaint, upscale, remove-background, and outpaint; pose/depth controls remain capability-gated when the chosen adapter supports them.
-- [ ] Make model list/get schema expose which utility/reference roles each concrete model/workflow actually supports.
-- [ ] Keep arbitrary model-supplied workflow graphs disabled in v1.
-- [ ] Add operator config/capability activation docs.
+- [ ] Freeze one provider/model-neutral execution-binding interface for media operations before choosing any conformance implementation.
+- [ ] Confirm each registered binding's operator setup, endpoint policy, executable/plugin trust model, result format, cancellation, license metadata, and credentials remain implementation details.
+- [ ] Implement/route supported image capabilities through the same job/lineage contract: generate, reference-generate, edit/inpaint, upscale, remove-background, and outpaint; pose/depth controls remain capability-gated per binding.
+- [ ] Make execution-binding discovery expose supported utility/reference roles and validated extensions without changing semantic tool names.
+- [ ] Keep arbitrary executor-native graphs/custom code disabled in ordinary capability calls.
+- [ ] Add operator registration/configuration docs without declaring a product-wide default provider/model.
 
-**Validation:** safe mock/fixture tests plus operator-only manual smoke cover reference generation and at least one child-asset transform for upscale, background removal, and outpaint; no Higgsfield dependency.
+**Validation:** one fake binding plus at least one operator-selected conformance binding pass the same contract tests for reference generation and child-asset transforms; replacing the binding requires no MCP schema/tool-name changes and no Higgsfield dependency.
 
-**Commit boundary:** `feat(creative): add initial image generation adapter`.
+**Commit boundary:** `feat(creative): add media execution binding`.
 
 ### TASK-012 — Implement structured prompt/spec compiler
 
-**Outcome:** Character Pack + Style Pack + requested mode compile into adapter inputs with traceable versioning.
+**Outcome:** an upper-layer-authored, engine-neutral creative request compiles deterministically into the caller-selected binding's validated input shape with traceable versioning.
 
 **Steps:**
 
-- [ ] Define engine-neutral generation spec.
+- [ ] Define provider/model-neutral semantic request spec.
 - [ ] Define reference role/order.
-- [ ] Compile only reviewed fields.
-- [ ] Record compiler version in job lineage.
-- [ ] Support controlled changed-fields for variants.
+- [ ] Accept creative prompt/content from the upper layer; do not author or enhance it inside MCP.
+- [ ] Translate only reviewed semantic fields plus namespaced binding extensions.
+- [ ] Record binding/compiler version in job lineage.
+- [ ] Support controlled changed-fields for revision requests.
 
-**Validation:** same creative spec can be serialized without adapter model names; adapter compiler fixture produces deterministic validated parameters.
+**Validation:** the same semantic request serializes without provider/model names and compiles deterministically through two different mock bindings selected by the caller.
 
 **Commit boundary:** `feat(creative): compile structured generation specs`.
 
-### TASK-013 — Implement Character Pack + Style Pack still workflow
+### TASK-013 — Prove Character/Style Element execution primitives with an upper-layer-driven still workflow
 
-**Outcome:** generate/curate a stable set of front/side/back/three-quarter/expression references for one anime character.
+**Outcome:** an external client/agent can use MCP state/jobs/assets to create and curate a stable front/side/back/three-quarter/expression reference set without MCP owning interviews, style decisions, prompt strategy, or model choice.
 
 **Steps:**
 
-- [ ] Build the minimal intake gate.
-- [ ] Produce candidate style directions cheaply.
-- [ ] Lock selected Style Pack.
-- [ ] Produce canonical front/reference view.
-- [ ] Produce additional views/expressions with locked identity/style fields.
+- [ ] Accept a caller-authored Style/Character specification and selected execution binding.
+- [ ] Store the caller-approved Style Element revision.
+- [ ] Execute requested canonical/reference views and additional views/expressions with typed reference roles.
 - [ ] Label generated hidden views as interpreted.
-- [ ] Run visual QA and bounded retries.
-- [ ] Promote accepted revisions into the Character Pack.
+- [ ] Return media plus deterministic metadata/evidence for upper-layer visual review.
+- [ ] Let the caller promote accepted revisions into the Character Element/Pack through explicit state mutation.
 
-**Validation:** A1/A2 fixture shows recognizable identity/style consistency across the selected set and records QA findings honestly.
+**Validation:** an external upper-layer acceptance client can drive A1/A2 using only agnostic MCP contracts; MCP preserves identity/style/reference lineage and never chooses the creative direction/model or claims subjective QA without caller/evaluator evidence.
 
 **Commit boundary:** `feat(anime): build character reference workflow`.
 
@@ -1848,20 +1754,20 @@ Steps:
 
 **Commit boundary:** `feat(creative): track style dependencies`.
 
-### TASK-015 — Add optional identity adapters without replacing Character Pack authority
+### TASK-015 — Support optional identity-capable execution bindings without replacing Character Pack authority
 
-**Outcome:** embeddings/LoRA/fine-tunes or future identity mechanisms can improve consistency while remaining adapter-specific accelerators.
+**Outcome:** embeddings/LoRA/fine-tunes or future identity mechanisms can improve consistency while remaining implementation details of caller-selected bindings.
 
 **Steps:**
 
 - [ ] Measure reference-only baseline first.
-- [ ] Add training only when evals show a meaningful gap.
+- [ ] Expose training/identity preparation only when an upper layer explicitly requests a compatible binding/capability; MCP never decides that training is needed.
 - [ ] Store training artifact/license/version lineage.
 - [ ] Keep Character Pack references and design constraints authoritative.
 
-**Validation:** deleting/changing one adapter-specific identity artifact does not erase the character's project identity contract.
+**Validation:** deleting/changing one binding-specific identity artifact does not erase the character's project identity contract or force changes to MCP tool/schema identity.
 
-**Commit boundary:** `feat(anime): support pluggable identity adapters`.
+**Commit boundary:** `feat(anime): support identity-capable execution bindings`.
 
 ### TASK-016 — Add World/Location Pack
 
@@ -1874,7 +1780,7 @@ Steps:
 **Phase exit criteria:**
 
 - [ ] style/character/world state survives multiple jobs;
-- [ ] adapter training is optional, traceable, and replaceable;
+- [ ] binding-specific identity preparation is optional, traceable, and replaceable;
 - [ ] downstream impact of style changes is explicit.
 
 # PHASE-06 — Blender first-class production engine
@@ -1951,8 +1857,8 @@ Steps:
 **Steps:**
 
 - [ ] Materialize/import front/side/back references.
-- [ ] Choose image-to-3D bootstrap only when active capability and eval quality justify it.
-- [ ] Otherwise create/manual-script blockout from references.
+- [ ] Accept the bootstrap route chosen by the upper layer: caller-selected image-to-3D execution binding, Blender/manual blockout, or hybrid.
+- [ ] Validate that the selected route/binding is active and compatible; MCP does not rank bootstrap methods or choose one from quality heuristics.
 - [ ] Preserve source/reference alignment metadata.
 - [ ] Inspect multi-angle silhouette before detail work.
 
@@ -2009,15 +1915,15 @@ Steps:
 
 **Dependencies:** PHASE-07.
 
-### TASK-026 — Add audio/voice adapter with MCP parity for speech, cloning, conversion, and dubbing
+### TASK-026 — Add audio/voice execution-binding contract with MCP parity for speech, cloning, conversion, and dubbing
 
-**Outcome:** reviewed local/operator-owned or explicitly configured adapters can create speech/voice/music/SFX and, where activated, perform authorized voice cloning, voice change, and video dubbing through one contained audio lineage model.
+**Outcome:** caller-selected reviewed audio execution bindings can create speech/voice/music/SFX and, where activated, perform authorized voice cloning, voice change, and video dubbing through one contained audio lineage model.
 
 **Steps:**
 
 - [ ] Freeze `audio.voice|speech|music|sfx|voice_clone|voice_change|video_dub` contracts and media/reference roles.
 - [ ] Preserve voice/source/license/consent provenance and distinguish generated fictional voices from authorized reference-voice derivatives.
-- [ ] Bind reusable accepted voice state to an `audio_voice` Element rather than exposing adapter-specific training IDs as the project identity.
+- [ ] Bind reusable accepted voice state to an `audio_voice` Element rather than exposing binding/provider-specific training IDs as the project identity.
 - [ ] Keep credentials/training artifacts isolated if a non-local provider is supported.
 - [ ] Produce contained audio/video child assets plus timing/language/voice metadata needed for animation and scene workflows.
 - [ ] Keep dubbing/voice conversion independently revisable from body animation or source video.
@@ -2026,9 +1932,9 @@ Steps:
 
 **Commit boundary:** `feat(audio): add anime dialogue capability`.
 
-### TASK-027 — Add pose/action workflow
+### TASK-027 — Add pose/action execution primitives
 
-**Outcome:** agent can create a short coherent action using inspected rig state, API docs, checkpoints, and preview.
+**Outcome:** any upper layer can author a short action using inspected rig state, API docs/resources, checkpoints, and preview while MCP exposes the editable Blender execution/state primitives.
 
 **Validation:** action/F-curve/keyframe/NLA state is structurally visible and representative frames show intended motion.
 
@@ -2057,49 +1963,49 @@ Steps:
 - [ ] audio/facial/body motion remain separately editable;
 - [ ] failures can roll back to a checkpoint.
 
-# PHASE-09 — Scene Studio: SceneBoard, Director, and shot orchestration
+# PHASE-09 — Scene Studio state/execution: SceneBoard, Director specification, and shots
 
-**Goal:** reach S1/S2 and produce an S3 candidate: a reusable-Element storyboard/shot workflow comparable in operating behavior to Popcorn + Cinema Studio, usable by both ordinary cinematic scenes and anime.
+**Goal:** reach S1/S2 and produce an S3 candidate while keeping storyboard/directing intelligence above MCP: MCP stores/validates caller-authored SceneBoard/Director state and executes requested shots through caller-selected bindings.
 
-**Dependencies:** PHASE-04, PHASE-05. PHASE-06/08 are required only for Blender-backed animated shots; generated-video scenes may use another active adapter.
+**Dependencies:** PHASE-04, PHASE-05. PHASE-06/08 are required only for Blender-backed animated shots; generated-video scenes use caller-selected compatible execution bindings.
 
-### TASK-030 — Implement SceneBoard Auto/Manual + Scene/Shot Manifest skill
+### TASK-030 — Implement SceneBoard + Scene/Shot Manifest contracts
 
-**Outcome:** an approved brief/script becomes a connected board and bounded scene/shot plan before render-heavy work starts.
+**Outcome:** MCP can store, validate, version, and revise a connected board and bounded scene/shot plan supplied by any upper layer before render-heavy work starts.
 
 **Steps:**
 
-- [ ] Implement `auto` mode: one scene brief -> bounded connected storyboard beats.
-- [ ] Implement `manual` mode: explicit per-frame/shot direction.
+- [ ] Support `planning_mode=auto|manual` as provenance metadata, but **do not implement AI auto-planning inside MCP**: in `auto`, the upper layer supplies the generated board; in `manual`, the upper layer/user supplies explicit per-frame/shot direction.
+- [ ] Validate the same board/shot schema regardless of which upper layer produced it.
 - [ ] Bind Character/Location/Prop/Style Elements with selected revisions.
 - [ ] Track global scene look/lighting/atmosphere/spatial constraints across frames.
 - [ ] Allow frame-level revision while preserving unrelated accepted frames.
 - [ ] Promote selected frames to hero-frame candidates.
 - [ ] Freeze shot IDs/durations/assets/continuity/camera intent.
 - [ ] Validate required upstream Elements/assets exist.
-- [ ] Keep user approval/autonomy behavior explicit.
+- [ ] Keep approval/effect boundaries explicit; conversational autonomy policy remains upper-layer behavior.
 
-**Validation:** a scene fixture can produce and revise a connected board without hidden chat context; changing one frame preserves the other accepted frame identities/lineage.
+**Validation:** two different upper-layer fixtures (one labeled auto, one manual) can submit/revise the same SceneBoard contract without hidden chat context; changing one frame preserves other accepted frame identities/lineage.
 
 **Commit boundary:** `feat(scene): add sceneboard and shot planning`.
 
-### TASK-031 — Implement Creative Director + generated-video utility surface + shot execution DAG
+### TASK-031 — Implement Director-spec validation + generated-video utility surface + shot execution DAG
 
-**Outcome:** script/scene intent is compiled into editable global project settings and per-shot cinematography, while generated-video backends expose the same reusable transform/job semantics expected from the MCP parity matrix.
+**Outcome:** caller-authored global scene settings and per-shot cinematography can be validated/executed through selected bindings, while generated-video executors expose reusable transform/job semantics expected from the MCP parity matrix.
 
 **Steps:**
 
 - [ ] Add global scene settings: genre/look, Style Element, lighting, color palette, atmosphere, era/time where relevant.
 - [ ] Add per-shot settings: shot size/framing, camera profile, lens/focal/aperture/DoF intent, move, movement speed/stabilization, tempo/edit intent.
-- [ ] Implement Hero Frame First route when the selected backend benefits from it.
-- [ ] Compile a shot to generated-video, Blender, or mixed backend without changing the engine-neutral manifest.
-- [ ] Route active video capabilities through the normal model/workflow/job/asset system: text/reference/image-to-video generation, extend, reframe, upscale, remove-background, and motion-control when supported.
+- [ ] Store a caller-selected Hero Frame First route when requested; MCP does not decide when it is creatively beneficial.
+- [ ] Execute a shot through the caller-selected generated-video binding, Blender path, or explicit mixed graph without changing the engine-neutral manifest.
+- [ ] Route active video capabilities through semantic capability/execution-binding/job/asset contracts: text/reference/image-to-video generation, extend, reframe, upscale, remove-background, and motion-control when supported.
 - [ ] Validate distinct media roles for motion-control inputs (character/reference image vs motion-reference video) and preserve timestamp/duration lineage.
 - [ ] Expose video utility workflows outside Scene Studio too; a user should be able to reframe/upscale/remove-background an existing Asset without manufacturing a Scene Manifest.
-- [ ] Director suggestions populate manifests/prompts but do not silently trigger generation.
+- [ ] MCP accepts already-authored Director settings/prompts from the upper layer; it neither invents Director suggestions nor silently triggers generation.
 - [ ] One failed shot/utility transform invalidates/retries only its affected descendants.
 
-**Validation:** same Scene Manifest fixture can compile to at least a fake generated-video adapter and fake/real Blender path with consistent Element/camera intent; separate fixtures prove reframe, upscale, background removal, and motion-control child-asset lineage/job semantics.
+**Validation:** the same Scene Manifest can execute through two caller-selected mock video bindings and a fake/real Blender path with consistent Element/camera intent; separate fixtures prove reframe, upscale, background removal, and motion-control child-asset lineage/job semantics without MCP choosing the backend.
 
 **Commit boundary:** `feat(scene): add director and shot orchestration`.
 
@@ -2121,16 +2027,16 @@ Steps:
 
 **Phase exit criteria:**
 
-- [ ] S1 SceneBoard Auto/Manual behavior works;
-- [ ] S2 global/per-shot Director controls are represented independently from engines;
+- [ ] S1 SceneBoard state supports upper-layer Auto/Manual experiences through one agnostic contract;
+- [ ] S2 global/per-shot Director controls are represented independently from engines and authored outside MCP;
 - [ ] one 10–30 second S3 candidate has bounded shot state;
 - [ ] reusable Character/Location/Prop/Style Elements survive shot changes;
 - [ ] generated-video and/or Blender preview can be inspected and revised shot by shot;
-- [ ] active video utilities (reframe/upscale/remove-background/motion-control where supported) are independently callable through normal model/workflow/job/asset contracts.
+- [ ] active video utilities (reframe/upscale/remove-background/motion-control where supported) are independently callable through normal capability/execution-binding/workflow/job/asset contracts.
 
-# PHASE-10 — Unified visual/temporal QA and surgical revisions
+# PHASE-10 — Unified QA evidence and surgical revisions
 
-**Goal:** make evidence-driven revision a shared platform contract rather than one skill's ad-hoc behavior.
+**Goal:** make structural/deterministic evidence and lineage-preserving revision a shared MCP contract while subjective visual/creative judgment remains upper-layer responsibility unless a caller explicitly selects an evaluator binding.
 
 **Dependencies:** PHASE-04, PHASE-08.
 
@@ -2142,25 +2048,25 @@ Steps:
 
 **Commit boundary:** `feat(creative): add production qa findings`.
 
-### TASK-034 — Implement visual QA workflow
+### TASK-034 — Implement visual QA evidence contract
 
-**Outcome:** selected outputs are inspected against Character/Style/Shot invariants before promotion.
+**Outcome:** MCP returns the images/previews/reference state and deterministic checks needed for an upper layer to judge Character/Style/Shot invariants; optional machine evaluation is only run through a caller-selected evaluator binding.
 
-**Validation:** anime identity/style/text/composition seeded failures are detected or explicitly reported as uninspected.
+**Validation:** without an evaluator binding, subjective fields are `not_inspected` rather than fabricated; with a mock caller-selected evaluator, findings attach to the correct Asset/revision without changing MCP semantics.
 
 **Commit boundary:** `feat(creative): add visual qa workflow`.
 
-### TASK-035 — Implement temporal QA workflow
+### TASK-035 — Implement temporal QA evidence contract
 
-**Outcome:** frame samples/playblast metadata are reviewed against animation/continuity/audio constraints.
+**Outcome:** MCP produces bounded frame samples/playblast/timing/structural metadata for upper-layer review; optional semantic evaluation requires an explicit caller-selected evaluator binding.
 
-**Validation:** seeded foot-slide/timing/identity-drift fixture produces bounded findings.
+**Validation:** deterministic timing/contact metadata is returned directly; semantic identity/motion judgments are `not_inspected` without an evaluator and attach correctly when a mock binding is explicitly selected.
 
 **Commit boundary:** `feat(creative): add temporal qa workflow`.
 
 ### TASK-036 — Implement surgical revision lineage
 
-**Outcome:** a user/agent can change one approved property while preserving other locked production state.
+**Outcome:** a caller can request one scoped child revision while preserving other locked production state.
 
 Example scopes:
 
@@ -2234,21 +2140,21 @@ Example scopes:
 
 **Dependencies:** PHASE-02, PHASE-03, PHASE-05. PHASE-06 is optional for games that need Blender-authored 3D/rigging.
 
-### TASK-040 — Implement `game-production` design and manifest workflow
+### TASK-040 — Implement Game Design/Build Manifest validation and state
 
-**Outcome:** a game request becomes a frozen Game Design/Build Manifest and STYLE FORMULA before broad asset generation or coding.
+**Outcome:** MCP can validate/store/version an upper-layer-authored Game Design/Build Manifest and STYLE FORMULA before broad asset execution or build work.
 
 **Steps:**
 
-- [ ] Resolve design-only/assets-only/build/deploy intent.
-- [ ] Freeze genre, perspective, target devices, core loop, verbs, win/lose/restart/progression, player count, controls, camera, language, physics/timing, and performance/asset budgets.
+- [ ] Accept the design-only/assets-only/build/deploy intent resolved by the upper layer.
+- [ ] Validate required genre, perspective, target devices, core loop, verbs, win/lose/restart/progression, player count, controls, camera, language, physics/timing, and performance/asset budgets.
 - [ ] Freeze solo/local/online multiplayer route.
 - [ ] Bind shared Character/Location/Prop/Style Elements where applicable.
 - [ ] Write stable `design/assets` roles/paths before generated asset batches.
 - [ ] Define placeholder policy and missing-asset behavior.
 - [ ] Keep public publish outside the build/deploy workflow.
 
-**Validation:** G1 fixture can be built from the manifest without hidden chat assumptions; implementation is blocked when required gameplay/style/input facts remain unresolved.
+**Validation:** two different upper-layer clients can submit the same valid G1 manifest and drive identical MCP build-state behavior; required gameplay/style/input fields fail deterministically when absent, without MCP asking conversational questions.
 
 **Commit boundary:** `feat(game): add game production manifest`.
 
@@ -2259,7 +2165,7 @@ Example scopes:
 **Steps:**
 
 - [ ] Add game-specific media roles for sprites, UI, tileables, sky/environment, textures, 3D models, animation clips, music, SFX, and voice where needed.
-- [ ] Start independent generation jobs concurrently under existing job bounds.
+- [ ] Execute independent asset jobs concurrently only when the caller-specified graph/manifest declares them independent; MCP does not creatively schedule undeclared work.
 - [ ] Build source against manifest-stable placeholders/paths rather than ephemeral job filenames.
 - [ ] Promote accepted results into Elements/assets and replace placeholders deterministically.
 - [ ] Validate skeleton/action compatibility for animated 3D assets; route to Blender/retargeting when necessary.
@@ -2271,7 +2177,7 @@ Example scopes:
 
 ### TASK-042 — Implement reviewed browser-game source/runtime templates
 
-**Outcome:** the coding agent can create/edit a normal workspace project for a small 2D or 3D browser game without depending on an opaque hosted builder.
+**Outcome:** any upper-layer coding system can create/edit a normal workspace project for a small 2D or 3D browser game using MCP workspace/build/runtime primitives without depending on an opaque hosted builder or MCP-managed coding agent.
 
 **Steps:**
 
@@ -2352,7 +2258,7 @@ Example scopes:
 
 ### TASK-046 — Implement source-preserving game iteration
 
-**Outcome:** follow-up prompts amend an existing game rather than silently regenerating it from scratch.
+**Outcome:** caller-requested follow-up changes can amend an existing game rather than silently regenerating it from scratch.
 
 **Steps:**
 
@@ -2374,9 +2280,9 @@ Example scopes:
 - [ ] deploy and publish remain different authority boundaries;
 - [ ] follow-up iteration preserves source/project continuity.
 
-# PHASE-14 — Creative Graph executor, Canvas workspace, and skill parity evals
+# PHASE-14 — Creative Graph executor, Canvas workspace, and MCP parity evals
 
-**Goal:** complete C3 and the highest-value Higgsfield operating parity by turning the graph contract into a safe reusable executor/workspace over proven scene/anime/game primitives.
+**Goal:** complete C3 and high-value Higgsfield MCP parity by turning caller-specified graph contracts into a safe reusable executor/workspace over proven scene/anime/game primitives, without adding an agent/skill/model router.
 
 **Dependencies:** PHASE-03 plus working scene/game workflows from PHASE-09/12. Blender/anime graph nodes depend on their owning phases.
 
@@ -2400,7 +2306,7 @@ Example scopes:
 
 ### TASK-048 — Implement reusable graph templates/presets
 
-**Outcome:** common workflows can be saved and instantiated with new Elements/inputs similar to Canvas templates/Apps without embedding vendor-specific model identities as the product contract.
+**Outcome:** common caller-authored workflows can be saved and instantiated with new Elements/inputs similar to Canvas templates/Apps without embedding provider/model identities or agent assumptions in the product contract.
 
 Initial templates may include:
 
@@ -2411,7 +2317,7 @@ Initial templates may include:
 - game design -> parallel asset batch -> build -> playtest;
 - promo/key-visual bundle.
 
-**Validation:** one template is instantiated with materially different Character/Location/Style Elements and preserves graph topology while recompiling adapter-specific parameters.
+**Validation:** one template is instantiated with materially different Character/Location/Style Elements and preserves graph topology while the caller selects different compatible execution bindings.
 
 **Commit boundary:** `feat(creative): add workflow templates`.
 
@@ -2432,15 +2338,15 @@ Initial templates may include:
 
 **Commit boundary:** `feat(creative): add visual production canvas`.
 
-### TASK-050 — Add first-party creative skill and parity eval scenarios
+### TASK-050 — Add MCP contract/resource parity eval scenarios
 
-**Outcome:** routing and workflow decisions for Generate/Canvas/Elements/SceneBoard/Scene Director/Anime/Game are testable rather than preference-driven.
+**Outcome:** Generate/Assets/Elements/Scene/Anime/Game/Graph MCP contracts are testable without evaluating any particular agent's routing quality.
 
-Eval categories include direct trigger, natural paraphrase, route-out, minimal interview, user autonomy, unavailable capability, auto-vs-explicit model selection, upload-handoff vs URL-import vs prior-Asset reuse, generation/upload history lookup, estimate-before-generate and budget denial, utility-transform routing (upscale/background removal/outpaint/reframe/motion control/clipper/dub), Element preservation, graph chaining, SceneBoard Auto/Manual choice, Director suggestion-vs-execution gate, game design lock, QA/playtest hard failures, surgical edits, deploy-vs-publish, and no authority escalation through templates.
+Eval categories include missing/invalid fields, unavailable capability, ambiguous execution binding, explicit binding selection, upload-handoff vs URL-import vs prior-Asset reuse, generation/upload history lookup, estimate-before-submit and budget denial, utility transforms (upscale/background removal/outpaint/reframe/motion control/clipper/dub), Element preservation, graph execution, caller-authored SceneBoard Auto/Manual provenance, Director-spec validation, Game Manifest validation, deterministic QA/playtest hard failures, revision lineage, deploy-vs-publish, and no authority escalation through templates.
 
-**Validation:** eval runner produces deterministic routing/contract results without requiring expensive inference for every scenario.
+**Validation:** eval runner produces deterministic MCP contract/state/effect results without any dependency on a specific agent/model or expensive inference.
 
-**Commit boundary:** `test(skills): cover creative platform parity`.
+**Commit boundary:** `test(creative): cover mcp platform parity`.
 
 ### TASK-051 — Add lower-priority reusable delivery templates
 
@@ -2450,11 +2356,11 @@ Candidate templates/skills after core parity:
 
 - anime/game promo pack;
 - key visual/cover/thumbnail bundle;
-- project/portfolio site using existing coding agent;
-- optional audience/engagement analysis adapter;
+- project/portfolio site/app using whichever upper-layer coding system the product chooses, over existing generic source/build/test/deploy primitives;
+- optional audience/engagement analysis execution binding;
 - other reviewed one-click creative effects.
 
-**Validation:** each candidate reuses Elements/Graph/QA/runtime state and has explicit route-out and publish/deploy semantics; none introduces a second identity/workflow system.
+**Validation:** each candidate reuses Elements/Graph/QA/runtime state and has explicit input/output and publish/deploy semantics; website/app parity must prove editable source plus build/test/deploy and separate publish using existing generic capabilities, and none introduces a second identity/workflow system or MCP-owned agent router.
 
 **Commit boundary:** feature/skill commits only for selected post-core templates.
 
@@ -2462,7 +2368,7 @@ Candidate templates/skills after core parity:
 
 - [ ] C3 graph execution/partial rerun/template behavior passes;
 - [ ] visual Canvas edits the same underlying graph contract;
-- [ ] core creative skill parity is evaluated deterministically;
+- [ ] core MCP capability/state/workflow parity is evaluated deterministically;
 - [ ] packaged workflows reuse, rather than bypass, Elements/Graph/QA.
 
 # PHASE-15 — Scene + Anime + Game acceptance and closeout
@@ -2509,7 +2415,7 @@ Acceptance journey:
 
 **Outcome:** prove the architecture is not hard-coded to the first character, scene genre, or game genre.
 
-**Validation:** without source-code special cases, materially different fixtures can reach at least S1/S2, A1/A2, and G1/G2 using the same Elements/Graph/skill contracts; at least one track reaches its repeatable-template milestone.
+**Validation:** without source-code special cases, materially different fixtures can reach at least S1/S2, A1/A2, and G1/G2 using the same Elements/Graph/MCP contracts from different upper-layer clients; at least one track reaches its repeatable-template milestone.
 
 ### TASK-056 — Run security and failure matrix
 
@@ -2524,15 +2430,16 @@ Acceptance journey:
 Acceptance journey:
 
 1. connect through the normal Masih Awam OAuth-protected MCP endpoint with no creative-provider key exposed to the client;
-2. inspect semantic capabilities, concrete models, and workflows separately;
+2. inspect semantic capabilities, compatible opaque execution bindings, and workflows separately;
 3. query budget/cost status and preflight one small generation;
 4. create an external-client upload handoff (or use a safely imported URL) and resolve it to an Asset ID;
 5. submit/wait/retrieve one bounded generation and receive both an in-conversation media/resource result and durable Asset ID;
 6. run at least one core utility transform on that Asset (for example upscale, background removal, outpaint/reframe as appropriate) and verify child lineage;
 7. list/search recent generations/uploads and reuse a previous Asset or Element directly in a second job;
-8. run one first-party multi-step skill/graph workflow through the same connector surface;
-9. verify an explicit compatible model choice is honored and an incompatible model choice fails precisely;
-10. verify a configured hard budget/approval threshold prevents an over-budget request before engine execution.
+8. run one caller-specified multi-step graph/workflow through the same connector surface without any MCP-owned skill/agent runtime;
+9. register/discover two compatible mock execution bindings, verify the caller-selected binding is honored, verify an incompatible binding fails precisely, and verify omission returns `execution_binding_required` rather than triggering MCP default/auto-selection;
+10. verify a configured hard budget/approval threshold prevents an over-budget request before execution;
+11. use a generated Asset in one editable website/app project driven by a thin upper-layer test client, then exercise existing source/build/test/deploy primitives and verify public publish remains a separate action with no MCP-managed coding agent.
 
 **Validation:** the flow requires no Higgsfield account/CLI, no local shell command, no arbitrary host path, and no manual download/re-upload between jobs. Client-specific rendering differences are allowed, but the MCP contracts and stable IDs remain identical.
 
@@ -2546,7 +2453,7 @@ Acceptance journey:
 - [ ] Run browser/runtime game acceptance where game behavior changed.
 - [ ] Run `pnpm guardrail:full` before closure.
 - [ ] Run dependency/security audits when dependency changes justify them.
-- [ ] Update operator docs, architecture/security docs, skills/resources, canonical memory, and this plan's status/checklists truthfully.
+- [ ] Update operator docs, architecture/security docs, optional upper-layer resources/guidance, canonical memory, and this plan's status/checklists truthfully.
 - [ ] Review `.agents/knowledge/self-improvement.md`.
 - [ ] Deliver through short-lived branch -> PR -> reviewed merge to `main`; do not bypass hooks or self-merge without authorization.
 - [ ] Keep relay restart, GPU/model installation, Blender/add-on setup, production deployment, and public publishing as explicit external/operator actions where policy requires them.
@@ -2574,9 +2481,9 @@ Verify:
 
 - Creative Project/Element/asset/scene/shot/game/audio/graph/QA schema versioning and bounds;
 - Element selected-revision and dependency-impact semantics;
-- semantic capability discovery independent from adapter/model names;
-- concrete model list/get schema, explicit compatible override, and precise incompatible/unavailable failure;
-- workflow registry remains separate from model inventory and exposes validated inputs/cost-estimator metadata where available;
+- semantic capability discovery independent from provider/model/binding implementation names;
+- execution-binding list/get schema, mandatory caller selection for pluggable executor-backed operations, `execution_binding_required` on omission, and precise incompatible/unavailable failure;
+- workflow registry remains separate from execution-binding inventory and exposes validated inputs/estimator metadata where available;
 - external MCP upload request/complete expiry, owner/project binding, single-use/replay handling, media/size bounds, and stable Asset result;
 - bounded URL import uses shared SSRF/network policy and rejects redirect/private-network/content-type/size violations;
 - asset/upload/generation history list/get/search filters, source tags, stable IDs, and previous-Asset reuse;
@@ -2592,21 +2499,22 @@ Verify:
 - effect/approval classification;
 - disabled-by-default optional capability behavior.
 
-### Engine adapter and MCP utility tests
+### Execution-binding and MCP utility tests
 
-Use fake/local mock adapters where possible to verify:
+Use fake/local mock bindings where possible to verify:
 
-- request parameter validation and per-model schema/bounds;
+- semantic request validation plus binding-specific namespaced extension bounds;
 - media-role validation including multi-reference and motion-control image/video role separation;
-- auto model selection vs explicit model override;
-- image generate/reference/edit/inpaint/upscale/remove-background/outpaint contracts;
-- video generate/reference/image-to-video/extend/reframe/upscale/remove-background/motion-control contracts;
+- explicit caller-selected binding, `execution_binding_required` on omission, and no MCP-side provider/model fallback;
+- image generate/reference/edit/inpaint/upscale/remove-background/outpaint contracts, including one caller-selected conformance binding proving a 4K-class output;
+- video generate/reference/image-to-video/extend/reframe/upscale/remove-background/motion-control contracts, including one caller-selected conformance binding proving >=15-second generation;
 - audio speech/music/SFX plus authorized voice-clone/voice-change/video-dub contracts;
 - long-video clip extraction preserves source timestamps/lineage and uses only contained/imported source Assets;
 - timeout/cancellation/retry bounds;
 - output bounds and current-turn media result delivery;
 - durable result registration/history reuse;
 - cost-estimate and budget-admission behavior;
+- conformance binding bounds are reported and validated without promoting that binding/provider/model into a default MCP route;
 - failure classification/redaction;
 - endpoint/credential containment.
 
@@ -2627,16 +2535,16 @@ Retain the original Plan 069 fake-bridge coverage:
 - raw Python high-risk semantics;
 - bounded activity/log content.
 
-### SceneBoard / Director tests
+### SceneBoard / Director-spec tests
 
 Verify with deterministic fixtures:
 
-- Auto and Manual storyboard modes produce bounded Scene/Shot state;
+- upper-layer-produced Auto and Manual storyboard payloads validate into the same bounded Scene/Shot state;
 - Element references and selected revisions resolve consistently across frames;
 - frame-level revision preserves unrelated accepted frames;
 - global scene direction and per-shot cinematography stay separate;
-- Director suggestions do not auto-trigger generation;
-- one Scene Manifest can compile to fake generated-video and Blender backends without changing source-of-truth state;
+- MCP does not invent Director suggestions; caller-authored Director specs never auto-trigger generation merely by being stored;
+- one Scene Manifest can execute through caller-selected fake generated-video bindings and Blender without changing source-of-truth state;
 - continuity findings detect seeded cast/location/prop/light/screen-direction errors.
 
 ### Game/runtime tests
@@ -2651,9 +2559,9 @@ Verify through normal source/build/browser/runtime test ownership:
 - two-session room/state-sync behavior and cross-room isolation when online multiplayer exists;
 - deployment maps to one accepted build revision and cannot silently become public publish.
 
-### Skill routing evals
+### Upper-layer independence / MCP neutrality tests
 
-Cover Generate/Canvas/Elements/SceneBoard/Scene Director/Anime/Game triggers and route-outs, minimal interviews, style/identity/game-design gates, capability-unavailable behavior, job/graph chaining, QA/playtest behavior, revision scope, Director suggestion-vs-execution, and deploy-vs-publish without requiring live expensive inference for every scenario.
+Use at least two thin test clients with different orchestration assumptions to prove that MCP behavior is identical for equivalent semantic requests. Cover capability-unavailable behavior, missing required fields, execution-binding ambiguity/selection, job/graph chaining, Scene/Director manifest storage, QA evidence, revision scope, Game Manifest/build/playtest state, and deploy-vs-publish. Do not test agent prompt quality, routing, interviews, or model choice inside the MCP suite.
 
 ### Production fixture tests
 
@@ -2686,18 +2594,18 @@ Actual scene/anime quality requires operator-enabled engines/Blender and visual 
 - **Game asset job failure:** keep stable manifest role/path and use bounded retry/explicit placeholder or manifest amendment; never loop forever.
 - **Multiplayer failure:** disable/revert the selected multiplayer route or restore last accepted networking module; do not silently claim multiplayer from single-session success.
 - **Deploy failure:** retain accepted local build and deployment metadata; do not publish or mutate source merely to force hosting success.
-- **Engine adapter outage:** retain project/job state; fail with capability-specific diagnosis; do not silently switch to an adapter with materially different semantics/cost without policy/user approval.
+- **Execution-binding outage:** retain project/job state and fail with a capability/binding-specific diagnosis; MCP never silently switches to another provider/model binding. The upper layer may choose a replacement explicitly.
 - **Capability unavailable:** report the missing operator capability/setup; continue independent planning/state work where possible.
 - **Unsafe media/path:** reject before engine/Blender/game runtime sees it.
-- **Skill/template regression:** roll back skill/reference/template change independently from engine/runtime where contracts permit.
-- **Model quality regression:** change adapter/model selection policy behind semantic capabilities; do not rewrite Scene/Anime/Game skills.
+- **Template/resource regression:** roll back graph/template/guidance changes independently from execution bindings where contracts permit.
+- **Provider/model quality regression:** do not change MCP routing because none exists; the upper layer may select a different compatible binding while Scene/Anime/Game MCP contracts remain unchanged.
 - **Long-form/large-game failure:** fall back to the last passing track milestone; never broaden from a failing short scene or incomplete core loop to a full episode/large game.
 
 ## Alternatives rejected
 
 ### Rewrite Blender into a “Higgsfield clone”
 
-Rejected because Blender is a DCC/execution backend, while Higgsfield's valuable architecture lives above execution: skills, state, routing, workflows, QA, and job orchestration.
+Rejected because Blender is a DCC/execution backend, while the reusable platform value is capability/state/job/workflow/asset/QA infrastructure. Agent skills, routing, and model choice remain above the Masih Awam MCP boundary.
 
 ### Proxy or wrap Higgsfield MCP/CLI
 
@@ -2705,15 +2613,15 @@ Rejected because the user explicitly requires no Higgsfield account/runtime depe
 
 ### Copy Higgsfield skill text wholesale
 
-Rejected. The public skills are useful reference material, but Masih Awam needs first-party scene/anime/game methodology aligned to its own runtime/security contracts. Learn the structure/patterns; author and evaluate the actual product guidance here.
+Rejected. Public skills are useful upper-layer reference material, but Plan 069 does not vendor them into an MCP-owned agent runtime. Learn their capability requirements and expose the necessary neutral MCP primitives/resources; let whichever upper layer owns agents/skills decide how to use them.
 
 ### Put every creative operation behind `terminal_exec`
 
 Rejected because credentials, effects, long-running jobs, media results, capability discovery, and Blender host authority need typed first-class boundaries.
 
-### Expose arbitrary ComfyUI workflow JSON from the model
+### Expose arbitrary executor-native workflow/code payloads through ordinary creative tools
 
-Rejected for the first release because custom nodes/workflows can become a broad execution/supply-chain boundary. Prefer curated reviewed workflow IDs plus validated parameters.
+Rejected because provider-native graphs/custom nodes/scripts can become a broad execution/supply-chain boundary. Prefer reviewed execution bindings and typed semantic/workflow contracts; executor-native escape hatches require their own privileged boundary.
 
 ### Add hundreds of Blender atomic tools
 
@@ -2733,9 +2641,9 @@ Rejected because scale hides failures across Elements/identity, scene direction,
 
 Creative production spans media generation, scenes, Blender/anime, browser games, graphs, and deployment. Mitigation: one shared C0–C3 kernel, then independently gated Scene S1–S4, Anime A1–A8, and Game G1–G6 ladders; marketing/site/analysis verticals remain post-core.
 
-### RISK-02 — Model quality changes faster than skills
+### RISK-02 — Provider/model quality changes independently from MCP contracts
 
-Mitigation: semantic capabilities and adapter-specific compilers keep model IDs out of core skill logic.
+Mitigation: semantic capabilities plus caller-selected opaque execution bindings keep provider/model IDs and quality-ranking policy out of MCP logic.
 
 ### RISK-03 — “Local” engine becomes arbitrary code execution
 
@@ -2757,9 +2665,9 @@ Mitigation: Style Pack is project-specific; guides describe principles and strat
 
 Mitigation: explicitly distinguish sampled preview from full playback; expand multimedia result/playblast support only behind bounded contracts.
 
-### RISK-08 — Giant context from creative manuals
+### RISK-08 — Optional creative guidance bloats connected-agent context
 
-Mitigation: compact routing skills + progressive reference loading, following the strongest Higgsfield skill-structure pattern.
+Mitigation: expose concise, progressive resources only when useful; MCP execution does not depend on loading creative manuals or a particular skill system.
 
 ### RISK-09 — Duplicate job systems
 
@@ -2783,48 +2691,48 @@ Mitigation: require Game Design/Build Manifest, stable generated assets, complet
 
 ### RISK-14 — Online multiplayer or deployment expands authority too broadly
 
-Mitigation: platform-owned bounded room/state-sync and deployment adapters own credentials/infrastructure; generated game source receives only the narrow runtime interface it needs and never generic operator credentials.
+Mitigation: platform-owned bounded room/state-sync and deployment bindings own credentials/infrastructure; generated game source receives only the narrow runtime interface it needs and never generic operator credentials.
 
 ### RISK-15 — MCP parity media ingest becomes a host/network escape hatch
 
 Mitigation: external-client upload uses expiring owner/project-bound first-party handoffs; URL import reuses SSRF/redirect/DNS/content-type/size policy; arbitrary local paths and engine-side downloads remain forbidden; all successful ingress resolves to a contained Asset ID before downstream use.
 
-### RISK-16 — Model/catalog parity leaks provider internals or silently changes user intent
+### RISK-16 — Execution-binding discovery leaks provider internals or becomes a hidden router
 
-Mitigation: concrete model descriptors expose only bounded routing/schema/license/cost facts, never credentials/endpoints; explicit compatible model overrides are preserved, while incompatible requests fail with a precise reason instead of silent substitution.
+Mitigation: descriptors use opaque binding IDs and bounded capability/schema/license/estimate metadata, never credentials/endpoints; MCP never ranks/defaults/auto-selects bindings, missing binding fails with `execution_binding_required`, and incompatible requests fail precisely.
 
 ### RISK-17 — Budget checks stay prompt-only and fail to constrain batch execution
 
-Mitigation: estimate/admission happens in the execution layer, operator hard maxima cannot be overridden by the model, and batch/graph execution accounts for aggregate budget before scheduling descendants.
+Mitigation: estimate/admission happens in the execution layer, operator hard maxima cannot be overridden by any caller/agent, and batch/graph execution accounts for aggregate budget before scheduling descendants.
 
 ## Final acceptance criteria
 
 Plan 069 implementation is complete only when:
 
 1. Masih Awam has no runtime dependency on Higgsfield services, auth, CLI, MCP, proprietary model IDs, or hosted state.
-2. The first-party operating model covers the high-value Higgsfield patterns: compact skills/references, Generate-style routing/discovery/jobs, reusable Elements, Canvas-style graphs/templates, Popcorn-style Auto/Manual storyboards, Cinema-Studio-style Director/cinematography/Hero-Frame workflow, Soul-Cast-like fictional-character creation, visual/temporal QA, scoped revisions, and Game-Studio-style build/playtest/deploy lifecycle.
+2. The first-party MCP surface covers the public Higgsfield MCP capability classes 1:1 where they are relevant—OAuth connection, media generation/edit utilities, reusable character/Element references, audio operations, safe upload/import/history reuse, async job/result delivery, quota/cost visibility, and generic MCP-client operation—while broader Canvas/Scene/Game contracts provide the requested Scene/Anime/Game production substrate.
 3. The parity claim remains bounded to **workflow architecture and production capability**; docs never claim identical proprietary model quality, private prompts, Higgsfield credit economics, marketplace implementation, or pixel-identical UI.
-4. One canonical first-party creative skill ownership path exists and Scene/Anime/Game skills route cleanly without duplicate authority.
+4. MCP remains agent-agnostic: no Plan 069 runtime path owns agent registries, agent spawning, skill auto-triggering, conversational interviews, creative routing, provider/model ranking, or fallback policy; optional resources/guidance carry no execution authority.
 5. Creative Project, Element Library, Character, Style, World/Location, Asset, Scene/Shot, Game Design/Build, Audio, Creative Graph, QA/Playtest, and revision/provenance state are versioned, contained, and resumable.
 6. Elements support at least Character, Location, Prop, Style, Media, Audio/Voice, 3D Asset, and Animation Clip selected revisions with explicit dependency impact.
-7. Semantic capability discovery, concrete model `list/get`, workflow `list/get`, asset/upload/history search, and budget/cost discovery are distinct first-party contracts rather than one ambiguous catalog.
-8. Model selection supports both automatic policy and explicit compatible user override; exact selected model/workflow/compiler versions are recorded in job lineage and silent substitution is forbidden.
+7. Semantic capability discovery, opaque `execution_binding.list/get`, workflow `list/get`, asset/upload/history search, and budget/cost discovery are distinct first-party contracts rather than one ambiguous catalog.
+8. MCP has no model/provider auto-selection policy: caller-selected `execution_binding_id` is required for pluggable executor-backed operations; omission fails with `execution_binding_required`; selected binding/workflow/compiler versions are recorded in job lineage and silent substitution is forbidden.
 9. Creative jobs support submit/get/wait/list/cancel, cross-turn retrieval, bounded retries/concurrency/results, owner/project isolation, current-turn media delivery, and durable Asset outputs.
-10. Cost/compute preflight plus enforceable job/batch/session/project hard limits can block expensive work before execution; paid-adapter secrets/quota data remain adapter-owned and redacted.
+10. Cost/compute preflight plus enforceable job/batch/session/project hard limits can block expensive work before execution; paid-binding secrets/quota data remain binding-owned and redacted.
 11. Conversation attachments, external-client device uploads, reviewed web-URL imports, prior generations, and promoted Elements can all become reusable stable Assets through reviewed ingest paths.
 12. External-client upload handoff is OAuth/owner/project bound, expiring, bounded, and replay-safe; URL import obeys shared SSRF/redirect/DNS/content-type/size policy; arbitrary local host paths are never the normal MCP upload mechanism.
 13. Generation/upload history is queryable by typed filters/source tags and prior media can be reused directly by Asset ID without download/re-upload round trips.
 14. Finished media can be reviewed in the current MCP/client turn through a bounded media/resource result while the same output persists as a queryable Asset.
-15. MCP-core image utility parity is implemented through normal model/workflow/job/lineage semantics: reference generation/editing plus image upscale, background removal, and outpaint.
-16. MCP-core video utility parity is implemented through normal model/workflow/job/lineage semantics: video generation/reference or image-to-video where active, reframe, upscale, background removal, motion control, and bounded clip extraction.
-17. MCP-core audio parity is implemented through normal Asset/Element lineage: speech/voice, authorized voice cloning, voice change, and video dubbing; music/SFX remain supported semantic capabilities when an active adapter provides them.
+15. MCP-core image utility parity is implemented through normal semantic capability/execution-binding/workflow/job/lineage semantics: text/reference/mixed generation, editing, upscale, background removal, and outpaint; at least one explicitly selected conformance binding proves a 4K-class image output without becoming a platform default.
+16. MCP-core video utility parity is implemented through normal semantic capability/execution-binding/workflow/job/lineage semantics: video generation/reference or image-to-video where active, reframe, upscale, background removal, motion control, and bounded clip extraction; at least one explicitly selected conformance binding proves a >=15-second video capability without becoming a platform default.
+17. MCP-core audio parity is implemented through normal Asset/Element lineage: speech/voice, authorized voice cloning, voice change, and video dubbing; music/SFX remain supported semantic capabilities when a caller-selected binding provides them.
 18. Every utility/edit transform creates a child revision/Asset and never mutates an accepted parent in place.
 19. Creative Graph execution supports typed validation, branching, parallel independent nodes, partial rerun, unaffected-output reuse, templates, node status/QA, and underlying approval/effect preservation.
 20. A Canvas-style visual workspace edits/runs that same graph contract without moving relay credentials, Blender host authority, provider secrets, or unrestricted executable node payloads into the browser.
-21. SceneBoard supports Auto and Manual planning with connected frames, reusable Elements, frame-level revision, continuity constraints, and hero-frame promotion.
-22. Scene Director owns engine-neutral global scene look/lighting/palette plus per-shot framing/camera/lens/focal/aperture/movement/tempo state; Director suggestions never silently trigger expensive generation.
+21. SceneBoard contracts support connected frames, reusable Elements, frame-level revision, continuity constraints, hero-frame promotion, and `auto|manual` provenance; any actual Auto planning is performed by the upper layer and submitted through the same MCP contract.
+22. Scene/Director state stores engine-neutral global look/lighting/palette plus per-shot framing/camera/lens/focal/aperture/movement/tempo; MCP validates/executes caller-authored settings and does not generate AI Director suggestions itself.
 23. One fresh **S3 Scene Studio** benchmark produces a coherent 10–30 second cinematic scene with inspectable Scene/Shot/Element/job/QA state through generated-video, Blender, or a deliberate mixed backend.
-24. Character identity supports a fictional-character path with structured visual/narrative fields independent of training; optional real-person identity adapters require explicit intent and never replace Character Element authority.
+24. Character identity supports a fictional-character path with structured visual/narrative fields independent of training; optional real-person identity-capable execution bindings require explicit intent and never replace Character Element authority.
 25. Blender is implemented as the retained 11-tool first-class optional capability with loopback-only bridge and truthful host-authority semantics.
 26. One anime character reaches production-ready-enough mesh/UV/material/hair/clothing state for the chosen benchmark, receives a reusable body rig plus initial facial controls, and passes representative deformation QA.
 27. A 3–5 second anime character performance passes structural and temporal review.
@@ -2834,16 +2742,16 @@ Plan 069 implementation is complete only when:
 31. When multiplayer is claimed, the selected local/online path passes reviewed **G4** acceptance; online mode proves at least two-session room/state behavior and cross-room/owner isolation.
 32. One fresh **G5 Game Studio** deployment maps a shareable playable URL to an accepted source/build revision while source remains editable and public marketplace/catalog publication has not happened implicitly.
 33. Follow-up game requests preserve existing source/Elements/assets when unaffected, amend manifests deliberately, rerun affected graph/build stages, and repeat playtest before acceptance.
-34. Visual, temporal, structural, continuity, and gameplay QA distinguish hard fail, soft finding, and not-inspected; generation/build/deploy success is never treated as QA success by itself.
+34. Structural/deterministic QA evidence distinguishes hard fail, soft finding, and not-inspected; subjective visual/temporal/creative judgments stay `not_inspected` unless supplied by the upper layer or an explicitly caller-selected evaluator binding; generation/build/deploy success is never treated as QA success by itself.
 35. Surgical revision lineage can alter one accepted field/node/shot/asset/mechanic without overwriting unrelated locked state or provenance.
 36. Generate/render/export/build, deploy/share, and public publish remain distinct lifecycle/effect boundaries.
 37. A clean-room second-project falsification shows Scene, Anime, and Game contracts are not hard-coded to the first demo; at least one track reaches its repeatable-template milestone with materially different Elements/style/genre.
-38. No arbitrary model-supplied endpoint/workflow graph/template, unrestricted Blender host/path, game networking credential, or secret-bearing generic terminal fallback bypasses reviewed capability boundaries.
-39. Core MCP parity tests cover model/workflow discovery, safe upload/import, history/reuse, cost/budget preflight, image/video/audio utilities, job lifecycle, and media delivery in addition to Scene/Anime/Game production tests.
-40. Extended MCP parity items—localization/subtitles/shorts, UGC/faceless/motion-design packaged workflows, identity edits, relight/weather/object edits, restore/stabilize/time-remap/color-match, and marketing/site verticals—have explicit shared-kernel owners and priorities; none requires a second state/job/asset platform.
+38. No caller/agent-supplied arbitrary provider endpoint, executor-native workflow/code payload, unrestricted Blender host/path, game networking credential, or secret-bearing generic terminal fallback bypasses reviewed capability boundaries.
+39. Core MCP parity tests cover capability/execution-binding/workflow discovery, safe upload/import, history/reuse, cost/budget preflight, image/video/audio utilities, job lifecycle, and media delivery in addition to Scene/Anime/Game production tests.
+40. Website/App MCP parity is satisfied through existing generic editable-source/Git/file/build/test/deploy/publish capabilities plus creative Asset/Element imports, with all coding/design intelligence above MCP and deploy distinct from public publish. Extended non-core items—localization/subtitles/shorts, UGC/faceless/motion-design packaged workflows, identity edits, relight/weather/object edits, restore/stabilize/time-remap/color-match, and marketing verticals—have explicit shared-kernel owners and priorities; none requires a second state/job/asset platform.
 41. Relevant focused tests and `pnpm guardrail:fast` / affected-stack full gates / `pnpm guardrail:full` pass before closure.
-42. A generic external MCP client can complete the parity acceptance journey—discover models/workflows, upload/import, estimate, generate, receive media, transform, browse history, reuse an Asset/Element, run a multi-step skill/graph, and hit a budget denial—without Higgsfield, CLI, local shell, or arbitrary host paths.
-43. Operator-only actions such as GPU/model installation, Blender/add-on setup, relay restart, production deployment credentials, or external public publishing are reported explicitly and are not performed implicitly by the implementation agent.
+42. A generic external MCP client can complete the parity acceptance journey—discover capabilities/execution bindings/workflows, upload/import, estimate, generate, receive media, transform, browse history, reuse an Asset/Element, run a caller-specified multi-step graph, and hit a budget denial—without Higgsfield, CLI, local shell, arbitrary host paths, or an MCP-owned agent/model router.
+43. Operator-only actions such as executor/provider/model installation, Blender/add-on setup, relay restart, production deployment credentials, or external public publishing are reported explicitly and are not performed implicitly by Plan 069 MCP runtime.
 
 ## Current execution state
 
@@ -2856,8 +2764,8 @@ As of 2026-09-13:
 - the first rewrite broadened the target to an anime-first Creative Production Platform, but this second review found that framing too narrow for the user's actual target;
 - the top-level product target is now explicitly **one Creative Production Platform with first-class Scene Studio, Anime Studio, and Game Studio tracks** over one shared Creative Project / Element Library / Capability / Job / Creative Graph / QA kernel;
 - public Higgsfield behavior was re-audited through its skills plus current Canvas, Popcorn, Cinema Studio, Elements, Soul Cast, and Games/Supercomputer documentation, and the plan now maps those product layers instead of comparing only MCP/CLI skills;
-- a third parity pass on 2026-09-13 audited the official Higgsfield MCP landing page/help-center/Claude workflow specifically; it added explicit contracts for concrete model list/get and exact-model override, image/video upscale, image/video background removal, image outpaint, video reframe, motion control, voice clone/change/video dubbing, Personal-Clipper-style extraction, credit/cost preflight, generation/upload history, prior-Asset reuse, external-client upload handoff, safe URL import, current-turn media delivery plus durable Asset persistence, and full skill execution through the same MCP surface;
-- Canvas-style graph composition, Popcorn-style Auto/Manual SceneBoard, Cinema-Studio-style Elements/Director/cinematography/Hero-Frame workflow, and Supercomputer/Game-Generation-style design/assets/build/playtest/multiplayer/deploy behavior are first-class roadmap scope;
+- a third parity pass on 2026-09-13 audited the official Higgsfield MCP landing page/help-center flow and added missing utility/upload/history/cost/job/media-delivery coverage; a fourth 1:1 pass the same day corrected responsibility: Higgsfield's docs say the connected **agent** selects a model automatically, so Masih Awam MCP now exposes semantic capabilities plus opaque compatible execution bindings but owns **no agent/model/provider selection or skill-routing policy**;
+- Canvas-style graph execution, SceneBoard/Director **state contracts**, Elements, and Game build/playtest/multiplayer/deploy behavior remain first-class roadmap scope; AI planning/directing, agent choice, model/provider selection, prompt authoring, and fallback policy are explicitly upper-layer concerns;
 - Higgsfield remains a public behavioral/product benchmark only, not a runtime dependency;
 - game documentation currently shows an evolving command/project surface; the plan therefore freezes behavior contracts rather than copying transient Higgsfield command names;
-- no production implementation files were changed as part of this planning review.
+- no production implementation files were changed as part of these planning reviews; Plan 069 remains plan-only.
