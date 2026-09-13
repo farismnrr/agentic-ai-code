@@ -104,6 +104,27 @@ async fn test_terminal_exec_captures_stderr() {
 #[tokio::test]
 async fn test_terminal_exec_timeout_produces_timed_out() {
     let fixture = TestFixture::new();
+    let warm_id = start_terminal_job(
+        &json!({
+            "command": "true",
+            "cwd": fixture.root,
+            "timeout_ms": 5000
+        }),
+        &fixture.config,
+        &fixture.manager,
+    )
+    .await
+    .expect("failed to warm the selected workspace index");
+    assert_eq!(
+        fixture
+            .manager
+            .wait(&warm_id)
+            .await
+            .expect("wait for warm command")
+            .state,
+        JobState::Completed
+    );
+
     let start = Instant::now();
     let id = start_terminal_job(
         &json!({
@@ -123,9 +144,13 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
     assert_eq!(snapshot.state, JobState::TimedOut);
     let result = snapshot.result.as_ref().expect("timed-out tool result");
     assert!(result.is_error);
-    assert!(result.content[0]
-        .text
-        .contains("terminal execution failed at child_wait: TimedOut"));
+    assert!(
+        result.content[0]
+            .text
+            .contains("terminal execution failed at child_wait: TimedOut"),
+        "unexpected timeout stage: {}",
+        result.content[0].text
+    );
     assert!(
         elapsed < Duration::from_secs(4),
         "timeout took too long: {elapsed:?}"
