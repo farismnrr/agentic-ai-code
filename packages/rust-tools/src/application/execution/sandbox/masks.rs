@@ -1,15 +1,25 @@
 //! Complete bounded masking for every exposed user tree; never prune visible caches.
-use std::path::{Path, PathBuf};
-const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
+use std::path::Path;
+use std::time::Instant;
+
+#[cfg(target_os = "linux")]
+mod protected_index;
+#[cfg(not(target_os = "linux"))]
+#[path = "masks/protected_index_portable.rs"]
+mod protected_index;
 
 pub(super) fn mask_executables(
     args: &mut Vec<String>,
     config: &crate::core::config::ServerConfig,
     names: &[&str],
+    control: Option<&super::SpawnControl<'_>>,
 ) -> Result<(), std::io::Error> {
     let mut masked = std::collections::BTreeSet::new();
     for directory in super::safe_path_entries(config) {
         for name in names {
+            if let Some(control) = control {
+                control.check()?;
+            }
             let candidate = directory.join(name);
             match std::fs::symlink_metadata(&candidate) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
@@ -93,22 +103,63 @@ pub(super) fn add_protected_paths(
     execution_root: &Path,
     recursive: bool,
     skip: Option<&Path>,
+    scope: &'static str,
+    control: Option<&super::SpawnControl<'_>>,
 ) -> Result<(), std::io::Error> {
-    let paths = if recursive {
-        discover_protected_paths(execution_root).map_err(|_| {
-            std::io::Error::other("protected-path discovery could not complete safely")
-        })?
+    let scan_started = Instant::now();
+    let (paths, scanned_entries, cache_hit) = if recursive {
+        let (canonical_root, index, cache_hit) = protected_index::discover(execution_root, control)
+            .map_err(|error| {
+                tracing::warn!(
+                    event = "relay.sandbox.stage",
+                    stage = "protected_path_discovery",
+                    scope,
+                    outcome = "failed",
+                    error_kind = ?error.kind(),
+                    duration_ms = scan_started.elapsed().as_millis() as u64,
+                );
+                std::io::Error::new(
+                    error.kind(),
+                    "protected-path discovery could not complete safely",
+                )
+            })?;
+        let paths = index
+            .protected_paths
+            .iter()
+            .filter(|path| path.strip_prefix(&canonical_root).is_ok())
+            .cloned()
+            .collect::<Vec<_>>();
+        (paths, index.scanned_entries, cache_hit)
     } else {
-        crate::core::protected_paths::protected_paths(execution_root).collect()
+        (
+            crate::core::protected_paths::protected_paths(execution_root).collect(),
+            0,
+            false,
+        )
     };
+    tracing::info!(
+        event = "relay.sandbox.stage",
+        stage = "protected_path_discovery",
+        scope,
+        outcome = "completed",
+        recursive,
+        cache_hit,
+        protected_path_count = paths.len(),
+        scanned_entries,
+        duration_ms = scan_started.elapsed().as_millis() as u64,
+    );
     for path in paths.into_iter().filter(|p| skip != Some(p.as_path())) {
+        if let Some(control) = control {
+            control.check()?;
+        }
         let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) if !recursive && error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => {
-                return Err(std::io::Error::other(
-                    "protected path metadata is unavailable",
-                ))
+            Err(error) => {
+                return Err(std::io::Error::other(format!(
+                    "protected path metadata is unavailable: {:?}",
+                    error.kind()
+                )))
             }
         };
         if metadata.file_type().is_symlink() {
@@ -153,46 +204,6 @@ pub(super) fn mask_state(
     Ok(())
 }
 
-fn discover_protected_paths(root: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
-    let mut protected = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    let mut scanned = 0usize;
-    while let Some(directory) = stack.pop() {
-        for entry in std::fs::read_dir(&directory)? {
-            let entry = entry?;
-            scanned = scanned.saturating_add(1);
-            if scanned > MAX_PROTECTED_SCAN_ENTRIES {
-                return Err(std::io::Error::other(
-                    "protected-path scan exceeds bounded workspace maximum",
-                ));
-            }
-            let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|_| std::io::Error::other("protected-path scan escaped workspace"))?;
-            let kind = entry.file_type()?;
-            if (crate::core::protected_paths::may_be_protected_entry(&entry.file_name())
-                && crate::core::protected_paths::is_protected_relative(relative))
-                || is_socket(&kind)
-            {
-                protected.push(path);
-            } else if kind.is_dir() {
-                stack.push(path);
-            }
-        }
-    }
-    Ok(protected)
-}
-
-fn is_socket(kind: &std::fs::FileType) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileTypeExt;
-        kind.is_socket()
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = kind;
-        false
-    }
+pub(super) fn prime_protected_path_index(root: &Path) -> Result<usize, std::io::Error> {
+    protected_index::prime(root)
 }

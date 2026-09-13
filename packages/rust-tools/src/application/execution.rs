@@ -236,11 +236,38 @@ pub async fn dispatch_tool_call(
         _ => return Ok(ToolCallResult::not_implemented(tool.name)),
     };
     let id = manager.start(job).await?;
+    let mut cancel_on_drop = CancelJobOnDrop {
+        manager: manager.clone(),
+        id: id.clone(),
+        active: true,
+    };
     let snapshot = manager.wait(&id).await?;
+    cancel_on_drop.active = false;
     Ok(snapshot.result.unwrap_or_else(|| {
         ToolCallResult::error(vec![ToolResultContent {
             kind: "text",
             text: "Tool execution failed".into(),
         }])
     }))
+}
+
+struct CancelJobOnDrop {
+    manager: Arc<JobManager>,
+    id: String,
+    active: bool,
+}
+
+impl Drop for CancelJobOnDrop {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        let manager = Arc::clone(&self.manager);
+        let id = self.id.clone();
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                manager.request_cancel_internal(&id).await;
+            });
+        }
+    }
 }

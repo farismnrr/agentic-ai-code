@@ -308,7 +308,13 @@ async fn home_fixture_child() {
     )
     .unwrap();
     let result = shell(&config, &root.join("project-a"), "cargo build --offline && ./target/debug/fixture && node -e 'console.log(42)' && npm --version").await;
-    assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
+    assert_eq!(
+        result.exit_code,
+        Some(0),
+        "stderr={} result={:?}",
+        result.stderr,
+        result.result
+    );
     assert!(result.stdout.contains("fixture-build-ok"));
     assert!(result.stdout.contains("42"));
     config.toolchain_paths.clear();

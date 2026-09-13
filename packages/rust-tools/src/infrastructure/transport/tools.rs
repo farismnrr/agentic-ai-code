@@ -16,10 +16,9 @@ mod telegram_message;
 mod tool_dispatch;
 #[path = "tool_helpers.rs"]
 pub(super) mod tool_helpers;
-use tool_helpers::deny_activity;
 use tool_helpers::{
-    agent_session_from_params, bounded_tool_error, client_supports_tasks, record_activity_outcome,
-    requires_idempotency_key,
+    agent_session_from_params, bounded_tool_error, client_supports_tasks, deny_activity,
+    record_activity_outcome, requires_idempotency_key,
 };
 pub(super) type JsonErr2 = Result<Json<Value>, JsonErr>;
 pub(super) async fn handle_agent_session_start(
@@ -270,6 +269,7 @@ pub(super) async fn handle_tools_call(
                     || idempotency_key.is_some())
         }
     };
+    tool_helpers::trace_task_routing(&call.name, execute_async, client_has_tasks, tool_has_tasks);
     let hook_payload = json!({
         "hook_event": "pre_tool_use",
         "tool_id": call.name.as_str(),

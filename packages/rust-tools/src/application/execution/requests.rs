@@ -271,8 +271,15 @@ pub(super) async fn run_text_search(
     config: &ServerConfig,
 ) -> Result<ToolCallResult, McpError> {
     let (invocation, max_results) = build_text_search_invocation(arguments, config)?;
-    let mut child = sandbox::spawn(config, &invocation, sandbox::WorkspaceAccess::ReadOnly)
-        .map_err(|_| McpError::Internal("failed to start text search".into()))?;
+    let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    let mut child = sandbox::spawn(
+        config,
+        &invocation,
+        sandbox::WorkspaceAccess::ReadOnly,
+        None,
+        &cancel_rx,
+    )
+    .map_err(|_| McpError::Internal("failed to start text search".into()))?;
     let stdout = child
         .stdout
         .take()

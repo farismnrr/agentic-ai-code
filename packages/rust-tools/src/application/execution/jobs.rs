@@ -3,14 +3,15 @@ use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use crate::core::redaction::redact_credentials;
 use crate::interfaces::mcp::ToolCallResult;
-use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{watch, Mutex, Semaphore};
-use tokio::time::{timeout, Duration};
 use uuid::Uuid;
+
+mod presentation;
+mod wait;
 const MAX_RETAINED_JOBS: usize = 64;
 /// Per-owner admission guard keeps one authenticated client from consuming the
 /// whole relay semaphore. The global operator limit remains authoritative too.
@@ -52,114 +53,6 @@ pub struct JobSnapshot {
     pub exit_code: Option<i32>,
     pub result: Option<ToolCallResult>,
 }
-impl JobSnapshot {
-    pub fn create_task_json(&self) -> Value {
-        let mut value = json!({
-            "resultType": "task",
-            "taskId": self.job_id,
-            "status": self.task_status(),
-            "createdAt": format_timestamp(self.created_at),
-            "lastUpdatedAt": format_timestamp(self.last_updated_at),
-            "ttlMs": Value::Null,
-            "pollIntervalMs": 1000,
-            "output": self.task_output_json()
-        });
-        self.add_execution_status(&mut value);
-        value
-    }
-    pub fn task_json(&self, completed_retention_ms: u64) -> Value {
-        let ttl_ms = self.finished_at.map(|finished_at| {
-            let lifetime = finished_at.saturating_sub(self.created_at);
-            u64::try_from(lifetime)
-                .unwrap_or(u64::MAX)
-                .saturating_add(completed_retention_ms)
-        });
-        let mut value = json!({
-            "resultType": "complete",
-            "taskId": self.job_id,
-            "status": self.task_status(),
-            "createdAt": format_timestamp(self.created_at),
-            "lastUpdatedAt": format_timestamp(self.last_updated_at),
-            "ttlMs": ttl_ms,
-            "pollIntervalMs": 1000
-        });
-        value["output"] = self.task_output_json();
-        self.add_execution_status(&mut value);
-        if let Some(duration_ms) = self.execution_duration_ms {
-            value["executionDurationMs"] = json!(duration_ms);
-        }
-        match self.state {
-            JobState::Completed | JobState::TimedOut => {
-                if let Some(result) = &self.result {
-                    value["result"] = serde_json::to_value(result).unwrap_or_else(|_| json!({}));
-                }
-            }
-            JobState::Failed => {
-                value["error"] = json!({
-                    "code": -32603,
-                    "message": "Tool execution failed"
-                });
-            }
-            JobState::Queued | JobState::Running | JobState::Cancelled => {}
-        }
-        value
-    }
-    pub fn job_json(&self) -> Value {
-        let mut value = json!({
-            "taskId": self.job_id,
-            "status": self.job_status(),
-            "createdAt": format_timestamp(self.created_at),
-            "lastUpdatedAt": format_timestamp(self.last_updated_at),
-            "output": {
-                "stdout": redact_credentials(&self.stdout),
-                "stderr": redact_credentials(&self.stderr),
-                "omittedBytes": self.omitted_bytes,
-                "exitCode": self.exit_code
-            }
-        });
-        if let Some(duration_ms) = self.execution_duration_ms {
-            value["executionDurationMs"] = json!(duration_ms);
-        }
-        if let Some(result) = &self.result {
-            value["result"] = serde_json::to_value(result).unwrap_or_else(|_| json!({}));
-        }
-        value
-    }
-    fn task_status(&self) -> &'static str {
-        self.state.task_status()
-    }
-    fn add_execution_status(&self, value: &mut Value) {
-        if self.state == JobState::TimedOut {
-            value["executionStatus"] = json!("timed_out");
-        }
-    }
-    fn task_output_json(&self) -> Value {
-        json!({
-            "stdout": redact_credentials(&self.stdout),
-            "stderr": redact_credentials(&self.stderr),
-            "omittedBytes": self.omitted_bytes,
-            "exitCode": self.exit_code
-        })
-    }
-    fn job_status(&self) -> &'static str {
-        match self.state {
-            JobState::Queued => "queued",
-            JobState::Running => "working",
-            JobState::Completed => "completed",
-            JobState::Failed => "failed",
-            JobState::TimedOut => "timed_out",
-            JobState::Cancelled => "cancelled",
-        }
-    }
-    pub fn output_text(&self) -> String {
-        render_output(
-            self.exit_code.unwrap_or(-1),
-            &redact_credentials(&self.stdout),
-            &redact_credentials(&self.stderr),
-            self.omitted_bytes,
-        )
-    }
-}
 pub(crate) struct JobRecord {
     pub(crate) snapshot: JobSnapshot,
     pub(crate) owner: String,
@@ -167,6 +60,9 @@ pub(crate) struct JobRecord {
     cancel: watch::Sender<bool>,
     stdout: Arc<Mutex<process::OutputBuffer>>,
     stderr: Arc<Mutex<process::OutputBuffer>>,
+    timeout_ms: u64,
+    task_abort: Option<tokio::task::AbortHandle>,
+    pub(crate) child_pid: Option<u32>,
 }
 pub struct JobManager {
     pub(crate) jobs: Mutex<HashMap<String, JobRecord>>,
@@ -206,7 +102,8 @@ impl JobManager {
                         | JobState::Failed
                         | JobState::TimedOut
                         | JobState::Cancelled
-                ) {
+                ) && job.snapshot.finished_at.is_some()
+                {
                     Some((id.clone(), job.snapshot.finished_at.unwrap_or(u128::MAX)))
                 } else {
                     None
@@ -227,10 +124,7 @@ impl JobManager {
         }
         let owner_running = jobs
             .values()
-            .filter(|record| {
-                record.owner == owner
-                    && matches!(record.snapshot.state, JobState::Queued | JobState::Running)
-            })
+            .filter(|record| record.owner == owner && is_active(&record.snapshot))
             .count();
         if owner_running >= MAX_RUNNING_JOBS_PER_OWNER {
             return Err(McpError::InvalidRequest(
@@ -256,6 +150,9 @@ impl JobManager {
             exit_code: None,
             result: None,
         };
+        let timeout_ms = match &job {
+            JobKind::Process(inv) => inv.timeout_ms,
+        };
         jobs.insert(
             id.clone(),
             JobRecord {
@@ -265,14 +162,22 @@ impl JobManager {
                 cancel: cancel.clone(),
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
+                timeout_ms,
+                task_abort: None,
+                child_pid: None,
             },
         );
         drop(jobs);
         let manager = Arc::clone(self);
         let job_id = id.clone();
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             process::run_job(manager, job_id, job, receiver, stdout, stderr).await;
         });
+        let abort_handle = task.abort_handle();
+        drop(task);
+        if let Some(record) = self.jobs.lock().await.get_mut(&id) {
+            record.task_abort = Some(abort_handle);
+        }
         Ok(id)
     }
 
@@ -405,52 +310,8 @@ impl JobManager {
         if job.owner != owner || !session_matches(job.session.as_deref(), session) {
             return Err(McpError::InvalidParams("unknown task".into()));
         }
-        if !matches!(
-            job.snapshot.state,
-            JobState::Completed | JobState::Failed | JobState::TimedOut | JobState::Cancelled
-        ) {
-            let _ = job.cancel.send(true);
-            let now = now_ms();
-            job.snapshot.state = JobState::Cancelled;
-            job.snapshot.finished_at = Some(now);
-            job.snapshot.last_updated_at = now;
-        }
+        request_cancel(job);
         Ok(job.snapshot.clone())
-    }
-
-    pub async fn wait(&self, id: &str) -> Result<JobSnapshot, McpError> {
-        loop {
-            let snapshot = self
-                .get_internal(id)
-                .await
-                .ok_or_else(|| McpError::Internal("execution job disappeared".into()))?;
-            if matches!(
-                snapshot.state,
-                JobState::Completed | JobState::Failed | JobState::TimedOut | JobState::Cancelled
-            ) {
-                return Ok(snapshot);
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    }
-
-    pub async fn shutdown(&self) {
-        let active_ids = {
-            let jobs = self.jobs.lock().await;
-            jobs.iter()
-                .filter_map(|(id, job)| {
-                    if matches!(job.snapshot.state, JobState::Queued | JobState::Running) {
-                        let _ = job.cancel.send(true);
-                        Some(id.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-        };
-        for id in active_ids {
-            let _ = timeout(Duration::from_secs(5), self.wait(&id)).await;
-        }
     }
 
     async fn expire_completed(&self) {
@@ -461,6 +322,27 @@ impl JobManager {
                 JobState::Completed | JobState::Failed | JobState::TimedOut | JobState::Cancelled
             ) || job.snapshot.finished_at.unwrap_or(u128::MAX) > cutoff
         });
+    }
+}
+
+fn is_active(snapshot: &JobSnapshot) -> bool {
+    matches!(snapshot.state, JobState::Queued | JobState::Running)
+        || (snapshot.state == JobState::Cancelled && snapshot.finished_at.is_none())
+        || (snapshot.state == JobState::TimedOut && snapshot.finished_at.is_none())
+}
+
+fn is_finished(snapshot: &JobSnapshot) -> bool {
+    matches!(
+        snapshot.state,
+        JobState::Completed | JobState::Failed | JobState::TimedOut | JobState::Cancelled
+    ) && snapshot.finished_at.is_some()
+}
+
+fn request_cancel(job: &mut JobRecord) {
+    if is_active(&job.snapshot) {
+        let _ = job.cancel.send(true);
+        job.snapshot.state = JobState::Cancelled;
+        job.snapshot.last_updated_at = now_ms();
     }
 }
 
