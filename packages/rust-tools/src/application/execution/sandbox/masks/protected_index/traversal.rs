@@ -1,6 +1,6 @@
 use super::{
-    control_check, DirectoryRecord, DirectorySignature, ProtectedPathIndex, CONTROL_CHECK_INTERVAL,
-    MAX_PROTECTED_SCAN_ENTRIES,
+    control_check, DirectoryRecord, DirectorySignature, DirectoryWatcher, ProtectedPathIndex,
+    CONTROL_CHECK_INTERVAL, MAX_PROTECTED_SCAN_ENTRIES,
 };
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::{CStr, CString, OsStr, OsString};
@@ -159,7 +159,20 @@ pub(super) fn scan(
     control: Option<&super::super::super::SpawnControl<'_>>,
 ) -> io::Result<ProtectedPathIndex> {
     control_check(control)?;
+    let mut watcher = match DirectoryWatcher::new() {
+        Ok(watcher) => Some(watcher),
+        Err(error) => {
+            tracing::warn!(
+                event = "relay.sandbox.stage",
+                stage = "protected_path_watch",
+                outcome = "unavailable",
+                error_kind = ?error.kind(),
+            );
+            None
+        }
+    };
     let root_directory = open_directory(root)?;
+    install_directory_watch(&mut watcher, &root_directory);
     let root_signature = DirectorySignature::read(&root_directory)?;
     let root_stream = DirectoryStream::open(&root_directory)?;
     let mut stack = vec![ScanFrame {
@@ -251,6 +264,7 @@ pub(super) fn scan(
             return Err(io::Error::other("protected-path traversal lost its parent"));
         }
         let child = open_child_directory(&parent.directory, &entry.name)?;
+        install_directory_watch(&mut watcher, &child);
         let signature = DirectorySignature::read(&child)?;
         if (entry.device != 0 || entry.inode != 0)
             && (signature.device != entry.device || signature.inode != entry.inode)
@@ -276,11 +290,48 @@ pub(super) fn scan(
         });
     }
 
+    if let Some(watcher) = watcher.as_mut() {
+        match watcher.has_events() {
+            Ok(false) => {}
+            Ok(true) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "workspace changed during protected-path discovery",
+                ));
+            }
+            Err(error) => {
+                tracing::warn!(
+                    event = "relay.sandbox.stage",
+                    stage = "protected_path_watch",
+                    outcome = "failed",
+                    error_kind = ?error.kind(),
+                );
+                return Err(error);
+            }
+        }
+    }
+
     Ok(ProtectedPathIndex {
         directories,
         protected_paths,
         scanned_entries,
+        watcher: watcher.map(std::sync::Mutex::new),
     })
+}
+
+fn install_directory_watch(watcher: &mut Option<DirectoryWatcher>, directory: &File) {
+    let error = watcher
+        .as_mut()
+        .and_then(|watcher| watcher.watch_directory(directory).err());
+    if let Some(error) = error {
+        tracing::warn!(
+            event = "relay.sandbox.stage",
+            stage = "protected_path_watch",
+            outcome = "unavailable",
+            error_kind = ?error.kind(),
+        );
+        *watcher = None;
+    }
 }
 
 fn entry_path_relative(root: &Path, directory: &Path, name: &OsStr) -> io::Result<PathBuf> {
@@ -314,6 +365,19 @@ pub(super) fn validate(
             scanned_entries = index.scanned_entries,
         );
         return Err(error);
+    }
+    if index.watcher.is_some() {
+        let fresh = index.is_fresh()?;
+        if !fresh {
+            tracing::info!(
+                event = "relay.sandbox.stage",
+                stage = "protected_path_index_validation",
+                outcome = "invalidated",
+                reason = "filesystem_event",
+                scanned_entries = index.scanned_entries,
+            );
+        }
+        return Ok(fresh);
     }
     let root_directory = match open_directory(root) {
         Ok(directory) => directory,

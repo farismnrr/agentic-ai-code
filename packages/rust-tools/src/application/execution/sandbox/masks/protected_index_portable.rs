@@ -12,6 +12,16 @@ pub(super) struct ProtectedPathIndex {
     pub(super) scanned_entries: usize,
 }
 
+impl ProtectedPathIndex {
+    pub(super) fn watcher_enabled(&self) -> bool {
+        false
+    }
+
+    pub(super) fn is_fresh(&self) -> io::Result<bool> {
+        Ok(true)
+    }
+}
+
 pub(super) fn discover(
     root: &Path,
     control: Option<&super::super::SpawnControl<'_>>,

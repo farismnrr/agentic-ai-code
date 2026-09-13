@@ -1,9 +1,10 @@
 //! Cached, fail-closed protected-path discovery for mounted workspace trees.
 use std::collections::{BTreeSet, HashMap};
+use std::ffi::CString;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -68,10 +69,96 @@ struct DirectoryRecord {
     child_directories: Vec<OsString>,
 }
 
+pub(super) struct DirectoryWatcher {
+    fd: File,
+    // Sticky for the lifetime of an index: concurrent spawns may still hold
+    // snapshots after one request consumes the kernel event.
+    dirty: bool,
+}
+
+impl DirectoryWatcher {
+    fn new() -> io::Result<Self> {
+        let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC | libc::IN_NONBLOCK) };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self {
+            fd: unsafe { File::from_raw_fd(fd) },
+            dirty: false,
+        })
+    }
+
+    pub(super) fn watch_directory(&mut self, directory: &File) -> io::Result<()> {
+        let path = CString::new(format!("/proc/self/fd/{}", directory.as_raw_fd()))
+            .expect("proc fd path contains no NUL bytes");
+        let mask = libc::IN_ATTRIB
+            | libc::IN_CREATE
+            | libc::IN_DELETE
+            | libc::IN_DELETE_SELF
+            | libc::IN_MOVE_SELF
+            | libc::IN_MOVED_FROM
+            | libc::IN_MOVED_TO
+            | libc::IN_UNMOUNT
+            | libc::IN_ONLYDIR;
+        let watch = unsafe { libc::inotify_add_watch(self.fd.as_raw_fd(), path.as_ptr(), mask) };
+        if watch < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub(super) fn has_events(&mut self) -> io::Result<bool> {
+        if self.dirty {
+            return Ok(true);
+        }
+        let mut buffer = [0u8; 4096];
+        loop {
+            let count = unsafe {
+                libc::read(
+                    self.fd.as_raw_fd(),
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                )
+            };
+            if count > 0 {
+                self.dirty = true;
+                return Ok(true);
+            }
+            if count == 0 {
+                self.dirty = true;
+                return Ok(true);
+            }
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            if error.kind() == io::ErrorKind::WouldBlock {
+                return Ok(false);
+            }
+            return Err(error);
+        }
+    }
+}
+
 pub(super) struct ProtectedPathIndex {
     directories: HashMap<PathBuf, DirectoryRecord>,
     pub(super) protected_paths: BTreeSet<PathBuf>,
     pub(super) scanned_entries: usize,
+    watcher: Option<Mutex<DirectoryWatcher>>,
+}
+
+impl ProtectedPathIndex {
+    pub(super) fn watcher_enabled(&self) -> bool {
+        self.watcher.is_some()
+    }
+
+    pub(super) fn is_fresh(&self) -> io::Result<bool> {
+        let Some(watcher) = &self.watcher else {
+            return Ok(true);
+        };
+        let mut watcher = watcher.lock().unwrap_or_else(|error| error.into_inner());
+        Ok(!watcher.has_events()?)
+    }
 }
 
 enum CachedPathIndex {
