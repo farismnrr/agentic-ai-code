@@ -18,6 +18,16 @@ impl TestFixture {
     pub(super) fn with_config<F: FnOnce(&mut ServerConfig)>(customize: F) -> Self {
         let root =
             std::env::temp_dir().join(format!("terminal-exec-test-{}", uuid::Uuid::new_v4()));
+        Self::at_root(root, customize)
+    }
+
+    pub(super) fn on_project_filesystem() -> Self {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(format!(".terminal-exec-test-{}", uuid::Uuid::new_v4()));
+        Self::at_root(root, |_| {})
+    }
+
+    fn at_root<F: FnOnce(&mut ServerConfig)>(root: PathBuf, customize: F) -> Self {
         fs::create_dir_all(&root).expect("failed to create fixture root");
         let mut config = ServerConfig {
             dir: Some(root.to_string_lossy().into()),

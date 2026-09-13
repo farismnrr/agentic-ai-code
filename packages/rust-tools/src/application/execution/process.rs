@@ -116,6 +116,7 @@ pub(super) async fn run_process(
     let wait_started = Instant::now();
     let wait_result = if let Some(deadline) = deadline {
         tokio::select! {
+            biased;
             result = timeout_at(TokioInstant::from_std(deadline), child.wait()) => match result {
                 Ok(Ok(status)) => Ok((status, JobState::Completed)),
                 Ok(Err(error)) => {

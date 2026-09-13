@@ -35,12 +35,6 @@ pub(crate) struct SpawnControl<'a> {
 
 impl SpawnControl<'_> {
     pub(crate) fn check(&self) -> Result<(), io::Error> {
-        if *self.cancel.borrow() {
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "terminal execution was cancelled",
-            ));
-        }
         if self
             .deadline
             .is_some_and(|deadline| Instant::now() >= deadline)
@@ -48,6 +42,12 @@ impl SpawnControl<'_> {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
                 "terminal execution deadline elapsed",
+            ));
+        }
+        if *self.cancel.borrow() {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "terminal execution was cancelled",
             ));
         }
         Ok(())
