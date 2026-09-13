@@ -13,7 +13,9 @@ use tokio::sync::watch;
 
 mod masks;
 mod paths;
-use masks::{add_optional_socket, add_protected_paths, mask_protected_file};
+use masks::{
+    add_optional_socket, add_protected_paths, mask_protected_file, ProtectedPathFreshness,
+};
 mod managed_process;
 mod protected_paths;
 mod ssh_material;
@@ -219,6 +221,7 @@ fn spawn_with_profile(
     let mut cargo_home = None;
     let mut rustup_home = None;
     let mut toolchain_roots = std::collections::BTreeSet::new();
+    let mut protected_path_freshness_checks: Vec<ProtectedPathFreshness> = Vec::new();
     let home_cargo_bin = host_home.join(".cargo/bin");
     let canonical_home_cargo_bin = std::fs::canonicalize(&home_cargo_bin).ok();
     for path in &config.toolchain_paths {
@@ -329,8 +332,16 @@ fn spawn_with_profile(
                 .iter()
                 .any(|other| other != toolchain_root && toolchain_root.starts_with(other))
         {
-            add_protected_paths(&mut args, toolchain_root, true, None, "toolchain", control)
-                .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
+            add_protected_paths(
+                &mut args,
+                toolchain_root,
+                true,
+                None,
+                "toolchain",
+                control,
+                &mut protected_path_freshness_checks,
+            )
+            .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
             masks::mask_state(&mut args, config, toolchain_root)?;
         }
     }
@@ -341,8 +352,16 @@ fn spawn_with_profile(
     };
     // A mounted HOME must hide the entire SSH store even for dedicated SSH;
     // only its exact reviewed material is restored below.
-    add_protected_paths(&mut args, sandbox_root, true, None, "workspace", control)
-        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
+    add_protected_paths(
+        &mut args,
+        sandbox_root,
+        true,
+        None,
+        "workspace",
+        control,
+        &mut protected_path_freshness_checks,
+    )
+    .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
     masks::mask_state(&mut args, config, sandbox_root)?;
     if sandbox_root != execution_root {
         add_protected_paths(
@@ -352,6 +371,7 @@ fn spawn_with_profile(
             ssh_root.as_deref(),
             "execution_root_mask",
             control,
+            &mut protected_path_freshness_checks,
         )
         .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
     }
@@ -382,8 +402,16 @@ fn spawn_with_profile(
                 {
                     let val = ws.to_string_lossy().into_owned();
                     args.extend([root_bind.into(), val.clone(), val]);
-                    add_protected_paths(&mut args, &ws, true, None, "authorized_sibling", control)
-                        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
+                    add_protected_paths(
+                        &mut args,
+                        &ws,
+                        true,
+                        None,
+                        "authorized_sibling",
+                        control,
+                        &mut protected_path_freshness_checks,
+                    )
+                    .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
                     masks::mask_state(&mut args, config, &ws)?;
                 }
             }
@@ -417,6 +445,31 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    let freshness_started = Instant::now();
+    for index in &protected_path_freshness_checks {
+        if let Some(control) = control {
+            control.check()?;
+        }
+        let fresh = index
+            .is_fresh()
+            .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
+        if !fresh {
+            return Err(SandboxError::at(
+                "protected_path_discovery",
+                io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "workspace changed before sandbox spawn",
+                ),
+            ));
+        }
+    }
+    tracing::info!(
+        event = "relay.sandbox.stage",
+        stage = "protected_path_final_check",
+        outcome = "completed",
+        index_count = protected_path_freshness_checks.len(),
+        duration_ms = freshness_started.elapsed().as_millis() as u64,
+    );
     if let Some(control) = control {
         control.check()?;
     }

@@ -77,6 +77,14 @@ pub(super) fn mask_protected_file(
     Ok(())
 }
 
+pub(super) struct ProtectedPathFreshness(std::sync::Arc<protected_index::ProtectedPathIndex>);
+
+impl ProtectedPathFreshness {
+    pub(super) fn is_fresh(&self) -> Result<bool, std::io::Error> {
+        self.0.is_fresh()
+    }
+}
+
 pub(super) fn add_optional_socket(
     args: &mut Vec<String>,
     enabled: bool,
@@ -105,9 +113,10 @@ pub(super) fn add_protected_paths(
     skip: Option<&Path>,
     scope: &'static str,
     control: Option<&super::SpawnControl<'_>>,
+    freshness_checks: &mut Vec<ProtectedPathFreshness>,
 ) -> Result<(), std::io::Error> {
     let scan_started = Instant::now();
-    let (paths, scanned_entries, cache_hit) = if recursive {
+    let (paths, scanned_entries, cache_hit, watch_enabled) = if recursive {
         let (canonical_root, index, cache_hit) = protected_index::discover(execution_root, control)
             .map_err(|error| {
                 tracing::warn!(
@@ -129,11 +138,15 @@ pub(super) fn add_protected_paths(
             .filter(|path| path.strip_prefix(&canonical_root).is_ok())
             .cloned()
             .collect::<Vec<_>>();
-        (paths, index.scanned_entries, cache_hit)
+        let scanned_entries = index.scanned_entries;
+        let watch_enabled = index.watcher_enabled();
+        freshness_checks.push(ProtectedPathFreshness(index));
+        (paths, scanned_entries, cache_hit, watch_enabled)
     } else {
         (
             crate::core::protected_paths::protected_paths(execution_root).collect(),
             0,
+            false,
             false,
         )
     };
@@ -144,6 +157,7 @@ pub(super) fn add_protected_paths(
         outcome = "completed",
         recursive,
         cache_hit,
+        watch_enabled,
         protected_path_count = paths.len(),
         scanned_entries,
         duration_ms = scan_started.elapsed().as_millis() as u64,

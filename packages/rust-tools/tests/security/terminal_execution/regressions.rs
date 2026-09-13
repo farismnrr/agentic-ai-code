@@ -14,8 +14,8 @@ async fn large_workspace_reindexes_new_protected_path_before_sync_deadline() {
     let large_directory = fixture.root.join("large");
     fs::create_dir_all(&large_directory).expect("create large workspace subtree");
     for index in 0..12_000 {
-        fs::File::create(large_directory.join(format!("entry-{index:05}")))
-            .expect("create workspace entry");
+        fs::create_dir(large_directory.join(format!("entry-{index:05}")))
+            .expect("create nested workspace directory");
     }
 
     fixture.manager.prepare_for_serving().await;
@@ -40,12 +40,13 @@ async fn large_workspace_reindexes_new_protected_path_before_sync_deadline() {
         JobState::Completed
     );
 
-    fs::write(fixture.root.join(".env.local"), "PRIVATE_SENTINEL")
-        .expect("create protected path after index warmup");
+    let protected_path = large_directory.join("entry-11999/.env.local");
+    fs::write(&protected_path, "PRIVATE_SENTINEL")
+        .expect("create nested protected path after index warmup");
     let refresh_started = std::time::Instant::now();
     let read_id = start_terminal_job(
         &json!({
-            "command": "cat .env.local",
+            "command": "cat large/entry-11999/.env.local",
             "cwd": fixture.root,
             "timeout_ms": 5000
         }),
