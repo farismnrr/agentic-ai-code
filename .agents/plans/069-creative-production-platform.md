@@ -1378,11 +1378,11 @@ Current `origin/main` baseline audited for this plan:
 e13bd38666ec4cb100ae713bd8272426db209d0e
 ```
 
-Plan 069 is the next unused numeric plan on the audited `main` baseline as of 2026-09-13.
+Plan 069 is the next unused numeric plan on the audited `main` baseline as of 2026-09-13. This file is the sole active Plan 069 and consolidates the earlier Blender-only and anime/Higgsfield-scoped drafts.
 
-The `release/ai-tools-v0.0.15` work carries optional-capability composition that has not yet landed on `main`. The original Blender Plan 069 was kept only on that release branch. This rewritten Plan 069 is intentionally created from `origin/main` so future implementation has a canonical main-based planning artifact.
+The `release/ai-tools-v0.0.15` branch contains an optional-capability prototype that was never merged to `main`. Treat it as historical work, not as an implementation dependency or an approved source baseline.
 
-**Implementation gate:** before source work, re-audit current `main` and confirm the optional-capability framework from v0.0.15 (or its successor) is merged. Do not copy/cherry-pick an obsolete framework into a competing implementation.
+**Implementation gate:** before source work, re-audit current `main` for optional-capability support. Reimplement or selectively cherry-pick only pieces that are still needed and pass a fresh security and architecture review. Do not port the old release branch wholesale.
 
 ## Expected implementation ownership
 
