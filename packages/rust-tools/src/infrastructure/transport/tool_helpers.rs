@@ -8,6 +8,26 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Instant;
 
+pub(super) fn trace_task_routing(
+    tool: &str,
+    execute_async: bool,
+    client_has_tasks: bool,
+    tool_has_tasks: bool,
+) {
+    tracing::info!(
+        event = "relay.transport.stage",
+        stage = "task_routing",
+        outcome = if execute_async {
+            "task_dispatch"
+        } else {
+            "synchronous_dispatch"
+        },
+        tool,
+        client_has_tasks,
+        tool_has_tasks,
+    );
+}
+
 pub(super) fn record_activity_outcome(
     state: &AppState,
     start: &ActivityEvent,
@@ -307,6 +327,19 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
         )
         .await;
 
+    tracing::info!(
+        event = "relay.transport.stage",
+        stage = "tool_completion",
+        outcome = if result.is_error {
+            "error"
+        } else {
+            "completed"
+        },
+        tool = tool_name,
+        lifecycle_hook = lifecycle_event.name(),
+        dispatch_duration_ms = dispatch_ms,
+        duration_ms = request_started.elapsed().as_millis() as u64,
+    );
     let result = result.with_timing(dispatch_ms, request_started.elapsed().as_millis() as u64);
     let response = Response::new(
         request.id.clone(),

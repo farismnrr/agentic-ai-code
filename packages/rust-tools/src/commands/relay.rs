@@ -76,6 +76,7 @@ pub async fn run(cli: ai_tools::core::config::Cli) -> Result<(), Box<dyn std::er
     }
 
     let jobs = ai_tools::application::execution::JobManager::new(config.clone());
+    jobs.prepare_for_serving().await;
     let hooks = ai_tools::application::hooks::HookManager::load(Arc::new(config.clone()))
         .map_err(|error| format!("agent hook configuration failed closed: {error}"))?;
     let router = create_router_with_jobs_and_hooks(config.clone(), jobs.clone(), hooks);

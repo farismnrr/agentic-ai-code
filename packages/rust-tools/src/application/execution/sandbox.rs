@@ -3,20 +3,81 @@
 use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
 use crate::core::config::ServerConfig;
 use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Instant;
 
 use tokio::process::{Child, Command};
+use tokio::sync::watch;
 
 mod masks;
 mod paths;
 use masks::{add_optional_socket, add_protected_paths, mask_protected_file};
+mod managed_process;
+mod protected_paths;
 mod ssh_material;
+
+pub(super) use managed_process::spawn;
+pub(crate) use managed_process::{spawn_hook, spawn_lsp};
+pub(crate) use protected_paths::prime_protected_path_indexes;
 
 #[derive(Clone, Copy)]
 pub(crate) enum WorkspaceAccess {
     ReadOnly,
     Writable,
+}
+
+pub(crate) struct SpawnControl<'a> {
+    deadline: Option<Instant>,
+    cancel: &'a watch::Receiver<bool>,
+}
+
+impl SpawnControl<'_> {
+    pub(crate) fn check(&self) -> Result<(), io::Error> {
+        if *self.cancel.borrow() {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "terminal execution was cancelled",
+            ));
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "terminal execution deadline elapsed",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct SandboxError {
+    pub(crate) stage: &'static str,
+    source: io::Error,
+}
+
+impl SandboxError {
+    fn at(stage: &'static str, source: io::Error) -> Self {
+        Self { stage, source }
+    }
+
+    pub(crate) fn kind(&self) -> io::ErrorKind {
+        self.source.kind()
+    }
+
+    fn into_io_error(self) -> io::Error {
+        self.source
+    }
+}
+
+impl From<io::Error> for SandboxError {
+    fn from(source: io::Error) -> Self {
+        Self::at("sandbox_profile", source)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -45,123 +106,47 @@ pub(crate) fn runtime_home() -> Result<PathBuf, std::io::Error> {
     std::fs::canonicalize(home).map_err(|_| std::io::Error::other("HOME is unavailable"))
 }
 
-pub(super) fn spawn(
-    config: &ServerConfig,
-    invocation: &ToolInvocation,
-    workspace_access: WorkspaceAccess,
-) -> Result<Child, std::io::Error> {
-    // SSH is a distinct execution class: it gets host networking but never a
-    // writable workspace or local privileged sockets. Other invocation classes
-    // continue to derive network authority only from their owning request path.
-    let ssh = matches!(invocation.security, InvocationSecurity::Ssh { .. });
-    let network_access = if ssh || invocation.allow_network {
-        NetworkAccess::Host
-    } else {
-        NetworkAccess::Isolated
-    };
-    let effective_workspace_access = if ssh {
-        WorkspaceAccess::ReadOnly
-    } else {
-        workspace_access
-    };
-    let writable = matches!(effective_workspace_access, WorkspaceAccess::Writable);
-    spawn_with_profile(
-        config,
-        invocation,
-        SandboxProfile {
-            workspace_access: effective_workspace_access,
-            network_access,
-            expose_optional_sockets: !ssh && writable && invocation.expose_optional_sockets,
-            expose_runtime_extras: !ssh && writable,
-            workspace_root: None,
-        },
-    )
-}
-
-/// Spawn an approved language server with a stricter profile than ordinary
-/// terminal execution: read-only workspace, isolated network namespace, no
-/// Docker/Tailscale sockets, the runtime-resolved HOME path without a whole-home
-/// bind, a cleared environment, and only the relay safe PATH/toolchain mounts.
-pub(crate) fn spawn_lsp(
-    config: &ServerConfig,
-    executable: PathBuf,
-    args: Vec<String>,
-    cwd: PathBuf,
-) -> Result<Child, std::io::Error> {
-    spawn_with_profile(
-        config,
-        &ToolInvocation {
-            program: InvocationProgram::Direct(executable),
-            args,
-            cwd: Some(cwd.clone()),
-            timeout_ms: 0,
-            allow_network: false,
-            expose_optional_sockets: false,
-            expose_authorized_siblings: false,
-            security: InvocationSecurity::Standard,
-        },
-        SandboxProfile {
-            workspace_access: WorkspaceAccess::ReadOnly,
-            network_access: NetworkAccess::Isolated,
-            expose_optional_sockets: false,
-            expose_runtime_extras: false,
-            workspace_root: Some(&cwd),
-        },
-    )
-}
-
-/// Hook profile: contained repository cwd, with workspace authority capped by
-/// the triggering operation. A read-only lifecycle event is never given a
-/// writable bind merely because a hook is configured.
-pub(crate) fn spawn_hook(
-    config: &ServerConfig,
-    executable: PathBuf,
-    args: Vec<String>,
-    cwd: PathBuf,
-    workspace_access: WorkspaceAccess,
-) -> Result<Child, std::io::Error> {
-    spawn_with_profile(
-        config,
-        &ToolInvocation {
-            program: InvocationProgram::Direct(executable),
-            args,
-            cwd: Some(cwd.clone()),
-            timeout_ms: 0,
-            allow_network: false,
-            expose_optional_sockets: false,
-            expose_authorized_siblings: false,
-            security: InvocationSecurity::Standard,
-        },
-        SandboxProfile {
-            workspace_access,
-            network_access: NetworkAccess::Isolated,
-            expose_optional_sockets: false,
-            expose_runtime_extras: false,
-            workspace_root: Some(&cwd),
-        },
-    )
-}
-
 fn spawn_with_profile(
     config: &ServerConfig,
     invocation: &ToolInvocation,
     profile: SandboxProfile<'_>,
-) -> Result<Child, std::io::Error> {
-    let current_exe = env::current_exe()?;
+    control: Option<&SpawnControl<'_>>,
+) -> Result<Child, SandboxError> {
+    let resolution_started = Instant::now();
+    let current_exe =
+        env::current_exe().map_err(|error| SandboxError::at("executable_resolution", error))?;
     let program_path = match &invocation.program {
         InvocationProgram::SelfBinary => current_exe,
         InvocationProgram::Direct(path) => path.clone(),
     };
     if !program_path.exists() {
-        return Err(std::io::Error::other("tool binary unavailable"));
+        return Err(SandboxError::at(
+            "executable_resolution",
+            io::Error::new(io::ErrorKind::NotFound, "tool binary unavailable"),
+        ));
     }
     let execution_root = config
         .resolved_execution_root()
         .map_err(|_| std::io::Error::other("invalid execution root"))?;
-    let host_home = runtime_home()?;
+    let host_home =
+        runtime_home().map_err(|error| SandboxError::at("executable_resolution", error))?;
     let home = host_home.to_string_lossy().into_owned();
-    let bwrap = resolve_safe_executable(config, "bwrap")
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let bwrap = resolve_safe_executable(config, "bwrap").map_err(|_| {
+        SandboxError::at(
+            "executable_resolution",
+            io::Error::new(io::ErrorKind::NotFound, "sandbox executable unavailable"),
+        )
+    })?;
+    tracing::info!(
+        event = "relay.sandbox.stage",
+        stage = "executable_resolution",
+        outcome = "completed",
+        duration_ms = resolution_started.elapsed().as_millis() as u64,
+    );
+    let profile_started = Instant::now();
+    if let Some(control) = control {
+        control.check()?;
+    }
     let discovered_workspace = if profile.workspace_root.is_none() {
         let cwd_arg = invocation.cwd.as_ref().and_then(|path| path.to_str());
         crate::application::git::resolve_git_workspace(cwd_arg, config)
@@ -205,12 +190,13 @@ fn spawn_with_profile(
     {
         return Err(std::io::Error::other(
             "sandbox root is outside authorized workspace authority",
-        ));
+        )
+        .into());
     }
     if crate::core::protected_paths::is_protected_path(&execution_root, sandbox_root) {
-        return Err(std::io::Error::other(
-            "sandbox workspace is protected by credential policy",
-        ));
+        return Err(
+            std::io::Error::other("sandbox workspace is protected by credential policy").into(),
+        );
     }
     let root = sandbox_root.to_string_lossy().into_owned();
     let root_bind = match profile.workspace_access {
@@ -236,6 +222,9 @@ fn spawn_with_profile(
     let home_cargo_bin = host_home.join(".cargo/bin");
     let canonical_home_cargo_bin = std::fs::canonicalize(&home_cargo_bin).ok();
     for path in &config.toolchain_paths {
+        if let Some(control) = control {
+            control.check()?;
+        }
         let configured = PathBuf::from(path);
         let canonical = std::fs::canonicalize(&configured)
             .map_err(|_| std::io::Error::other("invalid toolchain path"))?;
@@ -302,6 +291,9 @@ fn spawn_with_profile(
     // than HOME. Mount only the validated executable directory, never its
     // surrounding profile or credential store.
     for discovered in super::toolchain::safe_path_entries(config) {
+        if let Some(control) = control {
+            control.check()?;
+        }
         let Ok(canonical) = std::fs::canonicalize(&discovered) else {
             continue;
         };
@@ -329,12 +321,16 @@ fn spawn_with_profile(
         toolchain_roots.insert(canonical);
     }
     for toolchain_root in &toolchain_roots {
+        if let Some(control) = control {
+            control.check()?;
+        }
         if !toolchain_root.starts_with(sandbox_root)
             && !toolchain_roots
                 .iter()
                 .any(|other| other != toolchain_root && toolchain_root.starts_with(other))
         {
-            add_protected_paths(&mut args, toolchain_root, true, None)?;
+            add_protected_paths(&mut args, toolchain_root, true, None, "toolchain", control)
+                .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
             masks::mask_state(&mut args, config, toolchain_root)?;
         }
     }
@@ -345,10 +341,19 @@ fn spawn_with_profile(
     };
     // A mounted HOME must hide the entire SSH store even for dedicated SSH;
     // only its exact reviewed material is restored below.
-    add_protected_paths(&mut args, sandbox_root, true, None)?;
+    add_protected_paths(&mut args, sandbox_root, true, None, "workspace", control)
+        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
     masks::mask_state(&mut args, config, sandbox_root)?;
     if sandbox_root != execution_root {
-        add_protected_paths(&mut args, &execution_root, false, ssh_root.as_deref())?;
+        add_protected_paths(
+            &mut args,
+            &execution_root,
+            false,
+            ssh_root.as_deref(),
+            "execution_root_mask",
+            control,
+        )
+        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
     }
     if let InvocationSecurity::Ssh {
         identity_file,
@@ -367,6 +372,9 @@ fn spawn_with_profile(
     if invocation.expose_authorized_siblings {
         if let Ok(guard) = config.workspaces.read() {
             for ws in guard.all_roots() {
+                if let Some(control) = control {
+                    control.check()?;
+                }
                 if ws != sandbox_root
                     && !ws.starts_with(sandbox_root)
                     && !sandbox_root.starts_with(&ws)
@@ -374,7 +382,8 @@ fn spawn_with_profile(
                 {
                     let val = ws.to_string_lossy().into_owned();
                     args.extend([root_bind.into(), val.clone(), val]);
-                    add_protected_paths(&mut args, &ws, true, None)?;
+                    add_protected_paths(&mut args, &ws, true, None, "authorized_sibling", control)
+                        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
                     masks::mask_state(&mut args, config, &ws)?;
                 }
             }
@@ -385,12 +394,14 @@ fn spawn_with_profile(
             &mut args,
             config,
             crate::core::terminal_policy::GENERIC_SSH_CLIENTS,
+            control,
         )?;
     }
     masks::mask_executables(
         &mut args,
         config,
         crate::core::terminal_policy::PRIVILEGE_BROKERS,
+        control,
     )?;
     // Masks run before opt-ins, so a configured socket under HOME cannot bypass
     // default denial yet can still be exposed by its separate operator grant.
@@ -406,6 +417,9 @@ fn spawn_with_profile(
             add_optional_socket(&mut args, enabled, socket, name)?;
         }
     }
+    if let Some(control) = control {
+        control.check()?;
+    }
     if let Some(cwd) = &invocation.cwd {
         args.extend(["--chdir".into(), cwd.to_string_lossy().into_owned()]);
     }
@@ -416,6 +430,13 @@ fn spawn_with_profile(
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join(":");
+    tracing::info!(
+        event = "relay.sandbox.stage",
+        stage = "profile_construction",
+        outcome = "completed",
+        bubblewrap_argument_count = args.len(),
+        duration_ms = profile_started.elapsed().as_millis() as u64,
+    );
     let mut command = Command::new(bwrap);
     command
         .args(args)
@@ -459,5 +480,15 @@ fn spawn_with_profile(
             Ok(())
         });
     }
-    command.spawn()
+    let spawn_started = Instant::now();
+    let child = command
+        .spawn()
+        .map_err(|error| SandboxError::at("bwrap_spawn", error))?;
+    tracing::info!(
+        event = "relay.sandbox.stage",
+        stage = "bwrap_spawn",
+        outcome = "completed",
+        duration_ms = spawn_started.elapsed().as_millis() as u64,
+    );
+    Ok(child)
 }

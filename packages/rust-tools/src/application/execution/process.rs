@@ -1,108 +1,46 @@
 //! Job execution and the single sandboxed process lifecycle.
 
 use super::sandbox;
-use super::{now_ms, render_output, JobKind, JobManager, JobState, ToolInvocation};
+use super::{now_ms, render_output, JobManager, JobState, ToolInvocation};
 use crate::core::config::ServerConfig;
 use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
+use std::io;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio::sync::{watch, Mutex};
-use tokio::time::{timeout, Duration};
+use tokio::time::{timeout, timeout_at, Duration, Instant as TokioInstant};
 
-const TIMEOUT_GRACE_MS: u64 = 5_000;
+mod job;
+mod output;
+pub(super) use job::run_job;
+pub(super) use output::drain_pipe;
+pub(super) use output::OutputBuffer;
 
-pub(super) async fn run_job(
-    manager: Arc<JobManager>,
-    id: String,
-    job: JobKind,
-    mut cancel: watch::Receiver<bool>,
-    stdout: Arc<Mutex<OutputBuffer>>,
-    stderr: Arc<Mutex<OutputBuffer>>,
-) {
-    let semaphore = manager.semaphore.clone();
-    let permit = tokio::select! {
-        permit = semaphore.acquire_owned() => permit,
-        _ = cancel.changed() => {
-            finish(
-                &manager,
-                &id,
-                JobState::Cancelled,
-                -1,
-                (String::new(), String::new(), 0),
-                None,
-                None,
-            )
-            .await;
-            return;
-        }
-    };
-    if *cancel.borrow() {
-        finish(
-            &manager,
-            &id,
-            JobState::Cancelled,
-            -1,
-            (String::new(), String::new(), 0),
-            None,
-            None,
-        )
-        .await;
-        return;
+pub(crate) const PROCESS_CLEANUP_GRACE_MS: u64 = 1_500;
+const PROCESS_REAP_GRACE_MS: u64 = 500;
+const PIPE_DRAIN_GRACE_MS: u64 = 500;
+
+#[derive(Debug)]
+pub(super) struct ProcessFailure {
+    pub(super) stage: &'static str,
+    pub(super) kind: io::ErrorKind,
+}
+
+impl ProcessFailure {
+    fn new(stage: &'static str, kind: io::ErrorKind) -> Self {
+        Self { stage, kind }
     }
-    let Ok(_permit) = permit else {
-        finish(
-            &manager,
-            &id,
-            JobState::Failed,
-            -1,
-            ("execution semaphore unavailable".into(), String::new(), 0),
-            None,
-            None,
+
+    fn from_io(stage: &'static str, error: io::Error) -> Self {
+        Self::new(stage, error.kind())
+    }
+
+    fn diagnostic(&self) -> String {
+        format!(
+            "terminal execution failed at {}: {:?}",
+            self.stage, self.kind
         )
-        .await;
-        return;
-    };
-    let execution_started = Instant::now();
-    update_state(&manager, &id, JobState::Running, Some(now_ms()), None).await;
-    let result = match job {
-        JobKind::Process(invocation) => {
-            run_process(&manager.config, &invocation, &mut cancel, stdout, stderr).await
-        }
-    };
-    let execution_duration_ms = execution_started.elapsed().as_millis() as u64;
-    match result {
-        Ok(process) => {
-            finish(
-                &manager,
-                &id,
-                process.state,
-                process.exit_code,
-                (process.stdout, process.stderr, process.omitted),
-                Some(execution_duration_ms),
-                process.result,
-            )
-            .await
-        }
-        Err(error) => {
-            tracing::warn!(
-                event = "relay.process.spawn_failed",
-                job_id = %id,
-                error = %error,
-                "process spawn or execution failed"
-            );
-            finish(
-                &manager,
-                &id,
-                JobState::Failed,
-                -1,
-                (String::new(), String::new(), 0),
-                Some(execution_duration_ms),
-                None,
-            )
-            .await
-        }
     }
 }
 
@@ -115,80 +53,185 @@ pub(super) struct ProcessResult {
     pub(super) result: Option<ToolCallResult>,
 }
 
-pub(super) struct OutputBuffer {
-    pub(super) bytes: Vec<u8>,
-    pub(super) omitted: u64,
-    pub(super) updated_at: u128,
-}
-
-impl OutputBuffer {
-    pub(super) fn new(updated_at: u128) -> Self {
-        Self {
-            bytes: Vec::new(),
-            omitted: 0,
-            updated_at,
-        }
-    }
-
-    pub(super) fn push(&mut self, chunk: &[u8], limit: usize) {
-        self.updated_at = now_ms();
-        if chunk.len() >= limit {
-            self.omitted += (self.bytes.len() + chunk.len() - limit) as u64;
-            self.bytes = chunk[chunk.len() - limit..].to_vec();
-            return;
-        }
-        self.bytes.extend_from_slice(chunk);
-        if self.bytes.len() > limit {
-            let drop_count = self.bytes.len() - limit;
-            self.bytes.drain(..drop_count);
-            self.omitted += drop_count as u64;
-        }
-    }
-}
-
-pub(super) async fn drain_pipe<R: tokio::io::AsyncRead + Unpin>(
-    mut pipe: R,
-    output: Arc<Mutex<OutputBuffer>>,
-    limit: usize,
-) {
-    let mut buf = [0u8; 8192];
-    loop {
-        match pipe.read(&mut buf).await {
-            Ok(0) | Err(_) => break,
-            Ok(n) => output.lock().await.push(&buf[..n], limit),
-        }
-    }
+pub(super) struct ProcessOutput {
+    pub(super) stdout: Arc<Mutex<OutputBuffer>>,
+    pub(super) stderr: Arc<Mutex<OutputBuffer>>,
 }
 
 pub(super) async fn run_process(
+    manager: &JobManager,
+    id: &str,
     config: &ServerConfig,
     invocation: &ToolInvocation,
     cancel: &mut watch::Receiver<bool>,
-    stdout: Arc<Mutex<OutputBuffer>>,
-    stderr: Arc<Mutex<OutputBuffer>>,
-) -> Result<ProcessResult, std::io::Error> {
-    let mut child = sandbox::spawn(config, invocation, sandbox::WorkspaceAccess::Writable)?;
-    let out_task = tokio::spawn(drain_pipe(
-        child.stdout.take().unwrap(),
+    output: ProcessOutput,
+    deadline: Option<Instant>,
+) -> Result<ProcessResult, ProcessFailure> {
+    let ProcessOutput { stdout, stderr } = output;
+    let spawn_started = Instant::now();
+    let mut child = sandbox::spawn(
+        config,
+        invocation,
+        sandbox::WorkspaceAccess::Writable,
+        deadline,
+        cancel,
+    )
+    .map_err(|error| ProcessFailure::new(error.stage, error.kind()))?;
+    let child_pid = child.id();
+    manager.register_child_pid(id, child_pid).await;
+    tracing::info!(
+        event = "relay.process.stage",
+        stage = "child_start",
+        outcome = "completed",
+        duration_ms = spawn_started.elapsed().as_millis() as u64,
+    );
+
+    // Close stdin immediately so non-interactive commands observe EOF.
+    drop(child.stdin.take());
+    let Some(stdout_pipe) = child.stdout.take() else {
+        let failure = ProcessFailure::new("stdout_pipe_setup", io::ErrorKind::BrokenPipe);
+        return match kill_and_reap(&mut child, child_pid).await {
+            Ok(_) => Err(failure),
+            Err(cleanup_failure) => Err(cleanup_failure),
+        };
+    };
+    let Some(stderr_pipe) = child.stderr.take() else {
+        let failure = ProcessFailure::new("stderr_pipe_setup", io::ErrorKind::BrokenPipe);
+        return match kill_and_reap(&mut child, child_pid).await {
+            Ok(_) => Err(failure),
+            Err(cleanup_failure) => Err(cleanup_failure),
+        };
+    };
+
+    let mut out_task = tokio::spawn(drain_pipe(
+        stdout_pipe,
         stdout.clone(),
         config.max_retained_output_bytes / 2,
     ));
-    let err_task = tokio::spawn(drain_pipe(
-        child.stderr.take().unwrap(),
+    let mut err_task = tokio::spawn(drain_pipe(
+        stderr_pipe,
         stderr.clone(),
         config.max_retained_output_bytes / 2,
     ));
-    let deadline = effective_timeout(config, invocation.timeout_ms);
-    let wait_result = if deadline == 0 {
-        tokio::select! { result = child.wait() => result.map(|status| (status, JobState::Completed)), _ = cancel.changed() => { kill_process_group(&mut child).await; child.wait().await.map(|status| (status, JobState::Cancelled)) } }
+    let wait_started = Instant::now();
+    let wait_result = if let Some(deadline) = deadline {
+        tokio::select! {
+            result = timeout_at(TokioInstant::from_std(deadline), child.wait()) => match result {
+                Ok(Ok(status)) => Ok((status, JobState::Completed)),
+                Ok(Err(error)) => {
+                    tracing::warn!(
+                        event = "relay.process.stage",
+                        stage = "child_wait",
+                        outcome = "failed",
+                        error_kind = ?error.kind(),
+                    );
+                    let failure = ProcessFailure::from_io("child_wait", error);
+                    match kill_and_reap(&mut child, child_pid).await {
+                        Ok(_) => Err(failure),
+                        Err(cleanup_failure) => Err(cleanup_failure),
+                    }
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        event = "relay.process.stage",
+                        stage = "timeout_path",
+                        outcome = "timed_out",
+                    );
+                    let status = kill_and_reap(&mut child, child_pid).await?;
+                    Ok((status, JobState::TimedOut))
+                }
+            },
+            _ = cancel.changed() => {
+                tracing::info!(
+                    event = "relay.process.stage",
+                    stage = "cancellation_path",
+                    outcome = "requested",
+                );
+                let status = kill_and_reap(&mut child, child_pid).await?;
+                Ok((status, JobState::Cancelled))
+            }
+        }
     } else {
         tokio::select! {
-            result = timeout(Duration::from_millis(deadline), child.wait()) => match result { Ok(status) => status.map(|s| (s, JobState::Completed)), Err(_) => { kill_process_group(&mut child).await; child.wait().await.map(|s| (s, JobState::TimedOut)) } },
-            _ = cancel.changed() => { kill_process_group(&mut child).await; child.wait().await.map(|s| (s, JobState::Cancelled)) }
+            result = child.wait() => match result {
+                Ok(status) => Ok((status, JobState::Completed)),
+                Err(error) => {
+                    tracing::warn!(
+                        event = "relay.process.stage",
+                        stage = "child_wait",
+                        outcome = "failed",
+                        error_kind = ?error.kind(),
+                    );
+                    let failure = ProcessFailure::from_io("child_wait", error);
+                    match kill_and_reap(&mut child, child_pid).await {
+                        Ok(_) => Err(failure),
+                        Err(cleanup_failure) => Err(cleanup_failure),
+                    }
+                }
+            },
+            _ = cancel.changed() => {
+                tracing::info!(
+                    event = "relay.process.stage",
+                    stage = "cancellation_path",
+                    outcome = "requested",
+                );
+                let status = kill_and_reap(&mut child, child_pid).await?;
+                Ok((status, JobState::Cancelled))
+            }
         }
     }?;
-    let _ = out_task.await;
-    let _ = err_task.await;
+    tracing::info!(
+        event = "relay.process.stage",
+        stage = "child_wait",
+        outcome = match wait_result.1 {
+            JobState::Completed => "completed",
+            JobState::TimedOut => "timed_out",
+            JobState::Cancelled => "cancelled",
+            _ => "failed",
+        },
+        duration_ms = wait_started.elapsed().as_millis() as u64,
+    );
+
+    let drain_started = Instant::now();
+    let drain_result = timeout(Duration::from_millis(PIPE_DRAIN_GRACE_MS), async {
+        let (outcome, error) = tokio::join!(&mut out_task, &mut err_task);
+        outcome
+            .map_err(|_| ProcessFailure::new("stdout_drain", io::ErrorKind::Other))?
+            .map_err(|error| ProcessFailure::from_io("stdout_drain", error))?;
+        error
+            .map_err(|_| ProcessFailure::new("stderr_drain", io::ErrorKind::Other))?
+            .map_err(|error| ProcessFailure::from_io("stderr_drain", error))?;
+        Ok::<(), ProcessFailure>(())
+    })
+    .await;
+    let drain_failure = match drain_result {
+        Ok(Ok(())) => None,
+        Ok(Err(error)) => Some(error),
+        Err(_) => Some(ProcessFailure::new(
+            "stdout_stderr_drain",
+            io::ErrorKind::TimedOut,
+        )),
+    };
+    if let Some(failure) = drain_failure {
+        kill_process_group_by_pid(child_pid).await;
+        out_task.abort();
+        err_task.abort();
+        tracing::warn!(
+            event = "relay.process.stage",
+            stage = "stdout_stderr_drain",
+            outcome = "failed",
+            error_kind = ?failure.kind,
+            duration_ms = drain_started.elapsed().as_millis() as u64,
+        );
+        return Err(failure);
+    }
+    tracing::info!(
+        event = "relay.process.stage",
+        stage = "stdout_stderr_drain",
+        outcome = "completed",
+        duration_ms = drain_started.elapsed().as_millis() as u64,
+    );
+
     let out = stdout.lock().await;
     let err = stderr.lock().await;
     let exit_code = wait_result.0.code().unwrap_or(-1);
@@ -208,28 +251,60 @@ pub(super) async fn run_process(
         stdout: stdout_text,
         stderr: stderr_text,
         omitted: out.omitted + err.omitted,
-        result: None,
+        result: match wait_result.1 {
+            JobState::TimedOut => Some(ToolCallResult::error(vec![ToolResultContent {
+                kind: "text",
+                text: "terminal execution failed at child_wait: TimedOut".into(),
+            }])),
+            JobState::Cancelled => Some(ToolCallResult::error(vec![ToolResultContent {
+                kind: "text",
+                text: "terminal execution failed at request_cancellation: Interrupted".into(),
+            }])),
+            _ => None,
+        },
     })
 }
 
-fn effective_timeout(config: &ServerConfig, requested: u64) -> u64 {
-    if config.max_terminal_timeout_ms == 0 {
-        requested
-    } else if requested == 0 {
-        config.max_terminal_timeout_ms
-    } else {
-        requested.min(config.max_terminal_timeout_ms)
+pub(crate) async fn kill_process_group(child: &mut Child) {
+    kill_process_group_by_pid(child.id()).await;
+}
+
+pub(crate) async fn kill_process_group_by_pid(pid: Option<u32>) {
+    if let Some(pid) = pid {
+        #[cfg(unix)]
+        let outcome = unsafe {
+            if libc::kill(-(pid as i32), libc::SIGKILL) == 0 {
+                ("signalled", None)
+            } else {
+                let error = io::Error::last_os_error();
+                if error.raw_os_error() == Some(libc::ESRCH) {
+                    ("already_exited", None)
+                } else {
+                    ("failed", Some(error.kind()))
+                }
+            }
+        };
+        #[cfg(not(unix))]
+        let outcome: (&str, Option<io::ErrorKind>) = ("unsupported", None);
+        tracing::info!(
+            event = "relay.process.stage",
+            stage = "process_group_kill",
+            outcome = outcome.0,
+            error_kind = ?outcome.1,
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
 
-pub(crate) async fn kill_process_group(child: &mut Child) {
-    if let Some(pid) = child.id() {
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(-(pid as i32), libc::SIGKILL);
-        }
-        tokio::time::sleep(Duration::from_millis(TIMEOUT_GRACE_MS.min(100))).await;
-    }
+async fn kill_and_reap(
+    child: &mut Child,
+    child_pid: Option<u32>,
+) -> Result<std::process::ExitStatus, ProcessFailure> {
+    kill_process_group_by_pid(child_pid).await;
+    timeout(Duration::from_millis(PROCESS_REAP_GRACE_MS), child.wait())
+        .await
+        .map_err(|_| ProcessFailure::new("child_reap", io::ErrorKind::TimedOut))?
+        .map_err(|error| ProcessFailure::from_io("child_reap", error))
 }
 
 async fn update_state(
@@ -240,6 +315,9 @@ async fn update_state(
     finished: Option<u128>,
 ) {
     if let Some(job) = manager.jobs.lock().await.get_mut(id) {
+        if job.snapshot.finished_at.is_some() {
+            return;
+        }
         job.snapshot.state = state;
         job.snapshot.started_at = started;
         job.snapshot.finished_at = finished;
@@ -257,30 +335,38 @@ async fn finish(
     result_override: Option<ToolCallResult>,
 ) {
     let (stdout, stderr, omitted) = output;
-    let result = result_override.or_else(|| match state {
-        JobState::Completed if exit_code == 0 => {
-            Some(ToolCallResult::complete(vec![ToolResultContent {
+    if let Some(job) = manager.jobs.lock().await.get_mut(id) {
+        if job.snapshot.finished_at.is_some() {
+            return;
+        }
+        let final_state = match job.snapshot.state {
+            JobState::Cancelled | JobState::TimedOut => job.snapshot.state,
+            _ => state,
+        };
+        let result_override = (state == final_state).then_some(result_override).flatten();
+        let result = result_override.or_else(|| match final_state {
+            JobState::Completed if exit_code == 0 => {
+                Some(ToolCallResult::complete(vec![ToolResultContent {
+                    kind: "text",
+                    text: render_output(exit_code, &stdout, &stderr, omitted),
+                }]))
+            }
+            JobState::Completed => Some(ToolCallResult::error(vec![ToolResultContent {
                 kind: "text",
                 text: render_output(exit_code, &stdout, &stderr, omitted),
-            }]))
-        }
-        JobState::Completed => Some(ToolCallResult::error(vec![ToolResultContent {
-            kind: "text",
-            text: render_output(exit_code, &stdout, &stderr, omitted),
-        }])),
-        JobState::TimedOut => Some(ToolCallResult::error(vec![ToolResultContent {
-            kind: "text",
-            text: "execution timed out".into(),
-        }])),
-        JobState::Queued | JobState::Running | JobState::Failed | JobState::Cancelled => None,
-    });
-    if let Some(job) = manager.jobs.lock().await.get_mut(id) {
+            }])),
+            JobState::TimedOut => Some(ToolCallResult::error(vec![ToolResultContent {
+                kind: "text",
+                text: "terminal execution failed at job_wait: TimedOut".into(),
+            }])),
+            JobState::Cancelled => Some(ToolCallResult::error(vec![ToolResultContent {
+                kind: "text",
+                text: "execution cancelled".into(),
+            }])),
+            JobState::Queued | JobState::Running | JobState::Failed => None,
+        });
         let finished_at = now_ms();
-        // Transport cancellation commits the public state before process
-        // reaping completes. A later timeout or exit must not overwrite it.
-        if job.snapshot.state != JobState::Cancelled {
-            job.snapshot.state = state;
-        }
+        job.snapshot.state = final_state;
         job.snapshot.finished_at = Some(finished_at);
         job.snapshot.execution_duration_ms = execution_duration_ms;
         job.snapshot.last_updated_at = finished_at;
@@ -289,5 +375,18 @@ async fn finish(
         job.snapshot.stderr = stderr;
         job.snapshot.omitted_bytes = omitted;
         job.snapshot.result = result;
+        job.child_pid = None;
+        tracing::info!(
+            event = "relay.process.stage",
+            stage = "job_finish",
+            outcome = match final_state {
+                JobState::Completed => "completed",
+                JobState::Failed => "failed",
+                JobState::TimedOut => "timed_out",
+                JobState::Cancelled => "cancelled",
+                JobState::Queued | JobState::Running => "invalid",
+            },
+            duration_ms = execution_duration_ms.unwrap_or_default(),
+        );
     }
 }

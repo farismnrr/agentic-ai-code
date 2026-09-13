@@ -4,6 +4,9 @@ use axum::http::{header::HOST, header::ORIGIN, HeaderMap, HeaderValue};
 
 #[path = "security/terminal_discovery.rs"]
 mod terminal_discovery;
+#[cfg(target_os = "linux")]
+#[path = "security/terminal_execution/mod.rs"]
+mod terminal_execution;
 #[path = "security/terminal_filesystem.rs"]
 mod terminal_filesystem;
 #[path = "security/terminal_network.rs"]
