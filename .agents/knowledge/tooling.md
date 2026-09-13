@@ -18,15 +18,16 @@ Primary and child prompts share `application/chat/tool-selection-policy.ts`;
 child guidance is composed after authority/effect/ownership filtering and
 counts toward its context budget. Routing advice never changes approvals.
 
-With both `--dir "$HOME"` and `--execution-root "$HOME"`, terminal mounts the
-authorized home tree rather than discovering one Git repository from `cwd`.
-A narrower primary workspace still requires explicit sibling authorization.
-Bubblewrap, scrubbed environment and credential masking remain mandatory;
-direct and shell-wrapped privilege brokers and generic SSH remain unavailable.
-Protected discovery scans visible dependency/cache/build directories too and
-fails closed on incomplete traversal or the 500,000-entry limit. Do not bypass
-that failure by pruning still-visible directories. Use narrower authorized
-roots for homes above the bound. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
+The default `RELAY_WORKSPACE_ROOT` is `$HOME/Documents/Projects`; it supplies
+both the primary workspace and default execution ceiling. Child repositories
+beneath that tree can be selected with `cwd`, while paths outside it are denied.
+Setting the workspace root and an explicit `--execution-root` to `$HOME` is a
+deliberate full-home scope and should not be the default. Bubblewrap, a scrubbed
+environment and credential masking remain mandatory; direct and shell-wrapped
+privilege brokers and generic SSH remain unavailable. Protected discovery scans
+visible dependency/cache/build directories too and fails closed on incomplete
+traversal or the 500,000-entry limit. Do not bypass that failure by pruning
+visible directories. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
 
 Host `systemctl --user` and `journalctl --user` are intentionally unavailable
 through generic terminal execution: `/run/user`, the host session/system bus,
@@ -86,8 +87,7 @@ A representative single-owner local coding profile is:
 ./target/release/ai-tools relay \
   --mode local \
   --port 47821 \
-  --dir "$HOME" \
-  --execution-root "$HOME" \
+  --workspace-root "$HOME/Documents/Projects" \
   --origin http://localhost:3333 \
   --allowed-host mcp.example.com \
   --toolchain-path "$HOME/.cargo/bin" \
@@ -95,7 +95,7 @@ A representative single-owner local coding profile is:
   --toolchain-path "<active-fnm-node-installation>/bin"
 ```
 
-For a general coding relay, prefer `--dir "$HOME"` so the default working directory is neutral while task calls select a specific repository with `cwd`. Use `--dir "$PWD"` only for intentionally project-scoped relay instances. Keep deployment-specific hostnames and versioned runtime paths in operator configuration, not hardcoded in source or agent policy.
+For a general coding relay, use the default `$HOME/Documents/Projects` root so task calls can select child repositories with `cwd`. Use `--workspace-root "$PWD"` only for an intentionally project-scoped relay instance. Keep deployment-specific hostnames and versioned runtime paths in operator configuration, not hardcoded in source or agent policy.
 
 ## Package manager and native toolchain
 

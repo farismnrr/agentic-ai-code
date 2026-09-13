@@ -42,16 +42,20 @@ binary/archive.
 
 ## 2. Choose filesystem scope
 
-For a single-owner coding machine:
+Use one root for the coding relay:
 
 ```bash
-export EXECUTION_ROOT="$HOME"
-export RELAY_WORKING_DIR="$HOME/Projects/your-project"
+export RELAY_WORKSPACE_ROOT="$HOME/Documents/Projects"
 ```
 
-`EXECUTION_ROOT` is the hard filesystem boundary. `RELAY_WORKING_DIR` is only
-the starting `cwd`; other roots beneath the execution boundary still need
-explicit `workspace_add` authorization.
+`RELAY_WORKSPACE_ROOT` (also `--workspace-root`; legacy `--dir` alias) is the
+primary workspace and the default hard execution ceiling. If unset, the Rust
+CLI defaults to `$HOME/Documents/Projects`. Every child directory beneath it
+can be selected through `cwd`, so sibling repositories do not need separate
+`workspace_add` calls. To keep the primary workspace narrower than the hard
+ceiling, pass `--execution-root` explicitly; any extra roots must still stay
+inside that ceiling. The launcher no longer reads the separate
+`EXECUTION_ROOT` and `RELAY_WORKING_DIR` environment variables.
 
 If toolchains are installed under the home directory, allow only the required
 directories through `RELAY_TOOLCHAIN_PATH`. Do not copy the entire interactive
@@ -81,7 +85,7 @@ enroll/bind a source as described in [configuration.md](configuration.md#workspa
 then add the `RELAY_ACTIVITY_*` values to the relay service environment. The
 activity sink is an authenticated Nuxt API; it is independent of OAuth tool
 authorization and does not grant access to normal application APIs. Keep the
-relay state directory outside `EXECUTION_ROOT`/workspace mounts where
+relay state directory outside `RELAY_WORKSPACE_ROOT`/workspace mounts where
 possible, and set `RELAY_ACTIVITY_MODE=required` when silent pre-execution
 gaps are unacceptable.
 
@@ -155,7 +159,9 @@ export AI_TOOLS_BIN="$PWD/target/release/ai-tools"
 ops/remote-mcp/start-relay.sh
 ```
 
-The important effective arguments are:
+The launcher inherits `RELAY_WORKSPACE_ROOT` and leaves the explicit
+`--execution-root` override unset, so its default boundary comes from that
+single root:
 
 ```bash
 RELAY_TOOL_PROFILE=primary \
@@ -164,8 +170,6 @@ ai-tools relay \
   --trusted-proxy \
   --trusted-proxy-cidr 127.0.0.1/32 \
   --port 47821 \
-  --dir "$RELAY_WORKING_DIR" \
-  --execution-root "$EXECUTION_ROOT" \
   --oauth-issuer "$OAUTH_ISSUER" \
   --oauth-audience "$OAUTH_AUDIENCE" \
   --oauth-owner-subject "$OAUTH_OWNER_SUBJECT"

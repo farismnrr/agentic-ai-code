@@ -41,7 +41,7 @@ Record only durable, reusable lessons discovered from completed work or user cor
 
 - Date: 2026-08-19
 - Context: Reconciling explicit workspace authorization with a broader single-owner execution ceiling.
-- Lesson: Keep the filesystem ceiling and active workspace authority separate. `--execution-root` is the hard maximum boundary, `--dir` is the primary authorized workspace, and sibling projects require explicit bounded `workspace_add` authorization. Setting both to `$HOME` intentionally authorizes the whole home tree and should not be the default when an explicit allowlist is desired. Toolchain mounts may live elsewhere beneath the execution ceiling without becoming workspaces.
+- Lesson: Keep the filesystem ceiling and active workspace authority as separate checks. The canonical root is `RELAY_WORKSPACE_ROOT`/`--workspace-root`, defaulting to `$HOME/Documents/Projects`; absent an explicit `--execution-root`, it supplies both the primary workspace and hard ceiling, so child project directories can be selected with `cwd`. A narrower primary root still needs bounded `workspace_add` for sibling projects within an explicit ceiling. Setting the canonical root and ceiling to `$HOME` intentionally authorizes the whole home tree and must remain deliberate. Toolchain mounts may live elsewhere beneath the ceiling without becoming workspaces.
 - Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
 - Action taken: Split execution-boundary vs workspace-allowlist semantics in core containment, updated Bubblewrap/Git/file-tool integration, and corrected operator/agent documentation.
 

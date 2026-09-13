@@ -23,6 +23,38 @@ fn relay_advertises_only_the_fully_implemented_modern_protocol() {
     assert!(LEGACY_PROTOCOL_VERSIONS.is_empty());
 }
 
+#[cfg(unix)]
+#[test]
+fn default_workspace_root_is_documents_projects_under_home() {
+    let home = std::env::var_os("HOME").expect("HOME is available to the relay");
+    let expected = std::path::PathBuf::from(home)
+        .join("Documents")
+        .join("Projects");
+
+    assert_eq!(ServerConfig::default().resolved_dir().unwrap(), expected);
+}
+
+#[test]
+fn workspace_root_option_keeps_dir_alias_and_defaults_execution_ceiling() {
+    let root = env!("CARGO_MANIFEST_DIR");
+
+    for option in ["--workspace-root", "--dir"] {
+        let cli = Cli::try_parse_from(["ai-tools", option, root])
+            .expect("workspace-root and its dir alias should be accepted");
+        let config = ServerConfig::from(&cli);
+
+        assert_eq!(
+            config.resolved_dir().unwrap(),
+            std::path::PathBuf::from(root)
+        );
+        assert_eq!(
+            config.resolved_execution_root().unwrap(),
+            std::fs::canonicalize(root).unwrap()
+        );
+        assert!(config.is_path_contained(&std::path::PathBuf::from(root).join("src")));
+    }
+}
+
 #[test]
 fn cli_accepts_explicit_bind_host_and_preserves_it_in_server_config() {
     let cli = Cli::try_parse_from([

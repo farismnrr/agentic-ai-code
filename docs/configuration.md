@@ -171,12 +171,15 @@ not authorization: absent or unsupported client identity is shown as
 
 ## Relay configuration
 
-Filesystem authority has two levels: `--execution-root` is the hard ceiling,
-and `--dir` plus explicitly authorized workspaces determine the visible roots.
-Setting both to the canonical `$HOME` enables ordinary user-space work across
-home subdirectories. Setting `--dir` to one project keeps that authorization
-narrow even when the ceiling is HOME. Terminal `cwd` selects a location within
-those roots; it does not reduce a HOME grant to the nearest Git repository.
+The relay has one default workspace root: `RELAY_WORKSPACE_ROOT` or
+`--workspace-root` (`--dir` remains an alias), defaulting to
+`$HOME/Documents/Projects`. This root is the primary authorized workspace and,
+unless explicitly overridden, the hard execution ceiling too. Every child
+directory under `Projects` is in scope and can be selected with `cwd`; no
+per-repository `workspace_add` is needed. A narrower primary workspace may use
+an explicit `--execution-root` ceiling plus `workspace_add` for additional
+roots inside that ceiling. A broader ceiling does not authorize sibling paths
+by itself.
 
 This profile still uses Bubblewrap and a rebuilt minimal environment. It does
 not inherit login-shell credentials or PATH. Credential files, session/keyring
@@ -199,7 +202,7 @@ RELAY_AGENT_MODE=remote
 OAUTH_ISSUER=https://auth.example.com/realms/example
 OAUTH_AUDIENCE=https://mcp.example.com/mcp
 OAUTH_OWNER_SUBJECT=<stable-owner-sub>
-EXECUTION_ROOT=/home/owner
+RELAY_WORKSPACE_ROOT=/home/owner/Documents/Projects
 RELAY_AGENT_TRUSTED_PROXY=true
 RELAY_AGENT_TRUSTED_PROXY_CIDR=127.0.0.1/32
 RELAY_ALLOWED_HOSTS=mcp.example.com
@@ -221,7 +224,7 @@ RELAY_ALLOW_TAILSCALE
 RELAY_TAILSCALE_SOCKET
 ```
 
-`EXECUTION_ROOT` defines the hard filesystem ceiling for terminal commands and native workspace tools. In the standard single-user laptop profile, setting `EXECUTION_ROOT=/home/owner` (with `--dir` pointing to an initial workspace) permits broad user-space developer actions—including accessing ordinary sibling projects and tools under `$HOME`—without jailbreaking into host-level services. Commands cannot traverse or symlink escape above `EXECUTION_ROOT`. In addition, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
+`RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
 
 `timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
 
