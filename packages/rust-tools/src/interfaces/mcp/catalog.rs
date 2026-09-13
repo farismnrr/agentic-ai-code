@@ -7,6 +7,9 @@ use crate::core::error::McpError;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+pub const DEFAULT_TERMINAL_SYNC_WAIT_MS: u64 = 3_000;
+pub const MAX_TERMINAL_SYNC_WAIT_MS: u64 = 30_000;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
     pub name: &'static str,
@@ -75,11 +78,18 @@ pub fn tool_catalog() -> Vec<Tool> {
                         "default": 30000,
                         "description": "Requested command runtime in milliseconds. Choose a realistic value for the operation; 0 means no command deadline unless the relay operator configured a maximum."
                     },
+                    "sync_wait_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": MAX_TERMINAL_SYNC_WAIT_MS,
+                        "default": DEFAULT_TERMINAL_SYNC_WAIT_MS,
+                        "description": "How long auto mode waits for a terminal command to finish before returning a task handle. Set 0 to hand off immediately; a quick command that finishes within this window returns its normal result."
+                    },
                     "execution_mode": {
                         "type": "string",
                         "enum": ["sync", "async", "auto"],
                         "default": "auto",
-                        "description": "Use sync for short commands whose result is needed immediately, async for long-running work that should survive the initial request, or auto to use task execution when the client supports Tasks and the call is safe to resume."
+                        "description": "Use sync to wait for the full command, async to return a task immediately when the client supports Tasks, or auto (default) to return a normal result if the command finishes within sync_wait_ms and otherwise hand off the same command as a pollable task."
                     },
                     "idempotency_key": {
                         "type": "string",

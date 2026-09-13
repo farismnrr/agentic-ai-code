@@ -1,4 +1,4 @@
-/// Client-visible v15 surface. Local Git orchestration and LSP/code-intelligence
+/// Client-visible v16 surface. Local Git orchestration and LSP/code-intelligence
 /// calls remain implemented for internal validation/bridge code, but ordinary
 /// agents use the terminal for those workflows. Remote Git delivery stays on
 /// the four credential-isolated bridge tools below.

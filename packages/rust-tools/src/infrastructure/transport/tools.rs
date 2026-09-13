@@ -134,63 +134,34 @@ pub(super) async fn handle_tools_call(
     let client_has_tasks = client_supports_tasks(request.params.as_ref());
     let tool_has_tasks =
         crate::application::execution::tool_call_supports_tasks(&tool, &call.arguments);
-    let idempotency_key = call
-        .arguments
-        .get("idempotency_key")
-        .and_then(Value::as_str);
-    let idempotency_scope = auth_ctx
-        .claims
-        .as_ref()
-        .and_then(|claims| claims.sub.as_deref())
-        .unwrap_or("local");
-    let idempotency_session = agent_session.as_deref().unwrap_or("none");
-    let idempotency_key = idempotency_key
-        .filter(|_| {
-            call.name == "terminal_job_start"
-                || execution_mode == "async"
-                || (execution_mode == "auto" && client_has_tasks && tool_has_tasks)
-        })
-        .map(|key| {
-            format!(
-                "{idempotency_scope}:{idempotency_session}:{}:{key}",
-                call.name
-            )
-        });
+    let routing = task_calls::resolve_tool_call_routing(
+        &request.id,
+        &call,
+        execution_mode,
+        client_has_tasks,
+        tool_has_tasks,
+        &task_owner,
+        agent_session.as_deref(),
+    );
+    let automatic_handoff = routing.automatic_handoff;
+    let sync_wait_ms = routing.sync_wait_ms;
+    let idempotency_key = routing.idempotency_key;
     let request_fingerprint = serde_json::to_string(&call.arguments).unwrap_or_default();
-    if let Some(key) = idempotency_key.as_deref() {
-        match state
-            .jobs
-            .existing_idempotency_key_for(
-                key,
-                &request_fingerprint,
-                &task_owner,
-                agent_session.as_deref(),
-            )
-            .await
-        {
-            Ok(Some(task_id)) => {
-                let Some(task) = state
-                    .jobs
-                    .get_for(&task_id, &task_owner, agent_session.as_deref())
-                    .await
-                else {
-                    return bounded_tool_error(
-                        &request.id,
-                        "accepted task is no longer available",
-                        request_started,
-                    );
-                };
-                let result = mcp::with_timing_meta(
-                    task.create_task_json(),
-                    0,
-                    request_started.elapsed().as_millis() as u64,
-                );
-                let response = Response::new(request.id.clone(), result);
-                return Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))));
-            }
-            Ok(None) => {}
-            Err(err) => return bounded_tool_error(&request.id, &err.to_string(), request_started),
-        }
+    if let Some(response) =
+        task_calls::try_replay_idempotent_task(task_calls::IdempotentReplayContext {
+            request,
+            state: &state,
+            idempotency_key: idempotency_key.as_deref(),
+            request_fingerprint: &request_fingerprint,
+            owner: &task_owner,
+            session: agent_session.as_deref(),
+            automatic_handoff,
+            client_has_tasks,
+            request_started,
+        })
+        .await
+    {
+        return response;
     }
     let activity_start = activity::event_for_tool(
         &state.config,
@@ -211,6 +182,7 @@ pub(super) async fn handle_tools_call(
     };
     let execute_async = match execution_mode {
         "sync" => false,
+        "auto" if automatic_handoff => false,
         "async" => {
             if !client_has_tasks {
                 record_activity_outcome(
@@ -269,7 +241,13 @@ pub(super) async fn handle_tools_call(
                     || idempotency_key.is_some())
         }
     };
-    tool_helpers::trace_task_routing(&call.name, execute_async, client_has_tasks, tool_has_tasks);
+    tool_helpers::trace_task_routing(
+        &call.name,
+        execute_async,
+        automatic_handoff,
+        client_has_tasks,
+        tool_has_tasks,
+    );
     let hook_payload = json!({
         "hook_event": "pre_tool_use",
         "tool_id": call.name.as_str(),
@@ -465,6 +443,9 @@ pub(super) async fn handle_tools_call(
         activity_start: &activity_start,
         effects: &effects,
         execute_async,
+        automatic_handoff,
+        sync_wait_ms,
+        client_has_tasks,
         idempotency_key: idempotency_key.as_deref(),
         request_fingerprint,
         owner: &task_owner,

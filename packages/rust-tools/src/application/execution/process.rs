@@ -18,6 +18,9 @@ pub(super) use output::drain_pipe;
 pub(super) use output::OutputBuffer;
 
 pub(crate) const PROCESS_CLEANUP_GRACE_MS: u64 = 1_500;
+/// Sandbox discovery and process setup are bounded separately from the
+/// caller's command runtime timeout.
+pub(crate) const PROCESS_PREPARATION_TIMEOUT_MS: u64 = 120_000;
 const PROCESS_REAP_GRACE_MS: u64 = 500;
 const PIPE_DRAIN_GRACE_MS: u64 = 500;
 
@@ -58,6 +61,11 @@ pub(super) struct ProcessOutput {
     pub(super) stderr: Arc<Mutex<OutputBuffer>>,
 }
 
+pub(super) struct ProcessTimeouts {
+    pub(super) preparation_deadline: Option<Instant>,
+    pub(super) command_timeout_ms: u64,
+}
+
 pub(super) async fn run_process(
     manager: &JobManager,
     id: &str,
@@ -65,7 +73,7 @@ pub(super) async fn run_process(
     invocation: &ToolInvocation,
     cancel: &mut watch::Receiver<bool>,
     output: ProcessOutput,
-    deadline: Option<Instant>,
+    timeouts: ProcessTimeouts,
 ) -> Result<ProcessResult, ProcessFailure> {
     let ProcessOutput { stdout, stderr } = output;
     let spawn_started = Instant::now();
@@ -73,7 +81,7 @@ pub(super) async fn run_process(
         config,
         invocation,
         sandbox::WorkspaceAccess::Writable,
-        deadline,
+        timeouts.preparation_deadline,
         cancel,
     )
     .map_err(|error| ProcessFailure::new(error.stage, error.kind()))?;
@@ -85,6 +93,11 @@ pub(super) async fn run_process(
         outcome = "completed",
         duration_ms = spawn_started.elapsed().as_millis() as u64,
     );
+
+    // timeout_ms is the requested command runtime. Starting it before sandbox
+    // discovery made cold protected-path scans consume the command's budget.
+    let command_deadline = (timeouts.command_timeout_ms > 0)
+        .then(|| Instant::now() + Duration::from_millis(timeouts.command_timeout_ms));
 
     // Close stdin immediately so non-interactive commands observe EOF.
     drop(child.stdin.take());
@@ -114,7 +127,7 @@ pub(super) async fn run_process(
         config.max_retained_output_bytes / 2,
     ));
     let wait_started = Instant::now();
-    let wait_result = if let Some(deadline) = deadline {
+    let wait_result = if let Some(deadline) = command_deadline {
         tokio::select! {
             biased;
             result = timeout_at(TokioInstant::from_std(deadline), child.wait()) => match result {

@@ -11,6 +11,7 @@ use std::time::Instant;
 pub(super) fn trace_task_routing(
     tool: &str,
     execute_async: bool,
+    automatic_handoff: bool,
     client_has_tasks: bool,
     tool_has_tasks: bool,
 ) {
@@ -19,6 +20,8 @@ pub(super) fn trace_task_routing(
         stage = "task_routing",
         outcome = if execute_async {
             "task_dispatch"
+        } else if automatic_handoff {
+            "automatic_handoff"
         } else {
             "synchronous_dispatch"
         },

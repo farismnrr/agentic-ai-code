@@ -1,6 +1,6 @@
 # Plan 068 — Terminal Hardening Portability and Quota Completion
 
-**Status:** READY — follow-up to the scoped Linux/modern closure of Plan 067
+**Status:** IN PROGRESS — scoped automatic terminal handoff slice verified; remaining workstreams stay open
 **Predecessor:** [Plan 067](067-terminal-first-multi-os-hardening.md)
 **Baseline:** `plan/067-terminal-first-hardening` at the Plan 067 closure commit
 
@@ -41,6 +41,15 @@ until it passes the same positive and negative evidence matrix.
 - Test malformed headers/meta, notification handling, duplicate IDs, unknown
   methods, invalid task IDs, mismatched task routing headers, and auth context
   binding without leaking existence or private details.
+- [x] `terminal_exec` auto mode waits up to `sync_wait_ms` (default 3 seconds,
+  maximum 30 seconds), returns a normal result for fast commands, and hands off
+  the already-started job to MCP Tasks or the legacy `terminal_job_get` path.
+  The command's `timeout_ms` begins after child spawn; sandbox preparation has
+  a separate 120-second fail-closed bound. A request-ID-derived key scoped by
+  owner/session/tool makes an unchanged retry resolve the same job. Verified
+  by `auto_terminal_exec_keeps_fast_results_sync_and_hands_off_slow_jobs_once`;
+  this does not close the remaining 068-A conformance work or 068-F restart
+  persistence.
 
 ### 068-B — Linux resource controls and lifecycle stress
 

@@ -1,9 +1,14 @@
 use super::super::{err_response, AppState};
-use super::tool_helpers::{record_activity_outcome, record_activity_outcome_with_detail};
+use super::tool_helpers::{
+    bounded_tool_error, record_activity_outcome, record_activity_outcome_with_detail,
+};
 use super::JsonErr2;
+#[path = "task_calls/auto_terminal.rs"]
+mod auto_terminal;
 use crate::application::activity::{ActivityEvent, Evidence, Status};
 use crate::core::error::McpError;
 use crate::interfaces::mcp::{self, Response, Tool, ToolsCallParams};
+pub(super) use auto_terminal::automatic_terminal_result;
 use axum::{http::StatusCode, Json};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -17,11 +22,126 @@ pub(super) struct ToolCallContext<'a> {
     pub(super) activity_start: &'a ActivityEvent,
     pub(super) effects: &'a [&'static str],
     pub(super) execute_async: bool,
+    pub(super) automatic_handoff: bool,
+    pub(super) sync_wait_ms: u64,
+    pub(super) client_has_tasks: bool,
     pub(super) idempotency_key: Option<&'a str>,
     pub(super) request_fingerprint: String,
     pub(super) owner: &'a str,
     pub(super) session: Option<&'a str>,
     pub(super) request_started: Instant,
+}
+
+pub(super) struct ToolCallRouting {
+    pub(super) automatic_handoff: bool,
+    pub(super) sync_wait_ms: u64,
+    pub(super) idempotency_key: Option<String>,
+}
+
+pub(super) struct IdempotentReplayContext<'a> {
+    pub(super) request: &'a mcp::Request,
+    pub(super) state: &'a AppState,
+    pub(super) idempotency_key: Option<&'a str>,
+    pub(super) request_fingerprint: &'a str,
+    pub(super) owner: &'a str,
+    pub(super) session: Option<&'a str>,
+    pub(super) automatic_handoff: bool,
+    pub(super) client_has_tasks: bool,
+    pub(super) request_started: Instant,
+}
+
+pub(super) fn resolve_tool_call_routing(
+    request_id: &mcp::Id,
+    call: &ToolsCallParams,
+    execution_mode: &str,
+    client_has_tasks: bool,
+    tool_has_tasks: bool,
+    owner: &str,
+    session: Option<&str>,
+) -> ToolCallRouting {
+    let automatic_handoff = call.name == "terminal_exec" && execution_mode == "auto";
+    let sync_wait_ms = call
+        .arguments
+        .get("sync_wait_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(mcp::DEFAULT_TERMINAL_SYNC_WAIT_MS);
+    let explicit_key = call
+        .arguments
+        .get("idempotency_key")
+        .and_then(Value::as_str);
+    let session = session.unwrap_or("none");
+    let idempotency_key = explicit_key
+        .filter(|_| {
+            call.name == "terminal_job_start"
+                || execution_mode == "async"
+                || automatic_handoff
+                || (execution_mode == "auto" && client_has_tasks && tool_has_tasks)
+        })
+        .map(|key| format!("{owner}:{session}:{}:{key}", call.name))
+        .or_else(|| {
+            automatic_handoff.then(|| {
+                format!(
+                    "{owner}:{session}:terminal_exec:{}",
+                    auto_terminal::automatic_request_key(request_id)
+                )
+            })
+        });
+    ToolCallRouting {
+        automatic_handoff,
+        sync_wait_ms,
+        idempotency_key,
+    }
+}
+
+pub(super) async fn try_replay_idempotent_task(
+    context: IdempotentReplayContext<'_>,
+) -> Option<JsonErr2> {
+    let IdempotentReplayContext {
+        request,
+        state,
+        idempotency_key,
+        request_fingerprint,
+        owner,
+        session,
+        automatic_handoff,
+        client_has_tasks,
+        request_started,
+    } = context;
+    let key = idempotency_key?;
+    match state
+        .jobs
+        .existing_idempotency_key_for(key, request_fingerprint, owner, session)
+        .await
+    {
+        Ok(Some(task_id)) => {
+            let Some(task) = state.jobs.get_for(&task_id, owner, session).await else {
+                return Some(bounded_tool_error(
+                    &request.id,
+                    "accepted task is no longer available",
+                    request_started,
+                ));
+            };
+            let result = mcp::with_timing_meta(
+                if automatic_handoff {
+                    automatic_terminal_result(&task, client_has_tasks)
+                } else {
+                    task.create_task_json()
+                },
+                0,
+                request_started.elapsed().as_millis() as u64,
+            );
+            let response = Response::new(request.id.clone(), result);
+            Some(Ok(Json(
+                serde_json::to_value(response).unwrap_or(json!({})),
+            )))
+        }
+        Ok(None) => None,
+        Err(err) => Some(bounded_tool_error(
+            &request.id,
+            &err.to_string(),
+            request_started,
+        )),
+    }
 }
 
 pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option<JsonErr2> {
@@ -33,6 +153,9 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
         activity_start,
         effects,
         execute_async,
+        automatic_handoff,
+        sync_wait_ms,
+        client_has_tasks,
         idempotency_key,
         request_fingerprint,
         owner,
@@ -222,6 +345,29 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
         return Some(Ok(Json(
             serde_json::to_value(response).unwrap_or(json!({})),
         )));
+    }
+
+    if automatic_handoff {
+        return Some(
+            auto_terminal::handle(ToolCallContext {
+                request,
+                state,
+                call,
+                tool,
+                activity_start,
+                effects,
+                execute_async,
+                automatic_handoff,
+                sync_wait_ms,
+                client_has_tasks,
+                idempotency_key,
+                request_fingerprint,
+                owner,
+                session,
+                request_started,
+            })
+            .await,
+        );
     }
 
     if execute_async {
