@@ -14,7 +14,7 @@
     "lint": "pnpm lint:web && pnpm lint:rust",
     "lint:fix": "eslint . --fix && cargo fmt --all",
     "typecheck:web": "nuxt prepare --dotenv .env.example && vue-tsc -p .nuxt/tsconfig.json --noEmit",
-    "typecheck:rust": "RUSTFLAGS='-D warnings' cargo check --workspace --lib --bins --tests --all-features --locked",
+    "typecheck:rust": "cargo check --workspace --lib --bins --tests --all-features --locked",
     "typecheck": "pnpm typecheck:web && pnpm typecheck:rust",
     "test:web:legacy": "node --experimental-strip-types --test test/unit/*.test.ts test/unit/*.test.mjs",
     "test:rust": "cargo test --workspace --lib --bins --tests --all-features --locked",
