@@ -11,10 +11,10 @@ pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
         .read()
         .map(|workspaces| workspaces.all_roots())
         .unwrap_or_default();
-    let mut roots = workspace_roots
-        .iter()
-        .cloned()
-        .collect::<std::collections::BTreeSet<_>>();
+    // Workspace roots may represent a broad Projects tree. Their protected
+    // paths are indexed per selected sandbox before spawn, not eagerly scanned
+    // here before the relay can accept requests.
+    let mut roots = std::collections::BTreeSet::new();
     let home = runtime_home().ok();
     let canonical_home_cargo_bin = home
         .as_ref()
@@ -75,7 +75,7 @@ pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
         event = "relay.sandbox.stage",
         stage = "protected_path_cache_prime",
         workspace_root_count = workspace_roots.len(),
-        toolchain_root_count = roots.len().saturating_sub(workspace_roots.len()),
+        toolchain_root_count = roots.len(),
     );
     for root in roots {
         let started = Instant::now();

@@ -148,18 +148,20 @@ fn spawn_with_profile(
     if let Some(control) = control {
         control.check()?;
     }
-    let discovered_workspace = if profile.workspace_root.is_none() {
+    let discovered_repository = if profile.workspace_root.is_none() {
         let cwd_arg = invocation.cwd.as_ref().and_then(|path| path.to_str());
-        crate::application::git::resolve_git_workspace(cwd_arg, config)
-            .ok()
-            .or_else(|| invocation.cwd.clone())
+        crate::application::git::resolve_git_workspace(cwd_arg, config).ok()
     } else {
         None
     };
+    let discovered_workspace = discovered_repository
+        .clone()
+        .or_else(|| invocation.cwd.clone());
     let configured_workspace = std::fs::canonicalize(config.resolved_dir().unwrap_or_default())
         .map_err(|_| std::io::Error::other("invalid workspace directory"))?;
-    // Terminal authority is the containing authorized root, not a repository
-    // guessed from cwd. The execution boundary alone never authorizes siblings.
+    // The containing allowlist root remains the authorization boundary. A
+    // repository discovered beneath it may only narrow the terminal mount;
+    // it can never grant access outside that containing root.
     config
         .ensure_workspaces_initialized()
         .map_err(|_| std::io::Error::other("workspace authority is unavailable"))?;
@@ -171,12 +173,16 @@ fn spawn_with_profile(
             .workspaces
             .read()
             .map_err(|_| std::io::Error::other("workspace authority is unavailable"))?;
-        Some(
-            guard
-                .containing_root(invocation.cwd.as_deref().unwrap_or(&configured_workspace))
-                .ok_or_else(|| std::io::Error::other("sandbox root is unauthorized"))?
-                .to_path_buf(),
-        )
+        let containing_root = guard
+            .containing_root(invocation.cwd.as_deref().unwrap_or(&configured_workspace))
+            .ok_or_else(|| std::io::Error::other("sandbox root is unauthorized"))?;
+        let selected_root = discovered_repository
+            .as_deref()
+            .filter(|repository| {
+                *repository != containing_root && repository.starts_with(containing_root)
+            })
+            .unwrap_or(containing_root);
+        Some(selected_root.to_path_buf())
     } else {
         None
     };
