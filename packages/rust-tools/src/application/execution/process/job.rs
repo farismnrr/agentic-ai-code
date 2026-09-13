@@ -28,6 +28,7 @@ pub(in crate::application::execution) async fn run_job(
     let semaphore = manager.semaphore.clone();
     let semaphore_started = Instant::now();
     let permit = tokio::select! {
+        biased;
         result = async {
             match deadline {
                 Some(deadline) => timeout(

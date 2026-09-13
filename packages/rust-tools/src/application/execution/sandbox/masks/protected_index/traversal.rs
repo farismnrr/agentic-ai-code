@@ -45,6 +45,32 @@ impl DirectoryStream {
                 continue;
             }
             let name = OsString::from_vec(name.to_bytes().to_vec());
+            let entry_type = unsafe { (*entry).d_type };
+            if entry_type == libc::DT_SOCK {
+                return Ok(Some(ScannedEntry {
+                    name,
+                    directory: false,
+                    socket: true,
+                    device: 0,
+                    inode: 0,
+                }));
+            }
+            if entry_type != libc::DT_DIR && entry_type != libc::DT_UNKNOWN {
+                return Ok(Some(ScannedEntry {
+                    name,
+                    directory: false,
+                    socket: false,
+                    device: 0,
+                    inode: 0,
+                }));
+            }
+
+            // Most entries in developer workspaces are regular files or
+            // symlinks. Their dirent type is sufficient: the parent
+            // directory signature is checked after traversal, so concurrent
+            // replacement invalidates this scan. Stat only directories (to
+            // preserve the openat identity check) and filesystems that report
+            // DT_UNKNOWN.
             let name_c = CString::new(name.as_bytes()).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "invalid directory entry")
             })?;
@@ -201,14 +227,19 @@ pub(super) fn scan(
             }
         }
 
-        let relative = entry_path_relative(root, &path, &entry.name)?;
         let may_be_protected = crate::core::protected_paths::may_be_protected_entry(&entry.name);
-        let is_protected = (may_be_protected
-            && crate::core::protected_paths::is_protected_relative(&relative))
-            || entry.socket;
-        let entry_path = path.join(&entry.name);
-        if is_protected {
-            protected_paths.insert(entry_path);
+        if may_be_protected
+            && crate::core::protected_paths::is_protected_relative(&entry_path_relative(
+                root,
+                &path,
+                &entry.name,
+            )?)
+        {
+            protected_paths.insert(path.join(&entry.name));
+            continue;
+        }
+        if entry.socket {
+            protected_paths.insert(path.join(&entry.name));
             continue;
         }
         if !entry.directory {
@@ -221,13 +252,16 @@ pub(super) fn scan(
         }
         let child = open_child_directory(&parent.directory, &entry.name)?;
         let signature = DirectorySignature::read(&child)?;
-        if signature.device != entry.device || signature.inode != entry.inode {
+        if (entry.device != 0 || entry.inode != 0)
+            && (signature.device != entry.device || signature.inode != entry.inode)
+        {
             return Err(io::Error::new(
                 io::ErrorKind::Interrupted,
                 "workspace changed during protected-path discovery",
             ));
         }
         let stream = DirectoryStream::open(&child)?;
+        let entry_path = path.join(&entry.name);
         stack
             .last_mut()
             .expect("scan stack is non-empty")

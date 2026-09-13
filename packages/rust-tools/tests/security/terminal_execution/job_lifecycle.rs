@@ -121,6 +121,11 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
     let snapshot = fixture.manager.wait(&id).await.expect("wait failed");
     let elapsed = start.elapsed();
     assert_eq!(snapshot.state, JobState::TimedOut);
+    let result = snapshot.result.as_ref().expect("timed-out tool result");
+    assert!(result.is_error);
+    assert!(result.content[0]
+        .text
+        .contains("terminal execution failed at child_wait: TimedOut"));
     assert!(
         elapsed < Duration::from_secs(4),
         "timeout took too long: {elapsed:?}"

@@ -9,8 +9,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::test]
-async fn newly_created_protected_path_invalidates_cached_sandbox_index() {
-    let fixture = TestFixture::new();
+async fn large_workspace_reindexes_new_protected_path_before_sync_deadline() {
+    let fixture = TestFixture::on_project_filesystem();
+    let large_directory = fixture.root.join("large");
+    fs::create_dir_all(&large_directory).expect("create large workspace subtree");
+    for index in 0..12_000 {
+        fs::File::create(large_directory.join(format!("entry-{index:05}")))
+            .expect("create workspace entry");
+    }
+
     fixture.manager.prepare_for_serving().await;
     let warm_id = start_terminal_job(
         &json!({
@@ -35,6 +42,7 @@ async fn newly_created_protected_path_invalidates_cached_sandbox_index() {
 
     fs::write(fixture.root.join(".env.local"), "PRIVATE_SENTINEL")
         .expect("create protected path after index warmup");
+    let refresh_started = std::time::Instant::now();
     let read_id = start_terminal_job(
         &json!({
             "command": "cat .env.local",
@@ -53,6 +61,11 @@ async fn newly_created_protected_path_invalidates_cached_sandbox_index() {
         .expect("protected-path wait");
     assert_eq!(snapshot.state, JobState::Completed);
     assert!(!snapshot.stdout.contains("PRIVATE_SENTINEL"));
+    assert!(
+        refresh_started.elapsed() < Duration::from_secs(8),
+        "protected-path index refresh exceeded the sync execution budget: {:?}",
+        refresh_started.elapsed()
+    );
 }
 
 #[cfg(unix)]
