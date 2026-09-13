@@ -22,15 +22,29 @@ fn dedicated_ssh_tool_is_portable_and_full_profile_only() {
 }
 
 #[test]
-fn catalog_v15_snapshot_matches_current_reduced_surface() {
+fn catalog_v16_snapshot_matches_current_reduced_surface() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join(".agents/contracts/067-tool-catalog-v15.json");
-    let expected = std::fs::read_to_string(root).expect("catalog v15 snapshot");
-    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v15");
+        .join(".agents/contracts/068-tool-catalog-v16.json");
+    let expected = std::fs::read_to_string(root).expect("catalog v16 snapshot");
+    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v16");
     let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
     assert_eq!(actual, expected);
     assert_eq!(actual.as_array().map(Vec::len), Some(52));
+}
+
+#[test]
+fn terminal_auto_handoff_wait_window_is_optional_and_bounded() {
+    let tool = find_tool_for_profile("terminal_exec", ToolProfile::Primary)
+        .expect("terminal is available in Primary");
+    validate_tool_arguments(&tool, &json!({ "command": "true", "sync_wait_ms": 0 }))
+        .expect("zero wait allows an immediate task handoff");
+    validate_tool_arguments(&tool, &json!({ "command": "true", "sync_wait_ms": 30_000 }))
+        .expect("maximum wait is accepted");
+    assert!(
+        validate_tool_arguments(&tool, &json!({ "command": "true", "sync_wait_ms": 30_001 }),)
+            .is_err()
+    );
 }
 
 #[test]
@@ -44,6 +58,10 @@ fn historical_catalog_snapshots_are_immutable() {
         (
             "../../../.agents/contracts/065-tool-catalog-v14.json",
             "6db382b1dd0cbce72190d87794470323caa29b9981a225f4dcba95b9457942b8",
+        ),
+        (
+            "../../../.agents/contracts/067-tool-catalog-v15.json",
+            "38e4d27f101fc94679c8f0e4f4f8bc8225c69bc60204c728d97a8c0c12d1af84",
         ),
     ] {
         let bytes = std::fs::read(

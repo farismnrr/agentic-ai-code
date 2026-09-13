@@ -35,9 +35,21 @@ impl JobManager {
             jobs.get(id).map(|j| j.timeout_ms).unwrap_or(0)
         };
         let effective = if timeout_ms > 0 {
-            timeout_ms
+            if self.config.max_terminal_timeout_ms == 0 {
+                timeout_ms
+            } else {
+                timeout_ms.min(self.config.max_terminal_timeout_ms)
+            }
         } else {
             self.config.max_terminal_timeout_ms
+        };
+        let effective = if effective > 0 {
+            effective
+                .saturating_add(process::PROCESS_PREPARATION_TIMEOUT_MS)
+                .saturating_add(process::PROCESS_CLEANUP_GRACE_MS)
+                .saturating_add(1_000)
+        } else {
+            0
         };
         let wait_start = Instant::now();
 
@@ -94,6 +106,30 @@ impl JobManager {
                 }
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    /// Wait briefly for a task without changing or cancelling its lifecycle.
+    /// The caller can return a task handle when this handoff window expires.
+    pub async fn wait_for_completion_within(
+        &self,
+        id: &str,
+        duration: Duration,
+    ) -> Result<Option<JobSnapshot>, McpError> {
+        let deadline = Instant::now() + duration;
+        loop {
+            let snapshot = self
+                .get_internal(id)
+                .await
+                .ok_or_else(|| McpError::Internal("execution job disappeared".into()))?;
+            if is_finished(&snapshot) {
+                return Ok(Some(snapshot));
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Ok(None);
+            }
+            tokio::time::sleep(remaining.min(Duration::from_millis(10))).await;
         }
     }
 

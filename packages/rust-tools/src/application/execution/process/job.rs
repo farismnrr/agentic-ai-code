@@ -1,6 +1,6 @@
 use super::{
     finish, run_process, update_state, JobManager, JobState, OutputBuffer, ProcessFailure,
-    ProcessOutput,
+    ProcessOutput, ProcessTimeouts,
 };
 use crate::application::execution::jobs::JobKind;
 use crate::application::execution::now_ms;
@@ -24,13 +24,14 @@ pub(in crate::application::execution) async fn run_job(
     let timeout_ms = match &job {
         JobKind::Process(inv) => effective_timeout(&manager.config, inv.timeout_ms),
     };
-    let deadline = (timeout_ms > 0).then(|| job_started + Duration::from_millis(timeout_ms));
+    let preparation_deadline =
+        Some(job_started + Duration::from_millis(super::PROCESS_PREPARATION_TIMEOUT_MS));
     let semaphore = manager.semaphore.clone();
     let semaphore_started = Instant::now();
     let permit = tokio::select! {
         biased;
         result = async {
-            match deadline {
+            match preparation_deadline {
                 Some(deadline) => timeout(
                     deadline.saturating_duration_since(Instant::now()),
                     semaphore.acquire_owned(),
@@ -108,7 +109,10 @@ pub(in crate::application::execution) async fn run_job(
                 &invocation,
                 &mut cancel,
                 ProcessOutput { stdout, stderr },
-                deadline,
+                ProcessTimeouts {
+                    preparation_deadline,
+                    command_timeout_ms: timeout_ms,
+                },
             )
             .await
         }

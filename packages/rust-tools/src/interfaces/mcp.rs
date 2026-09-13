@@ -258,7 +258,7 @@ mod catalog;
 pub use catalog::{
     find_tool, find_tool_for_profile, tool_catalog, tool_catalog_for_profile,
     validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
-    PRIMARY_TOOL_NAMES,
+    DEFAULT_TERMINAL_SYNC_WAIT_MS, MAX_TERMINAL_SYNC_WAIT_MS, PRIMARY_TOOL_NAMES,
 };
 
 #[derive(Debug, Clone, Deserialize)]
