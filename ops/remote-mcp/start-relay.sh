@@ -12,10 +12,9 @@ set -euo pipefail
 #   REMOTE_MCP_URL=https://mcp.farismunir.my.id/mcp
 #   OAUTH_ISSUER=https://<authorization-server-issuer>/
 #   OAUTH_OWNER_SUBJECT=<stable owner sub claim>
-#   EXECUTION_ROOT=/home/<user> (canonical non-root owner home)
 #
 # Optional:
-#   RELAY_WORKING_DIR=$EXECUTION_ROOT
+#   RELAY_WORKSPACE_ROOT=$HOME/Documents/Projects (this is the Rust CLI default)
 #   RELAY_AGENT_PORT=47821
 #   AI_TOOLS_BIN=target/release/ai-tools
 #   RELAY_AGENT_ORIGIN=https://<hosted-nuxt-origin>
@@ -26,13 +25,15 @@ set -euo pipefail
 : "${REMOTE_MCP_URL:?set REMOTE_MCP_URL to the canonical public MCP resource}"
 : "${OAUTH_ISSUER:?set OAUTH_ISSUER to the Authorization Server issuer}"
 : "${OAUTH_OWNER_SUBJECT:?set OAUTH_OWNER_SUBJECT to the allowed owner subject}"
-EXECUTION_ROOT="${EXECUTION_ROOT:-${HOME:?HOME must be set for the owner-home relay scope}}"
 
 command -v node >/dev/null
 
 relay_port="${RELAY_AGENT_PORT:-47821}"
-working_dir="${RELAY_WORKING_DIR:-$EXECUTION_ROOT}"
 ai_tools_bin="${AI_TOOLS_BIN:-target/release/ai-tools}"
+
+if [[ -n "${EXECUTION_ROOT:-}" || -n "${RELAY_WORKING_DIR:-}" ]]; then
+  echo 'EXECUTION_ROOT and RELAY_WORKING_DIR are ignored; use RELAY_WORKSPACE_ROOT as the single workspace root.' >&2
+fi
 
 node - "$REMOTE_MCP_URL" "$OAUTH_ISSUER" "$relay_port" <<'NODE'
 const [resourceRaw, issuerRaw, portRaw] = process.argv.slice(2)
@@ -63,15 +64,6 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 NODE
 
-if [[ ! -d "$EXECUTION_ROOT" ]]; then
-  echo 'EXECUTION_ROOT must be an existing directory' >&2
-  exit 1
-fi
-if [[ ! -d "$working_dir" ]]; then
-  echo 'RELAY_WORKING_DIR must be an existing directory' >&2
-  exit 1
-fi
-
 if [[ "$ai_tools_bin" == */* ]]; then
   if [[ ! -x "$ai_tools_bin" ]]; then
     echo "AI_TOOLS_BIN is not executable: $ai_tools_bin" >&2
@@ -93,8 +85,6 @@ exec "$ai_tools_bin" relay \
   --trusted-proxy \
   --trusted-proxy-cidr '127.0.0.1/32' \
   --port "$relay_port" \
-  --dir "$working_dir" \
-  --execution-root "$EXECUTION_ROOT" \
   --oauth-issuer "$OAUTH_ISSUER" \
   --oauth-audience "$REMOTE_MCP_URL" \
   --oauth-owner-subject "$OAUTH_OWNER_SUBJECT"

@@ -79,9 +79,11 @@ support output.
 
 ## Terminal filesystem and credential boundary
 
-Broad terminal authority means operator-user work within authorized roots.
-`--dir "$HOME" --execution-root "$HOME"` permits ordinary files throughout
-that home; a project grant stays project-scoped. Bubblewrap remains mandatory,
+By default, `RELAY_WORKSPACE_ROOT` selects `$HOME/Documents/Projects` as both
+the primary workspace and hard execution ceiling. Child project directories
+can be selected directly with `cwd`. Setting the workspace root and an explicit
+`--execution-root` to `$HOME` intentionally expands access to the full
+non-protected home tree; keep that broader scope deliberate. Bubblewrap remains mandatory,
 with read-only system runtime (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) and isolated
 `/dev`, `/proc`, `/tmp` (tmpfs) and PID namespace. System configuration files such
 as `/etc/resolv.conf` or TLS CA bundles are readable by runtime toolchains, but writes

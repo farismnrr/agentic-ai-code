@@ -38,8 +38,8 @@ Check:
 - OS is Linux;
 - Bubblewrap (`bwrap`) is installed;
 - process is not running as root;
-- `--execution-root` exists and is a safe user-owned path;
-- `--dir` exists under the intended scope;
+- `$HOME/Documents/Projects` exists, or `RELAY_WORKSPACE_ROOT` names an existing safe user-owned path;
+- an explicit `--execution-root`, if supplied, contains the workspace root;
 - remote issuer/audience are canonical HTTPS URLs;
 - `--trusted-proxy` has an explicit trusted CIDR.
 
@@ -59,9 +59,11 @@ Do not fix this with login-shell startup files that reintroduce the full host en
 
 ## Relay cannot access `.ssh`, Docker, or cloud credential directories
 
-For broad terminal work, configure both `--dir "$HOME"` and
-`--execution-root "$HOME"`; a home ceiling alone does not authorize sibling
-projects. Credential and privilege boundaries still apply. A protected-path
+The default relay root is `$HOME/Documents/Projects`, configured through
+`RELAY_WORKSPACE_ROOT` when an override is needed. Child repositories in that
+tree can be selected directly with `cwd`; paths outside it are denied by
+default. Use a narrower root if Projects contains more than the relay should
+see. Credential and privilege boundaries still apply. A protected-path
 discovery failure means the sandbox did not start: check for protected
 symlinks, inaccessible directories or a tree above 500,000 entries. Use
 narrower authorized roots instead of disabling masking or skipping visible

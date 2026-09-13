@@ -113,15 +113,14 @@ The application also supports a router endpoint through `NUXT_ROUTER_BASE_URL` /
 Install Bubblewrap, then from the repository root:
 
 ```bash
+export RELAY_WORKSPACE_ROOT="$HOME/Documents/Projects"
 ./target/release/ai-tools relay \
   --mode local \
-  --dir "$PWD" \
-  --execution-root "$HOME" \
   --origin http://localhost:3333 \
   --allowed-host mcp.example.com
 ```
 
-The relay remains loopback-only. `--execution-root` is the hard maximum filesystem boundary; `--dir` is the primary authorized workspace. Additional projects beneath that execution boundary must be authorized explicitly with `workspace_add`, can be inspected with `workspace_list` / `workspace_get`, and can be revoked with `workspace_remove`. Setting both values to `$HOME` intentionally authorizes the whole home tree and therefore removes most of the value of explicit workspace allowlisting.
+The relay remains loopback-only. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) defaults to `$HOME/Documents/Projects` and supplies both the primary authorized workspace and the default hard execution boundary. Child repositories beneath it can be selected directly with `cwd` without `workspace_add`. `--execution-root` remains an explicit advanced override; additional workspace roots still must remain beneath it. Setting the workspace root and execution boundary to `$HOME` intentionally authorizes the whole non-protected home tree.
 
 For routine repository work, prefer the relay's active dedicated MCP tools when they fully cover the operation: workspace inspection/editing tools, remote Git transport, forge/issues/workflows, HTTP/web, SSH diagnostics, alerts, and messaging. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and operations without an active structured contract; ordinary terminal execution remains credential-isolated. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
 

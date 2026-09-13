@@ -1,10 +1,9 @@
 //! CLI contract and server configuration for `relay-agent`.
 //!
-//! The flag set here matches the legacy Node CLI (`packages/relay-agent/bin/cli.mjs`)
-//! exactly, per the frozen audit in `.agents/plans/028-phase0-contract-audit.md`:
-//! `--dir`/`-d`, `--port`/`-p` (default `47821`), `--origin`/`-o` (env fallback
-//! `RELAY_AGENT_ORIGIN`), `--bind-host` (env fallback
-//! `RELAY_AGENT_BIND_HOST`), and a `stop --port <port>` subcommand.
+//! The canonical filesystem root is `--workspace-root` / `RELAY_WORKSPACE_ROOT`,
+//! with `--dir` retained as a CLI alias. It defaults to
+//! `$HOME/Documents/Projects`; `--execution-root` is an optional CLI-only hard
+//! ceiling override. The remaining flags retain the existing relay contract.
 use crate::core::error::RelayError;
 use serde::{Deserialize, Serialize};
 mod activity;
@@ -112,16 +111,19 @@ impl Default for ServerConfig {
     }
 }
 impl ServerConfig {
-    /// Resolve the effective working directory: the configured `dir`, or the
-    /// OS home directory if unset. Does not touch the filesystem.
+    /// Resolve the primary workspace root: the configured root, or
+    /// `$HOME/Documents/Projects` if unset. Does not touch the filesystem.
     pub fn resolved_dir(&self) -> Result<std::path::PathBuf, RelayError> {
         match &self.dir {
             Some(d) => Ok(std::path::PathBuf::from(d)),
-            None => dirs_home().ok_or_else(|| {
-                RelayError::InvalidConfig(
-                    "no --dir given and the OS home directory could not be determined".into(),
-                )
-            }),
+            None => dirs_home()
+                .map(|home| home.join("Documents").join("Projects"))
+                .ok_or_else(|| {
+                    RelayError::InvalidConfig(
+                        "no workspace root given and the OS home directory could not be determined"
+                            .into(),
+                    )
+                }),
         }
     }
     /// Resolve the effective execution root, and reject unsafe system paths.

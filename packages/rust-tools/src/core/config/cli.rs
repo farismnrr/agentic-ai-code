@@ -38,8 +38,14 @@ pub struct Cli {
     #[arg(long, env = "RELAY_AGENT_TRUSTED_PROXY_CIDR")]
     pub trusted_proxy_cidr: Option<String>,
 
-    /// Default working directory configuration, not a filesystem sandbox (falls back to the OS home directory).
-    #[arg(short, long)]
+    /// Primary workspace root. Child projects are in scope; the execution
+    /// boundary defaults to the same path. Defaults to `$HOME/Documents/Projects`.
+    #[arg(
+        short = 'd',
+        long = "workspace-root",
+        visible_alias = "dir",
+        env = "RELAY_WORKSPACE_ROOT"
+    )]
     pub dir: Option<String>,
 
     /// Allowed Nuxt/browser origin for MCP requests.
@@ -73,8 +79,8 @@ pub struct Cli {
     #[arg(long, env = "OAUTH_OWNER_SUBJECT")]
     pub oauth_owner_subject: Option<String>,
 
-    /// Explicit execution root for filesystem containment.
-    #[arg(long, env = "EXECUTION_ROOT")]
+    /// Optional hard filesystem ceiling. Defaults to the primary workspace root.
+    #[arg(long)]
     pub execution_root: Option<String>,
 
     /// Default terminal deadline in milliseconds; zero means no deadline.

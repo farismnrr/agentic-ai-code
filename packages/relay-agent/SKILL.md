@@ -13,7 +13,7 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Listener binding:** `--bind-host` / `RELAY_AGENT_BIND_HOST` defaults to
   `127.0.0.1`. Local mode remains loopback-only; remote non-loopback binds require
   an explicit browser Origin and OAuth configuration. `0.0.0.0` is never a client URL.
-- **Filesystem boundary:** execution is confined to an explicit `execution_root` and enforced through relay policy plus Bubblewrap. The single-user laptop profile uses the canonical non-root owner home as the root (`--execution-root /home/user`), permitting access to ordinary sibling projects under `$HOME`; `--dir` remains an independent starting `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and recursively masks protected credential directories (`.ssh`, `.aws`, `.cargo/credentials`, `.env.*`) and Unix domain sockets across all visible depths. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
+- **Filesystem boundary:** execution is confined through relay policy plus Bubblewrap. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) is the single root setting and defaults to `$HOME/Documents/Projects`; it defines the primary workspace and, unless explicitly overridden by `--execution-root`, the hard ceiling. Child repositories beneath it can be selected with `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and recursively masks protected credential directories (`.ssh`, `.aws`, `.cargo/credentials`, `.env.*`) and Unix domain sockets across all visible depths. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
 - **Tools:** Full exposes the immutable v15 retained catalog of 52 tools — local sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools, Full-only read-only remote diagnostics (`ssh_readonly_exec`), bounded native workspace tools, remote Git transport, forge/issues/workflows, alerts, and Telegram integration. Primary is the intentional 15-tool core fast path. Discovery and invocation are strictly aligned: tools advertised in `tools/list` match `tools/call` routing; invoking a capability-disabled tool returns structured revocation errors (`CAPABILITY_REVOKED`), and unknown tools return 404 errors. Local Git wrappers and LSP wrappers are not public catalog entries; use terminal for builds, tests, package managers, interpreters, scripts, and uncovered CLI work. Standard developer CLI tools are fully permitted inside the sandbox, while privilege escalation brokers (`sudo`, `su`, `doas`, `pkexec`, `runas`) and generic SSH clients are blocked and masked. The exact static catalog contract is frozen under `.agents/contracts/`.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
@@ -68,20 +68,19 @@ The repository pins Rust 1.95.0. Current local verification/release policy is do
 
 ## Local mode
 
-Local mode is the default and binds to loopback. Supply the project directory and browser/Nuxt origin explicitly:
+Local mode is the default and binds to loopback. The workspace root defaults to `$HOME/Documents/Projects`; set `RELAY_WORKSPACE_ROOT` or pass `--workspace-root` to select another tree. Supply the browser/Nuxt origin explicitly:
 
 ```bash
 cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- relay \
   --mode local \
-  --dir /home/user/project \
-  --execution-root /home/user \
+  --workspace-root /home/user/Documents/Projects \
   --origin http://localhost:3333
 ```
 
 Important:
 
-- `--dir` is the default working directory.
-- `--execution-root` is the filesystem containment root. For a single-owner coding relay, set it to `/home/user`; sibling projects can then be selected with `cwd` without restarting or reconnecting.
+- `RELAY_WORKSPACE_ROOT` / `--workspace-root` sets the primary root; it defaults to `$HOME/Documents/Projects`, and `--dir` remains a compatibility alias.
+- `--execution-root` is an explicit hard-ceiling override. When omitted, it uses the same root. Child folders under Projects are selectable directly with `cwd`; siblings outside a narrower primary root require `workspace_add` and must remain inside the ceiling.
 - The execution root must resolve to an allowed user-owned path; unsafe/shallow system roots are rejected.
 - Bubblewrap must be installed before startup.
 - The process must run as an unprivileged user.
@@ -108,8 +107,7 @@ Representative invocation:
 ai-tools relay \
   --mode remote \
   --bind-host 0.0.0.0 \
-  --dir /home/relay/workspace \
-  --execution-root /home/relay/workspace \
+  --workspace-root /home/relay/workspace \
   --origin https://app.example.com \
   --oauth-issuer https://issuer.example.com/ \
   --oauth-audience https://relay.example.com/mcp \
