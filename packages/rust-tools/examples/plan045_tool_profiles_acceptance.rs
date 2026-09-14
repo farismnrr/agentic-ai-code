@@ -1,11 +1,11 @@
 use ai_tools::core::config::{ServerConfig, ToolProfile};
 use ai_tools::interfaces::mcp::{
-    find_tool_for_profile, tool_catalog, tool_catalog_for_profile, PRIMARY_TOOL_NAMES,
+    find_tool_for_profile, retained_tool_catalog, runtime_tool_catalog, PRIMARY_TOOL_NAMES,
 };
 
 fn main() {
-    let full = tool_catalog();
-    let primary = tool_catalog_for_profile(ToolProfile::Primary);
+    let full = retained_tool_catalog();
+    let primary = runtime_tool_catalog(ToolProfile::Primary, false);
     assert_eq!(primary.len(), 33);
     assert_eq!(PRIMARY_TOOL_NAMES.len(), 33);
     assert!(full.len() >= primary.len());

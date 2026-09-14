@@ -4,7 +4,7 @@ use ai_tools::application::execution::{
 };
 use ai_tools::application::hooks::HookManager;
 use ai_tools::application::lsp::LspSessionManager;
-use ai_tools::interfaces::mcp::tool_catalog;
+use ai_tools::interfaces::mcp::retained_tool_catalog;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -365,7 +365,7 @@ async fn test_task_backed_and_sync_execution_parity() {
         .expect("async wait failed");
 
     // Synchronous dispatch path
-    let catalog = tool_catalog();
+    let catalog = retained_tool_catalog();
     let tool = catalog
         .iter()
         .find(|t| t.name == "terminal_exec")

@@ -33,6 +33,7 @@ impl From<&Cli> for ServerConfig {
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
             lsp_servers: cli.lsp_servers.clone(),
+            enable_creative: cli.enable_creative,
             enable_agent_hooks: cli.enable_agent_hooks,
             agent_hooks_config: cli.agent_hooks_config.clone(),
             tool_profile: cli.tool_profile,

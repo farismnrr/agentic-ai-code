@@ -5,7 +5,7 @@ use ai_tools::application::hooks::effect_classes;
 use ai_tools::application::lsp::LspSessionManager;
 use ai_tools::core::config::ServerConfig;
 use ai_tools::core::workspace_path::MAX_AUTHORIZED_WORKSPACES;
-use ai_tools::interfaces::mcp::{find_tool, tool_catalog};
+use ai_tools::interfaces::mcp::{find_tool, retained_tool_catalog};
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hooks = ai_tools::application::hooks::HookManager::load(Arc::new(config.clone()))?;
 
     assert_eq!(
-        tool_catalog().len(),
+        retained_tool_catalog().len(),
         77,
         "Plan 043 must extend all 50 v7 tools without removals"
     );

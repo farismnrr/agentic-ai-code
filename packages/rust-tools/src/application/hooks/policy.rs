@@ -5,8 +5,19 @@ pub fn effect_classes_for_call(
     tool_id: &str,
     destructive_hint: bool,
     open_world_hint: bool,
-    _arguments: &serde_json::Value,
+    arguments: &serde_json::Value,
 ) -> Vec<&'static str> {
+    if tool_id.starts_with("creative_") {
+        let action = arguments.get("action").and_then(serde_json::Value::as_str);
+        return match (tool_id, action) {
+            ("creative_project", Some("create"))
+            | ("creative_element", Some("create_revision" | "promote"))
+            | ("creative_asset", Some("register" | "promote"))
+            | ("creative_graph", Some("execute"))
+            | ("creative_job", Some("cancel")) => vec!["workspace_write"],
+            _ => vec!["workspace_read"],
+        };
+    }
     effect_classes(tool_id, destructive_hint, open_world_hint)
 }
 

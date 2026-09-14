@@ -184,6 +184,11 @@ pub struct Cli {
     #[arg(long, value_enum, env = "RELAY_TOOL_PROFILE", default_value = "full")]
     pub tool_profile: ToolProfile,
 
+    /// Enable the first-party creative production capability group. Disabled by
+    /// default; execution bindings remain separately operator-registered.
+    #[arg(long, env = "RELAY_ENABLE_CREATIVE", default_value_t = false)]
+    pub enable_creative: bool,
+
     /// Explicitly enable the repository-owned deterministic lifecycle hooks.
     /// Hook configuration is never trusted merely because it exists.
     #[arg(long, env = "RELAY_ENABLE_AGENT_HOOKS", default_value_t = false)]

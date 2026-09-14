@@ -1,3 +1,4 @@
+mod creative;
 mod file_edit;
 mod forge;
 mod profile;
@@ -51,7 +52,10 @@ fn coding_security_scheme() -> Vec<ToolSecurityScheme> {
 }
 
 /// Canonical client-visible MCP tool catalog.
-pub fn tool_catalog() -> Vec<Tool> {
+/// Fixed retained non-optional tool set used by historical acceptance coverage.
+/// Runtime exposure must be built through `runtime_tool_catalog` so optional
+/// capabilities have one canonical composition path.
+pub fn retained_tool_catalog() -> Vec<Tool> {
     let mut tools = vec![
         Tool {
             name: "terminal_exec",
@@ -426,30 +430,43 @@ pub fn tool_catalog() -> Vec<Tool> {
 
 pub use profile::{PRIMARY_TOOL_NAMES, RETAINED_TOOL_NAMES};
 
-pub fn tool_catalog_for_profile(profile: crate::core::config::ToolProfile) -> Vec<Tool> {
-    match profile {
-        crate::core::config::ToolProfile::Full => tool_catalog(),
-        crate::core::config::ToolProfile::Primary => {
-            let all = tool_catalog();
-            PRIMARY_TOOL_NAMES
-                .iter()
-                .filter_map(|name| all.iter().find(|t| t.name == *name).cloned())
-                .collect()
-        }
+/// Canonical client-visible runtime catalog. Optional capabilities are composed
+/// here from operator configuration; there is no second active catalog version.
+pub fn runtime_tool_catalog(
+    profile: crate::core::config::ToolProfile,
+    creative_enabled: bool,
+) -> Vec<Tool> {
+    let all = retained_tool_catalog();
+    let mut selected = match profile {
+        crate::core::config::ToolProfile::Full => all,
+        crate::core::config::ToolProfile::Primary => PRIMARY_TOOL_NAMES
+            .iter()
+            .filter_map(|name| all.iter().find(|tool| tool.name == *name).cloned())
+            .collect(),
+    };
+    let mut creative_tools = creative::tools().into_iter();
+    if let Some(status) = creative_tools.next() {
+        selected.push(status);
     }
+    if creative_enabled && profile == crate::core::config::ToolProfile::Full {
+        selected.extend(creative_tools);
+    }
+    selected
 }
 
 pub fn find_tool_for_profile(
     name: &str,
     profile: crate::core::config::ToolProfile,
 ) -> Option<Tool> {
-    tool_catalog_for_profile(profile)
+    runtime_tool_catalog(profile, false)
         .into_iter()
         .find(|t| t.name == name)
 }
 
 pub fn find_tool(name: &str) -> Option<Tool> {
-    tool_catalog().into_iter().find(|t| t.name == name)
+    runtime_tool_catalog(crate::core::config::ToolProfile::Full, false)
+        .into_iter()
+        .find(|t| t.name == name)
 }
 
 /// Validate `arguments` against the declared JSON Schema before execution.

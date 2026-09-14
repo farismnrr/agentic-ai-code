@@ -1,7 +1,9 @@
-/// Client-visible v15 surface. Local Git orchestration and LSP/code-intelligence
-/// calls remain implemented for internal validation/bridge code, but ordinary
-/// agents use the terminal for those workflows. Remote Git delivery stays on
-/// the four credential-isolated bridge tools below.
+/// Retained non-optional base surface. Historical catalog snapshots may record
+/// this set, but they are archive artifacts rather than alternate active runtime
+/// versions. `runtime_tool_catalog` is the single client-visible composition path.
+/// Local Git orchestration and LSP/code-intelligence calls remain implemented for
+/// internal validation/bridge code, while ordinary agents use the terminal for
+/// those workflows. Remote Git delivery stays on the credential-isolated tools.
 pub const RETAINED_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
     "ssh_readonly_exec",

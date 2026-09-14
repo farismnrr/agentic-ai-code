@@ -6,7 +6,7 @@ use crate::core::error::McpError;
 use crate::core::workspace_path::EntryKind;
 use serde::Serialize;
 use serde_json::Value;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 pub const DEFAULT_FILE_READ_LINES: usize = 200;
 pub const MAX_FILE_READ_LINES: usize = 1_000;
 pub const MAX_FILE_READ_BYTES: usize = 256 * 1024;
@@ -52,6 +52,47 @@ fn read_bounded_line_sync<R: BufRead>(
             return Ok(Some(line));
         }
     }
+}
+
+pub(crate) fn read_contained_text(
+    path: &str,
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    max_bytes: usize,
+) -> Result<String, McpError> {
+    if max_bytes == 0 || max_bytes > super::mutate::MAX_FILE_EDIT_BYTES {
+        return Err(McpError::InvalidRequest(
+            "contained text read bound is invalid".into(),
+        ));
+    }
+    let _ = config.ensure_workspaces_initialized();
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let target = crate::core::workspace_path::resolve_existing_path_in_allowlist(
+        &guard,
+        cwd,
+        path,
+        EntryKind::File,
+    )?;
+    let root = guard.containing_root(&target).ok_or_else(|| {
+        McpError::InvalidRequest("file is outside authorized workspace roots".into())
+    })?;
+    reject_protected_path(root, &target)?;
+    let file = std::fs::File::open(&target)
+        .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
+    let mut bytes = Vec::new();
+    std::io::Read::take(file, (max_bytes + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
+    if bytes.len() > max_bytes {
+        return Err(McpError::InvalidRequest(
+            "contained text file exceeds maximum".into(),
+        ));
+    }
+    String::from_utf8(bytes)
+        .map_err(|_| McpError::InvalidRequest("file is not valid UTF-8 text".into()))
 }
 
 pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadResult, McpError> {
