@@ -1,9 +1,18 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **PLANNED — supersedes the Blender-only and anime-only Plan 069 scope before implementation; no production source implementation has started**
+Status: **IMPLEMENTATION IN PROGRESS — PHASE-01 reconciled; C0/C1/C2 and minimal C3 foundations are implemented in source but Rust compile/test verification is currently blocked by the local toolchain environment; no relay restart/deployment has occurred**
 
 Created: 2026-09-11
-Updated: 2026-09-13
+Updated: 2026-09-14
+
+## Current implementation state — 2026-09-14
+
+- Implementation branch: `feat/plan-069-creative-core`, forked from reconciled `main` at `ae9571448a7c92e9ecf6f73b51b05009adc310e7`. This branch plus current `main` are the only active source truth for Plan 069; older release-branch assumptions are history only.
+- Versioning is intentionally singular: the client-visible runtime surface is built through one `runtime_tool_catalog` path and Creative state uses one active schema version (`CREATIVE_SCHEMA_VERSION = 1`). The retained 52-tool base and numbered catalog snapshots, including historical v15, are immutable history/audit artifacts rather than alternate current versions. `creative_status` remains visible while disabled; the remaining Creative tools are composed into Full only when `RELAY_ENABLE_CREATIVE=true`.
+- Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime.
+- Deliberately not implemented yet: external upload handoff, conversation attachment materialization, URL import, provider/media execution bindings, cost/budget enforcement, graph partial rerun/invalidation/parallel executor scheduling, Blender bridge/tools, Scene/Anime/Game production engines, and publish/deploy execution. Generic manual asset registration cannot claim generated/upload/URL provenance.
+- Fresh benchmark audit: official Higgsfield MCP remains OAuth/client-neutral, asynchronous, credit-aware, and backed by durable Assets/history; Higgsfield may auto-select models, but Masih Awam intentionally keeps provider/model routing above the MCP boundary. Official Blender Lab MCP is released for Blender 5.1+ and explicitly warns that generated Blender Python runs without data-protection guards, reinforcing Plan 069's privileged/manual Blender-Python boundary.
+- Verification completed without service mutation: `git diff --check`, repository policy/agent-doc checks, architecture, test-layout, and maintainability pass. Rust compile/tests are **not claimed**: the host rustup installation currently has no toolchain, the surviving `target/` artifacts were built with Rust `1.98.1`, and the only local Rust container is `1.89` without compatible dependency sources. No toolchain was installed implicitly and no relay/service restart or reload was performed.
 
 ## Goal
 
@@ -835,7 +844,7 @@ A job record should return bounded metadata:
 
 Raw prompts, giant workflow JSON, credentials, and unrestricted engine logs must not become routine client-visible metadata.
 
-Jobs should be resumable/retrievable across normal agent turns. Exact persistence ownership is frozen only after auditing the post-v0.0.15 relay/product task model so we do not build a competing job manager unnecessarily.
+Jobs should be resumable/retrievable across normal agent turns. Exact persistence ownership is frozen only after auditing the current relay/product task model so we do not build a competing job manager unnecessarily.
 
 ## Asset and revision lineage
 
@@ -1370,19 +1379,17 @@ Expected intent:
 
 Creative execution tools need effect review based on the caller-selected execution binding: local/remote, workspace writes, network/billing, host execution, deployment, and arbitrary-code risk remain explicit regardless of provider/model.
 
-## Repository baseline and dependency gate
+## Canonical implementation baseline
 
-Current `origin/main` baseline audited for this plan:
+The single active source baseline for Plan 069 was re-audited from `origin/main` on 2026-09-14:
 
 ```text
-e13bd38666ec4cb100ae713bd8272426db209d0e
+ae9571448a7c92e9ecf6f73b51b05009adc310e7
 ```
 
-Plan 069 is the next unused numeric plan on the audited `main` baseline as of 2026-09-13. This file is the sole active Plan 069 and consolidates the earlier Blender-only and anime/Higgsfield-scoped drafts.
+Implementation proceeds only from this reconciled baseline and the current `feat/plan-069-creative-core` branch. Earlier SHAs, release branches, and numbered tool-catalog snapshots are historical audit artifacts only; they are not alternate active implementations or contract versions.
 
-The `release/ai-tools-v0.0.15` branch contains an optional-capability prototype that was never merged to `main`. Treat it as historical work, not as an implementation dependency or an approved source baseline.
-
-**Implementation gate:** before source work, re-audit current `main` for optional-capability support. Reimplement or selectively cherry-pick only pieces that are still needed and pass a fresh security and architecture review. Do not port the old release branch wholesale.
+Phase-01 audit confirmed that no prior optional-capability prototype defines current `main` behavior. Historical branches do not define the active contract and no source is ported wholesale from them. The current implementation owns one runtime catalog composition path and one active Creative schema version (`CREATIVE_SCHEMA_VERSION = 1`).
 
 ## Expected implementation ownership
 
@@ -1391,7 +1398,7 @@ Exact new module names are frozen only after the Phase 1 architecture audit, but
 - `packages/rust-tools/src/core/config/` — operator capability config and bounds;
 - `packages/rust-tools/src/application/` — first-party runtime/job/execution-binding/Blender application logic;
 - `packages/rust-tools/src/interfaces/mcp/` — compact MCP tool schemas and capability metadata;
-- `packages/rust-tools/src/application/resources.rs` or its post-v0.0.15 successor — bounded resources/capability guidance;
+- `packages/rust-tools/src/application/resources.rs` — bounded resources/capability guidance when Plan 069 needs a read-only resource surface;
 - `packages/rust-tools/tests/` — Rust integration/security/contract tests;
 - `server/application/` / `server/infrastructure/` only when product persistence, attachment materialization, or shared policy requires Nuxt ownership;
 - `shared/` only for genuine cross-client/product contracts;
@@ -1406,7 +1413,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | --- | --- | --- | --- |
 | PHASE-01 | Reconcile baseline and freeze architecture/contracts | none | upper-layer/MCP boundary, Elements/state, execution-binding/capability/job/workflow/graph, scene/game and Blender contracts frozen |
 | PHASE-02 | Creative Project + Element state + safe media ingress | PHASE-01 | C0/C1 project/Element/materialization contracts proven |
-| PHASE-03 | Capability/workflow registry + creative jobs + graph contract | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate |
+| PHASE-03 | Capability/workflow registry + creative jobs + graph contract + minimal headless executor | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate and execute through the minimal reviewed DAG runtime |
 | PHASE-04 | Initial reference-aware media generation | PHASE-02, PHASE-03 | Character/Style still consistency foundation passes A1/A2-quality gate |
 | PHASE-05 | Identity/style/world/Element production system | PHASE-04 | reusable Characters/Locations/Props/Style Elements drive revisions and reuse |
 | PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | retained 11-tool bridge/tool/security contract passes |
@@ -1417,7 +1424,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | PHASE-11 | Sequence assembly/export + anime delivery | PHASE-08, PHASE-09, PHASE-10 | A6 plus contained reusable project delivery passes |
 | PHASE-12 | Game Studio: design/assets/build/playtest | PHASE-02, PHASE-03, PHASE-05 | G1/G2/G3 pass for a small browser game |
 | PHASE-13 | Game multiplayer/deploy + source-preserving iteration | PHASE-12 | selected G4 path passes where applicable and G5 deploy contract passes |
-| PHASE-14 | Creative Graph executor + Canvas-style workspace + MCP parity/resource evals | PHASE-03 and proven scene/game workflows | C3 graph runtime/templates and high-value Higgsfield MCP operating parity pass |
+| PHASE-14 | Mature Creative Graph runtime + Canvas-style workspace + MCP parity/resource evals | PHASE-03 and proven scene/game workflows | C3 production graph runtime/templates/UI and high-value Higgsfield MCP operating parity pass |
 | PHASE-15 | Triad acceptance and closeout | all required prior phases | fresh Scene S3, Anime A6, and Game G5 benchmarks pass; second-project falsification and repository gates pass |
 
 # PHASE-01 — Reconcile baseline and freeze contracts
@@ -1426,20 +1433,20 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Dependencies:** none.
 
-### TASK-001 — Re-audit post-v0.0.15 runtime
+### TASK-001 — Re-audit current runtime baseline
 
-**Outcome:** implementation starts from the actual merged optional-capability/task/resource architecture, not the release snapshot assumed by planning.
+**Outcome:** implementation starts from the actual current task/resource/catalog architecture, not from optional-capability assumptions or historical release snapshots.
 
 **Files:** read current `packages/rust-tools/src/`, `server/infrastructure/mcp/`, shared capability policy, and current contracts after updating from `main`.
 
 **Steps:**
 
-- [ ] Verify repository identity, clean task branch/worktree, and current `main` HEAD.
-- [ ] Confirm which v0.0.15 optional-capability components landed.
-- [ ] Re-audit current MCP protocol/tool/resource/task contract.
-- [ ] Re-audit attachment/file ingress and image result support.
-- [ ] Re-audit Blender Lab bridge/version/security docs.
-- [ ] Re-audit the official Higgsfield MCP help pages/landing page operation list first; use public skills only as upper-layer/product reference, never as MCP authority.
+- [x] Verify repository identity, clean task branch/worktree, and current `main` HEAD.
+- [x] Confirm which previously assumed optional-capability components actually landed. *(Reconciled result: none of the assumed creative/optional framework existed on the active baseline, so current source is authoritative.)*
+- [x] Re-audit current MCP protocol/tool/resource/task contract.
+- [x] Re-audit attachment/file ingress and image result support. *(No reusable first-party creative attachment/upload materialization path was found; TASK-006 remains open.)*
+- [x] Re-audit Blender Lab bridge/version/security docs.
+- [x] Re-audit the official Higgsfield MCP help pages/landing page operation list first; use public skills only as upper-layer/product reference, never as MCP authority.
 
 **Validation:** architecture findings are recorded in this plan or durable knowledge without stale release-branch assumptions.
 
@@ -1453,12 +1460,12 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Document that agents, subagents, skill auto-triggering, interviews, creative prompt authoring, workflow planning, provider/model ranking, and fallback policy are outside Plan 069 MCP ownership.
-- [ ] Define the semantic request envelope accepted from any upper layer.
-- [ ] Define opaque `execution_binding_id` discovery/validation without provider/model-specific public tool names.
-- [ ] Define the ambiguity error returned when multiple compatible bindings exist and the caller has not selected one.
-- [ ] Define optional MCP resources/guidance as read-only reference material with no authority to auto-run or route an agent.
-- [ ] Verify existing agent/subagent infrastructure is not extended merely to implement creative MCP parity.
+- [x] Document that agents, subagents, skill auto-triggering, interviews, creative prompt authoring, workflow planning, provider/model ranking, and fallback policy are outside Plan 069 MCP ownership.
+- [x] Define the semantic request envelope accepted from any upper layer.
+- [x] Define opaque `execution_binding_id` discovery/validation without provider/model-specific public tool names.
+- [x] Define the missing-selection/ambiguity error returned when a pluggable capability has no caller-selected binding.
+- [x] Define optional MCP resources/guidance as read-only reference material with no authority to auto-run or route an agent.
+- [x] Verify existing agent/subagent infrastructure is not extended merely to implement creative MCP parity.
 
 **Validation:** architecture/contract tests can prove that two different upper-layer clients/agents can call the same creative MCP capability with different selected execution bindings and no MCP-owned agent/model-selection path is invoked.
 
@@ -1470,12 +1477,12 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Define required vs optional fields.
-- [ ] Define stable IDs and relative workspace references.
-- [ ] Define authoritative vs interpreted/generated reference labels.
-- [ ] Define revision lineage.
-- [ ] Define forward-compatible schema versioning.
-- [ ] Define bounds and secret-exclusion rules.
+- [x] Define required vs optional fields.
+- [x] Define stable IDs and relative workspace references.
+- [x] Define authoritative vs interpreted/generated reference labels.
+- [x] Define revision lineage.
+- [x] Define forward-compatible schema versioning.
+- [x] Define bounds and secret-exclusion rules.
 
 **Validation:** representative fixtures can express (a) one cinematic scene with Character/Location/Prop Elements and three shots, (b) one anime character/turnaround/rig path, and (c) one small browser-game design/build manifest, all with audio/provenance/revision lineage and no engine-specific IDs as source of truth.
 
@@ -1487,18 +1494,18 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Freeze semantic capability vocabulary needed through C3/S3/A6/G5 plus MCP utility parity: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub.
-- [ ] Freeze `capability.list/get` representation for durable upper-layer discovery.
-- [ ] Freeze opaque `execution_binding.list/get` representation separately from semantic capabilities; provider/model names are optional implementation metadata, never stable contract identity.
-- [ ] Freeze workflow `list/get` separately from execution-binding inventory.
-- [ ] Freeze caller-selected-binding semantics and explicit ambiguity failure; MCP has no automatic model/provider selection or fallback policy.
-- [ ] Freeze asset/upload/history `list/get/search` filters, source tags, stable IDs, and media-result representation.
+- [x] Freeze semantic capability vocabulary needed through C3/S3/A6/G5 plus MCP utility parity: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub.
+- [x] Freeze capability list/get representation for durable upper-layer discovery.
+- [x] Freeze opaque execution-binding list/get representation separately from semantic capabilities; provider/model names are optional implementation metadata, never stable contract identity.
+- [x] Freeze workflow list/get separately from execution-binding inventory.
+- [x] Freeze caller-selected-binding semantics and explicit missing-selection failure; MCP has no automatic model/provider selection or fallback policy.
+- [x] Freeze Asset/history `list/get/search` filters, source/source-surface tags, stable IDs, typed media metadata, acceptance state, and lineage. *(Upload-specific records and current-turn preview/resource delivery remain open under TASK-006 and the result-delivery item below.)*
 - [ ] Freeze secure external-client upload request/complete and bounded URL-import contracts.
 - [ ] Freeze cost/compute estimate plus global/project/session/job budget-status and hard-limit semantics.
 - [ ] Freeze job submit/get/wait/list/cancel behavior and cross-turn retrieval.
 - [ ] Freeze result and failure bounds, including current-turn preview/resource delivery plus durable Asset registration.
-- [ ] Freeze external-cost/network vs local-compute effect classifications.
-- [ ] Decide whether existing relay Tasks can own creative long-running jobs directly or need a thin creative domain layer over the same manager.
+- [x] Freeze external-cost/network vs local-compute effect classifications.
+- [x] Decide whether existing relay Tasks can own creative long-running jobs directly or need a thin creative domain layer over the same manager. *(Decision: current process-only/in-memory manager is not forced to own creative state; use a thin project-persisted creative domain layer and preserve a replaceable lifecycle boundary.)*
 
 **Validation:** mock bindings can advertise different implementations for the same semantic capability without changing MCP contracts; the same fixture can discover compatible binding IDs, require the upper layer to select one when ambiguous, preflight cost for that binding, submit, list/retrieve the job, and reuse the returned Asset ID.
 
@@ -1506,11 +1513,11 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Phase exit criteria:**
 
-- [ ] no implementation depends on a Higgsfield contract;
-- [ ] the upper-layer/MCP boundary is explicit and no agent/model router was added;
-- [ ] creative state schemas are frozen for initial milestones;
-- [ ] execution-binding/job semantics reuse existing platform primitives where possible;
-- [ ] Blender remains a separate privileged DCC capability under the master architecture.
+- [x] no implementation depends on a Higgsfield contract;
+- [x] the upper-layer/MCP boundary is explicit and no agent/model router was added;
+- [x] creative state schemas are frozen for initial milestones;
+- [x] execution-binding/job semantics reuse existing platform primitives where possible;
+- [x] Blender remains a separate privileged DCC capability under the master architecture.
 
 # PHASE-02 — Creative Project, Element state, and safe media ingress
 
@@ -1525,10 +1532,10 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 **Steps:**
 
 - [ ] Define contained path layout for project manifest, Elements, assets/revisions, scene/shot boards, creative graphs/templates, game design/build metadata, QA/playtest evidence, and exports.
-- [ ] Ensure paths remain relative/canonical and cannot target protected credentials.
-- [ ] Add atomic manifest updates.
-- [ ] Preserve human-readable diffs.
-- [ ] Bound manifest and metadata sizes.
+- [x] Ensure paths remain relative/canonical and cannot target protected credentials.
+- [x] Add atomic manifest updates.
+- [x] Preserve human-readable diffs.
+- [x] Bound manifest and metadata sizes.
 
 **Validation:** traversal/symlink/protected-path tests fail closed; normal project fixture round-trips.
 
@@ -1560,13 +1567,13 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Register source type, source surface (`mcp|canvas|scene|anime|game|blender|manual/import` or equivalent), media role, project, Element binding, and selected revision.
-- [ ] Record bounded output metadata/checksum/dimensions/duration where appropriate.
-- [ ] Link generation/utility job and parent revision.
-- [ ] Mark accepted vs candidate revisions.
-- [ ] Implement bounded list/get/search filters for recent generations, uploads/imports, media type, job status, Element, project, source surface, and time range.
+- [x] Register source type, source surface (`mcp|canvas|scene|anime|game|blender|manual/import` or equivalent), media role, project, Element binding, and accepted/candidate selection state.
+- [x] Record bounded output metadata/checksum/dimensions/duration where appropriate.
+- [x] Link originating creative job and parent Asset lineage.
+- [x] Mark accepted vs candidate revisions.
+- [x] Implement bounded list/get/search filters for media type/role, job lineage, Element, project, source/source-surface, acceptance state, parent Asset, and time range. *(Upload-specific filters remain meaningful once TASK-006 adds upload records.)*
 - [ ] Return reusable Asset IDs plus bounded preview/resource metadata so a result can be reviewed in the current client and reused later without download/re-upload.
-- [ ] Keep raw credentials/prompts/unrestricted provider logs out of routine metadata.
+- [x] Keep raw credentials/prompts/unrestricted provider logs out of routine metadata. *(Asset metadata is a typed media-facts object; arbitrary extra keys are rejected.)*
 
 **Validation:** fixtures can (a) trace user reference -> generated turnaround -> revised selected image -> Blender import, (b) list recent generated/uploaded assets with stable filters, and (c) reuse one previous Asset directly as a later job reference.
 
@@ -1578,9 +1585,9 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [ ] every asset has bounded provenance/lineage;
 - [ ] no Blender/generator path assumes transient chat paths are filesystem paths.
 
-# PHASE-03 — Capability/workflow registry, creative jobs, and graph contract
+# PHASE-03 — Capability/workflow registry, creative jobs, and minimal graph runtime
 
-**Goal:** reproduce Higgsfield's live discovery/job strengths without vendor coupling.
+**Goal:** reproduce Higgsfield's live discovery/job strengths without vendor coupling, and establish the smallest reviewed headless DAG executor that downstream Scene/Anime/Game phases can reuse instead of inventing temporary orchestration.
 
 **Dependencies:** PHASE-01.
 
@@ -1590,14 +1597,14 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Add operator-disabled-by-default creative capability group.
-- [ ] Expose active semantic capabilities independently from execution implementations.
-- [ ] Expose bounded `execution_binding.list/get` descriptors: opaque binding ID, capabilities, reference roles, validated extension schema/bounds, duration/resolution/aspect constraints, availability/health, known license notes, and estimator support.
-- [ ] Expose workflow IDs and `workflow.list/get` separately from execution bindings.
-- [ ] Never rank/default/auto-select a binding. For pluggable executor-backed operations, omission returns `execution_binding_required` with compatible binding IDs regardless of how many bindings are currently registered.
-- [ ] Validate an explicit caller-selected binding and return precise incompatibility/unavailable diagnostics instead of silent substitution.
-- [ ] Keep endpoint/credential/raw engine implementation metadata hidden; provider/model display metadata, if exposed at all, is informational and non-contractual.
-- [ ] Return activation/setup hint when disabled.
+- [x] Add operator-disabled-by-default creative capability group.
+- [x] Expose active semantic capabilities independently from execution implementations.
+- [x] Expose bounded execution-binding list/get descriptors: opaque binding ID, capabilities, reference roles, validated extension schema/bounds, duration/resolution/aspect constraints, availability/health, known license notes, and estimator support. *(The implementation inventory is intentionally empty until a reviewed binding is registered.)*
+- [x] Expose workflow IDs and workflow list/get separately from execution bindings.
+- [x] Never rank/default/auto-select a binding. For pluggable executor-backed operations, omission returns `execution_binding_required` with compatible binding IDs regardless of how many bindings are currently registered.
+- [x] Validate an explicit caller-selected binding and return precise incompatibility/unavailable diagnostics instead of silent substitution.
+- [x] Keep endpoint/credential/raw engine implementation metadata hidden; provider/model display metadata, if exposed at all, is informational and non-contractual.
+- [x] Return activation/setup hint when disabled.
 
 **Validation:** semantic capabilities remain stable while underlying provider/model implementations change; the same request works through two caller-selected mock bindings, missing selection always fails with `execution_binding_required`, and incompatible binding selection fails with a bounded reason.
 
@@ -1616,16 +1623,16 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [ ] Add domain metadata only where creative workflows need it.
 - [ ] Support submit/get/wait/list/cancel and cross-turn retrieval.
 - [ ] Bound concurrent jobs/batches and retry count.
-- [ ] Persist/recover only if current platform task semantics cannot satisfy cross-turn retrieval safely.
-- [ ] Keep failure/cost/provider diagnostics redacted/classified.
+- [x] Persist/recover only if current platform task semantics cannot satisfy cross-turn retrieval safely. *(Current task state is in-memory/process-oriented, so creative graph/job records are project-persisted.)*
+- [x] Keep failure diagnostics bounded/classified; provider/cost diagnostics remain absent until bindings/cost estimation exist.
 
 **Validation:** fake execution bindings cover queued/running/completed/failed/cancelled, list/retrieve after client reconnect, estimate-before-submit, approval threshold, hard-budget denial, timeout, output bounds, and owner isolation.
 
 **Commit boundary:** `feat(creative): add generation job lifecycle`.
 
-### TASK-010 — Add curated workflow registry and Creative Graph contract
+### TASK-010 — Add curated workflow registry, Creative Graph contract, and minimal headless executor
 
-**Outcome:** multi-step workflows are discoverable independently from execution bindings, and a typed graph can represent caller-specified composition before a visual Canvas/executor is added.
+**Outcome:** multi-step workflows are discoverable independently from execution bindings, and a typed graph can represent and execute caller-specified composition through one minimal reviewed headless runtime before any visual Canvas surface is added.
 
 Initial candidate workflows to freeze from actual engine support:
 
@@ -1656,15 +1663,18 @@ Initial candidate workflows to freeze from actual engine support:
 
 Steps:
 
-- [ ] Define workflow schemas independently from execution-binding/provider/model catalogs.
-- [ ] Define typed Creative Graph node/edge/port/revision contract around workflows/jobs/Elements.
+- [ ] Define workflow-specific input/output schemas independently from execution-binding/provider/model catalogs. *(The workflow descriptor envelope exists, but per-workflow schemas are still generic and are not claimed frozen.)*
+- [x] Define typed Creative Graph node/edge/port/revision contract around workflows/jobs/Elements.
 - [ ] Define dirty-descendant and partial-rerun semantics.
 - [ ] Define template input/output contract.
-- [ ] Validate that graph representation cannot encode arbitrary code/endpoints/credentials as ordinary nodes.
+- [ ] Implement the minimal headless executor needed by downstream phases: deterministic dependency resolution, bounded execution of reviewed nodes, parallel scheduling only for declared-independent nodes, node status/output recording, descendant invalidation, and reuse of accepted unaffected ancestors.
+- [x] Map every executable node to an already reviewed capability/job/effect boundary; the graph runtime itself grants no new shell/Python/network/deploy authority.
+- [x] Keep advanced template UX, selected-subgraph execution ergonomics, production Canvas UI, and broader parity hardening for PHASE-14.
+- [x] Validate that graph representation cannot encode arbitrary code/endpoints/credentials as ordinary nodes.
 
-**Validation:** workflows advertise required inputs/output roles and reject unsupported parameters before execution; representative scene/anime/game graphs validate without containing engine-specific secrets or arbitrary executable payloads.
+**Validation:** workflows advertise required inputs/output roles and reject unsupported parameters before execution; representative scene/anime/game graphs validate and execute through fake/reviewed nodes, declared-independent branches can run concurrently, one changed node invalidates only affected descendants, and no graph contains engine-specific secrets or arbitrary executable payloads.
 
-**Commit boundary:** `feat(creative): add workflow and graph contracts`.
+**Commit boundary:** `feat(creative): add workflow and minimal graph runtime`.
 
 **Phase exit criteria:**
 
@@ -1674,6 +1684,7 @@ Steps:
 - [ ] job lifecycle is bounded, listable/retrievable across normal turns, and owner/project scoped;
 - [ ] cost/compute preflight and hard budget thresholds can block a batch before execution;
 - [ ] graph/workflow contracts can express scene/anime/game dependencies;
+- [ ] the minimal headless graph executor can run those dependencies without Scene/Anime/Game implementing separate orchestration loops;
 - [ ] arbitrary upper layers can make their own routing decisions without hard-coded provider/model IDs in MCP contracts.
 
 # PHASE-04 — Initial reference-aware media generation
@@ -1785,7 +1796,7 @@ Steps:
 
 # PHASE-06 — Blender first-class production engine
 
-**Goal:** implement the retained original Plan 069 Blender capability on the merged optional-capability framework.
+**Goal:** implement the retained original Plan 069 Blender capability on the current single runtime capability/catalog framework.
 
 **Dependencies:** PHASE-02, PHASE-03.
 
@@ -1793,7 +1804,7 @@ Steps:
 
 **Outcome:** operator config, loopback framing, 11 tool schemas, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
 
-**Validation:** immutable prior contracts remain untouched unless the post-v0.0.15 versioning policy explicitly requires a successor snapshot.
+**Validation:** historical numbered contracts remain untouched and Plan 069 does not create a parallel successor catalog; Blender composes into the same current runtime catalog path.
 
 **Commit boundary:** `feat(blender): freeze relay capability contract`.
 
@@ -2280,25 +2291,24 @@ Example scopes:
 - [ ] deploy and publish remain different authority boundaries;
 - [ ] follow-up iteration preserves source/project continuity.
 
-# PHASE-14 — Creative Graph executor, Canvas workspace, and MCP parity evals
+# PHASE-14 — Mature Creative Graph runtime, Canvas workspace, and MCP parity evals
 
-**Goal:** complete C3 and high-value Higgsfield MCP parity by turning caller-specified graph contracts into a safe reusable executor/workspace over proven scene/anime/game primitives, without adding an agent/skill/model router.
+**Goal:** complete C3 and high-value Higgsfield MCP parity by hardening and expanding the minimal PHASE-03 headless graph runtime into the full reusable production executor/workspace over proven scene/anime/game primitives, without adding an agent/skill/model router.
 
 **Dependencies:** PHASE-03 plus working scene/game workflows from PHASE-09/12. Blender/anime graph nodes depend on their owning phases.
 
-### TASK-047 — Implement typed Creative Graph executor
+### TASK-047 — Mature the typed Creative Graph executor
 
-**Outcome:** validated graphs can execute reviewed nodes with branch/parallel/partial-rerun semantics while preserving underlying tool authority.
+**Outcome:** the minimal PHASE-03 executor is hardened for production-scale branch/parallel/partial-rerun usage while preserving underlying tool authority and without duplicating Scene/Game orchestration.
 
 **Steps:**
 
-- [ ] Resolve graph dependencies deterministically.
-- [ ] Start independent eligible nodes concurrently within existing job/admission bounds.
-- [ ] Record node run status, output asset IDs, QA, cost/compute metadata where available.
-- [ ] Mark invalidated descendants after input/Element revision changes.
-- [ ] Reuse accepted unaffected ancestors.
-- [ ] Support selected-node/subgraph/all-dirty execution.
-- [ ] Map every graph node to an existing reviewed capability/tool/effect rather than granting graph-wide authority.
+- [ ] Preserve the PHASE-03 dependency resolution, bounded concurrency, invalidation, and authority model as the single graph execution path.
+- [ ] Harden scheduling/recovery for larger graphs and mixed long-running jobs within existing admission bounds.
+- [ ] Enrich node run state with output Asset IDs, QA, cost/compute metadata, and failure classification where available.
+- [ ] Support selected-node/subgraph/all-dirty execution and production-grade resumability semantics.
+- [ ] Expand reusable accepted-output/cache behavior only where lineage and selected revisions make reuse safe.
+- [ ] Map every graph node to an existing reviewed capability/tool/effect rather than granting graph-wide authority; do not create a second Scene/Game-specific DAG engine.
 
 **Validation:** representative scene, anime, and game graphs branch and partial-rerun correctly; a high-risk Blender node still requires the same approval as direct invocation.
 
@@ -2753,19 +2763,8 @@ Plan 069 implementation is complete only when:
 42. A generic external MCP client can complete the parity acceptance journey—discover capabilities/execution bindings/workflows, upload/import, estimate, generate, receive media, transform, browse history, reuse an Asset/Element, run a caller-specified multi-step graph, and hit a budget denial—without Higgsfield, CLI, local shell, arbitrary host paths, or an MCP-owned agent/model router.
 43. Operator-only actions such as executor/provider/model installation, Blender/add-on setup, relay restart, production deployment credentials, or external public publishing are reported explicitly and are not performed implicitly by Plan 069 MCP runtime.
 
-## Current execution state
+## Historical consolidation note — non-authoritative
 
-As of 2026-09-13:
+Earlier Plan 069 drafts, release branches, planning SHAs, and numbered tool-catalog snapshots are preserved only for audit/history. They are **not** alternate active implementations or versions. Git history is the source for detailed chronology.
 
-- `origin/main` is `e13bd38666ec4cb100ae713bd8272426db209d0e` at the planning baseline; implementation must re-audit current `main` again before source work;
-- Plan 069 did not exist on that `origin/main` baseline; 069 was the next unused numeric plan there;
-- the earlier Blender-only Plan 069 lived on the local `release/ai-tools-v0.0.15` branch and had no Blender source implementation started;
-- the retained Blender design still owns its loopback bridge, security, 11-tool surface, 3D/anime workflow guidance, attachment ingress, QA, asset I/O, and checkpoint decisions;
-- the first rewrite broadened the target to an anime-first Creative Production Platform, but this second review found that framing too narrow for the user's actual target;
-- the top-level product target is now explicitly **one Creative Production Platform with first-class Scene Studio, Anime Studio, and Game Studio tracks** over one shared Creative Project / Element Library / Capability / Job / Creative Graph / QA kernel;
-- public Higgsfield behavior was re-audited through its skills plus current Canvas, Popcorn, Cinema Studio, Elements, Soul Cast, and Games/Supercomputer documentation, and the plan now maps those product layers instead of comparing only MCP/CLI skills;
-- a third parity pass on 2026-09-13 audited the official Higgsfield MCP landing page/help-center flow and added missing utility/upload/history/cost/job/media-delivery coverage; a fourth 1:1 pass the same day corrected responsibility: Higgsfield's docs say the connected **agent** selects a model automatically, so Masih Awam MCP now exposes semantic capabilities plus opaque compatible execution bindings but owns **no agent/model/provider selection or skill-routing policy**;
-- Canvas-style graph execution, SceneBoard/Director **state contracts**, Elements, and Game build/playtest/multiplayer/deploy behavior remain first-class roadmap scope; AI planning/directing, agent choice, model/provider selection, prompt authoring, and fallback policy are explicitly upper-layer concerns;
-- Higgsfield remains a public behavioral/product benchmark only, not a runtime dependency;
-- game documentation currently shows an evolving command/project surface; the plan therefore freezes behavior contracts rather than copying transient Higgsfield command names;
-- no production implementation files were changed as part of these planning reviews; Plan 069 remains plan-only.
+The only active Plan 069 truth is this file plus the current `feat/plan-069-creative-core` implementation rebased conceptually on the reconciled `main` baseline above. The current architecture has one shared Scene/Anime/Game creative kernel, one runtime catalog composition path, one active Creative schema version (`1`), and one minimal Creative Graph executor that downstream phases must extend rather than replace.
