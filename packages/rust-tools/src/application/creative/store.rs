@@ -12,6 +12,7 @@ use crate::core::error::McpError;
 use serde_json::Value;
 
 mod assets;
+mod dependencies;
 mod io;
 mod support;
 mod templates;
@@ -260,29 +261,46 @@ pub fn promote_element_revision(
     validate_id(element_id, "element_id")?;
     validate_id(revision_id, "revision_id")?;
     let mut project = load_project(cwd, config, project_id)?;
-    let element = project
-        .elements
-        .iter_mut()
-        .find(|value| value.element_id == element_id)
-        .ok_or_else(|| McpError::InvalidRequest("unknown creative element".into()))?;
-    for revision in &mut element.revisions {
-        revision.state = if revision.revision_id == revision_id {
-            RevisionState::Accepted
-        } else if revision.state == RevisionState::Accepted {
-            RevisionState::Candidate
-        } else {
-            revision.state.clone()
-        };
-    }
-    if !element
-        .revisions
-        .iter()
-        .any(|value| value.revision_id == revision_id)
+    let (is_style, previous_selected) = {
+        let element = project
+            .elements
+            .iter_mut()
+            .find(|value| value.element_id == element_id)
+            .ok_or_else(|| McpError::InvalidRequest("unknown creative element".into()))?;
+        if !element
+            .revisions
+            .iter()
+            .any(|value| value.revision_id == revision_id)
+        {
+            return Err(McpError::InvalidRequest("unknown element revision".into()));
+        }
+        let previous_selected = element.selected_revision_id.clone();
+        for revision in &mut element.revisions {
+            revision.state = if revision.revision_id == revision_id {
+                RevisionState::Accepted
+            } else if revision.state == RevisionState::Accepted {
+                RevisionState::Candidate
+            } else {
+                revision.state.clone()
+            };
+        }
+        element.selected_revision_id = Some(revision_id.to_owned());
+        (element.kind == ElementKind::Style, previous_selected)
+    };
+    let timestamp = now_ms();
+    if is_style
+        && previous_selected
+            .as_deref()
+            .is_some_and(|value| value != revision_id)
     {
-        return Err(McpError::InvalidRequest("unknown element revision".into()));
+        dependencies::mark_style_dependents_for_review(
+            &mut project,
+            element_id,
+            revision_id,
+            timestamp,
+        )?;
     }
-    element.selected_revision_id = Some(revision_id.to_owned());
-    project.updated_at_ms = now_ms();
+    project.updated_at_ms = timestamp;
     save_project(cwd, config, &project)?;
     Ok(project)
 }

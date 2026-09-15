@@ -1,6 +1,6 @@
 use super::{apply_reference_tint, enforce_dimensions, id_array, load_asset_image};
 use crate::application::creative::contracts::{
-    AssetMetadata, AssetSource, AssetState, AssetSurface,
+    AssetMetadata, AssetSource, AssetState, AssetSurface, ElementKind,
 };
 use crate::application::creative::graph::{CreativeJobRecord, CreativeJobStatus, NodeRunRecord};
 use crate::application::creative::store::{self, AssetRegistrationInput};
@@ -41,6 +41,26 @@ pub(super) fn execute_reference_workflow(
         .and_then(Value::as_str)
         .ok_or_else(|| McpError::InvalidRequest("creative element_id is required".into()))?;
     crate::application::creative::validate_id(element_id, "element_id")?;
+    let style_element_id = job
+        .execution_parameters
+        .get("style_element_id")
+        .and_then(Value::as_str);
+    if let Some(style_element_id) = style_element_id {
+        crate::application::creative::validate_id(style_element_id, "style_element_id")?;
+        let project = store::load_project(cwd, config, &job.project_id)?;
+        let style = project
+            .element(style_element_id)
+            .ok_or_else(|| McpError::InvalidRequest("unknown style element".into()))?;
+        if style.kind != ElementKind::Style {
+            return Err(McpError::InvalidRequest(
+                "style_element_id must reference a Style Element".into(),
+            ));
+        }
+    }
+    let dependency_element_ids = style_element_id
+        .map(str::to_owned)
+        .into_iter()
+        .collect::<Vec<_>>();
     let source = load_asset_image(cwd, config, &job.project_id, &parent_asset_id)?;
 
     let mut rendered = Vec::with_capacity(labels.len());
@@ -96,6 +116,7 @@ pub(super) fn execute_reference_workflow(
                 job_id: Some(job.job_id.clone()),
                 parent_asset_id: Some(parent_asset_id.clone()),
                 element_id: Some(element_id.to_owned()),
+                dependency_element_ids: dependency_element_ids.clone(),
                 metadata: AssetMetadata {
                     width: Some(variant.width),
                     height: Some(variant.height),
@@ -119,6 +140,7 @@ pub(super) fn execute_reference_workflow(
                 "inspection": "not_inspected",
                 "parent_asset_id": parent_asset_id,
                 "element_id": element_id,
+                "style_element_id": style_element_id,
                 "checksum_sha256": asset.checksum_sha256,
                 "width": variant.width,
                 "height": variant.height

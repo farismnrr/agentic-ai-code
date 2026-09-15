@@ -1796,7 +1796,9 @@ Steps:
 
 **Outcome:** style changes identify affected downstream assets rather than silently drifting the project.
 
-**Validation:** palette/line/material rule change marks dependent candidate assets/shots for review while preserving accepted unrelated state.
+**Implementation:** COMPLETE on 2026-09-15. Assets can carry bounded validated `dependency_element_ids`; Character/Anime reference workflows declare the selected Style Element separately from their primary Character Element binding. Promoting a different accepted Style revision creates bounded `style_dependency` soft-review findings for only declared dependent Assets and Scene shots using that Style Element, without automatically changing Asset acceptance state or unrelated project state. Re-promoting the same Style revision is idempotent and does not duplicate findings; review-capacity overflow fails closed.
+
+**Validation:** deterministic acceptance changes palette rules on a persisted Style Element after creating style-dependent character reference Assets and a valid Scene/shot fixture. Dependent candidate Assets and the affected shot receive soft review findings, an unrelated accepted Asset remains accepted and unflagged, and repeated promotion of the same revision leaves finding count unchanged. Creative suite: 23/23 PASS; fast guardrail PASS.
 
 **Commit boundary:** `feat(creative): track style dependencies`.
 

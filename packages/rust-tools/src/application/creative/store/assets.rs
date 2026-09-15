@@ -3,7 +3,7 @@ use super::support::{new_id, validate_media_type};
 use super::{load_project, now_ms, MAX_REGISTER_ASSET_BYTES, STATE_PREFIX};
 use crate::application::creative::contracts::{
     validate_id, AssetMetadata, AssetRecord, AssetSource, AssetState, AssetSurface,
-    CreativeProject, MAX_PROJECT_ASSETS,
+    CreativeProject, MAX_ELEMENT_DEPENDENCIES, MAX_PROJECT_ASSETS,
 };
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
@@ -18,6 +18,7 @@ pub struct AssetRegistrationInput {
     pub job_id: Option<String>,
     pub parent_asset_id: Option<String>,
     pub element_id: Option<String>,
+    pub dependency_element_ids: Vec<String>,
     pub metadata: AssetMetadata,
 }
 
@@ -103,6 +104,22 @@ pub fn register_asset(
             return Err(McpError::InvalidRequest("unknown asset element".into()));
         }
     }
+    if input.dependency_element_ids.len() > MAX_ELEMENT_DEPENDENCIES {
+        return Err(McpError::InvalidRequest(
+            "asset element dependency count exceeds maximum".into(),
+        ));
+    }
+    let mut dependency_ids = std::collections::HashSet::new();
+    for dependency_id in &input.dependency_element_ids {
+        validate_id(dependency_id, "asset dependency element id")?;
+        if !dependency_ids.insert(dependency_id.as_str())
+            || project.element(dependency_id).is_none()
+        {
+            return Err(McpError::InvalidRequest(
+                "asset element dependency is unknown or duplicated".into(),
+            ));
+        }
+    }
 
     let resolved = resolve_asset_path(cwd, config, &input.path)?;
     if resolved.relative == STATE_PREFIX
@@ -134,6 +151,7 @@ pub fn register_asset(
         job_id: input.job_id,
         parent_asset_id: input.parent_asset_id,
         element_id: input.element_id,
+        dependency_element_ids: input.dependency_element_ids,
         metadata: input.metadata,
         created_at_ms: now_ms(),
     });

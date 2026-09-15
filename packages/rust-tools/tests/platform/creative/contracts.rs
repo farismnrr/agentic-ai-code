@@ -69,6 +69,7 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
             job_id: Some("job_voice".into()),
             parent_asset_id: None,
             element_id: Some("voice".into()),
+            dependency_element_ids: vec!["look".into()],
             metadata: AssetMetadata {
                 duration_ms: Some(2_000),
                 language: Some("en".into()),

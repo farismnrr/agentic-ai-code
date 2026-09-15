@@ -96,6 +96,7 @@ pub fn execute_media_job(
             job_id: Some(job.job_id.clone()),
             parent_asset_id: result.parent_asset_id,
             element_id: result.element_id,
+            dependency_element_ids: result.dependency_element_ids,
             metadata: AssetMetadata {
                 width: Some(result.width),
                 height: Some(result.height),
@@ -123,6 +124,7 @@ struct RenderResult {
     role: String,
     parent_asset_id: Option<String>,
     element_id: Option<String>,
+    dependency_element_ids: Vec<String>,
 }
 
 fn render(
@@ -133,6 +135,9 @@ fn render(
 ) -> Result<RenderResult, McpError> {
     let params = &job.execution_parameters;
     let element_id = optional_id(params, "element_id")?;
+    let dependency_element_ids = optional_id(params, "style_element_id")?
+        .into_iter()
+        .collect::<Vec<_>>();
     let (image, parent_asset_id) = match capability_id {
         "image.generate" => {
             let (width, height) = requested_dimensions(
@@ -239,6 +244,7 @@ fn render(
         role: capability_id.replace('.', "_"),
         parent_asset_id,
         element_id,
+        dependency_element_ids,
     })
 }
 

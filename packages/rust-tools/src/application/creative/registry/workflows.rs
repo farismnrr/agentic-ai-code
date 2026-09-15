@@ -11,6 +11,7 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
                 "type":"object",
                 "properties":{
                     "element_id": id_schema(),
+                    "style_element_id": id_schema(),
                     "reference_asset_ids": id_array(1, 16),
                     "views":{"type":"array","minItems":2,"maxItems":12,"uniqueItems":true,"items":short_string(64)},
                     "prompt": free_text(4096)
@@ -28,6 +29,7 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
                 "type":"object",
                 "properties":{
                     "element_id": id_schema(),
+                    "style_element_id": id_schema(),
                     "reference_asset_ids": id_array(1, 16),
                     "expressions":{"type":"array","minItems":1,"maxItems":32,"uniqueItems":true,"items":short_string(96)}
                 },

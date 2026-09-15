@@ -183,6 +183,12 @@ fn asset_tool() -> Tool {
                 "job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "parent_asset_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "element_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "dependency_element_ids": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
                 "metadata": {
                     "type": "object",
                     "properties": {

@@ -277,6 +277,7 @@ pub fn complete_upload(
             job_id: None,
             parent_asset_id: None,
             element_id: None,
+            dependency_element_ids: Vec::new(),
             metadata: AssetMetadata::default(),
         },
     )?;
@@ -388,6 +389,7 @@ pub async fn import_url(
             job_id: None,
             parent_asset_id: request.parent_asset_id,
             element_id: request.element_id,
+            dependency_element_ids: Vec::new(),
             metadata: AssetMetadata::default(),
         },
     )?;

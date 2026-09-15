@@ -45,6 +45,8 @@ pub(in crate::application::creative) async fn asset(
                     job_id: None,
                     parent_asset_id: optional_string(arguments, "parent_asset_id"),
                     element_id: optional_string(arguments, "element_id"),
+                    dependency_element_ids: parse_optional(arguments, "dependency_element_ids")?
+                        .unwrap_or_default(),
                     metadata: parse_optional(arguments, "metadata")?.unwrap_or_default(),
                 },
             )?;

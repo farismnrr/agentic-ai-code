@@ -1,6 +1,7 @@
 use super::validate_text;
 use crate::application::creative::contracts::{
     AssetMetadata, AssetRecord, AssetSource, AssetSurface, CreativeProject,
+    MAX_ELEMENT_DEPENDENCIES,
 };
 use crate::core::error::McpError;
 use std::collections::HashSet;
@@ -61,6 +62,21 @@ pub(super) fn validate_asset(
         if project.element(element_id).is_none() {
             return Err(McpError::InvalidRequest(
                 "asset element binding references an unknown element".into(),
+            ));
+        }
+    }
+    if asset.dependency_element_ids.len() > MAX_ELEMENT_DEPENDENCIES {
+        return Err(McpError::InvalidRequest(
+            "asset element dependency count exceeds maximum".into(),
+        ));
+    }
+    let mut dependencies = HashSet::new();
+    for dependency_id in &asset.dependency_element_ids {
+        super::validate_id(dependency_id, "asset dependency element id")?;
+        if !dependencies.insert(dependency_id.as_str()) || project.element(dependency_id).is_none()
+        {
+            return Err(McpError::InvalidRequest(
+                "asset element dependency is unknown or duplicated".into(),
             ));
         }
     }
