@@ -5,7 +5,6 @@ use super::{
 use crate::application::execution::{kill_process_group, resolve_safe_executable};
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
-use crate::core::workspace_path::resolve_contained_cwd;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -290,13 +289,13 @@ fn ensure_enabled(config: &ServerConfig) -> Result<(), McpError> {
 }
 
 fn project_root(cwd: Option<&str>, config: &ServerConfig) -> Result<PathBuf, McpError> {
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::InvalidRequest("execution root is unavailable".into()))?;
-    resolve_contained_cwd(&root, cwd)
+    super::resolve_project_root(cwd, config)
 }
 
-fn ensure_project_layout(cwd: Option<&str>, config: &ServerConfig) -> Result<(), McpError> {
+pub(super) fn ensure_project_layout(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+) -> Result<(), McpError> {
     for path in [
         "blender/scenes/.relay-layout",
         "blender/assets/.relay-layout",

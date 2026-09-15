@@ -1878,7 +1878,9 @@ Steps:
 
 **Outcome:** session status, inspection scopes, version-aligned API/manual lookup, screenshots, animation previews, and bounded render previews work without arbitrary Python input; previews materialized by the workflow remain under `<project>/blender/renders/preview/` or another frozen Blender-subtree path.
 
-**Validation:** fake-bridge integration tests cover every scope/result transformation and preview bound.
+**Implementation:** COMPLETE on 2026-09-15. `blender_inspect` covers all frozen scene/object/mesh/uv/rig/animation/material/nodes/physics/asset/render/character scopes through relay-authored bounded `bpy` programs; `blender_python_api_docs` performs bounded live `bpy` namespace introspection and reports the matching Blender-version API documentation base without granting network authority. Screenshot and sampled animation-preview tools write only project-contained PNGs under `blender/renders/preview/`, enforce frame/dimension/total-pixel/file-size bounds, reject existing/symlink/escaped targets, decode the resulting image, and return relative-path/dimension/byte/SHA-256 evidence.
+
+**Validation:** deterministic fake-bridge acceptance exercises every frozen inspection scope plus version-aligned docs, contained screenshot, sampled temporal preview, checksums, invalid docs namespace rejection, and overwrite refusal. Blender-focused platform tests: 6/6 PASS; fast guardrail and maintainability PASS.
 
 **Commit boundary:** `feat(blender): add structured production reads`.
 

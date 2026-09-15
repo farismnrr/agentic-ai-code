@@ -4,9 +4,12 @@ use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 mod bridge;
+mod knowledge;
+mod preview;
+mod reads;
 mod session;
 
 pub const BLENDER_LAB_PROTOCOL: &str = "blender_lab_json_nul_v1";
@@ -89,6 +92,16 @@ pub fn bridge_address(config: &ServerConfig) -> SocketAddrV4 {
     SocketAddrV4::new(Ipv4Addr::LOCALHOST, config.blender_bridge_port)
 }
 
+pub(super) fn resolve_project_root(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+) -> Result<PathBuf, McpError> {
+    let root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::InvalidRequest("execution root is unavailable".into()))?;
+    crate::core::workspace_path::resolve_contained_cwd(&root, cwd)
+}
+
 pub fn artifact_relative_path(
     scope: BlenderArtifactScope,
     file_name: &str,
@@ -169,24 +182,85 @@ pub async fn dispatch_tool(
     if !tool_name.starts_with("blender_") {
         return Ok(None);
     }
-    if tool_name != "blender_session" {
-        return Ok(None);
-    }
     let cwd = required_str(arguments, "cwd")?;
     let project_id = required_str(arguments, "project_id")?;
     crate::application::creative::require_project(Some(cwd), config, project_id)?;
-    let action = required_str(arguments, "action")?;
-    let status = match action {
-        "status" => session::status(Some(cwd), config, owner, project_id).await?,
-        "start" => session::start(Some(cwd), config, owner, project_id).await?,
-        "stop" => session::stop(Some(cwd), config, owner, project_id).await?,
-        _ => {
-            return Err(McpError::InvalidRequest(
-                "unsupported Blender session action".into(),
-            ))
+    match tool_name {
+        "blender_session" => {
+            let action = required_str(arguments, "action")?;
+            let status = match action {
+                "status" => session::status(Some(cwd), config, owner, project_id).await?,
+                "start" => session::start(Some(cwd), config, owner, project_id).await?,
+                "stop" => session::stop(Some(cwd), config, owner, project_id).await?,
+                _ => {
+                    return Err(McpError::InvalidRequest(
+                        "unsupported Blender session action".into(),
+                    ))
+                }
+            };
+            complete(json!({"session": status})).map(Some)
         }
-    };
-    complete(json!({"session": status})).map(Some)
+        "blender_inspect" => {
+            let scope = required_str(arguments, "scope")?;
+            let target = arguments.get("target").and_then(Value::as_str);
+            let detail = arguments
+                .get("detail")
+                .and_then(Value::as_str)
+                .unwrap_or("standard");
+            complete(json!({"inspection": reads::inspect(config, scope, target, detail).await?}))
+                .map(Some)
+        }
+        "blender_python_api_docs" => {
+            let query = required_str(arguments, "query")?;
+            let module = arguments.get("module").and_then(Value::as_str);
+            let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(8) as usize;
+            complete(json!({"docs": knowledge::lookup(config, query, module, limit).await?}))
+                .map(Some)
+        }
+        "blender_screenshot" => {
+            let source = arguments
+                .get("source")
+                .and_then(Value::as_str)
+                .unwrap_or("viewport");
+            let width = arguments
+                .get("width")
+                .and_then(Value::as_u64)
+                .unwrap_or(1024) as u32;
+            let height = arguments
+                .get("height")
+                .and_then(Value::as_u64)
+                .unwrap_or(1024) as u32;
+            let save_name = arguments.get("save_name").and_then(Value::as_str);
+            complete(
+                preview::screenshot(Some(cwd), config, source, width, height, save_name).await?,
+            )
+            .map(Some)
+        }
+        "blender_animation_preview" => {
+            let start_frame = required_i64(arguments, "start_frame")? as i32;
+            let end_frame = required_i64(arguments, "end_frame")? as i32;
+            let request = preview::AnimationPreviewRequest {
+                start_frame,
+                end_frame,
+                step: arguments.get("step").and_then(Value::as_u64).unwrap_or(1) as u32,
+                max_frames: arguments
+                    .get("max_frames")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(48) as usize,
+                width: arguments
+                    .get("width")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(640) as u32,
+                height: arguments
+                    .get("height")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(360) as u32,
+                save_name: arguments.get("save_name").and_then(Value::as_str),
+            };
+            complete(preview::animation_preview(Some(cwd), config, request).await?).map(Some)
+        }
+        _ => Ok(None),
+    }
 }
 
 fn required_str<'a>(arguments: &'a Value, field: &str) -> Result<&'a str, McpError> {
@@ -194,6 +268,13 @@ fn required_str<'a>(arguments: &'a Value, field: &str) -> Result<&'a str, McpErr
         .get(field)
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
+        .ok_or_else(|| McpError::InvalidRequest(format!("Blender {field} is required")))
+}
+
+fn required_i64(arguments: &Value, field: &str) -> Result<i64, McpError> {
+    arguments
+        .get(field)
+        .and_then(Value::as_i64)
         .ok_or_else(|| McpError::InvalidRequest(format!("Blender {field} is required")))
 }
 
