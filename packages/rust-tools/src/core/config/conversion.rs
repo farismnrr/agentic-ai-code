@@ -35,6 +35,7 @@ impl From<&Cli> for ServerConfig {
             lsp_servers: cli.lsp_servers.clone(),
             enable_creative: cli.enable_creative,
             creative_binding_descriptors: cli.creative_binding_descriptors.clone(),
+            creative_binding_backends: cli.creative_binding_backends.clone(),
             creative_approval_compute_units: cli.creative_approval_compute_units,
             creative_job_hard_compute_units: cli.creative_job_hard_compute_units,
             creative_project_hard_compute_units: cli.creative_project_hard_compute_units,

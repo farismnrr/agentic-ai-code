@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 mod activity;
 mod cli;
 mod conversion;
+mod creative;
+mod defaults;
 mod lsp;
 mod ssh;
 pub use activity::ActivityConfig;
@@ -55,6 +57,9 @@ pub struct ServerConfig {
     /// Operator-supplied bounded JSON descriptors for discoverable Creative execution bindings.
     /// Descriptors never contain endpoints or credentials and never imply a default route.
     pub creative_binding_descriptors: Vec<String>,
+    /// Operator-only execution backend implementations keyed by binding ID.
+    /// This state is never exposed through Creative discovery responses.
+    pub creative_binding_backends: Vec<String>,
     /// Compute units above which Creative submit requires explicit caller approval.
     pub creative_approval_compute_units: u64,
     /// Hard per-job compute ceiling. Caller approval cannot override this maximum.
@@ -79,61 +84,11 @@ pub struct ServerConfig {
     pub workspaces:
         std::sync::Arc<std::sync::RwLock<crate::core::workspace_path::WorkspaceAllowlist>>,
 }
-fn default_workspaces(
+pub(super) fn default_workspaces(
 ) -> std::sync::Arc<std::sync::RwLock<crate::core::workspace_path::WorkspaceAllowlist>> {
     std::sync::Arc::new(std::sync::RwLock::new(
         crate::core::workspace_path::WorkspaceAllowlist::default(),
     ))
-}
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            port: DEFAULT_PORT,
-            mode: SecurityMode::Local,
-            dir: None,
-            origin: None,
-            allowed_hosts: Vec::new(),
-            oauth_secret: None,
-            oauth_issuer: None,
-            oauth_audience: None,
-            oauth_owner_subject: None,
-            execution_root: None,
-            bind_host: "127.0.0.1".into(),
-            trusted_proxy: false,
-            trusted_proxy_cidr: None,
-            default_terminal_timeout_ms: 30_000,
-            max_terminal_timeout_ms: 0,
-            completed_job_ttl_ms: 3_600_000,
-            max_retained_output_bytes: 1_048_576,
-            max_running_jobs: 16,
-            allow_terminal_network: false,
-            allow_ssh: false,
-            ssh_root: None,
-            ssh_config: None,
-            ssh_readonly_db_user: None,
-            ssh_readonly_redis_user: None,
-            allow_docker: false,
-            docker_socket: "/var/run/docker.sock".into(),
-            allow_tailscale: false,
-            tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
-            toolchain_paths: Vec::new(),
-            lsp_servers: Vec::new(),
-            enable_creative: false,
-            creative_binding_descriptors: Vec::new(),
-            creative_approval_compute_units: 5_000,
-            creative_job_hard_compute_units: 50_000,
-            creative_project_hard_compute_units: 500_000,
-            creative_max_job_output_bytes: 64 * 1024 * 1024,
-            creative_max_concurrent_jobs: 4,
-            creative_max_retries: 2,
-            enable_agent_hooks: false,
-            agent_hooks_config: None,
-            tool_profile: ToolProfile::Full,
-            activity: ActivityConfig::default(),
-            telegram_enabled: false,
-            workspaces: default_workspaces(),
-        }
-    }
 }
 impl ServerConfig {
     /// Resolve the primary workspace root: the configured root, or
@@ -392,26 +347,7 @@ impl ServerConfig {
                 "max_retained_output_bytes must be non-zero".into(),
             ));
         }
-        if self.creative_job_hard_compute_units == 0
-            || self.creative_project_hard_compute_units < self.creative_job_hard_compute_units
-            || self.creative_max_job_output_bytes == 0
-            || self.creative_max_concurrent_jobs == 0
-            || self.creative_max_retries > 16
-            || self.creative_approval_compute_units > self.creative_job_hard_compute_units
-        {
-            return Err(RelayError::InvalidConfig(
-                "creative job/budget limits are invalid".into(),
-            ));
-        }
-        if self.creative_binding_descriptors.len() > 32
-            || self.creative_binding_descriptors.iter().any(|value| {
-                value.is_empty() || value.len() > 16 * 1024 || value.chars().any(char::is_control)
-            })
-        {
-            return Err(RelayError::InvalidConfig(
-                "creative binding descriptors exceed allowed bounds".into(),
-            ));
-        }
+        creative::validate(self)?;
         activity::validate(&self.activity)?;
         if self.allow_ssh {
             if self

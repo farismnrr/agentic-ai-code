@@ -246,6 +246,44 @@ Provider-specific coding-CLI delegation is not part of the current relay
 surface. Long-running eligible tools use the standard MCP Tasks contract and
 the explicit `execution_mode` described above.
 
+### Creative execution bindings
+
+Creative production remains disabled unless `RELAY_ENABLE_CREATIVE=true` (or
+`--enable-creative`) is set before relay startup. Public binding discovery and
+private execution configuration are intentionally separate. A discoverable
+binding descriptor contains semantic capabilities and bounded constraints only;
+it must not contain endpoints, credentials, executable paths, command payloads,
+or a product-wide default provider/model. Register descriptors with repeated
+`--creative-binding` flags or the semicolon-separated
+`RELAY_CREATIVE_BINDING` value.
+
+A concrete implementation is mapped separately with repeated
+`--creative-binding-backend binding_id=backend_kind` flags or
+`RELAY_CREATIVE_BINDING_BACKEND`. The initial built-in conformance backend is
+`local_raster`, a pure-Rust contained PNG backend for the reviewed image
+capabilities. It creates candidate Assets under the selected Creative project's
+contained `creative/<project_id>/assets/generated/` subtree and preserves job,
+parent-Asset, and optional Element lineage. It is intentionally a deterministic
+local conformance/utility backend, not an AI image model and not a subjective
+quality guarantee.
+
+Example operator configuration:
+
+```text
+RELAY_ENABLE_CREATIVE=true
+RELAY_CREATIVE_BINDING={"binding_id":"binding_local_raster","binding_version":"local-raster-v1","capabilities":["image.generate","image.reference_generate","image.edit","image.inpaint","image.upscale","image.remove_background","image.outpaint"],"media_roles":["image","reference_image","mask"],"extension_schema":{"type":"object","additionalProperties":false},"constraints":{"max_width":4096,"max_height":4096,"estimate":{"base_compute_units":10,"base_output_bytes":4096}},"estimate_available":true,"availability":"available"}
+RELAY_CREATIVE_BINDING_BACKEND=binding_local_raster=local_raster
+```
+
+Creative admission limits are separately operator-controlled through
+`RELAY_CREATIVE_APPROVAL_COMPUTE_UNITS`,
+`RELAY_CREATIVE_JOB_HARD_COMPUTE_UNITS`,
+`RELAY_CREATIVE_PROJECT_HARD_COMPUTE_UNITS`,
+`RELAY_CREATIVE_MAX_JOB_OUTPUT_BYTES`,
+`RELAY_CREATIVE_MAX_CONCURRENT_JOBS`, and `RELAY_CREATIVE_MAX_RETRIES`.
+Approval can cross only the soft approval threshold; it never overrides a hard
+limit.
+
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
 `RELAY_ALLOW_DOCKER=true` is an explicit local-development escape hatch. It permits the `docker` CLI and bind-mounts the host Docker daemon socket into the terminal sandbox. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Docker daemon access can provide host-level authority, so the default remains disabled and it should only be enabled for a trusted single-owner coding relay.

@@ -51,6 +51,20 @@ pub struct ElementRevisionInput {
     pub spec: Value,
 }
 
+pub fn resolve_registered_asset_path(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<std::path::PathBuf, McpError> {
+    validate_id(asset_id, "asset_id")?;
+    let project = load_project(cwd, config, project_id)?;
+    let asset = project
+        .asset(asset_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
+    Ok(io::resolve_asset_path(cwd, config, &asset.relative_path)?.absolute)
+}
+
 pub fn project_layout(project_id: &str) -> Result<CreativeProjectLayout, McpError> {
     validate_id(project_id, "project_id")?;
     let state_root = format!("{STATE_PREFIX}/projects/{project_id}");

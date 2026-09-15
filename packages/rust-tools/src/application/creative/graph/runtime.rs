@@ -124,6 +124,7 @@ fn execute_graph_internal(
         updated_at_ms: now_ms,
         node_runs: Vec::new(),
         output_asset_ids: Vec::new(),
+        actual_output_bytes: None,
         failure_code: None,
     };
     if !validation.valid {

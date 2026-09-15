@@ -72,6 +72,42 @@ fn cli_accepts_explicit_bind_host_and_preserves_it_in_server_config() {
 }
 
 #[test]
+fn creative_backend_mapping_is_operator_only_bounded_and_validated() {
+    let cli = Cli::try_parse_from([
+        "ai-tools",
+        "--creative-binding-backend",
+        "binding_local_raster=local_raster",
+    ])
+    .expect("creative backend mapping should be a supported operator option");
+    let config = ServerConfig::from(&cli);
+    assert_eq!(
+        config.creative_binding_backends,
+        vec!["binding_local_raster=local_raster"]
+    );
+    assert!(config.validate().is_ok());
+
+    for mapping in [
+        "missing_separator",
+        "binding=unknown_backend",
+        "../escape=local_raster",
+    ] {
+        let config = ServerConfig {
+            creative_binding_backends: vec![mapping.into()],
+            ..ServerConfig::default()
+        };
+        assert!(
+            config.validate().is_err(),
+            "accepted invalid mapping: {mapping}"
+        );
+    }
+    let duplicate = ServerConfig {
+        creative_binding_backends: vec!["same=local_raster".into(), "same=local_raster".into()],
+        ..ServerConfig::default()
+    };
+    assert!(duplicate.validate().is_err());
+}
+
+#[test]
 fn telegram_credentials_are_not_cli_arguments() {
     let parsed = Cli::try_parse_from([
         "ai-tools",

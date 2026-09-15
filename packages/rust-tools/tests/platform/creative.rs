@@ -4,8 +4,12 @@ mod contracts;
 mod graph;
 #[path = "creative/ingest.rs"]
 mod ingest;
+#[path = "creative/job_execution.rs"]
+mod job_execution;
 #[path = "creative/jobs.rs"]
 mod jobs;
+#[path = "creative/media.rs"]
+mod media;
 #[path = "creative/workflows.rs"]
 mod workflows;
 

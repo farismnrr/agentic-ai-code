@@ -348,7 +348,7 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-pub(super) async fn handle_agent_session_start(
+pub(crate) async fn handle_agent_session_start(
     request: &mcp::Request,
     state: Arc<AppState>,
 ) -> JsonErr2 {
@@ -418,7 +418,7 @@ pub(super) fn bounded_tool_error(
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-pub(super) async fn handle_agent_pre_stop(
+pub(crate) async fn handle_agent_pre_stop(
     request: &mcp::Request,
     state: Arc<AppState>,
 ) -> JsonErr2 {

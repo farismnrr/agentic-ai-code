@@ -1734,14 +1734,14 @@ Steps:
 
 **Steps:**
 
-- [ ] Freeze one provider/model-neutral execution-binding interface for media operations before choosing any conformance implementation.
-- [ ] Confirm each registered binding's operator setup, endpoint policy, executable/plugin trust model, result format, cancellation, license metadata, and credentials remain implementation details.
-- [ ] Implement/route supported image capabilities through the same job/lineage contract: generate, reference-generate, edit/inpaint, upscale, remove-background, and outpaint; pose/depth controls remain capability-gated per binding.
-- [ ] Make execution-binding discovery expose supported utility/reference roles and validated extensions without changing semantic tool names.
-- [ ] Keep arbitrary executor-native graphs/custom code disabled in ordinary capability calls.
-- [ ] Add operator registration/configuration docs without declaring a product-wide default provider/model.
+- [x] Freeze one provider/model-neutral execution-binding interface for media operations before choosing any conformance implementation.
+- [x] Confirm each registered binding's operator setup, endpoint policy, executable/plugin trust model, result format, cancellation, license metadata, and credentials remain implementation details. *(Public descriptors stay semantic/credential-free; operator-only backend mapping is separate.)*
+- [x] Implement/route supported image capabilities through the same job/lineage contract: generate, reference-generate, edit/inpaint, upscale, remove-background, and outpaint; pose/depth controls remain capability-gated per binding.
+- [x] Make execution-binding discovery expose supported utility/reference roles and validated extensions without changing semantic tool names.
+- [x] Keep arbitrary executor-native graphs/custom code disabled in ordinary capability calls.
+- [x] Add operator registration/configuration docs without declaring a product-wide default provider/model.
 
-**Validation:** one fake binding plus at least one operator-selected conformance binding pass the same contract tests for reference generation and child-asset transforms; replacing the binding requires no MCP schema/tool-name changes and no Higgsfield dependency.
+**Validation:** 2026-09-15 acceptance uses the existing debug/test conformance binding for generic lifecycle semantics and an operator-selected `binding_local_raster=local_raster` implementation for real contained image execution. All seven reviewed image capabilities produce decodable PNG candidate Assets through the same submit/wait contract with job/parent/Element lineage and bounded dimensions/output bytes; removing the private backend mapping fails closed with `execution_not_implemented`. Public tool/capability names remain unchanged and no provider/model/Higgsfield dependency is introduced. Dependency audit additionally upgraded `rustls` to 0.23.45 and `chacha20` to 0.10.2; `cargo audit` reports no findings.
 
 **Commit boundary:** `feat(creative): add media execution binding`.
 

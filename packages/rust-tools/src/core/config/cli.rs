@@ -198,6 +198,15 @@ pub struct Cli {
     )]
     pub creative_binding_descriptors: Vec<String>,
 
+    /// Operator-only execution backend mappings (`binding_id=backend_kind`).
+    /// Backend details are never exposed through Creative discovery responses.
+    #[arg(
+        long = "creative-binding-backend",
+        env = "RELAY_CREATIVE_BINDING_BACKEND",
+        value_delimiter = ';'
+    )]
+    pub creative_binding_backends: Vec<String>,
+
     /// Creative compute threshold requiring explicit submit approval.
     #[arg(
         long,

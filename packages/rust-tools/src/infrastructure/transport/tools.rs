@@ -21,18 +21,7 @@ use tool_helpers::{
     record_activity_outcome, requires_idempotency_key,
 };
 pub(super) type JsonErr2 = Result<Json<Value>, JsonErr>;
-pub(super) async fn handle_agent_session_start(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-) -> JsonErr2 {
-    tool_helpers::handle_agent_session_start(request, state).await
-}
-pub(super) async fn handle_agent_pre_stop(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-) -> JsonErr2 {
-    tool_helpers::handle_agent_pre_stop(request, state).await
-}
+pub(crate) use tool_helpers::{handle_agent_pre_stop, handle_agent_session_start};
 pub(super) async fn handle_tools_call(
     request: &mcp::Request,
     state: Arc<AppState>,
