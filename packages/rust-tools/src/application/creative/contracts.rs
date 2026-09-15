@@ -15,6 +15,10 @@ pub const MAX_PROJECT_GRAPHS: usize = 1_024;
 pub const MAX_PROJECT_JOBS: usize = 4_096;
 pub const MAX_REVISIONS_PER_ELEMENT: usize = 128;
 pub const MAX_REFERENCES_PER_REVISION: usize = 64;
+pub const MAX_SCENE_SHOTS: usize = 256;
+pub const MAX_GAME_LIST_ITEMS: usize = 128;
+pub const MAX_GAME_ASSET_ROLES: usize = 512;
+pub const MAX_AUDIO_CUES: usize = 512;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

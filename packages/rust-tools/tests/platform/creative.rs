@@ -1,7 +1,9 @@
-use ai_tools::application::creative::{
-    dispatch_tool, CreativeGraph, CreativeTrack, GraphEdge, GraphNode, GraphNodeKind,
-    CREATIVE_SCHEMA_VERSION,
-};
+#[path = "creative/contracts.rs"]
+mod contracts;
+#[path = "creative/graph.rs"]
+mod graph;
+
+use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};
 use ai_tools::interfaces::mcp::{
     retained_tool_catalog, runtime_tool_catalog, validate_tool_arguments,
@@ -291,131 +293,4 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
         &config,
     );
     assert!(state_registration.is_err());
-}
-
-#[test]
-fn graph_runtime_persists_control_flow_jobs_and_requires_explicit_bindings() {
-    let workspace = TempWorkspace::new();
-    let config = workspace.config();
-    create_project(&config, "project_graph");
-
-    let graph = CreativeGraph {
-        schema_version: CREATIVE_SCHEMA_VERSION,
-        graph_id: "graph_control".into(),
-        project_id: "project_graph".into(),
-        revision: 1,
-        nodes: vec![
-            GraphNode {
-                node_id: "brief".into(),
-                kind: GraphNodeKind::InputText,
-                execution_binding_id: None,
-                inputs: json!({"text": "approved caller-authored brief"}),
-            },
-            GraphNode {
-                node_id: "review".into(),
-                kind: GraphNodeKind::ExternalReviewGate,
-                execution_binding_id: None,
-                inputs: json!({"approved": true}),
-            },
-            GraphNode {
-                node_id: "qa".into(),
-                kind: GraphNodeKind::VisualEvidence,
-                execution_binding_id: None,
-                inputs: json!({}),
-            },
-        ],
-        edges: vec![
-            GraphEdge {
-                from_node: "brief".into(),
-                from_port: "output".into(),
-                to_node: "review".into(),
-                to_port: "input".into(),
-            },
-            GraphEdge {
-                from_node: "review".into(),
-                from_port: "output".into(),
-                to_node: "qa".into(),
-                to_port: "input".into(),
-            },
-        ],
-    };
-
-    let validation = call(
-        &config,
-        "creative_graph",
-        json!({"action": "validate", "graph": graph}),
-    );
-    assert_eq!(validation["validation"]["valid"], true);
-
-    let executed = call(
-        &config,
-        "creative_graph",
-        json!({"action": "execute", "graph": graph}),
-    );
-    let job_id = executed["job"]["job_id"].as_str().unwrap().to_owned();
-    assert_eq!(executed["job"]["status"], "completed");
-    assert_eq!(
-        executed["job"]["node_runs"].as_array().map(Vec::len),
-        Some(3)
-    );
-
-    let stored = call(
-        &config,
-        "creative_job",
-        json!({
-            "action": "get",
-            "project_id": "project_graph",
-            "job_id": job_id
-        }),
-    );
-    assert_eq!(stored["job"]["status"], "completed");
-
-    let generated_graph = CreativeGraph {
-        schema_version: CREATIVE_SCHEMA_VERSION,
-        graph_id: "graph_generate".into(),
-        project_id: "project_graph".into(),
-        revision: 1,
-        nodes: vec![GraphNode {
-            node_id: "generate".into(),
-            kind: GraphNodeKind::GenerateImage,
-            execution_binding_id: None,
-            inputs: json!({"prompt": "caller authored"}),
-        }],
-        edges: vec![],
-    };
-    let missing_binding = call(
-        &config,
-        "creative_graph",
-        json!({"action": "validate", "graph": generated_graph}),
-    );
-    assert_eq!(missing_binding["validation"]["valid"], false);
-    assert!(missing_binding["validation"]["diagnostics"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|item| item["code"] == "execution_binding_required"));
-
-    let unsafe_graph = CreativeGraph {
-        schema_version: CREATIVE_SCHEMA_VERSION,
-        graph_id: "graph_unsafe".into(),
-        project_id: "project_graph".into(),
-        revision: 1,
-        nodes: vec![GraphNode {
-            node_id: "unsafe".into(),
-            kind: GraphNodeKind::GenerateImage,
-            execution_binding_id: None,
-            inputs: json!({
-                "prompt": "caller authored",
-                "endpoint": "https://untrusted.example",
-                "token": "must-not-enter-graph-state"
-            }),
-        }],
-        edges: vec![],
-    };
-    assert!(dispatch_tool(
-        "creative_graph",
-        &json!({"action": "validate", "graph": unsafe_graph}),
-        &config,
-    )
-    .is_err());
 }

@@ -59,12 +59,17 @@ fn historical_catalog_snapshots_are_immutable() {
 }
 
 #[test]
-fn primary_profile_contains_only_the_fifteen_core_tools() {
+fn primary_profile_contains_the_retained_core_plus_creative_status() {
     let tools = runtime_tool_catalog(ToolProfile::Primary, false);
-    assert_eq!(tools.len(), 15);
+    assert_eq!(
+        tools.len(),
+        ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.len() + 1
+    );
+    assert!(tools.iter().any(|tool| tool.name == "creative_status"));
     assert!(tools
         .iter()
-        .all(|tool| ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.contains(&tool.name)));
+        .filter(|tool| tool.name != "creative_status")
+        .all(|tool| { ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.contains(&tool.name) }));
     assert!(!tools.iter().any(|tool| tool.name.starts_with("git_")));
     assert!(!tools.iter().any(|tool| tool.name.starts_with("code_")));
 }

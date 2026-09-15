@@ -4,6 +4,9 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Component, Path};
 
+mod assets;
+use assets::{validate_asset, validate_asset_lineage};
+
 impl CreativeProject {
     pub fn validate(&self) -> Result<(), McpError> {
         if self.schema_version != CREATIVE_SCHEMA_VERSION {
@@ -13,7 +16,7 @@ impl CreativeProject {
         }
         validate_id(&self.project_id, "project_id")?;
         validate_text(&self.title, 1, MAX_PROJECT_TITLE_BYTES, "project title")?;
-        validate_text(&self.intent, 1, MAX_PROJECT_INTENT_BYTES, "project intent")?;
+        validate_freeform_text(&self.intent, 1, MAX_PROJECT_INTENT_BYTES, "project intent")?;
         if self.tracks.is_empty() || self.tracks.len() > 3 {
             return Err(McpError::InvalidRequest(
                 "creative project tracks must contain one to three entries".into(),
@@ -84,6 +87,7 @@ impl CreativeProject {
         for asset in &self.assets {
             validate_asset(asset, self)?;
         }
+        validate_asset_lineage(self)?;
         for scene in &self.scenes {
             validate_scene(scene, self)?;
         }
@@ -169,98 +173,42 @@ fn validate_element(element: &ElementRecord, project: &CreativeProject) -> Resul
                 ));
             }
         }
-    }
-    if let Some(selected) = element.selected_revision_id.as_deref() {
-        if !element
-            .revisions
-            .iter()
-            .any(|revision| revision.revision_id == selected)
+        if revision.authority == ReferenceAuthority::Generated
+            && !revision.reference_asset_ids.iter().any(|asset_id| {
+                project
+                    .asset(asset_id)
+                    .is_some_and(|asset| asset.source == AssetSource::GeneratedAsset)
+            })
         {
             return Err(McpError::InvalidRequest(
-                "selected element revision does not exist".into(),
+                "generated element authority requires machine-produced asset provenance".into(),
             ));
         }
     }
-    Ok(())
-}
-
-fn validate_asset(asset: &AssetRecord, project: &CreativeProject) -> Result<(), McpError> {
-    validate_id(&asset.asset_id, "asset_id")?;
-    validate_text(&asset.media_type, 1, 128, "asset media type")?;
-    validate_text(&asset.role, 1, 128, "asset role")?;
-    validate_text(&asset.relative_path, 1, 4_096, "asset relative path")?;
-    let relative_path = Path::new(&asset.relative_path);
-    if relative_path.is_absolute()
-        || relative_path
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
+    if let Some(selected) = element.selected_revision_id.as_deref() {
+        let selected_revision = element
+            .revisions
+            .iter()
+            .find(|revision| revision.revision_id == selected)
+            .ok_or_else(|| {
+                McpError::InvalidRequest("selected element revision does not exist".into())
+            })?;
+        if selected_revision.state != RevisionState::Accepted {
+            return Err(McpError::InvalidRequest(
+                "selected element revision must be accepted".into(),
+            ));
+        }
+    }
+    if element
+        .revisions
+        .iter()
+        .filter(|revision| revision.state == RevisionState::Accepted)
+        .count()
+        > 1
     {
         return Err(McpError::InvalidRequest(
-            "asset relative path must contain only normal relative components".into(),
+            "element cannot contain multiple accepted revisions".into(),
         ));
-    }
-    if asset.checksum_sha256.len() != 64
-        || !asset
-            .checksum_sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err(McpError::InvalidRequest(
-            "asset checksum must be a SHA-256 hex digest".into(),
-        ));
-    }
-    validate_asset_metadata(&asset.metadata)?;
-    if let Some(job_id) = asset.job_id.as_deref() {
-        validate_id(job_id, "asset job id")?;
-        if !project.job_ids.iter().any(|value| value == job_id) {
-            return Err(McpError::InvalidRequest(
-                "asset job lineage references an unknown project job".into(),
-            ));
-        }
-    }
-    if let Some(parent_id) = asset.parent_asset_id.as_deref() {
-        if parent_id == asset.asset_id || project.asset(parent_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "asset parent must reference another project asset".into(),
-            ));
-        }
-    }
-    if let Some(element_id) = asset.element_id.as_deref() {
-        if project.element(element_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "asset element binding references an unknown element".into(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
-    if metadata
-        .width
-        .is_some_and(|value| value == 0 || value > 16_384)
-        || metadata
-            .height
-            .is_some_and(|value| value == 0 || value > 16_384)
-        || metadata
-            .duration_ms
-            .is_some_and(|value| value == 0 || value > 86_400_000)
-        || metadata
-            .frame_rate
-            .is_some_and(|value| !value.is_finite() || !(1.0..=240.0).contains(&value))
-        || metadata
-            .sample_rate_hz
-            .is_some_and(|value| !(8_000..=384_000).contains(&value))
-        || metadata
-            .channels
-            .is_some_and(|value| value == 0 || value > 32)
-    {
-        return Err(McpError::InvalidRequest(
-            "creative asset media metadata is outside allowed bounds".into(),
-        ));
-    }
-    if let Some(language) = metadata.language.as_deref() {
-        validate_text(language, 1, 32, "asset language")?;
     }
     Ok(())
 }
@@ -268,7 +216,13 @@ fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
 fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<(), McpError> {
     validate_id(&scene.scene_id, "scene_id")?;
     validate_text(&scene.title, 1, 200, "scene title")?;
+    if scene.shots.len() > MAX_SCENE_SHOTS {
+        return Err(McpError::InvalidRequest(
+            "scene shot count exceeds maximum".into(),
+        ));
+    }
     let mut shot_ids = HashSet::new();
+    let mut shot_orders = HashSet::new();
     for element_id in scene
         .cast_element_ids
         .iter()
@@ -283,11 +237,15 @@ fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<()
     }
     for shot in &scene.shots {
         validate_id(&shot.shot_id, "shot_id")?;
-        if !shot_ids.insert(shot.shot_id.as_str()) || shot.duration_ms == 0 {
+        if !shot_ids.insert(shot.shot_id.as_str())
+            || !shot_orders.insert(shot.order)
+            || shot.duration_ms == 0
+        {
             return Err(McpError::InvalidRequest(
                 "scene shot identity or duration is invalid".into(),
             ));
         }
+        validate_freeform_text(&shot.action, 0, 4_096, "shot action")?;
         validate_spec(&shot.continuity)?;
         for element_id in &shot.element_ids {
             if project.element(element_id).is_none() {
@@ -306,18 +264,51 @@ fn validate_game(game: &GameManifest, project: &CreativeProject) -> Result<(), M
         (&game.title, "game title"),
         (&game.genre, "game genre"),
         (&game.perspective, "game perspective"),
+    ] {
+        validate_text(value, 1, 4_096, label)?;
+    }
+    for (value, label) in [
         (&game.core_loop, "game core loop"),
         (&game.win_condition, "game win condition"),
         (&game.lose_condition, "game lose condition"),
         (&game.restart_behavior, "game restart behavior"),
     ] {
-        validate_text(value, 1, 4_096, label)?;
+        validate_freeform_text(value, 1, 4_096, label)?;
     }
     if let Some(style_id) = game.style_element_id.as_deref() {
         if project.element(style_id).is_none() {
             return Err(McpError::InvalidRequest(
                 "game style references an unknown element".into(),
             ));
+        }
+    }
+    if game.target_devices.len() > MAX_GAME_LIST_ITEMS
+        || game.verbs.len() > MAX_GAME_LIST_ITEMS
+        || game.inputs.len() > MAX_GAME_LIST_ITEMS
+        || game.asset_roles.len() > MAX_GAME_ASSET_ROLES
+    {
+        return Err(McpError::InvalidRequest(
+            "game manifest collection exceeds allowed bounds".into(),
+        ));
+    }
+    for value in game
+        .target_devices
+        .iter()
+        .chain(game.verbs.iter())
+        .chain(game.inputs.iter())
+    {
+        validate_text(value, 1, 128, "game manifest list item")?;
+    }
+    for role in &game.asset_roles {
+        validate_text(&role.role, 1, 128, "game asset role")?;
+        validate_relative_path(&role.runtime_path, "game runtime asset path")?;
+        if let Some(asset_id) = role.asset_id.as_deref() {
+            validate_id(asset_id, "game asset id")?;
+            if project.asset(asset_id).is_none() {
+                return Err(McpError::InvalidRequest(
+                    "game asset role references an unknown asset".into(),
+                ));
+            }
         }
     }
     Ok(())
@@ -332,8 +323,19 @@ fn validate_audio(audio: &AudioPlan, project: &CreativeProject) -> Result<(), Mc
             ));
         }
     }
+    if audio.cues.len() > MAX_AUDIO_CUES {
+        return Err(McpError::InvalidRequest(
+            "audio cue count exceeds maximum".into(),
+        ));
+    }
+    let mut cue_ids = HashSet::new();
     for cue in &audio.cues {
         validate_id(&cue.cue_id, "audio cue id")?;
+        if !cue_ids.insert(cue.cue_id.as_str()) {
+            return Err(McpError::InvalidRequest(
+                "duplicate audio cue identity".into(),
+            ));
+        }
         if let Some(asset_id) = cue.asset_id.as_deref() {
             if project.asset(asset_id).is_none() {
                 return Err(McpError::InvalidRequest(
@@ -342,7 +344,7 @@ fn validate_audio(audio: &AudioPlan, project: &CreativeProject) -> Result<(), Mc
             }
         }
         if let Some(text) = cue.text.as_deref() {
-            validate_text(text, 1, 4_096, "audio cue text")?;
+            validate_freeform_text(text, 1, 4_096, "audio cue text")?;
         }
     }
     Ok(())
@@ -381,7 +383,7 @@ fn validate_qa_finding(finding: &QaFinding) -> Result<(), McpError> {
     validate_id(&finding.finding_id, "QA finding id")?;
     validate_id(&finding.subject_id, "QA subject id")?;
     validate_text(&finding.domain, 1, 128, "QA domain")?;
-    validate_text(&finding.message, 1, 4_096, "QA message")
+    validate_freeform_text(&finding.message, 1, 4_096, "QA message")
 }
 
 fn validate_text(value: &str, min: usize, max: usize, field: &str) -> Result<(), McpError> {
@@ -391,6 +393,39 @@ fn validate_text(value: &str, min: usize, max: usize, field: &str) -> Result<(),
         )));
     }
     Ok(())
+}
+
+fn validate_freeform_text(
+    value: &str,
+    min: usize,
+    max: usize,
+    field: &str,
+) -> Result<(), McpError> {
+    if value.len() < min || value.len() > max || value.chars().any(is_disallowed_control) {
+        return Err(McpError::InvalidRequest(format!(
+            "{field} exceeds allowed bounds"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_relative_path(value: &str, field: &str) -> Result<(), McpError> {
+    validate_text(value, 1, 4_096, field)?;
+    let path = Path::new(value);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(McpError::InvalidRequest(format!(
+            "{field} must contain only normal relative components"
+        )));
+    }
+    Ok(())
+}
+
+fn is_disallowed_control(value: char) -> bool {
+    value.is_control() && !matches!(value, '\n' | '\r' | '\t')
 }
 
 fn ensure_unique<'a>(values: impl Iterator<Item = &'a str>, label: &str) -> Result<(), McpError> {

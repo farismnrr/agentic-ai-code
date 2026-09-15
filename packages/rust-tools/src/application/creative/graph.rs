@@ -374,6 +374,15 @@ fn validate_node(
                         Some(&node.node_id),
                     )),
                     Some(binding)
+                        if binding.availability != registry::BindingAvailability::Available =>
+                    {
+                        diagnostics.push(diagnostic(
+                            "execution_binding_unavailable",
+                            "selected execution binding is unavailable",
+                            Some(&node.node_id),
+                        ));
+                    }
+                    Some(binding)
                         if !binding
                             .capabilities
                             .iter()
