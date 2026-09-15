@@ -4,6 +4,7 @@ pub mod dispatcher;
 pub mod execution;
 pub mod workspace;
 
+pub mod blender;
 pub mod code;
 pub mod continuation;
 pub mod creative;

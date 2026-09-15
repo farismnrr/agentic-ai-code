@@ -18,6 +18,36 @@ fn remote_config() -> ServerConfig {
 }
 
 #[test]
+fn blender_operator_flags_are_explicit_bounded_and_require_creative() {
+    let cli = Cli::try_parse_from([
+        "ai-tools",
+        "--enable-creative",
+        "--enable-blender",
+        "--blender-executable",
+        "/opt/blender/blender",
+        "--blender-bridge-port",
+        "9988",
+        "--blender-bridge-timeout-ms",
+        "45000",
+    ])
+    .expect("Blender operator flags should parse");
+    let config = ServerConfig::from(&cli);
+    assert!(config.enable_creative);
+    assert!(config.enable_blender);
+    assert_eq!(
+        config.blender_executable.as_deref(),
+        Some("/opt/blender/blender")
+    );
+    assert_eq!(config.blender_bridge_port, 9988);
+    assert_eq!(config.blender_bridge_timeout_ms, 45_000);
+    config.validate().expect("bounded Blender operator config");
+
+    let blender_only = Cli::try_parse_from(["ai-tools", "--enable-blender"])
+        .expect("Blender enable flag should parse");
+    assert!(ServerConfig::from(&blender_only).validate().is_err());
+}
+
+#[test]
 fn relay_advertises_only_the_fully_implemented_modern_protocol() {
     assert_eq!(PROTOCOL_VERSION, "2026-07-28");
     assert!(LEGACY_PROTOCOL_VERSIONS.is_empty());

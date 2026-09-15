@@ -7,6 +7,7 @@
 use crate::core::error::RelayError;
 use serde::{Deserialize, Serialize};
 mod activity;
+mod blender;
 mod cli;
 mod conversion;
 mod creative;
@@ -54,6 +55,14 @@ pub struct ServerConfig {
     pub lsp_servers: Vec<String>,
     /// Optional first-party creative capability; activation changes require a restart.
     pub enable_creative: bool,
+    /// Optional first-party Blender production engine. Blender remains disabled by default.
+    pub enable_blender: bool,
+    /// Optional operator-approved Blender executable path/name. Callers never control this value.
+    pub blender_executable: Option<String>,
+    /// Official Blender Lab loopback bridge port. No host override exists; v1 is loopback-only.
+    pub blender_bridge_port: u16,
+    /// Bounded Blender Lab request/response timeout.
+    pub blender_bridge_timeout_ms: u64,
     /// Operator-supplied bounded JSON descriptors for discoverable Creative execution bindings.
     /// Descriptors never contain endpoints or credentials and never imply a default route.
     pub creative_binding_descriptors: Vec<String>,
@@ -348,6 +357,7 @@ impl ServerConfig {
             ));
         }
         creative::validate(self)?;
+        blender::validate(self)?;
         activity::validate(&self.activity)?;
         if self.allow_ssh {
             if self

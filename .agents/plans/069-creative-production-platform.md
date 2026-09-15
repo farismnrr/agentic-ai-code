@@ -1845,13 +1845,13 @@ Steps:
 
 **Steps:**
 
-- [ ] Freeze operator-configured Blender executable plus bounded reviewed fallback discovery; no caller-supplied arbitrary executable path.
-- [ ] Freeze owner-safe session identity so an existing user-started Blender can be attached to but never killed by relay `stop`.
-- [ ] Freeze readiness semantics: probe compatible loopback bridge first; explicit `start` launches Blender only when needed and waits for bounded bridge readiness.
-- [ ] Freeze the canonical `<project>/blender/` production layout and require every Blender-owned save/render/export/checkpoint/bake/temp destination to resolve beneath it.
-- [ ] Keep executable authority separate from project-data authority: Blender may execute from an approved system/home installation path while production artifacts stay under the authorized Projects workspace.
+- [x] Freeze operator-configured Blender executable plus bounded reviewed fallback discovery; no caller-supplied arbitrary executable path.
+- [x] Freeze owner-safe session identity so an existing user-started Blender can be attached to but never killed by relay `stop`.
+- [x] Freeze readiness semantics: probe compatible loopback bridge first; explicit `start` launches Blender only when needed and waits for bounded bridge readiness.
+- [x] Freeze the canonical `<project>/blender/` production layout and require every Blender-owned save/render/export/checkpoint/bake/temp destination to resolve beneath it.
+- [x] Keep executable authority separate from project-data authority: Blender may execute from an approved system/home installation path while production artifacts stay under the authorized Projects workspace.
 
-**Validation:** historical numbered contracts remain untouched and Plan 069 does not create a parallel successor catalog; Blender composes into the same current runtime catalog path; config/path fixtures reject caller-controlled executables and any production output outside the selected project's `blender/` subtree.
+**Validation:** COMPLETE on 2026-09-15. `RELAY_ENABLE_BLENDER` remains default-off and requires Creative; operator-only executable, bridge port, and bridge timeout configuration are bounded and caller schemas expose no host/port/executable/PID injection. The frozen Blender Lab protocol identity is loopback TCP on operator-selected port (default 9876) with NUL-delimited bounded JSON framing. Session state distinguishes external attachment from relay-owned launch so stop semantics can never assume ownership of a user-started Blender. The canonical `blender/{scenes,assets,references,renders/preview,renders/final,animations,exports,checkpoints,tmp}` subtree and artifact-scope helpers reject absolute paths, traversal, and noncanonical destinations. Exactly 11 bounded Blender v1 tool schemas are defined without creating a numbered successor catalog, with read/start-stop/raw-Python/render/checkpoint effect classes kept distinct. Blender contract acceptance: 4/4 PASS; CLI config acceptance PASS; Clippy `-D warnings`, fast Rust/auto guardrails, and `git diff --check` PASS.
 
 **Commit boundary:** `feat(blender): freeze relay capability contract`.
 

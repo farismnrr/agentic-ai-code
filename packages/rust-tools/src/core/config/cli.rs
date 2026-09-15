@@ -189,6 +189,24 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ENABLE_CREATIVE", default_value_t = false)]
     pub enable_creative: bool,
 
+    /// Enable the first-party Blender production engine. Requires Creative and
+    /// remains disabled by default.
+    #[arg(long, env = "RELAY_ENABLE_BLENDER", default_value_t = false)]
+    pub enable_blender: bool,
+
+    /// Optional operator-approved Blender executable path/name. This is never a
+    /// client-supplied tool argument.
+    #[arg(long, env = "RELAY_BLENDER_EXECUTABLE")]
+    pub blender_executable: Option<String>,
+
+    /// Official Blender Lab loopback TCP port. No host flag exists in v1.
+    #[arg(long, env = "RELAY_BLENDER_PORT", default_value_t = 9876)]
+    pub blender_bridge_port: u16,
+
+    /// Blender Lab loopback request/response timeout in milliseconds.
+    #[arg(long, env = "RELAY_BLENDER_TIMEOUT_MS", default_value_t = 30_000)]
+    pub blender_bridge_timeout_ms: u64,
+
     /// Bounded JSON execution-binding descriptors. Descriptors expose semantic
     /// support/constraints only; endpoints and credentials are forbidden.
     #[arg(

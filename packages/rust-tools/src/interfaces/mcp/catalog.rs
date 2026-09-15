@@ -1,3 +1,4 @@
+mod blender;
 mod creative;
 mod file_edit;
 mod forge;
@@ -429,6 +430,13 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
 }
 
 pub use profile::{PRIMARY_TOOL_NAMES, RETAINED_TOOL_NAMES};
+
+/// Frozen Blender v1 tool contracts. Runtime composition reuses this exact
+/// source once the implementation gate is enabled; numbered historical
+/// catalogs remain untouched.
+pub fn blender_tool_catalog() -> Vec<Tool> {
+    blender::tools()
+}
 
 /// Canonical client-visible runtime catalog. Optional capabilities are composed
 /// here from operator configuration; there is no second active catalog version.

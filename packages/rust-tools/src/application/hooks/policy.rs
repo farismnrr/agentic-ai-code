@@ -7,6 +7,37 @@ pub fn effect_classes_for_call(
     open_world_hint: bool,
     arguments: &serde_json::Value,
 ) -> Vec<&'static str> {
+    if tool_id.starts_with("blender_") {
+        let action = arguments.get("action").and_then(serde_json::Value::as_str);
+        return match (tool_id, action) {
+            ("blender_session", Some("status"))
+            | ("blender_inspect", _)
+            | ("blender_python_api_docs", _) => vec!["workspace_read", "privileged_bridge"],
+            ("blender_session", Some("start")) => {
+                vec!["process_exec", "workspace_write", "privileged_bridge"]
+            }
+            ("blender_session", Some("stop")) => vec!["process_exec", "privileged_bridge"],
+            ("blender_checkpoint_restore", _) => {
+                vec![
+                    "workspace_read",
+                    "workspace_write",
+                    "workspace_delete",
+                    "privileged_bridge",
+                ]
+            }
+            ("blender_execute_python", _) => vec![
+                "process_exec",
+                "workspace_read",
+                "workspace_write",
+                "external_mutation",
+                "privileged_bridge",
+            ],
+            ("blender_screenshot", _) | ("blender_animation_preview", _) => {
+                vec!["workspace_read", "workspace_write", "privileged_bridge"]
+            }
+            _ => vec!["workspace_read", "workspace_write", "privileged_bridge"],
+        };
+    }
     if tool_id.starts_with("creative_") {
         let action = arguments.get("action").and_then(serde_json::Value::as_str);
         return match (tool_id, action) {

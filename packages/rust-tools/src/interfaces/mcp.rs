@@ -256,9 +256,9 @@ impl DiscoverResult {
 
 mod catalog;
 pub use catalog::{
-    find_tool, find_tool_for_profile, retained_tool_catalog, runtime_tool_catalog,
-    validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
-    PRIMARY_TOOL_NAMES,
+    blender_tool_catalog, find_tool, find_tool_for_profile, retained_tool_catalog,
+    runtime_tool_catalog, validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme,
+    CODING_SCOPE, PRIMARY_TOOL_NAMES,
 };
 
 #[derive(Debug, Clone, Deserialize)]

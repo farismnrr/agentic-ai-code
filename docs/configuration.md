@@ -284,6 +284,46 @@ Creative admission limits are separately operator-controlled through
 Approval can cross only the soft approval threshold; it never overrides a hard
 limit.
 
+### Blender production engine
+
+Plan 069's Blender engine is separately disabled by default with
+`RELAY_ENABLE_BLENDER=false` / no `--enable-blender`, and enabling it requires
+Creative to be enabled as well. The relay speaks directly to the official
+Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
+`RELAY_BLENDER_PORT` / `--blender-port` defaults to `9876`, and
+`RELAY_BLENDER_TIMEOUT_MS` / `--blender-timeout-ms` defaults to 30000 ms with a
+120000 ms hard maximum.
+
+`RELAY_BLENDER_EXECUTABLE` / `--blender-executable` is optional operator-only
+executable authority used by explicit `blender_session start`. It may point to a
+reviewed Blender installation outside the Projects workspace; callers cannot
+supply or override an executable, process ID, host, port, or launch arguments.
+When no executable is configured, later session lifecycle code may resolve only
+a bounded reviewed standard Blender location/PATH entry. Blender/add-on
+installation is never implicit.
+
+Every workflow-owned Blender production artifact is project data and must stay
+beneath the selected project's canonical subtree:
+
+```text
+blender/
+  scenes/
+  assets/
+  references/
+  renders/preview/
+  renders/final/
+  animations/
+  exports/
+  checkpoints/
+  tmp/
+```
+
+The frozen 11-tool v1 contract accepts contained Asset IDs, reviewed enums, and
+bounded leaf file names rather than arbitrary URLs or host paths. The schemas
+are frozen before runtime composition; Blender tools are not advertised until
+their execution paths are implemented and the Blender capability is explicitly
+enabled.
+
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
 `RELAY_ALLOW_DOCKER=true` is an explicit local-development escape hatch. It permits the `docker` CLI and bind-mounts the host Docker daemon socket into the terminal sandbox. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Docker daemon access can provide host-level authority, so the default remains disabled and it should only be enabled for a trusted single-owner coding relay.
