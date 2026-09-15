@@ -300,7 +300,15 @@ reviewed Blender installation outside the Projects workspace; callers cannot
 supply or override an executable, process ID, host, port, or launch arguments.
 When no executable is configured, later session lifecycle code may resolve only
 a bounded reviewed standard Blender location/PATH entry. Blender/add-on
-installation is never implicit.
+installation is never implicit. Relay-owned launches are headless and invoke
+the server-owned Blender Lab CLI command `--background --command blender_mcp`;
+therefore the official Blender Lab MCP extension must already be installed and
+enabled for that Blender user. This avoids requiring a desktop/display in the
+relay service while keeping interactive GUI Blender sessions on the external-
+attach path. If the extension/command is unavailable, startup fails closed
+instead of silently launching a Blender process with no bridge. An already-
+running official loopback bridge may still be attached as an external session
+and is never given relay stop/kill ownership.
 
 Every workflow-owned Blender production artifact is project data and must stay
 beneath the selected project's canonical subtree:

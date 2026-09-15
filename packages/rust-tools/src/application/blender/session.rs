@@ -119,6 +119,9 @@ pub async fn start(
     let tmp_root = blender_root.join("tmp");
     let mut command = Command::new(executable);
     command
+        .arg("--background")
+        .arg("--command")
+        .arg("blender_mcp")
         .current_dir(&blender_root)
         .env("TMPDIR", &tmp_root)
         .env("TMP", &tmp_root)

@@ -294,7 +294,7 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
     let fake_blender = workspace.0.join("fake-blender");
     write_executable(
         &fake_blender,
-        "#!/bin/sh\nsleep 1000 &\necho \"$!\" > \"$TMPDIR/fake-child.pid\"\nwait\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TMPDIR/fake-argv.txt\"\nsleep 1000 &\necho \"$!\" > \"$TMPDIR/fake-child.pid\"\nwait\n",
     );
     let mut cold_config = workspace.config(cold_port);
     cold_config.blender_executable = Some(fake_blender.to_string_lossy().into_owned());
@@ -312,6 +312,12 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
     .unwrap();
     assert_eq!(started["session"]["state"], "ready");
     assert_eq!(started["session"]["ownership"], "relay_owned");
+
+    let argv = fs::read_to_string(workspace.0.join("blender/tmp/fake-argv.txt")).unwrap();
+    assert_eq!(
+        argv.lines().collect::<Vec<_>>(),
+        ["--background", "--command", "blender_mcp"]
+    );
 
     let child_pid_path = workspace.0.join("blender/tmp/fake-child.pid");
     wait_for_file(&child_pid_path).await;
