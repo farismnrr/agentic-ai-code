@@ -4,7 +4,7 @@ use ai_tools::application::creative::{
 };
 use serde_json::{json, Value};
 
-fn binding_descriptor() -> String {
+pub(super) fn binding_descriptor_for_workflow_tests() -> String {
     json!({
         "binding_id": "binding_mock_image",
         "binding_version": "1",
@@ -67,7 +67,7 @@ fn test_binding_descriptor() -> String {
 fn configured_workspace() -> (TempWorkspace, ai_tools::core::config::ServerConfig) {
     let workspace = TempWorkspace::new();
     let mut config = workspace.config();
-    config.creative_binding_descriptors = vec![binding_descriptor()];
+    config.creative_binding_descriptors = vec![binding_descriptor_for_workflow_tests()];
     config.creative_approval_compute_units = 100;
     config.creative_job_hard_compute_units = 1_000;
     config.creative_project_hard_compute_units = 260;

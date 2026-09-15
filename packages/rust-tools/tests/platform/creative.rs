@@ -6,6 +6,8 @@ mod graph;
 mod ingest;
 #[path = "creative/jobs.rs"]
 mod jobs;
+#[path = "creative/workflows.rs"]
+mod workflows;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};

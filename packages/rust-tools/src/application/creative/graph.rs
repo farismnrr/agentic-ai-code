@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 mod runtime;
-pub use runtime::execute_graph;
+pub use runtime::{dirty_descendants, execute_graph, execute_graph_partial};
 
 const MAX_GRAPH_NODES: usize = 256;
 const MAX_GRAPH_EDGES: usize = 1_024;
@@ -69,6 +69,21 @@ pub struct CreativeGraph {
     pub edges: Vec<GraphEdge>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreativeGraphTemplate {
+    pub schema_version: u32,
+    pub template_id: String,
+    pub project_id: String,
+    pub version: u32,
+    pub description: String,
+    pub graph: CreativeGraph,
+    #[serde(default)]
+    pub input_node_ids: Vec<String>,
+    #[serde(default)]
+    pub output_node_ids: Vec<String>,
+    pub created_at_ms: u128,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraphDiagnostic {
     pub code: String,
@@ -104,6 +119,10 @@ pub struct NodeRunRecord {
     pub output: Option<Value>,
     #[serde(default)]
     pub failure_code: Option<String>,
+    #[serde(default)]
+    pub reused: bool,
+    #[serde(default)]
+    pub execution_batch: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -288,6 +307,79 @@ pub fn validate_graph(
         topological_order: order,
         diagnostics,
     })
+}
+
+pub fn validate_graph_template(
+    template: &CreativeGraphTemplate,
+    project: &CreativeProject,
+    config: &ServerConfig,
+) -> Result<(), McpError> {
+    if template.schema_version != CREATIVE_SCHEMA_VERSION {
+        return Err(McpError::InvalidRequest(
+            "creative graph template schema version is unsupported".into(),
+        ));
+    }
+    validate_id(&template.template_id, "template_id")?;
+    validate_id(&template.project_id, "project_id")?;
+    if template.project_id != project.project_id || template.graph.project_id != project.project_id
+    {
+        return Err(McpError::InvalidRequest(
+            "creative graph template belongs to a different project".into(),
+        ));
+    }
+    if template.version == 0
+        || template.description.len() > 1024
+        || template.description.chars().any(char::is_control)
+        || template.input_node_ids.len() > MAX_GRAPH_NODES
+        || template.output_node_ids.is_empty()
+        || template.output_node_ids.len() > MAX_GRAPH_NODES
+    {
+        return Err(McpError::InvalidRequest(
+            "creative graph template exceeds allowed bounds".into(),
+        ));
+    }
+    let validation = validate_graph(&template.graph, project, config)?;
+    if !validation.valid {
+        return Err(McpError::InvalidRequest(
+            "creative graph template contains an invalid graph".into(),
+        ));
+    }
+    let nodes = template
+        .graph
+        .nodes
+        .iter()
+        .map(|node| (node.node_id.as_str(), node))
+        .collect::<HashMap<_, _>>();
+    let mut seen = HashSet::new();
+    for node_id in &template.input_node_ids {
+        validate_id(node_id, "template input node id")?;
+        if !seen.insert(node_id.as_str()) {
+            return Err(McpError::InvalidRequest(
+                "creative graph template contains duplicate input node ids".into(),
+            ));
+        }
+        let node = nodes
+            .get(node_id.as_str())
+            .ok_or_else(|| McpError::InvalidRequest("unknown template input node".into()))?;
+        if !matches!(
+            node.kind,
+            GraphNodeKind::InputText | GraphNodeKind::InputAsset | GraphNodeKind::ElementRef
+        ) {
+            return Err(McpError::InvalidRequest(
+                "creative graph template inputs must reference declared input nodes".into(),
+            ));
+        }
+    }
+    seen.clear();
+    for node_id in &template.output_node_ids {
+        validate_id(node_id, "template output node id")?;
+        if !seen.insert(node_id.as_str()) || !nodes.contains_key(node_id.as_str()) {
+            return Err(McpError::InvalidRequest(
+                "creative graph template output node is invalid or duplicated".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_job_record(job: &CreativeJobRecord) -> Result<(), McpError> {

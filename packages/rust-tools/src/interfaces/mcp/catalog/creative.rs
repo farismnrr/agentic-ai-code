@@ -251,15 +251,31 @@ fn graph_tool() -> Tool {
     Tool {
         name: "creative_graph",
         title: Some("Creative Graph Runtime"),
-        description: "Validate, execute, or retrieve a caller-authored typed Creative Graph. The minimal headless executor handles reviewed control/reference nodes, preserves DAG authority boundaries, and refuses pluggable executor nodes without an explicit compatible execution_binding_id.",
+        description: "Validate, execute, partially rerun, or retrieve a caller-authored typed Creative Graph. Independent DAG levels are scheduled concurrently; partial reruns invalidate only changed descendants and reuse completed unaffected outputs. The graph grants no authority beyond reviewed node capabilities." ,
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["validate", "execute", "get"] },
+                "action": { "type": "string", "enum": ["validate", "execute", "partial_rerun", "get", "template_save", "template_get", "template_list"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "graph": { "type": "object", "maxProperties": 16 }
+                "graph": { "type": "object", "maxProperties": 16 },
+                "previous_job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "changed_node_ids": {
+                    "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "template_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+                "description": { "type": "string", "maxLength": 1024 },
+                "input_node_ids": {
+                    "type": "array", "maxItems": 256, "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "output_node_ids": {
+                    "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                }
             },
             "allOf": [
                 {
@@ -272,6 +288,22 @@ fn graph_tool() -> Tool {
                 {
                     "if": { "properties": { "action": { "const": "get" } }, "required": ["action"] },
                     "then": { "required": ["project_id", "graph_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "partial_rerun" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "graph_id", "previous_job_id", "changed_node_ids"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_save" } }, "required": ["action"] },
+                    "then": { "required": ["template_id", "graph", "output_node_ids"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_get" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "template_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_list" } }, "required": ["action"] },
+                    "then": { "required": ["project_id"] }
                 }
             ],
             "required": ["action"],

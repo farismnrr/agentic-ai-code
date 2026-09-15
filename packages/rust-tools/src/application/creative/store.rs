@@ -14,6 +14,7 @@ use serde_json::Value;
 mod assets;
 mod io;
 mod support;
+mod templates;
 mod uploads;
 pub use assets::{
     promote_asset, register_asset, search_assets, AssetRegistrationInput, AssetSearch,
@@ -21,6 +22,7 @@ pub use assets::{
 use io::*;
 use support::new_id;
 pub use support::now_ms;
+pub use templates::{list_templates, load_template, store_template};
 pub use uploads::{
     list_upload_tickets, load_upload_receipt, load_upload_ticket, store_upload_receipt,
     store_upload_ticket,

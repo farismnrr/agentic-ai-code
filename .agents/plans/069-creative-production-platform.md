@@ -1698,29 +1698,29 @@ Initial candidate workflows to freeze from actual engine support:
 
 Steps:
 
-- [ ] Define workflow-specific input/output schemas independently from execution-binding/provider/model catalogs. *(The workflow descriptor envelope exists, but per-workflow schemas are still generic and are not claimed frozen.)*
+- [x] Define workflow-specific input/output schemas independently from execution-binding/provider/model catalogs for the curated PHASE-03 workflow set; unsupported parameters fail schema validation before job admission.
 - [x] Define typed Creative Graph node/edge/port/revision contract around workflows/jobs/Elements.
-- [ ] Define dirty-descendant and partial-rerun semantics.
-- [ ] Define template input/output contract.
-- [ ] Implement the minimal headless executor needed by downstream phases: deterministic dependency resolution, bounded execution of reviewed nodes, parallel scheduling only for declared-independent nodes, node status/output recording, descendant invalidation, and reuse of accepted unaffected ancestors.
+- [x] Define dirty-descendant and partial-rerun semantics: a changed node invalidates itself plus transitive descendants while completed unaffected outputs from the prior same-graph job remain reusable.
+- [x] Define a project-scoped immutable template input/output contract with `template_save`, `template_get`, and `template_list`; duplicate template identity is rejected rather than silently overwritten.
+- [x] Implement the minimal headless executor needed by downstream phases: deterministic dependency resolution, bounded execution of reviewed nodes, up to 16 declared-independent nodes per parallel worker wave, node status/output/batch recording, descendant invalidation, and reuse of completed unaffected ancestors.
 - [x] Map every executable node to an already reviewed capability/job/effect boundary; the graph runtime itself grants no new shell/Python/network/deploy authority.
 - [x] Keep advanced template UX, selected-subgraph execution ergonomics, production Canvas UI, and broader parity hardening for PHASE-14.
 - [x] Validate that graph representation cannot encode arbitrary code/endpoints/credentials as ordinary nodes.
 
-**Validation:** workflows advertise required inputs/output roles and reject unsupported parameters before execution; representative scene/anime/game graphs validate and execute through fake/reviewed nodes, declared-independent branches can run concurrently, one changed node invalidates only affected descendants, and no graph contains engine-specific secrets or arbitrary executable payloads.
+**Validation:** 2026-09-15 Creative acceptance proves all 24 curated workflows advertise specific schemas and reject unsupported parameters, one shared headless graph runtime executes Scene visual-evidence, Anime temporal-evidence, and Game QA branches, independent DAG levels share execution batches and run through bounded scoped workers, partial rerun invalidates only changed descendants while reusing the independent branch, immutable template save/get/list round-trips declared I/O, and endpoint/credential/executable graph payloads remain rejected.
 
 **Commit boundary:** `feat(creative): add workflow and minimal graph runtime`.
 
 **Phase exit criteria:**
 
-- [ ] semantic capability, execution-binding, workflow, asset/history, and budget discovery are distinct and queryable;
-- [ ] explicit caller-selected binding works and omitted execution binding fails without MCP-side ranking/defaulting/auto-selection;
-- [ ] core MCP utility workflows are represented: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub;
-- [ ] job lifecycle is bounded, listable/retrievable across normal turns, and owner/project scoped;
-- [ ] cost/compute preflight and hard budget thresholds can block a batch before execution;
-- [ ] graph/workflow contracts can express scene/anime/game dependencies;
-- [ ] the minimal headless graph executor can run those dependencies without Scene/Anime/Game implementing separate orchestration loops;
-- [ ] arbitrary upper layers can make their own routing decisions without hard-coded provider/model IDs in MCP contracts.
+- [x] semantic capability, execution-binding, workflow, asset/history, and budget discovery are distinct and queryable;
+- [x] explicit caller-selected binding works through the non-default conformance binding and omitted execution binding fails without MCP-side ranking/defaulting/auto-selection; production real-binding execution remains owned by later engine phases;
+- [x] core MCP utility workflows are represented: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub;
+- [x] job lifecycle is bounded, listable/retrievable across normal turns, and owner/project scoped;
+- [x] cost/compute preflight and hard budget thresholds can block a batch before execution;
+- [x] graph/workflow contracts can express scene/anime/game dependencies;
+- [x] the minimal headless graph executor can run shared control/evidence dependencies without Scene/Anime/Game implementing separate orchestration loops;
+- [x] arbitrary upper layers can make their own routing decisions without hard-coded provider/model IDs in MCP contracts.
 
 # PHASE-04 — Initial reference-aware media generation
 

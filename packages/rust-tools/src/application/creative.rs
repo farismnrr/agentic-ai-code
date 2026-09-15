@@ -403,6 +403,78 @@ fn graph_tool(
             store::store_job(cwd, config, &job)?;
             complete(json!({"job": job}))
         }
+        "template_save" => {
+            let graph: CreativeGraph = parse_required(arguments, "graph")?;
+            let project = store::load_project(cwd, config, &graph.project_id)?;
+            let template = graph::CreativeGraphTemplate {
+                schema_version: CREATIVE_SCHEMA_VERSION,
+                template_id: required_str(arguments, "template_id")?.to_owned(),
+                project_id: project.project_id.clone(),
+                version: arguments
+                    .get("version")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .unwrap_or(1),
+                description: arguments
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                graph,
+                input_node_ids: parse_optional(arguments, "input_node_ids")?.unwrap_or_default(),
+                output_node_ids: parse_required(arguments, "output_node_ids")?,
+                created_at_ms: store::now_ms(),
+            };
+            graph::validate_graph_template(&template, &project, config)?;
+            store::store_template(cwd, config, &template)?;
+            complete(json!({"template": template}))
+        }
+        "template_get" => {
+            let project_id = required_str(arguments, "project_id")?;
+            let template_id = required_str(arguments, "template_id")?;
+            complete(json!({
+                "template": store::load_template(cwd, config, project_id, template_id)?
+            }))
+        }
+        "template_list" => {
+            let project_id = required_str(arguments, "project_id")?;
+            complete(json!({
+                "templates": store::list_templates(cwd, config, project_id)?
+            }))
+        }
+        "partial_rerun" => {
+            let project_id = required_str(arguments, "project_id")?;
+            let graph_id = required_str(arguments, "graph_id")?;
+            let previous_job_id = required_str(arguments, "previous_job_id")?;
+            let changed_node_ids: Vec<String> = parse_required(arguments, "changed_node_ids")?;
+            let graph = store::load_graph(cwd, config, project_id, graph_id)?;
+            let project = store::load_project(cwd, config, project_id)?;
+            let previous = jobs::get(cwd, config, owner, project_id, previous_job_id)?;
+            let invalidated = graph::dirty_descendants(&graph, &changed_node_ids)?;
+            let job = graph::execute_graph_partial(
+                &graph,
+                &project,
+                config,
+                owner,
+                &previous,
+                &changed_node_ids,
+                store::now_ms(),
+            )?;
+            store::store_job(cwd, config, &job)?;
+            let mut invalidated_node_ids = invalidated.into_iter().collect::<Vec<_>>();
+            invalidated_node_ids.sort();
+            let reused_node_ids = job
+                .node_runs
+                .iter()
+                .filter(|run| run.reused)
+                .map(|run| run.node_id.clone())
+                .collect::<Vec<_>>();
+            complete(json!({
+                "job": job,
+                "invalidated_node_ids": invalidated_node_ids,
+                "reused_node_ids": reused_node_ids
+            }))
+        }
         "get" => {
             let project_id = required_str(arguments, "project_id")?;
             let graph_id = required_str(arguments, "graph_id")?;
