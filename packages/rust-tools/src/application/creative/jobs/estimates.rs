@@ -18,8 +18,7 @@ pub fn estimate_capability(
     parameters: &Value,
 ) -> Result<CreativeEstimate, McpError> {
     validate_spec(parameters)?;
-    let capability = registry::capability(capability_id)
-        .ok_or_else(|| McpError::InvalidRequest("unknown creative capability".into()))?;
+    let capability = registry::validate_capability_parameters(capability_id, parameters)?;
     if !capability.requires_execution_binding {
         return Ok(CreativeEstimate {
             compute_units: REVIEWED_CAPABILITY_COMPUTE_UNITS,

@@ -6,6 +6,8 @@ mod compiler;
 mod contracts;
 #[path = "creative/graph.rs"]
 mod graph;
+#[path = "creative/identity.rs"]
+mod identity;
 #[path = "creative/ingest.rs"]
 mod ingest;
 #[path = "creative/job_execution.rs"]
@@ -14,6 +16,8 @@ mod job_execution;
 mod jobs;
 #[path = "creative/media.rs"]
 mod media;
+#[path = "creative/style_dependencies.rs"]
+mod style_dependencies;
 #[path = "creative/workflows.rs"]
 mod workflows;
 

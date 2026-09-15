@@ -142,5 +142,14 @@ fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
     if let Some(language) = metadata.language.as_deref() {
         validate_text(language, 1, 32, "asset language")?;
     }
+    if let Some(kind) = metadata.artifact_kind.as_deref() {
+        validate_text(kind, 1, 64, "asset artifact kind")?;
+    }
+    if let Some(version) = metadata.artifact_version.as_deref() {
+        validate_text(version, 1, 128, "asset artifact version")?;
+    }
+    if let Some(notes) = metadata.license_notes.as_deref() {
+        validate_text(notes, 1, 1024, "asset license notes")?;
+    }
     Ok(())
 }

@@ -76,11 +76,13 @@ pub fn validate_job_record(job: &CreativeJobRecord) -> Result<(), McpError> {
             )));
         }
     }
-    if job.compiler_version.is_some() != job.execution_binding_version.is_some()
+    if (job.compiler_version.is_some() && job.execution_binding_version.is_none())
+        || (job.compiler_version.is_none() && !job.changed_fields.is_empty())
+        || (job.execution_binding_version.is_some() && job.execution_binding_id.is_none())
         || job.changed_fields.len() > 32
     {
         return Err(McpError::InvalidRequest(
-            "creative compiler lineage is inconsistent".into(),
+            "creative compiler/binding lineage is inconsistent".into(),
         ));
     }
     let mut changed_fields = HashSet::new();

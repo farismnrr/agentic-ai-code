@@ -1808,12 +1808,12 @@ Steps:
 
 **Steps:**
 
-- [ ] Measure reference-only baseline first.
-- [ ] Expose training/identity preparation only when an upper layer explicitly requests a compatible binding/capability; MCP never decides that training is needed.
-- [ ] Store training artifact/license/version lineage.
-- [ ] Keep Character Pack references and design constraints authoritative.
+- [x] Measure reference-only baseline first.
+- [x] Expose training/identity preparation only when an upper layer explicitly requests a compatible binding/capability; MCP never decides that training is needed.
+- [x] Store training artifact/license/version lineage.
+- [x] Keep Character Pack references and design constraints authoritative.
 
-**Validation:** deleting/changing one binding-specific identity artifact does not erase the character's project identity contract or force changes to MCP tool/schema identity.
+**Validation:** 2026-09-15 acceptance proves the provider-neutral `identity.prepare` capability is absent as an execution route unless a caller explicitly selects a compatible binding, and real-person preparation fails schema validation without `authorization_attested=true`. A debug/test-only identity binding materializes a contained candidate `identity_binding_artifact` with Character Element, parent-reference, job, selected binding/version, artifact kind/version, and binding license lineage. Rejecting that artifact and replacing the binding/artifact version leaves the Character Element's selected revision, reference Asset IDs, and design spec unchanged. Raw bound jobs now persist execution-binding version lineage even when no semantic compiler is involved. Creative suite: 25/25 PASS; fast guardrail PASS.
 
 **Commit boundary:** `feat(anime): support identity-capable execution bindings`.
 

@@ -112,6 +112,7 @@ pub fn capabilities() -> Vec<CapabilityDescriptor> {
             &["image"],
             &["network_or_compute", "workspace_write"],
         ),
+        identity_prepare_descriptor(),
         capability_descriptor(
             "video.generate",
             "video",
@@ -359,6 +360,23 @@ pub fn workflow(id: &str) -> Option<WorkflowDescriptor> {
         .find(|descriptor| descriptor.workflow_id == id)
 }
 
+pub fn validate_capability_parameters(
+    id: &str,
+    parameters: &Value,
+) -> Result<CapabilityDescriptor, McpError> {
+    super::contracts::validate_spec(parameters)?;
+    let descriptor = capability(id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative capability".into()))?;
+    let validator = jsonschema::validator_for(&descriptor.parameter_schema)
+        .map_err(|_| McpError::Internal("creative capability schema is invalid".into()))?;
+    if validator.iter_errors(parameters).next().is_some() {
+        return Err(McpError::InvalidRequest(
+            "creative capability parameters do not match the capability schema".into(),
+        ));
+    }
+    Ok(descriptor)
+}
+
 pub fn validate_workflow_parameters(
     id: &str,
     parameters: &Value,
@@ -380,6 +398,34 @@ mod bindings;
 pub use bindings::{
     binding, compatible_binding_ids, execution_bindings, validate_binding_selection,
 };
+
+fn identity_prepare_descriptor() -> CapabilityDescriptor {
+    CapabilityDescriptor {
+        capability_id: "identity.prepare".into(),
+        family: "identity".into(),
+        requires_execution_binding: true,
+        input_roles: vec!["reference_image".into()],
+        output_roles: vec!["identity_artifact".into()],
+        effects: vec!["network_or_compute".into(), "workspace_write".into()],
+        parameter_schema: json!({
+            "type":"object",
+            "properties":{
+                "element_id":{"type":"string","minLength":1,"maxLength":64},
+                "reference_asset_ids":{"type":"array","minItems":1,"maxItems":32,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":64}},
+                "subject_kind":{"type":"string","enum":["fictional","real_person"]},
+                "authorization_attested":{"type":"boolean"},
+                "artifact_kind":{"type":"string","minLength":1,"maxLength":64},
+                "artifact_version":{"type":"string","minLength":1,"maxLength":128}
+            },
+            "required":["element_id","reference_asset_ids","subject_kind","artifact_kind","artifact_version"],
+            "allOf":[{
+                "if":{"properties":{"subject_kind":{"const":"real_person"}},"required":["subject_kind"]},
+                "then":{"properties":{"authorization_attested":{"const":true}},"required":["authorization_attested"]}
+            }],
+            "additionalProperties":false
+        }),
+    }
+}
 
 fn capability_descriptor(
     id: &str,

@@ -142,6 +142,12 @@ pub struct AssetMetadata {
     pub sample_rate_hz: Option<u32>,
     #[serde(default)]
     pub channels: Option<u16>,
+    #[serde(default)]
+    pub artifact_kind: Option<String>,
+    #[serde(default)]
+    pub artifact_version: Option<String>,
+    #[serde(default)]
+    pub license_notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

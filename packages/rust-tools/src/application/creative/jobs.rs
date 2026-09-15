@@ -1,6 +1,6 @@
 use super::contracts::{validate_id, validate_spec, CREATIVE_SCHEMA_VERSION};
 use super::graph::{self, CreativeEstimate, CreativeJobKind, CreativeJobRecord, CreativeJobStatus};
-use super::store;
+use super::{registry, store};
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde::Serialize;
@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 mod estimates;
 mod support;
+#[cfg(all(feature = "test-creative-binding", debug_assertions))]
+mod test_binding;
 pub use estimates::estimate_request;
 use support::{enforce_owner, owned_jobs, validate_owner};
 
@@ -157,8 +159,14 @@ pub fn submit(
     validate_owner(owner)?;
     let project = store::load_project(cwd, config, project_id)?;
     validate_submit_shape(&request)?;
-    let lineage = prepare_request(config, &mut request)?;
+    let mut lineage = prepare_request(config, &mut request)?;
     validate_spec(&request.parameters)?;
+    if lineage.execution_binding_version.is_none() {
+        if let Some(binding_id) = request.execution_binding_id.as_deref() {
+            lineage.execution_binding_version =
+                registry::binding(config, binding_id)?.map(|binding| binding.binding_version);
+        }
+    }
     let estimate = estimate_request(cwd, config, project_id, &request)?;
     let status = budget_status(cwd, config, owner, project_id)?;
     let decision = admission_decision(config, &status, &estimate, request.approved);
@@ -324,7 +332,7 @@ fn execute_bound_job(
             .as_deref()
             .is_some_and(|binding_id| binding_id.starts_with("test_"))
         {
-            return execute_test_binding(config, job);
+            return test_binding::execute(cwd, config, job);
         }
     }
     if let Some(executed) = super::media::execute_media_job(cwd, config, &job)? {
@@ -335,61 +343,6 @@ fn execute_bound_job(
     failed.failure_code = Some("execution_not_implemented".into());
     failed.updated_at_ms = store::now_ms();
     Ok(failed)
-}
-
-#[cfg(all(feature = "test-creative-binding", debug_assertions))]
-fn execute_test_binding(
-    config: &ServerConfig,
-    mut job: CreativeJobRecord,
-) -> Result<CreativeJobRecord, McpError> {
-    let behavior = job
-        .execution_parameters
-        .get("test_behavior")
-        .and_then(Value::as_str)
-        .unwrap_or("complete");
-    let simulated_duration_ms = job
-        .execution_parameters
-        .get("test_duration_ms")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if job.timeout_ms > 0 && simulated_duration_ms > job.timeout_ms {
-        job.status = CreativeJobStatus::Failed;
-        job.failure_code = Some("execution_timeout".into());
-        job.updated_at_ms = store::now_ms();
-        return Ok(job);
-    }
-    let actual_output_bytes = job
-        .execution_parameters
-        .get("test_actual_output_bytes")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if actual_output_bytes > config.creative_max_job_output_bytes {
-        job.status = CreativeJobStatus::Failed;
-        job.failure_code = Some("output_hard_limit_exceeded".into());
-        job.updated_at_ms = store::now_ms();
-        return Ok(job);
-    }
-    match behavior {
-        "running" => {
-            job.status = CreativeJobStatus::Running;
-            job.failure_code = None;
-        }
-        "complete" => {
-            job.status = CreativeJobStatus::Completed;
-            job.failure_code = None;
-        }
-        "fail" => {
-            job.status = CreativeJobStatus::Failed;
-            job.failure_code = Some("test_execution_failed".into());
-        }
-        _ => {
-            return Err(McpError::InvalidRequest(
-                "test creative binding behavior is unsupported".into(),
-            ));
-        }
-    }
-    job.updated_at_ms = store::now_ms();
-    Ok(job)
 }
 
 fn execute_graph_job(
