@@ -1751,14 +1751,14 @@ Steps:
 
 **Steps:**
 
-- [ ] Define provider/model-neutral semantic request spec.
-- [ ] Define reference role/order.
-- [ ] Accept creative prompt/content from the upper layer; do not author or enhance it inside MCP.
-- [ ] Translate only reviewed semantic fields plus namespaced binding extensions.
-- [ ] Record binding/compiler version in job lineage.
-- [ ] Support controlled changed-fields for revision requests.
+- [x] Define provider/model-neutral semantic request spec.
+- [x] Define reference role/order.
+- [x] Accept creative prompt/content from the upper layer; do not author or enhance it inside MCP.
+- [x] Translate only reviewed semantic fields plus namespaced binding extensions.
+- [x] Record binding/compiler version in job lineage.
+- [x] Support controlled changed-fields for revision requests.
 
-**Validation:** the same semantic request serializes without provider/model names and compiles deterministically through two different mock bindings selected by the caller.
+**Validation:** 2026-09-15 acceptance proves `creative.semantic.v1` rejects unknown semantic fields, duplicate/invalid reference order, unsupported changed fields, invalid namespaced extensions, and raw-parameter/semantic-spec mixing; the same provider-neutral request compiles deterministically through two explicitly selected mock bindings with different binding versions/extensions, preserves typed reference role/order, and persists compiler version, binding version, and sorted changed-fields in durable job lineage across later retrieval. MCP copies caller-authored prompt/content verbatim and does not add creative prompt strategy or provider/model names.
 
 **Commit boundary:** `feat(creative): compile structured generation specs`.
 

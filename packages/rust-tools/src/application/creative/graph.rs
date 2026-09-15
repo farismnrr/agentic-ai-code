@@ -161,6 +161,12 @@ pub struct CreativeJobRecord {
     pub execution_binding_id: Option<String>,
     #[serde(default)]
     pub execution_parameters: Value,
+    #[serde(default)]
+    pub compiler_version: Option<String>,
+    #[serde(default)]
+    pub execution_binding_version: Option<String>,
+    #[serde(default)]
+    pub changed_fields: Vec<String>,
     pub status: CreativeJobStatus,
     #[serde(default)]
     pub estimate: Option<CreativeEstimate>,

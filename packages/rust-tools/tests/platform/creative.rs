@@ -1,3 +1,5 @@
+#[path = "creative/compiler.rs"]
+mod compiler;
 #[path = "creative/contracts.rs"]
 mod contracts;
 #[path = "creative/graph.rs"]

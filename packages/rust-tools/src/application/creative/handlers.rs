@@ -410,8 +410,39 @@ pub(super) fn job(
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     let project_id = required_str(arguments, "project_id")?;
     match action {
+        "compile_spec" => {
+            let capability_id = required_str(arguments, "capability_id")?;
+            let binding_id = required_str(arguments, "execution_binding_id")?;
+            let semantic_spec = arguments
+                .get("semantic_spec")
+                .ok_or_else(|| McpError::InvalidRequest("semantic_spec is required".into()))?;
+            let changed_fields = arguments
+                .get("changed_fields")
+                .and_then(Value::as_array)
+                .map(|values| {
+                    values
+                        .iter()
+                        .map(|value| {
+                            value.as_str().map(str::to_owned).ok_or_else(|| {
+                                McpError::InvalidRequest("changed_fields is invalid".into())
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let compiled = super::compiler::compile(
+                config,
+                capability_id,
+                binding_id,
+                semantic_spec,
+                &changed_fields,
+            )?;
+            complete(json!({"compiled": compiled}))
+        }
         "cost_estimate" => {
-            let request = parse_job_submit_request(arguments)?;
+            let mut request = parse_job_submit_request(arguments)?;
+            let _ = jobs::prepare_request(config, &mut request)?;
             let estimate = jobs::estimate_request(cwd, config, project_id, &request)?;
             complete(json!({"estimate": estimate}))
         }
@@ -486,6 +517,18 @@ fn parse_job_submit_request(arguments: &Value) -> Result<jobs::SubmitRequest, Mc
             .get("parameters")
             .cloned()
             .unwrap_or_else(|| json!({})),
+        semantic_spec: arguments.get("semantic_spec").cloned(),
+        changed_fields: arguments
+            .get("changed_fields")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
         approved: arguments
             .get("approved")
             .and_then(Value::as_bool)

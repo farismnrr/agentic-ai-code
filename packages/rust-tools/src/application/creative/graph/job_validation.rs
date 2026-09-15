@@ -61,6 +61,37 @@ pub fn validate_job_record(job: &CreativeJobRecord) -> Result<(), McpError> {
     if let Some(binding_id) = job.execution_binding_id.as_deref() {
         validate_id(binding_id, "execution_binding_id")?;
     }
+    for (value, label) in [
+        (job.compiler_version.as_deref(), "compiler_version"),
+        (
+            job.execution_binding_version.as_deref(),
+            "execution_binding_version",
+        ),
+    ] {
+        if value.is_some_and(|value| {
+            value.is_empty() || value.len() > 128 || value.chars().any(char::is_control)
+        }) {
+            return Err(McpError::InvalidRequest(format!(
+                "creative job {label} is invalid"
+            )));
+        }
+    }
+    if job.compiler_version.is_some() != job.execution_binding_version.is_some()
+        || job.changed_fields.len() > 32
+    {
+        return Err(McpError::InvalidRequest(
+            "creative compiler lineage is inconsistent".into(),
+        ));
+    }
+    let mut changed_fields = HashSet::new();
+    for field in &job.changed_fields {
+        validate_id(field, "changed_field")?;
+        if !changed_fields.insert(field.as_str()) {
+            return Err(McpError::InvalidRequest(
+                "creative compiler lineage contains duplicate changed fields".into(),
+            ));
+        }
+    }
     if let Some(estimate) = &job.estimate {
         if estimate.compute_units == 0
             || estimate.output_bytes == 0

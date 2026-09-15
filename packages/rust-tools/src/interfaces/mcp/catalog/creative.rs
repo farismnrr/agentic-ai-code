@@ -325,7 +325,7 @@ fn job_tool() -> Tool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["cost_estimate", "budget_status", "submit", "get", "wait", "list", "cancel"]
+                    "enum": ["compile_spec", "cost_estimate", "budget_status", "submit", "get", "wait", "list", "cancel"]
                 },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -335,6 +335,16 @@ fn job_tool() -> Tool {
                 "workflow_id": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "execution_binding_id": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "parameters": { "type": "object", "maxProperties": 64 },
+                "semantic_spec": { "type": "object", "maxProperties": 16 },
+                "changed_fields": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                        "type": "string",
+                        "enum": ["prompt", "references", "asset_id", "mask_asset_id", "element_id", "width", "height", "batch_count", "duration_ms", "binding_extensions"]
+                    }
+                },
                 "approved": { "type": "boolean", "default": false },
                 "max_retries": { "type": "integer", "minimum": 0, "maximum": 16 },
                 "timeout_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 },
@@ -368,6 +378,16 @@ fn job_tool() -> Tool {
                                 "not": { "anyOf": [{"required":["graph_id"]}, {"required":["capability_id"]}] }
                             }
                         ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "compile_spec" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["capability_id", "execution_binding_id", "semantic_spec"],
+                        "not": { "anyOf": [{"required":["graph_id"]}, {"required":["workflow_id"]}, {"required":["parameters"]}] }
                     }
                 }
             ],

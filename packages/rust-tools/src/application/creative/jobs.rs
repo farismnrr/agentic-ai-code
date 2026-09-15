@@ -19,6 +19,8 @@ pub struct SubmitRequest {
     pub workflow_id: Option<String>,
     pub execution_binding_id: Option<String>,
     pub parameters: Value,
+    pub semantic_spec: Option<Value>,
+    pub changed_fields: Vec<String>,
     pub approved: bool,
     pub max_retries: Option<u32>,
     pub timeout_ms: Option<u64>,
@@ -47,6 +49,62 @@ pub enum AdmissionDecision {
     ProjectHardLimitExceeded,
     OutputHardLimitExceeded,
     ConcurrencyLimitExceeded,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CompilationLineage {
+    pub compiler_version: Option<String>,
+    pub execution_binding_version: Option<String>,
+    pub changed_fields: Vec<String>,
+}
+
+pub fn prepare_request(
+    config: &ServerConfig,
+    request: &mut SubmitRequest,
+) -> Result<CompilationLineage, McpError> {
+    let Some(spec) = request.semantic_spec.take() else {
+        if !request.changed_fields.is_empty() {
+            return Err(McpError::InvalidRequest(
+                "creative changed_fields require semantic_spec".into(),
+            ));
+        }
+        return Ok(CompilationLineage::default());
+    };
+    if request
+        .parameters
+        .as_object()
+        .is_none_or(|object| !object.is_empty())
+    {
+        return Err(McpError::InvalidRequest(
+            "creative semantic_spec and raw parameters are mutually exclusive".into(),
+        ));
+    }
+    if request.graph_id.is_some() || request.workflow_id.is_some() {
+        return Err(McpError::InvalidRequest(
+            "creative semantic compiler currently targets one capability job".into(),
+        ));
+    }
+    let capability_id = request
+        .capability_id
+        .as_deref()
+        .ok_or_else(|| McpError::InvalidRequest("semantic_spec requires capability_id".into()))?;
+    let binding_id = request.execution_binding_id.as_deref().ok_or_else(|| {
+        McpError::InvalidRequest("semantic_spec requires execution_binding_id".into())
+    })?;
+    let compiled = super::compiler::compile(
+        config,
+        capability_id,
+        binding_id,
+        &spec,
+        &request.changed_fields,
+    )?;
+    request.parameters = compiled.parameters;
+    request.changed_fields = compiled.changed_fields.clone();
+    Ok(CompilationLineage {
+        compiler_version: Some(compiled.compiler_version),
+        execution_binding_version: Some(compiled.execution_binding_version),
+        changed_fields: compiled.changed_fields,
+    })
 }
 
 pub fn budget_status(
@@ -85,7 +143,7 @@ pub fn submit(
     config: &ServerConfig,
     owner: &str,
     project_id: &str,
-    request: SubmitRequest,
+    mut request: SubmitRequest,
 ) -> Result<
     (
         AdmissionDecision,
@@ -97,6 +155,7 @@ pub fn submit(
     validate_owner(owner)?;
     let project = store::load_project(cwd, config, project_id)?;
     validate_submit_shape(&request)?;
+    let lineage = prepare_request(config, &mut request)?;
     validate_spec(&request.parameters)?;
     let estimate = estimate_request(cwd, config, project_id, &request)?;
     let status = budget_status(cwd, config, owner, project_id)?;
@@ -135,6 +194,9 @@ pub fn submit(
         workflow_id,
         execution_binding_id: request.execution_binding_id,
         execution_parameters: request.parameters,
+        compiler_version: lineage.compiler_version,
+        execution_binding_version: lineage.execution_binding_version,
+        changed_fields: lineage.changed_fields,
         status: CreativeJobStatus::Queued,
         estimate: Some(estimate.clone()),
         approved: request.approved,

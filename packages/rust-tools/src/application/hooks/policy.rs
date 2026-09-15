@@ -13,8 +13,8 @@ pub fn effect_classes_for_call(
             ("creative_project", Some("create"))
             | ("creative_element", Some("create_revision" | "promote"))
             | ("creative_asset", Some("register" | "promote"))
-            | ("creative_graph", Some("execute"))
-            | ("creative_job", Some("cancel")) => vec!["workspace_write"],
+            | ("creative_graph", Some("execute" | "partial_rerun" | "template_save"))
+            | ("creative_job", Some("submit" | "wait" | "cancel")) => vec!["workspace_write"],
             _ => vec!["workspace_read"],
         };
     }

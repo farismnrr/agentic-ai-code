@@ -4,6 +4,7 @@
 //! creative intent, prompts, graphs, and execution-binding choices; this module
 //! validates, stores, and executes only the reviewed semantic contract.
 
+mod compiler;
 mod contracts;
 mod graph;
 mod handlers;
