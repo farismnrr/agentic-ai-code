@@ -257,7 +257,7 @@ fn generic_action(tool_id: &str, arguments: &Value, root: Option<&Path>) -> Stri
             || sensitive_argument_key(key)
             || matches!(
                 key.as_str(),
-                "content" | "data" | "headers" | "edits" | "patch"
+                "content" | "code" | "data" | "headers" | "edits" | "patch"
             )
         {
             continue;

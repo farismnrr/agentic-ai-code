@@ -8,6 +8,7 @@ use std::path::{Component, Path, PathBuf};
 
 mod artifacts;
 mod assets;
+mod authoring;
 mod bridge;
 mod checkpoints;
 mod knowledge;
@@ -221,6 +222,18 @@ pub async fn dispatch_tool(
             complete(json!({"docs": knowledge::lookup(config, query, module, limit).await?}))
                 .map(Some)
         }
+        "blender_execute_python" => complete(
+            authoring::execute_python(
+                config,
+                required_str(arguments, "code")?,
+                arguments
+                    .get("result_mode")
+                    .and_then(Value::as_str)
+                    .unwrap_or("json"),
+            )
+            .await?,
+        )
+        .map(Some),
         "blender_screenshot" => {
             let source = arguments
                 .get("source")

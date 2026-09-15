@@ -1907,7 +1907,9 @@ Steps:
 
 **Outcome:** `blender_execute_python` enables coherent live modeling/rigging/animation edits with high-risk/manual semantics.
 
-**Validation:** plan mode/approval/activity behavior is correct; code/results are bounded/redacted; no claim of sandboxing inside Blender.
+**Implementation:** COMPLETE on 2026-09-15. Caller-authored Blender Python is accepted only through the dedicated high-risk tool, capped by the frozen 256 KiB code bound, rejects NUL framing injection, and executes through the same reviewed loopback bridge rather than through shell/stdio or an alternate Python server. Result mode is explicit (`json|text`), encoded results are capped at 1 MiB, bridge stdout remains subject to the bridge response bound, and every result explicitly reports `sandboxed=false` plus `authority=blender_host_user` so Blender host-user execution is never misrepresented as contained execution. Tool annotations remain mutating/open-world; effect policy records process execution, workspace read/write, external mutation, and privileged bridge authority. Activity presentation intentionally excludes raw `code`, so caller source/secrets are not copied into the activity journal.
+
+**Validation:** deterministic fake-bridge acceptance executes JSON and text authoring calls, verifies strict-json framing, bounded results, explicit unsandboxed authority metadata, high-risk effect classes/tool annotations, and activity redaction; oversized code fails before bridge use. The composed Blender platform suite passes 8/8, all-target/all-feature Clippy passes with `-D warnings`, and fast Rust/auto guardrails plus `git diff --check` pass. Owner-aware dispatch fallout in three historical Rust acceptance examples was reconciled by supplying their local fixture owner rather than adding a compatibility API.
 
 **Commit boundary:** `feat(blender): add privileged authoring bridge`.
 

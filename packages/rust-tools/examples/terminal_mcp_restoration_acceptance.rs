@@ -98,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!res.is_error, "terminal_exec true failed: {:?}", res);
@@ -112,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(
@@ -132,6 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await;
     assert!(
@@ -151,6 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     // Masked with /dev/null -> stdout is empty
@@ -227,6 +231,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!res.is_error, "text_search without cwd failed: {:?}", res);
@@ -243,6 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(
@@ -262,6 +268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await;
     assert!(
@@ -278,6 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!res.is_error);

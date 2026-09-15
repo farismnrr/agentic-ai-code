@@ -13,6 +13,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+
+macro_rules! dispatch_tool_call {
+    ($($arg:expr),+ $(,)?) => {
+        dispatch_tool_call($($arg),+, "local")
+    };
+}
 struct TempTestDir {
     path: PathBuf,
 }
@@ -72,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n[1/3] Testing Workspace Allowlisting...");
     // 1.1 List initial workspaces
     let tool = find_tool("workspace_list").expect("workspace_list tool found");
-    let res = dispatch_tool_call(&tool, &json!({}), &config, &jobs, &lsp, &hooks)
+    let res = dispatch_tool_call!(&tool, &json!({}), &config, &jobs, &lsp, &hooks)
         .await
         .expect("workspace_list dispatch");
     assert!(!res.is_error);
@@ -82,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ workspace_list returned primary root");
     let file_tool = find_tool("file_write").expect("file_write tool found");
     let sec_file = secondary_dir.join("secondary_test.txt");
-    let denied = dispatch_tool_call(
+    let denied = dispatch_tool_call!(
         &file_tool,
         &json!({ "path": sec_file.to_string_lossy(), "content": "denied", "cwd": secondary_dir.to_string_lossy() }),
         &config,
@@ -97,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     // 1.2 Add secondary workspace
     let tool = find_tool("workspace_add").expect("workspace_add tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "path": secondary_dir.to_string_lossy() }),
         &config,
@@ -114,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ workspace_add authorized secondary workspace");
     // 1.3 Inspect with workspace_get
     let tool = find_tool("workspace_get").expect("workspace_get tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "path": secondary_dir.to_string_lossy() }),
         &config,
@@ -127,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!res.is_error);
     println!("  ✓ workspace_get retrieved authorized workspace");
     // 1.4 Write and read file inside dynamically authorized secondary workspace
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &file_tool,
         &json!({
             "path": sec_file.to_string_lossy(),
@@ -145,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ file_write succeeded inside dynamically authorized secondary workspace");
     // 1.5 Remove secondary workspace
     let tool = find_tool("workspace_remove").expect("workspace_remove tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "path": secondary_dir.to_string_lossy() }),
         &config,
@@ -156,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await
     .expect("workspace_remove dispatch");
     assert!(!res.is_error);
-    let denied = dispatch_tool_call(
+    let denied = dispatch_tool_call!(
         &file_tool,
         &json!({ "path": sec_file.to_string_lossy(), "content": "denied again", "cwd": secondary_dir.to_string_lossy(), "overwrite": true }),
         &config,
@@ -209,7 +215,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let worktree_dir = primary_dir.join("wt_feature_1");
     // Add worktree
     let tool = find_tool("git_worktree_add").expect("git_worktree_add tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -227,7 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_worktree_add created linked worktree feature/wt-test");
     // List worktrees
     let tool = find_tool("git_worktree_list").expect("git_worktree_list tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "cwd": repo_root.to_string_lossy() }),
         &config,
@@ -243,7 +249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_worktree_list discovered both main and linked worktrees");
     // Get worktree details
     let tool = find_tool("git_worktree_get").expect("git_worktree_get tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -260,7 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_worktree_get retrieved individual worktree metadata");
     // Remove worktree
     let tool = find_tool("git_worktree_remove").expect("git_worktree_remove tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -278,7 +284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_worktree_remove removed linked worktree");
     // Prune worktree
     let tool = find_tool("git_worktree_prune").expect("git_worktree_prune tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "cwd": repo_root.to_string_lossy() }),
         &config,
@@ -292,7 +298,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_worktree_prune pruned worktree metadata");
     // 3.2 Branch rename
     let tool = find_tool("git_branch_rename").expect("git_branch_rename tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -315,7 +321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
     let tool = find_tool("git_stash_push").expect("git_stash_push tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -331,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!res.is_error);
     println!("  ✓ git_stash_push stashed uncommitted changes");
     let tool = find_tool("git_stash_list").expect("git_stash_list tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "cwd": repo_root.to_string_lossy() }),
         &config,
@@ -347,7 +353,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_stash_list found stashed entry");
 
     let tool = find_tool("git_stash_pop").expect("git_stash_pop tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "cwd": repo_root.to_string_lossy(), "index": 0 }),
         &config,
@@ -362,7 +368,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3.4 Git Tag operations
     let tool = find_tool("git_tag_create").expect("git_tag_create tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -380,7 +386,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_tag_create created annotated tag v1.0.0");
 
     let tool = find_tool("git_tag_list").expect("git_tag_list tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({ "cwd": repo_root.to_string_lossy() }),
         &config,
@@ -397,7 +403,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_tag_list found v1.0.0 tag");
 
     let tool = find_tool("git_tag_delete").expect("git_tag_delete tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -415,7 +421,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3.5 Git Remote operations
     let tool = find_tool("git_remote_add").expect("git_remote_add tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -433,7 +439,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_remote_add added upstream remote");
 
     let tool = find_tool("git_remote_set_url").expect("git_remote_set_url tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -451,7 +457,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ git_remote_set_url updated remote URL");
 
     let tool = find_tool("git_remote_remove").expect("git_remote_remove tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
@@ -470,7 +476,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3.6 Restore and Clean
     fs::write(repo_root.join("untracked_scratch.txt"), "scratch\n").unwrap();
     let tool = find_tool("git_clean").expect("git_clean tool found");
-    let res = dispatch_tool_call(
+    let res = dispatch_tool_call!(
         &tool,
         &json!({
             "cwd": repo_root.to_string_lossy(),
