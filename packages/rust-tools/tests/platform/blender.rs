@@ -1,3 +1,5 @@
+#[path = "blender/artifacts.rs"]
+mod artifacts;
 #[path = "blender/contract.rs"]
 mod contract;
 #[path = "blender/reads.rs"]

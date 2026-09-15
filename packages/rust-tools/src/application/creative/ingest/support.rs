@@ -35,7 +35,10 @@ pub(super) fn validate_media_type(value: &str) -> Result<(), McpError> {
             || value.starts_with("video/")
             || value.starts_with("audio/")
             || value.starts_with("model/")
-            || value == "application/octet-stream")
+            || matches!(
+                value.as_str(),
+                "application/octet-stream" | "application/x-blender"
+            ))
     {
         return Err(McpError::InvalidRequest(
             "creative media type is unsupported".into(),

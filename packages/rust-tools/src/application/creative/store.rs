@@ -66,6 +66,33 @@ pub fn resolve_registered_asset_path(
     Ok(io::resolve_asset_path(cwd, config, &asset.relative_path)?.absolute)
 }
 
+pub(crate) fn store_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+    value: &Value,
+) -> Result<(), McpError> {
+    validate_id(project_id, "project_id")?;
+    validate_id(checkpoint_id, "checkpoint_id")?;
+    let path =
+        format!("{STATE_PREFIX}/projects/{project_id}/blender/checkpoints/{checkpoint_id}.json");
+    write_json(cwd, config, &path, value, false)
+}
+
+pub(crate) fn load_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+) -> Result<Value, McpError> {
+    validate_id(project_id, "project_id")?;
+    validate_id(checkpoint_id, "checkpoint_id")?;
+    let path =
+        format!("{STATE_PREFIX}/projects/{project_id}/blender/checkpoints/{checkpoint_id}.json");
+    read_json(cwd, config, &path)
+}
+
 pub fn project_layout(project_id: &str) -> Result<CreativeProjectLayout, McpError> {
     validate_id(project_id, "project_id")?;
     let state_root = format!("{STATE_PREFIX}/projects/{project_id}");

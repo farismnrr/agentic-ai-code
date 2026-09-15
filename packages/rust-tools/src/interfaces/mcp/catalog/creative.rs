@@ -173,7 +173,7 @@ fn asset_tool() -> Tool {
                 "role": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "source": {
                     "type": "string",
-                    "enum": ["conversation_upload", "mcp_upload", "url_import", "generated_asset", "manual_import"]
+                    "enum": ["conversation_upload", "mcp_upload", "url_import", "generated_asset", "blender_materialized", "manual_import"]
                 },
                 "source_surface": {
                     "type": "string",

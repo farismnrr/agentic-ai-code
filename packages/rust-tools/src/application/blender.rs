@@ -6,10 +6,14 @@ use serde_json::{json, Value};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::{Component, Path, PathBuf};
 
+mod artifacts;
+mod assets;
 mod bridge;
+mod checkpoints;
 mod knowledge;
 mod preview;
 mod reads;
+mod render;
 mod session;
 
 pub const BLENDER_LAB_PROTOCOL: &str = "blender_lab_json_nul_v1";
@@ -259,6 +263,92 @@ pub async fn dispatch_tool(
             };
             complete(preview::animation_preview(Some(cwd), config, request).await?).map(Some)
         }
+        "blender_render" => {
+            let request = render::RenderRequest {
+                mode: required_str(arguments, "mode")?,
+                output_scope: required_str(arguments, "output_scope")?,
+                file_name: required_str(arguments, "file_name")?,
+                start_frame: arguments
+                    .get("start_frame")
+                    .and_then(Value::as_i64)
+                    .and_then(|value| i32::try_from(value).ok()),
+                end_frame: arguments
+                    .get("end_frame")
+                    .and_then(Value::as_i64)
+                    .and_then(|value| i32::try_from(value).ok()),
+            };
+            complete(render::render(Some(cwd), config, project_id, request).await?).map(Some)
+        }
+        "blender_asset_import" => {
+            let asset_id = required_str(arguments, "asset_id")?;
+            let purpose = required_str(arguments, "purpose")?;
+            let target_name = arguments.get("target_name").and_then(Value::as_str);
+            let collection = arguments.get("collection").and_then(Value::as_str);
+            complete(
+                assets::import_asset(
+                    Some(cwd),
+                    config,
+                    project_id,
+                    asset_id,
+                    purpose,
+                    target_name,
+                    collection,
+                )
+                .await?,
+            )
+            .map(Some)
+        }
+        "blender_asset_export" => {
+            let selection = arguments
+                .get("selection")
+                .and_then(Value::as_array)
+                .ok_or_else(|| McpError::InvalidRequest("Blender selection is required".into()))?
+                .iter()
+                .map(|value| {
+                    value.as_str().map(str::to_owned).ok_or_else(|| {
+                        McpError::InvalidRequest("Blender selection is invalid".into())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            complete(
+                assets::export_asset(
+                    Some(cwd),
+                    config,
+                    project_id,
+                    &selection,
+                    required_str(arguments, "format")?,
+                    arguments
+                        .get("output_scope")
+                        .and_then(Value::as_str)
+                        .unwrap_or("export"),
+                    required_str(arguments, "file_name")?,
+                )
+                .await?,
+            )
+            .map(Some)
+        }
+        "blender_checkpoint_create" => complete(
+            checkpoints::create(
+                Some(cwd),
+                config,
+                owner,
+                project_id,
+                arguments.get("label").and_then(Value::as_str),
+            )
+            .await?,
+        )
+        .map(Some),
+        "blender_checkpoint_restore" => complete(
+            checkpoints::restore(
+                Some(cwd),
+                config,
+                owner,
+                project_id,
+                required_str(arguments, "checkpoint_id")?,
+            )
+            .await?,
+        )
+        .map(Some),
         _ => Ok(None),
     }
 }

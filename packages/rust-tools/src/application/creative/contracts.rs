@@ -145,6 +145,7 @@ pub enum AssetSource {
     McpUpload,
     UrlImport,
     GeneratedAsset,
+    BlenderMaterialized,
     ManualImport,
 }
 

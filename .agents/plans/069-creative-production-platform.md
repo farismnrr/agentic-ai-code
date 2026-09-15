@@ -1888,16 +1888,18 @@ Steps:
 
 **Outcome:** `.blend` saves, materialized references, import/export, render outputs, controlled bake/cache outputs, and checkpoint create/restore respect workspace/protected-path authority and the canonical `<project>/blender/` layout.
 
+**Implementation:** COMPLETE on 2026-09-15. Structured Blender import first materializes registered Creative Assets into `blender/references/` or `blender/assets/` through the existing contained binary-write primitive and registers explicit `blender_materialized` lineage before relay-authored import code runs. Still/fixed-frame animation renders are limited to canonical preview/final paths, reusable animation exports are separated from ordinary exports, and all generated files are post-verified as bounded regular files beneath the canonical Blender subtree before candidate Blender-surface Assets are registered. Checkpoint creation writes a scene snapshot beneath `blender/scenes/`, copies recovery state beneath `blender/checkpoints/`, and stores owner/project/checksum receipt state under protected Creative state rather than mutable production directories; restore verifies protected receipt, Asset lineage, owner/project identity, path, and checksum before opening the file.
+
 **Steps:**
 
-- [ ] Materialize project-contained external references into `<project>/blender/references/` or `<project>/blender/assets/` before Blender consumes them.
-- [ ] Require scene saves under `<project>/blender/scenes/`.
-- [ ] Require preview/final renders under `<project>/blender/renders/preview|final/`.
-- [ ] Require reusable animation outputs under `<project>/blender/animations/` and exports under `<project>/blender/exports/`.
-- [ ] Require checkpoints under `<project>/blender/checkpoints/` and controlled workflow temp/bake paths under `<project>/blender/tmp/` unless a more specific frozen subdirectory is defined.
-- [ ] Reject absolute/arbitrary host destinations even when Blender itself would accept them.
+- [x] Materialize project-contained external references into `<project>/blender/references/` or `<project>/blender/assets/` before Blender consumes them.
+- [x] Require scene saves under `<project>/blender/scenes/`.
+- [x] Require preview/final renders under `<project>/blender/renders/preview|final/`.
+- [x] Require reusable animation outputs under `<project>/blender/animations/` and exports under `<project>/blender/exports/`.
+- [x] Require checkpoints under `<project>/blender/checkpoints/` and controlled workflow temp/bake paths under `<project>/blender/tmp/` unless a more specific frozen subdirectory is defined.
+- [x] Reject absolute/arbitrary host destinations even when Blender itself would accept them.
 
-**Validation:** path escape, symlink escape, URL, unsupported format, arbitrary destination outside `<project>/blender/`, external-temp substitution, and checkpoint forgery tests fail closed; normal save/render/export/checkpoint fixtures remain entirely under the dedicated Blender subtree.
+**Validation:** deterministic fake-bridge acceptance covers materialization/import, preview/final renders, export versus reusable animation output, scene snapshot + checkpoint creation, correct-owner restore, wrong-owner rejection, checksum tamper rejection, path traversal, unsupported format, and symlink output refusal. Blender platform suite: 7/7 PASS; Clippy `-D warnings`, fast guardrail, maintainability, and `git diff --check` PASS.
 
 **Commit boundary:** `feat(blender): add contained asset and checkpoint tools`.
 

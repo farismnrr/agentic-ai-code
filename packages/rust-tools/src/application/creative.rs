@@ -18,6 +18,7 @@ mod support;
 pub use contracts::*;
 pub use graph::*;
 pub use registry::*;
+pub(crate) use store::AssetRegistrationInput;
 
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
@@ -31,6 +32,47 @@ pub(crate) fn require_project(
     project_id: &str,
 ) -> Result<(), McpError> {
     store::load_project(cwd, config, project_id).map(|_| ())
+}
+
+pub(crate) fn require_asset(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<AssetRecord, McpError> {
+    let project = store::load_project(cwd, config, project_id)?;
+    project
+        .asset(asset_id)
+        .cloned()
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))
+}
+
+pub(crate) fn register_internal_asset(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    input: AssetRegistrationInput,
+) -> Result<String, McpError> {
+    store::register_asset(cwd, config, project_id, input).map(|(_, asset_id)| asset_id)
+}
+
+pub(crate) fn store_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+    value: &Value,
+) -> Result<(), McpError> {
+    store::store_blender_checkpoint_state(cwd, config, project_id, checkpoint_id, value)
+}
+
+pub(crate) fn load_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+) -> Result<Value, McpError> {
+    store::load_blender_checkpoint_state(cwd, config, project_id, checkpoint_id)
 }
 
 pub async fn dispatch_tool(

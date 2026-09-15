@@ -209,6 +209,7 @@ fn asset_export_tool() -> Tool {
             json!({
                 "selection":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":256}},
                 "format":{"type":"string","enum":["glb","gltf","fbx","obj","usd","usdz"]},
+                "output_scope":{"type":"string","enum":["export","animation"],"default":"export"},
                 "file_name":safe_file_name()
             }),
             &["selection","format","file_name"],
