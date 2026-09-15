@@ -1,5 +1,6 @@
 use ai_tools::core::config::{ActivityConfig, ServerConfig, ToolProfile};
 use ai_tools::infrastructure::transport::create_router;
+use ai_tools::interfaces::mcp::{retained_tool_catalog, PRIMARY_TOOL_NAMES};
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -69,7 +70,7 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
 
     let client = reqwest::Client::new();
 
-    // 1. tools/list returns Full catalog of 52 tools
+    // 1. tools/list returns the retained Full base plus always-discoverable creative status.
     let list_res = post_mcp(
         &client,
         port,
@@ -89,7 +90,11 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
         .pointer("/result/tools")
         .and_then(Value::as_array)
         .expect("tools array");
-    assert_eq!(tools.len(), 52, "Full profile must have 52 tools");
+    assert_eq!(
+        tools.len(),
+        retained_tool_catalog().len() + 1,
+        "Full runtime must expose the retained base plus creative_status"
+    );
 
     // Verify key capabilities are listed
     let tool_names: Vec<&str> = tools
@@ -101,6 +106,7 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
     assert!(tool_names.contains(&"workspace_list"));
     assert!(tool_names.contains(&"ssh_readonly_exec"));
     assert!(tool_names.contains(&"telegram_send_message"));
+    assert!(tool_names.contains(&"creative_status"));
 
     // 2. tools/call on the same connection is consistent
     let call_res = post_mcp(
@@ -195,7 +201,7 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
 }
 
 #[tokio::test]
-async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools() {
+async fn wire_client_primary_profile_exposes_runtime_core_and_denies_full_tools() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("loopback listener");
@@ -242,7 +248,7 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
         "protocolVersion must negotiate 2026-07-28"
     );
 
-    // 1. tools/list returns exactly 15 tools in Primary
+    // 1. tools/list returns the retained Primary core plus creative_status.
     let list_res = post_mcp(
         &client,
         port,
@@ -264,14 +270,16 @@ async fn wire_client_primary_profile_exposes_fifteen_tools_and_denies_full_tools
         .expect("tools array");
     assert_eq!(
         tools.len(),
-        15,
-        "Primary profile must have exactly 15 tools"
+        PRIMARY_TOOL_NAMES.len() + 1,
+        "Primary runtime must expose the retained core plus creative_status"
     );
 
     let tool_names: Vec<&str> = tools
         .iter()
         .filter_map(|t| t.get("name").and_then(Value::as_str))
         .collect();
+
+    assert!(tool_names.contains(&"creative_status"));
 
     // Required Primary tools
     for required in [

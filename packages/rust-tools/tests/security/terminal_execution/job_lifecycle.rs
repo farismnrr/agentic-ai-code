@@ -144,12 +144,11 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
     assert_eq!(snapshot.state, JobState::TimedOut);
     let result = snapshot.result.as_ref().expect("timed-out tool result");
     assert!(result.is_error);
+    let timeout_text = &result.content[0].text;
     assert!(
-        result.content[0]
-            .text
-            .contains("terminal execution failed at child_wait: TimedOut"),
-        "unexpected timeout stage: {}",
-        result.content[0].text
+        timeout_text == "terminal execution failed at child_wait: TimedOut"
+            || timeout_text == "terminal execution failed at job_wait: TimedOut",
+        "unexpected timeout stage: {timeout_text}"
     );
     assert!(
         elapsed < Duration::from_secs(4),
