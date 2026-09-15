@@ -286,23 +286,57 @@ fn graph_tool() -> Tool {
 fn job_tool() -> Tool {
     Tool {
         name: "creative_job",
-        title: Some("Creative Job State"),
-        description: "Read, list, or cancel durable project-owned creative job records. Current headless graph runs persist terminal job state; later executor-backed jobs reuse this contract rather than creating a second job system.",
+        title: Some("Creative Job, Cost, and Budget State"),
+        description: "Estimate, admit, submit, wait, retrieve, list, or cancel durable owner/project-scoped Creative jobs. Operator hard compute/output/project limits are enforced before submit; approval can satisfy only the configured soft threshold and never overrides hard maxima.",
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["get", "list", "cancel"] },
+                "action": {
+                    "type": "string",
+                    "enum": ["cost_estimate", "budget_status", "submit", "get", "wait", "list", "cancel"]
+                },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "job_id": { "type": "string", "minLength": 1, "maxLength": 64 }
+                "job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "capability_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "workflow_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "execution_binding_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "parameters": { "type": "object", "maxProperties": 64 },
+                "approved": { "type": "boolean", "default": false },
+                "max_retries": { "type": "integer", "minimum": 0, "maximum": 16 },
+                "timeout_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+                "retry": { "type": "boolean", "default": false }
             },
             "allOf": [
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["get", "cancel"] } },
+                        "properties": { "action": { "enum": ["get", "wait", "cancel"] } },
                         "required": ["action"]
                     },
                     "then": { "required": ["job_id"] }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "enum": ["cost_estimate", "submit"] } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "oneOf": [
+                            {
+                                "required": ["graph_id"],
+                                "not": { "anyOf": [{"required":["capability_id"]}, {"required":["workflow_id"]}] }
+                            },
+                            {
+                                "required": ["capability_id"],
+                                "not": { "anyOf": [{"required":["graph_id"]}, {"required":["workflow_id"]}] }
+                            },
+                            {
+                                "required": ["workflow_id"],
+                                "not": { "anyOf": [{"required":["graph_id"]}, {"required":["capability_id"]}] }
+                            }
+                        ]
+                    }
                 }
             ],
             "required": ["action", "project_id"],

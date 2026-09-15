@@ -52,6 +52,21 @@ pub struct ServerConfig {
     pub lsp_servers: Vec<String>,
     /// Optional first-party creative capability; activation changes require a restart.
     pub enable_creative: bool,
+    /// Operator-supplied bounded JSON descriptors for discoverable Creative execution bindings.
+    /// Descriptors never contain endpoints or credentials and never imply a default route.
+    pub creative_binding_descriptors: Vec<String>,
+    /// Compute units above which Creative submit requires explicit caller approval.
+    pub creative_approval_compute_units: u64,
+    /// Hard per-job compute ceiling. Caller approval cannot override this maximum.
+    pub creative_job_hard_compute_units: u64,
+    /// Hard cumulative project compute ceiling across persisted Creative jobs.
+    pub creative_project_hard_compute_units: u64,
+    /// Hard per-job retained/generated output ceiling.
+    pub creative_max_job_output_bytes: u64,
+    /// Maximum simultaneously running Creative jobs per project.
+    pub creative_max_concurrent_jobs: usize,
+    /// Maximum bounded retry count recorded/admitted for one Creative job.
+    pub creative_max_retries: u32,
     pub enable_agent_hooks: bool,
     pub agent_hooks_config: Option<String>,
     pub tool_profile: ToolProfile,
@@ -104,6 +119,13 @@ impl Default for ServerConfig {
             toolchain_paths: Vec::new(),
             lsp_servers: Vec::new(),
             enable_creative: false,
+            creative_binding_descriptors: Vec::new(),
+            creative_approval_compute_units: 5_000,
+            creative_job_hard_compute_units: 50_000,
+            creative_project_hard_compute_units: 500_000,
+            creative_max_job_output_bytes: 64 * 1024 * 1024,
+            creative_max_concurrent_jobs: 4,
+            creative_max_retries: 2,
             enable_agent_hooks: false,
             agent_hooks_config: None,
             tool_profile: ToolProfile::Full,
@@ -368,6 +390,26 @@ impl ServerConfig {
         if self.max_retained_output_bytes == 0 {
             return Err(RelayError::InvalidConfig(
                 "max_retained_output_bytes must be non-zero".into(),
+            ));
+        }
+        if self.creative_job_hard_compute_units == 0
+            || self.creative_project_hard_compute_units < self.creative_job_hard_compute_units
+            || self.creative_max_job_output_bytes == 0
+            || self.creative_max_concurrent_jobs == 0
+            || self.creative_max_retries > 16
+            || self.creative_approval_compute_units > self.creative_job_hard_compute_units
+        {
+            return Err(RelayError::InvalidConfig(
+                "creative job/budget limits are invalid".into(),
+            ));
+        }
+        if self.creative_binding_descriptors.len() > 32
+            || self.creative_binding_descriptors.iter().any(|value| {
+                value.is_empty() || value.len() > 16 * 1024 || value.chars().any(char::is_control)
+            })
+        {
+            return Err(RelayError::InvalidConfig(
+                "creative binding descriptors exceed allowed bounds".into(),
             ));
         }
         activity::validate(&self.activity)?;

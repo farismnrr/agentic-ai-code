@@ -1651,17 +1651,17 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Reuse existing job/task manager lifecycle and cancellation where possible.
-- [ ] Add `cost.estimate`/compute-estimate semantics before submit when the selected execution binding/workflow can provide meaningful data.
-- [ ] Add `budget.status` for configured provider quota/credits, local compute class/quota, disk/output bounds, and project/session/job hard limits where measurable.
-- [ ] Enforce operator/user-configured thresholds before expensive jobs/batches; approval cannot override an operator hard maximum.
-- [ ] Add domain metadata only where creative workflows need it.
-- [ ] Support submit/get/wait/list/cancel and cross-turn retrieval.
-- [ ] Bound concurrent jobs/batches and retry count.
+- [x] Reuse existing job/task lifecycle semantics and cancellation where possible; Creative jobs remain durably project-owned because the process JobManager is intentionally in-memory/process-oriented and cannot provide cross-turn creative retrieval.
+- [x] Add `cost.estimate`/compute-estimate semantics before submit when the selected execution binding/workflow can provide meaningful bounded estimate data.
+- [x] Add `budget.status` for measurable operator limits: compute approval/hard limits, project admitted/remaining compute, output bounds, concurrency, retries, and explicit `binding_owned_not_reported` provider quota when the binding cannot expose credits safely.
+- [x] Enforce operator-configured thresholds before expensive jobs/batches; approval can cross only the soft approval threshold and cannot override job/project/output hard maxima.
+- [x] Add domain metadata only where creative workflows need it: owner, graph/capability/workflow target, binding, estimate, retry/timeout, output lineage, and bounded failure code.
+- [x] Support submit/get/wait/list/cancel and cross-turn retrieval through durable project job records.
+- [x] Bound concurrent jobs/batches and retry count.
 - [x] Persist/recover only if current platform task semantics cannot satisfy cross-turn retrieval safely. *(Current task state is in-memory/process-oriented, so creative graph/job records are project-persisted.)*
 - [x] Keep failure diagnostics bounded/classified; provider/cost diagnostics remain absent until bindings/cost estimation exist.
 
-**Validation:** fake execution bindings cover queued/running/completed/failed/cancelled, list/retrieve after client reconnect, estimate-before-submit, approval threshold, hard-budget denial, timeout, output bounds, and owner isolation.
+**Validation:** the non-default debug/test-only `test-creative-binding` conformance path covers queued/running/completed/failed/cancelled, list/retrieve after a fresh call, estimate-before-submit, soft approval, job/project/output hard-budget denial, execution timeout, actual-output overflow, retry bounds, and owner isolation. Production/release builds do not gain this executor; unimplemented real bindings still fail `execution_not_implemented` until their owning phase supplies execution.
 
 **Commit boundary:** `feat(creative): add generation job lifecycle`.
 

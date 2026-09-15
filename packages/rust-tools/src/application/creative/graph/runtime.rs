@@ -3,6 +3,7 @@ use super::{
     NodeRunRecord,
 };
 use crate::application::creative::contracts::{CreativeProject, CREATIVE_SCHEMA_VERSION};
+use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -11,19 +12,33 @@ use uuid::Uuid;
 pub fn execute_graph(
     graph: &CreativeGraph,
     project: &CreativeProject,
+    config: &ServerConfig,
+    owner: &str,
     now_ms: u128,
 ) -> Result<CreativeJobRecord, McpError> {
-    let validation = validate_graph(graph, project)?;
+    let validation = validate_graph(graph, project, config)?;
     let job_id = format!("job_{}", Uuid::new_v4().simple());
     let mut job = CreativeJobRecord {
         schema_version: CREATIVE_SCHEMA_VERSION,
         job_id,
         project_id: project.project_id.clone(),
-        graph_id: graph.graph_id.clone(),
+        owner: owner.to_owned(),
+        kind: super::CreativeJobKind::Graph,
+        graph_id: Some(graph.graph_id.clone()),
+        capability_id: None,
+        workflow_id: None,
+        execution_binding_id: None,
+        execution_parameters: Value::Object(Default::default()),
         status: CreativeJobStatus::Running,
+        estimate: None,
+        approved: true,
+        retry_count: 0,
+        max_retries: 0,
+        timeout_ms: 0,
         created_at_ms: now_ms,
         updated_at_ms: now_ms,
         node_runs: Vec::new(),
+        output_asset_ids: Vec::new(),
         failure_code: None,
     };
     if !validation.valid {

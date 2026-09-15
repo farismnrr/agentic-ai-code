@@ -7,6 +7,7 @@
 mod contracts;
 mod graph;
 pub(crate) mod ingest;
+mod jobs;
 mod registry;
 mod store;
 
@@ -43,12 +44,12 @@ pub async fn dispatch_tool(
         )?));
     }
     let result = match tool_name {
-        "creative_catalog" => catalog(arguments)?,
+        "creative_catalog" => catalog(arguments, config)?,
         "creative_project" => project(arguments, config)?,
         "creative_element" => element(arguments, config)?,
         "creative_asset" => asset(arguments, config, owner).await?,
-        "creative_graph" => graph_tool(arguments, config)?,
-        "creative_job" => job(arguments, config)?,
+        "creative_graph" => graph_tool(arguments, config, owner)?,
+        "creative_job" => job(arguments, config, owner)?,
         _ => return Ok(None),
     };
     Ok(Some(result))
@@ -61,7 +62,7 @@ fn status(config: &ServerConfig) -> Value {
         "agent_agnostic": true,
         "model_provider_agnostic": true,
         "state_namespace": ".masihawam/creative",
-        "execution_bindings_registered": registry::execution_bindings().len(),
+        "execution_bindings_registered": registry::execution_bindings(config).map(|items| items.len()).unwrap_or(0),
         "activation": if config.enable_creative {
             Value::Null
         } else {
@@ -71,7 +72,7 @@ fn status(config: &ServerConfig) -> Value {
     })
 }
 
-fn catalog(arguments: &Value) -> Result<ToolCallResult, McpError> {
+fn catalog(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, McpError> {
     let catalog = required_str(arguments, "catalog")?;
     let id = arguments.get("id").and_then(Value::as_str);
     let value = match (catalog, id) {
@@ -82,10 +83,10 @@ fn catalog(arguments: &Value) -> Result<ToolCallResult, McpError> {
             json!({"catalog":"capabilities","item":registry::capability(id)})
         }
         ("execution_bindings", None) => {
-            json!({"catalog":"execution_bindings","items":registry::execution_bindings()})
+            json!({"catalog":"execution_bindings","items":registry::execution_bindings(config)?})
         }
         ("execution_bindings", Some(id)) => {
-            json!({"catalog":"execution_bindings","item":registry::binding(id)})
+            json!({"catalog":"execution_bindings","item":registry::binding(config, id)?})
         }
         ("workflows", None) => json!({"catalog":"workflows","items":registry::workflows()}),
         ("workflows", Some(id)) => json!({"catalog":"workflows","item":registry::workflow(id)}),
@@ -372,20 +373,24 @@ async fn asset(
     }
 }
 
-fn graph_tool(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, McpError> {
+fn graph_tool(
+    arguments: &Value,
+    config: &ServerConfig,
+    owner: &str,
+) -> Result<ToolCallResult, McpError> {
     let action = required_str(arguments, "action")?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     match action {
         "validate" => {
             let graph: CreativeGraph = parse_required(arguments, "graph")?;
             let project = store::load_project(cwd, config, &graph.project_id)?;
-            let validation = graph::validate_graph(&graph, &project)?;
+            let validation = graph::validate_graph(&graph, &project, config)?;
             complete(json!({"validation": validation}))
         }
         "execute" => {
             let graph: CreativeGraph = parse_required(arguments, "graph")?;
             let project = store::load_project(cwd, config, &graph.project_id)?;
-            let validation = graph::validate_graph(&graph, &project)?;
+            let validation = graph::validate_graph(&graph, &project, config)?;
             if !validation.valid {
                 return error_result(
                     "graph_validation_failed",
@@ -394,7 +399,7 @@ fn graph_tool(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult
                 );
             }
             store::store_graph(cwd, config, &graph)?;
-            let job = graph::execute_graph(&graph, &project, store::now_ms())?;
+            let job = graph::execute_graph(&graph, &project, config, owner, store::now_ms())?;
             store::store_job(cwd, config, &job)?;
             complete(json!({"job": job}))
         }
@@ -411,22 +416,97 @@ fn graph_tool(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult
     }
 }
 
-fn job(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, McpError> {
+fn job(arguments: &Value, config: &ServerConfig, owner: &str) -> Result<ToolCallResult, McpError> {
     let action = required_str(arguments, "action")?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     let project_id = required_str(arguments, "project_id")?;
     match action {
-        "get" => complete(json!({
-            "job": store::load_job(cwd, config, project_id, required_str(arguments, "job_id")?)?
+        "cost_estimate" => {
+            let request = parse_job_submit_request(arguments)?;
+            let estimate = jobs::estimate_request(cwd, config, project_id, &request)?;
+            complete(json!({"estimate": estimate}))
+        }
+        "budget_status" => complete(json!({
+            "budget": jobs::budget_status(cwd, config, owner, project_id)?
         })),
-        "list" => complete(json!({"jobs": store::list_jobs(cwd, config, project_id)?})),
+        "submit" => {
+            let request = parse_job_submit_request(arguments)?;
+            let (decision, job, estimate) = jobs::submit(cwd, config, owner, project_id, request)?;
+            match decision {
+                jobs::AdmissionDecision::Allowed => complete(json!({
+                    "job": job,
+                    "estimate": estimate
+                })),
+                jobs::AdmissionDecision::ApprovalRequired => error_result(
+                    "creative_job_approval_required",
+                    "Creative job estimate exceeds the configured approval threshold",
+                    json!({"estimate": estimate, "budget": jobs::budget_status(cwd, config, owner, project_id)?}),
+                ),
+                jobs::AdmissionDecision::JobHardLimitExceeded => error_result(
+                    "creative_job_hard_limit_exceeded",
+                    "Creative job estimate exceeds the operator hard compute maximum",
+                    json!({"estimate": estimate}),
+                ),
+                jobs::AdmissionDecision::ProjectHardLimitExceeded => error_result(
+                    "creative_project_hard_limit_exceeded",
+                    "Creative project admitted compute would exceed the operator hard maximum",
+                    json!({"estimate": estimate, "budget": jobs::budget_status(cwd, config, owner, project_id)?}),
+                ),
+                jobs::AdmissionDecision::OutputHardLimitExceeded => error_result(
+                    "creative_job_output_limit_exceeded",
+                    "Creative job estimate exceeds the operator output-byte maximum",
+                    json!({"estimate": estimate}),
+                ),
+                jobs::AdmissionDecision::ConcurrencyLimitExceeded => error_result(
+                    "creative_job_concurrency_limit",
+                    "Creative project has reached its running-job limit",
+                    json!({"budget": jobs::budget_status(cwd, config, owner, project_id)?}),
+                ),
+            }
+        }
+        "get" => complete(json!({
+            "job": jobs::get(cwd, config, owner, project_id, required_str(arguments, "job_id")?)?
+        })),
+        "wait" => complete(json!({
+            "job": jobs::wait(
+                cwd,
+                config,
+                owner,
+                project_id,
+                required_str(arguments, "job_id")?,
+                arguments.get("retry").and_then(Value::as_bool).unwrap_or(false),
+            )?
+        })),
+        "list" => complete(json!({"jobs": jobs::list(cwd, config, owner, project_id)?})),
         "cancel" => complete(json!({
-            "job": store::cancel_job(cwd, config, project_id, required_str(arguments, "job_id")?)?
+            "job": jobs::cancel(cwd, config, owner, project_id, required_str(arguments, "job_id")?)?
         })),
         _ => Err(McpError::InvalidRequest(
             "unsupported creative job action".into(),
         )),
     }
+}
+
+fn parse_job_submit_request(arguments: &Value) -> Result<jobs::SubmitRequest, McpError> {
+    Ok(jobs::SubmitRequest {
+        graph_id: optional_string(arguments, "graph_id"),
+        capability_id: optional_string(arguments, "capability_id"),
+        workflow_id: optional_string(arguments, "workflow_id"),
+        execution_binding_id: optional_string(arguments, "execution_binding_id"),
+        parameters: arguments
+            .get("parameters")
+            .cloned()
+            .unwrap_or_else(|| json!({})),
+        approved: arguments
+            .get("approved")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        max_retries: arguments
+            .get("max_retries")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok()),
+        timeout_ms: arguments.get("timeout_ms").and_then(Value::as_u64),
+    })
 }
 
 fn required_str<'a>(arguments: &'a Value, field: &str) -> Result<&'a str, McpError> {

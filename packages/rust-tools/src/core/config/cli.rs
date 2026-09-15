@@ -189,6 +189,51 @@ pub struct Cli {
     #[arg(long, env = "RELAY_ENABLE_CREATIVE", default_value_t = false)]
     pub enable_creative: bool,
 
+    /// Bounded JSON execution-binding descriptors. Descriptors expose semantic
+    /// support/constraints only; endpoints and credentials are forbidden.
+    #[arg(
+        long = "creative-binding",
+        env = "RELAY_CREATIVE_BINDING",
+        value_delimiter = ';'
+    )]
+    pub creative_binding_descriptors: Vec<String>,
+
+    /// Creative compute threshold requiring explicit submit approval.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_APPROVAL_COMPUTE_UNITS",
+        default_value_t = 5_000
+    )]
+    pub creative_approval_compute_units: u64,
+
+    /// Hard compute ceiling for one Creative job.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_JOB_HARD_COMPUTE_UNITS",
+        default_value_t = 50_000
+    )]
+    pub creative_job_hard_compute_units: u64,
+
+    /// Hard cumulative compute ceiling for one Creative Project.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_PROJECT_HARD_COMPUTE_UNITS",
+        default_value_t = 500_000
+    )]
+    pub creative_project_hard_compute_units: u64,
+
+    /// Hard output-byte ceiling for one Creative job.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_JOB_OUTPUT_BYTES", default_value_t = 64 * 1024 * 1024)]
+    pub creative_max_job_output_bytes: u64,
+
+    /// Maximum Creative jobs concurrently in running state per project.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_CONCURRENT_JOBS", default_value_t = 4)]
+    pub creative_max_concurrent_jobs: usize,
+
+    /// Maximum bounded retry count admitted for one Creative job.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_RETRIES", default_value_t = 2)]
+    pub creative_max_retries: u32,
+
     /// Explicitly enable the repository-owned deterministic lifecycle hooks.
     /// Hook configuration is never trusted merely because it exists.
     #[arg(long, env = "RELAY_ENABLE_AGENT_HOOKS", default_value_t = false)]

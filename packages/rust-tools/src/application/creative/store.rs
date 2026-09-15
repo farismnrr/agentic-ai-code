@@ -5,7 +5,7 @@ use super::contracts::{
     MAX_REVISIONS_PER_ELEMENT,
 };
 use super::graph::{
-    validate_graph, validate_job_record, CreativeGraph, CreativeJobRecord, CreativeJobStatus,
+    validate_graph, validate_job_record, CreativeGraph, CreativeJobKind, CreativeJobRecord,
 };
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
@@ -279,7 +279,7 @@ pub fn store_graph(
     validate_id(&graph.project_id, "project_id")?;
     validate_id(&graph.graph_id, "graph_id")?;
     let mut project = load_project(cwd, config, &graph.project_id)?;
-    let validation = validate_graph(graph, &project)?;
+    let validation = validate_graph(graph, &project, config)?;
     if !validation.valid {
         return Err(McpError::InvalidRequest(
             "creative graph cannot be stored before validation succeeds".into(),
@@ -322,7 +322,7 @@ pub fn load_graph(
         return Err(McpError::InvalidRequest("unknown creative graph".into()));
     }
     let graph: CreativeGraph = read_json(cwd, config, &graph_path(project_id, graph_id))?;
-    let validation = validate_graph(&graph, &project)?;
+    let validation = validate_graph(&graph, &project, config)?;
     if !validation.valid {
         return Err(McpError::InvalidRequest(
             "stored creative graph is invalid".into(),
@@ -338,10 +338,15 @@ pub fn store_job(
 ) -> Result<(), McpError> {
     validate_job_record(job)?;
     let mut project = load_project(cwd, config, &job.project_id)?;
-    if !project.graph_ids.iter().any(|value| value == &job.graph_id) {
-        return Err(McpError::InvalidRequest(
-            "creative job references an unknown stored graph".into(),
-        ));
+    if job.kind == CreativeJobKind::Graph {
+        let graph_id = job.graph_id.as_deref().ok_or_else(|| {
+            McpError::InvalidRequest("graph creative job requires graph_id".into())
+        })?;
+        if !project.graph_ids.iter().any(|value| value == graph_id) {
+            return Err(McpError::InvalidRequest(
+                "creative job references an unknown stored graph".into(),
+            ));
+        }
     }
     let is_new = !project.job_ids.iter().any(|value| value == &job.job_id);
     if is_new && project.job_ids.len() >= MAX_JOBS_PER_PROJECT {
@@ -399,24 +404,4 @@ pub fn list_jobs(
         .take(200)
         .map(|job_id| load_job(cwd, config, project_id, job_id))
         .collect()
-}
-
-pub fn cancel_job(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    project_id: &str,
-    job_id: &str,
-) -> Result<CreativeJobRecord, McpError> {
-    let mut job = load_job(cwd, config, project_id, job_id)?;
-    match job.status {
-        CreativeJobStatus::Queued | CreativeJobStatus::Running => {
-            job.status = CreativeJobStatus::Cancelled;
-            job.updated_at_ms = now_ms();
-            store_job(cwd, config, &job)?;
-            Ok(job)
-        }
-        _ => Err(McpError::InvalidRequest(
-            "creative job is already terminal".into(),
-        )),
-    }
 }

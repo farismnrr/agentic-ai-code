@@ -1,5 +1,6 @@
 use super::contracts::{validate_id, validate_spec, CreativeProject, CREATIVE_SCHEMA_VERSION};
 use super::registry;
+use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -105,24 +106,72 @@ pub struct NodeRunRecord {
     pub failure_code: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CreativeJobKind {
+    #[default]
+    Graph,
+    Capability,
+    Workflow,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CreativeEstimate {
+    pub compute_units: u64,
+    pub output_bytes: u64,
+    #[serde(default)]
+    pub estimated_cost_micros: Option<u64>,
+    pub source: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreativeJobRecord {
     pub schema_version: u32,
     pub job_id: String,
     pub project_id: String,
-    pub graph_id: String,
+    #[serde(default = "default_job_owner")]
+    pub owner: String,
+    #[serde(default)]
+    pub kind: CreativeJobKind,
+    #[serde(default)]
+    pub graph_id: Option<String>,
+    #[serde(default)]
+    pub capability_id: Option<String>,
+    #[serde(default)]
+    pub workflow_id: Option<String>,
+    #[serde(default)]
+    pub execution_binding_id: Option<String>,
+    #[serde(default)]
+    pub execution_parameters: Value,
     pub status: CreativeJobStatus,
+    #[serde(default)]
+    pub estimate: Option<CreativeEstimate>,
+    #[serde(default)]
+    pub approved: bool,
+    #[serde(default)]
+    pub retry_count: u32,
+    #[serde(default)]
+    pub max_retries: u32,
+    #[serde(default)]
+    pub timeout_ms: u64,
     pub created_at_ms: u128,
     pub updated_at_ms: u128,
     #[serde(default)]
     pub node_runs: Vec<NodeRunRecord>,
     #[serde(default)]
+    pub output_asset_ids: Vec<String>,
+    #[serde(default)]
     pub failure_code: Option<String>,
+}
+
+fn default_job_owner() -> String {
+    "legacy".into()
 }
 
 pub fn validate_graph(
     graph: &CreativeGraph,
     project: &CreativeProject,
+    config: &ServerConfig,
 ) -> Result<GraphValidation, McpError> {
     if graph.schema_version != CREATIVE_SCHEMA_VERSION {
         return Err(McpError::InvalidRequest(
@@ -159,7 +208,7 @@ pub fn validate_graph(
                 Some(&node.node_id),
             ));
         }
-        validate_node(node, project, &mut diagnostics)?;
+        validate_node(node, project, config, &mut diagnostics)?;
     }
 
     let mut indegree = graph
@@ -249,7 +298,78 @@ pub fn validate_job_record(job: &CreativeJobRecord) -> Result<(), McpError> {
     }
     validate_id(&job.job_id, "job_id")?;
     validate_id(&job.project_id, "project_id")?;
-    validate_id(&job.graph_id, "graph_id")?;
+    if job.owner.is_empty() || job.owner.len() > 512 || job.owner.chars().any(char::is_control) {
+        return Err(McpError::InvalidRequest(
+            "creative job owner is invalid".into(),
+        ));
+    }
+    match job.kind {
+        CreativeJobKind::Graph => {
+            let graph_id = job.graph_id.as_deref().ok_or_else(|| {
+                McpError::InvalidRequest("graph creative job requires graph_id".into())
+            })?;
+            validate_id(graph_id, "graph_id")?;
+            if job.capability_id.is_some() || job.workflow_id.is_some() {
+                return Err(McpError::InvalidRequest(
+                    "graph creative job cannot also declare capability/workflow identity".into(),
+                ));
+            }
+        }
+        CreativeJobKind::Capability => {
+            let capability_id = job.capability_id.as_deref().ok_or_else(|| {
+                McpError::InvalidRequest("capability creative job requires capability_id".into())
+            })?;
+            if registry::capability(capability_id).is_none()
+                || job.graph_id.is_some()
+                || job.workflow_id.is_some()
+            {
+                return Err(McpError::InvalidRequest(
+                    "capability creative job identity is invalid".into(),
+                ));
+            }
+        }
+        CreativeJobKind::Workflow => {
+            let workflow_id = job.workflow_id.as_deref().ok_or_else(|| {
+                McpError::InvalidRequest("workflow creative job requires workflow_id".into())
+            })?;
+            if registry::workflow(workflow_id).is_none()
+                || job.graph_id.is_some()
+                || job.capability_id.is_some()
+            {
+                return Err(McpError::InvalidRequest(
+                    "workflow creative job identity is invalid".into(),
+                ));
+            }
+        }
+    }
+    if let Some(binding_id) = job.execution_binding_id.as_deref() {
+        validate_id(binding_id, "execution_binding_id")?;
+    }
+    if let Some(estimate) = &job.estimate {
+        if estimate.compute_units == 0
+            || estimate.output_bytes == 0
+            || estimate.source.is_empty()
+            || estimate.source.len() > 128
+            || estimate.source.chars().any(char::is_control)
+        {
+            return Err(McpError::InvalidRequest(
+                "creative job estimate is invalid".into(),
+            ));
+        }
+    }
+    if job.retry_count > job.max_retries || job.max_retries > 16 || job.timeout_ms > 86_400_000 {
+        return Err(McpError::InvalidRequest(
+            "creative job retry/timeout bounds are invalid".into(),
+        ));
+    }
+    if job.output_asset_ids.len() > 256 {
+        return Err(McpError::InvalidRequest(
+            "creative job output asset count exceeds maximum".into(),
+        ));
+    }
+    for asset_id in &job.output_asset_ids {
+        validate_id(asset_id, "asset_id")?;
+    }
     if job.node_runs.len() > MAX_GRAPH_NODES {
         return Err(McpError::InvalidRequest(
             "creative job node-run count exceeds maximum".into(),
@@ -270,6 +390,7 @@ pub fn validate_job_record(job: &CreativeJobRecord) -> Result<(), McpError> {
             validate_id(code, "failure_code")?;
         }
     }
+    validate_spec(&job.execution_parameters)?;
     if let Some(code) = job.failure_code.as_deref() {
         validate_id(code, "failure_code")?;
     }
@@ -296,6 +417,7 @@ pub fn capability_for_node(kind: &GraphNodeKind) -> Option<&'static str> {
 fn validate_node(
     node: &GraphNode,
     project: &CreativeProject,
+    config: &ServerConfig,
     diagnostics: &mut Vec<GraphDiagnostic>,
 ) -> Result<(), McpError> {
     match node.kind {
@@ -367,7 +489,7 @@ fn validate_node(
                     "pluggable graph node requires caller-selected execution_binding_id",
                     Some(&node.node_id),
                 )),
-                Some(binding_id) => match registry::binding(binding_id) {
+                Some(binding_id) => match registry::binding(config, binding_id)? {
                     None => diagnostics.push(diagnostic(
                         "execution_binding_unavailable",
                         "selected execution binding is unavailable",

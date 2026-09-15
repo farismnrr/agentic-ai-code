@@ -4,6 +4,8 @@ mod contracts;
 mod graph;
 #[path = "creative/ingest.rs"]
 mod ingest;
+#[path = "creative/jobs.rs"]
+mod jobs;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};
