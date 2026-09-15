@@ -5,7 +5,7 @@ use ai_tools::interfaces::mcp::{
 
 fn main() {
     let full = retained_tool_catalog();
-    let primary = runtime_tool_catalog(ToolProfile::Primary, false);
+    let primary = runtime_tool_catalog(ToolProfile::Primary, false, false);
     assert_eq!(primary.len(), 33);
     assert_eq!(PRIMARY_TOOL_NAMES.len(), 33);
     assert!(full.len() >= primary.len());

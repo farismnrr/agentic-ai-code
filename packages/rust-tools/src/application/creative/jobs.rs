@@ -1,17 +1,30 @@
-use super::contracts::{validate_id, validate_spec, CREATIVE_SCHEMA_VERSION};
-use super::graph::{self, CreativeEstimate, CreativeJobKind, CreativeJobRecord, CreativeJobStatus};
+use super::contracts::{validate_id, validate_spec, SceneManifest, CREATIVE_SCHEMA_VERSION};
+use super::graph::{
+    self, CreativeEstimate, CreativeJobKind, CreativeJobRecord, CreativeJobStatus,
+    ExternalNodeExecutor, GraphExecutionContext, GraphNode, GraphNodeKind,
+};
 use super::{registry, store};
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::sync::Arc;
 use uuid::Uuid;
 
+mod bootstrap;
+mod character;
+mod delivery;
 mod estimates;
+mod game;
+mod graph_exec;
+mod scene;
 mod support;
 #[cfg(all(feature = "test-creative-binding", debug_assertions))]
 mod test_binding;
 pub use estimates::estimate_request;
+pub(super) use graph_exec::{
+    execute_graph_direct, execute_graph_job, execute_graph_partial_direct, PartialGraphExecution,
+};
 use support::{enforce_owner, owned_jobs, validate_owner};
 
 const MAX_JOB_TIMEOUT_MS: u64 = 86_400_000;
@@ -268,7 +281,7 @@ pub fn cancel(
     }
 }
 
-pub fn wait(
+pub async fn wait(
     cwd: Option<&str>,
     config: &ServerConfig,
     owner: &str,
@@ -311,16 +324,48 @@ pub fn wait(
     store::store_job(cwd, config, &job)?;
 
     let terminal = match job.kind {
-        CreativeJobKind::Graph => execute_graph_job(cwd, config, owner, &job)?,
+        CreativeJobKind::Graph => execute_graph_job(cwd, config, owner, &job).await?,
         CreativeJobKind::Capability | CreativeJobKind::Workflow => {
-            execute_bound_job(cwd, config, job)?
+            execute_bound_job(cwd, config, owner, job).await?
         }
     };
     store::store_job(cwd, config, &terminal)?;
     Ok(terminal)
 }
 
-fn execute_bound_job(
+pub(super) async fn execute_bound_job(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    owner: &str,
+    job: CreativeJobRecord,
+) -> Result<CreativeJobRecord, McpError> {
+    match job.workflow_id.as_deref() {
+        Some("image_to_3d_bootstrap") => bootstrap::execute(cwd, config, job).await,
+        Some(
+            "character_mesh_production"
+            | "character_rig_production"
+            | "character_action"
+            | "character_facial_performance"
+            | "character_secondary_motion",
+        ) => character::execute(cwd, config, owner, job).await,
+        Some(
+            "export_profile" | "project_handoff" | "promo_pack" | "key_visual_bundle"
+            | "portfolio_delivery",
+        ) => delivery::execute(cwd, config, job),
+        Some("game_source_scaffold" | "game_build_playtest" | "game_iteration") => {
+            game::execute_local(cwd, config, job)
+        }
+        Some(
+            "scene_continuity_review"
+            | "visual_qa_evidence"
+            | "temporal_qa_evidence"
+            | "scoped_revision",
+        ) => scene::execute_local(cwd, config, job),
+        _ => execute_leaf_bound_job(cwd, config, job),
+    }
+}
+
+pub(super) fn execute_leaf_bound_job(
     cwd: Option<&str>,
     config: &ServerConfig,
     job: CreativeJobRecord,
@@ -343,28 +388,6 @@ fn execute_bound_job(
     failed.failure_code = Some("execution_not_implemented".into());
     failed.updated_at_ms = store::now_ms();
     Ok(failed)
-}
-
-fn execute_graph_job(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    owner: &str,
-    queued: &CreativeJobRecord,
-) -> Result<CreativeJobRecord, McpError> {
-    let graph_id = queued
-        .graph_id
-        .as_deref()
-        .ok_or_else(|| McpError::InvalidRequest("graph creative job requires graph_id".into()))?;
-    let graph = store::load_graph(cwd, config, &queued.project_id, graph_id)?;
-    let project = store::load_project(cwd, config, &queued.project_id)?;
-    let executed = graph::execute_graph(&graph, &project, config, owner, store::now_ms())?;
-    let mut terminal = queued.clone();
-    terminal.status = executed.status;
-    terminal.node_runs = executed.node_runs;
-    terminal.output_asset_ids = executed.output_asset_ids;
-    terminal.failure_code = executed.failure_code;
-    terminal.updated_at_ms = store::now_ms();
-    Ok(terminal)
 }
 
 fn admission_decision(

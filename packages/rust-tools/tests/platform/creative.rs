@@ -1,5 +1,7 @@
 #[path = "creative/anime.rs"]
 mod anime;
+#[path = "creative/bootstrap.rs"]
+mod bootstrap;
 #[path = "creative/compiler.rs"]
 mod compiler;
 #[path = "creative/contracts.rs"]
@@ -16,6 +18,8 @@ mod job_execution;
 mod jobs;
 #[path = "creative/media.rs"]
 mod media;
+#[path = "creative/parity.rs"]
+mod parity;
 #[path = "creative/style_dependencies.rs"]
 mod style_dependencies;
 #[path = "creative/workflows.rs"]
@@ -127,12 +131,12 @@ fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
         .iter()
         .any(|tool| tool.name.starts_with("creative_")));
 
-    let disabled = runtime_tool_catalog(ToolProfile::Full, false);
+    let disabled = runtime_tool_catalog(ToolProfile::Full, false, false);
     assert_eq!(disabled.len(), retained.len() + 1);
     assert!(disabled.iter().any(|tool| tool.name == "creative_status"));
     assert!(!disabled.iter().any(|tool| tool.name == "creative_project"));
 
-    let enabled = runtime_tool_catalog(ToolProfile::Full, true);
+    let enabled = runtime_tool_catalog(ToolProfile::Full, true, false);
     for name in [
         "creative_status",
         "creative_catalog",
@@ -148,14 +152,14 @@ fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
         );
     }
 
-    let primary = runtime_tool_catalog(ToolProfile::Primary, true);
+    let primary = runtime_tool_catalog(ToolProfile::Primary, true, false);
     assert!(primary.iter().any(|tool| tool.name == "creative_status"));
     assert!(!primary.iter().any(|tool| tool.name == "creative_project"));
 }
 
 #[test]
 fn creative_action_schemas_require_action_specific_inputs() {
-    let tools = runtime_tool_catalog(ToolProfile::Full, true);
+    let tools = runtime_tool_catalog(ToolProfile::Full, true, false);
     let tool = |name: &str| {
         tools
             .iter()
@@ -204,7 +208,7 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
     )
     .unwrap();
 
-    let asset_tool = runtime_tool_catalog(ToolProfile::Full, true)
+    let asset_tool = runtime_tool_catalog(ToolProfile::Full, true, false)
         .into_iter()
         .find(|tool| tool.name == "creative_asset")
         .expect("creative asset tool");

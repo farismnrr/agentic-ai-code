@@ -35,6 +35,7 @@ impl CreativeProject {
         }
         if self.elements.len() > MAX_PROJECT_ELEMENTS
             || self.assets.len() > MAX_PROJECT_ASSETS
+            || self.scene_boards.len() > MAX_PROJECT_SCENE_BOARDS
             || self.scenes.len() > MAX_PROJECT_SCENES
             || self.games.len() > MAX_PROJECT_GAMES
             || self.audio_plans.len() > MAX_PROJECT_AUDIO_PLANS
@@ -53,6 +54,12 @@ impl CreativeProject {
         ensure_unique(
             self.assets.iter().map(|value| value.asset_id.as_str()),
             "asset",
+        )?;
+        ensure_unique(
+            self.scene_boards
+                .iter()
+                .map(|value| value.board_id.as_str()),
+            "scene board",
         )?;
         ensure_unique(
             self.scenes.iter().map(|value| value.scene_id.as_str()),
@@ -89,6 +96,9 @@ impl CreativeProject {
             validate_asset(asset, self)?;
         }
         validate_asset_lineage(self)?;
+        for board in &self.scene_boards {
+            validate_scene_board(board, self)?;
+        }
         for scene in &self.scenes {
             validate_scene(scene, self)?;
         }
@@ -99,7 +109,7 @@ impl CreativeProject {
             validate_audio(audio, self)?;
         }
         for finding in &self.qa_findings {
-            validate_qa_finding(finding)?;
+            validate_qa_finding(finding, self)?;
         }
         Ok(())
     }
@@ -217,163 +227,8 @@ fn validate_element(element: &ElementRecord, project: &CreativeProject) -> Resul
     Ok(())
 }
 
-fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<(), McpError> {
-    validate_id(&scene.scene_id, "scene_id")?;
-    validate_text(&scene.title, 1, 200, "scene title")?;
-    if scene.shots.len() > MAX_SCENE_SHOTS {
-        return Err(McpError::InvalidRequest(
-            "scene shot count exceeds maximum".into(),
-        ));
-    }
-    let mut shot_ids = HashSet::new();
-    let mut shot_orders = HashSet::new();
-    for element_id in scene
-        .cast_element_ids
-        .iter()
-        .chain(scene.style_element_id.iter())
-    {
-        if project.element(element_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "scene references an unknown element".into(),
-            ));
-        }
-    }
-    let location_pack = scene
-        .location_element_id
-        .as_deref()
-        .map(|element_id| location::selected_location_pack(project, element_id))
-        .transpose()?;
-    for shot in &scene.shots {
-        validate_id(&shot.shot_id, "shot_id")?;
-        if !shot_ids.insert(shot.shot_id.as_str())
-            || !shot_orders.insert(shot.order)
-            || shot.duration_ms == 0
-        {
-            return Err(McpError::InvalidRequest(
-                "scene shot identity or duration is invalid".into(),
-            ));
-        }
-        validate_freeform_text(&shot.action, 0, 4_096, "shot action")?;
-        validate_spec(&shot.continuity)?;
-        if let Some(variant_id) = shot.location_variant_id.as_deref() {
-            validate_id(variant_id, "shot location variant id")?;
-            let pack = location_pack.as_ref().ok_or_else(|| {
-                McpError::InvalidRequest(
-                    "shot location variant requires a scene Location Element".into(),
-                )
-            })?;
-            if !pack
-                .variants
-                .iter()
-                .any(|variant| variant.variant_id == variant_id)
-            {
-                return Err(McpError::InvalidRequest(
-                    "shot location variant is not declared by the selected Location Pack".into(),
-                ));
-            }
-        }
-        for element_id in &shot.element_ids {
-            if project.element(element_id).is_none() {
-                return Err(McpError::InvalidRequest(
-                    "shot references an unknown element".into(),
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_game(game: &GameManifest, project: &CreativeProject) -> Result<(), McpError> {
-    validate_id(&game.game_id, "game_id")?;
-    for (value, label) in [
-        (&game.title, "game title"),
-        (&game.genre, "game genre"),
-        (&game.perspective, "game perspective"),
-    ] {
-        validate_text(value, 1, 4_096, label)?;
-    }
-    for (value, label) in [
-        (&game.core_loop, "game core loop"),
-        (&game.win_condition, "game win condition"),
-        (&game.lose_condition, "game lose condition"),
-        (&game.restart_behavior, "game restart behavior"),
-    ] {
-        validate_freeform_text(value, 1, 4_096, label)?;
-    }
-    if let Some(style_id) = game.style_element_id.as_deref() {
-        if project.element(style_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "game style references an unknown element".into(),
-            ));
-        }
-    }
-    if game.target_devices.len() > MAX_GAME_LIST_ITEMS
-        || game.verbs.len() > MAX_GAME_LIST_ITEMS
-        || game.inputs.len() > MAX_GAME_LIST_ITEMS
-        || game.asset_roles.len() > MAX_GAME_ASSET_ROLES
-    {
-        return Err(McpError::InvalidRequest(
-            "game manifest collection exceeds allowed bounds".into(),
-        ));
-    }
-    for value in game
-        .target_devices
-        .iter()
-        .chain(game.verbs.iter())
-        .chain(game.inputs.iter())
-    {
-        validate_text(value, 1, 128, "game manifest list item")?;
-    }
-    for role in &game.asset_roles {
-        validate_text(&role.role, 1, 128, "game asset role")?;
-        validate_relative_path(&role.runtime_path, "game runtime asset path")?;
-        if let Some(asset_id) = role.asset_id.as_deref() {
-            validate_id(asset_id, "game asset id")?;
-            if project.asset(asset_id).is_none() {
-                return Err(McpError::InvalidRequest(
-                    "game asset role references an unknown asset".into(),
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_audio(audio: &AudioPlan, project: &CreativeProject) -> Result<(), McpError> {
-    validate_id(&audio.audio_plan_id, "audio_plan_id")?;
-    if let Some(voice_id) = audio.voice_element_id.as_deref() {
-        if project.element(voice_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "audio plan voice references an unknown element".into(),
-            ));
-        }
-    }
-    if audio.cues.len() > MAX_AUDIO_CUES {
-        return Err(McpError::InvalidRequest(
-            "audio cue count exceeds maximum".into(),
-        ));
-    }
-    let mut cue_ids = HashSet::new();
-    for cue in &audio.cues {
-        validate_id(&cue.cue_id, "audio cue id")?;
-        if !cue_ids.insert(cue.cue_id.as_str()) {
-            return Err(McpError::InvalidRequest(
-                "duplicate audio cue identity".into(),
-            ));
-        }
-        if let Some(asset_id) = cue.asset_id.as_deref() {
-            if project.asset(asset_id).is_none() {
-                return Err(McpError::InvalidRequest(
-                    "audio cue references an unknown asset".into(),
-                ));
-            }
-        }
-        if let Some(text) = cue.text.as_deref() {
-            validate_freeform_text(text, 1, 4_096, "audio cue text")?;
-        }
-    }
-    Ok(())
-}
+mod production;
+use production::{validate_audio, validate_game, validate_scene, validate_scene_board};
 
 fn validate_target(target: &ProductionTarget) -> Result<(), McpError> {
     if let Some(aspect_ratio) = target.aspect_ratio.as_deref() {
@@ -404,11 +259,26 @@ fn validate_target(target: &ProductionTarget) -> Result<(), McpError> {
     Ok(())
 }
 
-fn validate_qa_finding(finding: &QaFinding) -> Result<(), McpError> {
+fn validate_qa_finding(finding: &QaFinding, project: &CreativeProject) -> Result<(), McpError> {
     validate_id(&finding.finding_id, "QA finding id")?;
     validate_id(&finding.subject_id, "QA subject id")?;
     validate_text(&finding.domain, 1, 128, "QA domain")?;
-    validate_freeform_text(&finding.message, 1, 4_096, "QA message")
+    validate_freeform_text(&finding.message, 1, 4_096, "QA message")?;
+    if let Some(revision_id) = finding.source_revision_id.as_deref() {
+        validate_id(revision_id, "QA source revision id")?;
+    }
+    if let Some(asset_id) = finding.asset_id.as_deref() {
+        validate_id(asset_id, "QA asset id")?;
+        if project.asset(asset_id).is_none() {
+            return Err(McpError::InvalidRequest(
+                "QA finding references an unknown asset".into(),
+            ));
+        }
+    }
+    if let Some(binding_id) = finding.evaluator_binding_id.as_deref() {
+        validate_id(binding_id, "QA evaluator binding id")?;
+    }
+    validate_spec(&finding.evidence)
 }
 
 fn validate_text(value: &str, min: usize, max: usize, field: &str) -> Result<(), McpError> {

@@ -9,13 +9,18 @@ use std::path::{Component, Path, PathBuf};
 mod artifacts;
 mod assets;
 mod authoring;
+mod bootstrap;
 mod bridge;
+mod character;
 mod checkpoints;
 mod knowledge;
 mod preview;
 mod reads;
 mod render;
 mod session;
+
+pub(crate) use bootstrap::{run_character_bootstrap, CharacterBootstrapRequest};
+pub(crate) use character::run_character_workflow;
 
 pub const BLENDER_LAB_PROTOCOL: &str = "blender_lab_json_nul_v1";
 pub const DEFAULT_BLENDER_LAB_PORT: u16 = 9876;

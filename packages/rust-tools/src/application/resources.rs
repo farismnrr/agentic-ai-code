@@ -13,19 +13,21 @@ const MIME: &str = "text/plain; charset=utf-8";
 const MAX_RESOURCE_BYTES: usize = 64 * 1024;
 const MAX_STATUS_BYTES: usize = 16 * 1024;
 pub const RESOURCE_NAMES: [&str; 4] = ["manifest", "agent-guidance", "status", "head"];
+const BLENDER_RESOURCE_NAME: &str = "blender-capability";
 
 pub fn list(config: &ServerConfig) -> Result<Vec<Resource>, McpError> {
     let (_, id) = repository(config)?;
-    Ok(RESOURCE_NAMES
-        .iter()
+    Ok(resource_names(config)
+        .into_iter()
         .map(|name| Resource {
             uri: uri(&id, name),
-            name: (*name).to_owned(),
-            description: match *name {
+            name: name.to_owned(),
+            description: match name {
                 "manifest" => "Bounded repository identity and capability metadata.",
                 "agent-guidance" => "Approved AGENTS.md and resource-index guidance.",
                 "status" => "Bounded non-mutating Git workspace status.",
                 "head" => "Current verified Git HEAD and ref metadata.",
+                BLENDER_RESOURCE_NAME => "Enabled Blender production capability, contained project layout, and structured-first routing guidance.",
                 _ => "Repository resource.",
             }
             .to_owned(),
@@ -39,14 +41,28 @@ pub fn read(config: &ServerConfig, requested: &str) -> Result<ResourceContent, M
     let Some((resource_id, name)) = parse_uri(requested) else {
         return Err(unknown());
     };
-    if resource_id != id || !RESOURCE_NAMES.contains(&name) {
+    let names = resource_names(config);
+    if resource_id != id || !names.contains(&name) {
         return Err(unknown());
     }
     let text = match name {
-        "manifest" => json!({ "repository": id, "root": "verified-execution-root", "markers": ["Cargo.toml", "package.json"], "resources": RESOURCE_NAMES, "capabilities": ["workspace-read", "workspace-write", "git-read", "lsp", "mcp-tools"] }).to_string(),
+        "manifest" => {
+            let mut capabilities = vec![
+                "workspace-read",
+                "workspace-write",
+                "git-read",
+                "lsp",
+                "mcp-tools",
+            ];
+            if blender_enabled(config) {
+                capabilities.push("blender");
+            }
+            json!({ "repository": id, "root": "verified-execution-root", "markers": ["Cargo.toml", "package.json"], "resources": names, "capabilities": capabilities }).to_string()
+        }
         "agent-guidance" => guidance(&root)?,
         "status" => git_text(&root, &["status", "--short", "--branch"], MAX_STATUS_BYTES)?,
         "head" => git_text(&root, &["rev-parse", "--verify", "HEAD"], MAX_STATUS_BYTES)?,
+        BLENDER_RESOURCE_NAME => blender_capability(),
         _ => unreachable!(),
     };
     Ok(ResourceContent {
@@ -54,6 +70,44 @@ pub fn read(config: &ServerConfig, requested: &str) -> Result<ResourceContent, M
         text: bounded(text, MAX_RESOURCE_BYTES)?,
         mime_type: MIME,
     })
+}
+
+fn blender_enabled(config: &ServerConfig) -> bool {
+    config.enable_creative && config.enable_blender
+}
+
+fn resource_names(config: &ServerConfig) -> Vec<&'static str> {
+    let mut names = RESOURCE_NAMES.to_vec();
+    if blender_enabled(config) {
+        names.push(BLENDER_RESOURCE_NAME);
+    }
+    names
+}
+
+fn blender_capability() -> String {
+    let tools = crate::interfaces::mcp::blender_tool_catalog()
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+    json!({
+        "capability": "blender",
+        "protocol": crate::application::blender::BLENDER_LAB_PROTOCOL,
+        "tools": tools,
+        "project_layout": crate::application::blender::project_layout(),
+        "routing": {
+            "default": "structured_first",
+            "raw_python": "explicit_high_risk_only",
+            "session": "attach_external_or_explicit_relay_start",
+            "network": "loopback_only"
+        },
+        "authority": {
+            "caller_host_override": false,
+            "caller_port_override": false,
+            "caller_executable_override": false,
+            "production_artifacts_project_contained": true
+        }
+    })
+    .to_string()
 }
 
 fn unknown() -> McpError {

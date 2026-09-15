@@ -127,6 +127,7 @@ impl AppState {
         crate::interfaces::mcp::runtime_tool_catalog(
             self.config.tool_profile,
             self.config.enable_creative,
+            self.config.enable_blender,
         )
     }
 

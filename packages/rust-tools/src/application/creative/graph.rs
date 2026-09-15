@@ -5,7 +5,10 @@ mod job_validation;
 mod runtime;
 mod validation;
 pub use job_validation::validate_job_record;
-pub use runtime::{dirty_descendants, execute_graph, execute_graph_partial};
+pub use runtime::{
+    dirty_descendants, execute_graph, execute_graph_partial, ExternalNodeExecutor,
+    GraphExecutionContext,
+};
 pub use validation::{capability_for_node, validate_graph, validate_graph_template};
 
 const MAX_GRAPH_NODES: usize = 256;

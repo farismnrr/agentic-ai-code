@@ -192,6 +192,7 @@ const userItems = computed<DropdownMenuItem[][]>(() => [
             </div>
             <UNavigationMenu
               :items="[
+                { label: 'Creative Canvas', icon: 'i-lucide-workflow', to: `/workspaces/${group.workspace.id}/creative`, active: route.path === `/workspaces/${group.workspace.id}/creative` },
                 { label: 'Logs', icon: 'i-lucide-activity', to: `/workspaces/${group.workspace.id}/logs`, active: route.path === `/workspaces/${group.workspace.id}/logs` },
                 ...itemsFor(group.conversations)
               ]"

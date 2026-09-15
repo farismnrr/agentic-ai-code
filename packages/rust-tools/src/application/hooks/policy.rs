@@ -41,6 +41,23 @@ pub fn effect_classes_for_call(
     if tool_id.starts_with("creative_") {
         let action = arguments.get("action").and_then(serde_json::Value::as_str);
         return match (tool_id, action) {
+            ("creative_job", Some("submit"))
+                if matches!(
+                    arguments
+                        .get("workflow_id")
+                        .and_then(serde_json::Value::as_str),
+                    Some(
+                        "image_to_3d_bootstrap"
+                            | "character_mesh_production"
+                            | "character_rig_production"
+                            | "character_action"
+                            | "character_facial_performance"
+                            | "character_secondary_motion"
+                    )
+                ) =>
+            {
+                vec!["workspace_write", "external_mutation", "privileged_bridge"]
+            }
             ("creative_project", Some("create"))
             | ("creative_element", Some("create_revision" | "promote" | "reject"))
             | ("creative_asset", Some("register" | "promote" | "reject"))

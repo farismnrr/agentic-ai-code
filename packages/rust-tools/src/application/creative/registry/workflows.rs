@@ -1,8 +1,10 @@
 use super::WorkflowDescriptor;
 use serde_json::{json, Value};
 
+mod extended;
+
 pub fn workflows() -> Vec<WorkflowDescriptor> {
-    vec![
+    let mut items = vec![
         workflow(
             "character_turnaround",
             "Create a reusable multi-view character reference set.",
@@ -88,16 +90,107 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
         ),
         workflow(
             "image_to_3d_bootstrap",
-            "Bootstrap a 3D asset from approved image references.",
+            "Bootstrap a Character Element into a contained Blender production setup using the caller-selected manual, binding, or hybrid route.",
             &["3d.image_to_mesh"],
             json!({
                 "type":"object",
                 "properties":{
-                    "reference_asset_ids": id_array(1, 16),
+                    "route":{"type":"string","enum":["manual","binding","hybrid"]},
+                    "reference_asset_ids": id_array(3, 16),
                     "element_id": id_schema(),
-                    "target_role": short_string(64)
+                    "target_role": short_string(64),
+                    "alignment":{
+                        "type":"object",
+                        "properties":{
+                            "front_asset_id":id_schema(),
+                            "side_asset_id":id_schema(),
+                            "back_asset_id":id_schema(),
+                            "reference_scale":{"type":"number","minimum":0.1,"maximum":100.0,"default":2.0}
+                        },
+                        "required":["front_asset_id","side_asset_id","back_asset_id"],
+                        "additionalProperties":false
+                    }
                 },
-                "required":["reference_asset_ids"],
+                "required":["route","reference_asset_ids","element_id","alignment"],
+                "additionalProperties":false
+            }),
+            asset_output(),
+        ),
+        workflow(
+            "character_mesh_production",
+            "Turn a contained Blender bootstrap into a deformation-ready mesh/UV/toon-material character candidate while preserving Character/Style authority.",
+            &[],
+            json!({
+                "type":"object",
+                "properties":{
+                    "source_asset_id":id_schema(),
+                    "element_id":id_schema(),
+                    "style_element_id":id_schema(),
+                    "strategy":{"type":"string","enum":["repair","retopo","manual_cleanup"]}
+                },
+                "required":["source_asset_id","element_id","style_element_id","strategy"],
+                "additionalProperties":false
+            }),
+            asset_output(),
+        ),
+        workflow(
+            "character_rig_production",
+            "Create a reusable reviewed humanoid rig candidate with armature binding and initial facial/viseme controls.",
+            &[],
+            json!({
+                "type":"object",
+                "properties":{"source_asset_id":id_schema(),"element_id":id_schema()},
+                "required":["source_asset_id","element_id"],
+                "additionalProperties":false
+            }),
+            asset_output(),
+        ),
+        workflow(
+            "character_action",
+            "Author one bounded editable Blender action on a contained rigged character asset.",
+            &[],
+            json!({
+                "type":"object",
+                "properties":{
+                    "source_asset_id":id_schema(),
+                    "action_name":short_string(96),
+                    "start_frame":{"type":"integer","minimum":1,"maximum":100000},
+                    "end_frame":{"type":"integer","minimum":2,"maximum":100000}
+                },
+                "required":["source_asset_id","action_name","start_frame","end_frame"],
+                "additionalProperties":false
+            }),
+            asset_output(),
+        ),
+        workflow(
+            "character_facial_performance",
+            "Author bounded editable viseme/facial animation from a contained audio Asset without rebuilding body animation.",
+            &[],
+            json!({
+                "type":"object",
+                "properties":{
+                    "source_asset_id":id_schema(),
+                    "audio_asset_id":id_schema(),
+                    "start_frame":{"type":"integer","minimum":1,"maximum":100000},
+                    "end_frame":{"type":"integer","minimum":2,"maximum":100000}
+                },
+                "required":["source_asset_id","audio_asset_id"],
+                "additionalProperties":false
+            }),
+            asset_output(),
+        ),
+        workflow(
+            "character_secondary_motion",
+            "Record and inspect a bounded secondary-motion choice for hair/clothing, including deliberate omission.",
+            &[],
+            json!({
+                "type":"object",
+                "properties":{
+                    "source_asset_id":id_schema(),
+                    "mode":{"type":"string","enum":["authored","omitted"]},
+                    "reason":free_text(1024)
+                },
+                "required":["source_asset_id","mode","reason"],
                 "additionalProperties":false
             }),
             asset_output(),
@@ -223,101 +316,12 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
             }),
             asset_output(),
         ),
-        workflow(
-            "voice_clone",
-            "Create an authorized reusable voice artifact from bounded voice references.",
-            &["audio.voice_clone"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "reference_asset_ids":id_array(1,16),
-                    "consent_asserted":{"const":true},
-                    "language":short_string(32)
-                },
-                "required":["reference_asset_ids","consent_asserted"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "voice_change",
-            "Create a lineaged voice-changed audio child asset.",
-            &["audio.voice_change"],
-            json!({
-                "type":"object",
-                "properties":{"asset_id":id_schema(),"voice_element_id":id_schema()},
-                "required":["asset_id","voice_element_id"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "video_dub",
-            "Create synchronized dubbed media from a contained source video and voice plan.",
-            &["audio.video_dub"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "video_asset_id":id_schema(),
-                    "voice_element_id":id_schema(),
-                    "language":short_string(32)
-                },
-                "required":["video_asset_id","voice_element_id","language"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "shot_render_preview",
-            "Execute one caller-authored shot through a selected backend.",
-            &["video.reference_generate"],
-            json!({
-                "type":"object",
-                "properties":{"scene_id":id_schema(),"shot_id":id_schema()},
-                "required":["scene_id","shot_id"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "game_asset_batch",
-            "Run caller-declared independent game asset jobs.",
-            &["image.generate", "audio.sfx"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "game_id":id_schema(),
-                    "roles":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":short_string(128)}
-                },
-                "required":["game_id","roles"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "game_build_playtest",
-            "Build then verify a browser game through reviewed runtime primitives.",
-            &["game.build", "game.playtest"],
-            json!({
-                "type":"object",
-                "properties":{"game_id":id_schema(),"build_revision":id_schema()},
-                "required":["game_id"],
-                "additionalProperties":false
-            }),
-            json!({
-                "type":"object",
-                "properties":{
-                    "build_id":id_schema(),
-                    "playtest_evidence_id":id_schema()
-                },
-                "required":["build_id","playtest_evidence_id"],
-                "additionalProperties":false
-            }),
-        ),
-    ]
+    ];
+    items.extend(extended::workflows());
+    items
 }
 
-fn workflow(
+pub(super) fn workflow(
     id: &str,
     description: &str,
     required: &[&str],
@@ -334,11 +338,11 @@ fn workflow(
     }
 }
 
-fn id_schema() -> Value {
+pub(super) fn id_schema() -> Value {
     json!({"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9_-]+$"})
 }
 
-fn id_array(min: usize, max: usize) -> Value {
+pub(super) fn id_array(min: usize, max: usize) -> Value {
     json!({
         "type":"array",
         "minItems":min,
@@ -348,15 +352,15 @@ fn id_array(min: usize, max: usize) -> Value {
     })
 }
 
-fn short_string(max: usize) -> Value {
+pub(super) fn short_string(max: usize) -> Value {
     json!({"type":"string","minLength":1,"maxLength":max})
 }
 
-fn free_text(max: usize) -> Value {
+pub(super) fn free_text(max: usize) -> Value {
     json!({"type":"string","minLength":1,"maxLength":max})
 }
 
-fn asset_output() -> Value {
+pub(super) fn asset_output() -> Value {
     json!({
         "type":"object",
         "properties":{"asset_ids":id_array(1,128)},
@@ -365,7 +369,7 @@ fn asset_output() -> Value {
     })
 }
 
-fn storyboard_output() -> Value {
+pub(super) fn storyboard_output() -> Value {
     json!({
         "type":"object",
         "properties":{"scene_id":id_schema(),"frame_asset_ids":id_array(1,256)},
@@ -374,7 +378,7 @@ fn storyboard_output() -> Value {
     })
 }
 
-fn storyboard_schema(mode: &str) -> Value {
+pub(super) fn storyboard_schema(mode: &str) -> Value {
     json!({
         "type":"object",
         "properties":{
@@ -401,7 +405,7 @@ fn storyboard_schema(mode: &str) -> Value {
     })
 }
 
-fn single_asset_schema(extra_optional_ids: &[&str]) -> Value {
+pub(super) fn single_asset_schema(extra_optional_ids: &[&str]) -> Value {
     let mut properties = serde_json::Map::new();
     properties.insert("asset_id".into(), id_schema());
     for key in extra_optional_ids {
@@ -415,7 +419,7 @@ fn single_asset_schema(extra_optional_ids: &[&str]) -> Value {
     })
 }
 
-fn resize_schema() -> Value {
+pub(super) fn resize_schema() -> Value {
     json!({
         "type":"object",
         "properties":{

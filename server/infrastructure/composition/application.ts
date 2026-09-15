@@ -42,6 +42,8 @@ import * as audit from '../database/security-events'
 import type { AuthUseCases } from '../../application/auth'
 import type { AccountDataUseCases } from '../../application/account-data'
 import type { McpUseCases } from '../../application/mcp'
+import type { CreativeCanvasUseCases } from '../../application/creative-canvas'
+import { invokeCreativeCanvas } from '../creative/canvas'
 import { createActivityUseCases } from '../../application/activity'
 import { activityDatabase } from '../database/activity'
 import { bootstrapRelayActivity } from '../activity/bootstrap'
@@ -121,6 +123,9 @@ export function createApplicationAdapters(requestId: string) {
       listMessages: messages.listConversationMessages,
       sendMessage: messages.sendMessage
     } satisfies McpUseCases,
+    creativeCanvas: {
+      invoke: (userId, input) => request.withSpan('creative_canvas.invoke', { 'creative.tool': input.tool }, () => invokeCreativeCanvas(userId, input))
+    } satisfies CreativeCanvasUseCases,
     conversations: createConversationUseCases(conversationPort, request),
     settings: createSettingsUseCases({ read: settings.getSettings, write: settings.updateSettings }, conversationPort.assertModelOwnership, request),
     providers: createProviderManagementUseCases(providerPort, request),

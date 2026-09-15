@@ -98,6 +98,7 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
             },
             created_at_ms: 2,
         }],
+        scene_boards: vec![],
         scenes: vec![SceneManifest {
             scene_id: "scene_intro".into(),
             title: "Opening beat".into(),
@@ -121,6 +122,7 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
                     },
                     action: "Hero enters frame.".into(),
                     continuity: json!({"screen_direction": "left_to_right"}),
+                    ..ShotManifest::default()
                 },
                 ShotManifest {
                     shot_id: "shot_2".into(),
@@ -137,6 +139,7 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
                     },
                     action: "Hero reacts.".into(),
                     continuity: json!({"eye_line": "camera_right"}),
+                    ..ShotManifest::default()
                 },
                 ShotManifest {
                     shot_id: "shot_3".into(),
@@ -147,8 +150,10 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
                     camera: CameraSpec::default(),
                     action: "Hero draws sword.".into(),
                     continuity: json!({"prop_hand": "right"}),
+                    ..ShotManifest::default()
                 },
             ],
+            ..SceneManifest::default()
         }],
         games: vec![GameManifest {
             game_id: "game_duel".into(),
@@ -169,6 +174,7 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
                 runtime_path: "characters/hero.glb".into(),
                 asset_id: None,
             }],
+            ..GameManifest::default()
         }],
         audio_plans: vec![AudioPlan {
             audio_plan_id: "audio_intro".into(),
@@ -190,6 +196,10 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
             severity: QaSeverity::NotInspected,
             subject_id: "scene_intro".into(),
             message: "Awaiting visual evidence.".into(),
+            source_revision_id: None,
+            asset_id: None,
+            evaluator_binding_id: None,
+            evidence: json!({}),
             created_at_ms: 3,
         }],
         created_at_ms: 1,

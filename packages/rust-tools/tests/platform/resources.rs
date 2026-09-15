@@ -81,3 +81,36 @@ fn reads_the_server_owned_manifest() {
     assert!(content.text.contains("\"repository\":\"ai-code\""));
     assert_eq!(content.uri, "workspace://ai-code/manifest");
 }
+
+#[test]
+fn blender_resource_is_exposed_only_with_the_enabled_blender_capability() {
+    let repository = TempRepo::new();
+    let disabled = repository.config();
+    assert!(read(&disabled, "workspace://ai-code/blender-capability").is_err());
+
+    let enabled = ServerConfig {
+        enable_creative: true,
+        enable_blender: true,
+        ..repository.config()
+    };
+    let resources = list(&enabled).unwrap();
+    assert!(resources
+        .iter()
+        .any(|resource| resource.name == "blender-capability"));
+
+    let content = read(&enabled, "workspace://ai-code/blender-capability").unwrap();
+    let value: serde_json::Value = serde_json::from_str(&content.text).unwrap();
+    assert_eq!(value["capability"], "blender");
+    assert_eq!(value["tools"].as_array().unwrap().len(), 11);
+    assert_eq!(value["routing"]["default"], "structured_first");
+    assert_eq!(value["routing"]["raw_python"], "explicit_high_risk_only");
+    assert_eq!(value["authority"]["caller_executable_override"], false);
+    assert_eq!(
+        value["authority"]["production_artifacts_project_contained"],
+        true
+    );
+
+    let manifest = read(&enabled, "workspace://ai-code/manifest").unwrap();
+    assert!(manifest.text.contains("blender-capability"));
+    assert!(manifest.text.contains("\"blender\""));
+}

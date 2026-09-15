@@ -46,6 +46,14 @@ pub(super) fn mark_style_dependents_for_review(
             message: format!(
                 "{subject_kind} depends on Style Element {style_element_id}; review after promoted revision {style_revision_id}"
             ),
+            source_revision_id: Some(style_revision_id.to_owned()),
+            asset_id: (subject_kind == &"asset").then(|| subject_id.clone()),
+            evaluator_binding_id: None,
+            evidence: serde_json::json!({
+                "style_element_id": style_element_id,
+                "style_revision_id": style_revision_id,
+                "subject_kind": subject_kind
+            }),
             created_at_ms,
         });
     }

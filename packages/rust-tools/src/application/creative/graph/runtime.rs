@@ -1,34 +1,46 @@
 use super::{
-    validate_graph, CreativeGraph, CreativeJobRecord, CreativeJobStatus, GraphNode, GraphNodeKind,
-    NodeRunRecord,
+    validate_graph, CreativeGraph, CreativeJobRecord, CreativeJobStatus, GraphEdge, GraphNode,
+    GraphNodeKind, NodeRunRecord,
 };
 use crate::application::creative::contracts::{CreativeProject, CREATIVE_SCHEMA_VERSION};
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use uuid::Uuid;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use tokio::task::JoinSet;
 
 const MAX_PARALLEL_GRAPH_NODES: usize = 16;
 
-pub fn execute_graph(
-    graph: &CreativeGraph,
-    project: &CreativeProject,
-    config: &ServerConfig,
-    owner: &str,
-    now_ms: u128,
-) -> Result<CreativeJobRecord, McpError> {
-    execute_graph_internal(graph, project, config, owner, now_ms, None, None)
+pub type ExternalNodeFuture = Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>;
+pub type ExternalNodeExecutor =
+    Arc<dyn Fn(GraphNode, Vec<Value>) -> ExternalNodeFuture + Send + Sync>;
+
+pub struct GraphExecutionContext<'a> {
+    pub owner: &'a str,
+    pub now_ms: u128,
+    pub job_id: &'a str,
+    pub external: ExternalNodeExecutor,
 }
 
-pub fn execute_graph_partial(
+pub async fn execute_graph(
     graph: &CreativeGraph,
     project: &CreativeProject,
     config: &ServerConfig,
-    owner: &str,
+    execution: GraphExecutionContext<'_>,
+) -> Result<CreativeJobRecord, McpError> {
+    execute_graph_internal(graph, project, config, execution, None, None).await
+}
+
+pub async fn execute_graph_partial(
+    graph: &CreativeGraph,
+    project: &CreativeProject,
+    config: &ServerConfig,
     previous: &CreativeJobRecord,
     changed_node_ids: &[String],
-    now_ms: u128,
+    execution: GraphExecutionContext<'_>,
 ) -> Result<CreativeJobRecord, McpError> {
     if previous.status != CreativeJobStatus::Completed
         || previous.graph_id.as_deref() != Some(graph.graph_id.as_str())
@@ -43,11 +55,11 @@ pub fn execute_graph_partial(
         graph,
         project,
         config,
-        owner,
-        now_ms,
+        execution,
         Some(previous),
         Some(&dirty),
     )
+    .await
 }
 
 pub fn dirty_descendants(
@@ -93,21 +105,20 @@ pub fn dirty_descendants(
     Ok(dirty)
 }
 
-fn execute_graph_internal(
+async fn execute_graph_internal(
     graph: &CreativeGraph,
     project: &CreativeProject,
     config: &ServerConfig,
-    owner: &str,
-    now_ms: u128,
+    execution: GraphExecutionContext<'_>,
     previous: Option<&CreativeJobRecord>,
     dirty: Option<&HashSet<String>>,
 ) -> Result<CreativeJobRecord, McpError> {
     let validation = validate_graph(graph, project, config)?;
     let mut job = CreativeJobRecord {
         schema_version: CREATIVE_SCHEMA_VERSION,
-        job_id: format!("job_{}", Uuid::new_v4().simple()),
+        job_id: execution.job_id.to_owned(),
         project_id: project.project_id.clone(),
-        owner: owner.to_owned(),
+        owner: execution.owner.to_owned(),
         kind: super::CreativeJobKind::Graph,
         graph_id: Some(graph.graph_id.clone()),
         capability_id: None,
@@ -123,8 +134,8 @@ fn execute_graph_internal(
         retry_count: 0,
         max_retries: 0,
         timeout_ms: 0,
-        created_at_ms: now_ms,
-        updated_at_ms: now_ms,
+        created_at_ms: execution.now_ms,
+        updated_at_ms: execution.now_ms,
         node_runs: Vec::new(),
         output_asset_ids: Vec::new(),
         actual_output_bytes: None,
@@ -141,7 +152,7 @@ fn execute_graph_internal(
         .iter()
         .map(|node| (node.node_id.as_str(), node))
         .collect::<HashMap<_, _>>();
-    let incoming = incoming_edges(graph);
+    let bindings = incoming_bindings(graph);
     let batches = execution_batches(graph, &validation.topological_order);
     let previous_runs = previous
         .map(|record| {
@@ -168,6 +179,7 @@ fn execute_graph_internal(
                 {
                     if let Some(output) = run.output.clone() {
                         outputs.insert(node.node_id.clone(), output.clone());
+                        collect_output_assets(&output, &mut job.output_asset_ids);
                         job.node_runs.push(NodeRunRecord {
                             node_id: node.node_id.clone(),
                             status: CreativeJobStatus::Completed,
@@ -180,38 +192,43 @@ fn execute_graph_internal(
                     }
                 }
             }
-            let upstream = incoming
-                .get(node.node_id.as_str())
-                .into_iter()
-                .flatten()
-                .filter_map(|source| outputs.get(*source).cloned())
-                .collect::<Vec<_>>();
-            execute.push((*node, upstream));
+            let (resolved_node, upstream) = resolve_node_inputs(node, &bindings, &outputs);
+            execute.push((resolved_node, upstream));
         }
 
         let mut results = Vec::with_capacity(execute.len());
         for wave in execute.chunks(MAX_PARALLEL_GRAPH_NODES) {
-            let mut wave_results = std::thread::scope(|scope| {
-                let handles = wave
-                    .iter()
-                    .map(|(node, upstream)| {
-                        let upstream = upstream.clone();
-                        scope.spawn(move || {
-                            (node.node_id.clone(), execute_node(node, project, upstream))
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                handles
-                    .into_iter()
-                    .map(|handle| handle.join().expect("creative graph node thread panicked"))
-                    .collect::<Vec<_>>()
-            });
-            results.append(&mut wave_results);
+            let mut pending = JoinSet::new();
+            for (node, upstream) in wave {
+                if requires_external_execution(&node.kind) {
+                    let executor = execution.external.clone();
+                    let node = node.clone();
+                    let upstream = upstream.clone();
+                    pending.spawn(async move {
+                        let node_id = node.node_id.clone();
+                        (node_id, executor(node, upstream).await)
+                    });
+                } else {
+                    results.push((
+                        node.node_id.clone(),
+                        execute_structural_node(node, project, upstream.clone()),
+                    ));
+                }
+            }
+            while let Some(joined) = pending.join_next().await {
+                match joined {
+                    Ok(result) => results.push(result),
+                    Err(_) => {
+                        results.push(("external_node".into(), Err("graph_node_task_failed".into())))
+                    }
+                }
+            }
         }
         results.sort_by(|left, right| left.0.cmp(&right.0));
-        for (node_id, result) in results {
+        for (node_id, result) in results.drain(..) {
             match result {
                 Ok(output) => {
+                    collect_output_assets(&output, &mut job.output_asset_ids);
                     outputs.insert(node_id.clone(), output.clone());
                     job.node_runs.push(NodeRunRecord {
                         node_id,
@@ -233,26 +250,63 @@ fn execute_graph_internal(
                     });
                     job.status = CreativeJobStatus::Failed;
                     job.failure_code = Some(code);
-                    job.updated_at_ms = now_ms;
-                    job.node_runs.sort_by(|left, right| {
-                        left.execution_batch
-                            .cmp(&right.execution_batch)
-                            .then_with(|| left.node_id.cmp(&right.node_id))
-                    });
+                    job.updated_at_ms = execution.now_ms;
+                    sort_runs(&mut job);
+                    job.output_asset_ids.sort();
+                    job.output_asset_ids.dedup();
                     return Ok(job);
                 }
             }
         }
     }
 
+    sort_runs(&mut job);
+    job.output_asset_ids.sort();
+    job.output_asset_ids.dedup();
+    job.status = CreativeJobStatus::Completed;
+    job.updated_at_ms = execution.now_ms;
+    Ok(job)
+}
+
+fn sort_runs(job: &mut CreativeJobRecord) {
     job.node_runs.sort_by(|left, right| {
         left.execution_batch
             .cmp(&right.execution_batch)
             .then_with(|| left.node_id.cmp(&right.node_id))
     });
-    job.status = CreativeJobStatus::Completed;
-    job.updated_at_ms = now_ms;
-    Ok(job)
+}
+
+fn collect_output_assets(value: &Value, output_asset_ids: &mut Vec<String>) {
+    if let Some(asset_id) = value.get("asset_id").and_then(Value::as_str) {
+        output_asset_ids.push(asset_id.to_owned());
+    }
+    if let Some(asset_ids) = value.get("output_asset_ids").and_then(Value::as_array) {
+        output_asset_ids.extend(
+            asset_ids
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned),
+        );
+    }
+}
+
+fn requires_external_execution(kind: &GraphNodeKind) -> bool {
+    matches!(
+        kind,
+        GraphNodeKind::GenerateImage
+            | GraphNodeKind::GenerateVideo
+            | GraphNodeKind::GenerateAudio
+            | GraphNodeKind::Generate3d
+            | GraphNodeKind::StoryboardStore
+            | GraphNodeKind::SceneManifestValidate
+            | GraphNodeKind::DccExecute
+            | GraphNodeKind::DccRender
+            | GraphNodeKind::GameBuild
+            | GraphNodeKind::GamePlaytest
+            | GraphNodeKind::GameDeploy
+            | GraphNodeKind::AssembleSequence
+            | GraphNodeKind::ExportArtifact
+    )
 }
 
 fn execution_batches(
@@ -279,7 +333,7 @@ fn execution_batches(
     batches
 }
 
-fn execute_node(
+fn execute_structural_node(
     node: &GraphNode,
     project: &CreativeProject,
     upstream: Vec<Value>,
@@ -330,20 +384,47 @@ fn execute_node(
                 "upstream": upstream
             }))
         }
-        GraphNodeKind::GenerateImage
-        | GraphNodeKind::GenerateVideo
-        | GraphNodeKind::GenerateAudio
-        | GraphNodeKind::Generate3d
-        | GraphNodeKind::StoryboardStore
-        | GraphNodeKind::SceneManifestValidate
-        | GraphNodeKind::DccExecute
-        | GraphNodeKind::DccRender
-        | GraphNodeKind::GameBuild
-        | GraphNodeKind::GamePlaytest
-        | GraphNodeKind::GameDeploy
-        | GraphNodeKind::AssembleSequence
-        | GraphNodeKind::ExportArtifact => Err("execution_not_implemented".into()),
+        _ => Err("graph_external_executor_required".into()),
     }
+}
+
+fn resolve_node_inputs(
+    node: &GraphNode,
+    bindings: &HashMap<&str, Vec<&GraphEdge>>,
+    outputs: &HashMap<String, Value>,
+) -> (GraphNode, Vec<Value>) {
+    let mut resolved = node.clone();
+    let mut upstream = Vec::new();
+    let Some(edges) = bindings.get(node.node_id.as_str()) else {
+        return (resolved, upstream);
+    };
+    if !resolved.inputs.is_object() {
+        resolved.inputs = json!({});
+    }
+    let target = resolved
+        .inputs
+        .as_object_mut()
+        .expect("resolved graph node inputs are an object");
+    for edge in edges {
+        let Some(source_output) = outputs.get(&edge.from_node) else {
+            continue;
+        };
+        upstream.push(source_output.clone());
+        let value = source_output
+            .get(&edge.from_port)
+            .cloned()
+            .unwrap_or_else(|| source_output.clone());
+        target.insert(edge.to_port.clone(), value);
+    }
+    (resolved, upstream)
+}
+
+fn incoming_bindings(graph: &CreativeGraph) -> HashMap<&str, Vec<&GraphEdge>> {
+    let mut result: HashMap<&str, Vec<&GraphEdge>> = HashMap::new();
+    for edge in &graph.edges {
+        result.entry(edge.to_node.as_str()).or_default().push(edge);
+    }
+    result
 }
 
 fn incoming_edges(graph: &CreativeGraph) -> HashMap<&str, Vec<&str>> {

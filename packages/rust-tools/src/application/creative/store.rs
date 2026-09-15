@@ -1,7 +1,9 @@
 use super::contracts::{
-    validate_id, validate_spec, AssetSource, CreativeProject, CreativeProjectLayout, CreativeTrack,
-    ElementKind, ElementRecord, ElementRevision, ProductionTarget, ReferenceAuthority,
-    RevisionState, CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_REFERENCES_PER_REVISION,
+    validate_id, validate_spec, AssetSource, AudioPlan, CreativeProject, CreativeProjectLayout,
+    CreativeTrack, ElementKind, ElementRecord, ElementRevision, GameManifest, MultiplayerRoomState,
+    ProductionTarget, QaFinding, ReferenceAuthority, RevisionState, SceneBoard, SceneManifest,
+    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_AUDIO_PLANS, MAX_PROJECT_ELEMENTS, MAX_PROJECT_GAMES,
+    MAX_PROJECT_SCENES, MAX_PROJECT_SCENE_BOARDS, MAX_QA_FINDINGS, MAX_REFERENCES_PER_REVISION,
     MAX_REVISIONS_PER_ELEMENT,
 };
 use super::graph::{
@@ -14,6 +16,7 @@ use serde_json::Value;
 mod assets;
 mod dependencies;
 mod io;
+mod production;
 mod support;
 mod templates;
 mod uploads;
@@ -21,6 +24,10 @@ pub use assets::{
     promote_asset, register_asset, reject_asset, search_assets, AssetRegistrationInput, AssetSearch,
 };
 use io::*;
+pub use production::{
+    add_qa_finding, list_projects, load_multiplayer_room, load_project, project_layout,
+    store_multiplayer_room, upsert_audio_plan, upsert_game, upsert_scene, upsert_scene_board,
+};
 use support::new_id;
 pub use support::now_ms;
 pub use templates::{list_templates, load_template, store_template};
@@ -93,23 +100,6 @@ pub(crate) fn load_blender_checkpoint_state(
     read_json(cwd, config, &path)
 }
 
-pub fn project_layout(project_id: &str) -> Result<CreativeProjectLayout, McpError> {
-    validate_id(project_id, "project_id")?;
-    let state_root = format!("{STATE_PREFIX}/projects/{project_id}");
-    let production_root = format!("creative/{project_id}");
-    Ok(CreativeProjectLayout {
-        state_root: state_root.clone(),
-        production_root: production_root.clone(),
-        assets_root: format!("{production_root}/assets"),
-        scene_boards_root: format!("{production_root}/scene-boards"),
-        graphs_root: format!("{state_root}/graphs"),
-        templates_root: format!("{state_root}/templates"),
-        games_root: format!("{production_root}/games"),
-        qa_root: format!("{state_root}/qa"),
-        exports_root: format!("{production_root}/exports"),
-    })
-}
-
 pub fn create_project(
     cwd: Option<&str>,
     config: &ServerConfig,
@@ -144,6 +134,7 @@ pub fn create_project(
         target: input.target,
         elements: Vec::new(),
         assets: Vec::new(),
+        scene_boards: Vec::new(),
         scenes: Vec::new(),
         games: Vec::new(),
         audio_plans: Vec::new(),
@@ -161,21 +152,6 @@ pub fn create_project(
     index.project_ids.dedup();
     write_json(cwd, config, index_path(), &index, true)?;
     Ok(project)
-}
-
-pub fn load_project(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    project_id: &str,
-) -> Result<CreativeProject, McpError> {
-    validate_id(project_id, "project_id")?;
-    let project: CreativeProject = read_json(cwd, config, &project_path(project_id))?;
-    project.validate()?;
-    Ok(project)
-}
-
-pub fn list_projects(cwd: Option<&str>, config: &ServerConfig) -> Result<Vec<String>, McpError> {
-    Ok(read_project_index(cwd, config)?.project_ids)
 }
 
 pub fn add_element_revision(

@@ -1,6 +1,9 @@
 use super::{coding_security_scheme, Tool, ToolAnnotations};
 use serde_json::json;
 
+mod project;
+use project::project_tool;
+
 pub(super) fn tools() -> Vec<Tool> {
     vec![
         status_tool(),
@@ -47,47 +50,6 @@ fn catalog_tool() -> Tool {
             "additionalProperties": false
         }),
         annotations: Some(read_only()),
-        security_schemes: coding_security_scheme(),
-        execution: None,
-    }
-}
-
-fn project_tool() -> Tool {
-    Tool {
-        name: "creative_project",
-        title: Some("Creative Project State"),
-        description: "Create, read, or list versioned workspace-contained Creative Projects. Projects own reusable Elements, Assets, Scene/Game/Audio state, graph/job identities, QA, and provenance without provider/model identities as source of truth.",
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "action": { "type": "string", "enum": ["create", "get", "list"] },
-                "cwd": { "type": "string", "maxLength": 4096 },
-                "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-                "intent": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                "tracks": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "uniqueItems": true,
-                    "items": { "type": "string", "enum": ["scene", "anime", "game"] }
-                },
-                "target": { "type": "object", "maxProperties": 8 }
-            },
-            "allOf": [
-                {
-                    "if": { "properties": { "action": { "const": "create" } }, "required": ["action"] },
-                    "then": { "required": ["title", "intent", "tracks"] }
-                },
-                {
-                    "if": { "properties": { "action": { "const": "get" } }, "required": ["action"] },
-                    "then": { "required": ["project_id"] }
-                }
-            ],
-            "required": ["action"],
-            "additionalProperties": false
-        }),
-        annotations: Some(workspace_mutation()),
         security_schemes: coding_security_scheme(),
         execution: None,
     }
@@ -261,12 +223,13 @@ fn graph_tool() -> Tool {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["validate", "execute", "partial_rerun", "get", "template_save", "template_get", "template_list"] },
+                "action": { "type": "string", "enum": ["validate", "execute", "partial_rerun", "rerun_selected", "rerun_subgraph", "rerun_all_dirty", "get", "template_save", "template_get", "template_list", "template_instantiate"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph": { "type": "object", "maxProperties": 16 },
                 "previous_job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "node_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "changed_node_ids": {
                     "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
                     "items": { "type": "string", "minLength": 1, "maxLength": 64 }
@@ -274,6 +237,9 @@ fn graph_tool() -> Tool {
                 "template_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
                 "description": { "type": "string", "maxLength": 1024 },
+                "approved": { "type": "boolean", "default": false },
+                "replacements": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 128 } },
+                "binding_overrides": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 } },
                 "input_node_ids": {
                     "type": "array", "maxItems": 256, "uniqueItems": true,
                     "items": { "type": "string", "minLength": 1, "maxLength": 64 }
@@ -296,8 +262,12 @@ fn graph_tool() -> Tool {
                     "then": { "required": ["project_id", "graph_id"] }
                 },
                 {
-                    "if": { "properties": { "action": { "const": "partial_rerun" } }, "required": ["action"] },
+                    "if": { "properties": { "action": { "enum": ["partial_rerun", "rerun_subgraph", "rerun_all_dirty"] } }, "required": ["action"] },
                     "then": { "required": ["project_id", "graph_id", "previous_job_id", "changed_node_ids"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "rerun_selected" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "graph_id", "previous_job_id", "node_id"] }
                 },
                 {
                     "if": { "properties": { "action": { "const": "template_save" } }, "required": ["action"] },
@@ -310,6 +280,10 @@ fn graph_tool() -> Tool {
                 {
                     "if": { "properties": { "action": { "const": "template_list" } }, "required": ["action"] },
                     "then": { "required": ["project_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_instantiate" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "template_id", "graph_id"] }
                 }
             ],
             "required": ["action"],

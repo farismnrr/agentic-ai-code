@@ -3,51 +3,13 @@ use super::support::*;
 use super::{contracts::*, graph, jobs, store};
 
 mod asset;
+mod project;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use crate::interfaces::mcp::ToolCallResult;
 pub(in crate::application::creative) use asset::asset;
+pub(super) use project::project;
 use serde_json::{json, Value};
-
-pub(super) fn project(
-    arguments: &Value,
-    config: &ServerConfig,
-) -> Result<ToolCallResult, McpError> {
-    let action = required_str(arguments, "action")?;
-    let cwd = arguments.get("cwd").and_then(Value::as_str);
-    match action {
-        "create" => {
-            let tracks: Vec<CreativeTrack> = parse_required(arguments, "tracks")?;
-            let target = parse_optional(arguments, "target")?;
-            let created = store::create_project(
-                cwd,
-                config,
-                store::NewProject {
-                    project_id: optional_string(arguments, "project_id"),
-                    title: required_str(arguments, "title")?.to_owned(),
-                    intent: required_str(arguments, "intent")?.to_owned(),
-                    tracks,
-                    target,
-                },
-            )?;
-            complete(json!({
-                "layout": store::project_layout(&created.project_id)?,
-                "project": created
-            }))
-        }
-        "get" => {
-            let project = store::load_project(cwd, config, required_str(arguments, "project_id")?)?;
-            complete(json!({
-                "layout": store::project_layout(&project.project_id)?,
-                "project": project
-            }))
-        }
-        "list" => complete(json!({"project_ids": store::list_projects(cwd, config)?})),
-        _ => Err(McpError::InvalidRequest(
-            "unsupported creative project action".into(),
-        )),
-    }
-}
 
 pub(super) fn element(
     arguments: &Value,
@@ -133,7 +95,7 @@ pub(super) fn element(
     }
 }
 
-pub(super) fn graph_tool(
+pub(super) async fn graph_tool(
     arguments: &Value,
     config: &ServerConfig,
     owner: &str,
@@ -159,8 +121,12 @@ pub(super) fn graph_tool(
                 );
             }
             store::store_graph(cwd, config, &graph)?;
-            let job = graph::execute_graph(&graph, &project, config, owner, store::now_ms())?;
-            store::store_job(cwd, config, &job)?;
+            let approved = arguments
+                .get("approved")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let job =
+                jobs::execute_graph_direct(cwd, config, owner, &graph, &project, approved).await?;
             complete(json!({"job": job}))
         }
         "template_save" => {
@@ -202,25 +168,36 @@ pub(super) fn graph_tool(
                 "templates": store::list_templates(cwd, config, project_id)?
             }))
         }
-        "partial_rerun" => {
+        "partial_rerun" | "rerun_selected" | "rerun_subgraph" | "rerun_all_dirty" => {
             let project_id = required_str(arguments, "project_id")?;
             let graph_id = required_str(arguments, "graph_id")?;
             let previous_job_id = required_str(arguments, "previous_job_id")?;
-            let changed_node_ids: Vec<String> = parse_required(arguments, "changed_node_ids")?;
+            let changed_node_ids: Vec<String> = if action == "rerun_selected" {
+                vec![required_str(arguments, "node_id")?.to_owned()]
+            } else {
+                parse_required(arguments, "changed_node_ids")?
+            };
             let graph = store::load_graph(cwd, config, project_id, graph_id)?;
             let project = store::load_project(cwd, config, project_id)?;
             let previous = jobs::get(cwd, config, owner, project_id, previous_job_id)?;
             let invalidated = graph::dirty_descendants(&graph, &changed_node_ids)?;
-            let job = graph::execute_graph_partial(
-                &graph,
-                &project,
+            let approved = arguments
+                .get("approved")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let job = jobs::execute_graph_partial_direct(
+                cwd,
                 config,
                 owner,
-                &previous,
-                &changed_node_ids,
-                store::now_ms(),
-            )?;
-            store::store_job(cwd, config, &job)?;
+                &graph,
+                &project,
+                jobs::PartialGraphExecution {
+                    previous: &previous,
+                    changed_node_ids: &changed_node_ids,
+                    approved,
+                },
+            )
+            .await?;
             let mut invalidated_node_ids = invalidated.into_iter().collect::<Vec<_>>();
             invalidated_node_ids.sort();
             let reused_node_ids = job
@@ -231,8 +208,55 @@ pub(super) fn graph_tool(
                 .collect::<Vec<_>>();
             complete(json!({
                 "job": job,
+                "execution_scope": action,
                 "invalidated_node_ids": invalidated_node_ids,
                 "reused_node_ids": reused_node_ids
+            }))
+        }
+        "template_instantiate" => {
+            let project_id = required_str(arguments, "project_id")?;
+            let template_id = required_str(arguments, "template_id")?;
+            let graph_id = required_str(arguments, "graph_id")?;
+            validate_id(graph_id, "graph_id")?;
+            let template = store::load_template(cwd, config, project_id, template_id)?;
+            let project = store::load_project(cwd, config, project_id)?;
+            let replacements = arguments
+                .get("replacements")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let binding_overrides = arguments
+                .get("binding_overrides")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let mut graph = template.graph.clone();
+            graph.graph_id = graph_id.to_owned();
+            graph.project_id = project_id.to_owned();
+            graph.revision = 1;
+            for node in &mut graph.nodes {
+                substitute_graph_value(&mut node.inputs, &replacements)?;
+                if let Some(binding_id) =
+                    binding_overrides.get(&node.node_id).and_then(Value::as_str)
+                {
+                    validate_id(binding_id, "execution_binding_id")?;
+                    node.execution_binding_id = Some(binding_id.to_owned());
+                }
+            }
+            let validation = graph::validate_graph(&graph, &project, config)?;
+            if !validation.valid {
+                return error_result(
+                    "graph_template_instantiation_failed",
+                    "Instantiated Creative Graph did not pass validation",
+                    json!({"validation": validation}),
+                );
+            }
+            store::store_graph(cwd, config, &graph)?;
+            complete(json!({
+                "graph": graph,
+                "template_id": template_id,
+                "template_version": template.version,
+                "validation": validation
             }))
         }
         "get" => {
@@ -248,7 +272,7 @@ pub(super) fn graph_tool(
     }
 }
 
-pub(super) fn job(
+pub(super) async fn job(
     arguments: &Value,
     config: &ServerConfig,
     owner: &str,
@@ -342,7 +366,7 @@ pub(super) fn job(
                 project_id,
                 required_str(arguments, "job_id")?,
                 arguments.get("retry").and_then(Value::as_bool).unwrap_or(false),
-            )?
+            ).await?
         })),
         "list" => complete(json!({"jobs": jobs::list(cwd, config, owner, project_id)?})),
         "cancel" => complete(json!({
@@ -352,6 +376,36 @@ pub(super) fn job(
             "unsupported creative job action".into(),
         )),
     }
+}
+
+fn substitute_graph_value(
+    value: &mut Value,
+    replacements: &serde_json::Map<String, Value>,
+) -> Result<(), McpError> {
+    match value {
+        Value::String(current) => {
+            if let Some(replacement) = replacements.get(current) {
+                if !replacement.is_string() {
+                    return Err(McpError::InvalidRequest(
+                        "graph template replacements must map string identities to strings".into(),
+                    ));
+                }
+                *value = replacement.clone();
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                substitute_graph_value(item, replacements)?;
+            }
+        }
+        Value::Object(object) => {
+            for item in object.values_mut() {
+                substitute_graph_value(item, replacements)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn parse_job_submit_request(arguments: &Value) -> Result<jobs::SubmitRequest, McpError> {

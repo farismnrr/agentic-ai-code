@@ -99,11 +99,11 @@ pub async fn dispatch_tool(
     }
     let result = match tool_name {
         "creative_catalog" => catalog(arguments, config)?,
-        "creative_project" => handlers::project(arguments, config)?,
+        "creative_project" => handlers::project(arguments, config, owner)?,
         "creative_element" => handlers::element(arguments, config)?,
         "creative_asset" => handlers::asset(arguments, config, owner).await?,
-        "creative_graph" => handlers::graph_tool(arguments, config, owner)?,
-        "creative_job" => handlers::job(arguments, config, owner)?,
+        "creative_graph" => handlers::graph_tool(arguments, config, owner).await?,
+        "creative_job" => handlers::job(arguments, config, owner).await?,
         _ => return Ok(None),
     };
     Ok(Some(result))
@@ -117,6 +117,17 @@ fn status(config: &ServerConfig) -> Value {
         "model_provider_agnostic": true,
         "state_namespace": ".masihawam/creative",
         "execution_bindings_registered": registry::execution_bindings(config).map(|items| items.len()).unwrap_or(0),
+        "blender": {
+            "enabled": config.enable_creative && config.enable_blender,
+            "tool_count": if config.enable_creative && config.enable_blender { 11 } else { 0 },
+            "activation": if config.enable_creative && config.enable_blender {
+                Value::Null
+            } else if !config.enable_creative {
+                Value::String("enable Creative first, then start relay-agent with --enable-blender or RELAY_ENABLE_BLENDER=true".into())
+            } else {
+                Value::String("start relay-agent with --enable-blender or RELAY_ENABLE_BLENDER=true".into())
+            }
+        },
         "activation": if config.enable_creative {
             Value::Null
         } else {

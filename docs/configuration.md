@@ -290,8 +290,8 @@ Plan 069's Blender engine is separately disabled by default with
 `RELAY_ENABLE_BLENDER=false` / no `--enable-blender`, and enabling it requires
 Creative to be enabled as well. The relay speaks directly to the official
 Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
-`RELAY_BLENDER_PORT` / `--blender-port` defaults to `9876`, and
-`RELAY_BLENDER_TIMEOUT_MS` / `--blender-timeout-ms` defaults to 30000 ms with a
+`RELAY_BLENDER_PORT` / `--blender-bridge-port` defaults to `9876`, and
+`RELAY_BLENDER_TIMEOUT_MS` / `--blender-bridge-timeout-ms` defaults to 30000 ms with a
 120000 ms hard maximum.
 
 `RELAY_BLENDER_EXECUTABLE` / `--blender-executable` is optional operator-only
@@ -319,10 +319,14 @@ blender/
 ```
 
 The frozen 11-tool v1 contract accepts contained Asset IDs, reviewed enums, and
-bounded leaf file names rather than arbitrary URLs or host paths. The schemas
-are frozen before runtime composition; Blender tools are not advertised until
-their execution paths are implemented and the Blender capability is explicitly
-enabled.
+bounded leaf file names rather than arbitrary URLs or host paths. The single
+runtime catalog composes those tools only for the Full profile when both
+Creative and Blender are enabled. When disabled, `creative_status` reports the
+required Blender activation step and the optional Blender capability resource is
+absent. When enabled, that read-only resource documents the canonical project
+layout and structured-first routing: prefer session/inspect/docs/import/render/
+checkpoint tools, and use `blender_execute_python` only for explicit high-risk
+host-user authoring that the structured tools cannot express.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 

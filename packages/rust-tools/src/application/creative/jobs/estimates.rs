@@ -106,6 +106,84 @@ pub fn estimate_request(
         .as_deref()
         .ok_or_else(|| McpError::InvalidRequest("creative job target is required".into()))?;
     let workflow = registry::validate_workflow_parameters(workflow_id, &request.parameters)?;
+    if workflow_id == "image_to_3d_bootstrap" {
+        let route = request
+            .parameters
+            .get("route")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidRequest("bootstrap route is required".into()))?;
+        return match route {
+            "manual" => {
+                if request.execution_binding_id.is_some() {
+                    return Err(McpError::InvalidRequest(
+                        "manual Blender bootstrap must not select an execution binding".into(),
+                    ));
+                }
+                Ok(CreativeEstimate {
+                    compute_units: 25,
+                    output_bytes: 256 * 1024,
+                    estimated_cost_micros: None,
+                    source: "reviewed_blender_bootstrap".into(),
+                })
+            }
+            "binding" | "hybrid" => estimate_capability(
+                config,
+                "3d.image_to_mesh",
+                request.execution_binding_id.as_deref(),
+                &request.parameters,
+            ),
+            _ => Err(McpError::InvalidRequest(
+                "bootstrap route is unsupported".into(),
+            )),
+        };
+    }
+    if matches!(
+        workflow_id,
+        "export_profile"
+            | "project_handoff"
+            | "promo_pack"
+            | "key_visual_bundle"
+            | "portfolio_delivery"
+            | "game_source_scaffold"
+            | "game_build_playtest"
+            | "game_iteration"
+            | "scene_continuity_review"
+            | "visual_qa_evidence"
+            | "temporal_qa_evidence"
+            | "scoped_revision"
+    ) {
+        if request.execution_binding_id.is_some() {
+            return Err(McpError::InvalidRequest(
+                "reviewed local workflows do not accept an execution binding".into(),
+            ));
+        }
+        return Ok(CreativeEstimate {
+            compute_units: 5,
+            output_bytes: 4 * 1024 * 1024,
+            estimated_cost_micros: None,
+            source: "reviewed_local_delivery".into(),
+        });
+    }
+    if matches!(
+        workflow_id,
+        "character_mesh_production"
+            | "character_rig_production"
+            | "character_action"
+            | "character_facial_performance"
+            | "character_secondary_motion"
+    ) {
+        if request.execution_binding_id.is_some() {
+            return Err(McpError::InvalidRequest(
+                "Blender character production workflows do not accept an execution binding".into(),
+            ));
+        }
+        return Ok(CreativeEstimate {
+            compute_units: 75,
+            output_bytes: 64 * 1024 * 1024,
+            estimated_cost_micros: None,
+            source: "reviewed_blender_character_workflow".into(),
+        });
+    }
     if workflow.required_capabilities.len() != 1 {
         return Err(McpError::InvalidRequest(
             "multi-capability workflow jobs must execute through a Creative Graph".into(),

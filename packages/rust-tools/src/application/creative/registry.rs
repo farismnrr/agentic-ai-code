@@ -2,7 +2,9 @@ use crate::core::error::McpError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+mod capabilities;
 mod workflows;
+pub use capabilities::capabilities;
 pub use workflows::workflows;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -54,300 +56,6 @@ pub struct WorkflowDescriptor {
     pub output_schema: Value,
 }
 
-pub fn capabilities() -> Vec<CapabilityDescriptor> {
-    vec![
-        capability_descriptor(
-            "image.generate",
-            "image",
-            true,
-            &[],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.reference_generate",
-            "image",
-            true,
-            &["reference_image"],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.edit",
-            "image",
-            true,
-            &["image"],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.inpaint",
-            "image",
-            true,
-            &["image", "mask"],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.upscale",
-            "image",
-            true,
-            &["image"],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.remove_background",
-            "image",
-            true,
-            &["image"],
-            &["image_alpha"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "image.outpaint",
-            "image",
-            true,
-            &["image"],
-            &["image"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        identity_prepare_descriptor(),
-        capability_descriptor(
-            "video.generate",
-            "video",
-            true,
-            &[],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.image_to_video",
-            "video",
-            true,
-            &["reference_image"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.reference_generate",
-            "video",
-            true,
-            &["reference_image"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.extend",
-            "video",
-            true,
-            &["video"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.reframe",
-            "video",
-            true,
-            &["video"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.upscale",
-            "video",
-            true,
-            &["video"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.remove_background",
-            "video",
-            true,
-            &["video"],
-            &["video_alpha"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.motion_control",
-            "video",
-            true,
-            &["reference_image", "motion_reference"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "video.clip_extract",
-            "video",
-            true,
-            &["video"],
-            &["video_clip"],
-            &["compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.speech",
-            "audio",
-            true,
-            &[],
-            &["audio"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.voice",
-            "audio",
-            true,
-            &[],
-            &["audio"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.music",
-            "audio",
-            true,
-            &[],
-            &["audio"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.sfx",
-            "audio",
-            true,
-            &[],
-            &["audio"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.voice_clone",
-            "audio",
-            true,
-            &["voice_reference"],
-            &["voice_artifact"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.voice_change",
-            "audio",
-            true,
-            &["audio"],
-            &["audio"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "audio.video_dub",
-            "audio",
-            true,
-            &["video", "voice_reference"],
-            &["video"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "3d.image_to_mesh",
-            "3d",
-            true,
-            &["reference_image"],
-            &["mesh"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "3d.text_to_mesh",
-            "3d",
-            true,
-            &[],
-            &["mesh"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "3d.texture",
-            "3d",
-            true,
-            &["mesh", "reference_image"],
-            &["mesh"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "3d.rig_bootstrap",
-            "3d",
-            true,
-            &["mesh"],
-            &["rigged_mesh"],
-            &["network_or_compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "storyboard.store",
-            "scene",
-            false,
-            &["element_reference"],
-            &["storyboard"],
-            &["workspace_write"],
-        ),
-        capability_descriptor(
-            "scene.manifest_validate",
-            "scene",
-            false,
-            &["element_reference"],
-            &["scene_manifest"],
-            &["workspace_read"],
-        ),
-        capability_descriptor(
-            "graph.validate",
-            "graph",
-            false,
-            &[],
-            &["graph_validation"],
-            &["workspace_read"],
-        ),
-        capability_descriptor(
-            "graph.execute",
-            "graph",
-            false,
-            &[],
-            &["graph_run"],
-            &["workspace_write"],
-        ),
-        capability_descriptor(
-            "dcc.execute",
-            "dcc",
-            true,
-            &["asset"],
-            &["asset"],
-            &["privileged_bridge", "workspace_write"],
-        ),
-        capability_descriptor(
-            "dcc.render",
-            "dcc",
-            true,
-            &["scene"],
-            &["image", "video"],
-            &["privileged_bridge", "compute", "workspace_write"],
-        ),
-        capability_descriptor(
-            "game.build",
-            "game",
-            true,
-            &["game_source", "asset"],
-            &["game_build"],
-            &["process_exec", "workspace_write"],
-        ),
-        capability_descriptor(
-            "game.playtest",
-            "game",
-            true,
-            &["game_build"],
-            &["playtest_evidence"],
-            &["process_exec", "workspace_read"],
-        ),
-        capability_descriptor(
-            "game.deploy",
-            "game",
-            true,
-            &["game_build"],
-            &["deployment"],
-            &["network_write", "external_mutation"],
-        ),
-    ]
-}
-
 pub fn capability(id: &str) -> Option<CapabilityDescriptor> {
     capabilities()
         .into_iter()
@@ -374,6 +82,7 @@ pub fn validate_capability_parameters(
             "creative capability parameters do not match the capability schema".into(),
         ));
     }
+    validate_capability_contract(id, parameters)?;
     Ok(descriptor)
 }
 
@@ -394,12 +103,93 @@ pub fn validate_workflow_parameters(
     Ok(descriptor)
 }
 
+fn validate_capability_contract(id: &str, parameters: &Value) -> Result<(), McpError> {
+    match id {
+        "audio.voice_clone" => {
+            if parameters.get("consent_asserted").and_then(Value::as_bool) != Some(true) {
+                return Err(McpError::InvalidRequest(
+                    "audio.voice_clone requires explicit consent_asserted=true".into(),
+                ));
+            }
+            let references = parameters
+                .get("reference_asset_ids")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    McpError::InvalidRequest(
+                        "audio.voice_clone requires reference_asset_ids".into(),
+                    )
+                })?;
+            if references.is_empty() || references.len() > 16 {
+                return Err(McpError::InvalidRequest(
+                    "audio.voice_clone reference count is outside allowed bounds".into(),
+                ));
+            }
+        }
+        "audio.voice_change" => {
+            required_parameter_id(parameters, "asset_id")?;
+            required_parameter_id(parameters, "voice_element_id")?;
+        }
+        "audio.video_dub" => {
+            required_parameter_id(parameters, "video_asset_id")?;
+            required_parameter_id(parameters, "voice_element_id")?;
+            required_parameter_text(parameters, "language", 32)?;
+        }
+        "video.motion_control" => {
+            required_parameter_id(parameters, "reference_asset_id")?;
+            required_parameter_id(parameters, "motion_asset_id")?;
+        }
+        "video.clip_extract" => {
+            required_parameter_id(parameters, "asset_id")?;
+            let start = parameters
+                .get("start_ms")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| McpError::InvalidRequest("clip start_ms is required".into()))?;
+            let end = parameters
+                .get("end_ms")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| McpError::InvalidRequest("clip end_ms is required".into()))?;
+            if end <= start || end - start > 30 * 60 * 1000 {
+                return Err(McpError::InvalidRequest(
+                    "clip extraction range is outside allowed bounds".into(),
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn required_parameter_id(parameters: &Value, field: &str) -> Result<(), McpError> {
+    let value = parameters
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest(format!("creative {field} is required")))?;
+    super::contracts::validate_id(value, field)
+}
+
+fn required_parameter_text(
+    parameters: &Value,
+    field: &str,
+    max_len: usize,
+) -> Result<(), McpError> {
+    let value = parameters
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| McpError::InvalidRequest(format!("creative {field} is required")))?;
+    if value.is_empty() || value.len() > max_len || value.chars().any(char::is_control) {
+        return Err(McpError::InvalidRequest(format!(
+            "creative {field} is outside allowed bounds"
+        )));
+    }
+    Ok(())
+}
+
 mod bindings;
 pub use bindings::{
     binding, compatible_binding_ids, execution_bindings, validate_binding_selection,
 };
 
-fn identity_prepare_descriptor() -> CapabilityDescriptor {
+pub(super) fn identity_prepare_descriptor() -> CapabilityDescriptor {
     CapabilityDescriptor {
         capability_id: "identity.prepare".into(),
         family: "identity".into(),
@@ -427,7 +217,7 @@ fn identity_prepare_descriptor() -> CapabilityDescriptor {
     }
 }
 
-fn capability_descriptor(
+pub(super) fn capability_descriptor(
     id: &str,
     family: &str,
     requires_binding: bool,

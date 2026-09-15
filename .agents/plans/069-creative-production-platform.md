@@ -1,6 +1,6 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **IMPLEMENTATION IN PROGRESS — PHASE-02 safe media ingress is implemented on top of the verified Creative core; Plan 069 overall remains open for real execution bindings/jobs/budgets, mature graph execution, Blender, and Scene/Anime/Game production phases; no relay restart/deployment has occurred**
+Status: **IMPLEMENTATION IN PROGRESS — TASK-023 through TASK-051 source implementation is now present across Anime, Scene/SceneBoard, Game, Creative Graph, Canvas, QA, delivery, parity fixtures, and Blender-backed production paths, but this batch has not yet received final Rust/Nuxt guardrails or runtime/E2E acceptance. TASK-052 through TASK-058 remain the fresh Scene/Anime/Game benchmarks, clean-room falsification, security matrix, generic external MCP acceptance, and repository closure. No relay restart/reload, real deployment, public publish, or final E2E acceptance has occurred.**
 
 Created: 2026-09-11
 Updated: 2026-09-15
@@ -1917,17 +1917,19 @@ Steps:
 
 **Outcome:** Blender appears only when enabled; capability resources, activation hints, routing guidance, docs, and tool catalog agree.
 
-**Validation:** disabled/enabled catalog tests plus repository Rust guardrail.
+**Implementation:** COMPLETE on 2026-09-15. The single canonical `runtime_tool_catalog` now composes the frozen 11-tool Blender surface only for the Full profile when both Creative and Blender are explicitly enabled; Primary and disabled configurations remain unchanged. `creative_status` reports Blender activation state/tool count without introducing a twelfth Blender status tool. A read-only `blender-capability` resource is likewise configuration-gated and exposes only stable tool names, the canonical project layout, structured-first routing guidance, and the explicit high-risk/unsandboxed Python boundary—never operator executable, bridge port, credentials, or other hidden authority. Operator documentation now matches the canonical bridge CLI/env names and the implemented runtime-composition rule.
+
+**Validation:** deterministic disabled/enabled catalog acceptance proves no Blender tool leakage while disabled, exactly 11 Blender tools when enabled, no Blender exposure in Primary, and the optional resource only when the capability is active. Targeted composition/resource tests and compile checks pass; maintainability reports no hard violations. A fresh full Rust guardrail retry is currently blocked by the execution sandbox's unavailable Rust toolchain mount (`rustup` reports no installed/default toolchain), not by a repository test failure; the last full Rust gate before this composition checkpoint passed on TASK-021 and the normal pre-commit hook must still pass before this checkpoint is committed.
 
 **Commit boundary:** `feat(blender): compose optional capability`.
 
 **Phase exit criteria:**
 
-- [ ] all 11 Blender tools are implemented and tested, including explicit cold-start/readiness/owner-safe stop through `blender_session`;
-- [ ] no generic stdio/nested Python MCP server is required;
-- [ ] Blender filesystem/network/process/host authority is represented honestly;
-- [ ] the Blender executable may remain outside Projects only as reviewed operator executable authority, while every workflow-owned production artifact remains beneath the selected project's dedicated `blender/` subtree;
-- [ ] safe reference materialization integrates with Blender import.
+- [x] all 11 Blender tools are implemented and tested, including explicit cold-start/readiness/owner-safe stop through `blender_session`;
+- [x] no generic stdio/nested Python MCP server is required;
+- [x] Blender filesystem/network/process/host authority is represented honestly;
+- [x] the Blender executable may remain outside Projects only as reviewed operator executable authority, while every workflow-owned production artifact remains beneath the selected project's dedicated `blender/` subtree;
+- [x] safe reference materialization integrates with Blender import.
 
 # PHASE-07 — Anime 3D character production
 
