@@ -30,8 +30,10 @@ pub(super) async fn access_policy(
     mut req: Request,
     next: Next,
 ) -> AxumResponse {
-    // Only apply policy to /mcp
-    if req.uri().path() != "/mcp" {
+    // Apply the relay trust boundary to MCP plus reviewed first-party upload
+    // ingress. Health and OAuth metadata remain intentionally public.
+    let path = req.uri().path();
+    if path != "/mcp" && !path.starts_with("/creative-upload/") {
         return next.run(req).await;
     }
 

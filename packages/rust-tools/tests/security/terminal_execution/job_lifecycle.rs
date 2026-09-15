@@ -384,6 +384,7 @@ async fn test_task_backed_and_sync_execution_parity() {
         &fixture.manager,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .expect("sync dispatch failed");

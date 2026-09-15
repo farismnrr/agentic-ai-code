@@ -290,6 +290,19 @@ pub struct QaFinding {
     pub created_at_ms: u128,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CreativeProjectLayout {
+    pub state_root: String,
+    pub production_root: String,
+    pub assets_root: String,
+    pub scene_boards_root: String,
+    pub graphs_root: String,
+    pub templates_root: String,
+    pub games_root: String,
+    pub qa_root: String,
+    pub exports_root: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreativeProject {
     pub schema_version: u32,

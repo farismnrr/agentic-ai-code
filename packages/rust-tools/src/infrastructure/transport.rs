@@ -40,7 +40,7 @@ use axum::{
     http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response as AxumResponse},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use std::sync::Arc;
@@ -59,6 +59,7 @@ use crate::infrastructure::observability::{CorrelationId, RequestId};
 use crate::interfaces::mcp::{ErrorResponse, Id};
 
 mod access;
+mod creative_upload;
 mod mcp_http;
 mod subagent_lifecycle;
 mod task_lifecycle;
@@ -227,6 +228,11 @@ pub fn create_router_with_jobs_and_hooks(
     });
 
     let mcp_router = Router::new().route("/mcp", post(mcp_http::handle_mcp));
+    let upload_router = Router::new()
+        .route("/creative-upload/:ticket_id", put(creative_upload::handle))
+        .layer(DefaultBodyLimit::max(
+            crate::application::workspace::MAX_INTERNAL_BINARY_WRITE_BYTES,
+        ));
     let mut well_known_router = Router::new().route(
         "/.well-known/oauth-protected-resource",
         get(handle_well_known_oauth),
@@ -248,6 +254,7 @@ pub fn create_router_with_jobs_and_hooks(
     Router::new()
         .route("/health", get(handle_health))
         .merge(mcp_router)
+        .merge(upload_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(
             state.clone(),

@@ -126,6 +126,7 @@ async fn dropping_sync_request_cancels_job_and_releases_semaphore() {
             &manager,
             &lsp,
             &hooks,
+            "local",
         )
         .await
     });

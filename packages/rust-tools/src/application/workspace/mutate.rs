@@ -245,6 +245,7 @@ fn apply_edit_operations(
 }
 
 pub const MAX_FILE_WRITE_BYTES: usize = 1024 * 1024;
+pub const MAX_INTERNAL_BINARY_WRITE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_FILE_WRITE_PATH_BYTES: usize = 4_096;
 const MAX_FILE_WRITE_CWD_BYTES: usize = 4_096;
 
@@ -415,6 +416,74 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
                 bytes: content.len(),
                 activity: activity_evidence(&evidence_path, None, content.as_bytes()),
             })
+        }
+    }
+}
+
+/// Internal binary-safe sibling of `file_write` for reviewed application
+/// capabilities such as media ingest. It deliberately remains crate-private:
+/// arbitrary MCP callers must use an owning typed capability instead of
+/// acquiring a generic large binary write primitive.
+pub(crate) fn write_contained_bytes(
+    path: &str,
+    cwd: Option<&str>,
+    bytes: &[u8],
+    create_parents: bool,
+    overwrite: bool,
+    config: &ServerConfig,
+) -> Result<(), McpError> {
+    if path.is_empty() || path.len() > MAX_FILE_WRITE_PATH_BYTES {
+        return Err(McpError::InvalidRequest(
+            "binary write path exceeds allowed bounds".into(),
+        ));
+    }
+    if bytes.len() > MAX_INTERNAL_BINARY_WRITE_BYTES {
+        return Err(McpError::InvalidRequest(
+            "binary write content exceeds maximum".into(),
+        ));
+    }
+    if cwd.is_some_and(|value| value.len() > MAX_FILE_WRITE_CWD_BYTES) {
+        return Err(McpError::InvalidRequest(
+            "binary write cwd exceeds maximum".into(),
+        ));
+    }
+    config
+        .ensure_workspaces_initialized()
+        .map_err(|error| McpError::Internal(error.to_string()))?;
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let cwd_resolved =
+        crate::core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, cwd)?;
+    let root = if Path::new(path).is_absolute() {
+        guard
+            .containing_root(Path::new(path))
+            .unwrap_or_else(|| guard.primary_root())
+    } else {
+        guard
+            .containing_root(&cwd_resolved)
+            .unwrap_or_else(|| guard.primary_root())
+    };
+    let normalized = normalize_write_path(root, &cwd_resolved, path)?;
+    reject_protected_path(root, &normalized)?;
+    let (directory, name) =
+        resolve_write_parent_directory(root, &cwd_resolved, path, create_parents)?;
+    match directory.entry_type(&name)? {
+        Some(entry) if entry.is_symlink() || entry.is_dir() || !entry.is_file() => Err(
+            McpError::InvalidRequest("binary write target has an unsupported entry type".into()),
+        ),
+        Some(_) if !overwrite => Err(McpError::InvalidRequest(
+            "binary file already exists; overwrite is required".into(),
+        )),
+        Some(_) => {
+            let (_file, identity, mode) = directory.open_regular_file(&name)?;
+            directory.atomic_replace_regular_file(&name, identity, bytes, mode)?;
+            Ok(())
+        }
+        None => {
+            directory.atomic_create_regular_file(&name, bytes, 0o644)?;
+            Ok(())
         }
     }
 }

@@ -1,6 +1,6 @@
-use super::{call, create_project, TempWorkspace};
+use super::{call, create_project, dispatch_sync, TempWorkspace};
 use ai_tools::application::creative::{
-    dispatch_tool, CreativeGraph, GraphEdge, GraphNode, GraphNodeKind, CREATIVE_SCHEMA_VERSION,
+    CreativeGraph, GraphEdge, GraphNode, GraphNodeKind, CREATIVE_SCHEMA_VERSION,
 };
 use serde_json::json;
 
@@ -194,10 +194,10 @@ fn graph_runtime_persists_control_flow_jobs_and_requires_explicit_bindings() {
         }],
         edges: vec![],
     };
-    assert!(dispatch_tool(
+    assert!(dispatch_sync(
+        &config,
         "creative_graph",
         &json!({"action": "validate", "graph": unsafe_graph}),
-        &config,
     )
     .is_err());
 }

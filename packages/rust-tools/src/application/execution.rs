@@ -165,6 +165,7 @@ pub async fn dispatch_tool_call(
     manager: &Arc<JobManager>,
     lsp: &Arc<crate::application::lsp::LspSessionManager>,
     hooks: &Arc<crate::application::hooks::HookManager>,
+    owner: &str,
 ) -> Result<ToolCallResult, McpError> {
     if let Some(result) =
         crate::application::workspace::dispatch_native_tool(tool.name, arguments, config)?
@@ -221,7 +222,8 @@ pub async fn dispatch_tool_call(
     {
         return Ok(result);
     }
-    if let Some(result) = crate::application::creative::dispatch_tool(tool.name, arguments, config)?
+    if let Some(result) =
+        crate::application::creative::dispatch_tool(tool.name, arguments, config, owner).await?
     {
         return Ok(result);
     }

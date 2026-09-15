@@ -487,13 +487,16 @@ pub(super) async fn handle_tools_call(
         .await;
     }
     tool_dispatch::handle(
-        request,
         state,
-        &tool,
-        &call.arguments,
-        effects,
-        &activity_start,
-        request_started,
+        tool_dispatch::ToolDispatchContext {
+            request,
+            tool: &tool,
+            arguments: &call.arguments,
+            owner: &task_owner,
+            effects,
+            activity_start: &activity_start,
+            request_started,
+        },
     )
     .await
 }

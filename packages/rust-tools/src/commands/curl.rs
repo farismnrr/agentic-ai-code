@@ -1,3 +1,4 @@
+use ai_tools::core::network::{safe_http_client, validate_public_http_url};
 use ai_tools::infrastructure::observability::classify_reqwest_error;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
@@ -30,71 +31,6 @@ pub struct Args {
     no_guard: bool,
 }
 
-pub fn is_safe_ip(ip: &std::net::IpAddr) -> bool {
-    match ip {
-        std::net::IpAddr::V4(ipv4) => {
-            !ipv4.is_private()
-                && !ipv4.is_loopback()
-                && !ipv4.is_link_local()
-                && !ipv4.is_multicast()
-                && !ipv4.is_broadcast()
-                && !ipv4.is_documentation()
-                && !ipv4.is_unspecified()
-        }
-        std::net::IpAddr::V6(ipv6) => {
-            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
-                return is_safe_ip(&std::net::IpAddr::V4(ipv4));
-            }
-
-            !ipv6.is_loopback()
-            && !ipv6.is_multicast()
-            && !ipv6.is_unspecified()
-            && (ipv6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Address
-            && (ipv6.segments()[0] & 0xffc0) != 0xfe80 // Link-Local
-        }
-    }
-}
-
-pub fn is_safe_scheme(scheme: &str) -> bool {
-    let s = scheme.to_lowercase();
-    s == "http" || s == "https"
-}
-
-struct SafeResolver;
-
-impl reqwest::dns::Resolve for SafeResolver {
-    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        Box::pin(async move {
-            let host = name.as_str();
-            let addrs = tokio::net::lookup_host(format!("{}:80", host)).await?;
-            let mut safe_addrs = vec![];
-            for addr in addrs {
-                let ip = addr.ip();
-                if !is_safe_ip(&ip) {
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::PermissionDenied,
-                        format!(
-                            "SSRF guard blocked request because {} resolves to private/local IP {}",
-                            host, ip
-                        ),
-                    ))
-                        as Box<dyn std::error::Error + Send + Sync>);
-                }
-                safe_addrs.push(addr);
-            }
-            if safe_addrs.is_empty() {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("No IP addresses found for {}", host),
-                ))
-                    as Box<dyn std::error::Error + Send + Sync>);
-            }
-            let addrs_iter: reqwest::dns::Addrs = Box::new(safe_addrs.into_iter());
-            Ok(addrs_iter)
-        })
-    }
-}
-
 async fn run_curl(
     url_str: &str,
     method_str: &str,
@@ -103,27 +39,19 @@ async fn run_curl(
     timeout_ms: u64,
     no_guard: bool,
 ) -> String {
-    let parsed_url = match Url::parse(url_str) {
-        Ok(u) => u,
-        Err(_) => return "Error: invalid URL".to_string(),
-    };
-
-    if !no_guard {
-        if !is_safe_scheme(parsed_url.scheme()) {
-            return format!(
-                "Error: SSRF Error: Scheme '{}' is not allowed",
-                parsed_url.scheme()
-            );
+    let parsed_url = if no_guard {
+        match Url::parse(url_str) {
+            Ok(url) => url,
+            Err(_) => return "Error: invalid URL".to_string(),
         }
-
-        if let Some(host) = parsed_url.host_str() {
-            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                if !is_safe_ip(&ip) {
-                    return "Error: SSRF Error: SSRF guard blocked request to private/local IP. Use --no-guard to bypass.".to_string();
-                }
+    } else {
+        match validate_public_http_url(url_str) {
+            Ok(url) => url,
+            Err(_) => {
+                return "Error: SSRF Error: request target is not a public HTTP(S) URL".to_string()
             }
         }
-    }
+    };
 
     let method = match Method::from_str(&method_str.to_uppercase()) {
         Ok(m) => m,
@@ -137,36 +65,8 @@ async fn run_curl(
     };
 
     let client = if !no_guard {
-        let policy = reqwest::redirect::Policy::custom(move |attempt| {
-            if attempt.previous().len() > 10 {
-                return attempt.error("too many redirects");
-            }
-
-            let url = attempt.url();
-            if !is_safe_scheme(url.scheme()) {
-                return attempt.error("redirect scheme not allowed");
-            }
-
-            if let Some(host) = url.host_str() {
-                if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                    if !is_safe_ip(&ip) {
-                        return attempt
-                            .error("redirect to private IP literal blocked by SSRF guard");
-                    }
-                }
-            }
-            attempt.follow()
-        });
-
-        let mut builder = reqwest::Client::builder()
-            .redirect(policy)
-            .dns_resolver(std::sync::Arc::new(SafeResolver));
-
-        if let Some(t) = timeout {
-            builder = builder.timeout(t);
-        }
-        match builder.build() {
-            Ok(c) => c,
+        match safe_http_client(timeout, 10) {
+            Ok(client) => client,
             Err(_) => return "Error: failed to build HTTP client".to_string(),
         }
     } else {

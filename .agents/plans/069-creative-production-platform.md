@@ -1,16 +1,16 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **IMPLEMENTATION IN PROGRESS — the initial Creative core slice is VERIFIED and ready for review; Plan 069 overall remains open for safe media ingress, real execution bindings/jobs/budgets, mature graph execution, Blender, and Scene/Anime/Game production phases; no relay restart/deployment has occurred**
+Status: **IMPLEMENTATION IN PROGRESS — PHASE-02 safe media ingress is implemented on top of the verified Creative core; Plan 069 overall remains open for real execution bindings/jobs/budgets, mature graph execution, Blender, and Scene/Anime/Game production phases; no relay restart/deployment has occurred**
 
 Created: 2026-09-11
 Updated: 2026-09-15
 
 ## Current implementation state — 2026-09-15
 
-- Implementation branch: `feat/plan-069-creative-core`, forked from reconciled `main` at `ae9571448a7c92e9ecf6f73b51b05009adc310e7`. This branch plus current `main` are the only active source truth for Plan 069; older release-branch assumptions are history only.
+- Active implementation branch: `feat/plan-069-complete`, continuing from current merged `main`. Current branch plus `main` are the only active source truth for Plan 069; older feature/release-branch assumptions are history only.
 - Versioning is intentionally singular: the client-visible runtime surface is built through one `runtime_tool_catalog` path and Creative state uses one active schema version (`CREATIVE_SCHEMA_VERSION = 1`). The retained 52-tool base and numbered catalog snapshots, including historical v15, are immutable history/audit artifacts rather than alternate current versions. `creative_status` remains visible while disabled; the remaining Creative tools are composed into Full only when `RELAY_ENABLE_CREATIVE=true`.
 - Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime. Reload validation now rejects unaccepted selected revisions, forged generated provenance, cyclic Asset lineage, forged manual source-surface provenance, invalid media facts/types, duplicate/invalid Scene shot ordering, invalid Game runtime paths/asset references, and duplicate/bounded audio cues.
-- Deliberately not implemented yet: external upload handoff, conversation attachment materialization, URL import, provider/media execution bindings, cost/budget enforcement, graph partial rerun/invalidation/parallel executor scheduling, Blender bridge/tools, Scene/Anime/Game production engines, and publish/deploy execution. Generic manual asset registration cannot claim generated/upload/URL provenance.
+- Implemented after the initial slice: canonical contained project layout descriptors; OAuth/local-owner-bound expiring single-use upload handoff supporting explicit `mcp_upload` and `conversation_upload` provenance; bounded URL import through the shared HTTP(S)/DNS/redirect/private-IP SSRF policy; durable upload receipts/history; binary-safe contained media writes; current-turn bounded Asset preview metadata. Still not implemented: provider/media execution bindings, cost/budget enforcement, graph partial rerun/invalidation/parallel executor scheduling, Blender bridge/tools, Scene/Anime/Game production engines, and publish/deploy execution. Generic manual asset registration still cannot claim generated/upload/URL provenance.
 - Fresh benchmark audit: official Higgsfield MCP remains OAuth/client-neutral, asynchronous, credit-aware, and backed by durable Assets/history; Higgsfield may auto-select models, but Masih Awam intentionally keeps provider/model routing above the MCP boundary. Official Blender Lab MCP is released for Blender 5.1+ and explicitly warns that generated Blender Python runs without data-protection guards, reinforcing Plan 069's privileged/manual Blender-Python boundary.
 - Verification completed without service mutation: the full branch gate against `origin/main` passes on 2026-09-15, including repository policy, agent-doc checks, architecture, test-layout, maintainability, `cargo fmt --check`, Clippy with `-D warnings`, `cargo check`, and the complete Rust test suite. The only ignored Rust test is the pre-existing operator-only real SSH client smoke that requires an explicit disposable external fixture. Verification used a repo-ignored local Rust `1.98.1` cache under `target/`; no relay/service restart, reload, deployment, or production capability activation occurred.
 
@@ -1566,7 +1566,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Define contained path layout for project manifest, Elements, assets/revisions, scene/shot boards, creative graphs/templates, game design/build metadata, QA/playtest evidence, and exports.
+- [x] Define contained path layout for project manifest, Elements, assets/revisions, scene/shot boards, creative graphs/templates, game design/build metadata, QA/playtest evidence, and exports.
 - [x] Ensure paths remain relative/canonical and cannot target protected credentials.
 - [x] Add atomic manifest updates.
 - [x] Preserve human-readable diffs.
@@ -1582,15 +1582,15 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [ ] Reuse an existing reviewed first-party conversation attachment handoff if present.
-- [ ] Otherwise add the smallest owning-layer attachment materialization primitive.
-- [ ] Add an external-client upload request/complete flow that returns an expiring OAuth-bound upload URL or equivalent reviewed first-party handoff rather than requesting arbitrary local filesystem paths from the agent.
-- [ ] Bind upload requests to owner/project, media class, size limit, expiry, single-use/replay policy, and final Asset ID.
-- [ ] Add bounded HTTP(S) URL import only through the existing SSRF/network policy: redirects, DNS/IP class, content type, size, timeout, filename and checksum/provenance are validated before persistence.
-- [ ] Validate media type, size, destination ownership, filename/path, and source metadata for every ingest route.
-- [ ] Never accept arbitrary host destination paths or let Blender/media engines fetch URLs directly as an ingest shortcut.
-- [ ] Preserve source/provenance and source-mode (`conversation_upload`, `mcp_upload`, `url_import`, `generated_asset`, etc.).
-- [ ] Keep model-visible attachment access distinct from Blender/engine-readable workspace files.
+- [x] Reuse an existing reviewed first-party conversation attachment handoff if present. *(Audit found none on current `main`; the new first-party handoff below is therefore the owning path.)*
+- [x] Otherwise add the smallest owning-layer attachment materialization primitive. *(Conversation/device bytes use the same reviewed ticketed byte-ingress and contained binary writer; no arbitrary host path is introduced.)*
+- [x] Add an external-client upload request/complete flow that returns an expiring OAuth-bound upload URL or equivalent reviewed first-party handoff rather than requesting arbitrary local filesystem paths from the agent.
+- [x] Bind upload requests to owner/project, media class, size limit, expiry, single-use/replay policy, and final Asset ID.
+- [x] Add bounded HTTP(S) URL import only through the existing SSRF/network policy: redirects, DNS/IP class, content type, size, timeout, filename and checksum/provenance are validated before persistence.
+- [x] Validate media type, size, destination ownership, filename/path, and source metadata for every ingest route.
+- [x] Never accept arbitrary host destination paths or let Blender/media engines fetch URLs directly as an ingest shortcut.
+- [x] Preserve source/provenance and source-mode (`conversation_upload`, `mcp_upload`, `url_import`, `generated_asset`, etc.).
+- [x] Keep model-visible attachment access distinct from Blender/engine-readable workspace files.
 
 **Validation:** conversation-upload, external-upload-handoff, URL-import, and prior-Asset fixtures materialize to stable Asset IDs; expired/replayed upload tickets, private-network URL targets, redirect escapes, oversized/unsupported media, path injection, and owner/project mismatch fail closed.
 
@@ -1607,7 +1607,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Link originating creative job and parent Asset lineage.
 - [x] Mark accepted vs candidate revisions.
 - [x] Implement bounded list/get/search filters for media type/role, job lineage, Element, project, source/source-surface, acceptance state, parent Asset, and time range. *(Upload-specific filters remain meaningful once TASK-006 adds upload records.)*
-- [ ] Return reusable Asset IDs plus bounded preview/resource metadata so a result can be reviewed in the current client and reused later without download/re-upload.
+- [x] Return reusable Asset IDs plus bounded preview/resource metadata so a result can be reviewed in the current client and reused later without download/re-upload. *(Current MCP result returns stable Asset identity, media facts, relative contained path, checksum, and byte bounds; richer client resource rendering may layer on this contract later.)*
 - [x] Keep raw credentials/prompts/unrestricted provider logs out of routine metadata. *(Asset metadata is a typed media-facts object; arbitrary extra keys are rejected.)*
 
 **Validation:** fixtures can (a) trace user reference -> generated turnaround -> revised selected image -> Blender import, (b) list recent generated/uploaded assets with stable filters, and (c) reuse one previous Asset directly as a later job reference.
@@ -1616,9 +1616,9 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Phase exit criteria:**
 
-- [ ] production media can be safely materialized;
-- [ ] every asset has bounded provenance/lineage;
-- [ ] no Blender/generator path assumes transient chat paths are filesystem paths.
+- [x] production media can be safely materialized;
+- [x] every asset has bounded provenance/lineage;
+- [x] no Blender/generator path assumes transient chat paths are filesystem paths.
 
 # PHASE-03 — Capability/workflow registry, creative jobs, and minimal graph runtime
 

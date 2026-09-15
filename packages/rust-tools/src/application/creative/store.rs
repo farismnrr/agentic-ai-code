@@ -1,7 +1,7 @@
 use super::contracts::{
-    validate_id, validate_spec, AssetSource, CreativeProject, CreativeTrack, ElementKind,
-    ElementRecord, ElementRevision, ProductionTarget, ReferenceAuthority, RevisionState,
-    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_REFERENCES_PER_REVISION,
+    validate_id, validate_spec, AssetSource, CreativeProject, CreativeProjectLayout, CreativeTrack,
+    ElementKind, ElementRecord, ElementRevision, ProductionTarget, ReferenceAuthority,
+    RevisionState, CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_REFERENCES_PER_REVISION,
     MAX_REVISIONS_PER_ELEMENT,
 };
 use super::graph::{
@@ -14,12 +14,17 @@ use serde_json::Value;
 mod assets;
 mod io;
 mod support;
+mod uploads;
 pub use assets::{
     promote_asset, register_asset, search_assets, AssetRegistrationInput, AssetSearch,
 };
 use io::*;
 use support::new_id;
 pub use support::now_ms;
+pub use uploads::{
+    list_upload_tickets, load_upload_receipt, load_upload_ticket, store_upload_receipt,
+    store_upload_ticket,
+};
 
 const STATE_PREFIX: &str = ".masihawam/creative";
 const MAX_REGISTER_ASSET_BYTES: u64 = 1024 * 1024 * 1024;
@@ -42,6 +47,23 @@ pub struct ElementRevisionInput {
     pub authority: ReferenceAuthority,
     pub reference_asset_ids: Vec<String>,
     pub spec: Value,
+}
+
+pub fn project_layout(project_id: &str) -> Result<CreativeProjectLayout, McpError> {
+    validate_id(project_id, "project_id")?;
+    let state_root = format!("{STATE_PREFIX}/projects/{project_id}");
+    let production_root = format!("creative/{project_id}");
+    Ok(CreativeProjectLayout {
+        state_root: state_root.clone(),
+        production_root: production_root.clone(),
+        assets_root: format!("{production_root}/assets"),
+        scene_boards_root: format!("{production_root}/scene-boards"),
+        graphs_root: format!("{state_root}/graphs"),
+        templates_root: format!("{state_root}/templates"),
+        games_root: format!("{production_root}/games"),
+        qa_root: format!("{state_root}/qa"),
+        exports_root: format!("{production_root}/exports"),
+    })
 }
 
 pub fn create_project(

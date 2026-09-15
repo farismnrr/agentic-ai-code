@@ -6,6 +6,7 @@
 
 mod contracts;
 mod graph;
+pub(crate) mod ingest;
 mod registry;
 mod store;
 
@@ -19,10 +20,11 @@ use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
-pub fn dispatch_tool(
+pub async fn dispatch_tool(
     tool_name: &str,
     arguments: &Value,
     config: &ServerConfig,
+    owner: &str,
 ) -> Result<Option<ToolCallResult>, McpError> {
     if tool_name == "creative_status" {
         return Ok(Some(complete(status(config))?));
@@ -44,7 +46,7 @@ pub fn dispatch_tool(
         "creative_catalog" => catalog(arguments)?,
         "creative_project" => project(arguments, config)?,
         "creative_element" => element(arguments, config)?,
-        "creative_asset" => asset(arguments, config)?,
+        "creative_asset" => asset(arguments, config, owner).await?,
         "creative_graph" => graph_tool(arguments, config)?,
         "creative_job" => job(arguments, config)?,
         _ => return Ok(None),
@@ -114,11 +116,17 @@ fn project(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, M
                     target,
                 },
             )?;
-            complete(json!({"project": created}))
+            complete(json!({
+                "layout": store::project_layout(&created.project_id)?,
+                "project": created
+            }))
         }
         "get" => {
             let project = store::load_project(cwd, config, required_str(arguments, "project_id")?)?;
-            complete(json!({"project": project}))
+            complete(json!({
+                "layout": store::project_layout(&project.project_id)?,
+                "project": project
+            }))
         }
         "list" => complete(json!({"project_ids": store::list_projects(cwd, config)?})),
         _ => Err(McpError::InvalidRequest(
@@ -193,7 +201,11 @@ fn element(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, M
     }
 }
 
-fn asset(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, McpError> {
+async fn asset(
+    arguments: &Value,
+    config: &ServerConfig,
+    owner: &str,
+) -> Result<ToolCallResult, McpError> {
     let action = required_str(arguments, "action")?;
     let cwd = arguments.get("cwd").and_then(Value::as_str);
     let project_id = required_str(arguments, "project_id")?;
@@ -290,6 +302,69 @@ fn asset(arguments: &Value, config: &ServerConfig) -> Result<ToolCallResult, Mcp
                 },
             )?;
             complete(json!({"assets": assets}))
+        }
+        "upload_request" => {
+            let request = ingest::request_upload(
+                cwd,
+                config,
+                owner,
+                project_id,
+                ingest::UploadRequest {
+                    source: parse_optional(arguments, "source")?.unwrap_or(AssetSource::McpUpload),
+                    media_type: required_str(arguments, "media_type")?.to_owned(),
+                    role: required_str(arguments, "role")?.to_owned(),
+                    filename: required_str(arguments, "filename")?.to_owned(),
+                    max_bytes: arguments.get("max_bytes").and_then(Value::as_u64),
+                    ttl_ms: arguments.get("ttl_ms").and_then(Value::as_u64),
+                },
+            )?;
+            complete(json!({"upload": request}))
+        }
+        "upload_complete" => {
+            let (asset_id, asset) = ingest::complete_upload(
+                cwd,
+                config,
+                owner,
+                project_id,
+                required_str(arguments, "ticket_id")?,
+            )?;
+            complete(json!({
+                "asset_id": asset_id,
+                "asset": asset,
+                "preview": ingest::asset_preview(&asset)
+            }))
+        }
+        "upload_list" => complete(json!({
+            "uploads": ingest::list_uploads(cwd, config, owner, project_id)?
+        })),
+        "import_url" => {
+            let (asset_id, asset) = ingest::import_url(
+                cwd,
+                config,
+                project_id,
+                ingest::UrlImportRequest {
+                    url: required_str(arguments, "url")?.to_owned(),
+                    media_type: optional_string(arguments, "media_type"),
+                    role: required_str(arguments, "role")?.to_owned(),
+                    filename: optional_string(arguments, "filename"),
+                    max_bytes: arguments.get("max_bytes").and_then(Value::as_u64),
+                    parent_asset_id: optional_string(arguments, "parent_asset_id"),
+                    element_id: optional_string(arguments, "element_id"),
+                },
+            )
+            .await?;
+            complete(json!({
+                "asset_id": asset_id,
+                "asset": asset,
+                "preview": ingest::asset_preview(&asset)
+            }))
+        }
+        "preview" => {
+            let project = store::load_project(cwd, config, project_id)?;
+            let asset = project
+                .asset(required_str(arguments, "asset_id")?)
+                .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
+            complete(json!({"preview": ingest::asset_preview(asset)}))
         }
         _ => Err(McpError::InvalidRequest(
             "unsupported creative asset action".into(),

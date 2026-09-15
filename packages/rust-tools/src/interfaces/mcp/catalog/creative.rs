@@ -159,11 +159,16 @@ fn asset_tool() -> Tool {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["register", "promote", "get", "list", "search"] },
+                "action": { "type": "string", "enum": ["register", "promote", "get", "list", "search", "upload_request", "upload_complete", "upload_list", "import_url", "preview"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "asset_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                "url": { "type": "string", "minLength": 1, "maxLength": 8192 },
+                "ticket_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "filename": { "type": "string", "minLength": 1, "maxLength": 180 },
+                "max_bytes": { "type": "integer", "minimum": 1, "maximum": 67108864 },
+                "ttl_ms": { "type": "integer", "minimum": 1, "maximum": 1800000 },
                 "media_type": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "role": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "source": {
@@ -215,10 +220,22 @@ fn asset_tool() -> Tool {
                 },
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["get", "promote"] } },
+                        "properties": { "action": { "enum": ["get", "promote", "preview"] } },
                         "required": ["action"]
                     },
                     "then": { "required": ["asset_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "upload_request" } }, "required": ["action"] },
+                    "then": { "required": ["media_type", "role", "filename"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "upload_complete" } }, "required": ["action"] },
+                    "then": { "required": ["ticket_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "import_url" } }, "required": ["action"] },
+                    "then": { "required": ["url", "role"] }
                 }
             ],
             "required": ["action", "project_id"],

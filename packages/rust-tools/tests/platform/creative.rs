@@ -2,6 +2,8 @@
 mod contracts;
 #[path = "creative/graph.rs"]
 mod graph;
+#[path = "creative/ingest.rs"]
+mod ingest;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};
@@ -45,8 +47,18 @@ impl Drop for TempWorkspace {
     }
 }
 
+fn dispatch_sync(
+    config: &ServerConfig,
+    name: &str,
+    arguments: &Value,
+) -> Result<Option<ai_tools::interfaces::mcp::ToolCallResult>, ai_tools::core::error::McpError> {
+    tokio::runtime::Runtime::new()
+        .expect("creative test runtime")
+        .block_on(dispatch_tool(name, arguments, config, "local"))
+}
+
 fn call(config: &ServerConfig, name: &str, arguments: Value) -> Value {
-    let result = dispatch_tool(name, &arguments, config)
+    let result = dispatch_sync(config, name, &arguments)
         .expect("creative dispatch")
         .expect("creative tool result");
     assert!(
@@ -71,6 +83,22 @@ fn create_project(config: &ServerConfig, project_id: &str) {
     );
     assert_eq!(result["project"]["schema_version"], CREATIVE_SCHEMA_VERSION);
     assert_eq!(result["project"]["project_id"], project_id);
+    assert_eq!(
+        result["layout"]["state_root"],
+        format!(".masihawam/creative/projects/{project_id}")
+    );
+    assert_eq!(
+        result["layout"]["production_root"],
+        format!("creative/{project_id}")
+    );
+    assert_eq!(
+        result["layout"]["assets_root"],
+        format!("creative/{project_id}/assets")
+    );
+    assert_eq!(
+        result["layout"]["exports_root"],
+        format!("creative/{project_id}/exports")
+    );
 }
 
 #[test]
@@ -281,7 +309,8 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
         Some(64)
     );
 
-    let state_registration = dispatch_tool(
+    let state_registration = dispatch_sync(
+        &config,
         "creative_asset",
         &json!({
             "action": "register",
@@ -290,7 +319,6 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
             "media_type": "application/json",
             "role": "forbidden_state"
         }),
-        &config,
     );
     assert!(state_registration.is_err());
 }
