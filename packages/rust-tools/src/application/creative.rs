@@ -25,6 +25,14 @@ use crate::interfaces::mcp::ToolCallResult;
 use serde_json::{json, Value};
 use support::{complete, error_result, required_str};
 
+pub(crate) fn require_project(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+) -> Result<(), McpError> {
+    store::load_project(cwd, config, project_id).map(|_| ())
+}
+
 pub async fn dispatch_tool(
     tool_name: &str,
     arguments: &Value,

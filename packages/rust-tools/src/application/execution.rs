@@ -227,6 +227,11 @@ pub async fn dispatch_tool_call(
     {
         return Ok(result);
     }
+    if let Some(result) =
+        crate::application::blender::dispatch_tool(tool.name, arguments, config, owner).await?
+    {
+        return Ok(result);
+    }
 
     if tool.name == "text_search" {
         return requests::run_text_search(arguments, config).await;

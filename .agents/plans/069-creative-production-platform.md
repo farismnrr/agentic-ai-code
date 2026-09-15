@@ -1859,16 +1859,18 @@ Steps:
 
 **Outcome:** Rust relay can attach to an already-running compatible Blender or explicitly launch the reviewed Blender executable when closed, then communicate only through the reviewed local add-on protocol with bounded framing/errors.
 
+**Implementation:** COMPLETE on 2026-09-15. The relay now speaks the reviewed Blender Lab one-request-per-connection loopback TCP contract directly (`execute` JSON framed by NUL bytes), validates a fixed relay-authored readiness payload, bounds connect/write/read timing and frame sizes, and never accepts caller host/port/executable/PID authority. Session state distinguishes external versus relay-owned bridges. Cold start resolves only an operator-configured absolute executable or the reviewed safe-PATH Blender fallback, initializes the canonical project `blender/` layout idempotently, constrains workflow temp environment to `blender/tmp/`, launches the process in a dedicated process group where supported, and polls bounded readiness. Relay-owned identity is tied to authenticated owner + Creative project ID + workspace root; stop refuses external or mismatched sessions and process-group cleanup kills relay-owned descendants. Losing relay state therefore cannot convert an external/user process into kill authority.
+
 **Steps:**
 
-- [ ] Implement bounded executable resolution from operator config/reviewed standard locations only.
-- [ ] Implement `blender_session status` as a non-mutating bridge/process readiness probe.
-- [ ] Implement explicit `blender_session start` that launches the reviewed executable, points controlled session temp/project context at `<project>/blender/`, and waits for compatible loopback bridge readiness.
-- [ ] Track relay-owned process identity strongly enough that `blender_session stop` can terminate only a process launched by this session manager.
-- [ ] If a compatible external/user-started Blender is already available, attach without taking ownership and refuse destructive stop.
-- [ ] Keep all bridge targets loopback-only and reject caller-provided host/port/executable overrides outside frozen operator config.
+- [x] Implement bounded executable resolution from operator config/reviewed standard locations only.
+- [x] Implement `blender_session status` as a non-mutating bridge/process readiness probe.
+- [x] Implement explicit `blender_session start` that launches the reviewed executable, points controlled session temp/project context at `<project>/blender/`, and waits for compatible loopback bridge readiness.
+- [x] Track relay-owned process identity strongly enough that `blender_session stop` can terminate only a process launched by this session manager.
+- [x] If a compatible external/user-started Blender is already available, attach without taking ownership and refuse destructive stop.
+- [x] Keep all bridge targets loopback-only and reject caller-provided host/port/executable overrides outside frozen operator config.
 
-**Validation:** fake process/bridge tests cover already-running attach, cold start to ready, owned stop, non-owned stop refusal, framing, malformed/oversized replies, timeout, startup failure, cancellation where supported, and impossible arbitrary host/executable targeting.
+**Validation:** deterministic fake process/bridge acceptance covers external attach, cold start to ready, relay-owned status/stop, wrong-owner and wrong-project refusal, descendant process-group cleanup, idempotent layout creation, valid NUL-delimited framing, incompatible/malformed/oversized/hung responses, startup failure, readiness timeout, and schema-level impossibility of caller host/port/executable/PID injection. Blender-focused platform tests: 5/5 PASS; Clippy, maintainability, and `git diff --check` PASS. Explicit stop provides the supported cancellation boundary for relay-owned sessions; there is no separate caller-supplied process cancellation primitive.
 
 **Commit boundary:** `feat(blender): add loopback bridge`.
 

@@ -1,8 +1,13 @@
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
+use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::{Component, Path};
+
+mod bridge;
+mod session;
 
 pub const BLENDER_LAB_PROTOCOL: &str = "blender_lab_json_nul_v1";
 pub const DEFAULT_BLENDER_LAB_PORT: u16 = 9876;
@@ -153,4 +158,50 @@ fn validate_leaf_name(file_name: &str) -> Result<(), McpError> {
         ));
     }
     Ok(())
+}
+
+pub async fn dispatch_tool(
+    tool_name: &str,
+    arguments: &Value,
+    config: &ServerConfig,
+    owner: &str,
+) -> Result<Option<ToolCallResult>, McpError> {
+    if !tool_name.starts_with("blender_") {
+        return Ok(None);
+    }
+    if tool_name != "blender_session" {
+        return Ok(None);
+    }
+    let cwd = required_str(arguments, "cwd")?;
+    let project_id = required_str(arguments, "project_id")?;
+    crate::application::creative::require_project(Some(cwd), config, project_id)?;
+    let action = required_str(arguments, "action")?;
+    let status = match action {
+        "status" => session::status(Some(cwd), config, owner, project_id).await?,
+        "start" => session::start(Some(cwd), config, owner, project_id).await?,
+        "stop" => session::stop(Some(cwd), config, owner, project_id).await?,
+        _ => {
+            return Err(McpError::InvalidRequest(
+                "unsupported Blender session action".into(),
+            ))
+        }
+    };
+    complete(json!({"session": status})).map(Some)
+}
+
+fn required_str<'a>(arguments: &'a Value, field: &str) -> Result<&'a str, McpError> {
+    arguments
+        .get(field)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| McpError::InvalidRequest(format!("Blender {field} is required")))
+}
+
+fn complete(value: Value) -> Result<ToolCallResult, McpError> {
+    let text = serde_json::to_string(&value)
+        .map_err(|_| McpError::Internal("Blender result could not be serialized".into()))?;
+    Ok(ToolCallResult::complete(vec![ToolResultContent {
+        kind: "text",
+        text,
+    }]))
 }
