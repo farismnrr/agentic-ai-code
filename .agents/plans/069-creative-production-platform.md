@@ -1,18 +1,27 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **IMPLEMENTATION IN PROGRESS — PHASE-01 reconciled; C0/C1/C2 and minimal C3 foundations are implemented in source but Rust compile/test verification is currently blocked by the local toolchain environment; no relay restart/deployment has occurred**
+Status: **IMPLEMENTATION IN PROGRESS — the initial Creative core slice is VERIFIED and ready for review; Plan 069 overall remains open for safe media ingress, real execution bindings/jobs/budgets, mature graph execution, Blender, and Scene/Anime/Game production phases; no relay restart/deployment has occurred**
 
 Created: 2026-09-11
-Updated: 2026-09-14
+Updated: 2026-09-15
 
-## Current implementation state — 2026-09-14
+## Current implementation state — 2026-09-15
 
 - Implementation branch: `feat/plan-069-creative-core`, forked from reconciled `main` at `ae9571448a7c92e9ecf6f73b51b05009adc310e7`. This branch plus current `main` are the only active source truth for Plan 069; older release-branch assumptions are history only.
 - Versioning is intentionally singular: the client-visible runtime surface is built through one `runtime_tool_catalog` path and Creative state uses one active schema version (`CREATIVE_SCHEMA_VERSION = 1`). The retained 52-tool base and numbered catalog snapshots, including historical v15, are immutable history/audit artifacts rather than alternate current versions. `creative_status` remains visible while disabled; the remaining Creative tools are composed into Full only when `RELAY_ENABLE_CREATIVE=true`.
-- Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime.
+- Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime. Reload validation now rejects unaccepted selected revisions, forged generated provenance, cyclic Asset lineage, forged manual source-surface provenance, invalid media facts/types, duplicate/invalid Scene shot ordering, invalid Game runtime paths/asset references, and duplicate/bounded audio cues.
 - Deliberately not implemented yet: external upload handoff, conversation attachment materialization, URL import, provider/media execution bindings, cost/budget enforcement, graph partial rerun/invalidation/parallel executor scheduling, Blender bridge/tools, Scene/Anime/Game production engines, and publish/deploy execution. Generic manual asset registration cannot claim generated/upload/URL provenance.
 - Fresh benchmark audit: official Higgsfield MCP remains OAuth/client-neutral, asynchronous, credit-aware, and backed by durable Assets/history; Higgsfield may auto-select models, but Masih Awam intentionally keeps provider/model routing above the MCP boundary. Official Blender Lab MCP is released for Blender 5.1+ and explicitly warns that generated Blender Python runs without data-protection guards, reinforcing Plan 069's privileged/manual Blender-Python boundary.
-- Verification completed without service mutation: `git diff --check`, repository policy/agent-doc checks, architecture, test-layout, and maintainability pass. Rust compile/tests are **not claimed**: the host rustup installation currently has no toolchain, the surviving `target/` artifacts were built with Rust `1.98.1`, and the only local Rust container is `1.89` without compatible dependency sources. No toolchain was installed implicitly and no relay/service restart or reload was performed.
+- Verification completed without service mutation: the full branch gate against `origin/main` passes on 2026-09-15, including repository policy, agent-doc checks, architecture, test-layout, maintainability, `cargo fmt --check`, Clippy with `-D warnings`, `cargo check`, and the complete Rust test suite. The only ignored Rust test is the pre-existing operator-only real SSH client smoke that requires an explicit disposable external fixture. Verification used a repo-ignored local Rust `1.98.1` cache under `target/`; no relay/service restart, reload, deployment, or production capability activation occurred.
+
+## Initial core-slice conformance audit — 2026-09-15
+
+- **Contracts / project state:** aligned. One active Creative schema (`v1`) covers shared project, Element revision, Asset/provenance, Scene/Shot, Game, Audio, QA, graph/job identity, and production target state. Cross-track fixtures prove Scene + Anime-oriented asset/voice/3D state + Game can coexist without provider/model/agent IDs as source of truth. Template input/output and detailed playtest-evidence contracts remain explicitly deferred to their owning later tasks.
+- **Contained state / Assets:** aligned for the implemented subset. Project/graph/job JSON is contained and atomically written; manual file registration is selected-workspace-contained, protected-path-aware, SHA-256 lineaged, queryable, and cannot claim generated/upload/URL provenance. Conversation/device upload and URL import remain TASK-006 and are not emulated through arbitrary host paths.
+- **Capability / workflow discovery:** aligned. Semantic capabilities and workflow descriptors are independent from an intentionally empty execution-binding inventory; pluggable nodes require a caller-selected binding and fail boundedly when omitted/unavailable. Positive multi-binding conformance remains TASK-011 rather than introducing a fake default provider/model.
+- **Graph / jobs:** aligned only to the minimal foundation claimed by this slice. Typed DAG validation, deterministic topological ordering, control/reference execution, persisted terminal graph-job records, cycle rejection, and endpoint/credential/executable-payload rejection are implemented. Parallel independent-node scheduling, dirty-descendant invalidation, accepted-ancestor reuse, templates, async submit/wait lifecycle, cost/budget enforcement, and binding-backed execution remain open exactly where the plan says they are open.
+- **Authority boundary:** aligned. No agent registry, prompt authoring, provider/model ranking, fallback router, arbitrary executor endpoint, raw executable graph payload, Blender host authority, or implicit deploy/publish path was added.
+- **Operational boundary:** aligned. Creative remains disabled by default; `creative_status` is the activation hint; no relay restart/reload or deployment was performed during this slice.
 
 ## Goal
 
@@ -1473,7 +1482,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 ### TASK-003 — Freeze creative project schemas
 
-**Outcome:** versioned Creative Project, Element, character, style, world/location, asset, scene/shot, game, audio, graph/template, QA/playtest, and lineage contracts are specified before engine integration.
+**Outcome:** versioned Creative Project, Element, character, style, world/location, asset, scene/shot, game, audio, graph identity, QA finding, and lineage contracts are specified before engine integration. Template input/output and detailed playtest-evidence contracts remain owned by TASK-010 and the Game Studio phases rather than being implied complete here.
 
 **Steps:**
 
@@ -1484,7 +1493,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Define forward-compatible schema versioning.
 - [x] Define bounds and secret-exclusion rules.
 
-**Validation:** representative fixtures can express (a) one cinematic scene with Character/Location/Prop Elements and three shots, (b) one anime character/turnaround/rig path, and (c) one small browser-game design/build manifest, all with audio/provenance/revision lineage and no engine-specific IDs as source of truth.
+**Validation:** `packages/rust-tools/tests/platform/creative/contracts.rs` now exercises one provider-neutral cross-track project containing Character/Location/Prop/Style/Voice/3D Elements, a three-shot cinematic Scene, anime-oriented asset/voice lineage, a browser-game manifest, audio cues, QA state, and graph/job identities; persisted-state falsification covers unaccepted selected revisions, forged generated authority, path traversal, cyclic Asset lineage, and forged source-surface provenance.
 
 **Commit boundary:** `feat(creative): add production manifest contracts`.
 
@@ -1606,7 +1615,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Keep endpoint/credential/raw engine implementation metadata hidden; provider/model display metadata, if exposed at all, is informational and non-contractual.
 - [x] Return activation/setup hint when disabled.
 
-**Validation:** semantic capabilities remain stable while underlying provider/model implementations change; the same request works through two caller-selected mock bindings, missing selection always fails with `execution_binding_required`, and incompatible binding selection fails with a bounded reason.
+**Validation:** this core slice proves stable semantic capability/workflow discovery, a truthful empty execution-binding inventory, mandatory `execution_binding_required` on pluggable nodes with no selection, bounded `execution_binding_unavailable` for an unknown explicit binding, and no provider/model auto-routing. Positive two-binding conformance is intentionally deferred to TASK-011, where reviewed mock/real bindings actually exist; this task does not invent fake default executors merely to satisfy discovery tests.
 
 **Commit boundary:** `feat(creative): expose capability discovery`.
 
