@@ -122,8 +122,15 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn tool_catalog(&self) -> Vec<crate::interfaces::mcp::Tool> {
+        crate::interfaces::mcp::runtime_tool_catalog(
+            self.config.tool_profile,
+            self.config.enable_creative,
+        )
+    }
+
     pub fn tool_for_name(&self, name: &str) -> Option<crate::interfaces::mcp::Tool> {
-        crate::interfaces::mcp::tool_catalog_for_profile(self.config.tool_profile)
+        self.tool_catalog()
             .into_iter()
             .find(|tool| tool.name == name)
     }

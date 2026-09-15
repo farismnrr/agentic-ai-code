@@ -5,7 +5,7 @@ use ai_tools::infrastructure::notifications::{
     telegram_send_message_body, validate_channel_target, validate_message_thread_id, QueueResult,
     TelegramMessageLedger, TelegramMessagePayload, TelegramMessageService, MAX_MESSAGE_BYTES,
 };
-use ai_tools::interfaces::mcp::{tool_catalog_for_profile, DiscoverResult, Id, Request};
+use ai_tools::interfaces::mcp::{runtime_tool_catalog, DiscoverResult, Id, Request};
 use rusqlite::Connection;
 use serde_json::json;
 use std::fs;
@@ -218,7 +218,7 @@ fn telegram_destination_contract_remains_fixed_and_bounded() {
 
 #[test]
 fn explicit_telegram_tool_replaces_completion_contract() {
-    let tools = tool_catalog_for_profile(ai_tools::core::config::ToolProfile::Full);
+    let tools = runtime_tool_catalog(ai_tools::core::config::ToolProfile::Full, false);
     let tool = tools
         .iter()
         .find(|tool| tool.name == "telegram_send_message")

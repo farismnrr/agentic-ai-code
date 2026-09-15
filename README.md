@@ -54,7 +54,7 @@ OpenTelemetry/Loki, and opaque process/Git/delegated work is never presented as
 an exact source diff without relay-owned proof. See
 [configuration](docs/configuration.md#workspace-activity-ledger).
 
-The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem. The public catalog is v15: Primary has 15 core tools and Full has 52 retained tools; dedicated MCP capabilities are preferred and terminal is the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered operations.
+The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem. The current runtime catalog has one composition path: Primary starts from a 15-tool retained core and Full from a 52-tool retained base, then explicitly enabled optional capabilities are composed by operator configuration. Dedicated MCP capabilities are preferred and terminal is the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered operations. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts, not alternate active runtime versions.
 
 ## Repository layout
 

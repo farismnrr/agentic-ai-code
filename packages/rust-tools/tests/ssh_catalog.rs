@@ -1,5 +1,7 @@
 use ai_tools::core::config::ToolProfile;
-use ai_tools::interfaces::mcp::{find_tool_for_profile, tool_catalog, validate_tool_arguments};
+use ai_tools::interfaces::mcp::{
+    find_tool_for_profile, runtime_tool_catalog, validate_tool_arguments,
+};
 use serde_json::json;
 
 #[test]
@@ -22,18 +24,6 @@ fn dedicated_ssh_tool_is_portable_and_full_profile_only() {
 }
 
 #[test]
-fn catalog_v15_snapshot_matches_current_reduced_surface() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(".agents/contracts/067-tool-catalog-v15.json");
-    let expected = std::fs::read_to_string(root).expect("catalog v15 snapshot");
-    let expected: serde_json::Value = serde_json::from_str(&expected).expect("valid catalog v15");
-    let actual = serde_json::to_value(tool_catalog()).expect("serialize current catalog");
-    assert_eq!(actual, expected);
-    assert_eq!(actual.as_array().map(Vec::len), Some(52));
-}
-
-#[test]
 fn historical_catalog_snapshots_are_immutable() {
     use ring::digest::{digest, SHA256};
     for (path, expected_hash) in [
@@ -44,6 +34,10 @@ fn historical_catalog_snapshots_are_immutable() {
         (
             "../../../.agents/contracts/065-tool-catalog-v14.json",
             "6db382b1dd0cbce72190d87794470323caa29b9981a225f4dcba95b9457942b8",
+        ),
+        (
+            "../../../.agents/contracts/067-tool-catalog-v15.json",
+            "38e4d27f101fc94679c8f0e4f4f8bc8225c69bc60204c728d97a8c0c12d1af84",
         ),
     ] {
         let bytes = std::fs::read(
@@ -65,12 +59,17 @@ fn historical_catalog_snapshots_are_immutable() {
 }
 
 #[test]
-fn primary_profile_contains_only_the_fifteen_core_tools() {
-    let tools = ai_tools::interfaces::mcp::tool_catalog_for_profile(ToolProfile::Primary);
-    assert_eq!(tools.len(), 15);
+fn primary_profile_contains_the_retained_core_plus_creative_status() {
+    let tools = runtime_tool_catalog(ToolProfile::Primary, false);
+    assert_eq!(
+        tools.len(),
+        ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.len() + 1
+    );
+    assert!(tools.iter().any(|tool| tool.name == "creative_status"));
     assert!(tools
         .iter()
-        .all(|tool| ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.contains(&tool.name)));
+        .filter(|tool| tool.name != "creative_status")
+        .all(|tool| { ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.contains(&tool.name) }));
     assert!(!tools.iter().any(|tool| tool.name.starts_with("git_")));
     assert!(!tools.iter().any(|tool| tool.name.starts_with("code_")));
 }

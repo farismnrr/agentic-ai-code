@@ -2,7 +2,7 @@ use super::support::TestFixture;
 use ai_tools::application::execution::{dispatch_tool_call, start_terminal_job, JobState};
 use ai_tools::application::hooks::HookManager;
 use ai_tools::application::lsp::LspSessionManager;
-use ai_tools::interfaces::mcp::tool_catalog;
+use ai_tools::interfaces::mcp::retained_tool_catalog;
 use serde_json::json;
 use std::fs;
 use std::sync::Arc;
@@ -110,7 +110,7 @@ async fn dropping_sync_request_cancels_job_and_releases_semaphore() {
     let lsp = Arc::new(LspSessionManager::new(config.clone()).expect("LSP manager"));
     let hooks = Arc::new(HookManager::load(Arc::new(config.clone())).expect("hook manager"));
     let request = tokio::spawn(async move {
-        let catalog = tool_catalog();
+        let catalog = retained_tool_catalog();
         let tool = catalog
             .iter()
             .find(|tool| tool.name == "terminal_exec")

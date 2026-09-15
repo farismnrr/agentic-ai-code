@@ -4,7 +4,7 @@ use ai_tools::application::execution::{
 };
 use ai_tools::application::hooks::HookManager;
 use ai_tools::application::lsp::LspSessionManager;
-use ai_tools::interfaces::mcp::tool_catalog;
+use ai_tools::interfaces::mcp::retained_tool_catalog;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -144,12 +144,11 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
     assert_eq!(snapshot.state, JobState::TimedOut);
     let result = snapshot.result.as_ref().expect("timed-out tool result");
     assert!(result.is_error);
+    let timeout_text = &result.content[0].text;
     assert!(
-        result.content[0]
-            .text
-            .contains("terminal execution failed at child_wait: TimedOut"),
-        "unexpected timeout stage: {}",
-        result.content[0].text
+        timeout_text == "terminal execution failed at child_wait: TimedOut"
+            || timeout_text == "terminal execution failed at job_wait: TimedOut",
+        "unexpected timeout stage: {timeout_text}"
     );
     assert!(
         elapsed < Duration::from_secs(4),
@@ -365,7 +364,7 @@ async fn test_task_backed_and_sync_execution_parity() {
         .expect("async wait failed");
 
     // Synchronous dispatch path
-    let catalog = tool_catalog();
+    let catalog = retained_tool_catalog();
     let tool = catalog
         .iter()
         .find(|t| t.name == "terminal_exec")

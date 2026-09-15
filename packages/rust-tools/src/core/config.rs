@@ -50,6 +50,8 @@ pub struct ServerConfig {
     pub toolchain_paths: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
+    /// Optional first-party creative capability; activation changes require a restart.
+    pub enable_creative: bool,
     pub enable_agent_hooks: bool,
     pub agent_hooks_config: Option<String>,
     pub tool_profile: ToolProfile,
@@ -101,6 +103,7 @@ impl Default for ServerConfig {
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
             lsp_servers: Vec::new(),
+            enable_creative: false,
             enable_agent_hooks: false,
             agent_hooks_config: None,
             tool_profile: ToolProfile::Full,
