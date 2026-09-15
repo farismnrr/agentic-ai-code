@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::path::{Component, Path};
 
 mod assets;
+mod location;
 use assets::{validate_asset, validate_asset_lineage};
 
 impl CreativeProject {
@@ -160,6 +161,9 @@ fn validate_element(element: &ElementRecord, project: &CreativeProject) -> Resul
     for revision in &element.revisions {
         validate_id(&revision.revision_id, "revision_id")?;
         validate_spec(&revision.spec)?;
+        if element.kind == ElementKind::Location {
+            location::validate_location_pack_spec(&revision.spec, project)?;
+        }
         if revision.reference_asset_ids.len() > MAX_REFERENCES_PER_REVISION {
             return Err(McpError::InvalidRequest(
                 "element reference count exceeds maximum".into(),
@@ -226,7 +230,6 @@ fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<()
     for element_id in scene
         .cast_element_ids
         .iter()
-        .chain(scene.location_element_id.iter())
         .chain(scene.style_element_id.iter())
     {
         if project.element(element_id).is_none() {
@@ -235,6 +238,11 @@ fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<()
             ));
         }
     }
+    let location_pack = scene
+        .location_element_id
+        .as_deref()
+        .map(|element_id| location::selected_location_pack(project, element_id))
+        .transpose()?;
     for shot in &scene.shots {
         validate_id(&shot.shot_id, "shot_id")?;
         if !shot_ids.insert(shot.shot_id.as_str())
@@ -247,6 +255,23 @@ fn validate_scene(scene: &SceneManifest, project: &CreativeProject) -> Result<()
         }
         validate_freeform_text(&shot.action, 0, 4_096, "shot action")?;
         validate_spec(&shot.continuity)?;
+        if let Some(variant_id) = shot.location_variant_id.as_deref() {
+            validate_id(variant_id, "shot location variant id")?;
+            let pack = location_pack.as_ref().ok_or_else(|| {
+                McpError::InvalidRequest(
+                    "shot location variant requires a scene Location Element".into(),
+                )
+            })?;
+            if !pack
+                .variants
+                .iter()
+                .any(|variant| variant.variant_id == variant_id)
+            {
+                return Err(McpError::InvalidRequest(
+                    "shot location variant is not declared by the selected Location Pack".into(),
+                ));
+            }
+        }
         for element_id in &shot.element_ids {
             if project.element(element_id).is_none() {
                 return Err(McpError::InvalidRequest(

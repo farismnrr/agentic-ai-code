@@ -96,6 +96,40 @@ pub struct ElementRecord {
     pub revisions: Vec<ElementRevision>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocationVariantSpec {
+    pub variant_id: String,
+    #[serde(default)]
+    pub time_of_day: Option<String>,
+    #[serde(default)]
+    pub weather: Option<String>,
+    #[serde(default)]
+    pub lighting: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocationPackSpec {
+    pub spec_type: String,
+    pub concept: String,
+    pub scale: String,
+    pub architecture_language: String,
+    pub set_dressing_language: String,
+    #[serde(default)]
+    pub canonical_landmarks: Vec<String>,
+    #[serde(default)]
+    pub variants: Vec<LocationVariantSpec>,
+    #[serde(default)]
+    pub style_element_id: Option<String>,
+    #[serde(default)]
+    pub asset3d_element_ids: Vec<String>,
+    #[serde(default)]
+    pub camera_landmarks: Vec<String>,
+    #[serde(default)]
+    pub continuity_notes: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetState {
@@ -195,6 +229,8 @@ pub struct ShotManifest {
     pub duration_ms: u64,
     #[serde(default)]
     pub element_ids: Vec<String>,
+    #[serde(default)]
+    pub location_variant_id: Option<String>,
     #[serde(default)]
     pub camera: CameraSpec,
     #[serde(default)]

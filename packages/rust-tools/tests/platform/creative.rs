@@ -20,6 +20,8 @@ mod media;
 mod style_dependencies;
 #[path = "creative/workflows.rs"]
 mod workflows;
+#[path = "creative/world.rs"]
+mod world;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};

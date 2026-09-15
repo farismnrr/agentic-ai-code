@@ -1821,15 +1821,17 @@ Steps:
 
 **Outcome:** recurring locations/environment language can be reused across key art and shots.
 
-**Validation:** two shots can reference the same location pack while varying time/camera without losing core location identity.
+**Implementation:** COMPLETE on 2026-09-15. Location Element revisions now use the strict `world_location_v1` contract with bounded concept/scale, architecture and set-dressing language, canonical landmarks, time/weather/lighting variants, optional Style and Asset3d Element dependencies, reusable camera landmarks, and continuity notes. `ShotManifest.location_variant_id` is a typed optional reference to one declared variant from the Scene's selected Location Pack; unknown variants, wrong Element kinds, unknown Style/Asset3d dependencies, duplicate identities, and ambiguous extra spec fields fail closed.
+
+**Validation:** deterministic acceptance creates/promotes/reloads a typed Location Pack through `creative_element`, then runs two durable key-art generation jobs bound to the same Location Element and Style dependency without changing the selected Location revision. The cross-track Scene fixture references that same Location Element from multiple shots while selecting `day_clear` versus `rain_night` and distinct camera settings; an undeclared shot variant is rejected. Creative suite: 26/26 PASS; fast guardrail PASS.
 
 **Commit boundary:** `feat(anime): add reusable world packs`.
 
 **Phase exit criteria:**
 
-- [ ] style/character/world state survives multiple jobs;
-- [ ] binding-specific identity preparation is optional, traceable, and replaceable;
-- [ ] downstream impact of style changes is explicit.
+- [x] style/character/world state survives multiple jobs;
+- [x] binding-specific identity preparation is optional, traceable, and replaceable;
+- [x] downstream impact of style changes is explicit.
 
 # PHASE-06 — Blender first-class production engine
 
