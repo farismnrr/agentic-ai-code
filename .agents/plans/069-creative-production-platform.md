@@ -1134,21 +1134,43 @@ Do not enable generic outbound stdio MCP in Nuxt and do not spawn the official P
 1. disabled by default;
 2. loopback only in v1;
 3. bounded operator-configured port/timeout;
-4. no implicit Blender/add-on installation or service management;
-5. raw Python is privileged host-user execution, not a sandbox;
-6. read-only wrappers never accept arbitrary Python;
-7. request/response bounds are relay-enforced;
-8. workspace import/export/checkpoint/render paths are validated before Blender receives them;
-9. URLs and arbitrary host paths are not asset-import shortcuts;
-10. activity/logging does not persist giant scripts/scene dumps;
-11. attachment ingress is explicit and contained;
-12. no upper-layer coding system or Plan 069 implementation step restarts the live relay/systemd service implicitly.
+4. no implicit Blender/add-on installation; explicit Blender process lifecycle is allowed only through `blender_session` and never through generic terminal/process arguments;
+5. the Blender executable may live outside the workspace, but it must be operator-configured or resolved from a bounded reviewed set of standard executable locations/PATH entries; callers cannot supply arbitrary executable paths;
+6. if an already-running compatible Blender/add-on bridge is detected, the relay attaches without claiming process ownership; `stop` may terminate only a Blender process previously launched by the relay-owned session manager;
+7. raw Python is privileged host-user execution, not a sandbox;
+8. read-only wrappers never accept arbitrary Python;
+9. request/response bounds are relay-enforced;
+10. all Blender-created or Blender-mutated production files must remain beneath the selected project workspace's dedicated `blender/` subtree; render/export/checkpoint/save destinations outside it fail closed;
+11. source media elsewhere in the selected project may be materialized/copied into the dedicated Blender subtree before Blender consumes it; URLs and arbitrary host paths are never direct Blender import shortcuts;
+12. activity/logging does not persist giant scripts/scene dumps;
+13. attachment ingress is explicit and contained;
+14. no upper-layer coding system or Plan 069 implementation step restarts the live relay/systemd service implicitly.
+
+### Canonical Blender project layout
+
+For a selected project rooted under the authorized `Documents/Projects` workspace, Blender production state is contained under one dedicated subtree:
+
+```text
+<project>/blender/
+  scenes/
+  assets/
+  references/
+  renders/
+    preview/
+    final/
+  animations/
+  exports/
+  checkpoints/
+  tmp/
+```
+
+The Blender executable itself is not project data and may live in an operator-approved system/home installation path. By contrast, `.blend` files, Blender-authored assets, materialized references, previews, final renders, animation outputs, exports, checkpoints, controlled bake/cache outputs, and session temp files owned by the workflow must resolve beneath `<project>/blender/`. System/GPU/application caches that Blender or the OS owns independently are outside this production-artifact contract and are never treated as project deliverables.
 
 ### Retained Blender v1 tool surface
 
-Keep the compact **11-tool** design:
+Keep the compact **11-tool** design while making session ownership explicit:
 
-1. `blender_status`
+1. `blender_session` — `status|start|stop`
 2. `blender_inspect`
 3. `blender_python_api_docs`
 4. `blender_execute_python`
@@ -1159,6 +1181,8 @@ Keep the compact **11-tool** design:
 9. `blender_asset_export`
 10. `blender_checkpoint_create`
 11. `blender_checkpoint_restore`
+
+`blender_session status` probes bridge compatibility without mutation. `start` launches only the reviewed operator-resolved Blender executable when no compatible bridge is already available, then waits for the bounded loopback bridge readiness contract. `stop` is owner-safe and refuses to terminate a Blender process the relay did not launch.
 
 `blender_inspect` should retain scoped structured reads for at least `scene|object|mesh|uv|rig|animation|material|nodes|physics|asset|render|character`.
 
@@ -1374,7 +1398,9 @@ Expected intent:
 
 | Tool | Effects | Risk intent |
 | --- | --- | --- |
-| `blender_status` | read-only + privileged bridge identity | low/medium, no mutation |
+| `blender_session status` | read-only + privileged bridge identity | low/medium, no mutation |
+| `blender_session start` | process execution + workspace write + privileged bridge | explicit local Blender launch from operator-approved executable; waits for loopback readiness |
+| `blender_session stop` | process execution + privileged bridge | mutating only for relay-owned Blender session; refuses non-owned process termination |
 | `blender_inspect` | read-only + privileged bridge identity | low/medium, no mutation |
 | `blender_python_api_docs` | bounded read-only knowledge lookup | low |
 | `blender_screenshot` | privileged bridge; optional contained output | bounded visual readback |
@@ -1425,7 +1451,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | PHASE-03 | Capability/workflow registry + creative jobs + graph contract + minimal headless executor | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate and execute through the minimal reviewed DAG runtime |
 | PHASE-04 | Initial reference-aware media generation | PHASE-02, PHASE-03 | Character/Style still consistency foundation passes A1/A2-quality gate |
 | PHASE-05 | Identity/style/world/Element production system | PHASE-04 | reusable Characters/Locations/Props/Style Elements drive revisions and reuse |
-| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | retained 11-tool bridge/tool/security contract passes |
+| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | retained 11-tool contract passes, including cold start/readiness/owner-safe stop and project-contained Blender production outputs |
 | PHASE-07 | Anime 3D character asset pipeline | PHASE-05, PHASE-06 | A3/A4 pass |
 | PHASE-08 | Animation, facial, audio, and temporal QA | PHASE-07 | A5 passes |
 | PHASE-09 | Scene Studio: SceneBoard + Director + shot orchestration | PHASE-04, PHASE-05; PHASE-06 optional per backend | S1/S2 pass and one S3 candidate can be produced/revised |
@@ -1809,35 +1835,61 @@ Steps:
 
 **Dependencies:** PHASE-02, PHASE-03.
 
-### TASK-017 — Freeze Blender bridge/config/tool schemas
+### TASK-017 — Freeze Blender bridge/config/session/tool schemas
 
-**Outcome:** operator config, loopback framing, 11 tool schemas, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
+**Outcome:** operator config, reviewed executable resolution, explicit `blender_session status|start|stop`, loopback framing, 11 tool schemas, dedicated project `blender/` layout, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
 
-**Validation:** historical numbered contracts remain untouched and Plan 069 does not create a parallel successor catalog; Blender composes into the same current runtime catalog path.
+**Steps:**
+
+- [ ] Freeze operator-configured Blender executable plus bounded reviewed fallback discovery; no caller-supplied arbitrary executable path.
+- [ ] Freeze owner-safe session identity so an existing user-started Blender can be attached to but never killed by relay `stop`.
+- [ ] Freeze readiness semantics: probe compatible loopback bridge first; explicit `start` launches Blender only when needed and waits for bounded bridge readiness.
+- [ ] Freeze the canonical `<project>/blender/` production layout and require every Blender-owned save/render/export/checkpoint/bake/temp destination to resolve beneath it.
+- [ ] Keep executable authority separate from project-data authority: Blender may execute from an approved system/home installation path while production artifacts stay under the authorized Projects workspace.
+
+**Validation:** historical numbered contracts remain untouched and Plan 069 does not create a parallel successor catalog; Blender composes into the same current runtime catalog path; config/path fixtures reject caller-controlled executables and any production output outside the selected project's `blender/` subtree.
 
 **Commit boundary:** `feat(blender): freeze relay capability contract`.
 
-### TASK-018 — Implement bounded loopback Blender bridge
+### TASK-018 — Implement bounded Blender session lifecycle and loopback bridge
 
-**Outcome:** Rust relay connects only to the reviewed local add-on protocol with null-delimited JSON framing and bounded errors.
+**Outcome:** Rust relay can attach to an already-running compatible Blender or explicitly launch the reviewed Blender executable when closed, then communicate only through the reviewed local add-on protocol with bounded framing/errors.
 
-**Validation:** fake TCP bridge tests cover framing, malformed/oversized replies, timeout, refusal, cancellation where supported, and impossible arbitrary host targeting.
+**Steps:**
+
+- [ ] Implement bounded executable resolution from operator config/reviewed standard locations only.
+- [ ] Implement `blender_session status` as a non-mutating bridge/process readiness probe.
+- [ ] Implement explicit `blender_session start` that launches the reviewed executable, points controlled session temp/project context at `<project>/blender/`, and waits for compatible loopback bridge readiness.
+- [ ] Track relay-owned process identity strongly enough that `blender_session stop` can terminate only a process launched by this session manager.
+- [ ] If a compatible external/user-started Blender is already available, attach without taking ownership and refuse destructive stop.
+- [ ] Keep all bridge targets loopback-only and reject caller-provided host/port/executable overrides outside frozen operator config.
+
+**Validation:** fake process/bridge tests cover already-running attach, cold start to ready, owned stop, non-owned stop refusal, framing, malformed/oversized replies, timeout, startup failure, cancellation where supported, and impossible arbitrary host/executable targeting.
 
 **Commit boundary:** `feat(blender): add loopback bridge`.
 
 ### TASK-019 — Implement structured Blender read/knowledge/preview tools
 
-**Outcome:** status, inspection scopes, version-aligned API/manual lookup, screenshots, animation previews, and bounded render previews work without arbitrary Python input.
+**Outcome:** session status, inspection scopes, version-aligned API/manual lookup, screenshots, animation previews, and bounded render previews work without arbitrary Python input; previews materialized by the workflow remain under `<project>/blender/renders/preview/` or another frozen Blender-subtree path.
 
 **Validation:** fake-bridge integration tests cover every scope/result transformation and preview bound.
 
 **Commit boundary:** `feat(blender): add structured production reads`.
 
-### TASK-020 — Implement contained Blender asset/recovery tools
+### TASK-020 — Implement contained Blender asset/render/recovery paths
 
-**Outcome:** import/export/checkpoint create/restore respect workspace/protected-path authority and reviewed formats.
+**Outcome:** `.blend` saves, materialized references, import/export, render outputs, controlled bake/cache outputs, and checkpoint create/restore respect workspace/protected-path authority and the canonical `<project>/blender/` layout.
 
-**Validation:** path escape, URL, unsupported format, arbitrary destination, and checkpoint forgery tests fail closed.
+**Steps:**
+
+- [ ] Materialize project-contained external references into `<project>/blender/references/` or `<project>/blender/assets/` before Blender consumes them.
+- [ ] Require scene saves under `<project>/blender/scenes/`.
+- [ ] Require preview/final renders under `<project>/blender/renders/preview|final/`.
+- [ ] Require reusable animation outputs under `<project>/blender/animations/` and exports under `<project>/blender/exports/`.
+- [ ] Require checkpoints under `<project>/blender/checkpoints/` and controlled workflow temp/bake paths under `<project>/blender/tmp/` unless a more specific frozen subdirectory is defined.
+- [ ] Reject absolute/arbitrary host destinations even when Blender itself would accept them.
+
+**Validation:** path escape, symlink escape, URL, unsupported format, arbitrary destination outside `<project>/blender/`, external-temp substitution, and checkpoint forgery tests fail closed; normal save/render/export/checkpoint fixtures remain entirely under the dedicated Blender subtree.
 
 **Commit boundary:** `feat(blender): add contained asset and checkpoint tools`.
 
@@ -1859,9 +1911,10 @@ Steps:
 
 **Phase exit criteria:**
 
-- [ ] all 11 Blender tools are implemented and tested;
+- [ ] all 11 Blender tools are implemented and tested, including explicit cold-start/readiness/owner-safe stop through `blender_session`;
 - [ ] no generic stdio/nested Python MCP server is required;
-- [ ] Blender filesystem/network/host authority is represented honestly;
+- [ ] Blender filesystem/network/process/host authority is represented honestly;
+- [ ] the Blender executable may remain outside Projects only as reviewed operator executable authority, while every workflow-owned production artifact remains beneath the selected project's dedicated `blender/` subtree;
 - [ ] safe reference materialization integrates with Blender import.
 
 # PHASE-07 — Anime 3D character production
