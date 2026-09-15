@@ -41,7 +41,7 @@ fn media_binding_descriptor() -> String {
     .to_string()
 }
 
-fn configured_workspace() -> (TempWorkspace, ai_tools::core::config::ServerConfig) {
+pub(super) fn configured_workspace() -> (TempWorkspace, ai_tools::core::config::ServerConfig) {
     let workspace = TempWorkspace::new();
     let mut config = workspace.config();
     config.creative_binding_descriptors = vec![media_binding_descriptor()];
@@ -53,7 +53,7 @@ fn configured_workspace() -> (TempWorkspace, ai_tools::core::config::ServerConfi
     (workspace, config)
 }
 
-fn run_capability(
+pub(super) fn run_capability(
     config: &ai_tools::core::config::ServerConfig,
     project_id: &str,
     capability_id: &str,

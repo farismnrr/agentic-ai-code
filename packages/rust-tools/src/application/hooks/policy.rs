@@ -11,8 +11,8 @@ pub fn effect_classes_for_call(
         let action = arguments.get("action").and_then(serde_json::Value::as_str);
         return match (tool_id, action) {
             ("creative_project", Some("create"))
-            | ("creative_element", Some("create_revision" | "promote"))
-            | ("creative_asset", Some("register" | "promote"))
+            | ("creative_element", Some("create_revision" | "promote" | "reject"))
+            | ("creative_asset", Some("register" | "promote" | "reject"))
             | ("creative_graph", Some("execute" | "partial_rerun" | "template_save"))
             | ("creative_job", Some("submit" | "wait" | "cancel")) => vec!["workspace_write"],
             _ => vec!["workspace_read"],

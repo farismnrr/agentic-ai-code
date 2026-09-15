@@ -17,7 +17,7 @@ mod support;
 mod templates;
 mod uploads;
 pub use assets::{
-    promote_asset, register_asset, search_assets, AssetRegistrationInput, AssetSearch,
+    promote_asset, register_asset, reject_asset, search_assets, AssetRegistrationInput, AssetSearch,
 };
 use io::*;
 use support::new_id;
@@ -282,6 +282,35 @@ pub fn promote_element_revision(
         return Err(McpError::InvalidRequest("unknown element revision".into()));
     }
     element.selected_revision_id = Some(revision_id.to_owned());
+    project.updated_at_ms = now_ms();
+    save_project(cwd, config, &project)?;
+    Ok(project)
+}
+
+pub fn reject_element_revision(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    element_id: &str,
+    revision_id: &str,
+) -> Result<CreativeProject, McpError> {
+    validate_id(element_id, "element_id")?;
+    validate_id(revision_id, "revision_id")?;
+    let mut project = load_project(cwd, config, project_id)?;
+    let element = project
+        .elements
+        .iter_mut()
+        .find(|value| value.element_id == element_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative element".into()))?;
+    let revision = element
+        .revisions
+        .iter_mut()
+        .find(|value| value.revision_id == revision_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown element revision".into()))?;
+    revision.state = RevisionState::Rejected;
+    if element.selected_revision_id.as_deref() == Some(revision_id) {
+        element.selected_revision_id = None;
+    }
     project.updated_at_ms = now_ms();
     save_project(cwd, config, &project)?;
     Ok(project)

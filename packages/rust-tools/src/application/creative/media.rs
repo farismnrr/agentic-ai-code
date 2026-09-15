@@ -9,6 +9,8 @@ use ring::digest::{digest, SHA256};
 use serde_json::Value;
 use std::io::Cursor;
 
+mod workflows;
+
 const MAX_RASTER_DIMENSION: u32 = 4096;
 const MAX_RASTER_PIXELS: u64 = 16_777_216;
 const DEFAULT_GENERATED_DIMENSION: u32 = 512;
@@ -23,6 +25,11 @@ pub fn execute_media_job(
     };
     if backend_kind(config, binding_id)? != Some("local_raster") {
         return Ok(None);
+    }
+    if job.kind == CreativeJobKind::Workflow {
+        if let Some(executed) = workflows::execute_reference_workflow(cwd, config, job)? {
+            return Ok(Some(executed));
+        }
     }
     let workflow_capability = job
         .workflow_id

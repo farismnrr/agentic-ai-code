@@ -101,7 +101,7 @@ fn element_tool() -> Tool {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["create_revision", "promote", "get", "list"] },
+                "action": { "type": "string", "enum": ["create_revision", "promote", "reject", "get", "list"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "element_id": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -134,7 +134,7 @@ fn element_tool() -> Tool {
                     }
                 },
                 {
-                    "if": { "properties": { "action": { "const": "promote" } }, "required": ["action"] },
+                    "if": { "properties": { "action": { "enum": ["promote", "reject"] } }, "required": ["action"] },
                     "then": { "required": ["element_id", "revision_id"] }
                 },
                 {
@@ -159,7 +159,7 @@ fn asset_tool() -> Tool {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["register", "promote", "get", "list", "search", "upload_request", "upload_complete", "upload_list", "import_url", "preview"] },
+                "action": { "type": "string", "enum": ["register", "promote", "reject", "get", "list", "search", "upload_request", "upload_complete", "upload_list", "import_url", "preview"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "asset_id": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -220,7 +220,7 @@ fn asset_tool() -> Tool {
                 },
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["get", "promote", "preview"] } },
+                        "properties": { "action": { "enum": ["get", "promote", "reject", "preview"] } },
                         "required": ["action"]
                     },
                     "then": { "required": ["asset_id"] }

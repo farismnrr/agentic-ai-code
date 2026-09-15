@@ -8,7 +8,9 @@ use serde_json::Value;
 use uuid::Uuid;
 
 mod estimates;
+mod support;
 pub use estimates::estimate_request;
+use support::{enforce_owner, owned_jobs, validate_owner};
 
 const MAX_JOB_TIMEOUT_MS: u64 = 86_400_000;
 
@@ -445,36 +447,6 @@ fn admitted_compute_units(jobs: &[CreativeJobRecord]) -> u64 {
         .filter(|job| job.status != CreativeJobStatus::Cancelled)
         .filter_map(|job| job.estimate.as_ref().map(|estimate| estimate.compute_units))
         .fold(0u64, u64::saturating_add)
-}
-
-fn owned_jobs(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    owner: &str,
-    project_id: &str,
-) -> Result<Vec<CreativeJobRecord>, McpError> {
-    Ok(store::list_jobs(cwd, config, project_id)?
-        .into_iter()
-        .filter(|job| job.owner == owner)
-        .collect())
-}
-
-fn enforce_owner(job: &CreativeJobRecord, owner: &str) -> Result<(), McpError> {
-    if job.owner != owner {
-        return Err(McpError::InvalidRequest(
-            "creative job belongs to a different owner".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_owner(owner: &str) -> Result<(), McpError> {
-    if owner.is_empty() || owner.len() > 512 || owner.chars().any(char::is_control) {
-        return Err(McpError::InvalidRequest(
-            "creative job owner is invalid".into(),
-        ));
-    }
-    Ok(())
 }
 
 fn validate_submit_shape(request: &SubmitRequest) -> Result<(), McpError> {

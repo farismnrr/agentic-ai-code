@@ -55,6 +55,25 @@ pub fn promote_asset(
     Ok(project)
 }
 
+pub fn reject_asset(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<CreativeProject, McpError> {
+    validate_id(asset_id, "asset_id")?;
+    let mut project = load_project(cwd, config, project_id)?;
+    let asset = project
+        .assets
+        .iter_mut()
+        .find(|value| value.asset_id == asset_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
+    asset.state = AssetState::Rejected;
+    project.updated_at_ms = now_ms();
+    save_project(cwd, config, &project)?;
+    Ok(project)
+}
+
 pub fn register_asset(
     cwd: Option<&str>,
     config: &ServerConfig,

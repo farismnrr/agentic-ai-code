@@ -1768,14 +1768,14 @@ Steps:
 
 **Steps:**
 
-- [ ] Accept a caller-authored Style/Character specification and selected execution binding.
-- [ ] Store the caller-approved Style Element revision.
-- [ ] Execute requested canonical/reference views and additional views/expressions with typed reference roles.
-- [ ] Label generated hidden views as interpreted.
-- [ ] Return media plus deterministic metadata/evidence for upper-layer visual review.
-- [ ] Let the caller promote accepted revisions into the Character Element/Pack through explicit state mutation.
+- [x] Accept a caller-authored Style/Character specification and selected execution binding.
+- [x] Store the caller-approved Style Element revision.
+- [x] Execute requested canonical/reference views and additional views/expressions with typed reference roles.
+- [x] Label generated hidden views as interpreted.
+- [x] Return media plus deterministic metadata/evidence for upper-layer visual review.
+- [x] Let the caller promote accepted revisions into the Character Element/Pack through explicit state mutation.
 
-**Validation:** an external upper-layer acceptance client can drive A1/A2 using only agnostic MCP contracts; MCP preserves identity/style/reference lineage and never chooses the creative direction/model or claims subjective QA without caller/evaluator evidence.
+**Validation:** 2026-09-15 deterministic upper-layer acceptance drives Style and Character Element revisions plus `character_turnaround` and `expression_sheet` through the same agnostic job/media contracts, producing contained candidate Assets with Anime surface, Element/reference lineage, interpreted authority, per-variant dimensions/checksum evidence, and explicit `inspection=not_inspected`. The caller can explicitly reject Assets/revisions or promote accepted Assets/revisions; MCP never chooses creative direction/model or claims subjective QA. This proves the TASK-013 contract and lifecycle, **not** production character-consistency quality: PHASE-04 A1/A2 visual-quality exit criteria remain open until evaluated with a real quality-capable caller-selected binding/evaluator.
 
 **Commit boundary:** `feat(anime): build character reference workflow`.
 
