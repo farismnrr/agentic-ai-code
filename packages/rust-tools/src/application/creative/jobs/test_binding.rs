@@ -10,32 +10,44 @@ pub(super) fn execute(
     config: &ServerConfig,
     mut job: CreativeJobRecord,
 ) -> Result<CreativeJobRecord, McpError> {
-    if job.capability_id.is_none() {
-        if let Some(workflow_id) = job.workflow_id.as_deref() {
-            if let Some(workflow) = registry::workflow(workflow_id) {
-                if workflow.required_capabilities.len() == 1 {
-                    job.capability_id = workflow.required_capabilities.first().cloned();
-                }
-            }
-        }
+    let injected_workflow_capability = if job.capability_id.is_none() {
+        job.workflow_id
+            .as_deref()
+            .and_then(registry::workflow)
+            .filter(|workflow| workflow.required_capabilities.len() == 1)
+            .and_then(|workflow| workflow.required_capabilities.first().cloned())
+    } else {
+        None
+    };
+    if let Some(capability_id) = injected_workflow_capability.as_ref() {
+        job.capability_id = Some(capability_id.clone());
     }
-    if job.capability_id.as_deref() == Some("identity.prepare") {
-        return execute_identity_prepare(cwd, config, job);
-    }
-    if job.capability_id.as_deref() == Some("3d.image_to_mesh") {
-        return execute_image_to_mesh(cwd, config, job);
-    }
-    if job.capability_id.as_deref() == Some("game.deploy") {
-        return execute_game_deploy(cwd, config, job);
-    }
-    if job
+    let mut executed = if job.capability_id.as_deref() == Some("identity.prepare") {
+        execute_identity_prepare(cwd, config, job)?
+    } else if job.capability_id.as_deref() == Some("3d.image_to_mesh") {
+        execute_image_to_mesh(cwd, config, job)?
+    } else if job.capability_id.as_deref() == Some("game.deploy") {
+        execute_game_deploy(cwd, config, job)?
+    } else if job
         .capability_id
         .as_deref()
         .is_some_and(|id| id.starts_with("video.") || id.starts_with("audio."))
     {
-        return execute_media_conformance(cwd, config, job);
+        execute_media_conformance(cwd, config, job)?
+    } else {
+        execute_generic(cwd, config, job)?
+    };
+    if injected_workflow_capability.is_some() {
+        executed.capability_id = None;
     }
+    Ok(executed)
+}
 
+fn execute_generic(
+    _cwd: Option<&str>,
+    config: &ServerConfig,
+    mut job: CreativeJobRecord,
+) -> Result<CreativeJobRecord, McpError> {
     let behavior = job
         .execution_parameters
         .get("test_behavior")

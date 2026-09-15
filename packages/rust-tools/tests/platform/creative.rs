@@ -2,6 +2,8 @@
 mod anime;
 #[path = "creative/bootstrap.rs"]
 mod bootstrap;
+#[path = "creative/closure.rs"]
+mod closure;
 #[path = "creative/compiler.rs"]
 mod compiler;
 #[path = "creative/contracts.rs"]
