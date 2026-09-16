@@ -298,15 +298,34 @@ Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
 executable authority used by explicit `blender_session start`. It may point to a
 reviewed Blender installation outside the Projects workspace; callers cannot
 supply or override an executable, process ID, host, port, or launch arguments.
-When no executable is configured, later session lifecycle code may resolve only
-a bounded reviewed standard Blender location/PATH entry. Blender/add-on
-installation is never implicit. Relay-owned launches are headless and invoke
-the server-owned Blender Lab CLI command `--background --command blender_mcp`;
-therefore the official Blender Lab MCP extension must already be installed and
-enabled for that Blender user. This avoids requiring a desktop/display in the
-relay service while keeping interactive GUI Blender sessions on the external-
-attach path. If the extension/command is unavailable, startup fails closed
-instead of silently launching a Blender process with no bridge. An already-
+When no executable is configured, session lifecycle code may resolve only a
+bounded reviewed standard Blender location/PATH entry. Relay-owned sessions use
+the workspace-local runtime profile `.masihawam/blender-runtime-home` and invoke
+the installed official Blender Lab extension headlessly with the fixed CLI
+shape `--background --online-mode --command blender_mcp -- --host localhost
+--port <operator-port>`. The host is fixed loopback and the port remains
+operator-owned. The runtime profile must be prepared before relay start; the
+relay never downloads or installs Blender extensions implicitly. External
+interactive Blender sessions remain attach-only and never gain relay stop/kill
+ownership.
+
+Prepare the profile from a reviewed checkout of the official Blender Lab MCP
+repository with Blender's own extension tooling:
+
+```bash
+blender --background --command extension build \
+  --source-dir /path/to/blender_mcp/addon/blender_mcp_addon \
+  --output-dir /tmp/blender-mcp-build
+HOME="$PWD/.masihawam/blender-runtime-home" \
+  blender --online-mode --background --command extension install-file \
+  /tmp/blender-mcp-build/mcp-1.0.0.zip --repo user_default --enable
+HOME="$PWD/.masihawam/blender-runtime-home" \
+  blender --background --command help | grep blender_mcp
+```
+
+The last command is the pre-restart readiness check and must print
+`blender_mcp`. If the profile or command is unavailable, `blender_session start`
+fails closed instead of silently launching a process with no bridge. An already
 running official loopback bridge may still be attached as an external session
 and is never given relay stop/kill ownership.
 

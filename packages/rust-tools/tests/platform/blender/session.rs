@@ -291,10 +291,12 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
     }
 
     let cold_port = reserve_port();
+    let runtime_home = workspace.0.join(".masihawam/blender-runtime-home");
+    fs::create_dir_all(&runtime_home).unwrap();
     let fake_blender = workspace.0.join("fake-blender");
     write_executable(
         &fake_blender,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TMPDIR/fake-argv.txt\"\nsleep 1000 &\necho \"$!\" > \"$TMPDIR/fake-child.pid\"\nwait\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TMPDIR/fake-argv.txt\"\nprintf '%s\\n' \"$HOME\" > \"$TMPDIR/fake-home.txt\"\nsleep 1000 &\necho \"$!\" > \"$TMPDIR/fake-child.pid\"\nwait\n",
     );
     let mut cold_config = workspace.config(cold_port);
     cold_config.blender_executable = Some(fake_blender.to_string_lossy().into_owned());
@@ -315,9 +317,22 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
 
     let argv = fs::read_to_string(workspace.0.join("blender/tmp/fake-argv.txt")).unwrap();
     assert_eq!(
-        argv.lines().collect::<Vec<_>>(),
-        ["--background", "--command", "blender_mcp"]
+        argv.lines().map(str::to_owned).collect::<Vec<_>>(),
+        vec![
+            "--background".to_owned(),
+            "--online-mode".to_owned(),
+            "--command".to_owned(),
+            "blender_mcp".to_owned(),
+            "--".to_owned(),
+            "--host".to_owned(),
+            "127.0.0.1".to_owned(),
+            "--port".to_owned(),
+            cold_port.to_string(),
+        ]
     );
+
+    let launched_home = fs::read_to_string(workspace.0.join("blender/tmp/fake-home.txt")).unwrap();
+    assert_eq!(launched_home.trim(), runtime_home.to_string_lossy());
 
     let child_pid_path = workspace.0.join("blender/tmp/fake-child.pid");
     wait_for_file(&child_pid_path).await;

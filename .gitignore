@@ -30,6 +30,7 @@ logs
 !.env.example
 
 target/
+.masihawam/blender-runtime-home/
 
 # Local external coding-client session runtime (not repository-owned agent guidance)
 .client-session/

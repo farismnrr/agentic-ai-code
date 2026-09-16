@@ -117,12 +117,26 @@ pub async fn start(
     let executable = resolve_blender_executable(config)?;
     let blender_root = project_root.join("blender");
     let tmp_root = blender_root.join("tmp");
+    let runtime_home = project_root.join(".masihawam/blender-runtime-home");
+    if !runtime_home.is_dir() {
+        return Err(McpError::InvalidRequest(
+            "Blender runtime profile is not prepared; install the official Blender Lab MCP extension into .masihawam/blender-runtime-home before starting a relay-owned session"
+                .into(),
+        ));
+    }
     let mut command = Command::new(executable);
     command
         .arg("--background")
+        .arg("--online-mode")
         .arg("--command")
         .arg("blender_mcp")
+        .arg("--")
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(config.blender_bridge_port.to_string())
         .current_dir(&blender_root)
+        .env("HOME", &runtime_home)
         .env("TMPDIR", &tmp_root)
         .env("TMP", &tmp_root)
         .env("TEMP", &tmp_root)
@@ -161,7 +175,8 @@ pub async fn start(
                 {
                     guard.owned = None;
                     return Err(McpError::InvalidRequest(
-                        "Blender exited before its loopback bridge became ready".into(),
+                        "Blender exited before its loopback bridge became ready; verify the official Blender Lab MCP extension is installed and enabled for the relay service user"
+                            .into(),
                     ));
                 }
             }
