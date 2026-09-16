@@ -4,6 +4,8 @@ All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start a
 
 This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
 
+Workspace placement is a repository invariant. The relay authorization/execution root defaults to `$HOME/Documents/Projects`; the `ai-code` checkout may be used as `cwd` only for source development and must never be used as the root for user workspaces, Creative Projects, Blender production, or acceptance artifacts. Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`. See `.agents/knowledge/project.md` and the canonical memory for the full rule.
+
 This repository intentionally has **no CI**. Quality enforcement is local, but validation must stay proportional to the changed subsystem:
 
 - New permanent isolated JavaScript/TypeScript/Vue unit tests are forbidden; temporary unit tests must be removed before staging. Existing `test/unit/` files are legacy/manual coverage, while boundary tests live under top-level `test/`.

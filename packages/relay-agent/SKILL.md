@@ -79,7 +79,7 @@ cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- relay
 
 Important:
 
-- `RELAY_WORKSPACE_ROOT` / `--workspace-root` sets the primary root; it defaults to `$HOME/Documents/Projects`, and `--dir` remains a compatibility alias.
+- `RELAY_WORKSPACE_ROOT` / `--workspace-root` sets the primary root; it defaults to `$HOME/Documents/Projects`, and `--dir` remains a compatibility alias. Keep that Projects tree as the user-project root: the `ai-code` checkout is source-only and may be selected as `cwd` for repository development, but must never be used as a Creative/Blender project root or final acceptance-output root. Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`.
 - `--execution-root` is an explicit hard-ceiling override. When omitted, it uses the same root. Child folders under Projects are selectable directly with `cwd`; siblings outside a narrower primary root require `workspace_add` and must remain inside the ceiling.
 - The execution root must resolve to an allowed user-owned path; unsafe/shallow system roots are rejected.
 - Bubblewrap must be installed before startup.

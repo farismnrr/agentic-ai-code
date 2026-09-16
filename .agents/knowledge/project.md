@@ -25,6 +25,16 @@ Do not infer current architecture from historical plans alone. Current source/co
 
 ## Repository orientation
 
+### Workspace placement invariant
+
+`$HOME/Documents/Projects` is the canonical relay workspace/execution root. Keep repository source and user project data conceptually separate:
+
+- the `ai-code` checkout may be the selected `cwd` only while developing/testing this repository;
+- never create a user workspace, Creative Project, Blender production project, acceptance fixture, render, export, checkpoint, or other production artifact with the `ai-code` checkout as its project root;
+- Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`;
+- the existing project-internal Blender layout (`blender/scenes`, `blender/assets`, `blender/renders`, `blender/exports`, and related subtrees) is relative to that creative-project root, not relative to the `ai-code` repository;
+- acceptance that accidentally writes creative artifacts beneath `ai-code` is smoke/debug evidence only and cannot satisfy final Plan 069 production acceptance.
+
 ### Web application
 
 - `app/` — Vue pages, layouts, components, composables, plugins, and client UI.

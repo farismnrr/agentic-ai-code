@@ -45,6 +45,12 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
 - Action taken: Split execution-boundary vs workspace-allowlist semantics in core containment, updated Bubblewrap/Git/file-tool integration, and corrected operator/agent documentation.
 
+- Date: 2026-09-16
+- Context: Plan 069 Blender acceptance accidentally used the `ai-code` source checkout as the Creative Project root because the tool `cwd` and the intended production workspace root were conflated.
+- Lesson: Source-repository `cwd` and user-project workspace roots are different concepts. Keep the relay root at `$HOME/Documents/Projects`; use `ai-code` as `cwd` only for repository development. Creative production must use its own sibling project directory, and Blender work specifically belongs under `$HOME/Documents/Projects/Blender/<creative-project>/...`. Repo-local creative artifacts are smoke/debug evidence only and must never be promoted into final production acceptance.
+- Applies to: Plan 069, Creative Projects, Blender production, acceptance fixtures, and any future tool that materializes user project data.
+- Action taken: Updated Plan 069, repository agent guidance, canonical memory, operator docs, and relay skill guidance to freeze the distinction and require canonical Blender project placement.
+
 - Date: 2026-08-16
 - Context: Adding native read/search/edit/write tools to a filesystem-contained MCP coding relay.
 - Lesson: Treat canonical path containment as validation-time evidence, not mutation safety. For security-sensitive traversal and writes, keep one shared path contract, then use stable directory descriptors with no-follow opens, revalidate final entry identity at operation time, and commit writes through same-directory temporary files with explicit atomic/no-clobber semantics. When a broad regression check fails outside the changed surface, compare the same behavior against the baseline branch before expanding scope; unchanged baseline failures should be reported as unproven/pre-existing rather than silently “fixed” or falsely marked green.

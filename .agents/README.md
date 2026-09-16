@@ -6,6 +6,8 @@ Authoritative guidance for **any coding agent** working in this repository lives
 
 This is a **Nuxt 4 application plus a Rust native-tool workspace**. Use Nuxt-native mechanisms for web application work, and preserve the explicit Rust/MCP security boundaries for native execution work.
 
+**Workspace-root invariant:** `$HOME/Documents/Projects` is the canonical relay authorization/execution root. The `ai-code` repository checkout is source code only: agents may select it as `cwd` while editing/testing this repository, but must never use it as the root for user workspaces, Creative Projects, Blender production, or acceptance artifacts. Blender creative projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`; any project-internal `blender/` layout lives beneath that creative-project directory.
+
 Before changing anything, read the files relevant to the task:
 
 1. [`knowledge/project.md`](knowledge/project.md) — current stack, layout, and verification commands.

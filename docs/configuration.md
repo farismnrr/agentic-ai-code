@@ -181,6 +181,14 @@ an explicit `--execution-root` ceiling plus `workspace_add` for additional
 roots inside that ceiling. A broader ceiling does not authorize sibling paths
 by itself.
 
+The `ai-code` checkout is not a user-project root. It may be selected as `cwd`
+for developing this repository, but Creative/Blender production and final
+acceptance must use a sibling project beneath the canonical Projects tree.
+Blender creative projects use
+`$HOME/Documents/Projects/Blender/<creative-project>/...`; project-internal
+`blender/...` paths are resolved beneath that creative-project root, never
+beneath the `ai-code` checkout.
+
 This profile still uses Bubblewrap and a rebuilt minimal environment. It does
 not inherit login-shell credentials or PATH. Credential files, session/keyring
 stores, relay state and discovered Unix sockets remain masked; `.env.example`

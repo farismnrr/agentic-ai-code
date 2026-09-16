@@ -89,6 +89,8 @@ summary/unavailable evidence unless the relay can prove more.
 
 The default relay root is `RELAY_WORKSPACE_ROOT=$HOME/Documents/Projects`. It supplies the primary workspace and the default hard execution ceiling, so child repositories beneath `Projects` can be selected directly with `cwd`. Deployments can choose a narrower primary workspace and an explicit broader `--execution-root`; in that profile, sibling projects still need `workspace_add`, and no workspace can extend beyond the hard ceiling. Workspace path resolution retains these two authorization checks. Recursive native traversal does not follow symlink directories; edit/write operations additionally use no-follow directory/file descriptors and same-directory atomic replacement semantics so validation-time containment is not treated as sufficient mutation safety.
 
+Repository source location and user-project placement are intentionally separate. The `ai-code` checkout may be selected as `cwd` for source development, but it is never a user/Creative production root. Creative projects live as sibling projects beneath the canonical Projects tree; Blender projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`, and their contained `blender/...` artifact layout is resolved beneath that project directory rather than beneath the source checkout.
+
 ## Remote MCP and OAuth
 
 The remote relay is an **OAuth Resource Server**, not an Authorization Server.

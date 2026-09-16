@@ -15,6 +15,20 @@ Updated: 2026-09-16
 - Verification completed without service mutation: `pnpm guardrail:full` passes on 2026-09-15 after the closure-fixture fixes, including repository policy, agent-doc checks, architecture, test-layout, maintainability, Rust formatting/Clippy/check/full tests, and the applicable Nuxt gates. The platform suite includes 46 passing tests; the focused security suite includes 35 passing tests; deterministic Plan 069 closure fixtures pass 5/5. The only ignored Rust test is the pre-existing operator-only real SSH client smoke requiring an explicit disposable external fixture. Verification used the repo-ignored local Rust `1.98.1` cache under `target/`; no relay/service restart, reload, real deployment, production capability activation, or public publish occurred.
 - Historical live runtime handoff observed 2026-09-15: user systemd unit `ai-tools-relay.service` was restarted after installing the release binary built from `feat/plan-069-complete` at `c5f9e54768d115f355bf31a61533ba53b736e3e1`. That historical build still used separate `RELAY_ENABLE_CREATIVE=true` and `RELAY_ENABLE_BLENDER=true` activation. The current source supersedes that operator shape with the single `RELAY_ENABLE_CREATIVE` master flag; a new restart is required before the live runtime reflects the current source. Blender loopback port `9876`, Blender timeout `30000ms`, the documented credential-free `binding_local_raster` descriptor, and its `local_raster` backend mapping remain operator-owned; unrelated deployment settings and secrets were preserved/redacted. The resulting service was active/running with exit status 0 and binary version `ai-tools 0.0.14`. Authenticated `creative_status` reported Creative enabled, Blender enabled, exactly 11 Blender tools, one registered binding, schema v1, and the model/provider-agnostic flags true. A same-binary disposable Full MCP surface reported 70 unique tools (52 retained base + 7 Creative + the exact frozen 11 Blender tools) and a readable `workspace://ai-code/blender-capability`; disabled, Creative-only, and Primary probes reported 53/59/16 tools respectively with no unintended Blender exposure. The only live execution binding is deterministic `local_raster` (image capabilities); no quality-capable video/audio/3D/deploy binding was available. Fresh live projects and receipts are recorded under disposable workspace `/home/farismnrr/Documents/Projects/plan069-live-e2e-2fN900/ai-code`: Scene `project_1e62d0f5031540a589bfa4cc4397be4b` (three shots, 10s target, Elements, board, audio plan, image Assets, continuity/QA, still export, handoff); Anime `project_ba41cb34bf0e4777af200af615becb19` (accepted Character/Style, five accepted turnaround views, four accepted expressions, pose reference, 12s scene/board/audio/QA/handoff); Game `project_dd61169986cb46bfb86895b1c418be40` (editable scaffold, accepted asset role, accepted build revision, HTTP/static smoke, iteration invalidation/rebuild, handoff); and clean-room `project_001dfefeab8748a997e4a21f9240f14a` (materially different Saltwind Observatory project with isolated IDs/paths/jobs). These live receipts are runtime evidence only; local-raster output is not production visual-quality evidence, Blender visual/character inspection is `not_inspected`, and browser interaction/console/responsive inspection is `not_inspected` because no browser provider was available.
 
+## Workspace placement invariant — 2026-09-16
+
+Plan 069 production/acceptance state must never use the `ai-code` source checkout as a Creative Project root. The canonical relay authorization/execution root is `$HOME/Documents/Projects`; the repository checkout is source-only and may be selected as `cwd` only while editing/testing repository code.
+
+For Blender-backed creative work, the canonical project root is:
+
+```text
+$HOME/Documents/Projects/Blender/<creative-project>/
+```
+
+All project-internal Creative and Blender artifacts are resolved beneath that directory. The existing contained Blender layout therefore means paths such as `$HOME/Documents/Projects/Blender/<creative-project>/blender/scenes/...`, `blender/renders/...`, and `blender/exports/...`; it never means `<ai-code>/blender/...`.
+
+Acceptance rule: any Scene/Anime/Game/Blender fixture that materializes production artifacts beneath the `ai-code` checkout is smoke/debug evidence only. It does not satisfy TASK-052/TASK-053/TASK-054/TASK-057/TASK-058 final acceptance and must be re-run from a canonical project directory outside the source repository. Historical receipts already recorded beneath disposable/copied `.../ai-code` worktrees remain historical smoke evidence only; do not copy that placement into future implementation or acceptance prompts.
+
 ## Initial core-slice conformance audit — 2026-09-15
 
 - **Contracts / project state:** aligned. One active Creative schema (`v1`) covers shared project, Element revision, Asset/provenance, Scene/Shot, Game, Audio, QA, graph/job identity, and production target state. Cross-track fixtures prove Scene + Anime-oriented asset/voice/3D state + Game can coexist without provider/model/agent IDs as source of truth. Template input/output and detailed playtest-evidence contracts remain explicitly deferred to their owning later tasks.
@@ -1149,10 +1163,10 @@ Do not enable generic outbound stdio MCP in Nuxt and do not spawn the official P
 
 ### Canonical Blender project layout
 
-For a selected project rooted under the authorized `Documents/Projects` workspace, Blender production state is contained under one dedicated subtree:
+For Plan 069, the selected Blender creative-project root is canonically `$HOME/Documents/Projects/Blender/<creative-project>/`. Never substitute the `ai-code` source checkout as `<project>`. Blender production state is contained under one dedicated subtree beneath that creative-project root:
 
 ```text
-<project>/blender/
+$HOME/Documents/Projects/Blender/<creative-project>/blender/
   scenes/
   assets/
   references/
@@ -1563,11 +1577,12 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 ### TASK-005 — Implement contained creative project workspace layout
 
-**Outcome:** each project has bounded manifests plus Element, asset/revision, SceneBoard, graph/template, and game-build state without escaping authorized workspaces.
+**Outcome:** each project has bounded manifests plus Element, asset/revision, SceneBoard, graph/template, and game-build state without escaping authorized workspaces. Production placement is separate from repository source: the relay root is `$HOME/Documents/Projects`, and Blender-backed project work is rooted at `$HOME/Documents/Projects/Blender/<creative-project>/`, never at the `ai-code` checkout.
 
 **Steps:**
 
 - [x] Define contained path layout for project manifest, Elements, assets/revisions, scene/shot boards, creative graphs/templates, game design/build metadata, QA/playtest evidence, and exports.
+- [ ] Make Plan 069 production/bootstrap/acceptance flows select or create the canonical project root outside the `ai-code` source checkout; Blender-backed acceptance uses `$HOME/Documents/Projects/Blender/<creative-project>/` and treats repo-local creative outputs as smoke-only.
 - [x] Ensure paths remain relative/canonical and cannot target protected credentials.
 - [x] Add atomic manifest updates.
 - [x] Preserve human-readable diffs.
@@ -2863,6 +2878,7 @@ Plan 069 implementation is complete only when:
 41. Relevant focused tests and `pnpm guardrail:fast` / affected-stack full gates / `pnpm guardrail:full` pass before closure.
 42. A generic external MCP client can complete the parity acceptance journey—discover capabilities/execution bindings/workflows, upload/import, estimate, generate, receive media, transform, browse history, reuse an Asset/Element, run a caller-specified multi-step graph, and hit a budget denial—without Higgsfield, CLI, local shell, arbitrary host paths, or an MCP-owned agent/model router.
 43. Operator-only actions such as executor/provider/model installation, Blender/add-on setup, relay restart, production deployment credentials, or external public publishing are reported explicitly and are not performed implicitly by Plan 069 MCP runtime.
+44. Final Scene/Anime/Game/Blender acceptance uses canonical project roots beneath `$HOME/Documents/Projects`; Blender projects specifically run from `$HOME/Documents/Projects/Blender/<creative-project>/`. No production or final acceptance artifact rooted beneath the `ai-code` source checkout can satisfy closure.
 
 ## Historical consolidation note — non-authoritative
 
