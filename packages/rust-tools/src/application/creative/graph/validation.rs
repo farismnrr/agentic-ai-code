@@ -230,15 +230,14 @@ fn validate_node(
     diagnostics: &mut Vec<GraphDiagnostic>,
 ) -> Result<(), McpError> {
     match node.kind {
-        GraphNodeKind::InputText => {
-            if node.inputs.get("text").and_then(Value::as_str).is_none() {
-                diagnostics.push(diagnostic(
-                    "input_text_required",
-                    "InputText requires inputs.text",
-                    Some(&node.node_id),
-                ));
-            }
+        GraphNodeKind::InputText if node.inputs.get("text").and_then(Value::as_str).is_none() => {
+            diagnostics.push(diagnostic(
+                "input_text_required",
+                "InputText requires inputs.text",
+                Some(&node.node_id),
+            ));
         }
+        GraphNodeKind::InputText => {}
         GraphNodeKind::InputAsset => {
             let asset_id = node.inputs.get("asset_id").and_then(Value::as_str);
             if asset_id.is_none_or(|id| project.asset(id).is_none()) {
