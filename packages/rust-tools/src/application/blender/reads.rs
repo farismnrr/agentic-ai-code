@@ -35,6 +35,24 @@ def _object(name):
 def _limit(values, limit=128):
     return list(values)[:limit]
 
+def _action_fcurve_count(action):
+    if action is None:
+        return 0
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        try:
+            return len(legacy)
+        except (AttributeError, TypeError):
+            pass
+    total = 0
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                fcurves = getattr(channelbag, "fcurves", None)
+                if fcurves is not None:
+                    total += len(fcurves)
+    return total
+
 obj = _object(_target)
 scene = bpy.context.scene
 if _scope == "scene":
@@ -100,7 +118,7 @@ elif _scope == "animation":
         "object": obj.name if obj else None,
         "action": action.name if action else None,
         "frame_range": None if action is None else [float(action.frame_range[0]), float(action.frame_range[1])],
-        "fcurves": 0 if action is None else len(action.fcurves),
+        "fcurves": _action_fcurve_count(action),
         "nla_tracks": 0 if animation is None else len(animation.nla_tracks),
     }}
 elif _scope == "material":

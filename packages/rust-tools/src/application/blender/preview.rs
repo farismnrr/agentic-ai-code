@@ -162,7 +162,12 @@ try:
     for _frame, _path in zip(_frames, _paths):
         _scene.frame_set(_frame)
         _scene.render.filepath = _path
-        bpy.ops.render.opengl(write_still=True, view_context=False)
+        if bpy.app.background:
+            bpy.ops.render.render(write_still=True)
+        else:
+            _op_result = bpy.ops.render.opengl(write_still=True, view_context=False)
+            if "FINISHED" not in _op_result:
+                bpy.ops.render.render(write_still=True)
         _written.append({{"frame": _frame, "path": _path}})
     result = {{"written": _written}}
 finally:
