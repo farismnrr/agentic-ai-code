@@ -105,6 +105,7 @@ pub fn create_project(
     config: &ServerConfig,
     input: NewProject,
 ) -> Result<CreativeProject, McpError> {
+    io::ensure_creative_project_root(cwd, config)?;
     let project_id = input.project_id.unwrap_or_else(|| new_id("project"));
     validate_id(&project_id, "project_id")?;
     let project_path = project_path(&project_id);

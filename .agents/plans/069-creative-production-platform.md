@@ -1582,13 +1582,15 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 **Steps:**
 
 - [x] Define contained path layout for project manifest, Elements, assets/revisions, scene/shot boards, creative graphs/templates, game design/build metadata, QA/playtest evidence, and exports.
-- [ ] Make Plan 069 production/bootstrap/acceptance flows select or create the canonical project root outside the `ai-code` source checkout; Blender-backed acceptance uses `$HOME/Documents/Projects/Blender/<creative-project>/` and treats repo-local creative outputs as smoke-only.
+- [x] Make Plan 069 production/bootstrap/acceptance flows select or create the canonical project root outside the `ai-code` source checkout; Creative project admission rejects the `ai-code` source checkout, Blender tool admission requires a `.../Blender/<creative-project>` root, Blender-backed acceptance uses `$HOME/Documents/Projects/Blender/<creative-project>/`, and repo-local creative outputs remain smoke-only.
 - [x] Ensure paths remain relative/canonical and cannot target protected credentials.
 - [x] Add atomic manifest updates.
 - [x] Preserve human-readable diffs.
 - [x] Bound manifest and metadata sizes.
 
 **Validation:** traversal/symlink/protected-path tests fail closed; normal project fixture round-trips.
+
+**Implementation update (2026-09-16):** source admission now prevents Creative production state from using the `ai-code` checkout as its project root and requires every Blender tool call to resolve from a canonical `.../Blender/<creative-project>` directory. Deterministic tests cover both rejection rules, idempotent repeated Blender materialization, bootstrap-object selection, actual rig weighting/fallback evidence, and Blender 5.2 action-channel compatibility. The pre-restart platform suite passes 52/52 and `pnpm guardrail:full` passes with the expected single operator-only SSH fixture ignored. Live production acceptance must still be rerun after installing/restarting the new binary from `$HOME/Documents/Projects/Blender/<creative-project>/` before Plan 069 closure.
 
 **Commit boundary:** `feat(creative): add contained project state`.
 

@@ -33,6 +33,7 @@ mod world;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};
+use ai_tools::core::error::McpError;
 use ai_tools::interfaces::mcp::{
     retained_tool_catalog, runtime_tool_catalog, validate_tool_arguments,
 };
@@ -44,11 +45,12 @@ struct TempWorkspace(PathBuf);
 
 impl TempWorkspace {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let base = std::env::temp_dir().join(format!(
             "creative-platform-test-{}-{}",
             std::process::id(),
             Uuid::new_v4()
         ));
+        let root = base.join("Blender").join("creative-fixture");
         fs::create_dir_all(&root).expect("creative test workspace");
         Self(root)
     }
@@ -196,6 +198,42 @@ fn creative_action_schemas_require_action_specific_inputs() {
             validate_tool_arguments(tool(name), &arguments).is_err(),
             "{name} accepted incomplete action arguments"
         );
+    }
+}
+
+#[test]
+fn creative_project_rejects_ai_code_source_checkout_root() {
+    let workspace = TempWorkspace::new();
+    fs::create_dir_all(workspace.path(".agents")).unwrap();
+    fs::create_dir_all(workspace.path("packages/rust-tools")).unwrap();
+    fs::write(workspace.path(".agents/README.md"), b"fixture").unwrap();
+    fs::write(workspace.path("nuxt.config.ts"), b"export default {}").unwrap();
+    fs::write(
+        workspace.path("packages/rust-tools/Cargo.toml"),
+        b"[package]\nname='fixture'",
+    )
+    .unwrap();
+    let config = workspace.config();
+    let result = dispatch_sync(
+        &config,
+        "creative_project",
+        &json!({
+            "action":"create",
+            "cwd":workspace.0.to_string_lossy(),
+            "project_id":"project_source_checkout",
+            "title":"Rejected source checkout",
+            "intent":"must not materialize production state in source",
+            "tracks":["anime"]
+        }),
+    );
+    match result {
+        Err(McpError::InvalidRequest(message)) => {
+            assert_eq!(
+                message,
+                "creative project root cannot be the ai-code source checkout"
+            )
+        }
+        other => panic!("unexpected creative source-root result: {other:?}"),
     }
 }
 

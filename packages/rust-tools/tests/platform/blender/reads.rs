@@ -16,11 +16,12 @@ struct TempWorkspace(PathBuf);
 
 impl TempWorkspace {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let base = std::env::temp_dir().join(format!(
             "blender-reads-test-{}-{}",
             std::process::id(),
             Uuid::new_v4()
         ));
+        let root = base.join("Blender").join("reads-fixture");
         fs::create_dir_all(&root).expect("Blender reads test workspace");
         Self(root)
     }

@@ -18,11 +18,12 @@ struct TempWorkspace(PathBuf);
 
 impl TempWorkspace {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let base = std::env::temp_dir().join(format!(
             "blender-artifacts-test-{}-{}",
             std::process::id(),
             Uuid::new_v4()
         ));
+        let root = base.join("Blender").join("artifact-fixture");
         fs::create_dir_all(&root).expect("Blender artifacts test workspace");
         Self(root)
     }
@@ -244,7 +245,7 @@ fn write_png(path: &Path) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn blender_assets_renders_exports_and_checkpoints_stay_contained_and_traceable() {
     let workspace = TempWorkspace::new();
-    let (port, bridge) = start_fixture_bridge(7).await;
+    let (port, bridge) = start_fixture_bridge(8).await;
     let config = workspace.config(port);
     let source_asset_id = create_project_and_source(&config, &workspace).await;
 
@@ -268,6 +269,26 @@ async fn blender_assets_renders_exports_and_checkpoints_stay_contained_and_trace
         imported["materialized_asset_id"],
         imported["source_asset_id"]
     );
+
+    let repeated_import = call(
+        &config,
+        workspace.cwd(),
+        "owner_a",
+        "blender_asset_import",
+        json!({
+            "asset_id":source_asset_id,
+            "purpose":"reference",
+            "target_name":"front.png",
+            "collection":"References"
+        }),
+    )
+    .await
+    .expect("repeat identical import");
+    assert_eq!(
+        repeated_import["materialized_asset_id"],
+        imported["materialized_asset_id"]
+    );
+    assert_eq!(repeated_import["relative_path"], imported["relative_path"]);
 
     let still = call(
         &config,

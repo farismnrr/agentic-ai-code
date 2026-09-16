@@ -106,10 +106,31 @@ pub(super) fn resolve_project_root(
     cwd: Option<&str>,
     config: &ServerConfig,
 ) -> Result<PathBuf, McpError> {
-    let root = config
-        .resolved_execution_root()
-        .map_err(|_| McpError::InvalidRequest("execution root is unavailable".into()))?;
-    crate::core::workspace_path::resolve_contained_cwd(&root, cwd)
+    config
+        .ensure_workspaces_initialized()
+        .map_err(|error| McpError::Internal(error.to_string()))?;
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let root = crate::core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, cwd)?;
+    validate_blender_project_root_path(&root)?;
+    Ok(root)
+}
+
+pub fn validate_blender_project_root_path(path: &Path) -> Result<(), McpError> {
+    if path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|value| value.to_str())
+        != Some("Blender")
+        || path.file_name().is_none()
+    {
+        return Err(McpError::InvalidRequest(
+            "Blender project root must be .../Blender/<creative-project>".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub fn artifact_relative_path(
@@ -194,6 +215,7 @@ pub async fn dispatch_tool(
     }
     let cwd = required_str(arguments, "cwd")?;
     let project_id = required_str(arguments, "project_id")?;
+    resolve_project_root(Some(cwd), config)?;
     crate::application::creative::require_project(Some(cwd), config, project_id)?;
     match tool_name {
         "blender_session" => {

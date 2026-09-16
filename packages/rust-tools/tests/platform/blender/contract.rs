@@ -1,8 +1,9 @@
 use ai_tools::application::blender::{
-    artifact_relative_path, bridge_address, project_layout, validate_blender_relative_path,
-    BlenderArtifactScope, BlenderSessionOwnership, BlenderSessionState, BlenderSessionStatus,
-    BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT, MAX_BLENDER_PYTHON_BYTES,
-    MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES, REVIEWED_BLENDER_PATH_NAMES,
+    artifact_relative_path, bridge_address, project_layout, validate_blender_project_root_path,
+    validate_blender_relative_path, BlenderArtifactScope, BlenderSessionOwnership,
+    BlenderSessionState, BlenderSessionStatus, BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT,
+    MAX_BLENDER_PYTHON_BYTES, MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES,
+    REVIEWED_BLENDER_PATH_NAMES,
 };
 use ai_tools::application::hooks::effect_classes_for_call;
 use ai_tools::core::config::ServerConfig;
@@ -51,6 +52,24 @@ fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
     let mut bad_executable = enabled;
     bad_executable.blender_executable = Some("blender\n--evil".into());
     assert!(bad_executable.validate().is_err());
+}
+
+#[test]
+fn blender_project_root_requires_canonical_blender_parent() {
+    use std::path::Path;
+
+    validate_blender_project_root_path(Path::new("/tmp/Projects/Blender/ari-final"))
+        .expect("canonical Blender project root");
+    for rejected in [
+        "/tmp/Projects/MasihAwam/ai-code",
+        "/tmp/Projects/Blender",
+        "/tmp/Projects/Creative/ari-final",
+    ] {
+        assert!(
+            validate_blender_project_root_path(Path::new(rejected)).is_err(),
+            "{rejected}"
+        );
+    }
 }
 
 #[test]

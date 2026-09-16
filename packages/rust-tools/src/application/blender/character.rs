@@ -62,10 +62,12 @@ async fn mesh_production(
 import bpy
 _names = {names_literal}
 _strategy = {strategy_literal}
-_meshes = [bpy.data.objects.get(n) for n in _names]
-_meshes = [o for o in _meshes if o is not None and o.type == 'MESH']
+_imported_meshes = [bpy.data.objects.get(n) for n in _names]
+_imported_meshes = [o for o in _imported_meshes if o is not None and o.type == 'MESH']
+_tagged_meshes = [o for o in _imported_meshes if bool(o.get('masihawam_character_bootstrap', False))]
+_meshes = _tagged_meshes or _imported_meshes
 if not _meshes:
-    _meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH'][:16]
+    _meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and bool(o.get('masihawam_character_bootstrap', False))][:16]
 if not _meshes:
     raise ValueError('character mesh production requires at least one mesh')
 for _obj in _meshes:
@@ -198,6 +200,24 @@ if len(_arm_data.edit_bones) == 0:
             _b.parent = _created[_parent]
         _created[_name] = _b
 bpy.ops.object.mode_set(mode='OBJECT')
+for _obj in bpy.context.selected_objects:
+    _obj.select_set(False)
+for _mesh in _meshes:
+    _mesh.select_set(True)
+_arm.select_set(True)
+bpy.context.view_layer.objects.active = _arm
+_weighting_strategy = 'automatic_weights'
+try:
+    bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+except RuntimeError:
+    _weighting_strategy = 'bounded_object_groups_fallback'
+    for _mesh in _meshes:
+        for _group in list(_mesh.vertex_groups):
+            _mesh.vertex_groups.remove(_group)
+        _bone_name = 'head' if 'head' in _mesh.name.lower() else ('spine' if 'torso' in _mesh.name.lower() else 'root')
+        _group = _mesh.vertex_groups.new(name=_bone_name)
+        _group.add(list(range(len(_mesh.data.vertices))), 1.0, 'REPLACE')
+        _mesh.parent = _arm
 for _mesh in _meshes:
     _mod = next((m for m in _mesh.modifiers if m.type == 'ARMATURE'), None)
     if _mod is None:
@@ -209,12 +229,15 @@ for _mesh in _meshes:
         if _mesh.data.shape_keys.key_blocks.get(_shape) is None:
             _mesh.shape_key_add(name=_shape)
 _arm['masihawam_rig_strategy'] = 'reviewed_humanoid_v1'
+_arm['masihawam_weighting_strategy'] = _weighting_strategy
 _arm['masihawam_ik_fk_review'] = 'caller_editable'
 result = {{
     'armature':_arm.name,
     'bones':[b.name for b in _arm.data.bones],
     'meshes':[o.name for o in _meshes],
     'shape_keys':{{o.name:[k.name for k in o.data.shape_keys.key_blocks] for o in _meshes}},
+    'vertex_groups':{{o.name:[g.name for g in o.vertex_groups] for o in _meshes}},
+    'weighting_strategy':_weighting_strategy,
     'deformation_inspection':'not_inspected'
 }}
 "#

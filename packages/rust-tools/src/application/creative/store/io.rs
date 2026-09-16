@@ -17,6 +17,34 @@ pub(super) struct ProjectIndex {
     pub(super) project_ids: Vec<String>,
 }
 
+pub(super) fn ensure_creative_project_root(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+) -> Result<PathBuf, McpError> {
+    config
+        .ensure_workspaces_initialized()
+        .map_err(|error| McpError::Internal(error.to_string()))?;
+    let guard = config
+        .workspaces
+        .read()
+        .map_err(|_| McpError::Internal("workspace lock poisoned".into()))?;
+    let project_root =
+        crate::core::workspace_path::resolve_contained_cwd_in_allowlist(&guard, cwd)?;
+
+    let looks_like_ai_code_source = project_root.join(".agents/README.md").is_file()
+        && project_root.join("nuxt.config.ts").is_file()
+        && project_root
+            .join("packages/rust-tools/Cargo.toml")
+            .is_file();
+    if looks_like_ai_code_source {
+        return Err(McpError::InvalidRequest(
+            "creative project root cannot be the ai-code source checkout".into(),
+        ));
+    }
+
+    Ok(project_root)
+}
+
 pub(super) fn save_project(
     cwd: Option<&str>,
     config: &ServerConfig,

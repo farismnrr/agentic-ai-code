@@ -21,11 +21,12 @@ struct TempWorkspace(PathBuf);
 
 impl TempWorkspace {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let base = std::env::temp_dir().join(format!(
             "blender-session-test-{}-{}",
             std::process::id(),
             Uuid::new_v4()
         ));
+        let root = base.join("Blender").join("session-fixture");
         fs::create_dir_all(&root).expect("Blender session test workspace");
         Self(root)
     }

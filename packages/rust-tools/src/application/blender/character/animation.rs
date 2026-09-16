@@ -50,7 +50,15 @@ _arm.rotation_euler[2] = 0.0
 _arm.keyframe_insert(data_path='rotation_euler', frame=_end, group='MasihAwamBody')
 bpy.context.scene.frame_start = min(bpy.context.scene.frame_start, _start)
 bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, _end)
-result = {{'armature':_arm.name,'action':_action.name,'frame_start':_start,'frame_end':_end,'fcurves':len(_action.fcurves)}}
+_fcurve_count = 0
+if hasattr(_action, 'fcurves'):
+    _fcurve_count = len(_action.fcurves)
+else:
+    for _layer in getattr(_action, 'layers', []):
+        for _strip in getattr(_layer, 'strips', []):
+            for _bag in getattr(_strip, 'channelbags', []):
+                _fcurve_count += len(getattr(_bag, 'fcurves', []))
+result = {{'armature':_arm.name,'action':_action.name,'frame_start':_start,'frame_end':_end,'fcurves':_fcurve_count}}
 "#
     );
     let authored = bridge::execute(config, &code, true).await?;

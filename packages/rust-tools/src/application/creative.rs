@@ -57,6 +57,25 @@ pub(crate) fn register_internal_asset(
     store::register_asset(cwd, config, project_id, input).map(|(_, asset_id)| asset_id)
 }
 
+pub(crate) fn find_blender_materialized_asset(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    parent_asset_id: &str,
+    relative_path: &str,
+) -> Result<Option<AssetRecord>, McpError> {
+    let project = store::load_project(cwd, config, project_id)?;
+    Ok(project
+        .assets
+        .iter()
+        .find(|asset| {
+            asset.source == AssetSource::BlenderMaterialized
+                && asset.parent_asset_id.as_deref() == Some(parent_asset_id)
+                && asset.relative_path == relative_path
+        })
+        .cloned())
+}
+
 pub(crate) fn store_blender_checkpoint_state(
     cwd: Option<&str>,
     config: &ServerConfig,

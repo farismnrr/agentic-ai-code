@@ -186,6 +186,7 @@ pub fn load_project(
     config: &ServerConfig,
     project_id: &str,
 ) -> Result<CreativeProject, McpError> {
+    super::io::ensure_creative_project_root(cwd, config)?;
     validate_id(project_id, "project_id")?;
     let project: CreativeProject = read_json(cwd, config, &project_path(project_id))?;
     project.validate()?;
@@ -193,6 +194,7 @@ pub fn load_project(
 }
 
 pub fn list_projects(cwd: Option<&str>, config: &ServerConfig) -> Result<Vec<String>, McpError> {
+    super::io::ensure_creative_project_root(cwd, config)?;
     Ok(read_project_index(cwd, config)?.project_ids)
 }
 

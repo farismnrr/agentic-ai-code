@@ -186,6 +186,9 @@ else:
     if not _bootstrap_objects:
         raise ValueError("bootstrap mesh objects are missing")
 
+for _obj in _bootstrap_objects:
+    _obj['masihawam_character_bootstrap'] = True
+
 _meshes = [obj for obj in _bootstrap_objects if obj.type == 'MESH']
 if not _meshes:
     raise ValueError("bootstrap contains no mesh objects")

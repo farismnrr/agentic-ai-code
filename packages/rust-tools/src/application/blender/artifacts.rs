@@ -118,7 +118,6 @@ pub fn materialize_asset(
         }
     };
     let relative_path = artifact_relative_path(scope, file_name)?;
-    preflight_output(cwd, config, &relative_path)?;
     let bytes = fs::read(&source_path)
         .map_err(|_| McpError::InvalidRequest("creative asset source cannot be read".into()))?;
     if bytes.len() as u64 != source.bytes || sha256_bytes(&bytes) != source.checksum_sha256 {
@@ -126,8 +125,43 @@ pub fn materialize_asset(
             "creative asset bytes no longer match durable provenance".into(),
         ));
     }
-    write_contained_bytes(&relative_path, cwd, &bytes, true, false, config)?;
-    let absolute_path = verify_output(cwd, config, &relative_path)?;
+    let absolute_path = match preflight_output(cwd, config, &relative_path) {
+        Ok(_) => {
+            write_contained_bytes(&relative_path, cwd, &bytes, true, false, config)?;
+            verify_output(cwd, config, &relative_path)?
+        }
+        Err(McpError::InvalidRequest(message))
+            if message == "Blender artifact target already exists" =>
+        {
+            let existing_path = verify_output(cwd, config, &relative_path)?;
+            let existing_bytes = fs::read(&existing_path).map_err(|_| {
+                McpError::InvalidRequest("Blender materialized asset is inaccessible".into())
+            })?;
+            if existing_bytes.len() as u64 != source.bytes
+                || sha256_bytes(&existing_bytes) != source.checksum_sha256
+            {
+                return Err(McpError::InvalidRequest(
+                    "Blender artifact target already exists with different bytes".into(),
+                ));
+            }
+            if let Some(existing_asset) = creative::find_blender_materialized_asset(
+                cwd,
+                config,
+                project_id,
+                &source.asset_id,
+                &relative_path,
+            )? {
+                return Ok(MaterializedAsset {
+                    source,
+                    asset_id: existing_asset.asset_id,
+                    relative_path,
+                    absolute_path: existing_path,
+                });
+            }
+            existing_path
+        }
+        Err(error) => return Err(error),
+    };
 
     let mut metadata = source.metadata.clone();
     metadata.artifact_kind = Some("blender_materialized".into());
