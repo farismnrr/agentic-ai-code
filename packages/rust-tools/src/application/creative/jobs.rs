@@ -380,6 +380,9 @@ pub(super) fn execute_leaf_bound_job(
             return test_binding::execute(cwd, config, job);
         }
     }
+    if let Some(executed) = super::deployment::execute_local_static_game(cwd, config, &job)? {
+        return Ok(executed);
+    }
     if let Some(executed) = super::media::execute_media_job(cwd, config, &job)? {
         return Ok(executed);
     }

@@ -83,14 +83,13 @@ fn reads_the_server_owned_manifest() {
 }
 
 #[test]
-fn blender_resource_is_exposed_only_with_the_enabled_blender_capability() {
+fn blender_resource_is_exposed_only_with_the_creative_master_flag() {
     let repository = TempRepo::new();
     let disabled = repository.config();
     assert!(read(&disabled, "workspace://ai-code/blender-capability").is_err());
 
     let enabled = ServerConfig {
         enable_creative: true,
-        enable_blender: true,
         ..repository.config()
     };
     let resources = list(&enabled).unwrap();

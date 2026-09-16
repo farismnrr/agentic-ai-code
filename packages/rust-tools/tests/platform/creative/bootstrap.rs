@@ -251,7 +251,6 @@ async fn accepted_character_references_reproduce_manual_and_binding_blender_boot
     let workspace = TempWorkspace::new();
     let (port, bridge) = start_bridge(11).await;
     let mut config = workspace.config();
-    config.enable_blender = true;
     config.blender_bridge_port = port;
     config.blender_bridge_timeout_ms = 1_000;
     config.creative_binding_descriptors = vec![mesh_binding_descriptor()];
@@ -347,7 +346,6 @@ async fn accepted_character_references_reproduce_manual_and_binding_blender_boot
 async fn binding_and_hybrid_routes_require_an_explicit_compatible_binding() {
     let workspace = TempWorkspace::new();
     let mut config = workspace.config();
-    config.enable_blender = true;
     config.creative_binding_descriptors = vec![mesh_binding_descriptor()];
     let (element_id, refs) = prepare_project(&workspace, &config).await;
     for route in ["binding", "hybrid"] {

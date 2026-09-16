@@ -34,7 +34,6 @@ impl From<&Cli> for ServerConfig {
             toolchain_paths: cli.toolchain_paths.clone(),
             lsp_servers: cli.lsp_servers.clone(),
             enable_creative: cli.enable_creative,
-            enable_blender: cli.enable_blender,
             blender_executable: cli.blender_executable.clone(),
             blender_bridge_port: cli.blender_bridge_port,
             blender_bridge_timeout_ms: cli.blender_bridge_timeout_ms,

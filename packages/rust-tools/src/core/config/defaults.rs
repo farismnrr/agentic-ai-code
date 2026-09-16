@@ -34,7 +34,6 @@ impl Default for ServerConfig {
             toolchain_paths: Vec::new(),
             lsp_servers: Vec::new(),
             enable_creative: false,
-            enable_blender: false,
             blender_executable: None,
             blender_bridge_port: blender::DEFAULT_BLENDER_BRIDGE_PORT,
             blender_bridge_timeout_ms: 30_000,

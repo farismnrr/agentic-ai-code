@@ -73,7 +73,7 @@ pub fn read(config: &ServerConfig, requested: &str) -> Result<ResourceContent, M
 }
 
 fn blender_enabled(config: &ServerConfig) -> bool {
-    config.enable_creative && config.enable_blender
+    config.enable_creative
 }
 
 fn resource_names(config: &ServerConfig) -> Vec<&'static str> {

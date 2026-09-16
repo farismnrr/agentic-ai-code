@@ -18,11 +18,10 @@ fn remote_config() -> ServerConfig {
 }
 
 #[test]
-fn blender_operator_flags_are_explicit_bounded_and_require_creative() {
+fn creative_master_flag_enables_blender_runtime_with_bounded_operator_settings() {
     let cli = Cli::try_parse_from([
         "ai-tools",
         "--enable-creative",
-        "--enable-blender",
         "--blender-executable",
         "/opt/blender/blender",
         "--blender-bridge-port",
@@ -33,7 +32,6 @@ fn blender_operator_flags_are_explicit_bounded_and_require_creative() {
     .expect("Blender operator flags should parse");
     let config = ServerConfig::from(&cli);
     assert!(config.enable_creative);
-    assert!(config.enable_blender);
     assert_eq!(
         config.blender_executable.as_deref(),
         Some("/opt/blender/blender")
@@ -42,9 +40,7 @@ fn blender_operator_flags_are_explicit_bounded_and_require_creative() {
     assert_eq!(config.blender_bridge_timeout_ms, 45_000);
     config.validate().expect("bounded Blender operator config");
 
-    let blender_only = Cli::try_parse_from(["ai-tools", "--enable-blender"])
-        .expect("Blender enable flag should parse");
-    assert!(ServerConfig::from(&blender_only).validate().is_err());
+    assert!(Cli::try_parse_from(["ai-tools", "--enable-blender"]).is_err());
 }
 
 #[test]
@@ -115,6 +111,12 @@ fn creative_backend_mapping_is_operator_only_bounded_and_validated() {
         vec!["binding_local_raster=local_raster"]
     );
     assert!(config.validate().is_ok());
+
+    let local_deploy = ServerConfig {
+        creative_binding_backends: vec!["binding_local_game=local_static_game".into()],
+        ..ServerConfig::default()
+    };
+    assert!(local_deploy.validate().is_ok());
 
     for mapping in [
         "missing_separator",

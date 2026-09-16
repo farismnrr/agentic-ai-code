@@ -35,7 +35,6 @@ impl TempWorkspace {
             dir: Some(self.0.to_string_lossy().into_owned()),
             execution_root: Some(self.0.to_string_lossy().into_owned()),
             enable_creative: true,
-            enable_blender: true,
             blender_bridge_port: port,
             blender_bridge_timeout_ms: 500,
             ..ServerConfig::default()
@@ -323,7 +322,6 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
             "--online-mode".to_owned(),
             "--command".to_owned(),
             "blender_mcp".to_owned(),
-            "--".to_owned(),
             "--host".to_owned(),
             "127.0.0.1".to_owned(),
             "--port".to_owned(),

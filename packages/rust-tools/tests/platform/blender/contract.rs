@@ -11,9 +11,9 @@ use serde_json::json;
 use std::net::Ipv4Addr;
 
 #[test]
-fn blender_operator_config_is_disabled_loopback_only_and_bounded() {
+fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
     let default = ServerConfig::default();
-    assert!(!default.enable_blender);
+    assert!(!default.enable_creative);
     assert_eq!(default.blender_bridge_port, DEFAULT_BLENDER_LAB_PORT);
     assert_eq!(bridge_address(&default).ip(), &Ipv4Addr::LOCALHOST);
     assert_eq!(BLENDER_LAB_PROTOCOL, "blender_lab_json_nul_v1");
@@ -35,15 +35,10 @@ fn blender_operator_config_is_disabled_loopback_only_and_bounded() {
 
     let enabled = ServerConfig {
         enable_creative: true,
-        enable_blender: true,
         blender_executable: Some("/opt/blender/blender".into()),
         ..ServerConfig::default()
     };
     enabled.validate().expect("reviewed Blender config");
-
-    let mut without_creative = enabled.clone();
-    without_creative.enable_creative = false;
-    assert!(without_creative.validate().is_err());
 
     let mut privileged_port = enabled.clone();
     privileged_port.blender_bridge_port = 80;

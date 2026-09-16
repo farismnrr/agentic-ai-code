@@ -258,7 +258,7 @@ fn backend_kind<'a>(
             McpError::InvalidRequest("creative binding backend mapping is invalid".into())
         })?;
         super::contracts::validate_id(id, "execution_binding_id")?;
-        if !matches!(kind, "local_raster") {
+        if !matches!(kind, "local_raster" | "local_static_game") {
             return Err(McpError::InvalidRequest(
                 "creative binding backend kind is unsupported".into(),
             ));

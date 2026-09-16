@@ -218,7 +218,7 @@ fn telegram_destination_contract_remains_fixed_and_bounded() {
 
 #[test]
 fn explicit_telegram_tool_replaces_completion_contract() {
-    let tools = runtime_tool_catalog(ai_tools::core::config::ToolProfile::Full, false, false);
+    let tools = runtime_tool_catalog(ai_tools::core::config::ToolProfile::Full, false);
     let tool = tools
         .iter()
         .find(|tool| tool.name == "telegram_send_message")

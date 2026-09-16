@@ -8,7 +8,6 @@ use std::collections::HashSet;
 fn plan069_mcp_contract_parity_matrix_is_present_and_fail_closed() {
     let workspace = TempWorkspace::new();
     let mut config = workspace.config();
-    config.enable_blender = true;
     config.creative_binding_descriptors =
         vec![super::jobs::binding_descriptor_for_workflow_tests()];
     create_project(&config, "project_parity");
@@ -59,7 +58,7 @@ fn plan069_mcp_contract_parity_matrix_is_present_and_fail_closed() {
         );
     }
 
-    let catalog = runtime_tool_catalog(ToolProfile::Full, true, true);
+    let catalog = runtime_tool_catalog(ToolProfile::Full, true);
     let graph = catalog
         .iter()
         .find(|tool| tool.name == "creative_graph")

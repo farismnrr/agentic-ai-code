@@ -53,10 +53,10 @@ pub struct ServerConfig {
     pub toolchain_paths: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
-    /// Optional first-party creative capability; activation changes require a restart.
+    /// Master switch for the complete first-party Creative production platform,
+    /// including Scene, Anime/Blender, Game, graph, delivery, and related tools.
+    /// Activation changes require a restart.
     pub enable_creative: bool,
-    /// Optional first-party Blender production engine. Blender remains disabled by default.
-    pub enable_blender: bool,
     /// Optional operator-approved Blender executable path/name. Callers never control this value.
     pub blender_executable: Option<String>,
     /// Official Blender Lab loopback bridge port. No host override exists; v1 is loopback-only.

@@ -6,6 +6,7 @@
 
 mod compiler;
 mod contracts;
+pub(crate) mod deployment;
 mod graph;
 mod handlers;
 pub(crate) mod ingest;
@@ -118,14 +119,12 @@ fn status(config: &ServerConfig) -> Value {
         "state_namespace": ".masihawam/creative",
         "execution_bindings_registered": registry::execution_bindings(config).map(|items| items.len()).unwrap_or(0),
         "blender": {
-            "enabled": config.enable_creative && config.enable_blender,
-            "tool_count": if config.enable_creative && config.enable_blender { 11 } else { 0 },
-            "activation": if config.enable_creative && config.enable_blender {
+            "enabled": config.enable_creative,
+            "tool_count": if config.enable_creative { 11 } else { 0 },
+            "activation": if config.enable_creative {
                 Value::Null
-            } else if !config.enable_creative {
-                Value::String("enable Creative first, then start relay-agent with --enable-blender or RELAY_ENABLE_BLENDER=true".into())
             } else {
-                Value::String("start relay-agent with --enable-blender or RELAY_ENABLE_BLENDER=true".into())
+                Value::String("start relay-agent with --enable-creative or RELAY_ENABLE_CREATIVE=true".into())
             }
         },
         "activation": if config.enable_creative {

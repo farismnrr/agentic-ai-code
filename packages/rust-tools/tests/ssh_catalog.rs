@@ -60,7 +60,7 @@ fn historical_catalog_snapshots_are_immutable() {
 
 #[test]
 fn primary_profile_contains_the_retained_core_plus_creative_status() {
-    let tools = runtime_tool_catalog(ToolProfile::Primary, false, false);
+    let tools = runtime_tool_catalog(ToolProfile::Primary, false);
     assert_eq!(
         tools.len(),
         ai_tools::interfaces::mcp::PRIMARY_TOOL_NAMES.len() + 1

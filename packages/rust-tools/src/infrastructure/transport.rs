@@ -59,6 +59,7 @@ use crate::infrastructure::observability::{CorrelationId, RequestId};
 use crate::interfaces::mcp::{ErrorResponse, Id};
 
 mod access;
+mod creative_deploy;
 mod creative_upload;
 mod mcp_http;
 mod subagent_lifecycle;
@@ -127,7 +128,6 @@ impl AppState {
         crate::interfaces::mcp::runtime_tool_catalog(
             self.config.tool_profile,
             self.config.enable_creative,
-            self.config.enable_blender,
         )
     }
 
@@ -234,6 +234,10 @@ pub fn create_router_with_jobs_and_hooks(
         .layer(DefaultBodyLimit::max(
             crate::application::workspace::MAX_INTERNAL_BINARY_WRITE_BYTES,
         ));
+    let deploy_router = Router::new().route(
+        "/creative-deploy/:deployment_id/*path",
+        get(creative_deploy::handle),
+    );
     let mut well_known_router = Router::new().route(
         "/.well-known/oauth-protected-resource",
         get(handle_well_known_oauth),
@@ -256,6 +260,7 @@ pub fn create_router_with_jobs_and_hooks(
         .route("/health", get(handle_health))
         .merge(mcp_router)
         .merge(upload_router)
+        .merge(deploy_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(
             state.clone(),

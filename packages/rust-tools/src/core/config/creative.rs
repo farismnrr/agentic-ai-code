@@ -43,7 +43,7 @@ pub(super) fn validate(config: &ServerConfig) -> Result<(), RelayError> {
             || !binding_id
                 .chars()
                 .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
-            || backend_kind != "local_raster"
+            || !matches!(backend_kind, "local_raster" | "local_static_game")
             || !ids.insert(binding_id)
         {
             return Err(RelayError::InvalidConfig(

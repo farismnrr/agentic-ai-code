@@ -184,15 +184,11 @@ pub struct Cli {
     #[arg(long, value_enum, env = "RELAY_TOOL_PROFILE", default_value = "full")]
     pub tool_profile: ToolProfile,
 
-    /// Enable the first-party creative production capability group. Disabled by
-    /// default; execution bindings remain separately operator-registered.
+    /// Master switch for the complete first-party Creative production platform,
+    /// including Scene, Anime/Blender, Game, graph, delivery, and related tools.
+    /// Disabled by default; execution bindings remain separately operator-registered.
     #[arg(long, env = "RELAY_ENABLE_CREATIVE", default_value_t = false)]
     pub enable_creative: bool,
-
-    /// Enable the first-party Blender production engine. Requires Creative and
-    /// remains disabled by default.
-    #[arg(long, env = "RELAY_ENABLE_BLENDER", default_value_t = false)]
-    pub enable_blender: bool,
 
     /// Optional operator-approved Blender executable path/name. This is never a
     /// client-supplied tool argument.

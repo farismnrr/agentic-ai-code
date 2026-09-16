@@ -12,7 +12,7 @@ pub(super) async fn execute(
     config: &ServerConfig,
     job: CreativeJobRecord,
 ) -> Result<CreativeJobRecord, McpError> {
-    if !config.enable_blender {
+    if !config.enable_creative {
         return Err(McpError::InvalidRequest(
             "image_to_3d_bootstrap requires the operator-enabled Blender capability".into(),
         ));

@@ -259,13 +259,20 @@ or a product-wide default provider/model. Register descriptors with repeated
 
 A concrete implementation is mapped separately with repeated
 `--creative-binding-backend binding_id=backend_kind` flags or
-`RELAY_CREATIVE_BINDING_BACKEND`. The initial built-in conformance backend is
-`local_raster`, a pure-Rust contained PNG backend for the reviewed image
-capabilities. It creates candidate Assets under the selected Creative project's
-contained `creative/<project_id>/assets/generated/` subtree and preserves job,
-parent-Asset, and optional Element lineage. It is intentionally a deterministic
-local conformance/utility backend, not an AI image model and not a subjective
-quality guarantee.
+`RELAY_CREATIVE_BINDING_BACKEND`. Built-in reviewed backends are:
+
+- `local_raster`: a pure-Rust contained PNG conformance/utility backend for the
+  reviewed image capabilities. It creates candidate Assets under the selected
+  Creative project's contained `creative/<project_id>/assets/generated/`
+  subtree and preserves job, parent-Asset, and optional Element lineage. It is
+  not an AI image model and is not a subjective quality guarantee.
+- `local_static_game`: a private authenticated deployment backend for
+  `game.deploy`. It snapshots one accepted build into relay-owned contained
+  deployment storage and exposes it under `/creative-deploy/<deployment_id>/`.
+  This is a deploy target, not public publication; `published` remains false.
+
+External quality-capable media providers remain explicit operator integrations;
+client-visible descriptors never carry provider endpoints or credentials.
 
 Example operator configuration:
 
@@ -274,6 +281,16 @@ RELAY_ENABLE_CREATIVE=true
 RELAY_CREATIVE_BINDING={"binding_id":"binding_local_raster","binding_version":"local-raster-v1","capabilities":["image.generate","image.reference_generate","image.edit","image.inpaint","image.upscale","image.remove_background","image.outpaint"],"media_roles":["image","reference_image","mask"],"extension_schema":{"type":"object","additionalProperties":false},"constraints":{"max_width":4096,"max_height":4096,"estimate":{"base_compute_units":10,"base_output_bytes":4096}},"estimate_available":true,"availability":"available"}
 RELAY_CREATIVE_BINDING_BACKEND=binding_local_raster=local_raster
 ```
+
+Optional private local Game deploy binding:
+
+```text
+RELAY_CREATIVE_BINDING={"binding_id":"binding_local_game","binding_version":"local-static-game-v1","capabilities":["game.deploy"],"media_roles":["deployment"],"extension_schema":{"type":"object","additionalProperties":false},"constraints":{"estimate":{"base_compute_units":10,"base_output_bytes":4096}},"estimate_available":true,"availability":"available"}
+RELAY_CREATIVE_BINDING_BACKEND=binding_local_game=local_static_game
+```
+
+When image and local Game deploy bindings are both enabled, join both repeated
+environment values with `;` as documented by the relay CLI parser.
 
 Creative admission limits are separately operator-controlled through
 `RELAY_CREATIVE_APPROVAL_COMPUTE_UNITS`,
@@ -286,10 +303,11 @@ limit.
 
 ### Blender production engine
 
-Plan 069's Blender engine is separately disabled by default with
-`RELAY_ENABLE_BLENDER=false` / no `--enable-blender`, and enabling it requires
-Creative to be enabled as well. The relay speaks directly to the official
-Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
+Plan 069 uses one operator activation switch for the complete Creative production
+platform: `RELAY_ENABLE_CREATIVE=true` / `--enable-creative`. The same flag
+controls Scene, Anime/Blender, Game, graph, delivery, and related tool exposure;
+there is no separate Blender enable flag. The relay speaks directly to the
+official Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
 `RELAY_BLENDER_PORT` / `--blender-bridge-port` defaults to `9876`, and
 `RELAY_BLENDER_TIMEOUT_MS` / `--blender-bridge-timeout-ms` defaults to 30000 ms with a
 120000 ms hard maximum.
@@ -300,9 +318,10 @@ reviewed Blender installation outside the Projects workspace; callers cannot
 supply or override an executable, process ID, host, port, or launch arguments.
 When no executable is configured, session lifecycle code may resolve only a
 bounded reviewed standard Blender location/PATH entry. Relay-owned sessions use
-the workspace-local runtime profile `.masihawam/blender-runtime-home` and invoke
-the installed official Blender Lab extension headlessly with the fixed CLI
-shape `--background --online-mode --command blender_mcp -- --host localhost
+one execution-root-owned runtime profile `.masihawam/blender-runtime-home`, shared
+across Creative projects beneath that relay execution root, and invoke the
+installed official Blender Lab extension headlessly with the fixed CLI
+shape `--background --online-mode --command blender_mcp --host localhost
 --port <operator-port>`. The host is fixed loopback and the port remains
 operator-owned. The runtime profile must be prepared before relay start; the
 relay never downloads or installs Blender extensions implicitly. External
@@ -324,8 +343,10 @@ HOME="$PWD/.masihawam/blender-runtime-home" \
 ```
 
 The last command is the pre-restart readiness check and must print
-`blender_mcp`. If the profile or command is unavailable, `blender_session start`
-fails closed instead of silently launching a process with no bridge. An already
+`blender_mcp`. Prepare this profile once per relay execution root; individual
+Creative projects do not require separate extension installations. If the
+profile or command is unavailable, `blender_session start` fails closed instead
+of silently launching a process with no bridge. An already
 running official loopback bridge may still be attached as an external session
 and is never given relay stop/kill ownership.
 

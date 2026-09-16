@@ -11,7 +11,7 @@ pub(super) async fn execute(
     owner: &str,
     mut job: CreativeJobRecord,
 ) -> Result<CreativeJobRecord, McpError> {
-    if !config.enable_blender {
+    if !config.enable_creative {
         job.status = CreativeJobStatus::Failed;
         job.failure_code = Some("blender_capability_disabled".into());
         job.updated_at_ms = store::now_ms();

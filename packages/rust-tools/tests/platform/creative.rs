@@ -8,6 +8,8 @@ mod closure;
 mod compiler;
 #[path = "creative/contracts.rs"]
 mod contracts;
+#[path = "creative/game/deployment.rs"]
+mod game_deployment;
 #[path = "creative/graph.rs"]
 mod graph;
 #[path = "creative/identity.rs"]
@@ -133,12 +135,12 @@ fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
         .iter()
         .any(|tool| tool.name.starts_with("creative_")));
 
-    let disabled = runtime_tool_catalog(ToolProfile::Full, false, false);
+    let disabled = runtime_tool_catalog(ToolProfile::Full, false);
     assert_eq!(disabled.len(), retained.len() + 1);
     assert!(disabled.iter().any(|tool| tool.name == "creative_status"));
     assert!(!disabled.iter().any(|tool| tool.name == "creative_project"));
 
-    let enabled = runtime_tool_catalog(ToolProfile::Full, true, false);
+    let enabled = runtime_tool_catalog(ToolProfile::Full, true);
     for name in [
         "creative_status",
         "creative_catalog",
@@ -154,14 +156,14 @@ fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
         );
     }
 
-    let primary = runtime_tool_catalog(ToolProfile::Primary, true, false);
+    let primary = runtime_tool_catalog(ToolProfile::Primary, true);
     assert!(primary.iter().any(|tool| tool.name == "creative_status"));
     assert!(!primary.iter().any(|tool| tool.name == "creative_project"));
 }
 
 #[test]
 fn creative_action_schemas_require_action_specific_inputs() {
-    let tools = runtime_tool_catalog(ToolProfile::Full, true, false);
+    let tools = runtime_tool_catalog(ToolProfile::Full, true);
     let tool = |name: &str| {
         tools
             .iter()
@@ -210,7 +212,7 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
     )
     .unwrap();
 
-    let asset_tool = runtime_tool_catalog(ToolProfile::Full, true, false)
+    let asset_tool = runtime_tool_catalog(ToolProfile::Full, true)
         .into_iter()
         .find(|tool| tool.name == "creative_asset")
         .expect("creative asset tool");

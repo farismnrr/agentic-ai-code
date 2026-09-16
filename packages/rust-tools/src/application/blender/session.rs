@@ -117,10 +117,10 @@ pub async fn start(
     let executable = resolve_blender_executable(config)?;
     let blender_root = project_root.join("blender");
     let tmp_root = blender_root.join("tmp");
-    let runtime_home = project_root.join(".masihawam/blender-runtime-home");
+    let runtime_home = runtime_home(config)?;
     if !runtime_home.is_dir() {
         return Err(McpError::InvalidRequest(
-            "Blender runtime profile is not prepared; install the official Blender Lab MCP extension into .masihawam/blender-runtime-home before starting a relay-owned session"
+            "Blender runtime profile is not prepared; install the official Blender Lab MCP extension into the relay execution root .masihawam/blender-runtime-home before starting a relay-owned session"
                 .into(),
         ));
     }
@@ -130,7 +130,6 @@ pub async fn start(
         .arg("--online-mode")
         .arg("--command")
         .arg("blender_mcp")
-        .arg("--")
         .arg("--host")
         .arg("127.0.0.1")
         .arg("--port")
@@ -298,9 +297,9 @@ fn matches_identity(
 }
 
 fn ensure_enabled(config: &ServerConfig) -> Result<(), McpError> {
-    if !config.enable_blender {
+    if !config.enable_creative {
         return Err(McpError::InvalidRequest(
-            "Blender capability is disabled by operator configuration".into(),
+            "Creative capability is disabled by operator configuration".into(),
         ));
     }
     Ok(())
@@ -308,6 +307,13 @@ fn ensure_enabled(config: &ServerConfig) -> Result<(), McpError> {
 
 fn project_root(cwd: Option<&str>, config: &ServerConfig) -> Result<PathBuf, McpError> {
     super::resolve_project_root(cwd, config)
+}
+
+fn runtime_home(config: &ServerConfig) -> Result<PathBuf, McpError> {
+    let root = config
+        .resolved_execution_root()
+        .map_err(|_| McpError::InvalidRequest("execution root is unavailable".into()))?;
+    Ok(root.join(".masihawam/blender-runtime-home"))
 }
 
 pub(super) fn ensure_project_layout(

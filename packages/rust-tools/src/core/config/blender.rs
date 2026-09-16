@@ -5,11 +5,6 @@ pub(super) const DEFAULT_BLENDER_BRIDGE_PORT: u16 = 9876;
 pub(super) const MAX_BLENDER_BRIDGE_TIMEOUT_MS: u64 = 120_000;
 
 pub(super) fn validate(config: &ServerConfig) -> Result<(), RelayError> {
-    if config.enable_blender && !config.enable_creative {
-        return Err(RelayError::InvalidConfig(
-            "Blender requires the Creative capability group to be enabled".into(),
-        ));
-    }
     if config.blender_bridge_port < 1024 {
         return Err(RelayError::InvalidConfig(
             "Blender bridge port must be an unprivileged TCP port".into(),

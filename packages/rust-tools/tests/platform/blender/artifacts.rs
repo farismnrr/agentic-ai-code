@@ -32,7 +32,6 @@ impl TempWorkspace {
             dir: Some(self.0.to_string_lossy().into_owned()),
             execution_root: Some(self.0.to_string_lossy().into_owned()),
             enable_creative: true,
-            enable_blender: true,
             blender_bridge_port: port,
             blender_bridge_timeout_ms: 1_000,
             ..ServerConfig::default()

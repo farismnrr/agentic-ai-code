@@ -443,7 +443,6 @@ pub fn blender_tool_catalog() -> Vec<Tool> {
 pub fn runtime_tool_catalog(
     profile: crate::core::config::ToolProfile,
     creative_enabled: bool,
-    blender_enabled: bool,
 ) -> Vec<Tool> {
     let all = retained_tool_catalog();
     let mut selected = match profile {
@@ -459,9 +458,7 @@ pub fn runtime_tool_catalog(
     }
     if creative_enabled && profile == crate::core::config::ToolProfile::Full {
         selected.extend(creative_tools);
-        if blender_enabled {
-            selected.extend(blender_tool_catalog());
-        }
+        selected.extend(blender_tool_catalog());
     }
     selected
 }
@@ -470,13 +467,13 @@ pub fn find_tool_for_profile(
     name: &str,
     profile: crate::core::config::ToolProfile,
 ) -> Option<Tool> {
-    runtime_tool_catalog(profile, false, false)
+    runtime_tool_catalog(profile, false)
         .into_iter()
         .find(|t| t.name == name)
 }
 
 pub fn find_tool(name: &str) -> Option<Tool> {
-    runtime_tool_catalog(crate::core::config::ToolProfile::Full, false, false)
+    runtime_tool_catalog(crate::core::config::ToolProfile::Full, false)
         .into_iter()
         .find(|t| t.name == name)
 }
