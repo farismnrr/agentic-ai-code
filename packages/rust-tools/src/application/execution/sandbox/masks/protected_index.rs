@@ -1,336 +1,74 @@
-//! Cached, fail-closed protected-path discovery for mounted workspace trees.
-use std::collections::{BTreeSet, HashMap};
-use std::ffi::{CString, OsStr, OsString};
-use std::fs::File;
+//! Bounded, fail-closed protected-path indexing for mounted workspace trees.
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
+mod controller;
+mod index;
+mod operations;
+mod state;
+mod traversal;
+mod watcher;
+
+pub(super) use operations::{
+    discover, lock_and_validate_freshness, prime, schedule_initialization,
+};
+pub(in crate::application::execution::sandbox) use state::{
+    PreSpawnFreshnessGuard, ProtectedPathFreshness,
+};
+
+pub(super) const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
 const CONTROL_CHECK_INTERVAL: usize = 64;
 const MAX_CACHE_ROOTS: usize = 64;
 const MAX_CACHED_INDEX_ENTRIES: usize = 1_000_000;
-const FAILED_INDEX_RETRY: Duration = Duration::from_secs(30);
+const MAX_QUEUED_INITIALIZATIONS: usize = MAX_CACHE_ROOTS;
+// Keep failures fail-closed while retrying soon enough to recover after a
+// transient permission or mount issue is repaired.
+const FAILED_INDEX_RETRY: Duration = Duration::from_secs(1);
+const CHURN_RETRY_DELAY: Duration = Duration::from_millis(250);
+const WORKSPACE_INDEX_BUDGET: Duration = Duration::from_secs(60);
 
-mod traversal;
-use traversal::{scan, validate};
-
-fn control_check(control: Option<&super::super::SpawnControl<'_>>) -> io::Result<()> {
-    if let Some(control) = control {
-        control.check()?;
-    }
-    Ok(())
+/// An index lifecycle budget is independent of any one terminal command's deadline.
+pub(super) struct IndexScanBudget {
+    deadline: Instant,
+    max_entries: usize,
+    scanned_entries: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DirectorySignature {
-    device: u64,
-    inode: u64,
-    mode: u32,
-    modified_seconds: i64,
-    modified_nanoseconds: i64,
-    changed_seconds: i64,
-    changed_nanoseconds: i64,
-    length: u64,
-}
-
-impl DirectorySignature {
-    fn read(directory: &File) -> io::Result<Self> {
-        let mut stat = std::mem::MaybeUninit::<libc::stat>::zeroed();
-        if unsafe { libc::fstat(directory.as_raw_fd(), stat.as_mut_ptr()) } < 0 {
-            return Err(io::Error::last_os_error());
+impl IndexScanBudget {
+    pub(super) fn new(timeout: Duration) -> Self {
+        Self {
+            deadline: Instant::now() + timeout,
+            max_entries: MAX_PROTECTED_SCAN_ENTRIES,
+            scanned_entries: 0,
         }
-        let stat = unsafe { stat.assume_init() };
-        if stat.st_mode & libc::S_IFMT != libc::S_IFDIR {
+    }
+
+    pub(super) fn check(&self) -> io::Result<()> {
+        if Instant::now() >= self.deadline {
             return Err(io::Error::new(
-                io::ErrorKind::NotADirectory,
-                "protected-path index entry changed type",
+                io::ErrorKind::TimedOut,
+                "protected-path index initialization deadline elapsed",
             ));
-        }
-        Ok(Self {
-            device: stat.st_dev,
-            inode: stat.st_ino,
-            mode: stat.st_mode,
-            modified_seconds: stat.st_mtime,
-            modified_nanoseconds: stat.st_mtime_nsec,
-            changed_seconds: stat.st_ctime,
-            changed_nanoseconds: stat.st_ctime_nsec,
-            length: stat.st_size.max(0) as u64,
-        })
-    }
-}
-
-#[derive(Clone)]
-struct DirectoryRecord {
-    signature: DirectorySignature,
-    child_directories: Vec<OsString>,
-}
-
-pub(super) struct DirectoryWatcher {
-    fd: File,
-    // Sticky for the lifetime of an index: concurrent spawns may still hold
-    // snapshots after one request consumes the kernel event.
-    dirty: bool,
-}
-
-impl DirectoryWatcher {
-    fn new() -> io::Result<Self> {
-        let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC | libc::IN_NONBLOCK) };
-        if fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(Self {
-            fd: unsafe { File::from_raw_fd(fd) },
-            dirty: false,
-        })
-    }
-
-    pub(super) fn watch_directory(&mut self, directory: &File) -> io::Result<()> {
-        let path = CString::new(format!("/proc/self/fd/{}", directory.as_raw_fd()))
-            .expect("proc fd path contains no NUL bytes");
-        let mask = libc::IN_ATTRIB
-            | libc::IN_CREATE
-            | libc::IN_DELETE
-            | libc::IN_DELETE_SELF
-            | libc::IN_MOVE_SELF
-            | libc::IN_MOVED_FROM
-            | libc::IN_MOVED_TO
-            | libc::IN_UNMOUNT
-            | libc::IN_ONLYDIR;
-        let watch = unsafe { libc::inotify_add_watch(self.fd.as_raw_fd(), path.as_ptr(), mask) };
-        if watch < 0 {
-            return Err(io::Error::last_os_error());
         }
         Ok(())
     }
 
-    pub(super) fn has_events(&mut self) -> io::Result<bool> {
-        if self.dirty {
-            return Ok(true);
-        }
-        let mut buffer = [0u8; 4096];
-        loop {
-            let count = unsafe {
-                libc::read(
-                    self.fd.as_raw_fd(),
-                    buffer.as_mut_ptr().cast(),
-                    buffer.len(),
-                )
-            };
-            if count > 0 {
-                let count = count as usize;
-                let header_len = std::mem::size_of::<libc::inotify_event>();
-                let mut offset = 0usize;
-                while offset < count {
-                    if count.saturating_sub(offset) < header_len {
-                        self.dirty = true;
-                        return Ok(true);
-                    }
-                    let event = unsafe {
-                        std::ptr::read_unaligned(
-                            buffer.as_ptr().add(offset).cast::<libc::inotify_event>(),
-                        )
-                    };
-                    let record_len = header_len.saturating_add(event.len as usize);
-                    if record_len < header_len || record_len > count.saturating_sub(offset) {
-                        self.dirty = true;
-                        return Ok(true);
-                    }
-                    let name = if event.len == 0 {
-                        &[][..]
-                    } else {
-                        let raw = &buffer[offset + header_len..offset + record_len];
-                        let end = raw.iter().position(|byte| *byte == 0).unwrap_or(raw.len());
-                        &raw[..end]
-                    };
-                    if event_requires_reindex(event.mask, name) {
-                        self.dirty = true;
-                        return Ok(true);
-                    }
-                    offset = offset.saturating_add(record_len);
-                }
-                continue;
-            }
-            if count == 0 {
-                self.dirty = true;
-                return Ok(true);
-            }
-            let error = io::Error::last_os_error();
-            if error.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            if error.kind() == io::ErrorKind::WouldBlock {
-                return Ok(false);
-            }
-            return Err(error);
-        }
-    }
-}
-
-fn event_requires_reindex(mask: u32, name: &[u8]) -> bool {
-    let fail_closed = libc::IN_DELETE_SELF
-        | libc::IN_MOVE_SELF
-        | libc::IN_UNMOUNT
-        | libc::IN_Q_OVERFLOW
-        | libc::IN_IGNORED;
-    if mask & fail_closed != 0 {
-        return true;
-    }
-
-    // Existing directories are watched individually. Ordinary file churn in
-    // build outputs cannot change the set of protected paths, so it must not
-    // invalidate a large cached workspace index. Directory topology changes
-    // remain fail-closed because a newly introduced subtree is not watched
-    // until the index is rebuilt.
-    if mask & libc::IN_ISDIR != 0 || name.is_empty() {
-        return true;
-    }
-
-    crate::core::protected_paths::may_be_protected_entry(OsStr::from_bytes(name))
-}
-
-pub(super) struct ProtectedPathIndex {
-    directories: HashMap<PathBuf, DirectoryRecord>,
-    pub(super) protected_paths: BTreeSet<PathBuf>,
-    pub(super) scanned_entries: usize,
-    watcher: Option<Mutex<DirectoryWatcher>>,
-}
-
-impl ProtectedPathIndex {
-    pub(super) fn watcher_enabled(&self) -> bool {
-        self.watcher.is_some()
-    }
-
-    pub(super) fn is_fresh(&self) -> io::Result<bool> {
-        let Some(watcher) = &self.watcher else {
-            return Ok(true);
-        };
-        let mut watcher = watcher.lock().unwrap_or_else(|error| error.into_inner());
-        Ok(!watcher.has_events()?)
-    }
-}
-
-enum CachedPathIndex {
-    Ready(std::sync::Arc<ProtectedPathIndex>),
-    Failed {
-        kind: io::ErrorKind,
-        retry_after: Instant,
-    },
-}
-
-static PROTECTED_PATH_INDEX: OnceLock<Mutex<HashMap<PathBuf, CachedPathIndex>>> = OnceLock::new();
-
-fn cache() -> &'static Mutex<HashMap<PathBuf, CachedPathIndex>> {
-    PROTECTED_PATH_INDEX.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn make_cache_room(
-    entries: &mut HashMap<PathBuf, CachedPathIndex>,
-    current_root: &Path,
-    new_entry_count: usize,
-) {
-    loop {
-        let cached_entry_count = entries
-            .values()
-            .map(|entry| match entry {
-                CachedPathIndex::Ready(index) => index.scanned_entries,
-                CachedPathIndex::Failed { .. } => 0,
-            })
-            .sum::<usize>();
-        if entries.len() < MAX_CACHE_ROOTS
-            && cached_entry_count.saturating_add(new_entry_count) <= MAX_CACHED_INDEX_ENTRIES
-        {
-            return;
-        }
-        let Some(evict) = entries
-            .keys()
-            .find(|root| root.as_path() != current_root)
-            .cloned()
-        else {
-            return;
-        };
-        entries.remove(&evict);
-    }
-}
-
-fn lock_cache(
-    control: Option<&super::super::SpawnControl<'_>>,
-) -> io::Result<std::sync::MutexGuard<'static, HashMap<PathBuf, CachedPathIndex>>> {
-    loop {
-        match cache().try_lock() {
-            Ok(guard) => return Ok(guard),
-            Err(std::sync::TryLockError::Poisoned(error)) => return Ok(error.into_inner()),
-            Err(std::sync::TryLockError::WouldBlock) => {
-                control_check(control)?;
-                std::thread::sleep(Duration::from_millis(1));
-            }
-        }
-    }
-}
-
-pub(super) fn discover(
-    root: &Path,
-    control: Option<&super::super::SpawnControl<'_>>,
-) -> io::Result<(PathBuf, std::sync::Arc<ProtectedPathIndex>, bool)> {
-    control_check(control)?;
-    let root = std::fs::canonicalize(root)?;
-    let mut entries = lock_cache(control)?;
-
-    if let Some(CachedPathIndex::Failed { kind, retry_after }) = entries.get(&root) {
-        if Instant::now() < *retry_after {
+    pub(super) fn consume_entry(&mut self) -> io::Result<usize> {
+        self.check()?;
+        self.scanned_entries = self.scanned_entries.saturating_add(1);
+        if self.scanned_entries > self.max_entries {
             return Err(io::Error::new(
-                *kind,
-                "protected-path discovery is unavailable",
+                io::ErrorKind::InvalidData,
+                "protected-path scan exceeds bounded workspace maximum",
             ));
         }
-    }
-    if let Some(CachedPathIndex::Ready(index)) = entries.get(&root) {
-        match validate(&root, index, control) {
-            Ok(true) => return Ok((root, index.clone(), true)),
-            Ok(false) => {}
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::Interrupted | io::ErrorKind::TimedOut
-                ) =>
-            {
-                return Err(error)
-            }
-            Err(_) => {}
+        if self.scanned_entries.is_multiple_of(CONTROL_CHECK_INTERVAL) {
+            self.check()?;
         }
+        Ok(self.scanned_entries)
     }
 
-    entries.remove(&root);
-    match scan(&root, control) {
-        Ok(index) => {
-            let index = std::sync::Arc::new(index);
-            make_cache_room(&mut entries, &root, index.scanned_entries);
-            entries.insert(root.clone(), CachedPathIndex::Ready(index.clone()));
-            Ok((root, index, false))
-        }
-        Err(error) => {
-            // Only the deterministic entry-count ceiling is memoized. Filesystem
-            // permission and I/O errors may be transient and must be retried so
-            // repaired workspaces do not stay blocked for the cache TTL.
-            if error.kind() == io::ErrorKind::InvalidData {
-                make_cache_room(&mut entries, &root, 0);
-                entries.insert(
-                    root,
-                    CachedPathIndex::Failed {
-                        kind: error.kind(),
-                        retry_after: Instant::now() + FAILED_INDEX_RETRY,
-                    },
-                );
-            }
-            Err(error)
-        }
+    pub(super) fn scanned_entries(&self) -> usize {
+        self.scanned_entries
     }
-}
-
-pub(super) fn prime(root: &Path) -> io::Result<usize> {
-    let (_, index, _) = discover(root, None)?;
-    Ok(index.scanned_entries)
 }

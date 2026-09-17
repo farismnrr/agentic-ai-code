@@ -8,6 +8,26 @@ mod protected_index;
 #[path = "masks/protected_index_portable.rs"]
 mod protected_index;
 
+pub(super) use protected_index::ProtectedPathFreshness;
+
+pub(super) struct ProtectedPathFreshnessGuard<'a> {
+    _guard: protected_index::PreSpawnFreshnessGuard<'a>,
+}
+
+pub(super) fn lock_protected_path_freshness<'a>(
+    checks: &'a [ProtectedPathFreshness],
+) -> Result<ProtectedPathFreshnessGuard<'a>, std::io::Error> {
+    protected_index::lock_and_validate_freshness(checks)
+        .map(|_guard| ProtectedPathFreshnessGuard { _guard })
+}
+
+pub(super) fn schedule_protected_path_index(
+    root: &Path,
+    budget: std::time::Duration,
+) -> Result<(), std::io::Error> {
+    protected_index::schedule_initialization(root, budget)
+}
+
 pub(super) fn mask_executables_from(
     args: &mut Vec<String>,
     directories: impl IntoIterator<Item = PathBuf>,
@@ -77,14 +97,6 @@ pub(super) fn mask_protected_file(
     Ok(())
 }
 
-pub(super) struct ProtectedPathFreshness(std::sync::Arc<protected_index::ProtectedPathIndex>);
-
-impl ProtectedPathFreshness {
-    pub(super) fn is_fresh(&self) -> Result<bool, std::io::Error> {
-        self.0.is_fresh()
-    }
-}
-
 pub(super) fn add_optional_socket(
     args: &mut Vec<String>,
     enabled: bool,
@@ -133,14 +145,14 @@ pub(super) fn add_protected_paths(
                 )
             })?;
         let paths = index
-            .protected_paths
+            .protected_paths()
             .iter()
             .filter(|path| path.strip_prefix(&canonical_root).is_ok())
             .cloned()
             .collect::<Vec<_>>();
-        let scanned_entries = index.scanned_entries;
+        let scanned_entries = index.scanned_entries();
         let watch_enabled = index.watcher_enabled();
-        freshness_checks.push(ProtectedPathFreshness(index));
+        freshness_checks.push(index);
         (paths, scanned_entries, cache_hit, watch_enabled)
     } else {
         (
@@ -218,6 +230,9 @@ pub(super) fn mask_state(
     Ok(())
 }
 
-pub(super) fn prime_protected_path_index(root: &Path) -> Result<usize, std::io::Error> {
-    protected_index::prime(root)
+pub(super) fn prime_protected_path_index(
+    root: &Path,
+    budget: std::time::Duration,
+) -> Result<usize, std::io::Error> {
+    protected_index::prime(root, budget)
 }

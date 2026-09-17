@@ -7,11 +7,10 @@ use std::time::Instant;
 use tokio::time::{timeout, Duration};
 
 impl JobManager {
-    /// Warm protected-path indexes for toolchains before the relay accepts
-    /// terminal requests. Workspace indexes are discovered for the selected
-    /// sandbox before spawn, so a broad Projects root cannot delay startup.
-    /// Filesystem traversal stays off Tokio workers and every terminal spawn
-    /// still validates cached directory identities before using the index.
+    /// Prime bounded toolchain indexes and enqueue configured workspace roots
+    /// for the dedicated background index worker before serving requests.
+    /// Broad workspace traversal never runs inside a terminal command or
+    /// delays the relay from accepting requests.
     pub async fn prepare_for_serving(&self) {
         let config = self.config.clone();
         if tokio::task::spawn_blocking(move || {

@@ -2,6 +2,7 @@ use ai_tools::application::{activity, hooks};
 use ai_tools::core::config::ServerConfig;
 use serde_json::json;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 fn fixture_config() -> ServerConfig {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -102,22 +103,43 @@ async fn generic_terminal_shell_cannot_reach_masked_ssh_clients() {
     let mut config = fixture_config();
     config.allow_terminal_network = true;
     let manager = JobManager::new(config.clone());
-    let task = start_terminal_job(
-        &json!({
-            "command": "sh",
-            "args": ["-lc", "test ! -x /usr/bin/ssh && test ! -x /usr/bin/scp && test ! -x /usr/bin/sftp"]
-        }),
-        &config,
-        &manager,
-    )
-    .await
-    .expect("generic shell job admitted");
-    let snapshot = manager
-        .wait(&task)
+    manager.prepare_for_serving().await;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let task = start_terminal_job(
+            &json!({
+                "command": "sh",
+                "args": ["-lc", "test ! -x /usr/bin/ssh && test ! -x /usr/bin/scp && test ! -x /usr/bin/sftp"]
+            }),
+            &config,
+            &manager,
+        )
         .await
-        .expect("generic shell job completed");
-    assert_eq!(snapshot.state, JobState::Completed);
-    assert_eq!(snapshot.exit_code, Some(0));
+        .expect("generic shell job admitted");
+        let snapshot = manager
+            .wait(&task)
+            .await
+            .expect("generic shell job completed");
+        if snapshot.state == JobState::Completed {
+            assert_eq!(snapshot.exit_code, Some(0));
+            break;
+        }
+        let diagnostic = snapshot
+            .result
+            .as_ref()
+            .and_then(|result| result.content.first())
+            .map(|content| content.text.as_str())
+            .unwrap_or_default();
+        assert!(
+            snapshot.state == JobState::Failed && diagnostic.contains("protected_path_discovery"),
+            "unexpected shell sandbox failure: {diagnostic}"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "protected-path index prewarm did not complete within 30 seconds"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 #[tokio::test]

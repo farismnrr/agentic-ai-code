@@ -73,6 +73,10 @@ pub struct JobManager {
 
 impl JobManager {
     pub fn new(config: ServerConfig) -> Arc<Self> {
+        // Start the bounded background workspace warmup as soon as an
+        // execution manager is created. The relay's serving hook separately
+        // primes small toolchain roots and deduplicates this request.
+        super::sandbox::schedule_workspace_protected_path_indexes(&config);
         Arc::new(Self {
             jobs: Mutex::new(HashMap::new()),
             idempotency: Mutex::new(HashMap::new()),

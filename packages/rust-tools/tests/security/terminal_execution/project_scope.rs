@@ -33,19 +33,41 @@ async fn selected_git_repository_narrows_terminal_mount_inside_projects_root() {
         .ensure_workspaces_initialized()
         .expect("initialize broad authorized Projects root");
     let manager = JobManager::new(config.clone());
-    let id = start_terminal_job(
-        &json!({
-            "command": "sh",
-            "args": ["-c", "test ! -e ../Sensio/.env && printf selected-repo-only"],
-            "cwd": repository,
-            "timeout_ms": 5000
-        }),
-        &config,
-        &manager,
-    )
-    .await
-    .expect("start terminal job in selected child repository");
-    let snapshot = manager.wait(&id).await.expect("wait for terminal job");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let snapshot = loop {
+        let id = start_terminal_job(
+            &json!({
+                "command": "sh",
+                "args": ["-c", "test ! -e ../Sensio/.env && printf selected-repo-only"],
+                "cwd": repository,
+                "timeout_ms": 5000
+            }),
+            &config,
+            &manager,
+        )
+        .await
+        .expect("start terminal job in selected child repository");
+        let snapshot = manager.wait(&id).await.expect("wait for terminal job");
+        if snapshot.state == JobState::Completed {
+            break snapshot;
+        }
+        let diagnostic = snapshot
+            .result
+            .as_ref()
+            .and_then(|result| result.content.first())
+            .map(|content| content.text.as_str())
+            .unwrap_or_default();
+        assert!(
+            matches!(snapshot.state, JobState::Failed | JobState::Cancelled)
+                && diagnostic.contains("protected_path_discovery"),
+            "unexpected selected-repository warmup result: {diagnostic}"
+        );
+        assert!(
+            std::time::Instant::now() < deadline,
+            "selected repository protected-path index did not become ready"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    };
     manager.shutdown().await;
 
     assert_eq!(snapshot.state, JobState::Completed, "{:?}", snapshot.result);

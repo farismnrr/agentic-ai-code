@@ -2,7 +2,41 @@ use super::super::toolchain;
 use super::{masks, runtime_home, safe_path_entries};
 use crate::core::config::ServerConfig;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+const PROTECTED_INDEX_INITIALIZATION_BUDGET: Duration = Duration::from_secs(60);
+
+pub(crate) fn schedule_workspace_protected_path_indexes(config: &ServerConfig) {
+    let _ = config.ensure_workspaces_initialized();
+    let workspace_roots = config
+        .workspaces
+        .read()
+        .map(|workspaces| workspaces.all_roots())
+        .unwrap_or_default();
+    let canonical_roots = workspace_roots
+        .iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .filter(|root| root.is_dir())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for root in canonical_roots {
+        match masks::schedule_protected_path_index(&root, PROTECTED_INDEX_INITIALIZATION_BUDGET) {
+            Ok(()) => tracing::info!(
+                event = "relay.sandbox.stage",
+                stage = "protected_path_cache_prime",
+                outcome = "scheduled",
+                scope = "workspace_background",
+            ),
+            Err(error) => tracing::warn!(
+                event = "relay.sandbox.stage",
+                stage = "protected_path_cache_prime",
+                outcome = "queue_failed",
+                scope = "workspace_background",
+                error_kind = ?error.kind(),
+            ),
+        }
+    }
+}
 
 pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
     let _ = config.ensure_workspaces_initialized();
@@ -11,9 +45,9 @@ pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
         .read()
         .map(|workspaces| workspaces.all_roots())
         .unwrap_or_default();
-    // Workspace roots may represent a broad Projects tree. Their protected
-    // paths are indexed per selected sandbox before spawn, not eagerly scanned
-    // here before the relay can accept requests.
+    // Workspace roots can represent a broad Projects tree, so prime them in
+    // the dedicated background worker. Toolchain roots stay on the bounded
+    // startup path because they are expected to be small.
     let mut roots = std::collections::BTreeSet::new();
     let home = runtime_home().ok();
     let canonical_home_cargo_bin = home
@@ -76,14 +110,19 @@ pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
         stage = "protected_path_cache_prime",
         workspace_root_count = workspace_roots.len(),
         toolchain_root_count = roots.len(),
+        initialization_budget_ms = PROTECTED_INDEX_INITIALIZATION_BUDGET.as_millis() as u64,
     );
+
+    let initialization_deadline = Instant::now() + PROTECTED_INDEX_INITIALIZATION_BUDGET;
     for root in roots {
         let started = Instant::now();
-        match masks::prime_protected_path_index(&root) {
+        let budget = initialization_deadline.saturating_duration_since(Instant::now());
+        match masks::prime_protected_path_index(&root, budget) {
             Ok(scanned_entries) => tracing::info!(
                 event = "relay.sandbox.stage",
                 stage = "protected_path_cache_prime",
                 outcome = "completed",
+                scope = "toolchain",
                 scanned_entries,
                 duration_ms = started.elapsed().as_millis() as u64,
             ),
@@ -91,9 +130,12 @@ pub(crate) fn prime_protected_path_indexes(config: &ServerConfig) {
                 event = "relay.sandbox.stage",
                 stage = "protected_path_cache_prime",
                 outcome = "failed",
+                scope = "toolchain",
                 error_kind = ?error.kind(),
                 duration_ms = started.elapsed().as_millis() as u64,
             ),
         }
     }
+
+    schedule_workspace_protected_path_indexes(config);
 }

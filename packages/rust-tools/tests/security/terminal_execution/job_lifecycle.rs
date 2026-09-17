@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 // 1. terminal_exec("true") completes
 #[tokio::test]
 async fn test_terminal_exec_true_completes() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "true",
@@ -33,7 +33,7 @@ async fn test_terminal_exec_true_completes() {
 // 2. terminal_exec("printf", ["ok"]) returns captured stdout
 #[tokio::test]
 async fn test_terminal_exec_printf_captures_stdout() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "printf",
@@ -57,7 +57,7 @@ async fn test_terminal_exec_printf_captures_stdout() {
 // 3. non-zero commands return without hanging
 #[tokio::test]
 async fn test_terminal_exec_nonzero_exit_without_hanging() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let start = Instant::now();
     let id = start_terminal_job(
         &json!({
@@ -80,7 +80,7 @@ async fn test_terminal_exec_nonzero_exit_without_hanging() {
 // 4. stderr is captured without hanging
 #[tokio::test]
 async fn test_terminal_exec_captures_stderr() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "sh",
@@ -103,7 +103,7 @@ async fn test_terminal_exec_captures_stderr() {
 // 5. timeout produces TimedOut
 #[tokio::test]
 async fn test_terminal_exec_timeout_produces_timed_out() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let warm_id = start_terminal_job(
         &json!({
             "command": "true",
@@ -159,7 +159,7 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
 // 6. process descendants cannot keep a completed request alive indefinitely
 #[tokio::test]
 async fn test_terminal_exec_descendants_do_not_hang() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let start = Instant::now();
     // Primary shell process exits immediately, but background descendant inherits stdout pipe
     let id = start_terminal_job(
@@ -189,7 +189,7 @@ async fn test_terminal_exec_descendants_do_not_hang() {
 // 7. cancellation produces a terminal job state
 #[tokio::test]
 async fn test_terminal_exec_cancellation_produces_terminal_state() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "sleep",
@@ -217,7 +217,8 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
     // Only 1 running job allowed
     let fixture = TestFixture::with_config(|c| {
         c.max_running_jobs = 1;
-    });
+    })
+    .await;
 
     // 1st job: times out quickly
     let id1 = start_terminal_job(
@@ -277,7 +278,7 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
 // 9. repeated terminal executions do not accumulate stuck jobs
 #[tokio::test]
 async fn test_terminal_exec_repeated_executions_do_not_accumulate() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     for i in 0..10 {
         let id = start_terminal_job(
             &json!({
@@ -308,7 +309,8 @@ async fn test_synchronous_wait_has_bounded_watchdog() {
     let fixture = TestFixture::with_config(|c| {
         c.default_terminal_timeout_ms = 100;
         c.max_terminal_timeout_ms = 200;
-    });
+    })
+    .await;
 
     let start = Instant::now();
     let id = start_terminal_job(
@@ -339,7 +341,7 @@ async fn test_synchronous_wait_has_bounded_watchdog() {
 // 11. task-backed execution reaches the same final result semantics as synchronous execution
 #[tokio::test]
 async fn test_task_backed_and_sync_execution_parity() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
 
     // Async task-backed path
     let task_id = start_terminal_job_for(
@@ -401,7 +403,8 @@ async fn test_task_backed_and_sync_execution_parity() {
 async fn test_output_truncation_respects_limits() {
     let fixture = TestFixture::with_config(|c| {
         c.max_retained_output_bytes = 100;
-    });
+    })
+    .await;
 
     let id = start_terminal_job(
         &json!({

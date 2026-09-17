@@ -1,11 +1,11 @@
 //! Real Bubblewrap execution against disposable HOME fixtures, never owner secrets.
 #![cfg(target_os = "linux")]
 use ai_tools::application::execution::{
-    start_terminal_job, start_terminal_job_for, JobManager, JobSnapshot,
+    start_terminal_job, start_terminal_job_for, JobManager, JobSnapshot, JobState,
 };
 use ai_tools::core::config::{ActivityConfig, ServerConfig};
 use serde_json::json;
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path, process::Command, time::Duration};
 
 #[test]
 fn broad_home_sandbox() {
@@ -52,16 +52,32 @@ fn broad_home_sandbox() {
 
 pub(super) async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> JobSnapshot {
     let manager = JobManager::new(config.clone());
-    let id = start_terminal_job(
-        &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":10000}),
-        config,
-        &manager,
-    )
-    .await
-    .unwrap();
-    let result = manager.wait(&id).await.unwrap();
-    manager.shutdown().await;
-    result
+    manager.prepare_for_serving().await;
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let id = start_terminal_job(
+            &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":10000}),
+            config,
+            &manager,
+        )
+        .await
+        .unwrap();
+        let result = manager.wait(&id).await.unwrap();
+        let diagnostic = result
+            .result
+            .as_ref()
+            .and_then(|tool_result| tool_result.content.first())
+            .map(|content| content.text.as_str())
+            .unwrap_or_default();
+        let index_retry = result.state == JobState::Failed
+            && (diagnostic.contains("protected_path_discovery: Interrupted")
+                || diagnostic.contains("protected_path_discovery: WouldBlock"));
+        if !index_retry || std::time::Instant::now() >= deadline {
+            manager.shutdown().await;
+            return result;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 #[tokio::test]

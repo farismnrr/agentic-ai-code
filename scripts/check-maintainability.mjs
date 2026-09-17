@@ -9,7 +9,7 @@ const POLICY = Object.freeze({
   sourceRoots: ['app', 'server', 'shared', 'packages'],
   sourceExtensions: new Set(['.ts', '.tsx', '.js', '.mjs', '.vue', '.rs', '.css', '.scss', '.sass', '.less', '.styl', '.stylus']),
   excludedSegments: new Set([
-    'node_modules', 'target', '.nuxt', '.output', 'dist', 'coverage', 'vendor', 'generated',
+    'node_modules', 'target', 'target-plan069-release', '.nuxt', '.output', 'dist', 'coverage', 'vendor', 'generated',
     'migrations', '.agents', '.tmp'
   ]),
   file: { review: 400, hard: 500 },
