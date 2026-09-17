@@ -64,7 +64,10 @@ impl reqwest::dns::Resolve for SafeResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         Box::pin(async move {
             let host = name.as_str();
-            let addrs = tokio::net::lookup_host(format!("{host}:80")).await?;
+            // Return port 0 so reqwest can replace it with the URL scheme's
+            // default (80 for HTTP, 443 for HTTPS). Hard-coding 80 made every
+            // HTTPS request attempt TLS against the HTTP port.
+            let addrs = tokio::net::lookup_host(format!("{host}:0")).await?;
             let mut safe = Vec::new();
             for addr in addrs {
                 if !is_safe_ip(&addr.ip()) {
