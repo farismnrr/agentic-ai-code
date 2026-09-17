@@ -323,14 +323,33 @@ pub async fn wait(
     job.updated_at_ms = store::now_ms();
     store::store_job(cwd, config, &job)?;
 
-    let terminal = match job.kind {
-        CreativeJobKind::Graph => execute_graph_job(cwd, config, owner, &job).await?,
+    let execution = match job.kind {
+        CreativeJobKind::Graph => execute_graph_job(cwd, config, owner, &job).await,
         CreativeJobKind::Capability | CreativeJobKind::Workflow => {
-            execute_bound_job(cwd, config, owner, job).await?
+            execute_bound_job(cwd, config, owner, job.clone()).await
+        }
+    };
+    let terminal = match execution {
+        Ok(terminal) => terminal,
+        Err(error) => {
+            job.status = CreativeJobStatus::Failed;
+            job.failure_code = Some(execution_failure_code(&error).into());
+            job.updated_at_ms = store::now_ms();
+            store::store_job(cwd, config, &job)?;
+            return Err(error);
         }
     };
     store::store_job(cwd, config, &terminal)?;
     Ok(terminal)
+}
+
+fn execution_failure_code(error: &McpError) -> &'static str {
+    match error {
+        McpError::InvalidRequest(_) => "execution_invalid_request",
+        McpError::InvalidParams(_) => "execution_invalid_params",
+        McpError::Internal(_) => "execution_internal_error",
+        _ => "execution_protocol_error",
+    }
 }
 
 pub(super) async fn execute_bound_job(

@@ -1,6 +1,7 @@
 use super::jobs::{configured_workspace, test_binding_descriptor};
 use super::{call, create_project, dispatch_sync};
 use serde_json::{json, Value};
+use std::fs;
 
 #[test]
 fn test_binding_proves_running_timeout_actual_output_and_terminal_lifecycle() {
@@ -198,4 +199,69 @@ fn output_hard_limit_blocks_submit_before_job_creation() {
         json!({"action":"list","project_id":"project_output_budget"}),
     );
     assert_eq!(listed["jobs"].as_array().map(Vec::len), Some(0));
+}
+
+#[test]
+fn execution_error_persists_failed_job_instead_of_leaving_running_state() {
+    let (workspace, mut config) = configured_workspace();
+    config.creative_max_job_output_bytes = 8 * 1024 * 1024;
+    create_project(&config, "project_execution_error");
+    fs::write(workspace.path("candidate.png"), b"candidate").expect("candidate fixture");
+
+    let registered = call(
+        &config,
+        "creative_asset",
+        json!({
+            "action":"register",
+            "project_id":"project_execution_error",
+            "path":"candidate.png",
+            "media_type":"image/png",
+            "role":"character_reference"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap().to_owned();
+    assert_eq!(registered["state"], "candidate");
+
+    let submitted = call(
+        &config,
+        "creative_job",
+        json!({
+            "action":"submit",
+            "project_id":"project_execution_error",
+            "workflow_id":"export_profile",
+            "parameters":{
+                "asset_ids":[asset_id],
+                "profile":"character",
+                "file_name":"candidate.json"
+            }
+        }),
+    );
+    let job_id = submitted["job"]["job_id"].as_str().unwrap().to_owned();
+
+    let wait = dispatch_sync(
+        &config,
+        "creative_job",
+        &json!({
+            "action":"wait",
+            "project_id":"project_execution_error",
+            "job_id":job_id
+        }),
+    );
+    assert!(matches!(
+        wait,
+        Err(ai_tools::core::error::McpError::InvalidRequest(message))
+            if message == "final export profiles require accepted Assets"
+    ));
+
+    let stored = call(
+        &config,
+        "creative_job",
+        json!({
+            "action":"get",
+            "project_id":"project_execution_error",
+            "job_id":job_id
+        }),
+    );
+    assert_eq!(stored["job"]["status"], "failed");
+    assert_eq!(stored["job"]["failure_code"], "execution_invalid_request");
 }
