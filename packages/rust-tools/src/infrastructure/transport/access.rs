@@ -33,10 +33,8 @@ pub(super) async fn access_policy(
     // Apply the relay trust boundary to MCP plus reviewed first-party Creative
     // upload/deployment surfaces. Health and OAuth metadata remain public.
     let path = req.uri().path();
-    if path != "/mcp"
-        && !path.starts_with("/creative-upload/")
-        && !path.starts_with("/creative-deploy/")
-    {
+    let is_creative_upload = path.starts_with("/creative-upload/");
+    if path != "/mcp" && !is_creative_upload && !path.starts_with("/creative-deploy/") {
         return next.run(req).await;
     }
 
@@ -98,6 +96,24 @@ pub(super) async fn access_policy(
                 )),
             )
                 .into_response();
+        }
+
+        // Upload tickets are issued only through an authenticated Creative
+        // tool call and carry a short-lived, single-use capability token bound
+        // to the ticket's owner and project. External MCP clients cannot
+        // forward their relay OAuth bearer through a separate HTTP PUT, so
+        // permit a bearerless upload request to reach the handler, which
+        // verifies that capability before writing any bytes. A supplied
+        // Authorization header still follows the normal OAuth validation path.
+        if is_creative_upload
+            && req
+                .headers()
+                .get(axum::http::header::AUTHORIZATION)
+                .is_none()
+        {
+            auth_ctx.decision = AuthDecision::Missing;
+            req.extensions_mut().insert(auth_ctx);
+            return next.run(req).await;
         }
 
         let oauth_issuer = match &state.config.oauth_issuer {

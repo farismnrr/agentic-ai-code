@@ -58,8 +58,7 @@ pub(super) async fn handle(
     let owner = auth_ctx
         .claims
         .as_ref()
-        .and_then(|claims| claims.sub.as_deref())
-        .unwrap_or("local");
+        .and_then(|claims| claims.sub.as_deref());
     match crate::application::creative::ingest::accept_upload_bytes(
         cwd,
         &state.config,

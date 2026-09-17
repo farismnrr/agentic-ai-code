@@ -190,11 +190,17 @@ pub fn create_router_with_jobs_and_hooks(
         HeaderName::from_static(HDR_PROTOCOL_VERSION),
         HeaderName::from_static(HDR_MCP_METHOD),
         HeaderName::from_static(HDR_MCP_NAME),
+        HeaderName::from_static("x-creative-upload-token"),
     ];
 
     let cors = CorsLayer::new()
         .allow_origin(cors_origin)
-        .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods(vec![
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::OPTIONS,
+        ])
         .allow_headers(cors_headers);
 
     // A misconfigured `--lsp-server` mapping (e.g. an executable missing

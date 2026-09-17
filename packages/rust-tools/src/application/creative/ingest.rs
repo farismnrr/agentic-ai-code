@@ -159,15 +159,18 @@ pub fn list_uploads(
 pub fn accept_upload_bytes(
     cwd: Option<&str>,
     config: &ServerConfig,
-    owner: &str,
+    authenticated_owner: Option<&str>,
     ticket_id: &str,
     token: &str,
     content_type: Option<&str>,
     bytes: &[u8],
 ) -> Result<UploadReceipt, McpError> {
-    validate_owner(owner)?;
+    if let Some(owner) = authenticated_owner {
+        validate_owner(owner)?;
+    }
     let mut ticket = store::load_upload_ticket(cwd, config, ticket_id)?;
-    if ticket.owner != owner {
+    validate_owner(&ticket.owner)?;
+    if authenticated_owner.is_some_and(|owner| ticket.owner != owner) {
         return Err(McpError::InvalidRequest(
             "creative upload ticket owner mismatch".into(),
         ));
