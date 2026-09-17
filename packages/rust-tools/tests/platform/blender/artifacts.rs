@@ -142,15 +142,13 @@ async fn start_fixture_bridge(connections: usize) -> (u16, JoinHandle<()>) {
                 write_png(Path::new(&path));
                 json!({"written":true})
             } else if code.contains("# MASIHAWAM_RENDER_ANIMATION") {
-                let paths = extract_assignment(code, "_paths = ")
-                    .expect("animation paths")
-                    .as_array()
-                    .expect("animation array")
-                    .clone();
-                for path in &paths {
-                    write_png(Path::new(path.as_str().expect("animation path")));
-                }
-                json!({"written_frames":paths.len()})
+                let path = extract_assignment_string(code, "_path = ").expect("animation path");
+                let frame = extract_assignment(code, "_frame = ")
+                    .expect("animation frame")
+                    .as_i64()
+                    .expect("animation frame integer");
+                write_png(Path::new(&path));
+                json!({"written_frame":frame})
             } else if code.contains("# MASIHAWAM_ASSET_EXPORT") {
                 let path = extract_assignment_string(code, "_path = ")
                     .map(PathBuf::from)
@@ -245,7 +243,7 @@ fn write_png(path: &Path) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn blender_assets_renders_exports_and_checkpoints_stay_contained_and_traceable() {
     let workspace = TempWorkspace::new();
-    let (port, bridge) = start_fixture_bridge(8).await;
+    let (port, bridge) = start_fixture_bridge(10).await;
     let config = workspace.config(port);
     let source_asset_id = create_project_and_source(&config, &workspace).await;
 

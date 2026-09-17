@@ -149,47 +149,38 @@ async fn render_animation(
         relative_paths.push(relative);
         absolute_paths.push(absolute);
     }
-    let path_strings = absolute_paths
-        .iter()
-        .map(|path| {
-            path.to_str()
-                .map(str::to_owned)
-                .ok_or_else(|| McpError::InvalidRequest("Blender render path is not UTF-8".into()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let paths_literal = serde_json::to_string(&path_strings)
-        .map_err(|_| McpError::Internal("Blender render paths could not be encoded".into()))?;
-    let code = format!(
-        r#"# MASIHAWAM_RENDER_ANIMATION
+    let mut assets = Vec::with_capacity(frame_count);
+    let mut written_frames = Vec::with_capacity(frame_count);
+    for ((frame, relative_path), absolute_path) in (start..=end)
+        .zip(relative_paths.iter())
+        .zip(absolute_paths.iter())
+    {
+        let path_literal = artifacts::path_literal(absolute_path)?;
+        let code = format!(
+            r#"# MASIHAWAM_RENDER_ANIMATION
 import bpy
 _scene = bpy.context.scene
 if _scene.render.resolution_x > {max_dim} or _scene.render.resolution_y > {max_dim}:
     raise ValueError("render resolution exceeds relay bound")
-_paths = {paths_literal}
-_frames = list(range({start}, {end_plus_one}))
+_path = {path_literal}
+_frame = {frame}
 _old_frame = _scene.frame_current
 _old_path = _scene.render.filepath
 _old_format = _scene.render.image_settings.file_format
-_written = []
 try:
+    _scene.frame_set(_frame)
+    _scene.render.filepath = _path
     _scene.render.image_settings.file_format = "PNG"
-    for _frame, _path in zip(_frames, _paths):
-        _scene.frame_set(_frame)
-        _scene.render.filepath = _path
-        bpy.ops.render.render(write_still=True)
-        _written.append(_frame)
-    result = {{"written_frames": _written}}
+    bpy.ops.render.render(write_still=True)
+    result = {{"written_frame": _frame}}
 finally:
     _scene.frame_set(_old_frame)
     _scene.render.filepath = _old_path
     _scene.render.image_settings.file_format = _old_format
 "#,
-        max_dim = MAX_RENDER_DIMENSION,
-        end_plus_one = i64::from(end) + 1,
-    );
-    let reply = bridge::execute(config, &code, true).await?;
-    let mut assets = Vec::with_capacity(frame_count);
-    for relative_path in &relative_paths {
+            max_dim = MAX_RENDER_DIMENSION,
+        );
+        bridge::execute(config, &code, true).await?;
         let asset_id = artifacts::register_generated_output(
             cwd,
             config,
@@ -203,13 +194,14 @@ finally:
             },
         )?;
         assets.push(json!({"asset_id":asset_id,"relative_path":relative_path}));
+        written_frames.push(frame);
     }
     Ok(json!({
         "mode":"animation",
         "start_frame":start,
         "end_frame":end,
         "outputs":assets,
-        "bridge_result":reply.result
+        "bridge_result":{"written_frames":written_frames}
     }))
 }
 
