@@ -21,12 +21,7 @@
 - `scripts/check-architecture.sh` is mandatory through every guardrail mode and rejects representative direct, type-only, transitive-facade, and API-bypass violations.
 - Browser/Playwright automation may use the shared development database. Never assume browser-test data is isolated unless the environment explicitly provides isolation.
 - Top-level `workspaces/` is a local container for nested user/project checkouts, not maintained `ai-code` source. Keep it ignored by the parent Git repository and excluded from parent ESLint/test-layout traversal so a nested repository's own generated config/tests cannot break `ai-code` gates; validate each nested repository under its own rules instead.
-- **Agent task reporting standard:** The legacy 3-question prompt format ("1. What did you just finish? 2. What are you doing next? 3. Is relay restart required for the next step?") is superseded. All agents must report execution progress, handoffs, and completion using the structured English template defined in `.agents/knowledge/self-improvement.md`:
-  - `Workspace:` (mandatory full absolute path)
-  - `Issue(s):` (clear bulleted problem/task descriptions)
-  - `Work Completed:` (bullet points of changes, file edits, and exact local verifications executed)
-  - `Next Steps:` (actionable next items or "None. Task is complete and locally verified.")
-  - `Restart Required:` (`No` or `Yes — <target>` with exact operator command)
+- **Agent task reporting standard:** The legacy 3-question prompt format ("1. What did you just finish? 2. What are you doing next? 3. Is relay restart required for the next step?") is superseded. All agents must read and follow the single authoritative report template in [`.agents/knowledge/self-improvement.md`](../knowledge/self-improvement.md#standard-task-execution-report).
 
 ## Nuxt/application invariants
 
