@@ -2,8 +2,11 @@ use super::super::{err_response, AppState};
 use super::tool_helpers::{record_activity_outcome, record_activity_outcome_with_detail};
 use super::JsonErr2;
 use crate::application::activity::{ActivityEvent, Evidence, Status};
+use crate::application::execution::JobSnapshot;
 use crate::core::error::McpError;
-use crate::interfaces::mcp::{self, Response, Tool, ToolsCallParams};
+use crate::interfaces::mcp::{
+    self, Response, Tool, ToolCallResult, ToolResultContent, ToolsCallParams,
+};
 use axum::{http::StatusCode, Json};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -102,8 +105,8 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 )));
             }
         };
-        let result = mcp::with_timing_meta(
-            task.create_task_json(),
+        let result = terminal_job_tool_result(
+            &task,
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
@@ -194,8 +197,8 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
                 }
             }
         };
-        let result = mcp::with_timing_meta(
-            task.task_json(state.config.completed_job_ttl_ms),
+        let result = terminal_job_tool_result(
+            &task,
             tool_dispatch_started.elapsed().as_millis() as u64,
             request_started.elapsed().as_millis() as u64,
         );
@@ -304,6 +307,20 @@ pub(super) async fn try_handle_task_call(context: ToolCallContext<'_>) -> Option
     }
 
     None
+}
+
+pub(super) fn terminal_job_tool_result(
+    task: &JobSnapshot,
+    dispatch_ms: u64,
+    server_total_ms: u64,
+) -> Value {
+    let text = serde_json::to_string(&task.job_json()).unwrap_or_else(|_| "{}".into());
+    let result = ToolCallResult::complete(vec![ToolResultContent { kind: "text", text }]);
+    mcp::with_timing_meta(
+        serde_json::to_value(result).unwrap_or_else(|_| json!({})),
+        dispatch_ms,
+        server_total_ms,
+    )
 }
 
 fn summarize_task_output(detail: &str) -> String {

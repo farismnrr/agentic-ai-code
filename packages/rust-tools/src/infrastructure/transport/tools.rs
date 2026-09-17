@@ -169,8 +169,8 @@ pub(super) async fn handle_tools_call(
                         request_started,
                     );
                 };
-                let result = mcp::with_timing_meta(
-                    task.create_task_json(),
+                let result = task_calls::terminal_job_tool_result(
+                    &task,
                     0,
                     request_started.elapsed().as_millis() as u64,
                 );
