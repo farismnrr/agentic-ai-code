@@ -40,6 +40,40 @@ async fn large_workspace_reindexes_new_protected_path_before_sync_deadline() {
         JobState::Completed
     );
 
+    for index in 0..256 {
+        fs::write(
+            large_directory.join(format!("entry-{index:05}/artifact-{index:05}.rmeta")),
+            b"ordinary build output",
+        )
+        .expect("create ordinary build artifact");
+    }
+    let churn_started = std::time::Instant::now();
+    let churn_id = start_terminal_job(
+        &json!({
+            "command": "true",
+            "cwd": fixture.root,
+            "timeout_ms": 1000
+        }),
+        &fixture.config,
+        &fixture.manager,
+    )
+    .await
+    .expect("failed to start post-build-churn command");
+    assert_eq!(
+        fixture
+            .manager
+            .wait(&churn_id)
+            .await
+            .expect("post-build-churn wait")
+            .state,
+        JobState::Completed
+    );
+    assert!(
+        churn_started.elapsed() < Duration::from_secs(2),
+        "ordinary build churn invalidated the warm protected-path index: {:?}",
+        churn_started.elapsed()
+    );
+
     let protected_path = large_directory.join("entry-11999/.env.local");
     fs::write(&protected_path, "PRIVATE_SENTINEL")
         .expect("create nested protected path after index warmup");

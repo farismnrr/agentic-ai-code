@@ -1,10 +1,10 @@
 //! Cached, fail-closed protected-path discovery for mounted workspace trees.
 use std::collections::{BTreeSet, HashMap};
-use std::ffi::CString;
-use std::ffi::OsString;
+use std::ffi::{CString, OsStr, OsString};
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -121,8 +121,38 @@ impl DirectoryWatcher {
                 )
             };
             if count > 0 {
-                self.dirty = true;
-                return Ok(true);
+                let count = count as usize;
+                let header_len = std::mem::size_of::<libc::inotify_event>();
+                let mut offset = 0usize;
+                while offset < count {
+                    if count.saturating_sub(offset) < header_len {
+                        self.dirty = true;
+                        return Ok(true);
+                    }
+                    let event = unsafe {
+                        std::ptr::read_unaligned(
+                            buffer.as_ptr().add(offset).cast::<libc::inotify_event>(),
+                        )
+                    };
+                    let record_len = header_len.saturating_add(event.len as usize);
+                    if record_len < header_len || record_len > count.saturating_sub(offset) {
+                        self.dirty = true;
+                        return Ok(true);
+                    }
+                    let name = if event.len == 0 {
+                        &[][..]
+                    } else {
+                        let raw = &buffer[offset + header_len..offset + record_len];
+                        let end = raw.iter().position(|byte| *byte == 0).unwrap_or(raw.len());
+                        &raw[..end]
+                    };
+                    if event_requires_reindex(event.mask, name) {
+                        self.dirty = true;
+                        return Ok(true);
+                    }
+                    offset = offset.saturating_add(record_len);
+                }
+                continue;
             }
             if count == 0 {
                 self.dirty = true;
@@ -138,6 +168,28 @@ impl DirectoryWatcher {
             return Err(error);
         }
     }
+}
+
+fn event_requires_reindex(mask: u32, name: &[u8]) -> bool {
+    let fail_closed = libc::IN_DELETE_SELF
+        | libc::IN_MOVE_SELF
+        | libc::IN_UNMOUNT
+        | libc::IN_Q_OVERFLOW
+        | libc::IN_IGNORED;
+    if mask & fail_closed != 0 {
+        return true;
+    }
+
+    // Existing directories are watched individually. Ordinary file churn in
+    // build outputs cannot change the set of protected paths, so it must not
+    // invalidate a large cached workspace index. Directory topology changes
+    // remain fail-closed because a newly introduced subtree is not watched
+    // until the index is rebuilt.
+    if mask & libc::IN_ISDIR != 0 || name.is_empty() {
+        return true;
+    }
+
+    crate::core::protected_paths::may_be_protected_entry(OsStr::from_bytes(name))
 }
 
 pub(super) struct ProtectedPathIndex {
