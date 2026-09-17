@@ -54,6 +54,29 @@ The pre-030 plans were explicitly closed for a planning refresh. Historical unch
 
 Durable docs may summarize implementation facts when needed to orient future agents, but point to authoritative code/config rather than pretending Markdown is runtime source of truth.
 
+## Standard task execution report
+
+When presenting completion, handoffs, or milestone progress to the user, agents must format the report consistently in English:
+
+```markdown
+### Task Execution Report
+
+**Workspace:** `<mandatory-full-absolute-path>`
+
+**Issue(s):**
+- <clear description of problem or task; use bullet points if multiple>
+
+**Work Completed:**
+- <concise bullet point detailing what was implemented, fixed, or modified>
+- <exact local verification executed, e.g., pnpm guardrail:fast>
+
+**Next Steps:**
+- <actionable next task, dependency, or "None. Task is complete and locally verified.">
+
+**Restart Required:**
+- `No` OR `Yes — <target service/process>` (include exact operator command if Yes, e.g., `systemctl --user restart ai-tools-relay.service`)
+```
+
 ## General enforcement
 
 The repository intentionally avoids agent-client-specific hooks/settings. There is one shared entrypoint (`AGENTS.md`) and one shared durable guidance tree (`.agents/`).
