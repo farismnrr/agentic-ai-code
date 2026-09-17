@@ -1,5 +1,5 @@
 //! Complete bounded masking for every exposed user tree; never prune visible caches.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[cfg(target_os = "linux")]
@@ -8,14 +8,14 @@ mod protected_index;
 #[path = "masks/protected_index_portable.rs"]
 mod protected_index;
 
-pub(super) fn mask_executables(
+pub(super) fn mask_executables_from(
     args: &mut Vec<String>,
-    config: &crate::core::config::ServerConfig,
+    directories: impl IntoIterator<Item = PathBuf>,
     names: &[&str],
     control: Option<&super::SpawnControl<'_>>,
 ) -> Result<(), std::io::Error> {
     let mut masked = std::collections::BTreeSet::new();
-    for directory in super::safe_path_entries(config) {
+    for directory in directories {
         for name in names {
             if let Some(control) = control {
                 control.check()?;

@@ -461,9 +461,9 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         cwd: None,
         timeout_ms,
         allow_network: true,
-        expose_optional_sockets: true,
-        expose_authorized_siblings: true,
-        security: InvocationSecurity::Standard,
+        expose_optional_sockets: false,
+        expose_authorized_siblings: false,
+        security: InvocationSecurity::NetworkOnly,
     })
 }
 
@@ -483,8 +483,8 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
         cwd: None,
         timeout_ms: 30_000,
         allow_network: true,
-        expose_optional_sockets: true,
-        expose_authorized_siblings: true,
-        security: InvocationSecurity::Standard,
+        expose_optional_sockets: false,
+        expose_authorized_siblings: false,
+        security: InvocationSecurity::NetworkOnly,
     }
 }

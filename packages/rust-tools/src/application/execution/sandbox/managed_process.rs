@@ -1,6 +1,6 @@
 use super::{
     spawn_with_profile, InvocationProgram, InvocationSecurity, NetworkAccess, SandboxError,
-    SandboxProfile, SpawnControl, ToolInvocation, WorkspaceAccess,
+    SandboxProfile, SpawnControl, ToolInvocation, WorkspaceAccess, WorkspaceMount,
 };
 use crate::core::config::ServerConfig;
 use std::path::PathBuf;
@@ -16,15 +16,16 @@ pub(in crate::application::execution) fn spawn(
     cancel: &watch::Receiver<bool>,
 ) -> Result<Child, SandboxError> {
     // SSH is a distinct execution class: it gets host networking but never a
-    // writable workspace or local privileged sockets. Other invocation classes
-    // continue to derive network authority only from their owning request path.
+    // writable workspace or local privileged sockets. Dedicated network tools
+    // also get host networking, with no host-backed workspace at all.
     let ssh = matches!(invocation.security, InvocationSecurity::Ssh { .. });
+    let network_only = matches!(invocation.security, InvocationSecurity::NetworkOnly);
     let network_access = if ssh || invocation.allow_network {
         NetworkAccess::Host
     } else {
         NetworkAccess::Isolated
     };
-    let effective_workspace_access = if ssh {
+    let effective_workspace_access = if ssh || network_only {
         WorkspaceAccess::ReadOnly
     } else {
         workspace_access
@@ -36,9 +37,16 @@ pub(in crate::application::execution) fn spawn(
         SandboxProfile {
             workspace_access: effective_workspace_access,
             network_access,
-            expose_optional_sockets: !ssh && writable && invocation.expose_optional_sockets,
-            expose_runtime_extras: !ssh && writable,
-            workspace_root: None,
+            expose_optional_sockets: !ssh
+                && !network_only
+                && writable
+                && invocation.expose_optional_sockets,
+            expose_runtime_extras: !ssh && !network_only && writable,
+            workspace_mount: if network_only {
+                WorkspaceMount::Hidden
+            } else {
+                WorkspaceMount::Authorized
+            },
         },
         Some(&SpawnControl { deadline, cancel }),
     )
@@ -71,7 +79,7 @@ pub(crate) fn spawn_lsp(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
-            workspace_root: Some(&cwd),
+            workspace_mount: WorkspaceMount::Fixed(&cwd),
         },
         None,
     )
@@ -105,7 +113,7 @@ pub(crate) fn spawn_hook(
             network_access: NetworkAccess::Isolated,
             expose_optional_sockets: false,
             expose_runtime_extras: false,
-            workspace_root: Some(&cwd),
+            workspace_mount: WorkspaceMount::Fixed(&cwd),
         },
         None,
     )

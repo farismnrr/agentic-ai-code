@@ -24,6 +24,9 @@ enum InvocationProgram {
 #[derive(Clone)]
 pub(crate) enum InvocationSecurity {
     Standard,
+    /// Dedicated outbound HTTP/search requests have no need to expose any
+    /// owner workspace or host-backed project files.
+    NetworkOnly,
     Ssh {
         identity_file: PathBuf,
         known_hosts_file: PathBuf,

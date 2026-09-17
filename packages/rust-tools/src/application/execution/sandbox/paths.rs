@@ -1,6 +1,6 @@
 use std::path::Path;
 
-pub(super) fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<String> {
+pub(super) fn base_bwrap_args(home: &str, workspace: Option<(&str, &str)>) -> Vec<String> {
     let mut args = Vec::with_capacity(32);
     for p in ["/usr", "/lib"] {
         args.extend(["--ro-bind".into(), p.into(), p.into()]);
@@ -11,12 +11,11 @@ pub(super) fn base_bwrap_args(home: &str, root_bind: &str, root: &str) -> Vec<St
     for (flag, p) in [("--dev", "/dev"), ("--proc", "/proc"), ("--tmpfs", "/tmp")] {
         args.extend([flag.into(), p.into()]);
     }
+    args.extend(["--dir".into(), home.into()]);
+    if let Some((root_bind, root)) = workspace {
+        args.extend([root_bind.into(), root.into(), root.into()]);
+    }
     args.extend([
-        "--dir".into(),
-        home.into(),
-        root_bind.into(),
-        root.into(),
-        root.into(),
         "--unshare-pid".into(),
         // Keep the command in a fresh session so terminal-native job-control
         // signals cannot escape into the relay or its parent session.
