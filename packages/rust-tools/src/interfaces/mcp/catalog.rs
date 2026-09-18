@@ -61,7 +61,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "General CLI fallback inside the authorized execution scope. Prefer an active dedicated MCP tool whenever it fully covers the operation, including structured Git, filesystem, code, and network tools. Terminal execution is synchronous only and has an absolute 60 second deadline. Commands expected to exceed that limit must be run manually by the operator. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
+            description: "General CLI fallback inside the authorized execution scope. Inspect and use active dedicated MCP tools first whenever they fully cover the operation, including structured filesystem read/write/edit/search, Git, code, network, integration, diagnostics, and messaging tools; do not substitute terminal shell equivalents for those covered operations. Use terminal for builds, tests, package managers, interpreters, project scripts, composite shell workflows, local Git without an active structured equivalent, and otherwise uncovered CLI work. Terminal execution is synchronous only and has an absolute 60 second deadline. Commands expected to exceed that limit must be run manually by the operator. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
