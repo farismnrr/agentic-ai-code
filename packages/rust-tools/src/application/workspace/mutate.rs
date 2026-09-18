@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::io::Read;
 use std::path::Path;
 
-use super::{activity_evidence, ActivityEvidence};
+use super::{activity_evidence, evidence::content_sha256, ActivityEvidence};
 
 pub const MAX_FILE_EDIT_BYTES: usize = 1024 * 1024;
 const MAX_FILE_EDIT_TEXT_BYTES: usize = 256 * 1024;
@@ -29,6 +29,9 @@ pub struct FileEditResult {
     path: String,
     replacements: usize,
     changed: bool,
+    dry_run: bool,
+    before_sha256: String,
+    after_sha256: String,
     #[serde(rename = "_activity")]
     activity: ActivityEvidence,
 }
@@ -39,6 +42,11 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         .and_then(Value::as_str)
         .ok_or_else(|| McpError::InvalidRequest("file edit path is required".into()))?;
     let operations = parse_edit_operations(arguments)?;
+    let dry_run = arguments
+        .get("dry_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let expected_sha256 = parse_expected_sha256(arguments)?;
     if path.is_empty() || path.len() > MAX_FILE_EDIT_PATH_BYTES {
         return Err(McpError::InvalidRequest(
             "file edit path exceeds allowed bounds".into(),
@@ -83,6 +91,12 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
             "file edit target exceeds maximum".into(),
         ));
     }
+    let before_sha256 = content_sha256(&bytes);
+    if expected_sha256.is_some_and(|expected| expected != before_sha256) {
+        return Err(McpError::InvalidRequest(
+            "file edit expected_sha256 does not match current file".into(),
+        ));
+    }
     let before_bytes = bytes.clone();
     let source = String::from_utf8(bytes)
         .map_err(|_| McpError::InvalidRequest("file edit target is not valid UTF-8 text".into()))?;
@@ -93,10 +107,11 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         ));
     }
     let changed = updated != source;
-    if changed {
-        directory.atomic_replace_regular_file(name, identity, updated.as_bytes(), mode)?;
-    } else {
+    let after_sha256 = content_sha256(updated.as_bytes());
+    if dry_run || !changed {
         directory.verify_regular_entry(name, identity)?;
+    } else {
+        directory.atomic_replace_regular_file(name, identity, updated.as_bytes(), mode)?;
     }
     let evidence_path = target
         .strip_prefix(root)
@@ -106,12 +121,36 @@ pub fn file_edit(arguments: &Value, config: &ServerConfig) -> Result<FileEditRes
         path: path.to_owned(),
         replacements,
         changed,
-        activity: if changed {
+        dry_run,
+        before_sha256,
+        after_sha256,
+        activity: if dry_run {
+            ActivityEvidence::preview(&evidence_path, Some(&before_bytes), updated.as_bytes())
+        } else if changed {
             activity_evidence(&evidence_path, Some(&before_bytes), updated.as_bytes())
         } else {
             ActivityEvidence::no_change()
         },
     })
+}
+
+fn parse_expected_sha256(arguments: &Value) -> Result<Option<&str>, McpError> {
+    let Some(value) = arguments.get("expected_sha256") else {
+        return Ok(None);
+    };
+    let value = value
+        .as_str()
+        .ok_or_else(|| McpError::InvalidRequest("expected_sha256 must be a string".into()))?;
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(McpError::InvalidRequest(
+            "expected_sha256 must be 64 lowercase hex characters".into(),
+        ));
+    }
+    Ok(Some(value))
 }
 
 fn parse_edit_operations(arguments: &Value) -> Result<Vec<EditOperation>, McpError> {
@@ -358,6 +397,7 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
         .get("overwrite")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let expected_sha256 = parse_expected_sha256(arguments)?;
     let _ = config.ensure_workspaces_initialized();
     let guard = config
         .workspaces
@@ -398,6 +438,17 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
                 .map_err(|_| {
                     McpError::InvalidRequest("file write target is inaccessible".into())
                 })?;
+            if before.len() > MAX_FILE_WRITE_BYTES {
+                return Err(McpError::InvalidRequest(
+                    "file write target exceeds maximum".into(),
+                ));
+            }
+            let before_sha256 = content_sha256(&before);
+            if expected_sha256.is_some_and(|expected| expected != before_sha256) {
+                return Err(McpError::InvalidRequest(
+                    "file write expected_sha256 does not match current file".into(),
+                ));
+            }
             directory.atomic_replace_regular_file(&name, identity, content.as_bytes(), mode)?;
             Ok(FileWriteResult {
                 path: path.to_owned(),
@@ -408,6 +459,11 @@ pub fn file_write(arguments: &Value, config: &ServerConfig) -> Result<FileWriteR
             })
         }
         None => {
+            if expected_sha256.is_some() {
+                return Err(McpError::InvalidRequest(
+                    "file write expected_sha256 requires an existing overwrite target".into(),
+                ));
+            }
             directory.atomic_create_regular_file(&name, content.as_bytes(), 0o644)?;
             Ok(FileWriteResult {
                 path: path.to_owned(),

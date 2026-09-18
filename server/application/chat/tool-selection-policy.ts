@@ -3,7 +3,8 @@ export function buildToolSelectionPolicy(toolNames: Iterable<string>): string {
   const names = [...new Set(toolNames)].filter(name => /^[a-zA-Z0-9_.-]{1,128}$/.test(name)).sort()
   if (!names.length) return ''
   const groups: [string, RegExp][] = [
-    ['structured filesystem/search', /(?:^|[_.])(?:directory_list|file_(?:search|read|write|edit)|text_search|apply_patch)$/],
+    ['structured filesystem', /(?:^|[_.])(?:directory_list|file_(?:read(?:_multiple)?|write|edit)|apply_patch)$/],
+    ['structured search', /(?:^|[_.])(?:file_search|text_search)$/],
     ['structured Git', /(?:^|[_.])git_[a-z_]+$/],
     ['code intelligence', /(?:^|[_.])code_(?:symbols|definition|references|implementations|hover|diagnostics|rename_preview)$/],
     ['HTTP/web', /(?:^|[_.])(?:http_fetch|web_search)$/],

@@ -171,16 +171,16 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "directory_list",
             title: Some("Directory List"),
-            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories. depth=1 lists direct children; larger values include descendants.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "maxLength": 65536, "default": "." },
-                    "cwd": { "type": "string", "maxLength": 65536 },
-                    "depth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 },
-                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "path": { "type": "string", "maxLength": 65536, "default": ".", "description": "Contained directory path to list, relative to cwd or an authorized absolute workspace path." },
+                    "cwd": { "type": "string", "maxLength": 65536, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "depth": { "type": "integer", "minimum": 1, "maximum": 4, "default": 2, "description": "Traversal depth where 1 means direct children only." },
+                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Maximum entries returned on this page." },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "additionalProperties": false
             }),
@@ -196,15 +196,21 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_search",
             title: Some("File Search"),
-            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Optional exclude[] globs prune matching files/directories. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Relative filename/path glob using *, ?, and ** path segments." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used as the search root." },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Maximum matching file paths returned on this page." },
+                    "exclude": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Relative glob to prune matching files or directories from this search." },
+                        "description": "Optional exclusion globs applied before results are returned."
+                    },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "required": ["pattern"],
                 "additionalProperties": false
@@ -221,16 +227,17 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_write",
             title: Some("File Write"),
-            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. expected_sha256 may guard an overwrite against a stale complete-file version. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "content": { "type": "string", "maxLength": 1048576 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "create_parents": { "type": "boolean", "default": false },
-                    "overwrite": { "type": "boolean", "default": false }
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to create or overwrite." },
+                    "content": { "type": "string", "maxLength": 1048576, "description": "Complete UTF-8 file content to write." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "create_parents": { "type": "boolean", "default": false, "description": "Create missing contained parent directories before creating a new file." },
+                    "overwrite": { "type": "boolean", "default": false, "description": "Permit replacement of an existing regular file." },
+                    "expected_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Optional lowercase SHA-256 of the complete existing file; only valid for guarded overwrites." }
                 },
                 "required": ["path", "content"],
                 "additionalProperties": false
@@ -245,15 +252,15 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_read",
             title: Some("File Read"),
-            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
+            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Returns a complete-file SHA-256 when the file is within the 1 MiB mutation ceiling and next_offset_line when another page is available. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "offset_line": { "type": "integer", "minimum": 1, "default": 1 },
-                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to read." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1, "description": "1-based first line to return." },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200, "description": "Maximum number of lines to return, subject to the byte ceiling." }
                 },
                 "required": ["path"],
                 "additionalProperties": false
@@ -265,20 +272,57 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
-            name: "text_search",
-            title: Some("Text Search"),
-            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            name: "file_read_multiple",
+            title: Some("Read Multiple Files"),
+            description: "Read the same bounded 1-based line range from up to 16 contained UTF-8 text files in one call. Each item reports success or a bounded per-file error so one failed read does not discard successful reads. Successful items return the same metadata as file_read, including complete-file SHA-256 when the file is within the mutation ceiling and next_offset_line when truncated. The combined response is bounded.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "regex": { "type": "boolean", "default": false },
-                    "case_sensitive": { "type": "boolean", "default": true },
-                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "paths": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to read." },
+                        "description": "One to sixteen file paths. Individual failures are returned per item and do not abort successful reads."
+                    },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve relative paths." },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1, "description": "1-based first line to return from every requested file." },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200, "description": "Maximum lines per file, subject to the combined response ceiling." }
+                },
+                "required": ["paths"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "text_search",
+            title: Some("Text Search"),
+            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Optional exclude[] globs are applied as negative ripgrep globs. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Literal text to search for unless regex=true." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used as the search root." },
+                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Optional ripgrep include glob restricting searched paths." },
+                    "regex": { "type": "boolean", "default": false, "description": "Interpret query as a ripgrep regular expression instead of a fixed string." },
+                    "case_sensitive": { "type": "boolean", "default": true, "description": "Use case-sensitive matching when true." },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50, "description": "Maximum matches returned on this page." },
+                    "exclude": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Ripgrep glob to exclude; leading ! is not accepted." },
+                        "description": "Optional negative path globs."
+                    },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "required": ["query"],
                 "additionalProperties": false

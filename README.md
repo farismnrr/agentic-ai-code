@@ -41,7 +41,7 @@ Nuxt 4 / Vue provides authenticated chat, workspaces, provider/model settings, M
 
 The Rust workspace builds one `ai-tools` binary. Its relay exposes MCP `2026-07-28` over Streamable HTTP and provides:
 
-- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_edit`, `file_write`, `apply_patch`;
+- workspace: `directory_list`, `file_search`, `text_search`, `file_read`, `file_read_multiple`, `file_edit`, `file_write`, `apply_patch`;
 - execution: synchronous-only `terminal_exec` with an absolute 60 second deadline;
 - Full-only integrations: remote Git transport, `ssh_readonly_exec`, `http_fetch`, `web_search`, forge/issues/workflows, alerts, and Telegram.
 
@@ -54,7 +54,7 @@ OpenTelemetry/Loki, and opaque process/Git/delegated work is never presented as
 an exact source diff without relay-owned proof. See
 [configuration](docs/configuration.md#workspace-activity-ledger).
 
-The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem. The current runtime catalog has one composition path: Primary starts from a 12-tool retained core and Full from a 49-tool retained base, then explicitly enabled optional capabilities are composed by operator configuration. Dedicated MCP capabilities are preferred and terminal is the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered operations. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts, not alternate active runtime versions.
+The production relay is Linux-only, refuses to run as root, and uses Bubblewrap for filesystem/process containment. For the single-owner coding profile, the execution root can be the owner's home directory so the same MCP connection can move between sibling repositories without exposing the rest of the host filesystem. The current runtime catalog has one composition path: Primary starts from a 13-tool retained core and Full from a 50-tool retained base, then explicitly enabled optional capabilities are composed by operator configuration. Dedicated MCP capabilities are preferred and terminal is the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered operations. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts, not alternate active runtime versions.
 
 ## Repository layout
 

@@ -48,7 +48,7 @@ pub fn directory_list(
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(DEFAULT_DIRECTORY_DEPTH)
-        .min(MAX_DIRECTORY_DEPTH);
+        .clamp(1, MAX_DIRECTORY_DEPTH);
     let max_entries = arguments
         .get("max_entries")
         .and_then(Value::as_u64)

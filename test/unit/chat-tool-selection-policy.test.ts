@@ -7,7 +7,7 @@ import { intersectSubagentAuthority } from '../../server/application/subagents/p
 import { loadAgentProfile } from '../../server/application/subagents/profiles.ts'
 
 test('routing prefers exact active dedicated keys deterministically', () => {
-  const keys = ['relay_git_status', 'relay_git_diff', 'terminal_exec', 'file_read', 'text_search', 'code_definition', 'code_references', 'http_fetch', 'web_search', 'change_request_get', 'ssh_readonly_exec', 'telegram_send_message']
+  const keys = ['relay_git_status', 'relay_git_diff', 'terminal_exec', 'file_read', 'file_read_multiple', 'text_search', 'code_definition', 'code_references', 'http_fetch', 'web_search', 'change_request_get', 'ssh_readonly_exec', 'telegram_send_message']
   const policy = buildToolSelectionPolicy(keys)
   assert.equal(policy, buildToolSelectionPolicy([...keys].reverse()))
   for (const name of keys) assert.ok(policy.includes(name), name)

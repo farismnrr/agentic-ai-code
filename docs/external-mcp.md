@@ -73,7 +73,7 @@ The relay will fail closed if any of these do not match.
 
 ## 6. Verify tool discovery
 
-Tool discovery comes from one current runtime catalog composition path. Primary starts from the 12-tool retained terminal/workspace core; Full starts from the 49-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
+Tool discovery comes from one current runtime catalog composition path. Primary starts from the 13-tool retained terminal/workspace core; Full starts from the 50-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
 
 ```text
 terminal_exec
@@ -85,6 +85,7 @@ file_search
 file_write
 file_edit
 file_read
+file_read_multiple
 text_search
 git_remote_list
 git_remote_branch_get
@@ -190,6 +191,6 @@ It does not automatically prove every negative case, hosted-Nuxt token ownership
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a external MCP client routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
 
-Primary has a 12-tool retained core for synchronous terminal plus structured workspace work. Full has a 49-tool retained base, including remote Git transport, HTTP/web, Full-only SSH diagnostics, forge/issues/workflows, alerts, and Telegram. The runtime catalog composes explicitly enabled optional capabilities on top of that base; Plan 069 keeps `creative_status` discoverable and adds the remaining creative tools only to Full when `RELAY_ENABLE_CREATIVE=true`. Local Git and LSP wrappers are not in the public catalog; terminal remains the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered CLI operations. `ssh_readonly_exec` is a normal discoverable Full tool and does not require client-side SSH parsing; clients provide only structured alias/command/args while the relay owns SSH config/key resolution and read-only enforcement. Historical numbered snapshots are immutable audit records and are not alternate active runtime versions.
+Primary has a 13-tool retained core for synchronous terminal plus structured workspace work. Full has a 50-tool retained base, including remote Git transport, HTTP/web, Full-only SSH diagnostics, forge/issues/workflows, alerts, and Telegram. The runtime catalog composes explicitly enabled optional capabilities on top of that base; Plan 069 keeps `creative_status` discoverable and adds the remaining creative tools only to Full when `RELAY_ENABLE_CREATIVE=true`. Local Git and LSP wrappers are not in the public catalog; terminal remains the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered CLI operations. `ssh_readonly_exec` is a normal discoverable Full tool and does not require client-side SSH parsing; clients provide only structured alias/command/args while the relay owns SSH config/key resolution and read-only enforcement. Historical numbered snapshots are immutable audit records and are not alternate active runtime versions.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where external MCP client Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.

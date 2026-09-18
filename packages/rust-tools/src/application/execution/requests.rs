@@ -28,6 +28,7 @@ const MAX_TEXT_SEARCH_QUERY_BYTES: usize = 4096;
 const MAX_TEXT_SEARCH_GLOB_BYTES: usize = 4096;
 const MAX_TEXT_SEARCH_CWD_BYTES: usize = 4096;
 const MAX_TEXT_SEARCH_STDERR_BYTES: usize = 8192;
+const MAX_TEXT_SEARCH_EXCLUDES: usize = 16;
 const TEXT_SEARCH_MAX_COLUMNS: usize = 1024;
 
 fn resolve_safe_executable(config: &ServerConfig, binary: &str) -> Result<PathBuf, McpError> {
@@ -218,6 +219,39 @@ fn build_text_search_invocation(
             "text search glob exceeds allowed bounds".into(),
         ));
     }
+    let excludes = arguments
+        .get("exclude")
+        .map(|value| {
+            let values = value.as_array().ok_or_else(|| {
+                McpError::InvalidRequest("text search exclude must be an array".into())
+            })?;
+            if values.len() > MAX_TEXT_SEARCH_EXCLUDES {
+                return Err(McpError::InvalidRequest(
+                    "text search exclude count exceeds maximum".into(),
+                ));
+            }
+            values
+                .iter()
+                .map(|value| {
+                    let pattern = value.as_str().ok_or_else(|| {
+                        McpError::InvalidRequest(
+                            "text search exclude entries must be strings".into(),
+                        )
+                    })?;
+                    if pattern.is_empty()
+                        || pattern.len() > MAX_TEXT_SEARCH_GLOB_BYTES
+                        || pattern.starts_with('!')
+                    {
+                        return Err(McpError::InvalidRequest(
+                            "text search exclude exceeds allowed bounds".into(),
+                        ));
+                    }
+                    Ok(pattern.to_owned())
+                })
+                .collect::<Result<Vec<_>, McpError>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
     let regex = arguments
         .get("regex")
         .and_then(Value::as_bool)
@@ -285,6 +319,9 @@ fn build_text_search_invocation(
     }
     if let Some(glob) = glob {
         args.extend(["--glob".into(), glob.to_owned()]);
+    }
+    for exclude in excludes {
+        args.extend(["--glob".into(), format!("!{exclude}")]);
     }
     args.extend(["--".into(), query.to_owned(), ".".into()]);
     Ok((

@@ -1,6 +1,17 @@
+use ring::digest::{digest, SHA256};
 use serde::Serialize;
 
 const MAX_EVIDENCE_FILE_BYTES: usize = 512 * 1024;
+
+pub(crate) fn content_sha256(bytes: &[u8]) -> String {
+    let value = digest(&SHA256, bytes);
+    let mut out = String::with_capacity(64);
+    for byte in value.as_ref() {
+        use std::fmt::Write as _;
+        let _ = write!(&mut out, "{byte:02x}");
+    }
+    out
+}
 
 #[derive(Debug, Serialize)]
 pub(crate) struct ActivityEvidence {
@@ -53,6 +64,13 @@ pub(crate) fn activity_evidence(
 }
 
 impl ActivityEvidence {
+    pub(crate) fn preview(path: &str, before: Option<&[u8]>, after: &[u8]) -> Self {
+        let mut evidence = activity_evidence(path, before, after);
+        evidence.preview = true;
+        evidence.complete = false;
+        evidence
+    }
+
     pub(crate) fn no_change() -> Self {
         Self {
             evidence: "not_applicable",

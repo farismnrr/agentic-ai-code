@@ -71,6 +71,17 @@ pub(super) fn action_for_tool(
                 None => format!("Read {target}"),
             }
         }
+        "file_read_multiple" => {
+            let count = arguments
+                .get("paths")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0);
+            format!(
+                "Read {count} workspace file{}",
+                if count == 1 { "" } else { "s" }
+            )
+        }
         "file_write" => {
             let target = target_for_tool(tool_id, arguments, root)
                 .unwrap_or_else(|| "workspace file".into());
