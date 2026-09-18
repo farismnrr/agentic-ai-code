@@ -5,7 +5,7 @@ pub(super) fn tool() -> Tool {
     Tool {
         name: "ssh_readonly_exec",
         title: Some("Read-Only SSH Diagnostics"),
-        description: "Run one server-validated read-only diagnostic command on an operator-configured SSH alias. Alias/config/key resolution is relay-owned; raw SSH options, interactive access, forwarding, and remote mutation are unavailable.",
+        description: "Run one server-validated read-only diagnostic command on an operator-configured SSH alias, optionally through a bounded relay-owned SSH jump chain. Alias/config/key resolution is relay-owned; raw SSH options, interactive access, user-selected forwarding, and remote mutation are unavailable.",
         input_schema: json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
@@ -14,7 +14,19 @@ pub(super) fn tool() -> Tool {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255,
-                    "description": "Operator-configured SSH alias resolved by the relay."
+                    "description": "Final operator-configured SSH alias where the diagnostic command executes."
+                },
+                "via": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "pattern": "^[A-Za-z0-9._-]+$"
+                    },
+                    "maxItems": 8,
+                    "default": [],
+                    "description": "Optional ordered SSH alias chain traversed before the final alias. No diagnostic command executes on intermediate hops."
                 },
                 "command": {
                     "type": "string",

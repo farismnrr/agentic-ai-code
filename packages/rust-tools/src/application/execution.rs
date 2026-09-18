@@ -28,8 +28,7 @@ pub(crate) enum InvocationSecurity {
     /// owner workspace or host-backed project files.
     NetworkOnly,
     Ssh {
-        identity_file: PathBuf,
-        known_hosts_file: PathBuf,
+        material_files: Vec<PathBuf>,
     },
 }
 
@@ -37,6 +36,7 @@ pub(crate) enum InvocationSecurity {
 pub(crate) struct ToolInvocation {
     program: InvocationProgram,
     args: Vec<String>,
+    stdin_file: Option<PathBuf>,
     cwd: Option<PathBuf>,
     timeout_ms: u64,
     allow_network: bool,

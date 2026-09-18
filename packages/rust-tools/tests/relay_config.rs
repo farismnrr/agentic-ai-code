@@ -209,15 +209,17 @@ fn ssh_fixture() -> (ServerConfig, std::path::PathBuf) {
     let config_path = root.join("config");
     let key = root.join("id_ed25519");
     let known = root.join("known_hosts");
+    let redis_password = root.join("redis_readonly.pass");
     std::fs::write(&key, "dummy").unwrap();
     std::fs::write(&known, "dummy").unwrap();
+    std::fs::write(&redis_password, "fixture-secret").unwrap();
     std::fs::write(
         &config_path,
         "Host fixture\n HostName example.invalid\n User diagnostic\n IdentityFile id_ed25519\n UserKnownHostsFile known_hosts\n",
     )
     .unwrap();
     #[cfg(unix)]
-    for path in [&config_path, &key, &known] {
+    for path in [&config_path, &key, &known, &redis_password] {
         chmod(path, 0o600);
     }
     let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -229,6 +231,7 @@ fn ssh_fixture() -> (ServerConfig, std::path::PathBuf) {
         ssh_config: Some(config_path.to_string_lossy().into_owned()),
         ssh_readonly_db_user: Some("relay_reader".into()),
         ssh_readonly_redis_user: Some("relay_reader".into()),
+        ssh_readonly_redis_password_file: Some(redis_password.to_string_lossy().into_owned()),
         ..ServerConfig::default()
     };
     (config, root)

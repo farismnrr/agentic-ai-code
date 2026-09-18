@@ -138,8 +138,14 @@ pub struct Cli {
 
     /// Dedicated least-privilege Redis ACL diagnostic principal.
     /// This is an identity name only, never a password or secret.
-    #[arg(long, env = "RELAY_SSH_REDIS_READONLY_USER")]
+    #[arg(long, env = "RELAY_SSH_READONLY_REDIS_USER")]
     pub ssh_readonly_redis_user: Option<String>,
+
+    /// Operator-owned file containing only the Redis ACL password used by
+    /// read-only SSH diagnostics. The file must remain beneath RELAY_SSH_ROOT
+    /// and be owner-readable only; its contents are never exposed to clients.
+    #[arg(long, env = "RELAY_SSH_READONLY_REDIS_PASSWORD_FILE")]
+    pub ssh_readonly_redis_password_file: Option<String>,
 
     /// Explicit full-authority local-development access to a host Docker daemon socket.
     /// Without this flag, direct Docker calls are limited to the semantic read-only diagnostic policy.

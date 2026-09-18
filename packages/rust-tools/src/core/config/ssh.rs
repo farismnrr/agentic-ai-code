@@ -65,6 +65,63 @@ impl ServerConfig {
         validate_ssh_owner_permissions(&canonical, false)?;
         Ok(canonical)
     }
+
+    pub fn resolved_ssh_redis_password_file(
+        &self,
+    ) -> Result<Option<std::path::PathBuf>, RelayError> {
+        let Some(configured) = self.ssh_readonly_redis_password_file.as_deref() else {
+            return Ok(None);
+        };
+        let root = self.resolved_ssh_root()?;
+        let configured = std::path::PathBuf::from(configured);
+        if !configured.is_absolute() {
+            return Err(RelayError::InvalidConfig(
+                "SSH Redis password file must be an absolute path".into(),
+            ));
+        }
+        let canonical = std::fs::canonicalize(&configured).map_err(|_| {
+            RelayError::InvalidConfig("SSH Redis password file is unavailable".into())
+        })?;
+        if !canonical.starts_with(&root) || !canonical.is_file() {
+            return Err(RelayError::InvalidConfig(
+                "SSH Redis password file must be a regular file beneath the SSH credential root"
+                    .into(),
+            ));
+        }
+        validate_ssh_secret_file(&canonical)?;
+        Ok(Some(canonical))
+    }
+}
+
+fn validate_ssh_secret_file(path: &std::path::Path) -> Result<(), RelayError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|_| RelayError::InvalidConfig("SSH secret metadata is unavailable".into()))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(RelayError::InvalidConfig(
+            "SSH secret path must be a regular non-symlink file".into(),
+        ));
+    }
+    if metadata.len() == 0 || metadata.len() > 4096 {
+        return Err(RelayError::InvalidConfig(
+            "SSH secret file must contain between 1 and 4096 bytes".into(),
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let effective_uid = unsafe { libc::geteuid() };
+        if metadata.uid() != effective_uid {
+            return Err(RelayError::InvalidConfig(
+                "SSH secret file must be owned by the relay operator".into(),
+            ));
+        }
+        if metadata.mode() & 0o077 != 0 {
+            return Err(RelayError::InvalidConfig(
+                "SSH secret file must not be accessible by group or world".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn valid_diagnostic_principal(value: &str) -> bool {

@@ -78,7 +78,8 @@ fn dedicated_ssh_schema_accepts_structured_diagnostics_and_rejects_raw_options()
     validate_tool_arguments(
         &tool,
         &json!({
-            "alias": "smart-meeting",
+            "alias": "big",
+            "via": ["arch", "smart-meeting"],
             "command": "docker",
             "args": ["ps"],
             "timeout_ms": 30_000

@@ -17,6 +17,7 @@ const MAX_NODE_ARGS: usize = 64;
 pub struct ValidatedRemoteCommand {
     pub rendered: String,
     pub summary: String,
+    pub requires_redis_password: bool,
 }
 
 pub fn validate_remote_command(
@@ -38,6 +39,7 @@ pub fn validate_remote_command(
 
     let mut rendered = String::new();
     let mut summary = String::new();
+    let mut requires_redis_password = false;
     for (index, (operator, node)) in nodes.iter().enumerate() {
         let tokens = shell_words::split(node)
             .map_err(|_| policy_error("remote diagnostic command could not be parsed"))?;
@@ -45,6 +47,14 @@ pub fn validate_remote_command(
             return Err(policy_error("remote diagnostic command node is invalid"));
         }
         let normalized = validate_command_node(&tokens, readonly_db_user, readonly_redis_user)?;
+        if normalized.iter().any(|token| token == "redis-cli") {
+            if nodes.len() != 1 {
+                return Err(policy_error(
+                    "Redis diagnostics cannot be composed with pipelines or conditional commands",
+                ));
+            }
+            requires_redis_password = true;
+        }
         if index > 0 {
             let op = operator
                 .as_deref()
@@ -60,7 +70,11 @@ pub fn validate_remote_command(
         summary.push_str(&summarize_tokens(&normalized));
     }
 
-    Ok(ValidatedRemoteCommand { rendered, summary })
+    Ok(ValidatedRemoteCommand {
+        rendered,
+        summary,
+        requires_redis_password,
+    })
 }
 
 pub(crate) fn validate_docker_command(
@@ -78,10 +92,18 @@ pub(super) fn validate_command_node(
 ) -> Result<Vec<String>, McpError> {
     match tokens[0].as_str() {
         "docker" => validate_docker_command(tokens, readonly_db_user, readonly_redis_user),
+        "psql" => db::psql(tokens, readonly_db_user),
+        "mysql" | "mariadb" => db::mysql(tokens, readonly_db_user),
+        "sqlite3" => db::sqlite(tokens),
+        "redis-cli" => db::redis(tokens, readonly_redis_user),
         "uname" | "uptime" | "hostname" | "whoami" => common::simple(tokens, 8),
-        "id" | "df" | "free" | "ps" | "ss" | "ip" => host::bounded_observation(tokens),
+        "id" | "df" | "free" | "ps" | "ss" | "ip" | "journalctl" | "systemctl" => {
+            host::bounded_observation(tokens)
+        }
         "command" => read::command_discovery(tokens),
-        "cat" | "head" | "tail" | "grep" | "wc" | "stat" => read::read_transform(tokens),
+        "cat" | "head" | "tail" | "grep" | "wc" | "stat" | "ls" | "du" | "readlink" => {
+            read::read_transform(tokens)
+        }
         "git" => git::validate(tokens),
         "curl" => network::curl(tokens),
         "sudo" | "su" | "doas" | "pkexec" | "sh" | "bash" | "dash" | "zsh" | "fish" | "python"

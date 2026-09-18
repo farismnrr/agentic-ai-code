@@ -21,7 +21,7 @@ pub(super) fn validate(
         "top" => top(tokens),
         "inspect" => inspect(tokens),
         "exec" => exec(tokens, readonly_db_user, readonly_redis_user),
-        "compose" => compose(tokens),
+        "compose" => compose(tokens, readonly_db_user, readonly_redis_user),
         "run" | "start" | "stop" | "restart" | "kill" | "rm" | "rmi" | "build" | "pull"
         | "push" | "commit" | "update" | "cp" | "create" | "rename" | "attach" | "import"
         | "load" | "save" | "tag" | "login" | "logout" | "system" => Err(policy_error(
@@ -38,15 +38,54 @@ fn listing(tokens: &[String]) -> Result<Vec<String>, McpError> {
     let option_start = if container_listing { 3 } else { 2 };
     let image_listing = tokens.get(1).map(String::as_str) == Some("images");
     let mut filters = Vec::new();
+    let mut format: Option<String> = None;
     let mut all = false;
     let mut quiet = false;
-    for token in &tokens[option_start..] {
-        match token.as_str() {
+    let mut index = option_start;
+    while index < tokens.len() {
+        match tokens[index].as_str() {
             "-a" | "--all" => all = true,
             "-q" | "--quiet" => quiet = true,
-            value if value.starts_with("--filter=") => filters.push(value.to_owned()),
+            "--filter" => {
+                index += 1;
+                let value = tokens
+                    .get(index)
+                    .ok_or_else(|| policy_error("Docker listing filter value is missing"))?;
+                super::common::reject_shellish(value)?;
+                filters.push(format!("--filter={value}"));
+            }
+            "--format" => {
+                index += 1;
+                let value = tokens
+                    .get(index)
+                    .ok_or_else(|| policy_error("Docker listing format value is missing"))?;
+                if value.is_empty()
+                    || value.len() > 4096
+                    || value.chars().any(|ch| ch.is_control() && ch != '\t')
+                {
+                    return Err(policy_error("Docker listing format is invalid"));
+                }
+                super::common::reject_shellish(value)?;
+                format = Some(value.clone());
+            }
+            value if value.starts_with("--filter=") => {
+                super::common::reject_shellish(value)?;
+                filters.push(value.to_owned());
+            }
+            value if value.starts_with("--format=") => {
+                let value = value.trim_start_matches("--format=");
+                if value.is_empty()
+                    || value.len() > 4096
+                    || value.chars().any(|ch| ch.is_control() && ch != '\t')
+                {
+                    return Err(policy_error("Docker listing format is invalid"));
+                }
+                super::common::reject_shellish(value)?;
+                format = Some(value.to_owned());
+            }
             _ => return Err(policy_error("Docker listing option is not allowed")),
         }
+        index += 1;
     }
     let mut result = if image_listing {
         vec!["docker".into(), "images".into()]
@@ -59,6 +98,8 @@ fn listing(tokens: &[String]) -> Result<Vec<String>, McpError> {
     result.extend(filters);
     if quiet {
         result.push("--quiet".into());
+    } else if let Some(format) = format {
+        result.extend(["--format".into(), format]);
     } else if image_listing {
         result.extend([
             "--format".into(),
@@ -188,12 +229,20 @@ fn exec(
         "redis-cli" => db::redis(nested, readonly_redis_user)?,
         _ => super::validate_command_node(nested, readonly_db_user, readonly_redis_user)?,
     };
-    let mut result = vec!["docker".into(), "exec".into(), tokens[2].clone()];
+    let mut result = vec!["docker".into(), "exec".into()];
+    if normalized.iter().any(|token| token == "redis-cli") {
+        result.push("-i".into());
+    }
+    result.push(tokens[2].clone());
     result.extend(normalized);
     Ok(result)
 }
 
-fn compose(tokens: &[String]) -> Result<Vec<String>, McpError> {
+fn compose(
+    tokens: &[String],
+    readonly_db_user: Option<&str>,
+    readonly_redis_user: Option<&str>,
+) -> Result<Vec<String>, McpError> {
     if tokens.len() < 3 {
         return Err(policy_error(
             "Docker Compose diagnostic subcommand is required",
@@ -203,9 +252,7 @@ fn compose(tokens: &[String]) -> Result<Vec<String>, McpError> {
         "ps" => compose_ps(tokens),
         "logs" => compose_logs(tokens),
         "config" => compose_config(tokens),
-        "exec" => Err(policy_error(
-            "docker compose exec is unsupported in diagnostic mode",
-        )),
+        "exec" => compose_exec(tokens, readonly_db_user, readonly_redis_user),
         "up" | "down" | "restart" | "start" | "stop" | "kill" | "rm" | "run" | "build" | "pull"
         | "push" | "create" => Err(policy_error(
             "Docker Compose mutation is forbidden in diagnostic mode",
@@ -214,6 +261,55 @@ fn compose(tokens: &[String]) -> Result<Vec<String>, McpError> {
             "Docker Compose subcommand is not in the diagnostic allowlist",
         )),
     }
+}
+
+fn compose_exec(
+    tokens: &[String],
+    readonly_db_user: Option<&str>,
+    readonly_redis_user: Option<&str>,
+) -> Result<Vec<String>, McpError> {
+    if tokens.len() < 5 {
+        return Err(policy_error(
+            "Docker Compose exec requires a service and nested command",
+        ));
+    }
+    let mut index = 3usize;
+    let mut result = vec![
+        "docker".into(),
+        "compose".into(),
+        "exec".into(),
+        "-T".into(),
+    ];
+    while index < tokens.len() && tokens[index].starts_with('-') {
+        match tokens[index].as_str() {
+            "-T" | "--no-TTY" => {}
+            _ => {
+                return Err(policy_error(
+                    "Docker Compose exec option is not allowed in diagnostic mode",
+                ))
+            }
+        }
+        index += 1;
+    }
+    let service = tokens
+        .get(index)
+        .ok_or_else(|| policy_error("Docker Compose exec service is missing"))?;
+    validate_identifier(service, "service")?;
+    result.push(service.clone());
+    index += 1;
+    let nested = tokens
+        .get(index..)
+        .filter(|nested| !nested.is_empty())
+        .ok_or_else(|| policy_error("Docker Compose exec nested command is missing"))?;
+    let normalized = match nested[0].as_str() {
+        "psql" => db::psql(nested, readonly_db_user)?,
+        "mysql" | "mariadb" => db::mysql(nested, readonly_db_user)?,
+        "sqlite3" => db::sqlite(nested)?,
+        "redis-cli" => db::redis(nested, readonly_redis_user)?,
+        _ => super::validate_command_node(nested, readonly_db_user, readonly_redis_user)?,
+    };
+    result.extend(normalized);
+    Ok(result)
 }
 
 fn compose_ps(tokens: &[String]) -> Result<Vec<String>, McpError> {

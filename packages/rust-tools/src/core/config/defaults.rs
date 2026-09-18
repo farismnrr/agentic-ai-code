@@ -27,6 +27,7 @@ impl Default for ServerConfig {
             ssh_config: None,
             ssh_readonly_db_user: None,
             ssh_readonly_redis_user: None,
+            ssh_readonly_redis_password_file: None,
             allow_docker: false,
             docker_socket: "/var/run/docker.sock".into(),
             allow_tailscale: false,

@@ -233,18 +233,8 @@ pub(super) fn spawn_with_profile(
             .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
         }
     }
-    if let InvocationSecurity::Ssh {
-        identity_file,
-        known_hosts_file,
-    } = &invocation.security
-    {
-        ssh_material::add_material(
-            &mut args,
-            config,
-            &host_home,
-            identity_file,
-            known_hosts_file,
-        )?;
+    if let InvocationSecurity::Ssh { material_files } = &invocation.security {
+        ssh_material::add_material(&mut args, config, &host_home, material_files)?;
     }
     if !workspace_hidden && invocation.expose_authorized_siblings {
         let sandbox_root =
@@ -368,7 +358,9 @@ pub(super) fn spawn_with_profile(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    if matches!(invocation.security, InvocationSecurity::Ssh { .. }) {
+    if matches!(invocation.security, InvocationSecurity::Ssh { .. })
+        && invocation.stdin_file.is_none()
+    {
         command.stdin(Stdio::null());
     } else {
         command.stdin(Stdio::piped());

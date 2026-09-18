@@ -46,6 +46,7 @@ pub struct ServerConfig {
     pub ssh_config: Option<String>,
     pub ssh_readonly_db_user: Option<String>,
     pub ssh_readonly_redis_user: Option<String>,
+    pub ssh_readonly_redis_password_file: Option<String>,
     pub allow_docker: bool,
     pub docker_socket: String,
     pub allow_tailscale: bool,
@@ -387,10 +388,20 @@ impl ServerConfig {
                     }
                 }
             }
+            if self.ssh_readonly_redis_user.is_some()
+                != self.ssh_readonly_redis_password_file.is_some()
+            {
+                return Err(RelayError::InvalidConfig(
+                    "ssh-readonly-redis-user and ssh-readonly-redis-password-file must be configured together"
+                        .into(),
+                ));
+            }
+            let _ = self.resolved_ssh_redis_password_file()?;
         } else if self.ssh_root.is_some()
             || self.ssh_config.is_some()
             || self.ssh_readonly_db_user.is_some()
             || self.ssh_readonly_redis_user.is_some()
+            || self.ssh_readonly_redis_password_file.is_some()
         {
             return Err(RelayError::InvalidConfig(
                 "SSH-specific configuration requires --allow-ssh".into(),

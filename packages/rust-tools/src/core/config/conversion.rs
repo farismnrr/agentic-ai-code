@@ -27,6 +27,7 @@ impl From<&Cli> for ServerConfig {
             ssh_config: cli.ssh_config.clone(),
             ssh_readonly_db_user: cli.ssh_readonly_db_user.clone(),
             ssh_readonly_redis_user: cli.ssh_readonly_redis_user.clone(),
+            ssh_readonly_redis_password_file: cli.ssh_readonly_redis_password_file.clone(),
             allow_docker: cli.allow_docker,
             docker_socket: cli.docker_socket.clone(),
             allow_tailscale: cli.allow_tailscale,

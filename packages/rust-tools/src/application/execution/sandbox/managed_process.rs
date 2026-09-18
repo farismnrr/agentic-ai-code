@@ -15,9 +15,9 @@ pub(in crate::application::execution) fn spawn(
     deadline: Option<Instant>,
     cancel: &watch::Receiver<bool>,
 ) -> Result<Child, SandboxError> {
-    // SSH is a distinct execution class: it gets host networking but never a
-    // writable workspace or local privileged sockets. Dedicated network tools
-    // also get host networking, with no host-backed workspace at all.
+    // SSH is a distinct execution class: it gets host networking and exact
+    // reviewed credential files, but no host-backed workspace or local privileged
+    // sockets. Dedicated network tools use the same hidden-workspace boundary.
     let ssh = matches!(invocation.security, InvocationSecurity::Ssh { .. });
     let network_only = matches!(invocation.security, InvocationSecurity::NetworkOnly);
     let network_access = if ssh || invocation.allow_network {
@@ -42,7 +42,7 @@ pub(in crate::application::execution) fn spawn(
                 && writable
                 && invocation.expose_optional_sockets,
             expose_runtime_extras: !ssh && !network_only && writable,
-            workspace_mount: if network_only {
+            workspace_mount: if ssh || network_only {
                 WorkspaceMount::Hidden
             } else {
                 WorkspaceMount::Authorized
@@ -67,6 +67,7 @@ pub(crate) fn spawn_lsp(
         &ToolInvocation {
             program: InvocationProgram::Direct(executable),
             args,
+            stdin_file: None,
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,
@@ -102,6 +103,7 @@ pub(crate) fn spawn_hook(
         &ToolInvocation {
             program: InvocationProgram::Direct(executable),
             args,
+            stdin_file: None,
             cwd: Some(cwd.clone()),
             timeout_ms: 0,
             allow_network: false,

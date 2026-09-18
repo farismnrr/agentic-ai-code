@@ -18,6 +18,9 @@ pub(super) fn read_transform(tokens: &[String]) -> Result<Vec<String>, McpError>
         "grep" => grep(tokens),
         "wc" => wc(tokens),
         "stat" => stat(tokens),
+        "ls" => ls(tokens),
+        "du" => du(tokens),
+        "readlink" => readlink(tokens),
         _ => Err(policy_error("read transform is not supported")),
     }
 }
@@ -223,6 +226,105 @@ fn stat(tokens: &[String]) -> Result<Vec<String>, McpError> {
     }
     Ok(tokens.to_vec())
 }
+fn ls(tokens: &[String]) -> Result<Vec<String>, McpError> {
+    if tokens.len() > 20 {
+        return Err(policy_error("ls arguments exceed allowed bounds"));
+    }
+    for token in &tokens[1..] {
+        if token.starts_with("--") {
+            if !matches!(
+                token.as_str(),
+                "--all" | "--almost-all" | "--human-readable" | "--directory" | "--color=never"
+            ) {
+                return Err(policy_error("ls option is not allowed"));
+            }
+        } else if token.starts_with('-') {
+            let short = token.trim_start_matches('-');
+            if short.is_empty()
+                || !short
+                    .chars()
+                    .all(|ch| matches!(ch, 'l' | 'a' | 'A' | 'h' | 'd' | '1' | 't' | 'r' | 'S'))
+            {
+                return Err(policy_error("ls option is not allowed"));
+            }
+        } else {
+            validate_read_path(token)?;
+        }
+    }
+    Ok(tokens.to_vec())
+}
+
+fn du(tokens: &[String]) -> Result<Vec<String>, McpError> {
+    if tokens.len() > 16 {
+        return Err(policy_error("du arguments exceed allowed bounds"));
+    }
+    let mut has_path = false;
+    for token in &tokens[1..] {
+        if token.starts_with("--max-depth=") {
+            let depth = token
+                .trim_start_matches("--max-depth=")
+                .parse::<u64>()
+                .ok()
+                .filter(|depth| *depth <= 4)
+                .ok_or_else(|| policy_error("du max-depth exceeds allowed bounds"))?;
+            let _ = depth;
+        } else if token.starts_with("--") {
+            if !matches!(
+                token.as_str(),
+                "--human-readable" | "--summarize" | "--all" | "--total" | "--one-file-system"
+            ) {
+                return Err(policy_error("du option is not allowed"));
+            }
+        } else if token.starts_with('-') {
+            let short = token.trim_start_matches('-');
+            if short.is_empty()
+                || !short
+                    .chars()
+                    .all(|ch| matches!(ch, 'h' | 's' | 'a' | 'c' | 'x'))
+            {
+                return Err(policy_error("du option is not allowed"));
+            }
+        } else {
+            has_path = true;
+            validate_read_path(token)?;
+        }
+    }
+    if !has_path {
+        return Err(policy_error("du requires an explicit path"));
+    }
+    Ok(tokens.to_vec())
+}
+
+fn readlink(tokens: &[String]) -> Result<Vec<String>, McpError> {
+    if tokens.len() < 2 || tokens.len() > 8 {
+        return Err(policy_error("readlink arguments are invalid"));
+    }
+    let mut has_path = false;
+    for token in &tokens[1..] {
+        if token.starts_with('-') {
+            if !matches!(
+                token.as_str(),
+                "-f" | "--canonicalize"
+                    | "-e"
+                    | "--canonicalize-existing"
+                    | "-m"
+                    | "--canonicalize-missing"
+                    | "-n"
+                    | "--no-newline"
+            ) {
+                return Err(policy_error("readlink option is not allowed"));
+            }
+        } else {
+            has_path = true;
+            validate_read_path(token)?;
+        }
+    }
+    if !has_path {
+        return Err(policy_error("readlink requires a path"));
+    }
+    Ok(tokens.to_vec())
+}
+
 fn validate_count(value: &str, bytes_mode: bool) -> Result<(), McpError> {
     validate_numeric_bound(
         value,

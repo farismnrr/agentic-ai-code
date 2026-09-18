@@ -7,6 +7,7 @@ use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
 use std::io;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Child;
 use tokio::sync::{watch, Mutex};
 use tokio::time::{timeout, timeout_at, Duration, Instant as TokioInstant};
@@ -86,8 +87,38 @@ pub(super) async fn run_process(
         duration_ms = spawn_started.elapsed().as_millis() as u64,
     );
 
-    // Close stdin immediately so non-interactive commands observe EOF.
-    drop(child.stdin.take());
+    if let Some(path) = invocation.stdin_file.as_deref() {
+        let mut secret = std::fs::read(path)
+            .map_err(|error| ProcessFailure::from_io("stdin_secret_read", error))?;
+        while matches!(secret.last(), Some(b'\n' | b'\r')) {
+            secret.pop();
+        }
+        if secret.is_empty() || secret.len() > 4096 || secret.contains(&0) {
+            secret.fill(0);
+            return Err(ProcessFailure::new(
+                "stdin_secret_read",
+                io::ErrorKind::InvalidData,
+            ));
+        }
+        secret.push(b'\n');
+        let Some(mut stdin) = child.stdin.take() else {
+            secret.fill(0);
+            return Err(ProcessFailure::new(
+                "stdin_pipe_setup",
+                io::ErrorKind::BrokenPipe,
+            ));
+        };
+        let write_result = stdin.write_all(&secret).await;
+        secret.fill(0);
+        write_result.map_err(|error| ProcessFailure::from_io("stdin_secret_write", error))?;
+        stdin
+            .shutdown()
+            .await
+            .map_err(|error| ProcessFailure::from_io("stdin_secret_write", error))?;
+    } else {
+        // Close stdin immediately so non-interactive commands observe EOF.
+        drop(child.stdin.take());
+    }
     let Some(stdout_pipe) = child.stdout.take() else {
         let failure = ProcessFailure::new("stdout_pipe_setup", io::ErrorKind::BrokenPipe);
         return match kill_and_reap(&mut child, child_pid).await {
@@ -235,11 +266,18 @@ pub(super) async fn run_process(
 
     let out = stdout.lock().await;
     let err = stderr.lock().await;
-    let exit_code = wait_result.0.code().unwrap_or(-1);
+    let mut exit_code = wait_result.0.code().unwrap_or(-1);
     let mut stdout_text = String::from_utf8_lossy(&out.bytes).into_owned();
     let mut stderr_text = String::from_utf8_lossy(&err.bytes).into_owned();
     stdout_text = crate::core::redaction::redact_credentials(&stdout_text);
     stderr_text = crate::core::redaction::redact_credentials(&stderr_text);
+    if exit_code == 0 && invocation_mentions_redis_cli(invocation) {
+        if let Some(message) = redis_cli_protocol_failure(&stdout_text) {
+            exit_code = 1;
+            stdout_text.clear();
+            stderr_text = message.into();
+        }
+    }
     if matches!(invocation.security, super::InvocationSecurity::Ssh { .. }) && exit_code != 0 {
         if let Some(message) = super::ssh::normalized_failure(&stderr_text) {
             stdout_text.clear();
@@ -264,6 +302,29 @@ pub(super) async fn run_process(
             _ => None,
         },
     })
+}
+
+fn invocation_mentions_redis_cli(invocation: &ToolInvocation) -> bool {
+    invocation
+        .args
+        .iter()
+        .any(|arg| arg == "redis-cli" || arg.contains("redis-cli "))
+}
+
+fn redis_cli_protocol_failure(stdout: &str) -> Option<&'static str> {
+    let first = stdout
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?;
+    if first.starts_with("NOAUTH ") || first.starts_with("WRONGPASS ") {
+        Some("Redis read-only diagnostic authentication failed")
+    } else if first.starts_with("NOPERM ") {
+        Some("Redis read-only diagnostic ACL denied the command")
+    } else if first.starts_with("ERR ") {
+        Some("Redis read-only diagnostic returned a server error")
+    } else {
+        None
+    }
 }
 
 pub(crate) async fn kill_process_group(child: &mut Child) {

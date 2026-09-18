@@ -92,7 +92,7 @@ pub(super) fn build_terminal_invocation(
             args.push(arg.into());
         }
     }
-    let (args, readonly_docker_socket) = normalize_terminal_args(binary, args, config)?;
+    let (args, readonly_docker_socket, stdin_file) = normalize_terminal_args(binary, args, config)?;
     let program = super::toolchain::resolve_safe_executable_for(
         config,
         binary,
@@ -101,6 +101,7 @@ pub(super) fn build_terminal_invocation(
     Ok(ToolInvocation {
         program: InvocationProgram::Direct(program),
         args,
+        stdin_file,
         cwd: Some(cwd),
         timeout_ms,
         // Terminal network permission is translated here so other process
@@ -117,10 +118,10 @@ fn normalize_terminal_args(
     binary: &str,
     args: Vec<String>,
     config: &ServerConfig,
-) -> Result<(Vec<String>, bool), McpError> {
+) -> Result<(Vec<String>, bool, Option<std::path::PathBuf>), McpError> {
     let readonly_docker_socket = binary == "docker" && !config.allow_docker;
     if !readonly_docker_socket {
-        return Ok((args, false));
+        return Ok((args, false, None));
     }
     let mut tokens = vec![binary.to_owned()];
     tokens.extend(args);
@@ -129,7 +130,25 @@ fn normalize_terminal_args(
         config.ssh_readonly_db_user.as_deref(),
         config.ssh_readonly_redis_user.as_deref(),
     )?;
-    Ok((normalized.into_iter().skip(1).collect(), true))
+    let stdin_file = if normalized.iter().any(|token| token == "redis-cli") {
+        Some(
+            config
+                .resolved_ssh_redis_password_file()
+                .map_err(|_| {
+                    McpError::InvalidRequest(
+                        "Redis read-only password file is unavailable or unsafe".into(),
+                    )
+                })?
+                .ok_or_else(|| {
+                    McpError::InvalidRequest(
+                        "Redis diagnostics require a configured password file".into(),
+                    )
+                })?,
+        )
+    } else {
+        None
+    };
+    Ok((normalized.into_iter().skip(1).collect(), true, stdin_file))
 }
 
 #[derive(Debug, Serialize)]
@@ -328,6 +347,7 @@ fn build_text_search_invocation(
         ToolInvocation {
             program: InvocationProgram::Direct(resolve_safe_executable(config, "rg")?),
             args,
+            stdin_file: None,
             cwd: Some(cwd),
             timeout_ms: 0,
             allow_network: false,
@@ -534,6 +554,7 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
     Ok(ToolInvocation {
         program: InvocationProgram::SelfBinary,
         args,
+        stdin_file: None,
         cwd: None,
         timeout_ms,
         allow_network: true,
@@ -566,6 +587,7 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> Result<ToolInvoc
                 .unwrap_or("")
                 .into(),
         ],
+        stdin_file: None,
         cwd: None,
         timeout_ms,
         allow_network: true,
