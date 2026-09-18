@@ -18,6 +18,23 @@ pub(in crate::application::execution::sandbox) fn discover(
     root: &Path,
     control: Option<&super::super::super::SpawnControl<'_>>,
 ) -> io::Result<(PathBuf, ProtectedPathFreshness, bool)> {
+    loop {
+        match discover_once(root, control) {
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock && control.is_some() => {
+                if let Some(control) = control {
+                    control.check()?;
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            result => return result,
+        }
+    }
+}
+
+fn discover_once(
+    root: &Path,
+    control: Option<&super::super::super::SpawnControl<'_>>,
+) -> io::Result<(PathBuf, ProtectedPathFreshness, bool)> {
     if let Some(control) = control {
         control.check()?;
     }

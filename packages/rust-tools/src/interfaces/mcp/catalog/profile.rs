@@ -31,9 +31,6 @@ pub const RETAINED_TOOL_NAMES: &[&str] = &[
     "change_request_checks",
     "change_request_merge",
     "telegram_send_message",
-    "terminal_job_start",
-    "terminal_job_get",
-    "terminal_job_cancel",
     "issue_list",
     "issue_get",
     "issue_create",
@@ -61,9 +58,6 @@ pub const RETAINED_TOOL_NAMES: &[&str] = &[
 
 pub const PRIMARY_TOOL_NAMES: &[&str] = &[
     "terminal_exec",
-    "terminal_job_start",
-    "terminal_job_get",
-    "terminal_job_cancel",
     "directory_list",
     "file_search",
     "text_search",

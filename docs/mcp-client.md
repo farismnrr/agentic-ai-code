@@ -113,27 +113,18 @@ intentional.
 
 ## 5. Slow operations and tasks
 
-The relay separates the HTTP round-trip deadline from execution lifetime:
+`terminal_exec` is synchronous-only. Its timeout is `1..=60000` milliseconds
+with a 30 second default. It does not expose MCP Tasks or terminal job polling
+tools. Commands expected to exceed 60 seconds must be run manually by the
+operator instead of being handed off to background execution.
 
-- `timeout_ms: 0` means no terminal command deadline unless the operator set
-  `RELAY_MAX_TERMINAL_TIMEOUT_MS`;
-- task-capable clients may use MCP Tasks for `terminal_exec`, `ssh_readonly_exec`, `web_search`, and
-  read-like `http_fetch` calls;
-- eligible tools accept `execution_mode: sync | async | auto`; `auto` selects
-  async only when the client advertises Tasks, while explicit async fails
-  clearly for clients without that capability;
-- clients without Tasks can use `terminal_job_start`,
-  `terminal_job_get`, and `terminal_job_cancel`;
-- a dropped HTTP request does not implicitly cancel the relay job; explicit
-  cancellation targets the authoritative process tree.
+Other tools that explicitly advertise task support may retain their existing
+MCP Tasks behavior.
 
 ## 6. Execution modes
 
-`sync` waits for a direct result, `async` returns a standard MCP task and
-requires a client that advertises Tasks, and `auto` selects async only when
-that capability is present. An explicit async request is rejected rather than
-silently converted to synchronous execution. Accepted tasks remain owned by
-the relay after the initiating HTTP request disconnects.
+`terminal_exec` has no `execution_mode` argument. Terminal execution always
+returns its bounded direct result or a timeout result.
 
 ## What a successful connection proves
 

@@ -89,9 +89,6 @@ pub async fn start_tool_task_for(
         ));
     }
     let job = match tool.name {
-        "terminal_exec" => {
-            JobKind::Process(requests::build_terminal_exec_invocation(arguments, config)?)
-        }
         "ssh_readonly_exec" => JobKind::Process(ssh::build_invocation(arguments, config)?),
         "http_fetch" => JobKind::Process(requests::build_http_fetch_invocation(arguments)?),
         "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)),

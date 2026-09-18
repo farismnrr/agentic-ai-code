@@ -234,15 +234,14 @@ RELAY_TAILSCALE_SOCKET
 
 `RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
 
-`timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
+`terminal_exec` is synchronous-only. Its caller-visible `timeout_ms` range is
+`1..=60000` milliseconds with a 30 second default. The terminal hard ceiling is
+60 seconds; `RELAY_MAX_TERMINAL_TIMEOUT_MS` may lower that ceiling but cannot
+raise it. Terminal calls do not accept `execution_mode` and do not expose
+terminal job polling tools.
 
-`terminal_exec`, `http_fetch`, and `web_search` accept `execution_mode`:
-`sync` waits for the direct result, `async` returns an MCP task and requires a
-client that advertises Tasks, and `auto` uses async only when the client
-advertises Tasks. Primary and Full advertise the same Tasks capability. An
-explicit async request from an incompatible client is rejected; it is never
-silently converted to sync. Mutating HTTP methods remain synchronous until a
-request-level idempotency layer is available.
+Other independently task-capable tools retain their own `execution_mode`
+contracts where advertised by their schemas.
 
 Terminal subprocesses use an isolated network namespace (`--unshare-net`) by default, preventing outbound TCP/UDP connects and raw sockets at the kernel level. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for trusted workflows requiring network-capable CLI commands (e.g. package management, dependency installation, or loopback service communication). Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities subject to their own SSRF, private-network, and domain allowlist policies; they do not require or influence this flag. Generic `ssh`, `scp` and `sftp` remain blocked; remote diagnostics use `ssh_readonly_exec`.
 
@@ -251,8 +250,8 @@ Conversation approval modes are `plan` (read-only), `workspace` (edits with revi
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories prepended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit, gives operator-selected runtimes precedence, and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
 Provider-specific coding-CLI delegation is not part of the current relay
-surface. Long-running eligible tools use the standard MCP Tasks contract and
-the explicit `execution_mode` described above.
+surface. Non-terminal tools that explicitly advertise task support use the
+standard MCP Tasks contract and their schema-defined `execution_mode`.
 
 ### Creative execution bindings
 
@@ -489,7 +488,7 @@ ownership cannot be proven without introducing a persistence system.
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary has a 15-tool retained core for the common coding fast path: terminal execution and job lifecycle plus structured workspace inspection/editing and workspace authorization. Full has a 52-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Eligible asynchronous tools accept `execution_mode=sync|async|auto`. `ssh_readonly_exec` is Full-only: clients provide only `{ alias, command, args, timeout_ms, execution_mode }`; SSH config/key resolution stays relay-owned.
+Primary has a 12-tool retained core for the common coding fast path: synchronous terminal execution plus structured workspace inspection/editing and workspace authorization. Full has a 49-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Eligible asynchronous tools accept `execution_mode=sync|async|auto`. `ssh_readonly_exec` is Full-only: clients provide only `{ alias, command, args, timeout_ms, execution_mode }`; SSH config/key resolution stays relay-owned.
 
 Plan 069 creative production is disabled by default with `RELAY_ENABLE_CREATIVE=false` / no `--enable-creative`. `creative_status` remains discoverable so clients can inspect activation state. When creative production is enabled, the additional creative mutation/discovery tools are composed into the Full runtime catalog through the same catalog builder; there is no second catalog version. Changing this process-start configuration requires an operator-controlled relay restart, not an implicit tool action.
 

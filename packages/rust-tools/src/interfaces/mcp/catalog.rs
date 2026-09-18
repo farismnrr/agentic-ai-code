@@ -61,12 +61,16 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "General CLI fallback inside the authorized execution scope. Prefer an active dedicated MCP tool whenever it fully covers the operation, including structured Git, filesystem, code, and network tools. Use terminal for builds, tests, package managers, interpreters, scripts, process/user-service commands, shell pipelines, and unsupported operations. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
+            description: "General CLI fallback inside the authorized execution scope. Prefer an active dedicated MCP tool whenever it fully covers the operation, including structured Git, filesystem, code, and network tools. Terminal execution is synchronous only and has an absolute 60 second deadline. Commands expected to exceed that limit must be run manually by the operator. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
+                    "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 65536
+                    },
                     "args": {
                         "type": "array",
                         "items": { "type": "string", "maxLength": 65536 },
@@ -76,21 +80,10 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                     "cwd": { "type": "string" },
                     "timeout_ms": {
                         "type": "integer",
-                        "minimum": 0,
+                        "minimum": 1,
+                        "maximum": 60000,
                         "default": 30000,
-                        "description": "Requested command runtime in milliseconds. Choose a realistic value for the operation; 0 means no command deadline unless the relay operator configured a maximum."
-                    },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for short commands whose result is needed immediately, async for long-running work that should survive the initial request, or auto to use task execution when the client supports Tasks and the call is safe to resume."
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 128,
-                        "description": "Stable key for one logical async command. Required for async terminal execution so retries or lost responses resolve to the same accepted task instead of running the command twice."
+                        "description": "Requested synchronous command runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["command"],
@@ -103,7 +96,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         ssh::tool(),
         Tool {
@@ -376,48 +369,6 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool { name: "code_diagnostics", title: Some("Code Diagnostics"), description: "Bounded normalized diagnostics for one contained source file, including severity, stable diagnostic code when available, source, and document version (when the server reports one), so a stale result can be detected.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"severity":{"type":"integer","minimum":1,"maximum":4},"max_results":{"type":"integer","minimum":1,"maximum":128,"default":50},"continuation":{"type":"string","maxLength":64}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "code_rename_preview", title: Some("Code Rename Preview"), description: "Preview-only bounded rename: normalizes the language server's WorkspaceEdit into per-file text replacements without applying anything. Apply the result yourself through apply_patch/file_edit after review. Rejects edits outside the contained workspace, protected paths, unsafe symlinks, and any unsupported resource operation (file create/rename/delete).", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"line":{"type":"integer","minimum":0},"column":{"type":"integer","minimum":0},"new_name":{"type":"string","minLength":1,"maxLength":4096}},"required":["path","line","column","new_name"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         telegram_message::tool(),
-        Tool {
-            name: "terminal_job_start",
-            title: Some("Start Terminal Job"),
-            description: "Start a bounded sandboxed general CLI fallback job for builds, tests, package managers, interpreters, scripts, or unsupported operations. Prefer an active dedicated MCP tool when it fully covers the operation. Returns a task ID for polling; the same credential, privilege, and SSH boundaries as terminal_exec apply.",
-            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 }, "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Stable key for retrying one logical legacy job start without running it twice." } }, "required": ["command"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: false,
-                destructive_hint: true,
-                idempotent_hint: false,
-                open_world_hint: true,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
-        Tool {
-            name: "terminal_job_get",
-            title: Some("Get Terminal Job"),
-            description: "Get bounded state and retained output for a terminal job.",
-            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: true,
-                destructive_hint: false,
-                idempotent_hint: true,
-                open_world_hint: false,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
-        Tool {
-            name: "terminal_job_cancel",
-            title: Some("Cancel Terminal Job"),
-            description: "Cancel a running terminal job and its process group.",
-            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: false,
-                destructive_hint: true,
-                idempotent_hint: true,
-                open_world_hint: true,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
     ];
     tools.extend(forge::issue_tools());
     tools.extend(forge::action_tools());

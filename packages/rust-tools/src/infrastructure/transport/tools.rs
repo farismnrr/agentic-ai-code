@@ -135,8 +135,7 @@ pub(super) async fn handle_tools_call(
     let idempotency_session = agent_session.as_deref().unwrap_or("none");
     let idempotency_key = idempotency_key
         .filter(|_| {
-            call.name == "terminal_job_start"
-                || execution_mode == "async"
+            execution_mode == "async"
                 || (execution_mode == "auto" && client_has_tasks && tool_has_tasks)
         })
         .map(|key| {

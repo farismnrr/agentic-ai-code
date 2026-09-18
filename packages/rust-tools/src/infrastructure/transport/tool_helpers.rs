@@ -462,9 +462,6 @@ pub(super) fn requires_idempotency_key(tool: &str, arguments: &Value) -> bool {
     if tool == "ssh_readonly_exec" {
         return false;
     }
-    if tool == "terminal_exec" {
-        return true;
-    }
     if tool != "http_fetch" {
         return false;
     }

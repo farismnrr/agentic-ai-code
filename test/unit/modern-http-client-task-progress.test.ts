@@ -56,7 +56,7 @@ async function requestBody(init: RequestInit | undefined) {
   assert.deepEqual(methods, ['server/discover', 'tools/call'])
   assert.equal(progress.resultType, 'task')
   assert.equal(progress.taskId, 'async-task-1')
-  assert.match(String(progress.message), /terminal_job_get/)
+  assert.match(String(progress.message), /tasks\/get/)
   assert.match(JSON.stringify(progress.output), /step 1/)
 }
 

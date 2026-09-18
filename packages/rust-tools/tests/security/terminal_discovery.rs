@@ -102,7 +102,6 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
         .filter_map(|t| t.get("name").and_then(Value::as_str))
         .collect();
     assert!(tool_names.contains(&"terminal_exec"));
-    assert!(tool_names.contains(&"terminal_job_start"));
     assert!(tool_names.contains(&"workspace_list"));
     assert!(tool_names.contains(&"ssh_readonly_exec"));
     assert!(tool_names.contains(&"telegram_send_message"));
@@ -284,9 +283,6 @@ async fn wire_client_primary_profile_exposes_runtime_core_and_denies_full_tools(
     // Required Primary tools
     for required in [
         "terminal_exec",
-        "terminal_job_start",
-        "terminal_job_get",
-        "terminal_job_cancel",
         "directory_list",
         "file_search",
         "text_search",

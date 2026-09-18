@@ -18,7 +18,7 @@ test('routing prefers exact active dedicated keys deterministically', () => {
 
 test('empty and terminal-only turns do not invent dedicated capabilities', () => {
   assert.equal(buildToolSelectionPolicy([]), '')
-  const policy = buildToolSelectionPolicy(['terminal_exec', 'terminal_job_start'])
+  const policy = buildToolSelectionPolicy(['terminal_exec'])
   assert.doesNotMatch(policy, /git_status|file_read|ssh_readonly_exec|Prefer active/)
   assert.match(policy, /builds, tests, package managers, interpreters/)
 })

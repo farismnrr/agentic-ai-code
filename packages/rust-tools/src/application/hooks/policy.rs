@@ -75,7 +75,7 @@ pub fn effect_classes(
     open_world_hint: bool,
 ) -> Vec<&'static str> {
     match tool_id {
-        "terminal_exec" | "terminal_job_start" => vec![
+        "terminal_exec" => vec![
             "process_exec",
             "workspace_write",
             "network_read",

@@ -99,3 +99,68 @@ fn dedicated_ssh_schema_accepts_structured_diagnostics_and_rejects_raw_options()
         assert!(validate_tool_arguments(&tool, &forbidden).is_err());
     }
 }
+
+#[test]
+fn terminal_exec_is_sync_only_and_hard_capped() {
+    let tool = find_tool_for_profile("terminal_exec", ToolProfile::Full)
+        .expect("terminal_exec must remain discoverable");
+
+    assert!(
+        tool.execution.is_none(),
+        "terminal_exec must not advertise MCP Tasks"
+    );
+
+    validate_tool_arguments(
+        &tool,
+        &json!({
+            "command": "true",
+            "timeout_ms": 60_000
+        }),
+    )
+    .expect("60 second terminal timeout must be accepted");
+
+    assert!(
+        validate_tool_arguments(
+            &tool,
+            &json!({
+                "command": "true",
+                "timeout_ms": 60_001
+            }),
+        )
+        .is_err(),
+        "terminal timeout above 60 seconds must be rejected"
+    );
+
+    assert!(
+        validate_tool_arguments(
+            &tool,
+            &json!({
+                "command": "true",
+                "execution_mode": "sync"
+            }),
+        )
+        .is_err(),
+        "terminal_exec no longer accepts execution_mode"
+    );
+
+    assert!(
+        validate_tool_arguments(
+            &tool,
+            &json!({
+                "command": "true",
+                "idempotency_key": "retired"
+            }),
+        )
+        .is_err(),
+        "terminal_exec no longer accepts task idempotency"
+    );
+
+    for retired in [
+        "terminal_job_start",
+        "terminal_job_get",
+        "terminal_job_cancel",
+    ] {
+        assert!(find_tool_for_profile(retired, ToolProfile::Full).is_none());
+        assert!(find_tool_for_profile(retired, ToolProfile::Primary).is_none());
+    }
+}

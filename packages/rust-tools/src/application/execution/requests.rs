@@ -4,6 +4,8 @@ use super::paths::resolve_authorized_cwd;
 use super::process::{drain_pipe, kill_process_group, OutputBuffer};
 use super::sandbox;
 use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
+
+const TERMINAL_HARD_TIMEOUT_MS: u64 = 60_000;
 use crate::application::workspace::reject_protected_target;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
@@ -47,14 +49,23 @@ pub(super) fn build_terminal_invocation(
         .get("command")
         .and_then(Value::as_str)
         .unwrap_or("");
-    let timeout_ms = arguments
+    let operator_max = match config.max_terminal_timeout_ms {
+        0 => TERMINAL_HARD_TIMEOUT_MS,
+        configured => configured.min(TERMINAL_HARD_TIMEOUT_MS),
+    };
+    let requested_timeout_ms = arguments
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(config.default_terminal_timeout_ms);
-    if config.max_terminal_timeout_ms > 0 && timeout_ms > config.max_terminal_timeout_ms {
-        return Err(McpError::InvalidRequest(
-            "timeout_ms exceeds operator maximum".into(),
-        ));
+    let timeout_ms = if requested_timeout_ms == 0 {
+        operator_max
+    } else {
+        requested_timeout_ms
+    };
+    if timeout_ms > operator_max {
+        return Err(McpError::InvalidRequest(format!(
+            "timeout_ms exceeds terminal maximum of {operator_max} ms"
+        )));
     }
     let cwd = resolve_authorized_cwd(arguments, config)?;
     let parts = shell_words::split(command)

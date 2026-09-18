@@ -165,14 +165,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ .env masked with /dev/null inside Bubblewrap sandbox");
 
     // -------------------------------------------------------------
-    // Test 3: Background terminal_job lifecycle and cancellation
+    // Test 3: Internal job-manager lifecycle and cancellation
     // -------------------------------------------------------------
-    println!("\n[3/5] Testing terminal_job lifecycle...");
+    println!("\n[3/5] Testing internal job-manager lifecycle...");
     config.tool_profile = ai_tools::core::config::ToolProfile::Primary;
 
-    // 3.1 Successful long-running-capable job. Primary terminal_exec is capped at
-    // 30s, but terminal_job_start is the explicit escape hatch and must accept a
-    // larger bounded timeout while preserving the same sandbox/argv validation.
+    // 3.1 Internal JobManager lifecycle coverage. This is not a public MCP
+    // background-terminal escape hatch; terminal_exec remains synchronous-only.
     let task_id = start_terminal_job(
         &json!({ "command": "sh", "args": ["-c", "printf 'async-output-456'"], "timeout_ms": 60_000 }),
         &config,
@@ -189,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(snapshot.state, JobState::Completed);
     assert_eq!(snapshot.exit_code, Some(0));
     assert!(snapshot.stdout.contains("async-output-456"));
-    println!("  ✓ terminal_job completed successfully with stdout captured");
+    println!("  ✓ internal job completed successfully with stdout captured");
 
     // 3.2 Job cancellation
     let task_id = start_terminal_job(

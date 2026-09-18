@@ -161,7 +161,7 @@ export class ModernHttpMcpClient implements McpClientLike {
         // durable task identity immediately so the model can poll the latest
         // state instead of keeping an AI step open until its timeout.
         if (params.arguments?.execution_mode === 'async') {
-          return taskProgressResult(task, 'Task accepted asynchronously. Use terminal_job_get with this taskId to read the latest status and output; do not start the command again.')
+          return taskProgressResult(task, 'Task accepted asynchronously. Use standard MCP tasks/get with this taskId to read the latest status and output; do not start the command again.')
         }
         return this.awaitTask(task, signal)
       }
@@ -185,20 +185,20 @@ export class ModernHttpMcpClient implements McpClientLike {
           current = await this.request('tasks/get', { taskId })
         } catch (error) {
           if (error instanceof McpRoundTripTimeoutError) {
-            return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+            return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use standard MCP tasks/get with this taskId to resume from the latest known output.')
           }
           throw error
         }
         if (!isJsonRecord(current)) throw new Error('Remote MCP task returned an invalid result')
         if (current.status !== 'working') return taskResult(current)
-        return taskProgressResult(current, 'The request ended while the task was working. The relay task continues; use terminal_job_get with this taskId to resume from the latest output. Do not start the command again.')
+        return taskProgressResult(current, 'The request ended while the task was working. The relay task continues; use standard MCP tasks/get with this taskId to resume from the latest output. Do not start the command again.')
       }
       let task: unknown
       try {
         task = await this.request('tasks/get', { taskId })
       } catch (error) {
         if (error instanceof McpRoundTripTimeoutError) {
-          return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+          return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use standard MCP tasks/get with this taskId to resume from the latest known output.')
         }
         throw error
       }
@@ -294,13 +294,13 @@ export class ModernHttpMcpClient implements McpClientLike {
 
 function taskResult(task: Record<string, unknown>): McpClientCallResult {
   const status = typeof task.status === 'string' ? task.status : ''
-  if (status === 'failed') return taskProgressResult(task, 'Task execution failed. Use terminal_job_get with this taskId to inspect the retained output.', true)
-  if (status === 'cancelled') return taskProgressResult(task, 'Task execution was cancelled. Use terminal_job_get with this taskId to inspect the retained output.', true)
+  if (status === 'failed') return taskProgressResult(task, 'Task execution failed. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
+  if (status === 'cancelled') return taskProgressResult(task, 'Task execution was cancelled. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
   if (task.executionStatus === 'timed_out') return taskProgressResult(task, 'Task execution timed out. The retained output below is the last known log; do not start the command again unless a new execution is intentional.', true)
 
   const result = isJsonRecord(task.result) ? task.result : undefined
   if (!result || !Array.isArray(result.content)) {
-    return taskProgressResult(task, 'Task returned no result. Use terminal_job_get with this taskId to inspect the retained output.', true)
+    return taskProgressResult(task, 'Task returned no result. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
   }
   return {
     content: result.content,

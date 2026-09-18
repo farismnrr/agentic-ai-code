@@ -5,7 +5,7 @@ import { SUBAGENT_BUDGET_LIMITS } from './policy.ts'
 const MAX_PROFILE_BYTES = 64 * 1024
 const MAX_LIST = 32
 const TOOL_NAMES = new Set([
-  'terminal_exec', 'terminal_job_start', 'terminal_job_get', 'terminal_job_cancel',
+  'terminal_exec',
   'directory_list', 'file_search', 'text_search', 'file_read', 'file_write', 'file_edit', 'apply_patch',
   'workspace_add', 'workspace_list', 'workspace_get', 'workspace_remove',
   'git_remote_list', 'git_remote_branch_get', 'git_fetch', 'git_push',
