@@ -172,7 +172,12 @@ pub async fn dispatch_tool_call(
         crate::application::workspace::dispatch_native_tool(tool.name, arguments, config)?
     {
         if matches!(tool.name, "file_write" | "file_edit" | "apply_patch") && !result.is_error {
-            let changed = serde_json::from_str::<Value>(&result.content[0].text).ok();
+            let changed = result.structured_content.clone().or_else(|| {
+                result
+                    .content
+                    .first()
+                    .and_then(|content| serde_json::from_str::<Value>(&content.text).ok())
+            });
             let committed = changed.as_ref().is_some_and(|value| {
                 value.get("dry_run").and_then(Value::as_bool) != Some(true)
                     && (tool.name == "file_write"
