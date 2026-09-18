@@ -73,7 +73,6 @@ pub(super) fn build_terminal_invocation(
     let Some(binary) = parts.first() else {
         return Err(McpError::InvalidRequest("command must not be empty".into()));
     };
-    let program = resolve_safe_executable(config, binary)?;
     let mut args = parts[1..].to_vec();
     if let Some(arr) = arguments.get("args").and_then(Value::as_array) {
         if arr.len() > MAX_EXEC_ARGS {
@@ -92,6 +91,12 @@ pub(super) fn build_terminal_invocation(
             args.push(arg.into());
         }
     }
+    let (args, readonly_docker_socket) = normalize_terminal_args(binary, args, config)?;
+    let program = super::toolchain::resolve_safe_executable_for(
+        config,
+        binary,
+        config.allow_docker || readonly_docker_socket,
+    )?;
     Ok(ToolInvocation {
         program: InvocationProgram::Direct(program),
         args,
@@ -101,9 +106,29 @@ pub(super) fn build_terminal_invocation(
         // classes cannot inherit it accidentally inside the sandbox layer.
         allow_network: config.allow_terminal_network,
         expose_optional_sockets: true,
+        readonly_docker_socket,
         expose_authorized_siblings: true,
         security: InvocationSecurity::Standard,
     })
+}
+
+fn normalize_terminal_args(
+    binary: &str,
+    args: Vec<String>,
+    config: &ServerConfig,
+) -> Result<(Vec<String>, bool), McpError> {
+    let readonly_docker_socket = binary == "docker" && !config.allow_docker;
+    if !readonly_docker_socket {
+        return Ok((args, false));
+    }
+    let mut tokens = vec![binary.to_owned()];
+    tokens.extend(args);
+    let normalized = crate::core::ssh_policy::validate_docker_command(
+        &tokens,
+        config.ssh_readonly_db_user.as_deref(),
+        config.ssh_readonly_redis_user.as_deref(),
+    )?;
+    Ok((normalized.into_iter().skip(1).collect(), true))
 }
 
 #[derive(Debug, Serialize)]
@@ -270,6 +295,7 @@ fn build_text_search_invocation(
             timeout_ms: 0,
             allow_network: false,
             expose_optional_sockets: true,
+            readonly_docker_socket: false,
             expose_authorized_siblings: true,
             security: InvocationSecurity::Standard,
         },
@@ -436,6 +462,11 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(30_000);
+    if !(1..=60_000).contains(&timeout_ms) {
+        return Err(McpError::InvalidRequest(
+            "timeout_ms must be between 1 and 60000 ms".into(),
+        ));
+    }
     let mut args = vec![
         "curl".into(),
         "-X".into(),
@@ -473,13 +504,23 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         timeout_ms,
         allow_network: true,
         expose_optional_sockets: false,
+        readonly_docker_socket: false,
         expose_authorized_siblings: false,
         security: InvocationSecurity::NetworkOnly,
     })
 }
 
-pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
-    ToolInvocation {
+pub(super) fn build_web_search_invocation(arguments: &Value) -> Result<ToolInvocation, McpError> {
+    let timeout_ms = arguments
+        .get("timeout_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(30_000);
+    if !(1..=60_000).contains(&timeout_ms) {
+        return Err(McpError::InvalidRequest(
+            "timeout_ms must be between 1 and 60000 ms".into(),
+        ));
+    }
+    Ok(ToolInvocation {
         program: InvocationProgram::SelfBinary,
         args: vec![
             "searxng".into(),
@@ -492,10 +533,11 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> ToolInvocation {
                 .into(),
         ],
         cwd: None,
-        timeout_ms: 30_000,
+        timeout_ms,
         allow_network: true,
         expose_optional_sockets: false,
+        readonly_docker_socket: false,
         expose_authorized_siblings: false,
         security: InvocationSecurity::NetworkOnly,
-    }
+    })
 }

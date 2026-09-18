@@ -121,22 +121,10 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                     "data": { "type": "string", "maxLength": 65536 },
                     "timeout_ms": {
                         "type": "integer",
-                        "minimum": 0,
-                        "maximum": 300000,
+                        "minimum": 1,
+                        "maximum": 60000,
                         "default": 30000,
-                        "description": "Requested HTTP operation timeout in milliseconds. Choose it based on expected latency; the relay still enforces this tool's maximum."
-                    },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for short requests, async for eligible long-running safe requests, or auto to use task execution when supported. Mutating HTTP methods remain synchronous until request-level idempotency is available."
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 128,
-                        "description": "Stable logical-operation key reserved for task-backed requests that require retry deduplication."
+                        "description": "Requested synchronous HTTP runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["url"],
@@ -149,7 +137,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         Tool {
             name: "web_search",
@@ -160,11 +148,12 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "minLength": 1, "maxLength": 65536 },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for an immediate result, async when the search may take longer and the client can poll MCP Tasks, or auto to let the relay select task execution when supported."
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 60000,
+                        "default": 30000,
+                        "description": "Requested synchronous search runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["query"],
@@ -177,7 +166,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         Tool {
             name: "directory_list",

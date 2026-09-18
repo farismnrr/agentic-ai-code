@@ -308,11 +308,16 @@ pub(super) fn spawn_with_profile(
         crate::core::terminal_policy::PRIVILEGE_BROKERS,
         control,
     )?;
-    // Masks run before opt-ins, so a configured socket under HOME cannot bypass
-    // default denial yet can still be exposed by its separate operator grant.
+    // Masks run before socket exposure, so a configured socket under HOME cannot
+    // bypass default denial. Docker is exposed only for a semantically validated
+    // read-only Docker call or the operator's explicit full-authority opt-in.
     if !workspace_hidden && profile.expose_optional_sockets {
         for (enabled, socket, name) in [
-            (config.allow_docker, &config.docker_socket, "Docker"),
+            (
+                config.allow_docker || invocation.readonly_docker_socket,
+                &config.docker_socket,
+                "Docker",
+            ),
             (
                 config.allow_tailscale,
                 &config.tailscale_socket,
@@ -352,7 +357,14 @@ pub(super) fn spawn_with_profile(
         .env("HOME", sandbox_home)
         .env("PATH", safe_path)
         .env("LANG", "C.UTF-8")
-        .env("TMPDIR", "/tmp")
+        .env("TMPDIR", "/tmp");
+    if !workspace_hidden
+        && profile.expose_optional_sockets
+        && (config.allow_docker || invocation.readonly_docker_socket)
+    {
+        command.env("DOCKER_HOST", format!("unix://{}", config.docker_socket));
+    }
+    command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

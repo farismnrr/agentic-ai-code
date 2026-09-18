@@ -13,12 +13,9 @@ fn dedicated_ssh_tool_is_portable_and_full_profile_only() {
     assert!(!annotations.destructive_hint);
     assert!(annotations.idempotent_hint);
     assert!(annotations.open_world_hint);
-    assert_eq!(
-        tool.execution
-            .as_ref()
-            .and_then(|value| value.get("taskSupport"))
-            .and_then(serde_json::Value::as_str),
-        Some("optional")
+    assert!(
+        tool.execution.is_none(),
+        "ssh_readonly_exec must remain synchronous-only"
     );
     assert!(find_tool_for_profile("ssh_readonly_exec", ToolProfile::Primary).is_none());
 }
@@ -84,8 +81,7 @@ fn dedicated_ssh_schema_accepts_structured_diagnostics_and_rejects_raw_options()
             "alias": "smart-meeting",
             "command": "docker",
             "args": ["ps"],
-            "timeout_ms": 30_000,
-            "execution_mode": "auto"
+            "timeout_ms": 30_000
         }),
     )
     .expect("valid structured SSH diagnostic input");
@@ -97,6 +93,54 @@ fn dedicated_ssh_schema_accepts_structured_diagnostics_and_rejects_raw_options()
         json!({"alias":"smart-meeting","command":"docker","port":22}),
     ] {
         assert!(validate_tool_arguments(&tool, &forbidden).is_err());
+    }
+}
+
+#[test]
+fn network_execution_tools_are_sync_only_and_hard_capped() {
+    for (name, base) in [
+        (
+            "ssh_readonly_exec",
+            json!({"alias":"fixture","command":"uptime"}),
+        ),
+        ("http_fetch", json!({"url":"https://example.com"})),
+        ("web_search", json!({"query":"bounded search"})),
+    ] {
+        let tool = find_tool_for_profile(name, ToolProfile::Full)
+            .unwrap_or_else(|| panic!("{name} must remain discoverable"));
+        assert!(
+            tool.execution.is_none(),
+            "{name} must not advertise MCP Tasks"
+        );
+
+        let mut max = base.clone();
+        max.as_object_mut()
+            .expect("object")
+            .insert("timeout_ms".into(), json!(60_000));
+        validate_tool_arguments(&tool, &max)
+            .unwrap_or_else(|_| panic!("{name} must accept a 60 second timeout"));
+
+        for invalid in [json!(0), json!(60_001)] {
+            let mut arguments = base.clone();
+            arguments
+                .as_object_mut()
+                .expect("object")
+                .insert("timeout_ms".into(), invalid);
+            assert!(
+                validate_tool_arguments(&tool, &arguments).is_err(),
+                "{name} must reject timeout outside 1..=60000"
+            );
+        }
+
+        let mut legacy = base;
+        legacy
+            .as_object_mut()
+            .expect("object")
+            .insert("execution_mode".into(), json!("async"));
+        assert!(
+            validate_tool_arguments(&tool, &legacy).is_err(),
+            "{name} must reject legacy execution_mode"
+        );
     }
 }
 

@@ -92,8 +92,7 @@ async fn dedicated_ssh_tool_is_discoverable_and_reaches_application_path() {
                 "arguments": {
                     "alias": "fixture",
                     "command": "docker",
-                    "args": ["ps"],
-                    "execution_mode": "sync"
+                    "args": ["ps"]
                 },
                 "_meta": meta()
             }

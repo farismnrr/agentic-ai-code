@@ -29,7 +29,7 @@ Record only durable, reusable lessons discovered from completed work or user cor
 
 - Date: 2026-08-16
 - Context: Extending the Bubblewrap-backed MCP coding relay with host Docker debugging.
-- Lesson: Treat Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Keep Docker denied by default, require an opt-in flag/environment setting, bind only the selected Unix socket, support configurable/rootless socket paths, and document that daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics unless a shell-aware policy parser exists; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
+- Lesson: Treat unrestricted Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Without full opt-in, expose the selected Docker socket only to a direct `docker` invocation whose argv has passed a positive semantic read-only policy; never expose it generically to shells or unrelated executables. Keep `RELAY_ALLOW_DOCKER=true` as the separate trusted full-authority escape hatch, support configurable/rootless socket paths, and document that unrestricted daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
 - Applies to: Sandboxed local-development relays, coding agents, and terminal execution services that expose privileged host daemons.
 - Action taken: Added opt-in Docker configuration and socket plumbing with default-deny policy/tests, clarified terminal shell semantics, and kept the relay self-update boundary intact.
 

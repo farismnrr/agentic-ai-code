@@ -61,19 +61,25 @@ fn ssh_activity_persists_metadata_not_remote_query_literals() {
 
 #[tokio::test]
 async fn dedicated_ssh_tool_fails_closed_when_operator_capability_is_disabled() {
-    use ai_tools::application::execution::{start_tool_task, JobManager};
+    use ai_tools::application::execution::{dispatch_tool_call, JobManager};
+    use ai_tools::application::hooks::HookManager;
+    use ai_tools::application::lsp::LspSessionManager;
     use ai_tools::interfaces::mcp::find_tool;
+    use std::sync::Arc;
 
     let config = fixture_config();
     let manager = JobManager::new(config.clone());
+    let lsp = Arc::new(LspSessionManager::new(config.clone()).expect("LSP manager"));
+    let hooks = Arc::new(HookManager::load(Arc::new(config.clone())).expect("hook manager"));
     let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
-    let error = start_tool_task(
+    let error = dispatch_tool_call(
         &tool,
         &json!({"alias":"fixture","command":"docker","args":["ps"]}),
         &config,
         &manager,
-        None,
-        "disabled-ssh".into(),
+        &lsp,
+        &hooks,
+        "local",
     )
     .await
     .expect_err("disabled SSH capability must fail before spawn");

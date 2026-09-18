@@ -31,16 +31,10 @@ pub(super) fn tool() -> Tool {
                 },
                 "timeout_ms": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 60000,
                     "default": 30000,
-                    "description": "Requested remote diagnostic runtime in milliseconds; 0 uses the bounded relay SSH default."
-                },
-                "execution_mode": {
-                    "type": "string",
-                    "enum": ["sync", "async", "auto"],
-                    "default": "auto",
-                    "description": "Use sync for immediate results, async for task-backed execution, or auto to use MCP Tasks when negotiated."
+                    "description": "Requested synchronous remote diagnostic runtime in milliseconds. The absolute maximum is 60000 ms."
                 }
             },
             "required": ["alias", "command"],
@@ -53,6 +47,6 @@ pub(super) fn tool() -> Tool {
             open_world_hint: true,
         }),
         security_schemes: coding_security_scheme(),
-        execution: Some(json!({ "taskSupport": "optional" })),
+        execution: None,
     }
 }

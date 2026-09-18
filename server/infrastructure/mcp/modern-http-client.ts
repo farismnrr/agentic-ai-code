@@ -157,12 +157,6 @@ export class ModernHttpMcpClient implements McpClientLike {
     if (!isJsonRecord(result) || !Array.isArray(result.content)) {
       const task = asMcpTaskEnvelope(result)
       if (task) {
-        // An explicit async call is an acceptance operation. Return the
-        // durable task identity immediately so the model can poll the latest
-        // state instead of keeping an AI step open until its timeout.
-        if (params.arguments?.execution_mode === 'async') {
-          return taskProgressResult(task, 'Task accepted asynchronously. Use standard MCP tasks/get with this taskId to read the latest status and output; do not start the command again.')
-        }
         return this.awaitTask(task, signal)
       }
       throw new Error('Remote MCP server returned an invalid tools/call result')

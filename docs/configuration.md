@@ -240,8 +240,9 @@ RELAY_TAILSCALE_SOCKET
 raise it. Terminal calls do not accept `execution_mode` and do not expose
 terminal job polling tools.
 
-Other independently task-capable tools retain their own `execution_mode`
-contracts where advertised by their schemas.
+All retained process-like relay tools are synchronous at the MCP boundary. `ssh_readonly_exec`,
+`http_fetch`, and `web_search` do not accept `execution_mode`; caller-selectable
+runtime is bounded to at most 60 seconds where `timeout_ms` is exposed.
 
 Terminal subprocesses use an isolated network namespace (`--unshare-net`) by default, preventing outbound TCP/UDP connects and raw sockets at the kernel level. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for trusted workflows requiring network-capable CLI commands (e.g. package management, dependency installation, or loopback service communication). Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities subject to their own SSRF, private-network, and domain allowlist policies; they do not require or influence this flag. Generic `ssh`, `scp` and `sftp` remain blocked; remote diagnostics use `ssh_readonly_exec`.
 
@@ -250,8 +251,9 @@ Conversation approval modes are `plan` (read-only), `workspace` (edits with revi
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories prepended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit, gives operator-selected runtimes precedence, and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
 Provider-specific coding-CLI delegation is not part of the current relay
-surface. Non-terminal tools that explicitly advertise task support use the
-standard MCP Tasks contract and their schema-defined `execution_mode`.
+surface. Retained coding tools do not expose caller-selected MCP task execution;
+operations that cannot finish within their bounded synchronous runtime must be
+handed back to the operator rather than detached in the relay.
 
 ### Creative execution bindings
 
@@ -385,7 +387,7 @@ host-user authoring that the structured tools cannot express.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
-`RELAY_ALLOW_DOCKER=true` is an explicit local-development escape hatch. It permits the `docker` CLI and bind-mounts the host Docker daemon socket into the terminal sandbox. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Docker daemon access can provide host-level authority, so the default remains disabled and it should only be enabled for a trusted single-owner coding relay.
+Without `RELAY_ALLOW_DOCKER`, arbitrary terminal commands do not receive the Docker socket. Direct `docker` calls are instead normalized through a positive read-only diagnostic policy and receive the configured socket only for that validated invocation; Docker mutations and unknown subcommands are rejected. `RELAY_ALLOW_DOCKER=true` is the explicit local-development escape hatch for full Docker CLI authority and exposes the host daemon socket to ordinary terminal execution. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Full Docker daemon access can provide host-level authority, so the escape hatch should only be enabled for a trusted single-owner coding relay.
 
 In local mode, `127.0.0.1:<port>` and `localhost:<port>` are always allowed. Use repeated `--allowed-host` flags or the comma-separated `RELAY_ALLOWED_HOSTS` value for explicitly permitted external Host authorities. Entries may include an exact port; an entry without a port matches only a Host without a port, and never implicitly allows arbitrary ports. Wildcards and URL syntax are rejected.
 
@@ -488,7 +490,7 @@ ownership cannot be proven without introducing a persistence system.
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary has a 12-tool retained core for the common coding fast path: synchronous terminal execution plus structured workspace inspection/editing and workspace authorization. Full has a 49-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Eligible asynchronous tools accept `execution_mode=sync|async|auto`. `ssh_readonly_exec` is Full-only: clients provide only `{ alias, command, args, timeout_ms, execution_mode }`; SSH config/key resolution stays relay-owned.
+Primary has a 12-tool retained core for the common coding fast path: synchronous terminal execution plus structured workspace inspection/editing and workspace authorization. Full has a 49-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Retained process-like tools are synchronous-only and bounded to at most 60 seconds per call. `ssh_readonly_exec` is Full-only: clients provide only `{ alias, command, args, timeout_ms }`; SSH config/key resolution stays relay-owned.
 
 Plan 069 creative production is disabled by default with `RELAY_ENABLE_CREATIVE=false` / no `--enable-creative`. `creative_status` remains discoverable so clients can inspect activation state. When creative production is enabled, the additional creative mutation/discovery tools are composed into the Full runtime catalog through the same catalog builder; there is no second catalog version. Changing this process-start configuration requires an operator-controlled relay restart, not an implicit tool action.
 

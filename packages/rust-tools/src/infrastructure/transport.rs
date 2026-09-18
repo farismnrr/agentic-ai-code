@@ -63,7 +63,6 @@ mod creative_deploy;
 mod creative_upload;
 mod mcp_http;
 mod subagent_lifecycle;
-mod task_lifecycle;
 mod tools;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP

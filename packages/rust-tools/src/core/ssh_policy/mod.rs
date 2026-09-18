@@ -8,8 +8,9 @@ mod config;
 mod remote;
 
 pub use config::{openssh_args, resolve_connection_spec, validate_alias, SshConnectionSpec};
+pub(crate) use remote::validate_docker_command;
 pub use remote::{validate_remote_command, ValidatedRemoteCommand};
 
 pub(crate) fn policy_error(message: &str) -> crate::core::error::McpError {
-    crate::core::error::McpError::InvalidRequest(format!("SSH diagnostic policy: {message}"))
+    crate::core::error::McpError::InvalidRequest(format!("read-only diagnostic policy: {message}"))
 }

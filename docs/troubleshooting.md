@@ -79,9 +79,9 @@ Do not unmask credentials just to make a tool call convenient. Use an explicit s
 
 ## `docker` says the daemon/socket is unavailable from MCP
 
-Expected. The relay intentionally does not expose `/var/run/docker.sock`.
+Read-only diagnostics such as bounded `docker ps`, `docker logs`, `docker stats`, `docker top`, safe `docker inspect`, and reviewed Compose diagnostics are supported through direct `docker` terminal calls. The relay exposes the configured socket only to a call whose argv passes that semantic read-only policy.
 
-Run Docker-dependent operations—such as `pnpm release:publish`—from a trusted host shell with Docker configured. Do not use sudo/socket mounts/privileged-container tricks to bypass the relay boundary.
+Lifecycle/build/pull/push and other unrestricted Docker operations remain unavailable unless the operator explicitly enables `RELAY_ALLOW_DOCKER=true`. For long-running or full-authority Docker work—such as `pnpm release:publish`—run the foreground command from a trusted host shell instead of weakening the relay boundary.
 
 ## `ls /etc` works or commands can read `/etc/resolv.conf`
 

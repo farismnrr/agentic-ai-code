@@ -138,7 +138,7 @@ After changing relay access, socket, or toolchain configuration, rebuild/restart
 
 For local development that needs the host Tailscale daemon, add `--allow-tailscale` (or set `RELAY_ALLOW_TAILSCALE=true`). The socket defaults to `/var/run/tailscale/tailscaled.sock`; override it with `--tailscale-socket` or `RELAY_TAILSCALE_SOCKET` when needed.
 
-For trusted local debugging that needs Docker, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`). For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. This explicitly exposes the selected host Docker daemon socket to terminal commands and therefore grants substantially more authority than the default sandbox.
+Read-only Docker diagnostics do not require full Docker opt-in: direct `docker` commands are accepted only when they match the relay's bounded diagnostic policy and the selected socket is exposed only to that invocation. For Docker lifecycle/build/pull/push or other unrestricted Docker work, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`) only in a trusted single-owner environment. For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. Full opt-in exposes the selected host Docker daemon socket to ordinary terminal commands and therefore grants substantially more authority than the default sandbox.
 
 ## Next step
 

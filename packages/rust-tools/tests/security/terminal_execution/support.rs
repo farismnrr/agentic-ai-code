@@ -50,25 +50,34 @@ impl TestFixture {
     }
 
     async fn wait_for_protected_index(&self) {
+        // Protected-path indexing has its own lifecycle budget and must not
+        // inherit deliberately tiny terminal deadlines from individual tests.
+        let mut warmup_config = self.config.clone();
+        warmup_config.default_terminal_timeout_ms =
+            warmup_config.default_terminal_timeout_ms.max(5_000);
+        warmup_config.max_terminal_timeout_ms = warmup_config.max_terminal_timeout_ms.max(5_000);
+        let warmup_manager = JobManager::new(warmup_config.clone());
+        warmup_manager.prepare_for_serving().await;
+
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             let id = start_terminal_job(
                 &json!({
                     "command": "true",
                     "cwd": self.root,
-                    "timeout_ms": self.config.max_terminal_timeout_ms.min(5000)
+                    "timeout_ms": 5000
                 }),
-                &self.config,
-                &self.manager,
+                &warmup_config,
+                &warmup_manager,
             )
             .await
             .expect("failed to start protected-index warmup command");
-            let snapshot = self
-                .manager
+            let snapshot = warmup_manager
                 .wait(&id)
                 .await
                 .expect("protected-index warmup wait");
             if snapshot.state == JobState::Completed {
+                warmup_manager.shutdown().await;
                 return;
             }
             let diagnostic = snapshot

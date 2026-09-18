@@ -118,13 +118,15 @@ with a 30 second default. It does not expose MCP Tasks or terminal job polling
 tools. Commands expected to exceed 60 seconds must be run manually by the
 operator instead of being handed off to background execution.
 
-Other tools that explicitly advertise task support may retain their existing
-MCP Tasks behavior.
+The retained process-like coding tools (`terminal_exec`, `ssh_readonly_exec`,
+`http_fetch`, and `web_search`) are synchronous-only at the MCP boundary.
+Where a tool exposes `timeout_ms`, its public range is `1..=60000`.
 
-## 6. Execution modes
+## 6. Execution contract
 
-`terminal_exec` has no `execution_mode` argument. Terminal execution always
-returns its bounded direct result or a timeout result.
+Retained coding tools do not accept `execution_mode`. They return a bounded
+direct result or a timeout/error result; work that cannot finish within the
+bounded call must be handed back to the operator instead of detached.
 
 ## What a successful connection proves
 

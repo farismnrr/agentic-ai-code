@@ -8,26 +8,6 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Instant;
 
-pub(super) fn trace_task_routing(
-    tool: &str,
-    execute_async: bool,
-    client_has_tasks: bool,
-    tool_has_tasks: bool,
-) {
-    tracing::info!(
-        event = "relay.transport.stage",
-        stage = "task_routing",
-        outcome = if execute_async {
-            "task_dispatch"
-        } else {
-            "synchronous_dispatch"
-        },
-        tool,
-        client_has_tasks,
-        tool_has_tasks,
-    );
-}
-
 pub(super) fn record_activity_outcome(
     state: &AppState,
     start: &ActivityEvent,
@@ -447,31 +427,4 @@ pub(super) fn agent_session_from_params(params: Option<&Value>) -> Option<String
         .get("io.modelcontextprotocol/agentSession")?
         .as_str()
         .map(|value| value.chars().take(128).collect())
-}
-
-pub(super) fn client_supports_tasks(params: Option<&Value>) -> bool {
-    params
-        .and_then(|value| value.get("_meta"))
-        .and_then(|value| value.get("io.modelcontextprotocol/clientCapabilities"))
-        .and_then(|value| value.get("extensions"))
-        .and_then(|value| value.get("io.modelcontextprotocol/tasks"))
-        .is_some()
-}
-
-pub(super) fn requires_idempotency_key(tool: &str, arguments: &Value) -> bool {
-    if tool == "ssh_readonly_exec" {
-        return false;
-    }
-    if tool != "http_fetch" {
-        return false;
-    }
-    !matches!(
-        arguments
-            .get("method")
-            .and_then(Value::as_str)
-            .unwrap_or("GET")
-            .to_ascii_uppercase()
-            .as_str(),
-        "GET" | "HEAD" | "OPTIONS"
-    )
 }

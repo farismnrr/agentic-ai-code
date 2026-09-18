@@ -26,7 +26,7 @@ Hard rules:
 - keep the execution root explicit;
 - keep OAuth issuer, audience, owner, signature, time, and scope validation
   enabled; and
-- never expose the host Docker socket to the relay.
+- keep unrestricted Docker disabled; only the relay-owned read-only Docker diagnostic path may receive the configured socket per validated direct `docker` invocation.
 
 ## 1. Build or install `ai-tools`
 
@@ -62,9 +62,10 @@ directories through `RELAY_TOOLCHAIN_PATH`. Do not copy the entire interactive
 shell PATH into the relay.
 
 Provider-specific coding-CLI delegation is not part of the current relay
-surface. Long-running eligible tools use standard MCP Tasks with explicit
-`execution_mode=sync|async|auto`; `auto` selects async only when the client
-advertises Tasks.
+surface. Retained coding tools execute synchronously with a maximum per-call
+runtime of 60 seconds. The relay does not accept caller-selected
+`execution_mode`; longer operator work must be run manually rather than
+detached through the coding relay.
 
 ## 3. Configure OAuth values
 

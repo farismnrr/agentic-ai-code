@@ -149,8 +149,7 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
                 "arguments": {
                     "alias": "fixture",
                     "command": "docker",
-                    "args": ["ps"],
-                    "execution_mode": "sync"
+                    "args": ["ps"]
                 },
                 "_meta": meta()
             }

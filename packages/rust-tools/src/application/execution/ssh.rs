@@ -38,16 +38,9 @@ pub(super) fn build_invocation(
                 .default_terminal_timeout_ms
                 .clamp(1, MAX_SSH_TIMEOUT_MS),
         );
-    let timeout_ms = if timeout_ms == 0 {
-        config
-            .default_terminal_timeout_ms
-            .clamp(1, MAX_SSH_TIMEOUT_MS)
-    } else {
-        timeout_ms
-    };
-    if timeout_ms > MAX_SSH_TIMEOUT_MS {
+    if !(1..=MAX_SSH_TIMEOUT_MS).contains(&timeout_ms) {
         return Err(McpError::InvalidRequest(
-            "timeout_ms exceeds SSH diagnostic maximum".into(),
+            "timeout_ms must be between 1 and 60000 ms".into(),
         ));
     }
 
@@ -85,6 +78,7 @@ pub(super) fn build_invocation(
         timeout_ms,
         allow_network: true,
         expose_optional_sockets: false,
+        readonly_docker_socket: false,
         expose_authorized_siblings: false,
         security: InvocationSecurity::Ssh {
             identity_file: spec.identity_file,

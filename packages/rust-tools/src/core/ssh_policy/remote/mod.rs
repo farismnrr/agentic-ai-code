@@ -63,13 +63,21 @@ pub fn validate_remote_command(
     Ok(ValidatedRemoteCommand { rendered, summary })
 }
 
+pub(crate) fn validate_docker_command(
+    tokens: &[String],
+    readonly_db_user: Option<&str>,
+    readonly_redis_user: Option<&str>,
+) -> Result<Vec<String>, McpError> {
+    docker::validate(tokens, readonly_db_user, readonly_redis_user)
+}
+
 pub(super) fn validate_command_node(
     tokens: &[String],
     readonly_db_user: Option<&str>,
     readonly_redis_user: Option<&str>,
 ) -> Result<Vec<String>, McpError> {
     match tokens[0].as_str() {
-        "docker" => docker::validate(tokens, readonly_db_user, readonly_redis_user),
+        "docker" => validate_docker_command(tokens, readonly_db_user, readonly_redis_user),
         "uname" | "uptime" | "hostname" | "whoami" => common::simple(tokens, 8),
         "id" | "df" | "free" | "ps" | "ss" | "ip" => host::bounded_observation(tokens),
         "command" => read::command_discovery(tokens),

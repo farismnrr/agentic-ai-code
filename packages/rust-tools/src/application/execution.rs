@@ -41,6 +41,7 @@ pub(crate) struct ToolInvocation {
     timeout_ms: u64,
     allow_network: bool,
     expose_optional_sockets: bool,
+    readonly_docker_socket: bool,
     expose_authorized_siblings: bool,
     security: InvocationSecurity,
 }
@@ -91,7 +92,7 @@ pub async fn start_tool_task_for(
     let job = match tool.name {
         "ssh_readonly_exec" => JobKind::Process(ssh::build_invocation(arguments, config)?),
         "http_fetch" => JobKind::Process(requests::build_http_fetch_invocation(arguments)?),
-        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)),
+        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)?),
         _ => {
             return Err(McpError::InvalidRequest(
                 "tool task execution is not implemented".into(),
@@ -243,7 +244,7 @@ pub async fn dispatch_tool_call(
         }
         "ssh_readonly_exec" => JobKind::Process(ssh::build_invocation(arguments, config)?),
         "http_fetch" => JobKind::Process(requests::build_http_fetch_invocation(arguments)?),
-        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)),
+        "web_search" => JobKind::Process(requests::build_web_search_invocation(arguments)?),
         _ => return Ok(ToolCallResult::not_implemented(tool.name)),
     };
     let id = manager.start(job).await?;

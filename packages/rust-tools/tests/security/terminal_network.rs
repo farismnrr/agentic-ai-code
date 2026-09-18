@@ -122,11 +122,8 @@ pub(super) async fn test_network_boundaries(config: &mut ServerConfig, root: &Pa
     let http_tool = ai_tools::interfaces::mcp::find_tool("http_fetch")
         .expect("http_fetch tool must exist in catalog");
     assert!(
-        ai_tools::application::execution::tool_call_supports_tasks(
-            &http_tool,
-            &serde_json::json!({"url": "http://127.0.0.1:80", "method": "GET"})
-        ),
-        "http_fetch retains its independent task support"
+        http_tool.execution.is_none(),
+        "http_fetch must remain synchronous-only at the MCP boundary"
     );
 }
 
@@ -217,8 +214,7 @@ async fn http_fetch_reaches_its_policy_without_scanning_the_workspace() {
                 "name": "http_fetch",
                 "arguments": {
                     "url": "http://127.0.0.1:9/blocked",
-                    "timeout_ms": 1500,
-                    "execution_mode": "sync"
+                    "timeout_ms": 1500
                 },
                 "_meta": {
                     "io.modelcontextprotocol/protocolVersion": "2026-07-28",

@@ -42,6 +42,13 @@ async function requestBody(init: RequestInit | undefined) {
       return response(body.id, { supportedVersions: ['2026-07-28'], capabilities: {} })
     }
     if (body.method === 'tools/call') return response(body.id, task('async-task-1'))
+    if (body.method === 'tasks/get') {
+      return response(body.id, {
+        ...task('async-task-1', 'done\n'),
+        status: 'completed',
+        result: { content: [{ type: 'text', text: 'done' }], isError: false }
+      })
+    }
     throw new Error(`unexpected method ${body.method}`)
   }
 
@@ -49,15 +56,11 @@ async function requestBody(init: RequestInit | undefined) {
   await mcp.connect()
   const result = await mcp.callTool({
     name: 'terminal_exec',
-    arguments: { execution_mode: 'async', idempotency_key: 'async-test-1' }
+    arguments: {}
   })
-  const progress = JSON.parse(result.content[0].text) as Record<string, unknown>
-
-  assert.deepEqual(methods, ['server/discover', 'tools/call'])
-  assert.equal(progress.resultType, 'task')
-  assert.equal(progress.taskId, 'async-task-1')
-  assert.match(String(progress.message), /tasks\/get/)
-  assert.match(JSON.stringify(progress.output), /step 1/)
+  assert.deepEqual(methods, ['server/discover', 'tools/call', 'tasks/get'])
+  assert.equal(result.content[0].text, 'done')
+  assert.equal(result.isError, false)
 }
 
 {
@@ -77,7 +80,7 @@ async function requestBody(init: RequestInit | undefined) {
   const controller = new AbortController()
   const mcp = client(fetchImpl)
   await mcp.connect()
-  const call = mcp.callTool({ name: 'terminal_exec', arguments: { execution_mode: 'auto' } }, controller.signal)
+  const call = mcp.callTool({ name: 'terminal_exec', arguments: {} }, controller.signal)
   await new Promise(resolve => setImmediate(resolve))
   controller.abort()
   const result = await call
@@ -107,7 +110,7 @@ async function requestBody(init: RequestInit | undefined) {
 
   const mcp = client(fetchImpl, 25)
   await mcp.connect()
-  const result = await mcp.callTool({ name: 'terminal_exec', arguments: { execution_mode: 'auto' } })
+  const result = await mcp.callTool({ name: 'terminal_exec', arguments: {} })
   const progress = JSON.parse(result.content[0].text) as Record<string, unknown>
 
   assert.equal(progress.taskId, 'poll-timeout-task')
@@ -138,7 +141,7 @@ async function requestBody(init: RequestInit | undefined) {
 
   const mcp = client(fetchImpl)
   await mcp.connect()
-  const result = await mcp.callTool({ name: 'terminal_exec', arguments: { execution_mode: 'auto' } })
+  const result = await mcp.callTool({ name: 'terminal_exec', arguments: {} })
   const progress = JSON.parse(result.content[0].text) as Record<string, unknown>
 
   assert.equal(progress.taskId, 'timed-out-task')
@@ -147,4 +150,4 @@ async function requestBody(init: RequestInit | undefined) {
   assert.equal(result.isError, true)
 }
 
-console.log('async task progress focused acceptance: PASS')
+console.log('task progress focused acceptance: PASS')

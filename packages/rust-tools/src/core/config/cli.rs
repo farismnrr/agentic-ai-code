@@ -141,12 +141,12 @@ pub struct Cli {
     #[arg(long, env = "RELAY_SSH_REDIS_READONLY_USER")]
     pub ssh_readonly_redis_user: Option<String>,
 
-    /// Explicit local-development access to a host Docker daemon socket.
-    /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
+    /// Explicit full-authority local-development access to a host Docker daemon socket.
+    /// Without this flag, direct Docker calls are limited to the semantic read-only diagnostic policy.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
     pub allow_docker: bool,
 
-    /// Host Docker socket to expose when --allow-docker is enabled.
+    /// Host Docker socket used for validated read-only Docker diagnostics and full opt-in mode.
     #[arg(
         long,
         env = "RELAY_DOCKER_SOCKET",

@@ -137,7 +137,7 @@ The coding relay does not expose the host Tailscale local API socket by default.
 
 ## Docker boundary
 
-The coding relay does **not** expose the host Docker socket by default. For trusted single-owner local development, an operator may explicitly opt in with `RELAY_ALLOW_DOCKER=true`; that escape hatch permits the `docker` CLI and bind-mounts the daemon socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`) into the Bubblewrap sandbox. Docker daemon access is effectively host-level authority and therefore weakens the filesystem boundary. Production/remote deployments should keep it disabled unless the operator deliberately accepts that trust expansion.
+The coding relay does **not** expose the host Docker socket to arbitrary terminal commands by default. A direct `docker` invocation may receive the configured daemon socket only after its arguments pass the relay's positive read-only diagnostic policy (bounded list/logs/stats/top/safe-inspect/Compose diagnostics); lifecycle mutations and unknown Docker operations fail closed. For trusted single-owner local development, `RELAY_ALLOW_DOCKER=true` remains an explicit full-authority escape hatch: it permits unrestricted Docker CLI use from terminal execution and exposes the socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`). Full Docker daemon access is effectively host-level authority and should stay disabled unless the operator deliberately accepts that trust expansion.
 
 The Nuxt production image and the Rust relay are separate deployments. The
 Nuxt Docker build excludes `packages/rust-tools`, `packages/relay-agent`, Rust
