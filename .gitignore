@@ -58,3 +58,4 @@ workspaces/
 
 # Local temporary build/verification artifacts
 .tmp/
+/packages/rust-tools/target-plan069-release/
