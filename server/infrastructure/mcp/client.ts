@@ -33,6 +33,7 @@ export type McpClientTool = {
   name: string
   description?: string
   inputSchema: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
   annotations?: {
     readOnlyHint?: boolean
     destructiveHint?: boolean
@@ -44,6 +45,7 @@ export type McpClientTool = {
 export type McpClientCallResult = {
   content: unknown[]
   isError?: boolean
+  structuredContent?: unknown
   [key: string]: unknown
 }
 

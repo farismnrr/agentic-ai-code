@@ -475,12 +475,14 @@ pub(super) async fn run_text_search(
         result.count = result.matches.len();
         result.truncated = true;
     }
-    let text = serde_json::to_string(&result)
+    let structured_content = serde_json::to_value(&result)
         .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?;
-    Ok(ToolCallResult::complete(vec![ToolResultContent {
-        kind: "text",
-        text,
-    }]))
+    let text = serde_json::to_string(&structured_content)
+        .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?;
+    Ok(
+        ToolCallResult::complete(vec![ToolResultContent { kind: "text", text }])
+            .with_structured_content(structured_content),
+    )
 }
 
 pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvocation, McpError> {

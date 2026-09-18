@@ -82,6 +82,13 @@ pub(super) fn extract_activity_evidence(
     let Some(activity) = object.remove("_activity") else {
         return (result, None, Evidence::Summary, false);
     };
+    if let Some(structured) = result
+        .structured_content
+        .as_mut()
+        .and_then(Value::as_object_mut)
+    {
+        structured.remove("_activity");
+    }
     let preview = activity
         .get("preview")
         .and_then(Value::as_bool)
@@ -269,7 +276,36 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
             text,
         }])
     });
-    let (result, payload, evidence, preview) = extract_activity_evidence(result);
+    let (mut result, payload, evidence, preview) = extract_activity_evidence(result);
+    let output_contract_error = if result.is_error {
+        None
+    } else {
+        state.tool_for_name(tool_name).and_then(|tool| {
+            crate::interfaces::mcp::output_schema_for_tool(tool.name).and_then(|_| {
+                let validation = result
+                    .structured_content
+                    .as_ref()
+                    .ok_or_else(|| {
+                        McpError::Internal(
+                            "tool declared output schema without structured content".into(),
+                        )
+                    })
+                    .and_then(|value| crate::interfaces::mcp::validate_tool_output(&tool, value));
+                validation.err()
+            })
+        })
+    };
+    if let Some(error) = output_contract_error {
+        tracing::error!(
+            event = "relay.tool_output_contract_error",
+            tool = tool_name,
+            error = %error,
+        );
+        result = ToolCallResult::error(vec![crate::interfaces::mcp::ToolResultContent {
+            kind: "text",
+            text: "Tool output failed contract validation".into(),
+        }]);
+    }
     let activity_status = if result.is_error {
         Status::Error
     } else {

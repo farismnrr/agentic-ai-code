@@ -100,15 +100,17 @@ fn complete_json<T: Serialize>(
     serialization_error: &'static str,
     output_limit: Option<(usize, &'static str)>,
 ) -> Result<ToolCallResult, McpError> {
-    let text = serde_json::to_string(result)
+    let structured_content = serde_json::to_value(result)
+        .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
+    let text = serde_json::to_string(&structured_content)
         .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
     if let Some((max_bytes, error)) = output_limit {
         if text.len() > max_bytes {
             return Err(McpError::InvalidRequest(error.to_owned()));
         }
     }
-    Ok(ToolCallResult::complete(vec![ToolResultContent {
-        kind: "text",
-        text,
-    }]))
+    Ok(
+        ToolCallResult::complete(vec![ToolResultContent { kind: "text", text }])
+            .with_structured_content(structured_content),
+    )
 }

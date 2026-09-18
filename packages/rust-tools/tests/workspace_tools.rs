@@ -1,11 +1,25 @@
 use ai_tools::application::workspace::{
-    file_edit, file_read, file_read_multiple, file_search, file_write,
+    apply_patch, directory_list, dispatch_native_tool, file_edit, file_read, file_read_multiple,
+    file_search, file_write,
 };
 use ai_tools::core::config::ServerConfig;
-use ai_tools::interfaces::mcp::{retained_tool_catalog, PRIMARY_TOOL_NAMES};
+use ai_tools::interfaces::mcp::{
+    find_tool, output_schema_for_tool, retained_tool_catalog, validate_tool_output,
+    PRIMARY_TOOL_NAMES,
+};
+use serde::Serialize;
 use serde_json::{json, to_value, Value};
 use std::fs;
 use uuid::Uuid;
+
+fn public_output<T: Serialize>(tool_name: &str, result: T) -> Value {
+    let mut value = to_value(result).unwrap();
+    if let Some(object) = value.as_object_mut() {
+        object.remove("_activity");
+    }
+    validate_tool_output(&find_tool(tool_name).unwrap(), &value).unwrap();
+    value
+}
 
 fn fixture() -> (std::path::PathBuf, ServerConfig) {
     let root = std::env::temp_dir().join(format!("ai-tools-workspace-tools-{}", Uuid::new_v4()));
@@ -48,6 +62,24 @@ fn file_edit_schema_stays_flat_and_model_typed() {
         "file_read",
         "file_read_multiple",
         "text_search",
+        "apply_patch",
+    ] {
+        let schema = output_schema_for_tool(tool_name)
+            .unwrap_or_else(|| panic!("missing output schema: {tool_name}"));
+        assert_eq!(
+            schema["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
+    }
+
+    for tool_name in [
+        "directory_list",
+        "file_search",
+        "file_write",
+        "file_edit",
+        "file_read",
+        "file_read_multiple",
+        "text_search",
     ] {
         let tool = retained_tool_catalog()
             .into_iter()
@@ -63,6 +95,68 @@ fn file_edit_schema_stays_flat_and_model_typed() {
             );
         }
     }
+}
+
+#[test]
+fn workspace_output_schemas_match_public_runtime_results() {
+    let (root, config) = fixture();
+    fs::write(root.join("seed.txt"), "one\ntwo\n").unwrap();
+
+    public_output(
+        "directory_list",
+        directory_list(&json!({"path":".","depth":1}), &config).unwrap(),
+    );
+    public_output(
+        "file_search",
+        file_search(&json!({"pattern":"**/*.txt","max_results":10}), &config).unwrap(),
+    );
+    public_output(
+        "file_read",
+        file_read(&json!({"path":"seed.txt","limit_lines":10}), &config).unwrap(),
+    );
+    public_output(
+        "file_read_multiple",
+        file_read_multiple(
+            &json!({"paths":["seed.txt","missing.txt"],"limit_lines":10}),
+            &config,
+        )
+        .unwrap(),
+    );
+
+    public_output(
+        "file_write",
+        file_write(
+            &json!({"path":"write.txt","content":"alpha\nbeta\n"}),
+            &config,
+        )
+        .unwrap(),
+    );
+    public_output(
+        "file_edit",
+        file_edit(
+            &json!({
+                "path":"write.txt",
+                "old_text":"beta",
+                "new_text":"gamma",
+                "dry_run":true
+            }),
+            &config,
+        )
+        .unwrap(),
+    );
+    public_output(
+        "apply_patch",
+        apply_patch(
+            &json!({
+                "patch":"--- seed.txt\n+++ seed.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+three\n",
+                "dry_run":true
+            }),
+            &config,
+        )
+        .unwrap(),
+    );
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -85,6 +179,22 @@ fn workspace_read_write_edit_search_lifecycle_is_concurrency_safe() {
         &config,
     )
     .unwrap();
+
+    let dispatched = dispatch_native_tool(
+        "file_read",
+        &json!({"path":"a.txt","offset_line":1,"limit_lines":2}),
+        &config,
+    )
+    .unwrap()
+    .expect("file_read dispatch");
+    let structured = dispatched
+        .structured_content
+        .as_ref()
+        .expect("structured file_read result");
+    let fallback: Value =
+        serde_json::from_str(&dispatched.content[0].text).expect("JSON text fallback");
+    assert_eq!(structured, &fallback);
+    validate_tool_output(&find_tool("file_read").unwrap(), structured).unwrap();
 
     let first = to_value(
         file_read(

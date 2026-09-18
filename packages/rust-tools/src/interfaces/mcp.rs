@@ -256,9 +256,10 @@ impl DiscoverResult {
 
 mod catalog;
 pub use catalog::{
-    blender_tool_catalog, find_tool, find_tool_for_profile, retained_tool_catalog,
-    runtime_tool_catalog, validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme,
-    CODING_SCOPE, PRIMARY_TOOL_NAMES,
+    blender_tool_catalog, find_tool, find_tool_for_profile, output_schema_for_tool,
+    retained_tool_catalog, runtime_tool_catalog, tool_for_wire, validate_tool_arguments,
+    validate_tool_output, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
+    PRIMARY_TOOL_NAMES,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -307,6 +308,8 @@ pub struct ToolCallResult {
     pub content: Vec<ToolResultContent>,
     #[serde(rename = "isError")]
     pub is_error: bool,
+    #[serde(rename = "structuredContent", skip_serializing_if = "Option::is_none")]
+    pub structured_content: Option<Value>,
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<Value>,
 }
@@ -318,6 +321,11 @@ impl ToolCallResult {
 
     pub fn error(content: Vec<ToolResultContent>) -> Self {
         Self::new(content, true)
+    }
+
+    pub fn with_structured_content(mut self, structured_content: Value) -> Self {
+        self.structured_content = Some(structured_content);
+        self
     }
 
     pub fn with_meta(mut self, meta: Value) -> Self {
@@ -352,6 +360,7 @@ impl ToolCallResult {
             result_type: "complete",
             content,
             is_error,
+            structured_content: None,
             meta: None,
         }
     }

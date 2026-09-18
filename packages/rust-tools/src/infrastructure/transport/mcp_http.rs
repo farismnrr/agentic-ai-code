@@ -308,7 +308,11 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 fn handle_tools_list(request: &mcp::Request, state: &Arc<AppState>) -> JsonErr2 {
-    let tools = state.tool_catalog();
+    let tools = state
+        .tool_catalog()
+        .iter()
+        .map(mcp::tool_for_wire)
+        .collect::<Vec<_>>();
     let response = Response::new(
         request.id.clone(),
         json!({

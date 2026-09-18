@@ -278,6 +278,25 @@ async fn wire_client_primary_profile_exposes_runtime_core_and_denies_full_tools(
         .collect();
 
     assert!(tool_names.contains(&"creative_status"));
+    for structured in [
+        "directory_list",
+        "file_search",
+        "file_write",
+        "file_edit",
+        "file_read",
+        "file_read_multiple",
+        "text_search",
+        "apply_patch",
+    ] {
+        let tool = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some(structured))
+            .unwrap_or_else(|| panic!("missing tool: {structured}"));
+        assert!(
+            tool.get("outputSchema").is_some_and(Value::is_object),
+            "{structured} must expose outputSchema"
+        );
+    }
 
     // Required Primary tools
     for required in [
@@ -392,6 +411,44 @@ async fn wire_client_primary_profile_exposes_runtime_core_and_denies_full_tools(
     let valid_json: Value = valid_call.json().await.expect("workspace_list JSON");
     assert!(valid_json.pointer("/result").is_some());
 
+    let read_call = post_mcp(
+        &client,
+        port,
+        "tools/call",
+        Some("file_read"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "file_read",
+                "arguments": {
+                    "path": "Cargo.toml",
+                    "limit_lines": 5
+                },
+                "_meta": meta()
+            }
+        }),
+    )
+    .await;
+    assert_eq!(read_call.status(), reqwest::StatusCode::OK);
+    let read_json: Value = read_call.json().await.expect("file_read JSON");
+    assert_eq!(
+        read_json
+            .pointer("/result/isError")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    let structured = read_json
+        .pointer("/result/structuredContent")
+        .expect("file_read structuredContent");
+    let fallback = read_json
+        .pointer("/result/content/0/text")
+        .and_then(Value::as_str)
+        .and_then(|text| serde_json::from_str::<Value>(text).ok())
+        .expect("file_read JSON text fallback");
+    assert_eq!(structured, &fallback);
+
     server.abort();
     let _ = server.await;
     fs::remove_dir_all(activity_state_dir).expect("remove activity state directory");
@@ -460,6 +517,11 @@ async fn text_search_exclude_globs_are_enforced_over_the_wire() {
         .and_then(Value::as_str)
         .expect("text_search result text");
     let result: Value = serde_json::from_str(text).expect("text_search result payload");
+    assert_eq!(
+        body.pointer("/result/structuredContent"),
+        Some(&result),
+        "structuredContent must match the JSON text fallback"
+    );
     let matches = result["matches"].as_array().expect("matches");
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0]["path"], "include.txt");

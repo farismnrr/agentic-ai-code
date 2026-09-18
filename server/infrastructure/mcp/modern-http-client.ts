@@ -112,6 +112,7 @@ export class ModernHttpMcpClient implements McpClientLike {
         name: tool.name,
         description: typeof tool.description === 'string' ? tool.description : undefined,
         inputSchema: tool.inputSchema,
+        outputSchema: isJsonRecord(tool.outputSchema) ? tool.outputSchema : undefined,
         annotations: isJsonRecord(tool.annotations)
           ? {
               readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
@@ -164,7 +165,8 @@ export class ModernHttpMcpClient implements McpClientLike {
     return {
       ...result,
       content: result.content,
-      ...(typeof result.isError === 'boolean' && { isError: result.isError })
+      ...(typeof result.isError === 'boolean' && { isError: result.isError }),
+      ...('structuredContent' in result && { structuredContent: result.structuredContent })
     }
   }
 
