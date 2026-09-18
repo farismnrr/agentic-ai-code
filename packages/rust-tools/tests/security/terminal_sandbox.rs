@@ -300,6 +300,42 @@ async fn home_fixture_child() {
     fs::set_permissions(&inaccessible, fs::Permissions::from_mode(0o700)).unwrap();
     assert_ne!(result.exit_code, Some(0));
     assert!(!result.stdout.contains("must-not-run"));
+
+    // Auto-discovered ~/.cargo/bin must win over packaged system rustup shims
+    // and carry the owner's read-only rustup state even when HOME is outside
+    // the narrowed project execution root.
+    let cargo_bin = root.join(".cargo/bin");
+    let rustup_marker = root.join(".rustup/toolchains/fixture/marker");
+    fs::create_dir_all(&cargo_bin).unwrap();
+    fs::create_dir_all(rustup_marker.parent().unwrap()).unwrap();
+    fs::write(
+        cargo_bin.join("cargo"),
+        "#!/bin/sh\n\
+         test \"$CARGO_HOME\" = \"$HOME/.cargo\" || exit 41\n\
+         test \"$RUSTUP_HOME\" = \"$HOME/.rustup\" || exit 42\n\
+         test \"$(cat \"$CARGO_HOME/credentials\" 2>/dev/null)\" != \"fixture-protected-canary\" || exit 43\n\
+         cat \"$RUSTUP_HOME/toolchains/fixture/marker\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(cargo_bin.join("cargo"), fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(&rustup_marker, "auto-rustup-ok").unwrap();
+    let rust_project = root.join("project-a");
+    let rust_config = ServerConfig {
+        dir: Some(rust_project.to_string_lossy().into()),
+        execution_root: Some(rust_project.to_string_lossy().into()),
+        ..ServerConfig::default()
+    };
+    let result = shell(&rust_config, &rust_project, "cargo").await;
+    assert_eq!(
+        result.exit_code,
+        Some(0),
+        "auto-discovered Cargo/Rust failed: {}",
+        result.stderr
+    );
+    assert_eq!(result.stdout.trim(), "auto-rustup-ok");
+    fs::remove_file(cargo_bin.join("cargo")).unwrap();
+    fs::remove_dir_all(root.join(".rustup")).unwrap();
+
     // Reviewed Rust and a symlink-based Node installation are available without
     // inheriting the parent PATH, auth environment, or toolchain credentials.
     let node_link = root.join("node-bin");

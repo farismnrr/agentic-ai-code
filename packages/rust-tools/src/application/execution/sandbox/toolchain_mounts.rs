@@ -88,9 +88,45 @@ pub(super) fn mount_toolchains(
         }
     }
 
+    let safe_path_entries = super::super::toolchain::safe_path_entries(config);
+
+    // Automatic ~/.cargo/bin discovery must carry the rustup state that makes
+    // rustup's cargo/rustc proxy shims functional. Keep the state read-only and
+    // mask Cargo credential files exactly as for an explicit toolchain path.
+    if cargo_home.is_none()
+        && canonical_home_cargo_bin.as_ref().is_some_and(|cargo_bin| {
+            safe_path_entries
+                .iter()
+                .filter_map(|path| std::fs::canonicalize(path).ok())
+                .any(|path| &path == cargo_bin)
+        })
+    {
+        let candidate = host_home.join(".cargo");
+        if candidate.is_dir() {
+            let value = candidate.to_string_lossy().into_owned();
+            if !candidate.starts_with(sandbox_root) {
+                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                toolchain_roots.insert(candidate.clone());
+            }
+            for file in ["credentials", "credentials.toml"] {
+                mask_protected_file(args, &candidate.join(file))?;
+            }
+            cargo_home = Some(value);
+        }
+        let candidate = host_home.join(".rustup");
+        if candidate.is_dir() {
+            let value = candidate.to_string_lossy().into_owned();
+            if !candidate.starts_with(sandbox_root) {
+                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+                toolchain_roots.insert(candidate.clone());
+            }
+            rustup_home = Some(value);
+        }
+    }
+
     // Expose only validated executable directories from user-managed runtimes,
     // never their surrounding profiles or credential stores.
-    for discovered in super::super::toolchain::safe_path_entries(config) {
+    for discovered in safe_path_entries {
         if let Some(control) = control {
             control.check()?;
         }

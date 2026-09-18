@@ -30,9 +30,6 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
     for path in config.toolchain_paths.iter().map(PathBuf::from) {
         push_safe_directory(&mut entries, path, false);
     }
-    for path in DEFAULT_PATHS.iter().map(PathBuf::from) {
-        push_safe_directory(&mut entries, path, true);
-    }
     if let Ok(home) = super::sandbox::runtime_home() {
         for sub in [
             ".cargo/bin",
@@ -59,6 +56,13 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
         ] {
             discover_conda_bins(&mut entries, &env_root);
         }
+    }
+    // Reviewed owner-managed runtimes intentionally precede conflicting
+    // packaged system shims. This is required for rustup-style multi-call
+    // proxies such as ~/.cargo/bin/cargo to select the owner's installed
+    // toolchain instead of an unrelated /usr/bin rustup proxy.
+    for path in DEFAULT_PATHS.iter().map(PathBuf::from) {
+        push_safe_directory(&mut entries, path, true);
     }
     #[cfg(target_os = "macos")]
     for path in [
