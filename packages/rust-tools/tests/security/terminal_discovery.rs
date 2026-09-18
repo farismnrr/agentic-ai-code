@@ -442,12 +442,11 @@ async fn wire_client_primary_profile_exposes_runtime_core_and_denies_full_tools(
     let structured = read_json
         .pointer("/result/structuredContent")
         .expect("file_read structuredContent");
-    let fallback = read_json
-        .pointer("/result/content/0/text")
-        .and_then(Value::as_str)
-        .and_then(|text| serde_json::from_str::<Value>(text).ok())
-        .expect("file_read JSON text fallback");
-    assert_eq!(structured, &fallback);
+    assert!(structured.is_object());
+    assert!(read_json
+        .pointer("/result/content")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty));
 
     server.abort();
     let _ = server.await;
@@ -512,16 +511,13 @@ async fn text_search_exclude_globs_are_enforced_over_the_wire() {
         body.pointer("/result/isError").and_then(Value::as_bool),
         Some(false)
     );
-    let text = body
-        .pointer("/result/content/0/text")
-        .and_then(Value::as_str)
-        .expect("text_search result text");
-    let result: Value = serde_json::from_str(text).expect("text_search result payload");
-    assert_eq!(
-        body.pointer("/result/structuredContent"),
-        Some(&result),
-        "structuredContent must match the JSON text fallback"
-    );
+    assert!(body
+        .pointer("/result/content")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty));
+    let result = body
+        .pointer("/result/structuredContent")
+        .expect("text_search structuredContent");
     let matches = result["matches"].as_array().expect("matches");
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0]["path"], "include.txt");

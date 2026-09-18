@@ -1,4 +1,6 @@
 import { Buffer } from 'node:buffer'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, McpRoundTripTimeoutError, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
 import type { McpClientCallResult, McpClientLike, McpClientTool } from './client'
 import { redactSecrets } from '../observability/sanitize.ts'
@@ -38,6 +40,8 @@ function encodeMcpHeaderValue(value: string) {
 export class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
   private activityBootstrapSupported = false
+  private toolOutputValidators = new Map<string, JsonSchemaValidator<unknown>>()
+  private readonly outputValidatorProvider = new AjvJsonSchemaValidator()
   private readonly url: URL
   private readonly accessToken: string
   private readonly fetchImpl: typeof fetch
@@ -101,18 +105,26 @@ export class ModernHttpMcpClient implements McpClientLike {
       throw new Error('Remote MCP server returned an invalid tools/list result')
     }
 
+    const outputValidators = new Map<string, JsonSchemaValidator<unknown>>()
     const tools = result.tools.map((tool) => {
       if (!isJsonRecord(tool)
         || typeof tool.name !== 'string'
         || !isJsonRecord(tool.inputSchema)) {
         throw new Error('Remote MCP server returned an invalid tool definition')
       }
+      const outputSchema = isJsonRecord(tool.outputSchema) ? tool.outputSchema : undefined
+      if (outputSchema) {
+        outputValidators.set(
+          tool.name,
+          this.outputValidatorProvider.getValidator(outputSchema as JsonSchemaType)
+        )
+      }
       return {
         ...tool,
         name: tool.name,
         description: typeof tool.description === 'string' ? tool.description : undefined,
         inputSchema: tool.inputSchema,
-        outputSchema: isJsonRecord(tool.outputSchema) ? tool.outputSchema : undefined,
+        outputSchema,
         annotations: isJsonRecord(tool.annotations)
           ? {
               readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
@@ -124,6 +136,7 @@ export class ModernHttpMcpClient implements McpClientLike {
       } satisfies McpClientTool
     })
 
+    this.toolOutputValidators = outputValidators
     return { ...result, tools }
   }
 
@@ -151,6 +164,7 @@ export class ModernHttpMcpClient implements McpClientLike {
     // Do not bind caller cancellation to the initial HTTP round trip. A task
     // id must be received before cancellation can target durable relay work
     // rather than merely abandoning a request whose outcome is unknown.
+    const outputValidator = this.toolOutputValidators.get(params.name)
     const result = await this.request('tools/call', {
       name: params.name,
       arguments: params.arguments ?? {}
@@ -161,6 +175,15 @@ export class ModernHttpMcpClient implements McpClientLike {
         return this.awaitTask(task, signal)
       }
       throw new Error('Remote MCP server returned an invalid tools/call result')
+    }
+    if (outputValidator && result.isError !== true) {
+      if (!('structuredContent' in result)) {
+        throw new Error('Remote MCP tool declared an output schema but returned no structured content')
+      }
+      const validation = outputValidator(result.structuredContent)
+      if (!validation.valid) {
+        throw new Error('Remote MCP tool returned structured content that does not match its output schema')
+      }
     }
     return {
       ...result,
@@ -300,7 +323,8 @@ function taskResult(task: Record<string, unknown>): McpClientCallResult {
   }
   return {
     content: result.content,
-    ...(typeof result.isError === 'boolean' && { isError: result.isError })
+    ...(typeof result.isError === 'boolean' && { isError: result.isError }),
+    ...('structuredContent' in result && { structuredContent: result.structuredContent })
   }
 }
 

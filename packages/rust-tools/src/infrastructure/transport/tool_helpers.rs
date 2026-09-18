@@ -70,25 +70,31 @@ pub(super) fn deny_activity(
 pub(super) fn extract_activity_evidence(
     mut result: ToolCallResult,
 ) -> (ToolCallResult, Option<Vec<u8>>, Evidence, bool) {
-    let Some(content) = result.content.first_mut() else {
-        return (result, None, Evidence::NotApplicable, false);
-    };
-    let Ok(mut value) = serde_json::from_str::<Value>(&content.text) else {
-        return (result, None, Evidence::Summary, false);
-    };
-    let Some(object) = value.as_object_mut() else {
-        return (result, None, Evidence::Summary, false);
-    };
-    let Some(activity) = object.remove("_activity") else {
-        return (result, None, Evidence::Summary, false);
-    };
-    if let Some(structured) = result
+    let mut activity = result
         .structured_content
         .as_mut()
         .and_then(Value::as_object_mut)
-    {
-        structured.remove("_activity");
+        .and_then(|object| object.remove("_activity"));
+
+    if let Some(content) = result.content.first_mut() {
+        if let Ok(mut value) = serde_json::from_str::<Value>(&content.text) {
+            if let Some(object) = value.as_object_mut() {
+                let text_activity = object.remove("_activity");
+                let had_text_activity = text_activity.is_some();
+                if activity.is_none() {
+                    activity = text_activity;
+                }
+                if had_text_activity {
+                    content.text =
+                        serde_json::to_string(&value).unwrap_or_else(|_| content.text.clone());
+                }
+            }
+        }
     }
+
+    let Some(activity) = activity else {
+        return (result, None, Evidence::Summary, false);
+    };
     let preview = activity
         .get("preview")
         .and_then(Value::as_bool)
@@ -103,7 +109,6 @@ pub(super) fn extract_activity_evidence(
         .flatten()
         .filter(|payload| payload.len() <= 512 * 1024);
     let payload_available = payload.is_some();
-    content.text = serde_json::to_string(&value).unwrap_or_else(|_| content.text.clone());
     (
         result,
         payload,
@@ -124,19 +129,23 @@ pub(crate) fn activity_result_detail(
     if tool_name == "ssh_readonly_exec" {
         return None;
     }
-    let raw = result
-        .content
-        .iter()
-        .map(|content| content.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    if raw.trim().is_empty() {
-        return None;
-    }
-    let formatted = serde_json::from_str::<Value>(&raw)
-        .ok()
-        .and_then(|value| serde_json::to_string_pretty(&value).ok())
-        .unwrap_or(raw);
+    let formatted = if let Some(structured) = result.structured_content.as_ref() {
+        serde_json::to_string_pretty(structured).ok()?
+    } else {
+        let raw = result
+            .content
+            .iter()
+            .map(|content| content.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if raw.trim().is_empty() {
+            return None;
+        }
+        serde_json::from_str::<Value>(&raw)
+            .ok()
+            .and_then(|value| serde_json::to_string_pretty(&value).ok())
+            .unwrap_or(raw)
+    };
     let mut detail = crate::core::redaction::redact_credentials(&formatted);
     if let Some(cwd) = arguments
         .get("cwd")

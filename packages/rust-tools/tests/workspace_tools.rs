@@ -191,9 +191,7 @@ fn workspace_read_write_edit_search_lifecycle_is_concurrency_safe() {
         .structured_content
         .as_ref()
         .expect("structured file_read result");
-    let fallback: Value =
-        serde_json::from_str(&dispatched.content[0].text).expect("JSON text fallback");
-    assert_eq!(structured, &fallback);
+    assert!(dispatched.content.is_empty());
     validate_tool_output(&find_tool("file_read").unwrap(), structured).unwrap();
 
     let first = to_value(

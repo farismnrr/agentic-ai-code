@@ -13,6 +13,7 @@ async function requestBody(init: RequestInit | undefined) {
 }
 
 const outputSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
   properties: {
     path: { type: 'string' }
@@ -40,7 +41,7 @@ const fetchImpl: typeof fetch = async (_input, init) => {
   }
   if (body.method === 'tools/call') {
     return response(body.id, {
-      content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
+      content: [],
       structuredContent,
       isError: false
     })
@@ -62,6 +63,44 @@ assert.deepEqual(tools.tools[0]?.outputSchema, outputSchema)
 
 const result = await client.callTool({ name: 'file_read', arguments: {} })
 assert.deepEqual(result.structuredContent, structuredContent)
-assert.deepEqual(JSON.parse(String((result.content[0] as { text: string }).text)), structuredContent)
+assert.deepEqual(result.content, [])
+
+const invalidFetchImpl: typeof fetch = async (_input, init) => {
+  const body = await requestBody(init)
+  if (body.method === 'server/discover') {
+    return response(body.id, { supportedVersions: ['2026-07-28'], capabilities: {} })
+  }
+  if (body.method === 'tools/list') {
+    return response(body.id, {
+      tools: [{
+        name: 'file_read',
+        inputSchema: { type: 'object', properties: {} },
+        outputSchema
+      }]
+    })
+  }
+  if (body.method === 'tools/call') {
+    return response(body.id, {
+      content: [],
+      structuredContent: { wrong: true },
+      isError: false
+    })
+  }
+  throw new Error(`unexpected method ${body.method}`)
+}
+
+const invalidClient = new ModernHttpMcpClient(
+  new URL('https://relay.example.test/mcp'),
+  'test-token',
+  invalidFetchImpl,
+  1_000,
+  'first-party-relay'
+)
+await invalidClient.connect()
+await invalidClient.listTools()
+await assert.rejects(
+  () => invalidClient.callTool({ name: 'file_read', arguments: {} }),
+  /does not match its output schema/
+)
 
 console.log('modern MCP structured output acceptance: PASS')

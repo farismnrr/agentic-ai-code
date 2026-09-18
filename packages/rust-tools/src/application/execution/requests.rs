@@ -9,7 +9,7 @@ const TERMINAL_HARD_TIMEOUT_MS: u64 = 60_000;
 use crate::application::workspace::reject_protected_target;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
-use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
+use crate::interfaces::mcp::ToolCallResult;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -477,12 +477,7 @@ pub(super) async fn run_text_search(
     }
     let structured_content = serde_json::to_value(&result)
         .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?;
-    let text = serde_json::to_string(&structured_content)
-        .map_err(|_| McpError::Internal("failed to serialize text search result".into()))?;
-    Ok(
-        ToolCallResult::complete(vec![ToolResultContent { kind: "text", text }])
-            .with_structured_content(structured_content),
-    )
+    Ok(ToolCallResult::complete(Vec::new()).with_structured_content(structured_content))
 }
 
 pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvocation, McpError> {

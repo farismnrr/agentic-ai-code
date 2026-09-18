@@ -73,7 +73,7 @@ The relay will fail closed if any of these do not match.
 
 ## 6. Verify tool discovery
 
-Tool discovery comes from one current runtime catalog composition path. Primary starts from the 13-tool retained terminal/workspace core; Full starts from the 50-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Structured workspace read/write/search tools advertise MCP `outputSchema`; successful calls return conforming `structuredContent` plus the equivalent serialized JSON text block for backward compatibility. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
+Tool discovery comes from one current runtime catalog composition path. Primary starts from the 13-tool retained terminal/workspace core; Full starts from the 50-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Structured workspace read/write/search tools advertise MCP `outputSchema`; successful calls return conforming `structuredContent` as the single payload while the required MCP `content` array remains empty. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
 
 ```text
 terminal_exec

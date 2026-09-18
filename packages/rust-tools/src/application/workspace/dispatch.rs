@@ -1,7 +1,7 @@
 //! Workspace-owned MCP result adaptation for native workspace capabilities.
 
 use crate::core::{config::ServerConfig, error::McpError};
-use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
+use crate::interfaces::mcp::ToolCallResult;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -102,15 +102,12 @@ fn complete_json<T: Serialize>(
 ) -> Result<ToolCallResult, McpError> {
     let structured_content = serde_json::to_value(result)
         .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
-    let text = serde_json::to_string(&structured_content)
-        .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
     if let Some((max_bytes, error)) = output_limit {
-        if text.len() > max_bytes {
+        let bytes = serde_json::to_vec(&structured_content)
+            .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
+        if bytes.len() > max_bytes {
             return Err(McpError::InvalidRequest(error.to_owned()));
         }
     }
-    Ok(
-        ToolCallResult::complete(vec![ToolResultContent { kind: "text", text }])
-            .with_structured_content(structured_content),
-    )
+    Ok(ToolCallResult::complete(Vec::new()).with_structured_content(structured_content))
 }
