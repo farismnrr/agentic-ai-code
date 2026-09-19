@@ -2,9 +2,15 @@
 
 use crate::core::{config::ServerConfig, error::McpError};
 use crate::interfaces::mcp::resources::{Resource, ResourceContent};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine as _,
+};
+use ring::digest::{Context, SHA256};
 use serde_json::json;
 use std::{
     fs,
+    io::Cursor,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -12,6 +18,8 @@ use std::{
 const MIME: &str = "text/plain; charset=utf-8";
 const MAX_RESOURCE_BYTES: usize = 64 * 1024;
 const MAX_STATUS_BYTES: usize = 16 * 1024;
+const MAX_MEDIA_RESOURCE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_MEDIA_RESOURCE_DIMENSION: u32 = 4096;
 pub const RESOURCE_NAMES: [&str; 4] = ["manifest", "agent-guidance", "status", "head"];
 const BLENDER_RESOURCE_NAME: &str = "blender-capability";
 
@@ -37,6 +45,9 @@ pub fn list(config: &ServerConfig) -> Result<Vec<Resource>, McpError> {
 }
 
 pub fn read(config: &ServerConfig, requested: &str) -> Result<ResourceContent, McpError> {
+    if requested.starts_with("creative://asset/") {
+        return read_creative_asset(config, requested);
+    }
     let (root, id) = repository(config)?;
     let Some((resource_id, name)) = parse_uri(requested) else {
         return Err(unknown());
@@ -67,9 +78,150 @@ pub fn read(config: &ServerConfig, requested: &str) -> Result<ResourceContent, M
     };
     Ok(ResourceContent {
         uri: requested.to_owned(),
-        text: bounded(text, MAX_RESOURCE_BYTES)?,
-        mime_type: MIME,
+        text: Some(bounded(text, MAX_RESOURCE_BYTES)?),
+        blob: None,
+        mime_type: MIME.to_owned(),
     })
+}
+
+pub(crate) fn creative_asset_resource_uri(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<String, McpError> {
+    crate::application::creative::validate_id(project_id, "project_id")?;
+    crate::application::creative::validate_id(asset_id, "asset_id")?;
+    let fallback;
+    let cwd = match cwd {
+        Some(value) => value,
+        None => {
+            fallback = config
+                .resolved_execution_root()
+                .map_err(|_| {
+                    McpError::InvalidRequest(
+                        "creative resource project context is unavailable".into(),
+                    )
+                })?
+                .to_string_lossy()
+                .into_owned();
+            &fallback
+        }
+    };
+    if cwd.is_empty() || cwd.len() > 4096 || cwd.chars().any(char::is_control) {
+        return Err(McpError::InvalidRequest(
+            "creative resource project context is invalid".into(),
+        ));
+    }
+    let context = URL_SAFE_NO_PAD.encode(cwd.as_bytes());
+    Ok(format!(
+        "creative://asset/{context}/{project_id}/{asset_id}"
+    ))
+}
+
+fn read_creative_asset(
+    config: &ServerConfig,
+    requested: &str,
+) -> Result<ResourceContent, McpError> {
+    if !config.enable_creative {
+        return Err(unknown());
+    }
+    let rest = requested
+        .strip_prefix("creative://asset/")
+        .ok_or_else(unknown)?;
+    let mut parts = rest.split('/');
+    let context = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(unknown)?;
+    let project_id = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(unknown)?;
+    let asset_id = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(unknown)?;
+    if parts.next().is_some() {
+        return Err(unknown());
+    }
+    crate::application::creative::validate_id(project_id, "project_id")?;
+    crate::application::creative::validate_id(asset_id, "asset_id")?;
+    let cwd = String::from_utf8(URL_SAFE_NO_PAD.decode(context).map_err(|_| unknown())?)
+        .map_err(|_| unknown())?;
+    if cwd.is_empty() || cwd.len() > 4096 || cwd.chars().any(char::is_control) {
+        return Err(unknown());
+    }
+
+    let asset =
+        crate::application::creative::require_asset(Some(&cwd), config, project_id, asset_id)?;
+    let mime_type = match asset.media_type.as_str() {
+        "image/png" => "image/png",
+        "image/jpeg" | "image/jpg" => "image/jpeg",
+        _ => {
+            return Err(McpError::InvalidRequest(
+                "creative media resource type is not reviewable".into(),
+            ))
+        }
+    };
+    let path = crate::application::creative::resolve_registered_asset_path(
+        Some(&cwd),
+        config,
+        project_id,
+        asset_id,
+    )?;
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|_| McpError::InvalidRequest("creative media resource is unavailable".into()))?;
+    if metadata.file_type().is_symlink()
+        || !metadata.is_file()
+        || metadata.len() as usize > MAX_MEDIA_RESOURCE_BYTES
+        || metadata.len() != asset.bytes
+    {
+        return Err(McpError::InvalidRequest(
+            "creative media resource exceeds review bounds".into(),
+        ));
+    }
+    let bytes = fs::read(&path)
+        .map_err(|_| McpError::InvalidRequest("creative media resource is unavailable".into()))?;
+    if sha256_bytes(&bytes) != asset.checksum_sha256 {
+        return Err(McpError::InvalidRequest(
+            "creative media resource no longer matches durable provenance".into(),
+        ));
+    }
+    let format = match mime_type {
+        "image/png" => image::ImageFormat::Png,
+        "image/jpeg" => image::ImageFormat::Jpeg,
+        _ => unreachable!(),
+    };
+    let (width, height) = image::ImageReader::with_format(Cursor::new(&bytes), format)
+        .into_dimensions()
+        .map_err(|_| McpError::InvalidRequest("creative media resource image is invalid".into()))?;
+    if width == 0
+        || height == 0
+        || width > MAX_MEDIA_RESOURCE_DIMENSION
+        || height > MAX_MEDIA_RESOURCE_DIMENSION
+    {
+        return Err(McpError::InvalidRequest(
+            "creative media resource dimensions exceed review bounds".into(),
+        ));
+    }
+    Ok(ResourceContent {
+        uri: requested.to_owned(),
+        text: None,
+        blob: Some(STANDARD.encode(bytes)),
+        mime_type: mime_type.to_owned(),
+    })
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    let mut context = Context::new(&SHA256);
+    context.update(bytes);
+    context
+        .finish()
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn blender_enabled(config: &ServerConfig) -> bool {

@@ -16,7 +16,6 @@ pub(super) fn new_id(prefix: &str) -> String {
 pub(super) fn validate_media_type(value: &str) -> Result<(), McpError> {
     let allowed = value.starts_with("image/")
         || value.starts_with("video/")
-        || value.starts_with("audio/")
         || value.starts_with("model/")
         || matches!(
             value,

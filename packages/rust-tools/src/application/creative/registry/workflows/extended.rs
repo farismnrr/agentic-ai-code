@@ -4,13 +4,12 @@ pub(super) fn workflows() -> Vec<WorkflowDescriptor> {
     vec![
         workflow(
             "sequence_assemble",
-            "Assemble ordered accepted shot/video Assets and optional audio through a caller-selected compatible video binding.",
+            "Assemble ordered accepted shot/video Assets through a caller-selected compatible video binding.",
             &["video.sequence_assemble"],
             json!({
                 "type":"object",
                 "properties":{
                     "video_asset_ids":id_array(1,128),
-                    "audio_asset_ids":id_array(0,64),
                     "fps":{"type":"number","minimum":1,"maximum":240},
                     "width":{"type":"integer","minimum":16,"maximum":16384},
                     "height":{"type":"integer","minimum":16,"maximum":16384},
@@ -165,50 +164,6 @@ pub(super) fn workflows() -> Vec<WorkflowDescriptor> {
             asset_output(),
         ),
         workflow(
-            "voice_clone",
-            "Create an authorized reusable voice artifact from bounded voice references.",
-            &["audio.voice_clone"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "reference_asset_ids":id_array(1,16),
-                    "consent_asserted":{"const":true},
-                    "language":short_string(32)
-                },
-                "required":["reference_asset_ids","consent_asserted"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "voice_change",
-            "Create a lineaged voice-changed audio child asset.",
-            &["audio.voice_change"],
-            json!({
-                "type":"object",
-                "properties":{"asset_id":id_schema(),"voice_element_id":id_schema()},
-                "required":["asset_id","voice_element_id"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "video_dub",
-            "Create synchronized dubbed media from a contained source video and voice plan.",
-            &["audio.video_dub"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "video_asset_id":id_schema(),
-                    "voice_element_id":id_schema(),
-                    "language":short_string(32)
-                },
-                "required":["video_asset_id","voice_element_id","language"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
             "shot_render_preview",
             "Execute one caller-authored shot through a selected backend.",
             &["video.reference_generate"],
@@ -223,7 +178,7 @@ pub(super) fn workflows() -> Vec<WorkflowDescriptor> {
         workflow(
             "game_asset_batch",
             "Run caller-declared independent game asset jobs.",
-            &["image.generate", "audio.sfx"],
+            &["image.generate"],
             json!({
                 "type":"object",
                 "properties":{

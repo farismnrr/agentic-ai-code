@@ -256,29 +256,6 @@ pub struct MultiplayerRoomState {
     pub updated_at_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AudioCue {
-    pub cue_id: String,
-    pub start_ms: u64,
-    #[serde(default)]
-    pub duration_ms: Option<u64>,
-    #[serde(default)]
-    pub asset_id: Option<String>,
-    #[serde(default)]
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AudioPlan {
-    pub audio_plan_id: String,
-    #[serde(default)]
-    pub voice_element_id: Option<String>,
-    #[serde(default)]
-    pub language: Option<String>,
-    #[serde(default)]
-    pub cues: Vec<AudioCue>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum QaSeverity {

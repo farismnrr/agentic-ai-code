@@ -364,7 +364,6 @@ pub(super) async fn execute_bound_job(
             "character_mesh_production"
             | "character_rig_production"
             | "character_action"
-            | "character_facial_performance"
             | "character_secondary_motion",
         ) => character::execute(cwd, config, owner, job).await,
         Some(

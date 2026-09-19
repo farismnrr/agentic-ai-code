@@ -59,6 +59,7 @@ enum BridgeMode {
     Incompatible,
     Malformed,
     Oversized,
+    ErrorDetail,
     Hang,
 }
 
@@ -142,6 +143,15 @@ async fn serve_bridge(listener: TcpListener, mode: BridgeMode, connections: usiz
                 let bytes = vec![b'x'; blender::MAX_BLENDER_RESPONSE_BYTES + 1];
                 stream.write_all(&bytes).await.unwrap();
                 stream.write_all(&[0]).await.unwrap();
+            }
+            BridgeMode::ErrorDetail => {
+                let mut bytes = serde_json::to_vec(&json!({
+                    "status":"error",
+                    "message":format!("render failed\n{}", "x".repeat(600))
+                }))
+                .unwrap();
+                bytes.push(0);
+                stream.write_all(&bytes).await.unwrap();
             }
             BridgeMode::Hang => sleep(Duration::from_millis(500)).await,
         }
@@ -289,6 +299,32 @@ async fn blender_session_lifecycle_is_loopback_bounded_and_owner_safe() {
             bridge.await.unwrap();
         }
     }
+
+    let (error_port, error_bridge) = start_bridge(BridgeMode::ErrorDetail, 1).await;
+    let error_config = workspace.config(error_port);
+    let error = blender::dispatch_tool(
+        "blender_inspect",
+        &json!({
+            "cwd":workspace.cwd(),
+            "project_id":"project_a",
+            "scope":"scene"
+        }),
+        &error_config,
+        "owner_a",
+    )
+    .await
+    .expect_err("bridge error must propagate");
+    let rendered = error.to_string();
+    assert!(rendered.contains("Blender bridge execution error: render failed "));
+    assert!(!rendered.contains('\n'));
+    assert!(
+        rendered.chars().count()
+            <= "Invalid request: Blender bridge execution error: "
+                .chars()
+                .count()
+                + 512
+    );
+    error_bridge.await.unwrap();
 
     let cold_port = reserve_port();
     let runtime_home = workspace.0.join(".masihawam/blender-runtime-home");

@@ -25,7 +25,6 @@ pub enum GraphNodeKind {
     ExternalReviewGate,
     GenerateImage,
     GenerateVideo,
-    GenerateAudio,
     Generate3d,
     StoryboardStore,
     SceneManifestValidate,

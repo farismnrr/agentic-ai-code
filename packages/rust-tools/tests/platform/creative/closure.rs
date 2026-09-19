@@ -14,10 +14,9 @@ fn closure_binding_descriptor() -> String {
         "capabilities":[
             "video.generate",
             "video.sequence_assemble",
-            "audio.speech",
             "game.deploy"
         ],
-        "media_roles":["video","video_clip","audio","deployment"],
+        "media_roles":["video","video_clip","deployment"],
         "extension_schema":{"type":"object","additionalProperties":true},
         "constraints":{
             "estimate":{

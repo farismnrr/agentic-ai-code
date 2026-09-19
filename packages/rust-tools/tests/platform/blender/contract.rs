@@ -1,13 +1,16 @@
 use ai_tools::application::blender::{
     artifact_relative_path, bounded_mcp_config, bridge_address, project_layout,
-    unbounded_operator_config, validate_blender_project_root_path, validate_blender_relative_path,
-    BlenderArtifactScope, BlenderSessionOwnership, BlenderSessionState, BlenderSessionStatus,
-    BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT, MAX_BLENDER_PYTHON_BYTES,
-    MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES, PUBLIC_MCP_BLENDER_TIMEOUT_MS,
+    public_mcp_timeout_ms, unbounded_operator_config, validate_blender_project_root_path,
+    validate_blender_relative_path, BlenderArtifactScope, BlenderSessionOwnership,
+    BlenderSessionState, BlenderSessionStatus, BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT,
+    MAX_BLENDER_PYTHON_BYTES, MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES,
     REVIEWED_BLENDER_PATH_NAMES,
 };
 use ai_tools::application::hooks::effect_classes_for_call;
-use ai_tools::core::config::ServerConfig;
+use ai_tools::core::config::{
+    ServerConfig, BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS, BLENDER_MCP_DEFAULT_TIMEOUT_MS,
+    BLENDER_MCP_SCREENSHOT_TIMEOUT_MS, BLENDER_MCP_SESSION_TIMEOUT_MS,
+};
 use ai_tools::interfaces::mcp::{blender_tool_catalog, validate_tool_arguments};
 use serde_json::json;
 use std::net::Ipv4Addr;
@@ -22,7 +25,10 @@ fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
     assert_eq!(MAX_BLENDER_REQUEST_BYTES, 1024 * 1024);
     assert_eq!(MAX_BLENDER_RESPONSE_BYTES, 8 * 1024 * 1024);
     assert_eq!(MAX_BLENDER_PYTHON_BYTES, 256 * 1024);
-    assert_eq!(PUBLIC_MCP_BLENDER_TIMEOUT_MS, 50_000);
+    assert_eq!(BLENDER_MCP_DEFAULT_TIMEOUT_MS, 60_000);
+    assert_eq!(BLENDER_MCP_SESSION_TIMEOUT_MS, 120_000);
+    assert_eq!(BLENDER_MCP_SCREENSHOT_TIMEOUT_MS, 120_000);
+    assert_eq!(BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS, 180_000);
     assert_eq!(REVIEWED_BLENDER_PATH_NAMES, &["blender", "blender.exe"]);
     let external = BlenderSessionStatus {
         state: BlenderSessionState::Ready,
@@ -53,8 +59,21 @@ fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
         .validate()
         .expect("operator foreground timeout may exceed MCP ceiling");
     assert_eq!(
-        bounded_mcp_config(&operator_timeout).blender_bridge_timeout_ms,
-        PUBLIC_MCP_BLENDER_TIMEOUT_MS
+        bounded_mcp_config(&operator_timeout, "blender_session").blender_bridge_timeout_ms,
+        BLENDER_MCP_SESSION_TIMEOUT_MS
+    );
+    assert_eq!(
+        bounded_mcp_config(&operator_timeout, "blender_inspect").blender_bridge_timeout_ms,
+        BLENDER_MCP_DEFAULT_TIMEOUT_MS
+    );
+    assert_eq!(
+        bounded_mcp_config(&operator_timeout, "blender_screenshot").blender_bridge_timeout_ms,
+        BLENDER_MCP_SCREENSHOT_TIMEOUT_MS
+    );
+    assert_eq!(
+        bounded_mcp_config(&operator_timeout, "blender_animation_preview")
+            .blender_bridge_timeout_ms,
+        BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS
     );
     assert_eq!(
         unbounded_operator_config(&operator_timeout).blender_bridge_timeout_ms,
@@ -134,12 +153,12 @@ fn blender_public_contract_exposes_only_bounded_agent_tools() {
             "blender_inspect",
             "blender_python_api_docs",
             "blender_screenshot",
+            "blender_animation_preview",
         ]
     );
 
     for removed in [
         "blender_execute_python",
-        "blender_animation_preview",
         "blender_render",
         "blender_asset_import",
         "blender_asset_export",
@@ -161,6 +180,28 @@ fn blender_public_contract_exposes_only_bounded_agent_tools() {
                 tool.name
             );
         }
+    }
+
+    for (name, expected_timeout_ms) in [
+        ("blender_session", BLENDER_MCP_SESSION_TIMEOUT_MS),
+        ("blender_inspect", BLENDER_MCP_DEFAULT_TIMEOUT_MS),
+        ("blender_python_api_docs", BLENDER_MCP_DEFAULT_TIMEOUT_MS),
+        ("blender_screenshot", BLENDER_MCP_SCREENSHOT_TIMEOUT_MS),
+        (
+            "blender_animation_preview",
+            BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS,
+        ),
+    ] {
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        assert_eq!(
+            tool.execution
+                .as_ref()
+                .and_then(|execution| execution.get("timeoutMs"))
+                .and_then(|value| value.as_u64()),
+            Some(expected_timeout_ms),
+            "{name} execution timeout contract"
+        );
+        assert_eq!(public_mcp_timeout_ms(name), Some(expected_timeout_ms));
     }
 
     let session = tools

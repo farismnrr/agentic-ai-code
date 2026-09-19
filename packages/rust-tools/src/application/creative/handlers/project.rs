@@ -89,24 +89,6 @@ pub(in crate::application::creative) fn project(
                 .ok_or_else(|| McpError::InvalidRequest("unknown creative game".into()))?;
             complete(json!({"game": game}))
         }
-        "audio_put" => {
-            let project_id = required_str(arguments, "project_id")?;
-            let audio_plan: AudioPlan = parse_required(arguments, "audio_plan")?;
-            let project = store::upsert_audio_plan(cwd, config, project_id, audio_plan)?;
-            complete(
-                json!({"audio_plans": project.audio_plans, "project_updated_at_ms": project.updated_at_ms}),
-            )
-        }
-        "audio_get" => {
-            let project = store::load_project(cwd, config, required_str(arguments, "project_id")?)?;
-            let audio_plan_id = required_str(arguments, "audio_plan_id")?;
-            let audio_plan = project
-                .audio_plans
-                .iter()
-                .find(|value| value.audio_plan_id == audio_plan_id)
-                .ok_or_else(|| McpError::InvalidRequest("unknown creative audio plan".into()))?;
-            complete(json!({"audio_plan": audio_plan}))
-        }
         "qa_add" => {
             let project_id = required_str(arguments, "project_id")?;
             let severity: QaSeverity = parse_required(arguments, "severity")?;

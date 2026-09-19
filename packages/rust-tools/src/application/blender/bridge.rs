@@ -134,11 +134,30 @@ pub async fn execute(
                 .and_then(Value::as_str)
                 .map(|text| text.chars().take(16_384).collect()),
         }),
-        Some("error") => Err(McpError::InvalidRequest(
-            "Blender bridge reported an execution error".into(),
-        )),
+        Some("error") => Err(McpError::InvalidRequest(bridge_error_message(&value))),
         _ => Err(McpError::InvalidRequest(
             "Blender bridge returned an incompatible response".into(),
         )),
+    }
+}
+
+fn bridge_error_message(value: &Value) -> String {
+    const MAX_ERROR_CHARS: usize = 512;
+    let detail = ["message", "error", "traceback"]
+        .into_iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str))
+        .map(|text| {
+            text.chars()
+                .map(|ch| if ch.is_control() { ' ' } else { ch })
+                .take(MAX_ERROR_CHARS)
+                .collect::<String>()
+                .trim()
+                .to_owned()
+        })
+        .filter(|text| !text.is_empty());
+
+    match detail {
+        Some(detail) => format!("Blender bridge execution error: {detail}"),
+        None => "Blender bridge reported an execution error".into(),
     }
 }

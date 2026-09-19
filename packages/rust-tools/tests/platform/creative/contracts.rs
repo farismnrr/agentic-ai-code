@@ -1,8 +1,8 @@
 use ai_tools::application::creative::{
-    AssetMetadata, AssetRecord, AssetSource, AssetState, AssetSurface, AudioCue, AudioPlan,
-    CameraSpec, CreativeProject, CreativeTrack, ElementKind, ElementRecord, ElementRevision,
-    GameAssetRole, GameManifest, PlayerMode, ProductionTarget, QaFinding, QaSeverity,
-    ReferenceAuthority, RevisionState, SceneManifest, ShotManifest, CREATIVE_SCHEMA_VERSION,
+    AssetMetadata, AssetRecord, AssetSource, AssetState, AssetSurface, CameraSpec, CreativeProject,
+    CreativeTrack, ElementKind, ElementRecord, ElementRevision, GameAssetRole, GameManifest,
+    PlayerMode, ProductionTarget, QaFinding, QaSeverity, ReferenceAuthority, RevisionState,
+    SceneManifest, ShotManifest, CREATIVE_SCHEMA_VERSION,
 };
 use serde_json::json;
 
@@ -48,7 +48,7 @@ fn element(id: &str, kind: ElementKind, name: &str) -> ElementRecord {
 }
 
 #[test]
-fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_ids() {
+fn project_contract_expresses_scene_anime_game_and_lineage_without_engine_ids() {
     let project = CreativeProject {
         schema_version: CREATIVE_SCHEMA_VERSION,
         project_id: "project_contract".into(),
@@ -72,28 +72,25 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
             element("alley", ElementKind::Location, "Neon Alley"),
             element("sword", ElementKind::Prop, "Sword"),
             element("look", ElementKind::Style, "Anime Look"),
-            element("voice", ElementKind::AudioVoice, "Hero Voice"),
             element("rig", ElementKind::Asset3d, "Hero Rig"),
         ],
         assets: vec![AssetRecord {
-            asset_id: "asset_voice".into(),
-            media_type: "audio/wav".into(),
-            role: "dialogue_take".into(),
-            relative_path: "assets/dialogue.wav".into(),
+            asset_id: "asset_reference".into(),
+            media_type: "image/png".into(),
+            role: "character_reference".into(),
+            relative_path: "assets/reference.png".into(),
             checksum_sha256: "a".repeat(64),
             bytes: 1024,
             source: AssetSource::GeneratedAsset,
             source_surface: AssetSurface::Anime,
             state: AssetState::Accepted,
-            job_id: Some("job_voice".into()),
+            job_id: Some("job_reference".into()),
             parent_asset_id: None,
-            element_id: Some("voice".into()),
+            element_id: Some("hero".into()),
             dependency_element_ids: vec!["look".into()],
             metadata: AssetMetadata {
-                duration_ms: Some(2_000),
-                language: Some("en".into()),
-                sample_rate_hz: Some(48_000),
-                channels: Some(1),
+                width: Some(1024),
+                height: Some(1024),
                 ..AssetMetadata::default()
             },
             created_at_ms: 2,
@@ -176,20 +173,8 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
             }],
             ..GameManifest::default()
         }],
-        audio_plans: vec![AudioPlan {
-            audio_plan_id: "audio_intro".into(),
-            voice_element_id: Some("voice".into()),
-            language: Some("en".into()),
-            cues: vec![AudioCue {
-                cue_id: "cue_1".into(),
-                start_ms: 1_000,
-                duration_ms: Some(2_000),
-                asset_id: Some("asset_voice".into()),
-                text: Some("We finish this here.".into()),
-            }],
-        }],
         graph_ids: vec!["graph_intro".into()],
-        job_ids: vec!["job_voice".into()],
+        job_ids: vec!["job_reference".into()],
         qa_findings: vec![QaFinding {
             finding_id: "qa_1".into(),
             domain: "continuity".into(),
@@ -248,9 +233,9 @@ fn project_contract_expresses_scene_anime_game_audio_and_lineage_without_engine_
     let mut cyclic_lineage = project.clone();
     let mut child = cyclic_lineage.assets[0].clone();
     child.asset_id = "asset_child".into();
-    child.relative_path = "assets/dialogue-child.wav".into();
+    child.relative_path = "assets/reference-child.png".into();
     child.checksum_sha256 = "b".repeat(64);
-    child.parent_asset_id = Some("asset_voice".into());
+    child.parent_asset_id = Some("asset_reference".into());
     cyclic_lineage.assets[0].parent_asset_id = Some("asset_child".into());
     cyclic_lineage.assets.push(child);
     assert!(cyclic_lineage.validate().is_err());

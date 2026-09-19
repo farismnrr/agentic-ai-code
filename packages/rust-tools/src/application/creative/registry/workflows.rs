@@ -135,7 +135,7 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
         ),
         workflow(
             "character_rig_production",
-            "Create a reusable reviewed humanoid rig candidate with armature binding and initial facial/viseme controls.",
+            "Create a reusable reviewed humanoid rig candidate with armature binding and facial controls.",
             &[],
             json!({
                 "type":"object",
@@ -158,23 +158,6 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
                     "end_frame":{"type":"integer","minimum":2,"maximum":100000}
                 },
                 "required":["source_asset_id","action_name","start_frame","end_frame"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "character_facial_performance",
-            "Author bounded editable viseme/facial animation from a contained audio Asset without rebuilding body animation.",
-            &[],
-            json!({
-                "type":"object",
-                "properties":{
-                    "source_asset_id":id_schema(),
-                    "audio_asset_id":id_schema(),
-                    "start_frame":{"type":"integer","minimum":1,"maximum":100000},
-                    "end_frame":{"type":"integer","minimum":2,"maximum":100000}
-                },
-                "required":["source_asset_id","audio_asset_id"],
                 "additionalProperties":false
             }),
             asset_output(),
@@ -214,22 +197,6 @@ pub fn workflows() -> Vec<WorkflowDescriptor> {
                     "prompt":free_text(4096)
                 },
                 "required":["asset_id","duration_ms"],
-                "additionalProperties":false
-            }),
-            asset_output(),
-        ),
-        workflow(
-            "lipsync_preview",
-            "Create a bounded facial/lipsync preview from contained audio timing and an animation target.",
-            &["audio.voice"],
-            json!({
-                "type":"object",
-                "properties":{
-                    "audio_asset_id":id_schema(),
-                    "animation_element_id":id_schema(),
-                    "language":short_string(32)
-                },
-                "required":["audio_asset_id","animation_element_id"],
                 "additionalProperties":false
             }),
             asset_output(),

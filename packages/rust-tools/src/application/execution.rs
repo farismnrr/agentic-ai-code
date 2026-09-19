@@ -156,7 +156,7 @@ pub async fn dispatch_tool_call(
         return Ok(result);
     }
     if tool.name.starts_with("blender_") {
-        let bounded_config = crate::application::blender::bounded_mcp_config(config);
+        let bounded_config = crate::application::blender::bounded_mcp_config(config, tool.name);
         if let Some(result) =
             crate::application::blender::dispatch_tool(tool.name, arguments, &bounded_config, owner)
                 .await?

@@ -27,10 +27,31 @@ _detail = {detail_literal}
 def _vec(value):
     return [float(v) for v in value]
 
-def _object(name):
+def _object(name, scope):
     if name:
         return bpy.data.objects.get(name)
-    return bpy.context.active_object
+    active = bpy.context.active_object
+    if scope not in {{"rig", "animation", "character"}}:
+        return active
+    armatures = [o for o in bpy.context.scene.objects if o.type == "ARMATURE"]
+    if scope == "animation":
+        animated = [
+            o for o in armatures
+            if o.animation_data is not None and o.animation_data.action is not None
+        ]
+        if animated:
+            return animated[0]
+    reviewed = [
+        o for o in armatures
+        if bool(o.get("masihawam_rig_strategy", False))
+        or o.name.startswith("Ari_Rig")
+        or o.name.startswith("MasihAwam_Rig")
+    ]
+    if reviewed:
+        return reviewed[0]
+    if armatures:
+        return armatures[0]
+    return active
 
 def _limit(values, limit=128):
     return list(values)[:limit]
@@ -53,7 +74,7 @@ def _action_fcurve_count(action):
                     total += len(fcurves)
     return total
 
-obj = _object(_target)
+obj = _object(_target, _scope)
 scene = bpy.context.scene
 if _scope == "scene":
     result = {{
@@ -182,7 +203,11 @@ elif _scope == "character":
     if root is not None:
         if root.type == "ARMATURE":
             armature = root
-            meshes = [c for c in _limit(root.children) if c.type == "MESH"]
+            meshes = [
+                candidate
+                for candidate in _limit(scene.objects if scene else [])
+                if candidate.type == "MESH" and candidate.find_armature() == root
+            ]
         elif root.type == "MESH":
             meshes = [root]
             armature = root.find_armature()

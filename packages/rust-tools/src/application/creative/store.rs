@@ -1,9 +1,9 @@
 use super::contracts::{
-    validate_id, validate_spec, AssetSource, AudioPlan, CreativeProject, CreativeProjectLayout,
-    CreativeTrack, ElementKind, ElementRecord, ElementRevision, GameManifest, MultiplayerRoomState,
+    validate_id, validate_spec, AssetSource, CreativeProject, CreativeProjectLayout, CreativeTrack,
+    ElementKind, ElementRecord, ElementRevision, GameManifest, MultiplayerRoomState,
     ProductionTarget, QaFinding, ReferenceAuthority, RevisionState, SceneBoard, SceneManifest,
-    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_AUDIO_PLANS, MAX_PROJECT_ELEMENTS, MAX_PROJECT_GAMES,
-    MAX_PROJECT_SCENES, MAX_PROJECT_SCENE_BOARDS, MAX_QA_FINDINGS, MAX_REFERENCES_PER_REVISION,
+    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_PROJECT_GAMES, MAX_PROJECT_SCENES,
+    MAX_PROJECT_SCENE_BOARDS, MAX_QA_FINDINGS, MAX_REFERENCES_PER_REVISION,
     MAX_REVISIONS_PER_ELEMENT,
 };
 use super::graph::{
@@ -26,7 +26,7 @@ pub use assets::{
 use io::*;
 pub use production::{
     add_qa_finding, list_projects, load_multiplayer_room, load_project, project_layout,
-    store_multiplayer_room, upsert_audio_plan, upsert_game, upsert_scene, upsert_scene_board,
+    store_multiplayer_room, upsert_game, upsert_scene, upsert_scene_board,
 };
 use support::new_id;
 pub use support::now_ms;
@@ -138,7 +138,6 @@ pub fn create_project(
         scene_boards: Vec::new(),
         scenes: Vec::new(),
         games: Vec::new(),
-        audio_plans: Vec::new(),
         graph_ids: Vec::new(),
         job_ids: Vec::new(),
         qa_findings: Vec::new(),

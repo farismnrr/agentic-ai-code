@@ -1,4 +1,8 @@
 use super::{coding_security_scheme, Tool, ToolAnnotations};
+use crate::core::config::{
+    BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS, BLENDER_MCP_DEFAULT_TIMEOUT_MS,
+    BLENDER_MCP_SCREENSHOT_TIMEOUT_MS, BLENDER_MCP_SESSION_TIMEOUT_MS,
+};
 use serde_json::{json, Value};
 
 pub(super) fn tools() -> Vec<Tool> {
@@ -7,6 +11,7 @@ pub(super) fn tools() -> Vec<Tool> {
         inspect_tool(),
         python_api_docs_tool(),
         screenshot_tool(),
+        animation_preview_tool(),
     ]
 }
 
@@ -49,7 +54,7 @@ fn session_tool() -> Tool {
         ),
         annotations: Some(privileged_mutation(false)),
         security_schemes: coding_security_scheme(),
-        execution: None,
+        execution: Some(execution_timeout(BLENDER_MCP_SESSION_TIMEOUT_MS)),
     }
 }
 
@@ -68,7 +73,7 @@ fn inspect_tool() -> Tool {
         ),
         annotations: Some(read_only_privileged()),
         security_schemes: coding_security_scheme(),
-        execution: None,
+        execution: Some(execution_timeout(BLENDER_MCP_DEFAULT_TIMEOUT_MS)),
     }
 }
 
@@ -87,7 +92,7 @@ fn python_api_docs_tool() -> Tool {
         ),
         annotations: Some(read_only()),
         security_schemes: coding_security_scheme(),
-        execution: None,
+        execution: Some(execution_timeout(BLENDER_MCP_DEFAULT_TIMEOUT_MS)),
     }
 }
 
@@ -107,8 +112,35 @@ fn screenshot_tool() -> Tool {
         ),
         annotations: Some(privileged_mutation(false)),
         security_schemes: coding_security_scheme(),
-        execution: None,
+        execution: Some(execution_timeout(BLENDER_MCP_SCREENSHOT_TIMEOUT_MS)),
     }
+}
+
+fn animation_preview_tool() -> Tool {
+    Tool {
+        name: "blender_animation_preview",
+        title: Some("Blender Animation Preview"),
+        description: "Render a bounded sampled frame sequence for visual review. Preview images are contained under blender/renders/preview/, and small previews may be returned inline for direct agent inspection.",
+        input_schema: schema(
+            json!({
+                "start_frame":{"type":"integer"},
+                "end_frame":{"type":"integer"},
+                "step":{"type":"integer","minimum":1,"maximum":10000,"default":1},
+                "max_frames":{"type":"integer","minimum":1,"maximum":240,"default":48},
+                "width":{"type":"integer","minimum":64,"maximum":4096,"default":640},
+                "height":{"type":"integer","minimum":64,"maximum":4096,"default":360},
+                "save_name":safe_file_name()
+            }),
+            &["start_frame", "end_frame"],
+        ),
+        annotations: Some(privileged_mutation(false)),
+        security_schemes: coding_security_scheme(),
+        execution: Some(execution_timeout(BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS)),
+    }
+}
+
+fn execution_timeout(timeout_ms: u64) -> Value {
+    json!({ "timeoutMs": timeout_ms })
 }
 
 fn safe_file_name() -> Value {

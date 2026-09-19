@@ -105,35 +105,6 @@ pub fn validate_workflow_parameters(
 
 fn validate_capability_contract(id: &str, parameters: &Value) -> Result<(), McpError> {
     match id {
-        "audio.voice_clone" => {
-            if parameters.get("consent_asserted").and_then(Value::as_bool) != Some(true) {
-                return Err(McpError::InvalidRequest(
-                    "audio.voice_clone requires explicit consent_asserted=true".into(),
-                ));
-            }
-            let references = parameters
-                .get("reference_asset_ids")
-                .and_then(Value::as_array)
-                .ok_or_else(|| {
-                    McpError::InvalidRequest(
-                        "audio.voice_clone requires reference_asset_ids".into(),
-                    )
-                })?;
-            if references.is_empty() || references.len() > 16 {
-                return Err(McpError::InvalidRequest(
-                    "audio.voice_clone reference count is outside allowed bounds".into(),
-                ));
-            }
-        }
-        "audio.voice_change" => {
-            required_parameter_id(parameters, "asset_id")?;
-            required_parameter_id(parameters, "voice_element_id")?;
-        }
-        "audio.video_dub" => {
-            required_parameter_id(parameters, "video_asset_id")?;
-            required_parameter_id(parameters, "voice_element_id")?;
-            required_parameter_text(parameters, "language", 32)?;
-        }
         "video.motion_control" => {
             required_parameter_id(parameters, "reference_asset_id")?;
             required_parameter_id(parameters, "motion_asset_id")?;
@@ -165,23 +136,6 @@ fn required_parameter_id(parameters: &Value, field: &str) -> Result<(), McpError
         .and_then(Value::as_str)
         .ok_or_else(|| McpError::InvalidRequest(format!("creative {field} is required")))?;
     super::contracts::validate_id(value, field)
-}
-
-fn required_parameter_text(
-    parameters: &Value,
-    field: &str,
-    max_len: usize,
-) -> Result<(), McpError> {
-    let value = parameters
-        .get(field)
-        .and_then(Value::as_str)
-        .ok_or_else(|| McpError::InvalidRequest(format!("creative {field} is required")))?;
-    if value.is_empty() || value.len() > max_len || value.chars().any(char::is_control) {
-        return Err(McpError::InvalidRequest(format!(
-            "creative {field} is outside allowed bounds"
-        )));
-    }
-    Ok(())
 }
 
 mod bindings;

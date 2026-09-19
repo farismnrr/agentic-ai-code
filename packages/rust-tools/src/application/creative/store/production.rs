@@ -132,30 +132,6 @@ pub fn upsert_game(
     persist_project(cwd, config, project)
 }
 
-pub fn upsert_audio_plan(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    project_id: &str,
-    audio_plan: AudioPlan,
-) -> Result<CreativeProject, McpError> {
-    let mut project = load_project(cwd, config, project_id)?;
-    if let Some(existing) = project
-        .audio_plans
-        .iter_mut()
-        .find(|value| value.audio_plan_id == audio_plan.audio_plan_id)
-    {
-        *existing = audio_plan;
-    } else {
-        if project.audio_plans.len() >= MAX_PROJECT_AUDIO_PLANS {
-            return Err(McpError::InvalidRequest(
-                "creative audio-plan capacity reached".into(),
-            ));
-        }
-        project.audio_plans.push(audio_plan);
-    }
-    persist_project(cwd, config, project)
-}
-
 pub fn add_qa_finding(
     cwd: Option<&str>,
     config: &ServerConfig,

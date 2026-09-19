@@ -210,7 +210,6 @@ pub fn capability_for_node(kind: &GraphNodeKind) -> Option<&'static str> {
     match kind {
         GraphNodeKind::GenerateImage => Some("image.generate"),
         GraphNodeKind::GenerateVideo => Some("video.generate"),
-        GraphNodeKind::GenerateAudio => Some("audio.voice"),
         GraphNodeKind::Generate3d => Some("3d.image_to_mesh"),
         GraphNodeKind::StoryboardStore => Some("storyboard.store"),
         GraphNodeKind::SceneManifestValidate => Some("scene.manifest_validate"),

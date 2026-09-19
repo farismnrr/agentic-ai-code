@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn fresh_anime_contract_benchmark_preserves_character_audio_scene_and_handoff() {
+fn fresh_anime_contract_benchmark_preserves_character_scene_and_handoff() {
     let workspace = TempWorkspace::new();
     let config = config(&workspace);
     let project_id = "closure_anime";
@@ -22,17 +22,6 @@ fn fresh_anime_contract_benchmark_preserves_character_audio_scene_and_handoff() 
         "Cel Dawn",
         json!({"render_intent":"two-tone cel shading","line_weight":"clean"}),
     );
-    let audio = submit_wait(
-        &config,
-        &workspace,
-        project_id,
-        ("capability_id", "audio.speech"),
-        json!({"duration_ms":3000,"language":"en","text":"The engine is ready."}),
-        Some("test_closure_media"),
-    );
-    assert_eq!(audio["status"], "completed");
-    let audio_asset = audio["output_asset_ids"][0].as_str().unwrap().to_owned();
-    promote_asset(&config, &workspace, project_id, &audio_asset);
     let videos = [
         generated_video(
             &config,
@@ -56,14 +45,6 @@ fn fresh_anime_contract_benchmark_preserves_character_audio_scene_and_handoff() 
             "anime reaction closeup",
         ),
     ];
-    call(
-        &config,
-        "creative_project",
-        json!({
-            "action":"audio_put","cwd":workspace.0.to_string_lossy(),"project_id":project_id,
-            "audio_plan":{"audio_plan_id":"anime_audio","language":"en","cues":[{"cue_id":"line_1","start_ms":4500,"duration_ms":3000,"asset_id":audio_asset,"text":"The engine is ready."}]}
-        }),
-    );
     call(
         &config,
         "creative_project",
@@ -95,7 +76,7 @@ fn fresh_anime_contract_benchmark_preserves_character_audio_scene_and_handoff() 
         &workspace,
         project_id,
         ("workflow_id", "sequence_assemble"),
-        json!({"video_asset_ids":videos,"audio_asset_ids":[audio_asset],"fps":24,"width":1280,"height":720}),
+        json!({"video_asset_ids":videos,"fps":24,"width":1280,"height":720}),
         Some("test_closure_media"),
     );
     assert_eq!(assembled["status"], "completed");
@@ -125,10 +106,6 @@ fn fresh_anime_contract_benchmark_preserves_character_audio_scene_and_handoff() 
     assert_eq!(
         project["project"]["scenes"][0]["target_duration_ms"],
         12_000
-    );
-    assert_eq!(
-        project["project"]["audio_plans"][0]["audio_plan_id"],
-        "anime_audio"
     );
     assert_eq!(project["project"]["elements"].as_array().unwrap().len(), 2);
 }

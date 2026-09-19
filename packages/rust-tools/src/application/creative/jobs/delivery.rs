@@ -230,7 +230,6 @@ fn handoff_payload(
         "scene_boards":project.scene_boards,
         "scenes":project.scenes,
         "games":project.games,
-        "audio_plans":project.audio_plans,
         "graph_ids":project.graph_ids,
         "job_ids":project.job_ids,
         "qa_summary":qa_summary,

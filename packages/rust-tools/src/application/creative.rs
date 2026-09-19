@@ -23,7 +23,7 @@ pub(crate) use store::AssetRegistrationInput;
 
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
-use crate::interfaces::mcp::ToolCallResult;
+use crate::interfaces::mcp::{blender_tool_catalog, ToolCallResult};
 use serde_json::{json, Value};
 use support::{complete, error_result, required_str};
 
@@ -46,6 +46,15 @@ pub(crate) fn require_asset(
         .asset(asset_id)
         .cloned()
         .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))
+}
+
+pub(crate) fn resolve_registered_asset_path(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<std::path::PathBuf, McpError> {
+    store::resolve_registered_asset_path(cwd, config, project_id, asset_id)
 }
 
 pub(crate) fn register_internal_asset(
@@ -139,7 +148,7 @@ fn status(config: &ServerConfig) -> Value {
         "execution_bindings_registered": registry::execution_bindings(config).map(|items| items.len()).unwrap_or(0),
         "blender": {
             "enabled": config.enable_creative,
-            "tool_count": if config.enable_creative { 4 } else { 0 },
+            "tool_count": if config.enable_creative { blender_tool_catalog().len() } else { 0 },
             "activation": if config.enable_creative {
                 Value::Null
             } else {

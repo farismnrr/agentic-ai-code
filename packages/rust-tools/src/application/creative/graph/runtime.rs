@@ -295,7 +295,6 @@ fn requires_external_execution(kind: &GraphNodeKind) -> bool {
         kind,
         GraphNodeKind::GenerateImage
             | GraphNodeKind::GenerateVideo
-            | GraphNodeKind::GenerateAudio
             | GraphNodeKind::Generate3d
             | GraphNodeKind::StoryboardStore
             | GraphNodeKind::SceneManifestValidate

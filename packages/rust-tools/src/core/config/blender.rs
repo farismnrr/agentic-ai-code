@@ -3,6 +3,10 @@ use crate::core::error::RelayError;
 
 pub(super) const DEFAULT_BLENDER_BRIDGE_PORT: u16 = 9876;
 pub(super) const MAX_BLENDER_BRIDGE_TIMEOUT_MS: u64 = 120_000;
+pub const BLENDER_MCP_DEFAULT_TIMEOUT_MS: u64 = 60_000;
+pub const BLENDER_MCP_SESSION_TIMEOUT_MS: u64 = 120_000;
+pub const BLENDER_MCP_SCREENSHOT_TIMEOUT_MS: u64 = 120_000;
+pub const BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS: u64 = 180_000;
 
 pub(super) fn validate(config: &ServerConfig) -> Result<(), RelayError> {
     if config.blender_bridge_port < 1024 {

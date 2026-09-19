@@ -33,7 +33,6 @@ pub(super) fn validate_media_type(value: &str) -> Result<(), McpError> {
         || value.chars().any(char::is_control)
         || !(value.starts_with("image/")
             || value.starts_with("video/")
-            || value.starts_with("audio/")
             || value.starts_with("model/")
             || matches!(
                 value.as_str(),
@@ -51,6 +50,39 @@ pub(super) fn validate_role(value: &str) -> Result<(), McpError> {
     if value.is_empty() || value.len() > 128 || value.chars().any(char::is_control) {
         return Err(McpError::InvalidRequest(
             "creative media role exceeds allowed bounds".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn validate_untrusted_media_bytes(
+    media_type: &str,
+    bytes: &[u8],
+) -> Result<(), McpError> {
+    let media_type = normalize_content_type(media_type);
+    let matches = match media_type.as_str() {
+        "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg" => bytes.starts_with(&[0xff, 0xd8, 0xff]),
+        "image/webp" => bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "image/gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+        "image/svg+xml" => {
+            return Err(McpError::InvalidRequest(
+                "untrusted SVG media is not accepted without a reviewed sanitizer".into(),
+            ))
+        }
+        "video/mp4" => bytes.len() >= 12 && &bytes[4..8] == b"ftyp",
+        "model/gltf-binary" => bytes.starts_with(b"glTF"),
+        "application/x-blender" => bytes.starts_with(b"BLENDER"),
+        "application/octet-stream" => true,
+        _ => {
+            return Err(McpError::InvalidRequest(
+                "untrusted creative media type has no reviewed byte validator".into(),
+            ))
+        }
+    };
+    if !matches {
+        return Err(McpError::InvalidRequest(
+            "creative media bytes do not match the declared content type".into(),
         ));
     }
     Ok(())
@@ -108,8 +140,6 @@ pub(super) fn filename_from_url(url: &reqwest::Url, media_type: &str) -> String 
         "image/jpeg" => "jpg",
         "image/webp" => "webp",
         "video/mp4" => "mp4",
-        "audio/mpeg" => "mp3",
-        "audio/wav" => "wav",
         "model/gltf+json" => "gltf",
         "model/gltf-binary" => "glb",
         _ => "bin",

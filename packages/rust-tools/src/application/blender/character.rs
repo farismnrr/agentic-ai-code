@@ -21,9 +21,6 @@ pub async fn run_character_workflow(
             rig_production(cwd, config, owner, project_id, parameters).await
         }
         "character_action" => animation::action(cwd, config, owner, project_id, parameters).await,
-        "character_facial_performance" => {
-            animation::facial_performance(cwd, config, owner, project_id, parameters).await
-        }
         "character_secondary_motion" => {
             animation::secondary_motion(cwd, config, owner, project_id, parameters).await
         }
@@ -225,7 +222,7 @@ for _mesh in _meshes:
     _mod.object = _arm
     if _mesh.data.shape_keys is None:
         _mesh.shape_key_add(name='Basis')
-    for _shape in ['blink_L','blink_R','jaw_open','viseme_A','viseme_I','viseme_U','viseme_E','viseme_O']:
+    for _shape in ['blink_L','blink_R','jaw_open']:
         if _mesh.data.shape_keys.key_blocks.get(_shape) is None:
             _mesh.shape_key_add(name=_shape)
 _arm['masihawam_rig_strategy'] = 'reviewed_humanoid_v1'

@@ -104,7 +104,6 @@ pub(super) fn validate_asset_lineage(project: &CreativeProject) -> Result<(), Mc
 fn validate_asset_media_type(value: &str) -> Result<(), McpError> {
     let allowed = value.starts_with("image/")
         || value.starts_with("video/")
-        || value.starts_with("audio/")
         || value.starts_with("model/")
         || matches!(
             value,
@@ -131,12 +130,6 @@ fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
         || metadata
             .frame_rate
             .is_some_and(|value| !value.is_finite() || !(1.0..=240.0).contains(&value))
-        || metadata
-            .sample_rate_hz
-            .is_some_and(|value| !(8_000..=384_000).contains(&value))
-        || metadata
-            .channels
-            .is_some_and(|value| value == 0 || value > 32)
     {
         return Err(McpError::InvalidRequest(
             "creative asset media metadata is outside allowed bounds".into(),

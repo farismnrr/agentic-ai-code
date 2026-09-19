@@ -16,6 +16,10 @@ mod lsp;
 mod ssh;
 mod validation;
 pub use activity::ActivityConfig;
+pub use blender::{
+    BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS, BLENDER_MCP_DEFAULT_TIMEOUT_MS,
+    BLENDER_MCP_SCREENSHOT_TIMEOUT_MS, BLENDER_MCP_SESSION_TIMEOUT_MS,
+};
 pub use cli::{ActivityMode, Cli, Command, SecurityMode, ToolProfile, DEFAULT_PORT};
 /// Validated server configuration, independent of how it was sourced (CLI,
 /// tests, or otherwise). `ServerConfig::default()` is intentionally *not*

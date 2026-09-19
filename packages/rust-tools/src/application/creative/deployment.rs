@@ -409,9 +409,6 @@ fn content_type(path: &str) -> &'static str {
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
-        "wav" => "audio/wav",
-        "mp3" => "audio/mpeg",
-        "ogg" => "audio/ogg",
         _ => "application/octet-stream",
     }
 }

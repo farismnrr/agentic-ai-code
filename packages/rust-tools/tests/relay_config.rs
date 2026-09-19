@@ -2,6 +2,17 @@ use ai_tools::core::config::{Cli, SecurityMode, ServerConfig};
 use ai_tools::interfaces::mcp::{LEGACY_PROTOCOL_VERSIONS, PROTOCOL_VERSION};
 use clap::Parser;
 
+fn normalize_local_cli_fixture(config: &mut ServerConfig) {
+    config.mode = SecurityMode::Local;
+    config.bind_host = "127.0.0.1".into();
+    config.origin = None;
+    config.trusted_proxy = false;
+    config.trusted_proxy_cidr = None;
+    config.oauth_issuer = None;
+    config.oauth_audience = None;
+    config.oauth_owner_subject = None;
+}
+
 fn remote_config() -> ServerConfig {
     let root = env!("CARGO_MANIFEST_DIR").to_string();
     ServerConfig {
@@ -30,7 +41,8 @@ fn creative_master_flag_enables_blender_runtime_with_bounded_operator_settings()
         "45000",
     ])
     .expect("Blender operator flags should parse");
-    let config = ServerConfig::from(&cli);
+    let mut config = ServerConfig::from(&cli);
+    normalize_local_cli_fixture(&mut config);
     assert!(config.enable_creative);
     assert_eq!(
         config.blender_executable.as_deref(),
@@ -105,7 +117,8 @@ fn creative_backend_mapping_is_operator_only_bounded_and_validated() {
         "binding_local_raster=local_raster",
     ])
     .expect("creative backend mapping should be a supported operator option");
-    let config = ServerConfig::from(&cli);
+    let mut config = ServerConfig::from(&cli);
+    normalize_local_cli_fixture(&mut config);
     assert_eq!(
         config.creative_binding_backends,
         vec!["binding_local_raster=local_raster"]

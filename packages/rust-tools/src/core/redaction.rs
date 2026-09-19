@@ -60,24 +60,38 @@ pub fn redact_credentials(value: &str) -> String {
         }
         // URL userinfo credentials: scheme://user:pass@host (incl. DB
         // connection strings: postgres/postgresql/mysql/mongodb/redis).
-        if let Some(scheme_end) = value[i..].find("://") {
-            let scheme_end = i + scheme_end;
-            let is_scheme_start = i == 0 || !value.as_bytes()[i - 1].is_ascii_alphanumeric();
-            let scheme_ok = value[i..scheme_end]
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
-                && !value[i..scheme_end].is_empty()
-                && is_scheme_start;
-            if scheme_ok {
-                let rest = &value[scheme_end + 3..];
-                if let Some(at_pos) = rest.find('@') {
-                    let userinfo = &rest[..at_pos];
-                    let no_slash = !userinfo.contains('/');
-                    let has_colon = userinfo.contains(':');
-                    if no_slash && has_colon && !userinfo.is_empty() {
+        //
+        // Only scan forward when the current position can actually begin a
+        // URI scheme. The previous implementation called find("://") on
+        // every suffix, which made large base64-ish strings quadratic.
+        let is_scheme_start =
+            bytes[i].is_ascii_alphabetic() && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric());
+        if is_scheme_start {
+            let mut scheme_end = i + 1;
+            while scheme_end < bytes.len()
+                && (bytes[scheme_end].is_ascii_alphanumeric()
+                    || matches!(bytes[scheme_end], b'+' | b'-' | b'.'))
+            {
+                scheme_end += 1;
+            }
+            if value.as_bytes().get(scheme_end..scheme_end + 3) == Some(b"://") {
+                let authority_start = scheme_end + 3;
+                let mut authority_end = authority_start;
+                while authority_end < bytes.len()
+                    && !matches!(
+                        bytes[authority_end],
+                        b'/' | b'?' | b'#' | b' ' | b'\t' | b'\r' | b'\n' | b'"' | b'\''
+                    )
+                {
+                    authority_end += 1;
+                }
+                let authority = &value[authority_start..authority_end];
+                if let Some(at_pos) = authority.find('@') {
+                    let userinfo = &authority[..at_pos];
+                    if userinfo.contains(':') && !userinfo.is_empty() {
                         out.push_str(&value[i..scheme_end]);
                         out.push_str("://[REDACTED]@");
-                        i = scheme_end + 3 + at_pos + 1;
+                        i = authority_start + at_pos + 1;
                         continue;
                     }
                 }

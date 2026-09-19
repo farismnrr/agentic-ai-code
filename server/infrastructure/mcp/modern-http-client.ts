@@ -153,8 +153,14 @@ export class ModernHttpMcpClient implements McpClientLike {
     if (uri.length === 0 || uri.length > 4096) throw new Error('Resource URI is invalid')
     const result = await this.request('resources/read', { uri })
     if (!isJsonRecord(result) || !Array.isArray(result.contents)) throw new Error('Remote MCP server returned an invalid resources/read result')
-    const contents = result.contents.filter(isJsonRecord).flatMap(content => typeof content.uri === 'string' && (typeof content.text === 'string' || content.text === undefined)
-      ? [{ uri: content.uri, text: content.text, mimeType: typeof content.mimeType === 'string' ? content.mimeType : undefined }]
+    const contents = result.contents.filter(isJsonRecord).flatMap(content => typeof content.uri === 'string'
+      && (typeof content.text === 'string' || typeof content.blob === 'string')
+      ? [{
+          uri: content.uri,
+          text: typeof content.text === 'string' ? content.text : undefined,
+          blob: typeof content.blob === 'string' ? content.blob : undefined,
+          mimeType: typeof content.mimeType === 'string' ? content.mimeType : undefined
+        }]
       : [])
     return { ...result, contents }
   }

@@ -31,7 +31,7 @@ pub(super) fn execute(
     } else if job
         .capability_id
         .as_deref()
-        .is_some_and(|id| id.starts_with("video.") || id.starts_with("audio."))
+        .is_some_and(|id| id.starts_with("video."))
     {
         execute_media_conformance(cwd, config, job)?
     } else {
@@ -274,24 +274,7 @@ fn execute_media_conformance(
         .capability_id
         .as_deref()
         .ok_or_else(|| McpError::InvalidRequest("test media capability is missing".into()))?;
-    if capability_id == "audio.voice_clone"
-        && job
-            .execution_parameters
-            .get("consent_asserted")
-            .and_then(Value::as_bool)
-            != Some(true)
-    {
-        return Err(McpError::InvalidRequest(
-            "voice cloning requires explicit consent assertion".into(),
-        ));
-    }
-    let (extension, media_type, role) = if capability_id == "audio.video_dub" {
-        ("mp4", "video/mp4", "dubbed_video")
-    } else if capability_id.starts_with("audio.") {
-        ("wav", "audio/wav", "generated_audio")
-    } else {
-        ("mp4", "video/mp4", "generated_video")
-    };
+    let (extension, media_type, role) = ("mp4", "video/mp4", "generated_video");
     let parent_asset_id = ["asset_id", "video_asset_id", "reference_asset_id"]
         .into_iter()
         .find_map(|field| {
@@ -377,8 +360,7 @@ fn execute_media_conformance(
             parent_asset_id,
             element_id: job
                 .execution_parameters
-                .get("voice_element_id")
-                .or_else(|| job.execution_parameters.get("element_id"))
+                .get("element_id")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
             dependency_element_ids: Vec::new(),

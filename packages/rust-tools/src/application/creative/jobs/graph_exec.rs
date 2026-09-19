@@ -277,10 +277,7 @@ async fn execute_external_graph_node(
                 .map_err(|_| "export_execution_failed".to_owned())?;
             graph_child_output(executed)
         }
-        GraphNodeKind::GenerateImage
-        | GraphNodeKind::GenerateVideo
-        | GraphNodeKind::GenerateAudio
-        | GraphNodeKind::Generate3d => {
+        GraphNodeKind::GenerateImage | GraphNodeKind::GenerateVideo | GraphNodeKind::Generate3d => {
             let capability_id = graph::capability_for_node(&node.kind)
                 .ok_or_else(|| "graph_capability_missing".to_owned())?;
             execute_graph_capability(cwd, config, parent, node, capability_id).await
@@ -333,7 +330,6 @@ async fn execute_dcc_graph_node(
         "character_mesh_production"
             | "character_rig_production"
             | "character_action"
-            | "character_facial_performance"
             | "character_secondary_motion"
     ) {
         let mut child = graph_child_job(parent, &node);

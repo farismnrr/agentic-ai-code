@@ -51,7 +51,6 @@ pub fn effect_classes_for_call(
                             | "character_mesh_production"
                             | "character_rig_production"
                             | "character_action"
-                            | "character_facial_performance"
                             | "character_secondary_motion"
                     )
                 ) =>

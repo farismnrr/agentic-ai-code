@@ -169,7 +169,6 @@ pub fn estimate_request(
         "character_mesh_production"
             | "character_rig_production"
             | "character_action"
-            | "character_facial_performance"
             | "character_secondary_motion"
     ) {
         if request.execution_binding_id.is_some() {

@@ -1,5 +1,10 @@
-use ai_tools::application::resources::{list, read, RESOURCE_NAMES};
+use ai_tools::application::{
+    creative::{dispatch_tool, CreativeTrack},
+    resources::{list, read, RESOURCE_NAMES},
+};
 use ai_tools::core::config::ServerConfig;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde_json::{json, Value};
 use std::{fs, path::PathBuf, process::Command};
 
 // Git hooks export these repository-local variables to child processes. The
@@ -63,6 +68,34 @@ impl Drop for TempRepo {
     }
 }
 
+fn creative_call(config: &ServerConfig, name: &str, arguments: Value) -> Value {
+    let result = tokio::runtime::Runtime::new()
+        .expect("creative resource test runtime")
+        .block_on(dispatch_tool(name, &arguments, config, "local"))
+        .expect("creative resource dispatch")
+        .expect("creative resource tool result");
+    assert!(
+        !result.is_error,
+        "creative tool error: {:?}",
+        result.content
+    );
+    serde_json::from_str(&result.content[0].text).expect("creative JSON result")
+}
+
+fn create_creative_project(config: &ServerConfig, project_id: &str) {
+    creative_call(
+        config,
+        "creative_project",
+        json!({
+            "action": "create",
+            "project_id": project_id,
+            "title": "Resource fixture",
+            "intent": "Verify native contained media resources",
+            "tracks": [CreativeTrack::Scene]
+        }),
+    );
+}
+
 #[test]
 fn lists_the_server_owned_resources() {
     let repository = TempRepo::new();
@@ -78,7 +111,12 @@ fn lists_the_server_owned_resources() {
 fn reads_the_server_owned_manifest() {
     let repository = TempRepo::new();
     let content = read(&repository.config(), "workspace://ai-code/manifest").unwrap();
-    assert!(content.text.contains("\"repository\":\"ai-code\""));
+    assert!(content
+        .text
+        .as_deref()
+        .expect("text resource content")
+        .contains("\"repository\":\"ai-code\""));
+    assert!(content.blob.is_none());
     assert_eq!(content.uri, "workspace://ai-code/manifest");
 }
 
@@ -98,10 +136,11 @@ fn blender_resource_is_exposed_only_with_the_creative_master_flag() {
         .any(|resource| resource.name == "blender-capability"));
 
     let content = read(&enabled, "workspace://ai-code/blender-capability").unwrap();
-    let value: serde_json::Value = serde_json::from_str(&content.text).unwrap();
+    let value: serde_json::Value =
+        serde_json::from_str(content.text.as_deref().expect("text resource content")).unwrap();
     assert_eq!(value["capability"], "blender");
     let tools = value["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 4);
+    assert_eq!(tools.len(), 5);
     assert_eq!(
         tools,
         &[
@@ -109,6 +148,7 @@ fn blender_resource_is_exposed_only_with_the_creative_master_flag() {
             "blender_inspect",
             "blender_python_api_docs",
             "blender_screenshot",
+            "blender_animation_preview",
         ]
         .map(serde_json::Value::from)
     );
@@ -128,6 +168,226 @@ fn blender_resource_is_exposed_only_with_the_creative_master_flag() {
     );
 
     let manifest = read(&enabled, "workspace://ai-code/manifest").unwrap();
-    assert!(manifest.text.contains("blender-capability"));
-    assert!(manifest.text.contains("\"blender\""));
+    let manifest_text = manifest.text.as_deref().expect("text resource content");
+    assert!(manifest_text.contains("blender-capability"));
+    assert!(manifest_text.contains("\"blender\""));
+}
+
+#[test]
+fn reads_a_registered_contained_png_as_blob_resource() {
+    let repository = TempRepo::new();
+    let config = ServerConfig {
+        enable_creative: true,
+        ..repository.config()
+    };
+    create_creative_project(&config, "project_media_resource");
+
+    let asset_path = repository.0.join("assets").join("review.png");
+    fs::create_dir_all(asset_path.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([20, 40, 60, 255]))
+        .save(&asset_path)
+        .unwrap();
+    let expected = fs::read(&asset_path).unwrap();
+
+    let registered = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "register",
+            "project_id": "project_media_resource",
+            "path": "assets/review.png",
+            "media_type": "image/png",
+            "role": "review"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap();
+    let asset = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "get",
+            "project_id": "project_media_resource",
+            "asset_id": asset_id
+        }),
+    );
+    let resource_uri = asset["resource_uri"].as_str().unwrap();
+
+    let content = read(&config, resource_uri).unwrap();
+    assert_eq!(content.mime_type, "image/png");
+    assert!(content.text.is_none());
+    assert_eq!(
+        STANDARD.decode(content.blob.as_deref().unwrap()).unwrap(),
+        expected
+    );
+}
+
+#[test]
+fn rejects_creative_image_resource_with_oversized_dimensions() {
+    let repository = TempRepo::new();
+    let config = ServerConfig {
+        enable_creative: true,
+        ..repository.config()
+    };
+    create_creative_project(&config, "project_large_image_resource");
+
+    let asset_path = repository.0.join("assets").join("wide.png");
+    fs::create_dir_all(asset_path.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(4097, 1, image::Rgba([20, 40, 60, 255]))
+        .save(&asset_path)
+        .unwrap();
+
+    let registered = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "register",
+            "project_id": "project_large_image_resource",
+            "path": "assets/wide.png",
+            "media_type": "image/png",
+            "role": "review"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap();
+    let asset = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "get",
+            "project_id": "project_large_image_resource",
+            "asset_id": asset_id
+        }),
+    );
+    assert!(read(&config, asset["resource_uri"].as_str().unwrap()).is_err());
+}
+
+#[test]
+fn rejects_creative_resource_when_registered_bytes_change() {
+    let repository = TempRepo::new();
+    let config = ServerConfig {
+        enable_creative: true,
+        ..repository.config()
+    };
+    create_creative_project(&config, "project_changed_resource");
+
+    let asset_path = repository.0.join("assets").join("changed.png");
+    fs::create_dir_all(asset_path.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([20, 40, 60, 255]))
+        .save(&asset_path)
+        .unwrap();
+
+    let registered = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "register",
+            "project_id": "project_changed_resource",
+            "path": "assets/changed.png",
+            "media_type": "image/png",
+            "role": "review"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap();
+    let asset = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "get",
+            "project_id": "project_changed_resource",
+            "asset_id": asset_id
+        }),
+    );
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([99, 88, 77, 255]))
+        .save(&asset_path)
+        .unwrap();
+    assert!(read(&config, asset["resource_uri"].as_str().unwrap()).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_creative_resource_after_symlink_substitution() {
+    use std::os::unix::fs::symlink;
+
+    let repository = TempRepo::new();
+    let config = ServerConfig {
+        enable_creative: true,
+        ..repository.config()
+    };
+    create_creative_project(&config, "project_symlink_resource");
+
+    let asset_path = repository.0.join("assets").join("linked.png");
+    fs::create_dir_all(asset_path.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([20, 40, 60, 255]))
+        .save(&asset_path)
+        .unwrap();
+
+    let registered = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "register",
+            "project_id": "project_symlink_resource",
+            "path": "assets/linked.png",
+            "media_type": "image/png",
+            "role": "review"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap();
+    let asset = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "get",
+            "project_id": "project_symlink_resource",
+            "asset_id": asset_id
+        }),
+    );
+
+    let outside = repository.0.parent().unwrap().join("outside.png");
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([1, 2, 3, 255]))
+        .save(&outside)
+        .unwrap();
+    fs::remove_file(&asset_path).unwrap();
+    symlink(&outside, &asset_path).unwrap();
+
+    assert!(read(&config, asset["resource_uri"].as_str().unwrap()).is_err());
+}
+
+#[test]
+fn rejects_non_image_creative_resource_content() {
+    let repository = TempRepo::new();
+    let config = ServerConfig {
+        enable_creative: true,
+        ..repository.config()
+    };
+    create_creative_project(&config, "project_text_resource");
+
+    fs::create_dir_all(repository.0.join("assets")).unwrap();
+    fs::write(
+        repository.0.join("assets").join("notes.txt"),
+        b"not an image",
+    )
+    .unwrap();
+
+    let registered = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "register",
+            "project_id": "project_text_resource",
+            "path": "assets/notes.txt",
+            "media_type": "application/json",
+            "role": "notes"
+        }),
+    );
+    let asset_id = registered["asset_id"].as_str().unwrap();
+    let asset = creative_call(
+        &config,
+        "creative_asset",
+        json!({
+            "action": "get",
+            "project_id": "project_text_resource",
+            "asset_id": asset_id
+        }),
+    );
+    assert!(read(&config, asset["resource_uri"].as_str().unwrap()).is_err());
 }

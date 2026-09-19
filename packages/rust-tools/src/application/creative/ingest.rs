@@ -201,6 +201,7 @@ pub fn accept_upload_bytes(
             "creative upload content type does not match ticket".into(),
         ));
     }
+    validate_untrusted_media_bytes(&ticket.media_type, bytes)?;
     let relative_path = format!(
         "creative/{}/assets/uploads/{}-{}",
         ticket.project_id, ticket.ticket_id, ticket.filename
@@ -364,6 +365,7 @@ pub async fn import_url(
             "creative URL import body is empty".into(),
         ));
     }
+    validate_untrusted_media_bytes(&response_media_type, &body)?;
     let filename = match request.filename.as_deref() {
         Some(value) => sanitize_filename(value)?,
         None => filename_from_url(&url, &response_media_type),

@@ -183,18 +183,34 @@ deployments that intentionally need the larger catalog.
 
 ## 5. Publish through an HTTPS edge
 
-Configure the selected reverse proxy or outbound tunnel with one narrow route:
+Configure the selected reverse proxy or outbound tunnel with the narrow MCP
+route:
 
 ```text
 https://mcp.example.com/mcp  ->  http://127.0.0.1:47821/mcp
 ```
 
-The edge must preserve the `/mcp` path, forward the original HTTPS scheme in
-the reviewed proxy header, and avoid caching MCP responses or OAuth metadata.
-If the edge supports an allowlist, permit only the public hostname and the
-loopback upstream. Do not put a separate interactive login page in front of
-`/mcp` or `/.well-known/oauth-protected-resource*`; clients must receive the
-relay's own OAuth challenge and metadata.
+When the private reviewed Creative Game deployment backend is enabled and
+browser acceptance is required, expose only its authenticated deployment path
+through the same trusted HTTPS edge as well:
+
+```text
+https://mcp.example.com/creative-deploy/*  ->  http://127.0.0.1:47821/creative-deploy/*
+```
+
+This route does **not** publish the game publicly: deployment records remain
+owner-scoped and `published=false`, while the relay still applies its OAuth
+access boundary, private/no-store response policy, nosniff, and restrictive CSP.
+Do not expose port 47821 directly and do not proxy arbitrary relay paths merely
+to make browser testing convenient.
+
+The edge must preserve the requested path, forward the original HTTPS scheme in
+the reviewed proxy header, and avoid caching MCP/deployment responses or OAuth
+metadata. If the edge supports an allowlist, permit only the public hostname and
+the loopback upstream. Do not put a separate interactive login page in front of
+`/mcp`, `/creative-deploy/*`, or
+`/.well-known/oauth-protected-resource*`; clients must receive the relay's own
+OAuth challenge and metadata.
 
 The Authorization Server may use a separate HTTPS hostname and edge. Its
 public issuer and discovery/JWKS routes must remain stable and must match

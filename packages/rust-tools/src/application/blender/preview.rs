@@ -1,4 +1,7 @@
-use super::{artifact_relative_path, bridge, resolve_project_root, session, BlenderArtifactScope};
+use super::{
+    artifact_relative_path, artifacts, bridge, resolve_project_root, session, BlenderArtifactScope,
+};
+use crate::application::resources;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use image::GenericImageView;
@@ -15,6 +18,7 @@ const MAX_ANIMATION_PREVIEW_PIXELS: u64 = 128 * 1024 * 1024;
 pub async fn screenshot(
     cwd: Option<&str>,
     config: &ServerConfig,
+    project_id: &str,
     source: &str,
     width: u32,
     height: u32,
@@ -53,13 +57,18 @@ try:
     _scene.render.resolution_percentage = 100
     _scene.render.image_settings.file_format = "PNG"
     if _source == "render_result":
-        _image = bpy.data.images.get("Render Result")
-        if _image is None:
-            raise RuntimeError("Render Result is unavailable")
-        _image.save_render(filepath=_path, scene=_scene)
+        _scene.render.filepath = _path
+        _op_result = bpy.ops.render.render(write_still=True)
+        if "FINISHED" not in _op_result:
+            raise RuntimeError("Blender render did not finish")
     else:
         _scene.render.filepath = _path
-        bpy.ops.render.opengl(write_still=True, view_context=False)
+        try:
+            _op_result = bpy.ops.render.opengl(write_still=True, view_context=False)
+        except RuntimeError:
+            _op_result = {{"CANCELLED"}}
+        if "FINISHED" not in _op_result:
+            bpy.ops.render.render(write_still=True)
     result = {{"written": True, "source": _source}}
 finally:
     _scene.render.filepath = _old_path
@@ -70,7 +79,24 @@ finally:
 "#
     );
     let reply = bridge::execute(config, &code, true).await?;
-    let metadata = inspect_preview_file(&root, &absolute_path, &relative_path)?;
+    let mut metadata = inspect_preview_file(&root, &absolute_path, &relative_path)?;
+    let asset_id = artifacts::register_generated_output(
+        cwd,
+        config,
+        project_id,
+        artifacts::GeneratedOutputRegistration {
+            relative_path: &relative_path,
+            media_type: "image/png",
+            role: "blender_screenshot_preview",
+            artifact_kind: "blender_screenshot",
+            parent_asset_id: None,
+        },
+    )?;
+    let resource_uri = resources::creative_asset_resource_uri(cwd, config, project_id, &asset_id)?;
+    if let Some(object) = metadata.as_object_mut() {
+        object.insert("asset_id".into(), json!(asset_id));
+        object.insert("resource_uri".into(), json!(resource_uri));
+    }
     Ok(json!({
         "kind":"screenshot",
         "source":source,
@@ -92,6 +118,7 @@ pub struct AnimationPreviewRequest<'a> {
 pub async fn animation_preview(
     cwd: Option<&str>,
     config: &ServerConfig,
+    project_id: &str,
     request: AnimationPreviewRequest<'_>,
 ) -> Result<Value, McpError> {
     validate_dimensions(request.width, request.height)?;
@@ -189,7 +216,23 @@ finally:
         .zip(relative_paths.iter())
     {
         let mut metadata = inspect_preview_file(&root, absolute_path, relative_path)?;
+        let asset_id = artifacts::register_generated_output(
+            cwd,
+            config,
+            project_id,
+            artifacts::GeneratedOutputRegistration {
+                relative_path,
+                media_type: "image/png",
+                role: "blender_animation_preview_frame",
+                artifact_kind: "blender_animation_preview_frame",
+                parent_asset_id: None,
+            },
+        )?;
+        let resource_uri =
+            resources::creative_asset_resource_uri(cwd, config, project_id, &asset_id)?;
         metadata["frame"] = json!(frame);
+        metadata["asset_id"] = json!(asset_id);
+        metadata["resource_uri"] = json!(resource_uri);
         previews.push(metadata);
     }
     Ok(json!({

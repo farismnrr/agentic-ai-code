@@ -310,6 +310,15 @@ Creative admission limits are separately operator-controlled through
 Approval can cross only the soft approval threshold; it never overrides a hard
 limit.
 
+Untrusted Creative upload and URL-import bytes are validated before they are
+persisted as ingest receipts or registered as Assets. Reviewed raster/image,
+MP4, GLB, and Blender payloads must match their declared content
+type by bounded magic-byte checks. Active SVG is rejected on untrusted ingress
+until a reviewed sanitizer exists, and other unreviewed media types fail closed
+instead of being accepted solely from a caller or HTTP `Content-Type` claim.
+`application/octet-stream` remains an explicitly opaque payload and downstream
+consumers must apply their own format-specific validation before execution.
+
 ### Blender production engine
 
 Plan 069 uses one operator activation switch for the complete Creative production
@@ -376,13 +385,14 @@ blender/
 ```
 
 The public Blender MCP contract exposes only bounded agent operations:
-`blender_session`, `blender_inspect`, `blender_python_api_docs`, and
-`blender_screenshot`. Heavy or workload-dependent Blender execution is
-foreground operator work through `ai-tools creative --tool ... --input ...`,
-including arbitrary Blender Python, animation preview/render, asset import/export,
-and checkpoint create/restore. This keeps accepted MCP calls inside the public
-60-second execution boundary instead of hiding long work behind polling or
-background tasks.
+`blender_session`, `blender_inspect`, `blender_python_api_docs`,
+`blender_screenshot`, and bounded sampled `blender_animation_preview`. Heavy or
+workload-dependent Blender execution is foreground operator work through
+`ai-tools creative --tool ... --input ...`, including arbitrary Blender Python,
+final/bulk render or preview work, asset import/export, and checkpoint
+create/restore. This keeps accepted MCP calls inside the public 60-second
+execution boundary instead of hiding long work behind polling or background
+tasks.
 
 The single runtime catalog composes the bounded Blender tools only for the Full
 profile when Creative is enabled. When disabled, `creative_status` reports the

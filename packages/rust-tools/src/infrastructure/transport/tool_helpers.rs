@@ -135,6 +135,7 @@ pub(crate) fn activity_result_detail(
         let raw = result
             .content
             .iter()
+            .filter(|content| content.kind == "text")
             .map(|content| content.text.as_str())
             .collect::<Vec<_>>()
             .join("\n");

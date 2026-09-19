@@ -1,6 +1,6 @@
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
-use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
+use crate::interfaces::mcp::ToolCallResult;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -17,6 +17,7 @@ mod knowledge;
 mod preview;
 mod reads;
 mod render;
+mod result;
 mod session;
 
 pub(crate) use bootstrap::{run_character_bootstrap, CharacterBootstrapRequest};
@@ -27,14 +28,27 @@ pub const DEFAULT_BLENDER_LAB_PORT: u16 = 9876;
 pub const MAX_BLENDER_REQUEST_BYTES: usize = 1024 * 1024;
 pub const MAX_BLENDER_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_BLENDER_PYTHON_BYTES: usize = 256 * 1024;
-pub const PUBLIC_MCP_BLENDER_TIMEOUT_MS: u64 = 50_000;
 pub const REVIEWED_BLENDER_PATH_NAMES: &[&str] = &["blender", "blender.exe"];
 
-pub fn bounded_mcp_config(config: &ServerConfig) -> ServerConfig {
+pub fn public_mcp_timeout_ms(tool_name: &str) -> Option<u64> {
+    use crate::core::config::{
+        BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS, BLENDER_MCP_DEFAULT_TIMEOUT_MS,
+        BLENDER_MCP_SCREENSHOT_TIMEOUT_MS, BLENDER_MCP_SESSION_TIMEOUT_MS,
+    };
+    match tool_name {
+        "blender_session" => Some(BLENDER_MCP_SESSION_TIMEOUT_MS),
+        "blender_inspect" | "blender_python_api_docs" => Some(BLENDER_MCP_DEFAULT_TIMEOUT_MS),
+        "blender_screenshot" => Some(BLENDER_MCP_SCREENSHOT_TIMEOUT_MS),
+        "blender_animation_preview" => Some(BLENDER_MCP_ANIMATION_PREVIEW_TIMEOUT_MS),
+        _ => None,
+    }
+}
+
+pub fn bounded_mcp_config(config: &ServerConfig, tool_name: &str) -> ServerConfig {
     let mut bounded = config.clone();
-    bounded.blender_bridge_timeout_ms = bounded
-        .blender_bridge_timeout_ms
-        .min(PUBLIC_MCP_BLENDER_TIMEOUT_MS);
+    if let Some(timeout_ms) = public_mcp_timeout_ms(tool_name) {
+        bounded.blender_bridge_timeout_ms = timeout_ms;
+    }
     bounded
 }
 
@@ -245,7 +259,7 @@ pub async fn dispatch_tool(
                     ))
                 }
             };
-            complete(json!({"session": status})).map(Some)
+            result::complete(json!({"session": status})).map(Some)
         }
         "blender_inspect" => {
             let scope = required_str(arguments, "scope")?;
@@ -254,17 +268,21 @@ pub async fn dispatch_tool(
                 .get("detail")
                 .and_then(Value::as_str)
                 .unwrap_or("standard");
-            complete(json!({"inspection": reads::inspect(config, scope, target, detail).await?}))
-                .map(Some)
+            result::complete(
+                json!({"inspection": reads::inspect(config, scope, target, detail).await?}),
+            )
+            .map(Some)
         }
         "blender_python_api_docs" => {
             let query = required_str(arguments, "query")?;
             let module = arguments.get("module").and_then(Value::as_str);
             let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(8) as usize;
-            complete(json!({"docs": knowledge::lookup(config, query, module, limit).await?}))
-                .map(Some)
+            result::complete(
+                json!({"docs": knowledge::lookup(config, query, module, limit).await?}),
+            )
+            .map(Some)
         }
-        "blender_execute_python" => complete(
+        "blender_execute_python" => result::complete(
             authoring::execute_python(
                 config,
                 required_str(arguments, "code")?,
@@ -290,8 +308,19 @@ pub async fn dispatch_tool(
                 .and_then(Value::as_u64)
                 .unwrap_or(1024) as u32;
             let save_name = arguments.get("save_name").and_then(Value::as_str);
-            complete(
-                preview::screenshot(Some(cwd), config, source, width, height, save_name).await?,
+            result::complete_screenshot(
+                cwd,
+                config,
+                preview::screenshot(
+                    Some(cwd),
+                    config,
+                    project_id,
+                    source,
+                    width,
+                    height,
+                    save_name,
+                )
+                .await?,
             )
             .map(Some)
         }
@@ -316,7 +345,12 @@ pub async fn dispatch_tool(
                     .unwrap_or(360) as u32,
                 save_name: arguments.get("save_name").and_then(Value::as_str),
             };
-            complete(preview::animation_preview(Some(cwd), config, request).await?).map(Some)
+            result::complete_animation_preview(
+                cwd,
+                config,
+                preview::animation_preview(Some(cwd), config, project_id, request).await?,
+            )
+            .map(Some)
         }
         "blender_render" => {
             let request = render::RenderRequest {
@@ -332,14 +366,15 @@ pub async fn dispatch_tool(
                     .and_then(Value::as_i64)
                     .and_then(|value| i32::try_from(value).ok()),
             };
-            complete(render::render(Some(cwd), config, project_id, request).await?).map(Some)
+            result::complete(render::render(Some(cwd), config, project_id, request).await?)
+                .map(Some)
         }
         "blender_asset_import" => {
             let asset_id = required_str(arguments, "asset_id")?;
             let purpose = required_str(arguments, "purpose")?;
             let target_name = arguments.get("target_name").and_then(Value::as_str);
             let collection = arguments.get("collection").and_then(Value::as_str);
-            complete(
+            result::complete(
                 assets::import_asset(
                     Some(cwd),
                     config,
@@ -365,7 +400,7 @@ pub async fn dispatch_tool(
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            complete(
+            result::complete(
                 assets::export_asset(
                     Some(cwd),
                     config,
@@ -382,7 +417,7 @@ pub async fn dispatch_tool(
             )
             .map(Some)
         }
-        "blender_checkpoint_create" => complete(
+        "blender_checkpoint_create" => result::complete(
             checkpoints::create(
                 Some(cwd),
                 config,
@@ -393,7 +428,7 @@ pub async fn dispatch_tool(
             .await?,
         )
         .map(Some),
-        "blender_checkpoint_restore" => complete(
+        "blender_checkpoint_restore" => result::complete(
             checkpoints::restore(
                 Some(cwd),
                 config,
@@ -421,13 +456,4 @@ fn required_i64(arguments: &Value, field: &str) -> Result<i64, McpError> {
         .get(field)
         .and_then(Value::as_i64)
         .ok_or_else(|| McpError::InvalidRequest(format!("Blender {field} is required")))
-}
-
-fn complete(value: Value) -> Result<ToolCallResult, McpError> {
-    let text = serde_json::to_string(&value)
-        .map_err(|_| McpError::Internal("Blender result could not be serialized".into()))?;
-    Ok(ToolCallResult::complete(vec![ToolResultContent {
-        kind: "text",
-        text,
-    }]))
 }

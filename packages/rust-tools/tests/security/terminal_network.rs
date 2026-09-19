@@ -4,6 +4,7 @@
 use super::terminal_sandbox::shell;
 use ai_tools::core::config::ServerConfig;
 use serde_json::{json, Value};
+use std::io::Read as _;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -166,10 +167,12 @@ async fn http_fetch_reaches_its_policy_without_scanning_the_workspace() {
             .arg(&activity_state)
             .arg("--port")
             .arg(port.to_string())
+            .env_clear()
             .env("HOME", &home)
             .env("XDG_STATE_HOME", home.join(".local/state"))
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("start local relay child"),
     );
@@ -182,7 +185,11 @@ async fn http_fetch_reaches_its_policy_without_scanning_the_workspace() {
     let startup_deadline = Instant::now() + Duration::from_secs(8);
     loop {
         if let Some(status) = relay.try_wait().expect("check relay process") {
-            panic!("relay exited before readiness with {status}");
+            let mut stderr = String::new();
+            if let Some(mut pipe) = relay.0.stderr.take() {
+                let _ = pipe.read_to_string(&mut stderr);
+            }
+            panic!("relay exited before readiness with {status}; stderr: {stderr}");
         }
         if client
             .get(&health_url)

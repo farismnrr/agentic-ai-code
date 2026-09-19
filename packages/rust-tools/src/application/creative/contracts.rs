@@ -10,7 +10,6 @@ pub const MAX_PROJECT_ASSETS: usize = 2_048;
 pub const MAX_PROJECT_SCENES: usize = 128;
 pub const MAX_PROJECT_SCENE_BOARDS: usize = 128;
 pub const MAX_PROJECT_GAMES: usize = 32;
-pub const MAX_PROJECT_AUDIO_PLANS: usize = 128;
 pub const MAX_QA_FINDINGS: usize = 2_048;
 pub const MAX_PROJECT_GRAPHS: usize = 1_024;
 pub const MAX_PROJECT_JOBS: usize = 4_096;
@@ -21,7 +20,6 @@ pub const MAX_SCENE_SHOTS: usize = 256;
 pub const MAX_SCENE_BOARD_FRAMES: usize = 512;
 pub const MAX_GAME_LIST_ITEMS: usize = 128;
 pub const MAX_GAME_ASSET_ROLES: usize = 512;
-pub const MAX_AUDIO_CUES: usize = 512;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -52,7 +50,6 @@ pub enum ElementKind {
     Location,
     Prop,
     Style,
-    AudioVoice,
     Media,
     Asset3d,
     AnimationClip,
@@ -176,10 +173,6 @@ pub struct AssetMetadata {
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
-    pub sample_rate_hz: Option<u32>,
-    #[serde(default)]
-    pub channels: Option<u16>,
-    #[serde(default)]
     pub artifact_kind: Option<String>,
     #[serde(default)]
     pub artifact_version: Option<String>,
@@ -247,8 +240,6 @@ pub struct CreativeProject {
     pub scenes: Vec<SceneManifest>,
     #[serde(default)]
     pub games: Vec<GameManifest>,
-    #[serde(default)]
-    pub audio_plans: Vec<AudioPlan>,
     #[serde(default)]
     pub graph_ids: Vec<String>,
     #[serde(default)]

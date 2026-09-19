@@ -336,12 +336,93 @@ fn local_static_game_deployment_is_served_through_the_relay_access_boundary() {
                 .and_then(|value| value.to_str().ok()),
             Some("private, no-store")
         );
-        assert!(response
+        assert_eq!(
+            response
+                .headers()
+                .get(reqwest::header::X_CONTENT_TYPE_OPTIONS)
+                .and_then(|value| value.to_str().ok()),
+            Some("nosniff")
+        );
+        let csp = response
             .headers()
             .get(reqwest::header::CONTENT_SECURITY_POLICY)
-            .is_some());
+            .and_then(|value| value.to_str().ok())
+            .expect("deployment CSP");
+        assert!(csp.contains("script-src 'self'"));
+        assert!(csp.contains("connect-src 'none'"));
+        assert!(csp.contains("object-src 'none'"));
+        assert!(csp.contains("base-uri 'none'"));
+        assert!(csp.contains("frame-ancestors 'none'"));
         let html = response.text().await.expect("deployment html");
         assert!(html.contains("Relay HTTP Arcade"));
     });
     server.abort();
+}
+
+#[test]
+fn reviewed_browser_runtime_has_no_ambient_network_or_dynamic_code_primitives() {
+    let workspace = TempWorkspace::new();
+    let config = config(&workspace);
+    let project_id = "project_browser_runtime_security";
+    create_project(&config, project_id);
+    call(
+        &config,
+        "creative_project",
+        json!({
+            "action":"game_put",
+            "project_id":project_id,
+            "game":{
+                "game_id":"secure_arcade",
+                "title":"Secure Arcade",
+                "production_intent":"build",
+                "genre":"arcade",
+                "perspective":"top_down",
+                "core_loop":"Move and collect points.",
+                "win_condition":"Reach ten points.",
+                "lose_condition":"Lose all lives.",
+                "restart_behavior":"Press R to restart.",
+                "player_mode":"solo",
+                "target_devices":["desktop","mobile"],
+                "verbs":["move","collect","restart"],
+                "inputs":["keyboard","touch"],
+                "asset_roles":[]
+            }
+        }),
+    );
+    assert_eq!(
+        submit_wait(
+            &config,
+            project_id,
+            "game_source_scaffold",
+            json!({"game_id":"secure_arcade","template_family":"2d_canvas"}),
+            None,
+        )["status"],
+        "completed"
+    );
+
+    let script = std::fs::read_to_string(
+        workspace
+            .path("creative/project_browser_runtime_security/games/secure_arcade/source/game.js"),
+    )
+    .expect("read reviewed browser runtime");
+    for forbidden in [
+        "fetch(",
+        "XMLHttpRequest",
+        "WebSocket",
+        "EventSource",
+        "postMessage",
+        "localStorage",
+        "sessionStorage",
+        "eval(",
+        "new Function",
+        "document.write",
+        "innerHTML",
+    ] {
+        assert!(
+            !script.contains(forbidden),
+            "reviewed browser runtime unexpectedly contains {forbidden}"
+        );
+    }
+    assert!(script.contains("requestAnimationFrame"));
+    assert!(script.contains("Math.min((now-last)/1000,0.05)"));
 }

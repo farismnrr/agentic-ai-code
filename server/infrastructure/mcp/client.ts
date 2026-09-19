@@ -50,7 +50,7 @@ export type McpClientCallResult = {
 }
 
 export type McpClientResource = { uri: string, name: string, description?: string, mimeType?: string }
-export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, mimeType?: string }>, [key: string]: unknown }
+export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, blob?: string, mimeType?: string }>, [key: string]: unknown }
 
 export interface McpClientLike {
   trustedProvenance?: 'first-party-relay' | 'external'

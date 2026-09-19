@@ -114,7 +114,7 @@ fn fresh_scene_studio_contract_benchmark_reaches_contained_export() {
         &workspace,
         project_id,
         ("workflow_id", "sequence_assemble"),
-        json!({"video_asset_ids":videos,"audio_asset_ids":[],"fps":24,"width":1280,"height":720}),
+        json!({"video_asset_ids":videos,"fps":24,"width":1280,"height":720}),
         Some("test_closure_media"),
     );
     assert_eq!(assembled["status"], "completed");

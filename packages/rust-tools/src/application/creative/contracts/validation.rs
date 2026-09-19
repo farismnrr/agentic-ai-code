@@ -38,7 +38,6 @@ impl CreativeProject {
             || self.scene_boards.len() > MAX_PROJECT_SCENE_BOARDS
             || self.scenes.len() > MAX_PROJECT_SCENES
             || self.games.len() > MAX_PROJECT_GAMES
-            || self.audio_plans.len() > MAX_PROJECT_AUDIO_PLANS
             || self.graph_ids.len() > MAX_PROJECT_GRAPHS
             || self.job_ids.len() > MAX_PROJECT_JOBS
             || self.qa_findings.len() > MAX_QA_FINDINGS
@@ -69,12 +68,6 @@ impl CreativeProject {
             self.games.iter().map(|value| value.game_id.as_str()),
             "game",
         )?;
-        ensure_unique(
-            self.audio_plans
-                .iter()
-                .map(|value| value.audio_plan_id.as_str()),
-            "audio plan",
-        )?;
         ensure_unique(self.graph_ids.iter().map(String::as_str), "graph")?;
         ensure_unique(self.job_ids.iter().map(String::as_str), "job")?;
         ensure_unique(
@@ -104,9 +97,6 @@ impl CreativeProject {
         }
         for game in &self.games {
             validate_game(game, self)?;
-        }
-        for audio in &self.audio_plans {
-            validate_audio(audio, self)?;
         }
         for finding in &self.qa_findings {
             validate_qa_finding(finding, self)?;
@@ -228,7 +218,7 @@ fn validate_element(element: &ElementRecord, project: &CreativeProject) -> Resul
 }
 
 mod production;
-use production::{validate_audio, validate_game, validate_scene, validate_scene_board};
+use production::{validate_game, validate_scene, validate_scene_board};
 
 fn validate_target(target: &ProductionTarget) -> Result<(), McpError> {
     if let Some(aspect_ratio) = target.aspect_ratio.as_deref() {

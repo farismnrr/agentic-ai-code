@@ -59,7 +59,7 @@ fn element_tool() -> Tool {
     Tool {
         name: "creative_element",
         title: Some("Creative Element Library"),
-        description: "Create candidate Element revisions, explicitly promote an accepted revision, or read reusable Character/Location/Prop/Style/Voice/Media/3D/Animation Elements. Revisions preserve authoritative versus interpreted/generated provenance.",
+        description: "Create candidate Element revisions, explicitly promote an accepted revision, or read reusable Character/Location/Prop/Style/Media/3D/Animation Elements. Revisions preserve authoritative versus interpreted/generated provenance.",
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -70,7 +70,7 @@ fn element_tool() -> Tool {
                 "revision_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "kind": {
                     "type": "string",
-                    "enum": ["character", "location", "prop", "style", "audio_voice", "media", "asset3d", "animation_clip"]
+                    "enum": ["character", "location", "prop", "style", "media", "asset3d", "animation_clip"]
                 },
                 "name": { "type": "string", "minLength": 1, "maxLength": 200 },
                 "authority": {
@@ -159,8 +159,6 @@ fn asset_tool() -> Tool {
                         "duration_ms": { "type": "integer", "minimum": 1, "maximum": 86400000 },
                         "frame_rate": { "type": "number", "minimum": 1, "maximum": 240 },
                         "language": { "type": "string", "minLength": 1, "maxLength": 32 },
-                        "sample_rate_hz": { "type": "integer", "minimum": 8000, "maximum": 384000 },
-                        "channels": { "type": "integer", "minimum": 1, "maximum": 32 }
                     },
                     "additionalProperties": false
                 },

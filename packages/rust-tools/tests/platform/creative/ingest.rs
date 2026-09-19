@@ -7,20 +7,9 @@ use serde_json::Value;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-fn call_for_owner(
-    config: &ai_tools::core::config::ServerConfig,
-    name: &str,
-    arguments: serde_json::Value,
-    owner: &str,
-) -> Value {
-    let result = tokio::runtime::Runtime::new()
-        .expect("creative owner test runtime")
-        .block_on(dispatch_tool(name, &arguments, config, owner))
-        .expect("creative owner dispatch")
-        .expect("creative owner tool result");
-    assert!(!result.is_error, "creative owner tool returned an error");
-    serde_json::from_str(&result.content[0].text).expect("creative owner JSON result")
-}
+#[path = "ingest/support.rs"]
+mod support;
+use support::{abort_server, call_for_owner, http_client};
 
 #[test]
 fn upload_handoff_is_bounded_single_use_and_completes_to_durable_asset() {
@@ -71,17 +60,14 @@ fn upload_handoff_is_bounded_single_use_and_completes_to_durable_asset() {
     });
 
     runtime.block_on(async {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .expect("test HTTP client");
+        let client = http_client("test HTTP client");
         let upload_url = format!("http://127.0.0.1:{port}{path}");
         let uploaded = client
             .put(&upload_url)
             .header("origin", "http://localhost:3333")
             .header("content-type", "image/png")
             .header("x-creative-upload-token", &token)
-            .body(b"fixture-png-bytes".to_vec())
+            .body(b"\x89PNG\r\n\x1a\nfixture".to_vec())
             .send()
             .await
             .expect("upload response");
@@ -96,7 +82,7 @@ fn upload_handoff_is_bounded_single_use_and_completes_to_durable_asset() {
             .header("origin", "http://localhost:3333")
             .header("content-type", "image/png")
             .header("x-creative-upload-token", &token)
-            .body(b"fixture-png-bytes".to_vec())
+            .body(b"\x89PNG\r\n\x1a\nfixture".to_vec())
             .send()
             .await
             .expect("replay response");
@@ -135,10 +121,7 @@ fn upload_handoff_is_bounded_single_use_and_completes_to_durable_asset() {
     );
     assert_eq!(completed_again["asset_id"], asset_id);
 
-    server.abort();
-    runtime.block_on(async {
-        let _ = server.await;
-    });
+    abort_server(&runtime, server);
 }
 
 #[test]
@@ -176,9 +159,9 @@ fn remote_upload_uses_the_ticket_capability_without_forwarding_mcp_oauth() {
         serde_json::json!({
             "action":"upload_request",
             "project_id":project_id,
-            "media_type":"image/svg+xml",
+            "media_type":"image/png",
             "role":"external_parity_fixture",
-            "filename":"external.svg",
+            "filename":"external.png",
             "max_bytes":2048,
             "ttl_ms":60_000
         }),
@@ -231,10 +214,7 @@ fn remote_upload_uses_the_ticket_capability_without_forwarding_mcp_oauth() {
     });
 
     runtime.block_on(async {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .expect("remote upload test client");
+        let client = http_client("remote upload test client");
         let upload_url = format!("http://127.0.0.1:{port}{path}");
         let origin = "https://chat.example.test";
 
@@ -315,9 +295,9 @@ fn remote_upload_uses_the_ticket_capability_without_forwarding_mcp_oauth() {
             .put(&upload_url)
             .header("origin", origin)
             .header("x-forwarded-proto", "https")
-            .header("content-type", "image/svg+xml")
+            .header("content-type", "image/png")
             .header("x-creative-upload-token", token)
-            .body("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>")
+            .body(b"\x89PNG\r\n\x1a\nremote-fixture".to_vec())
             .send()
             .await
             .expect("bearerless upload response");
@@ -363,10 +343,83 @@ fn remote_upload_uses_the_ticket_capability_without_forwarding_mcp_oauth() {
     assert_eq!(completed["asset"]["source"], "mcp_upload");
     assert_eq!(completed["asset"]["state"], "candidate");
 
-    server.abort();
-    runtime.block_on(async {
-        let _ = server.await;
+    abort_server(&runtime, server);
+}
+
+#[test]
+fn upload_rejects_spoofed_media_bytes_before_persisting_or_consuming_ticket() {
+    let workspace = TempWorkspace::new();
+    let mut config = workspace.config();
+    config.origin = Some("http://localhost:3333".into());
+    create_project(&config, "project_spoofed_media");
+
+    let requested = call(
+        &config,
+        "creative_asset",
+        serde_json::json!({
+            "action":"upload_request",
+            "project_id":"project_spoofed_media",
+            "media_type":"image/png",
+            "role":"malicious_media_probe",
+            "filename":"probe.png",
+            "max_bytes":1024,
+            "ttl_ms":60_000
+        }),
+    );
+    let upload = &requested["upload"];
+    let path = upload["upload_path"]
+        .as_str()
+        .expect("upload path")
+        .to_owned();
+    let token = upload["upload_token"]
+        .as_str()
+        .expect("upload token")
+        .to_owned();
+
+    let runtime = tokio::runtime::Runtime::new().expect("spoofed media HTTP runtime");
+    let (port, server) = runtime.block_on(async {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback listener");
+        let port = listener.local_addr().expect("listener address").port();
+        config.port = port;
+        let router = create_router(config.clone());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("spoofed media test server");
+        });
+        (port, server)
     });
+
+    runtime.block_on(async {
+        let client = http_client("spoofed media test client");
+        let upload_url = format!("http://127.0.0.1:{port}{path}");
+
+        let spoofed = client
+            .put(&upload_url)
+            .header("origin", "http://localhost:3333")
+            .header("content-type", "image/png")
+            .header("x-creative-upload-token", &token)
+            .body(b"<script>alert('not png')</script>".to_vec())
+            .send()
+            .await
+            .expect("spoofed upload response");
+        assert_eq!(spoofed.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        let accepted = client
+            .put(&upload_url)
+            .header("origin", "http://localhost:3333")
+            .header("content-type", "image/png")
+            .header("x-creative-upload-token", &token)
+            .body(b"\x89PNG\r\n\x1a\nvalid-after-rejection".to_vec())
+            .send()
+            .await
+            .expect("valid upload after spoof rejection");
+        assert_eq!(accepted.status(), reqwest::StatusCode::CREATED);
+    });
+
+    abort_server(&runtime, server);
 }
 
 #[test]

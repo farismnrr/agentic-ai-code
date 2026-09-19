@@ -393,39 +393,3 @@ pub(super) fn validate_game(
     }
     Ok(())
 }
-
-pub(super) fn validate_audio(audio: &AudioPlan, project: &CreativeProject) -> Result<(), McpError> {
-    validate_id(&audio.audio_plan_id, "audio_plan_id")?;
-    if let Some(voice_id) = audio.voice_element_id.as_deref() {
-        if project.element(voice_id).is_none() {
-            return Err(McpError::InvalidRequest(
-                "audio plan voice references an unknown element".into(),
-            ));
-        }
-    }
-    if audio.cues.len() > MAX_AUDIO_CUES {
-        return Err(McpError::InvalidRequest(
-            "audio cue count exceeds maximum".into(),
-        ));
-    }
-    let mut cue_ids = HashSet::new();
-    for cue in &audio.cues {
-        validate_id(&cue.cue_id, "audio cue id")?;
-        if !cue_ids.insert(cue.cue_id.as_str()) {
-            return Err(McpError::InvalidRequest(
-                "duplicate audio cue identity".into(),
-            ));
-        }
-        if let Some(asset_id) = cue.asset_id.as_deref() {
-            if project.asset(asset_id).is_none() {
-                return Err(McpError::InvalidRequest(
-                    "audio cue references an unknown asset".into(),
-                ));
-            }
-        }
-        if let Some(text) = cue.text.as_deref() {
-            validate_freeform_text(text, 1, 4_096, "audio cue text")?;
-        }
-    }
-    Ok(())
-}

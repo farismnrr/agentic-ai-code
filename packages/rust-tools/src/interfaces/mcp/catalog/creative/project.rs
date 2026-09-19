@@ -4,11 +4,11 @@ pub(super) fn project_tool() -> Tool {
     Tool {
         name: "creative_project",
         title: Some("Creative Project State"),
-        description: "Create, read, or list versioned workspace-contained Creative Projects. Projects own reusable Elements, Assets, Scene/Game/Audio state, graph/job identities, QA, and provenance without provider/model identities as source of truth.",
+        description: "Create, read, or list versioned workspace-contained Creative Projects. Projects own reusable Elements, Assets, Scene/Game state, graph/job identities, QA, and provenance without provider/model identities as source of truth.",
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["create", "get", "list", "scene_board_put", "scene_board_get", "scene_put", "scene_get", "game_put", "game_get", "audio_put", "audio_get", "qa_add", "qa_list", "room_create", "room_join", "room_update", "room_get", "room_leave"] },
+                "action": { "type": "string", "enum": ["create", "get", "list", "scene_board_put", "scene_board_get", "scene_put", "scene_get", "game_put", "game_get", "qa_add", "qa_list", "room_create", "room_join", "room_update", "room_get", "room_leave"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "title": { "type": "string", "minLength": 1, "maxLength": 200 },
@@ -24,11 +24,9 @@ pub(super) fn project_tool() -> Tool {
                 "board_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "scene_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "game_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "audio_plan_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "scene_board": { "type": "object", "maxProperties": 16 },
                 "scene": { "type": "object", "maxProperties": 32 },
                 "game": { "type": "object", "maxProperties": 32 },
-                "audio_plan": { "type": "object", "maxProperties": 32 },
                 "domain": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "severity": { "type": "string", "enum": ["hard_fail", "soft_finding", "not_inspected"] },
                 "subject_id": { "type": "string", "minLength": 1, "maxLength": 128 },
@@ -52,7 +50,7 @@ pub(super) fn project_tool() -> Tool {
                     "then": { "required": ["project_id"] }
                 },
                 {
-                    "if": { "properties": { "action": { "enum": ["scene_board_put", "scene_put", "game_put", "audio_put", "qa_add", "qa_list"] } }, "required": ["action"] },
+                    "if": { "properties": { "action": { "enum": ["scene_board_put", "scene_put", "game_put", "qa_add", "qa_list"] } }, "required": ["action"] },
                     "then": { "required": ["project_id"] }
                 },
                 {
@@ -78,14 +76,6 @@ pub(super) fn project_tool() -> Tool {
                 {
                     "if": { "properties": { "action": { "const": "game_get" } }, "required": ["action"] },
                     "then": { "required": ["project_id", "game_id"] }
-                },
-                {
-                    "if": { "properties": { "action": { "const": "audio_put" } }, "required": ["action"] },
-                    "then": { "required": ["audio_plan"] }
-                },
-                {
-                    "if": { "properties": { "action": { "const": "audio_get" } }, "required": ["action"] },
-                    "then": { "required": ["project_id", "audio_plan_id"] }
                 },
                 {
                     "if": { "properties": { "action": { "const": "qa_add" } }, "required": ["action"] },

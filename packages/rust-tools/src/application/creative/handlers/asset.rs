@@ -1,6 +1,7 @@
 use super::super::contracts::{AssetSource, AssetState, AssetSurface};
 use super::super::{ingest, store};
 use super::{complete, optional_string, parse_optional, required_str};
+use crate::application::resources;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use crate::interfaces::mcp::ToolCallResult;
@@ -82,7 +83,15 @@ pub(in crate::application::creative) async fn asset(
             let asset = project
                 .asset(asset_id)
                 .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
-            complete(json!({"asset": asset}))
+            complete(json!({
+                "asset": asset,
+                "resource_uri": resources::creative_asset_resource_uri(
+                    cwd,
+                    config,
+                    project_id,
+                    asset_id
+                )?
+            }))
         }
         "list" => {
             let project = store::load_project(cwd, config, project_id)?;
@@ -147,7 +156,13 @@ pub(in crate::application::creative) async fn asset(
             complete(json!({
                 "asset_id": asset_id,
                 "asset": asset,
-                "preview": ingest::asset_preview(&asset)
+                "preview": ingest::asset_preview(&asset),
+                "resource_uri": resources::creative_asset_resource_uri(
+                    cwd,
+                    config,
+                    project_id,
+                    &asset_id
+                )?
             }))
         }
         "upload_list" => complete(json!({
@@ -172,7 +187,13 @@ pub(in crate::application::creative) async fn asset(
             complete(json!({
                 "asset_id": asset_id,
                 "asset": asset,
-                "preview": ingest::asset_preview(&asset)
+                "preview": ingest::asset_preview(&asset),
+                "resource_uri": resources::creative_asset_resource_uri(
+                    cwd,
+                    config,
+                    project_id,
+                    &asset_id
+                )?
             }))
         }
         "preview" => {
@@ -180,7 +201,15 @@ pub(in crate::application::creative) async fn asset(
             let asset = project
                 .asset(required_str(arguments, "asset_id")?)
                 .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
-            complete(json!({"preview": ingest::asset_preview(asset)}))
+            complete(json!({
+                "preview": ingest::asset_preview(asset),
+                "resource_uri": resources::creative_asset_resource_uri(
+                    cwd,
+                    config,
+                    project_id,
+                    &asset.asset_id
+                )?
+            }))
         }
         _ => Err(McpError::InvalidRequest(
             "unsupported creative asset action".into(),

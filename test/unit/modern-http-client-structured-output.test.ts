@@ -103,4 +103,37 @@ await assert.rejects(
   /does not match its output schema/
 )
 
+const resourceFetchImpl: typeof fetch = async (_input, init) => {
+  const body = await requestBody(init)
+  if (body.method === 'server/discover') {
+    return response(body.id, { supportedVersions: ['2026-07-28'], capabilities: { resources: {} } })
+  }
+  if (body.method === 'resources/read') {
+    return response(body.id, {
+      contents: [{
+        uri: 'creative://asset/context/project_fixture/asset_fixture',
+        blob: 'iVBORw0KGgo=',
+        mimeType: 'image/png'
+      }]
+    })
+  }
+  throw new Error(`unexpected method ${body.method}`)
+}
+
+const resourceClient = new ModernHttpMcpClient(
+  new URL('https://relay.example.test/mcp'),
+  'test-token',
+  resourceFetchImpl,
+  1_000,
+  'first-party-relay'
+)
+await resourceClient.connect()
+const resource = await resourceClient.readResource('creative://asset/context/project_fixture/asset_fixture')
+assert.deepEqual(resource.contents, [{
+  uri: 'creative://asset/context/project_fixture/asset_fixture',
+  text: undefined,
+  blob: 'iVBORw0KGgo=',
+  mimeType: 'image/png'
+}])
+
 console.log('modern MCP structured output acceptance: PASS')

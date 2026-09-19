@@ -1,6 +1,6 @@
 #![cfg(unix)]
 
-use ai_tools::application::{blender, creative};
+use ai_tools::application::{blender, creative, resources};
 use ai_tools::core::config::ServerConfig;
 use ai_tools::interfaces::mcp::ToolCallResult;
 use image::{ImageBuffer, Rgba};
@@ -69,6 +69,10 @@ async fn create_project(config: &ServerConfig, cwd: &str) {
 }
 
 async fn call(config: &ServerConfig, cwd: &str, tool: &str, extra: Value) -> Value {
+    result_json(call_raw(config, cwd, tool, extra).await)
+}
+
+async fn call_raw(config: &ServerConfig, cwd: &str, tool: &str, extra: Value) -> ToolCallResult {
     let mut arguments = json!({
         "cwd":cwd,
         "project_id":"project_reads"
@@ -76,11 +80,10 @@ async fn call(config: &ServerConfig, cwd: &str, tool: &str, extra: Value) -> Val
     for (key, value) in extra.as_object().expect("object arguments") {
         arguments[key] = value.clone();
     }
-    let result = blender::dispatch_tool(tool, &arguments, config, "owner_a")
+    blender::dispatch_tool(tool, &arguments, config, "owner_a")
         .await
         .expect("Blender dispatch")
-        .expect("Blender result");
-    result_json(result)
+        .expect("Blender result")
 }
 
 fn result_json(result: ToolCallResult) -> Value {
@@ -99,6 +102,13 @@ async fn start_fixture_bridge(connections: usize) -> (u16, JoinHandle<()>) {
             let request = read_request(&mut stream).await;
             let code = request["code"].as_str().expect("code string");
             let result = if let Some(scope) = inspect_scope(code) {
+                if matches!(scope, "rig" | "animation" | "character") {
+                    assert!(code.contains("armatures = [o for o in bpy.context.scene.objects if o.type == \"ARMATURE\"]"));
+                    assert!(code.contains("masihawam_rig_strategy"));
+                    if scope == "character" {
+                        assert!(code.contains("candidate.find_armature() == root"));
+                    }
+                }
                 json!({"scope":scope,"fixture":true})
             } else if code.contains("# MASIHAWAM_DOCS") {
                 json!({
@@ -110,6 +120,8 @@ async fn start_fixture_bridge(connections: usize) -> (u16, JoinHandle<()>) {
                     "matches":[{"name":"bpy.ops.render","kind":"fixture","doc":"fixture docs"}]
                 })
             } else if code.contains("# MASIHAWAM_SCREENSHOT") {
+                assert!(code.contains("bpy.ops.render.render(write_still=True)"));
+                assert!(code.contains("_op_result = bpy.ops.render.render(write_still=True)"));
                 let path_value =
                     extract_json_assignment(code, "_path = ").expect("screenshot path value");
                 let path = path_value.as_str().expect("screenshot path").to_owned();
@@ -219,7 +231,7 @@ async fn structured_blender_reads_docs_and_previews_are_bounded_and_contained() 
         "https://docs.blender.org/api/4.3/"
     );
 
-    let screenshot = call(
+    let screenshot_result = call_raw(
         &config,
         workspace.cwd(),
         "blender_screenshot",
@@ -231,7 +243,23 @@ async fn structured_blender_reads_docs_and_previews_are_bounded_and_contained() 
         }),
     )
     .await;
+    assert_eq!(screenshot_result.content.len(), 3);
+    assert_eq!(screenshot_result.content[1].kind, "resource_link");
+    assert_eq!(screenshot_result.content[2].kind, "image");
+    let serialized = serde_json::to_value(&screenshot_result).expect("serialize screenshot result");
+    assert_eq!(serialized["content"][1]["type"], "resource_link");
+    assert_eq!(serialized["content"][1]["mimeType"], "image/png");
+    assert!(serialized["content"][1]["uri"]
+        .as_str()
+        .is_some_and(|uri| uri.starts_with("creative://asset/")));
+    assert_eq!(serialized["content"][2]["type"], "image");
+    assert_eq!(serialized["content"][2]["mimeType"], "image/png");
+    assert!(serialized["content"][2]["data"]
+        .as_str()
+        .is_some_and(|data| !data.is_empty()));
+    let screenshot = result_json(screenshot_result);
     assert_eq!(screenshot["kind"], "screenshot");
+    assert_eq!(screenshot["preview"]["inline_image"], true);
     assert_eq!(
         screenshot["preview"]["relative_path"],
         "blender/renders/preview/viewport.png"
@@ -240,8 +268,21 @@ async fn structured_blender_reads_docs_and_previews_are_bounded_and_contained() 
     assert!(screenshot["preview"]["checksum_sha256"]
         .as_str()
         .is_some_and(|value| value.len() == 64));
+    assert!(screenshot["preview"]["asset_id"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("asset_")));
+    let screenshot_resource = screenshot["preview"]["resource_uri"]
+        .as_str()
+        .expect("screenshot resource URI");
+    let screenshot_content = resources::read(&config, screenshot_resource).unwrap();
+    assert_eq!(screenshot_content.mime_type, "image/png");
+    assert!(screenshot_content.text.is_none());
+    assert!(screenshot_content
+        .blob
+        .as_deref()
+        .is_some_and(|value| !value.is_empty()));
 
-    let animation = call(
+    let animation_result = call_raw(
         &config,
         workspace.cwd(),
         "blender_animation_preview",
@@ -256,6 +297,14 @@ async fn structured_blender_reads_docs_and_previews_are_bounded_and_contained() 
         }),
     )
     .await;
+    assert_eq!(animation_result.content.len(), 7);
+    assert!(animation_result.content[1..4]
+        .iter()
+        .all(|content| content.kind == "resource_link"));
+    assert!(animation_result.content[4..]
+        .iter()
+        .all(|content| content.kind == "image"));
+    let animation = result_json(animation_result);
     assert_eq!(animation["kind"], "animation_preview");
     assert_eq!(animation["sampled_frames"], json!([1, 3, 5]));
     assert_eq!(animation["previews"].as_array().unwrap().len(), 3);
@@ -263,6 +312,19 @@ async fn structured_blender_reads_docs_and_previews_are_bounded_and_contained() 
         assert!(preview["relative_path"]
             .as_str()
             .is_some_and(|path| path.starts_with("blender/renders/preview/walk-")));
+        assert!(preview["asset_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("asset_")));
+        let resource_uri = preview["resource_uri"]
+            .as_str()
+            .expect("animation frame resource URI");
+        let content = resources::read(&config, resource_uri).unwrap();
+        assert_eq!(content.mime_type, "image/png");
+        assert!(content.text.is_none());
+        assert!(content
+            .blob
+            .as_deref()
+            .is_some_and(|value| !value.is_empty()));
     }
 
     bridge.await.expect("fixture bridge task");

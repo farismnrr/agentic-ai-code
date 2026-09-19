@@ -3,7 +3,7 @@
 //! Types and pure logic only — no transport/axum concerns here (kept in
 //! `transport.rs`) so the protocol layer remains transport-independent.
 
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_json::{json, Value};
 
 use crate::core::error::McpError;
@@ -283,18 +283,76 @@ pub mod resources {
     #[derive(Debug, Clone, Serialize)]
     pub struct ResourceContent {
         pub uri: String,
-        pub text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub text: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub blob: Option<String>,
         #[serde(rename = "mimeType")]
-        pub mime_type: &'static str,
+        pub mime_type: String,
     }
 }
 
-/// `tools/call` result content block (MCP text-content convention).
-#[derive(Debug, Clone, Serialize)]
+/// `tools/call` result content block. Existing text callers retain the
+/// in-memory `text` field; `kind="image"` serializes that field as MCP
+/// base64 image data so binary previews can be returned without widening every
+/// existing call site.
+#[derive(Debug, Clone)]
 pub struct ToolResultContent {
-    #[serde(rename = "type")]
     pub kind: &'static str,
     pub text: String,
+}
+
+impl ToolResultContent {
+    pub fn png(data_base64: String) -> Self {
+        Self {
+            kind: "image",
+            text: data_base64,
+        }
+    }
+
+    pub fn image_resource_link(uri: String) -> Self {
+        Self {
+            kind: "resource_link",
+            text: uri,
+        }
+    }
+}
+
+impl Serialize for ToolResultContent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self.kind {
+            "image" => {
+                let mut state = serializer.serialize_struct("ToolResultContent", 3)?;
+                state.serialize_field("type", "image")?;
+                state.serialize_field("data", &self.text)?;
+                state.serialize_field("mimeType", "image/png")?;
+                state.end()
+            }
+            "resource_link" => {
+                let name = self
+                    .text
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("creative-image");
+                let mut state = serializer.serialize_struct("ToolResultContent", 4)?;
+                state.serialize_field("type", "resource_link")?;
+                state.serialize_field("uri", &self.text)?;
+                state.serialize_field("name", name)?;
+                state.serialize_field("mimeType", "image/png")?;
+                state.end()
+            }
+            _ => {
+                let mut state = serializer.serialize_struct("ToolResultContent", 2)?;
+                state.serialize_field("type", self.kind)?;
+                state.serialize_field("text", &self.text)?;
+                state.end()
+            }
+        }
+    }
 }
 
 /// `tools/call` result envelope. A failing tool call (including "not

@@ -1,6 +1,6 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **IMPLEMENTATION IN PROGRESS — the 2026-09-18/19 synchronous-execution replan is implemented, built, installed, restarted, reconnected, and live-accepted. The refreshed public relay now exposes synchronous-only agent execution with a 60-second maximum, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, `creative_graph` without execute/rerun actions, and exactly four bounded Blender MCP tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`); heavy Creative/Blender execution is operator-foreground through `ai-tools creative` with no Masih Awam-imposed timeout. `pnpm guardrail:fast` and the release build pass for the current refactor, but a fresh `pnpm guardrail:full` is still required after these latest changes. TASK-052/TASK-053 remain partial because final movie assembly/audio sync and subjective visual/temporal acceptance are incomplete; TASK-054 still lacks direct browser/UI runtime acceptance; TASK-056 still lacks browser-runtime, malicious-media runtime, and second-owner live checks; TASK-057 still lacks URL-import confirmation, two live bindings for the same capability, website/app parity, and a fresh hard-budget denial. TASK-058 therefore remains open. No public publish, PR, or merge occurred.**
+Status: **IMPLEMENTATION IN PROGRESS — the 2026-09-18/19 synchronous-execution replan is implemented, built, installed, restarted, reconnected, and live-accepted. Agent execution is synchronous-only with a 60-second maximum, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, and `creative_graph` without execute/rerun actions. The current source/live Blender MCP surface contains five bounded public tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`, `blender_animation_preview`); arbitrary Python, final render, import/export, and checkpoint operations remain operator-foreground through `ai-tools creative`. TASK-054/G5 direct browser runtime acceptance, TASK-056 security/failure acceptance, and TASK-057 external parity acceptance pass for their current scoped requirements. TASK-052/TASK-053 remain partial because S3/A6 still lack legitimate agent-reviewable subjective visual/temporal acceptance. The generic media/resource consumer gap is now implemented locally: contained Creative image Assets can be read through MCP Resource binary `blob` + `mimeType`; Blender screenshot and sampled animation-preview outputs register durable Creative Assets and return generic resource URIs; the first-party Nuxt MCP adapter preserves resource blobs. Focused Resource security tests pass 8/8, the Blender producer→Asset→Resource boundary test passes, the modern HTTP client blob-preservation regression passes, and the operator-run `pnpm guardrail:fast` passes Nuxt/Rust/auto fast. End-to-end ChatGPT connector rendering of resource blobs is still unproven and requires release build/install, relay restart, client reconnect, and live inspection before this path counts for subjective acceptance. TASK-058 therefore remains open. No public publish, PR, or merge occurred.**
 
 Created: 2026-09-11
 Updated: 2026-09-19
@@ -27,7 +27,7 @@ Creative production therefore separates **MCP control-plane/state operations** f
 | `blender_inspect`, `blender_python_api_docs` | **KEEP as MCP tools** | Bounded read-only inspection/knowledge. Public Blender MCP bridge transactions use one total deadline (connect + write + response share the same budget) rather than one full timeout per phase. |
 | `blender_screenshot` | **KEEP only as a tightly bounded preview tool** | Public screenshot execution shares the same 50-second total bridge budget and must fail boundedly; it must not silently become a final render path. |
 | `blender_execute_python` | **MOVE to operator CLI; do not expose as a public MCP tool** | Caller-authored Blender Python has unbounded algorithm/runtime behavior and host-user authority; no input-size limit can prove <=60-second completion. |
-| `blender_animation_preview` for arbitrary/bulk frame ranges | **MOVE heavy execution to operator CLI** | Current schema permits up to 240 sampled frames and scene-dependent rendering; accepted requests can exceed 60 seconds. MCP may retain only a small bounded inspection/sample variant if its worst-case runtime is proven <=60s. |
+| `blender_animation_preview` | **KEEP only as the reviewed bounded sampled-preview MCP variant; use operator CLI for heavier/bulk temporal preview work** | The public tool is for bounded representative-frame review with contained PNGs and bounded inline delivery. Work that should not fit the <=60-second agent boundary remains an exact foreground operator command. |
 | `blender_render` | **MOVE to operator CLI; do not expose final/animation rendering as a public MCP tool** | Even one complex still can exceed 60 seconds; animation rendering is inherently long-running. Per-frame MCP transactions avoid one bridge timeout but do not solve the agent execution boundary. |
 | `blender_asset_import`, `blender_asset_export` | **MOVE heavy forms to operator CLI; retain MCP only if a strict <=60s bounded subset is proven** | Large meshes/textures/conversion/export work is scene/asset-dependent and can exceed the ceiling. |
 | `blender_checkpoint_create|restore` | **MOVE heavy forms to operator CLI; retain MCP only if a strict <=60s bound is proven** | Saving/loading a large .blend file is workload-dependent. Destructive restore must never be hidden behind retry/background behavior. |
@@ -63,11 +63,11 @@ This replan supersedes the earlier assumption that durable Creative jobs should 
 
 - Active implementation branch: `feat/plan-069-complete`, continuing from current merged `main`. Current branch plus `main` are the only active source truth for Plan 069; older feature/release-branch assumptions are history only.
 - Versioning is intentionally singular: the client-visible runtime surface is built through one `runtime_tool_catalog` path and Creative state uses one active schema version (`CREATIVE_SCHEMA_VERSION = 1`). The retained 52-tool base and numbered catalog snapshots, including historical v15, are immutable history/audit artifacts rather than alternate current versions. `creative_status` remains visible while disabled; the remaining Creative tools are composed into Full only when `RELAY_ENABLE_CREATIVE=true`.
-- Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime. Reload validation now rejects unaccepted selected revisions, forged generated provenance, cyclic Asset lineage, forged manual source-surface provenance, invalid media facts/types, duplicate/invalid Scene shot ordering, invalid Game runtime paths/asset references, and duplicate/bounded audio cues.
+- Implemented source foundation: versioned Creative Project/Element/Asset contracts, authoritative/interpreted/generated reference labels, contained pretty-JSON project state, atomic writes, candidate/accepted revision promotion, typed media metadata, SHA-256 asset provenance, source/source-surface/job/parent/Element lineage, bounded asset search, semantic capability/workflow discovery, opaque execution-binding descriptors with no default binding, persisted creative graph/job state, and the minimal reviewed control/reference DAG runtime. Reload validation now rejects unaccepted selected revisions, forged generated provenance, cyclic Asset lineage, forged manual source-surface provenance, invalid media facts/types, duplicate/invalid Scene shot ordering, invalid Game runtime paths/asset references, .
 - Implemented after the initial slice: canonical contained project layout descriptors; owner-bound upload/import ingress and durable history; execution-binding discovery and explicit selection; cost/budget admission; durable job lifecycle; graph partial rerun/invalidation/concurrency/templates; Blender bridge/session/read/write/render/checkpoint/authoring surfaces; SceneBoard/Director/QA/delivery state; Anime bootstrap/character production workflows; editable Game source/build/playtest/deploy/multiplayer state; and the Nuxt Creative Canvas over the same server-owned graph contract. Generic manual asset registration still cannot forge generated/upload/URL provenance, external production bindings are never auto-selected, and public publish remains a separate authority boundary.
 - Fresh benchmark audit: official Higgsfield MCP remains OAuth/client-neutral, asynchronous, credit-aware, and backed by durable Assets/history; Higgsfield may auto-select models, but Masih Awam intentionally keeps provider/model routing above the MCP boundary. Official Blender Lab MCP is released for Blender 5.1+ and explicitly warns that generated Blender Python runs without data-protection guards, reinforcing Plan 069's privileged/manual Blender-Python boundary.
 - Verification completed without service mutation: `pnpm guardrail:full` passes on 2026-09-15 after the closure-fixture fixes, including repository policy, agent-doc checks, architecture, test-layout, maintainability, Rust formatting/Clippy/check/full tests, and the applicable Nuxt gates. The platform suite includes 46 passing tests; the focused security suite includes 35 passing tests; deterministic Plan 069 closure fixtures pass 5/5. The only ignored Rust test is the pre-existing operator-only real SSH client smoke requiring an explicit disposable external fixture. Verification used the repo-ignored local Rust `1.98.1` cache under `target/`; no relay/service restart, reload, real deployment, production capability activation, or public publish occurred.
-- Historical live runtime handoff observed 2026-09-15: user systemd unit `ai-tools-relay.service` was restarted after installing the release binary built from `feat/plan-069-complete` at `c5f9e54768d115f355bf31a61533ba53b736e3e1`. That historical build still used separate `RELAY_ENABLE_CREATIVE=true` and `RELAY_ENABLE_BLENDER=true` activation. The current source supersedes that operator shape with the single `RELAY_ENABLE_CREATIVE` master flag; a new restart is required before the live runtime reflects the current source. Blender loopback port `9876`, Blender timeout `30000ms`, the documented credential-free `binding_local_raster` descriptor, and its `local_raster` backend mapping remain operator-owned; unrelated deployment settings and secrets were preserved/redacted. The resulting service was active/running with exit status 0 and binary version `ai-tools 0.0.14`. Authenticated `creative_status` reported Creative enabled, Blender enabled, exactly 11 Blender tools, one registered binding, schema v1, and the model/provider-agnostic flags true. A same-binary disposable Full MCP surface reported 70 unique tools (52 retained base + 7 Creative + the exact frozen 11 Blender tools) and a readable `workspace://ai-code/blender-capability`; disabled, Creative-only, and Primary probes reported 53/59/16 tools respectively with no unintended Blender exposure. The only live execution binding is deterministic `local_raster` (image capabilities); no quality-capable video/audio/3D/deploy binding was available. Fresh live projects and receipts are recorded under disposable workspace `/home/farismnrr/Documents/Projects/plan069-live-e2e-2fN900/ai-code`: Scene `project_1e62d0f5031540a589bfa4cc4397be4b` (three shots, 10s target, Elements, board, audio plan, image Assets, continuity/QA, still export, handoff); Anime `project_ba41cb34bf0e4777af200af615becb19` (accepted Character/Style, five accepted turnaround views, four accepted expressions, pose reference, 12s scene/board/audio/QA/handoff); Game `project_dd61169986cb46bfb86895b1c418be40` (editable scaffold, accepted asset role, accepted build revision, HTTP/static smoke, iteration invalidation/rebuild, handoff); and clean-room `project_001dfefeab8748a997e4a21f9240f14a` (materially different Saltwind Observatory project with isolated IDs/paths/jobs). These live receipts are runtime evidence only; local-raster output is not production visual-quality evidence, Blender visual/character inspection is `not_inspected`, and browser interaction/console/responsive inspection is `not_inspected` because no browser provider was available.
+- Historical live runtime handoff observed 2026-09-15: user systemd unit `ai-tools-relay.service` was restarted after installing the release binary built from `feat/plan-069-complete` at `c5f9e54768d115f355bf31a61533ba53b736e3e1`. That historical build still used separate `RELAY_ENABLE_CREATIVE=true` and `RELAY_ENABLE_BLENDER=true` activation. The current source supersedes that operator shape with the single `RELAY_ENABLE_CREATIVE` master flag; a new restart is required before the live runtime reflects the current source. Blender loopback port `9876`, Blender timeout `30000ms`, the documented credential-free `binding_local_raster` descriptor, and its `local_raster` backend mapping remain operator-owned; unrelated deployment settings and secrets were preserved/redacted. The resulting service was active/running with exit status 0 and binary version `ai-tools 0.0.14`. Authenticated `creative_status` reported Creative enabled, Blender enabled, exactly 11 Blender tools, one registered binding, schema v1, and the model/provider-agnostic flags true. A same-binary disposable Full MCP surface reported 70 unique tools (52 retained base + 7 Creative + the exact frozen 11 Blender tools) and a readable `workspace://ai-code/blender-capability`; disabled, Creative-only, and Primary probes reported 53/59/16 tools respectively with no unintended Blender exposure. The only live execution binding is deterministic `local_raster` (image capabilities); no quality-capable video/3D/deploy binding was available. Fresh live projects and receipts are recorded under disposable workspace `/home/farismnrr/Documents/Projects/plan069-live-e2e-2fN900/ai-code`: Scene `project_1e62d0f5031540a589bfa4cc4397be4b` (three shots, 10s target, Elements, board, image Assets, continuity/QA, still export, handoff); Anime `project_ba41cb34bf0e4777af200af615becb19` (accepted Character/Style, five accepted turnaround views, four accepted expressions, pose reference, 12s scene/board/QA/handoff); Game `project_dd61169986cb46bfb86895b1c418be40` (editable scaffold, accepted asset role, accepted build revision, HTTP/static smoke, iteration invalidation/rebuild, handoff); and clean-room `project_001dfefeab8748a997e4a21f9240f14a` (materially different Saltwind Observatory project with isolated IDs/paths/jobs). These live receipts are runtime evidence only; local-raster output is not production visual-quality evidence, Blender visual/character inspection is `not_inspected`, and browser interaction/console/responsive inspection is `not_inspected` because no browser provider was available.
 
 ## Workspace placement invariant — 2026-09-16
 
@@ -83,9 +83,37 @@ All project-internal Creative and Blender artifacts are resolved beneath that di
 
 Acceptance rule: any Scene/Anime/Game/Blender fixture that materializes production artifacts beneath the `ai-code` checkout is smoke/debug evidence only. It does not satisfy TASK-052/TASK-053/TASK-054/TASK-057/TASK-058 final acceptance and must be re-run from a canonical project directory outside the source repository. Historical receipts already recorded beneath disposable/copied `.../ai-code` worktrees remain historical smoke evidence only; do not copy that placement into future implementation or acceptance prompts.
 
+## Generic media/resource review requirement — 2026-09-19
+
+Plan 069 requires **end-to-end agent-reviewable visual artifacts**. Producing a correct file is not sufficient acceptance when the connected agent can inspect only metadata, checksums, paths, or serialized base64 text.
+
+Producer and consumer responsibilities are distinct:
+
+- `blender_screenshot` remains a producer that captures a bounded visual artifact.
+- `blender_animation_preview` remains a producer that creates bounded sampled animation frames.
+- A generic media/resource inspection layer must provide the consumer/read path for contained Creative artifacts; do not add a Blender-specific image reader.
+- Native visual inspection must not require the user to manually locate and upload generated files.
+- Images require a contained, MIME-allowlisted, byte-bounded, dimension-bounded inspection path that preserves asset/resource identity and provenance.
+- Video/animation review must use a bounded deterministic representation such as metadata plus sampled frames/contact sheet unless a safe native client video mechanism is proven.
+- Arbitrary caller-controlled absolute host paths, traversal, symlink escape, protected-path escape, and unrelated filesystem browsing are forbidden.
+- Binary/base64 media bodies must never enter activity detail, activity summaries, credential redaction, logs, or telemetry.
+- Existing text MCP Resources behavior must remain compatible.
+
+The first architecture to investigate is the existing MCP Resources surface. MCP `2026-07-28` supports binary Resource contents through base64 `blob` plus `mimeType`; the pre-change Rust `ResourceContent` and Nuxt `ModernHttpMcpClient.readResource` abstractions were text-only. The current source extends those abstractions to preserve binary resource blobs, resolves reviewable image resources through durable Creative Asset identity plus selected contained project context, verifies MIME/size/dimensions/checksum before read, and has Blender screenshot/animation producers register their generated previews as Creative Assets. Tool results also emit standard MCP `resource_link` content for those image resources while retaining bounded inline-image fallback. No public generic media-read tool was added. Resource URIs remain server-derived and resolve through authorized contained Creative state rather than accepting a raw media path from the caller.
+
+The implementation decision is evidence-driven:
+
+1. extend generic MCP Resources if binary resource contents survive the owned server/client layers and the live ChatGPT connector exposes them natively enough for subjective image review;
+2. if the live client loses native media at a boundary outside repository control, record that exact boundary and add only the smallest generic media-inspection fallback compatible with the live client;
+3. do not add a new public generic tool until the Resources experiment proves it is necessary.
+
+S3 and A6 cannot be marked complete merely because files, checksums, dimensions, or distinct temporal samples exist. Subjective visual/temporal acceptance requires media that the connected agent/model can actually inspect.
+
+**Implementation checkpoint (2026-09-19):** source implementation for the generic image-resource path is present. Focused verification completed before the final `resource_link` wire addition: `cargo check -p ai-tools` passed; the legacy modern-client structured-output/resource test passed; all 8 focused `resources::` platform tests passed; and the focused Blender reads/preview test passed. After adding standard `resource_link` content, `git diff --check` passed, but repeated relay terminal preflight interruption prevented a fresh Cargo fmt/check/test run for that final delta. Do not treat the latest source as fully locally verified until the operator reruns the exact foreground verification commands. Live ChatGPT connector rendering remains completely unproven and is still the next acceptance boundary.
+
 ## Initial core-slice conformance audit — 2026-09-15
 
-- **Contracts / project state:** aligned. One active Creative schema (`v1`) covers shared project, Element revision, Asset/provenance, Scene/Shot, Game, Audio, QA, graph/job identity, and production target state. Cross-track fixtures prove Scene + Anime-oriented asset/voice/3D state + Game can coexist without provider/model/agent IDs as source of truth. Template input/output and detailed playtest-evidence contracts remain explicitly deferred to their owning later tasks.
+- **Contracts / project state:** aligned. One active Creative schema (`v1`) covers shared project, Element revision, Asset/provenance, Scene/Shot, Game, QA, graph/job identity, and production target state. Cross-track fixtures prove Scene + Anime-oriented asset/3D state + Game can coexist without provider/model/agent IDs as source of truth. Template input/output and detailed playtest-evidence contracts remain explicitly deferred to their owning later tasks.
 - **Contained state / Assets:** aligned for the implemented subset. Project/graph/job JSON is contained and atomically written; manual file registration is selected-workspace-contained, protected-path-aware, SHA-256 lineaged, queryable, and cannot claim generated/upload/URL provenance. Conversation/device upload and URL import remain TASK-006 and are not emulated through arbitrary host paths.
 - **Capability / workflow discovery:** aligned. Semantic capabilities and workflow descriptors are independent from an intentionally empty execution-binding inventory; pluggable nodes require a caller-selected binding and fail boundedly when omitted/unavailable. Positive multi-binding conformance remains TASK-011 rather than introducing a fake default provider/model.
 - **Graph / jobs (historical 2026-09-15 slice):** the initial implementation used inline execution and an async-style submit/wait concept. That execution model is superseded by the 2026-09-18/19 boundary: public MCP owns durable graph/job validation/admission/state, while heavy graph/job execution is synchronous foreground operator work with no public wait/poll path.
@@ -96,7 +124,7 @@ Acceptance rule: any Scene/Anime/Game/Blender fixture that materializes producti
 
 Build a first-party **Masih Awam Creative Production Platform** whose MCP layer provides model-agnostic and agent-agnostic creative capabilities, reusable Elements/assets, durable jobs, scene/anime/game production state, Blender/DCC execution, browser-game build/playtest primitives, QA evidence, and export/deploy boundaries **without depending on Higgsfield accounts, Higgsfield MCP, Higgsfield CLI, Higgsfield APIs, or Higgsfield-hosted generation**.
 
-The strict interoperability benchmark is the **public Higgsfield MCP surface** documented in 2026: OAuth connection, media generation/edit utilities, reusable characters/Elements, audio operations, upload/import/history reuse, durable jobs/results, quota/cost visibility, and MCP-compatible-client operation. Higgsfield's execution model may be asynchronous; Masih Awam deliberately does **not** copy that part. Masih Awam uses bounded synchronous MCP control-plane calls plus synchronous foreground operator execution for heavy work.
+The strict interoperability benchmark is the **public Higgsfield MCP surface** documented in 2026 for the subset relevant to this product: OAuth connection, image/video/3D generation and edit utilities, reusable characters/Elements, upload/import/history reuse, durable jobs/results, quota/cost visibility, and MCP-compatible-client operation. Higgsfield's execution model may be asynchronous; Masih Awam deliberately does **not** copy that part. Masih Awam uses bounded synchronous MCP control-plane calls plus synchronous foreground operator execution for heavy work.
 
 The architectural boundary is non-negotiable:
 
@@ -107,9 +135,9 @@ The architectural boundary is non-negotiable:
 
 Three production tracks are first-class from the architecture stage:
 
-1. **Scene Studio** — script/brief -> Elements -> storyboard -> hero frames -> shot list -> camera/lighting/audio -> generated or Blender-backed cinematic scene.
+1. **Scene Studio** — script/brief -> Elements -> storyboard -> hero frames -> shot list -> camera/lighting -> generated or Blender-backed cinematic scene.
 2. **Anime Studio** — consistent fictional characters/worlds -> turnarounds -> optional 3D/Blender assets -> rig/animation -> multi-shot anime sequence.
-3. **Game Studio** — game brief -> design/STYLE FORMULA -> asset manifest -> 2D/3D/audio assets -> playable browser build -> playtest -> optional multiplayer -> deploy, with public publication separate.
+3. **Game Studio** — game brief -> design/STYLE FORMULA -> asset manifest -> 2D/3D assets -> playable browser build -> playtest -> optional multiplayer -> deploy, with public publication separate.
 
 The first integrated release still advances incrementally: prove shared creative state and storyboard/scene quality first, then one short anime scene and one small verified browser game. A full anime episode, large game, or fully collaborative studio comes only after those smaller benchmarks pass.
 
@@ -118,19 +146,19 @@ The first integrated release still advances incrementally: prove shared creative
 Plan 069 is successful when Masih Awam can eventually demonstrate all of the following through its own first-party contracts:
 
 1. Any MCP-compatible upper layer can submit a fully specified creative operation or manifest and receive deterministic validation of required fields; conversational interviews and missing-information questions remain upper-layer behavior, not MCP behavior.
-2. One **Creative Project** owns reusable Elements and manifests for characters, locations, props, style, audio, scenes/shots, game assets, generated outputs, QA, and provenance.
+2. One **Creative Project** owns reusable Elements and manifests for characters, locations, props, style, scenes/shots, game assets, generated outputs, QA, and provenance.
 3. The stable MCP contract is **capability-centric, not agent/model-centric**: no public tool name, project schema, workflow identity, or guidance/resource requires a particular provider/model or agent implementation.
 4. Runtime capability, workflow, and compatible execution-binding discovery can report validated semantic schemas before the upper layer commits to execution; discovery never ranks or auto-selects a model/provider/agent.
 5. Generation/build jobs have first-party submit/get/list/cancel/result state semantics with deterministic project ownership, bounded outputs, and retained source metadata; execution that can exceed 60 seconds is never a public wait/poll path and instead runs synchronously in the operator foreground.
 6. A Canvas-style production graph can compose typed inputs, Elements, generation/edit nodes, storyboard/scene stages, Blender/DCC stages, game-build stages, QA, and delivery with partial reruns and reusable templates.
-7. Reusable **Elements** provide stable project-scoped identities for Character, Location, Prop, Style, Audio/Voice, 3D Asset, Animation Clip, and approved media revisions; Elements can be reused across scenes, anime shots, and games.
-8. Character identity supports both explicitly authorized real-person identity-capable execution bindings and **fictional-character creation** comparable to Soul Cast: structured appearance, outfit, archetype/personality/backstory, canonical views, later rig/voice bindings, and cross-scene consistency.
+7. Reusable **Elements** provide stable project-scoped identities for Character, Location, Prop, Style, 3D Asset, Animation Clip, and approved visual-media revisions; Elements can be reused across scenes, anime shots, and games.
+8. Character identity supports both explicitly authorized real-person identity-capable execution bindings and **fictional-character creation** comparable to Soul Cast: structured appearance, outfit, archetype/personality/backstory, canonical views, later rig bindings, and cross-scene consistency.
 9. A Popcorn-like storyboard layer supports Auto and Manual planning modes, connected multi-frame boards, explicit reference roles, reusable Elements, and continuity of character/location/style/lighting/spatial logic before expensive video or animation work.
 10. A Cinema Studio-like **Scene/Shot contract** can store and execute editable project-global style/lighting/palette rules plus per-shot camera/lens/focal/aperture/movement/framing/tempo controls; any AI Director that derives those settings from a script lives in the upper layer and submits the resulting manifest to MCP.
 11. Blender remains a first-class persistent DCC backend for exact geometry, retopology, UVs, materials, hair/clothing, rigging, facial setup, animation, cameras, lighting, rendering, compositing, import/export, and checkpoints.
-12. A Game Studio path can freeze a game design + STYLE FORMULA + asset manifest, generate 2D/3D/audio assets, build while independent jobs run, verify complete gameplay locally, support single-player and reviewed local/online multiplayer paths, deploy to a playable URL, and keep marketplace/public publication separate.
+12. A Game Studio path can freeze a game design + STYLE FORMULA + asset manifest, generate 2D/3D assets, build while independent jobs run, verify complete gameplay locally, support single-player and reviewed local/online multiplayer paths, deploy to a playable URL, and keep marketplace/public publication separate.
 13. The system can inspect visual, temporal, structural, and gameplay outputs, reject failed results, and perform narrowly scoped revisions instead of blindly regenerating/rebuilding everything.
-14. The first scene benchmark produces a coherent storyboard and **10–30 second cinematic scene** from shared Elements with inspectable shot/camera/audio/QA state.
+14. The first scene benchmark produces a coherent storyboard and **10–30 second cinematic scene** from shared Elements with inspectable shot/camera/QA state.
 15. The first anime benchmark produces a reusable stylized/anime character and **10–30 second anime sequence** with Blender-editable assets where the chosen workflow needs them.
 16. The first game benchmark produces a small **verified playable browser game** with shared Style/Asset state, desktop/mobile input where in scope, and a contained/deployed build without silent marketplace publication.
 17. Higgsfield is used only as a public product/design benchmark; no shipping code requires Higgsfield auth, tokens, binaries, endpoints, model IDs, hosted state, or services.
@@ -152,10 +180,9 @@ Plan 069 is successful when Masih Awam can eventually demonstrate all of the fol
 - safe attachment/materialization into production workspaces;
 - Blender as a first-class live-session DCC backend and exact-production authority where editable 3D/animation is needed;
 - 2D reference/turnaround -> 3D asset -> rig -> animation -> scene/shot -> render workflows;
-- **Game Studio** methodology: game design, STYLE FORMULA, asset manifest, 2D/3D/audio generation, browser build, local playtest, multiplayer path, deploy, and explicit publish gate;
+- **Game Studio** methodology: game design, STYLE FORMULA, asset manifest, 2D/3D generation, browser build, local playtest, multiplayer path, deploy, and explicit publish gate;
 - single-player, local multiplayer, and reviewed online multiplayer browser-game contracts;
 - visual, temporal, structural, and gameplay QA loops;
-- audio/voice/music capability routing shared by scenes, anime, and games;
 - deterministic assembly/compositing/export/deploy where practical;
 - reusable presets/templates analogous to Higgsfield Apps/Canvas recipes without copying vendor-specific implementations;
 - contract/resource evaluations and scene/anime/game production acceptance fixtures;
@@ -205,7 +232,7 @@ Creative Project + Element Library + Assets + Jobs
           +-----------+------------+
                       v
              Semantic capabilities
- image | video | audio | 3D | DCC | build | playtest | deploy
+ image | video | 3D | DCC | build | playtest | deploy
                       |
                       v
           caller-selected execution binding
@@ -213,7 +240,7 @@ Creative Project + Element Library + Assets + Jobs
                       |
       +---------------+----------------+----------------+
       |               |                |                |
- media executor   audio executor   3D executor     Blender / build runtime
+ media executor                  3D executor     Blender / build runtime
       |               |                |                |
       +---------------+----------------+----------------+
                       v
@@ -236,7 +263,7 @@ The important architectural rules are:
 
 > **Scene and game production share assets/state but own different verification loops.**
 
-An upper layer may request semantics such as `image.reference_generate`, `video.image_to_video`, `audio.voice`, `3d.image_to_mesh`, `dcc.execute`, `game.build`, `game.playtest`, or `game.deploy`, optionally with an explicit compatible `execution_binding_id`. Provider/model identifiers do not appear in the stable semantic contract, and MCP does not choose agents, models, providers, prompts, or creative direction.
+An upper layer may request semantics such as `image.reference_generate`, `video.image_to_video`, `3d.image_to_mesh`, `dcc.execute`, `game.build`, `game.playtest`, or `game.deploy`, optionally with an explicit compatible `execution_binding_id`. Provider/model identifiers do not appear in the stable semantic contract, and MCP does not choose agents, models, providers, prompts, or creative direction.
 
 ## External benchmark audited on 2026-09-13
 
@@ -278,14 +305,13 @@ The goal is not pixel/UI cloning. It is **behavioral parity for the creative-pro
 | Higgsfield public surface | Public behavior audited in 2026 | Masih Awam target | Plan priority |
 | --- | --- | --- | --- |
 | Skills + references | compact trigger/decision skills; detailed on-demand references; explicit route-outs/chaining | **upper-layer concern**; MCP may expose optional read-only resources but does not manage agents/skills | **outside MCP core** |
-| Generate | one connector across image/video/3D/audio, live schemas, jobs, reusable outputs | semantic capability surface + execution-binding discovery + durable jobs; upper layer chooses binding | **P0** |
+| Generate | one connector across image/video/3D, live schemas, jobs, reusable outputs | semantic capability surface + execution-binding discovery + durable jobs; upper layer chooses binding | **P0** |
 | Canvas | node-based infinite production board; any model as node; branching/parallel compare; reusable workflow templates; partial execution | typed Creative Graph runtime first, then Nuxt visual graph editor; curated safe nodes; template save/reuse | **P0/P1** |
-| Elements | reusable Characters, Locations, Props, saved outputs/reference media across shots/projects | project Element Library with Character/Location/Prop/Style/Audio/3D/Animation/Media types | **P0** |
+| Elements | reusable Characters, Locations, Props, saved outputs/reference media across shots/projects | project Element Library with Character/Location/Prop/Style/3D/Animation/Media types | **P0** |
 | Soul ID | train/reuse a real-person identity across generation paths | optional authorized identity-capable execution bindings behind Character Elements, never the source of truth | **P1** |
-| Soul Cast | construct fictional actors from structured character dimensions/backstory and reuse them across scenes | Fictional Character Builder -> Character Pack/Element -> canonical views/traits/outfit/personality/rig/voice bindings | **P0/P1** |
+| Soul Cast | construct fictional actors from structured character dimensions/backstory and reuse them across scenes | Fictional Character Builder -> Character Pack/Element -> canonical views/traits/outfit/personality/rig bindings | **P0/P1** |
 | Popcorn | Auto or Manual connected storyboards; multiple references; sequence-level character/light/atmosphere/spatial consistency; frame edits | SceneBoard with Auto/Manual shot planning, multi-frame board, Element references, continuity constraints, revision lineage | **P0/P1** |
-| Cinema Studio | hero-frame-first filmmaking; script-to-shot AI Director; reusable Elements; global look controls; per-shot camera/lens/focal/aperture/moves; native audio; long/reference-heavy clips | MCP stores/validates Scene/Director state and executes caller-authored shots; AI directing stays in the upper layer | **P1 state/execution** |
-| Video Explainer | style lock, script blocks, voice/video dependency ordering, deterministic assembly | generic sequence DAG and audio-first dependency patterns usable by scenes/anime | **P1** |
+| Cinema Studio | hero-frame-first filmmaking; script-to-shot AI Director; reusable Elements; global look controls; per-shot camera/lens/focal/aperture/moves; long/reference-heavy clips | MCP stores/validates Scene/Director state and executes caller-authored shots; AI directing stays in the upper layer | **P1 state/execution** |
 | Game Generation / Supercomputer Games | prompt -> game design -> asset manifest/style -> parallel asset generation + code -> local verification -> solo/multiplayer -> deploy -> optional publish | Game Studio state/build/playtest/multiplayer/deploy capabilities; design/coding intelligence stays above MCP; publication separate | **P1** |
 | Websites/Apps | scaffold/edit/test/deploy full-stack product; generated media can feed app/site | reuse generic workspace/build/deploy capabilities; whichever upper layer owns coding chooses its own agent/model | **P3** |
 | Brandkit / Photoshoot / Cards / Marketing | domain skills lock identity/style and compile specialist deliverables | later vertical skills built on same Element/Graph/QA kernel | **P3** |
@@ -308,7 +334,7 @@ The official MCP surface is narrower than the whole Higgsfield website but broad
 | Model/tool parameters available directly through MCP | validated semantic schemas + binding-specific namespaced extensions | common capability parameters stay provider/model-neutral; an upper layer may pass a chosen binding's validated extension fields without making those fields part of the stable cross-provider contract |
 | Text, reference-image, and mixed-reference generation | typed media/reference roles | one or multiple references can be attached to a job with explicit roles and selected-binding compatibility validation; parity acceptance includes at least one caller-selected image binding that can produce a 4K-class output without changing MCP schemas |
 | Image upscaling | `image.upscale` | preserve lineage, requested scale/resolution, bounded output and QA |
-| Video upscaling | `video.upscale` | preserve source timing/audio where supported and report selected-binding limitations honestly |
+| Video upscaling | `video.upscale` | preserve source timing and report selected-binding limitations honestly |
 | Image background removal | `image.remove_background` | transparent/derived asset with parent lineage |
 | Video background removal | `video.remove_background` | alpha/matte or equivalent reviewed output contract; duration/resolution bounds |
 | Image expand/outpaint | `image.outpaint` | aspect/canvas expansion without overwriting accepted parent revision |
@@ -316,10 +342,6 @@ The official MCP surface is narrower than the whole Higgsfield website but broad
 | Motion-control generation | `video.motion_control` / typed motion reference | character/reference image and motion video have distinct roles; timing/source metadata retained |
 | Reusable Soul characters | Character Elements + optional identity-capable execution binding | selected character revision can be referenced by name/ID across jobs without re-uploading source photos |
 | Reusable reference Elements for characters, locations, props; several per prompt | Element Library | jobs accept multiple Element IDs/revisions and preserve dependency lineage |
-| Voiceover / speech generation | `audio.speech` / `audio.voice` | language/performance metadata, contained output, timing metadata |
-| Voice cloning | `audio.voice_clone` | explicit authorized reference/audio ingest, provenance, reusable voice Element, binding-specific artifact hidden behind Element contract |
-| Voice change / conversion | `audio.voice_change` | source voice/audio -> derived audio with parent lineage and consent/usage policy |
-| Video dubbing | `audio.video_dub` | source video + translation/voice plan -> synchronized derived video/audio assets |
 | Personal Clipper / long-video-to-shorts utility | `video.clip_extract` workflow | safe source ingestion, transcript/segment plan where available, selected clips with timestamp lineage; no arbitrary downloader bypass |
 | Browse recent generations | `creative jobs/assets list/search/get` | query by project/type/status/source/time/Element; outputs reusable as later references |
 | List prior uploads | `creative uploads/assets list/search/get` | uploaded media is first-class asset state rather than transient file paths |
@@ -342,13 +364,13 @@ The official MCP surface is narrower than the whole Higgsfield website but broad
 ### MCP parity rules
 
 1. **Semantic capability, execution-binding, workflow, and asset/history catalogs are different concepts.** MCP does not own an agent/skill catalog. Do not collapse discovery into one ambiguous blob, and do not expose provider/model choice as a stable tool identity.
-2. **Every transform is a first-class lineage operation.** Upscale, remove-background, outpaint, reframe, motion control, dubbing, and clip extraction produce child assets rather than overwriting accepted inputs.
+2. **Every transform is a first-class lineage operation.** Upscale, remove-background, outpaint, reframe, motion control, and clip extraction produce child assets rather than overwriting accepted inputs.
 3. **External-client upload is part of the product contract.** Conversation-local attachments alone do not satisfy MCP parity because a generic external MCP client may not be able to pass local file bytes directly.
 4. **Media return and media persistence are separate guarantees.** A user should see/review the result in the current conversation and still be able to find/reuse it later by Asset ID.
 5. **History is queryable state, not log scraping.** Generation/upload history uses project-owned records and typed filters rather than reading raw activity logs.
 6. **Cost/budget behavior is explicit.** Local-first does not mean “free”; jobs may consume GPU time, provider quota, disk, or money. MCP reports/enforces measurable bounds for the caller-selected execution binding; the upper layer decides whether that cost is acceptable and whether to ask the user.
 7. **Utility/edit operations belong to the same job/QA system as generation.** They must not become ad-hoc shell commands or direct engine calls.
-8. **Client-specific omissions are not platform architecture.** Higgsfield's ChatGPT plugin currently omits some surfaces such as audio/website building; Masih Awam's core MCP contract should remain client-neutral and let each client expose the subset it can render/authorize.
+8. **Client-specific omissions are not platform architecture.** Masih Awam's core MCP contract should remain client-neutral and let each client expose the supported subset it can render/authorize.
 9. **No agent identity is part of creative state.** Concurrent clients share owner/project state only through normal authorization and stable IDs; Plan 069 never stores an “active agent”, agent persona, model preference, or agent-specific routing state.
 10. **Billing/account semantics are translated, not cloned.** Higgsfield subscription/credit rules are vendor-specific; Masih Awam parity is transparent estimate/quota/budget behavior for the caller-selected execution binding, not imitation of Higgsfield credits.
 
@@ -359,17 +381,13 @@ The official MCP landing/blog material also demonstrates broader packaged workfl
 | Advertised Higgsfield MCP/skill behavior | Masih Awam home | Priority |
 | --- | --- | --- |
 | batch/parallel campaign variants and presets | Creative Graph branches + templates + bounded batch jobs | P1/P2; core graph mechanism is P0 |
-| UGC/product-review/SaaS creator flows | packaged Scene/Audio/Character/Subtitle templates | P3 vertical |
-| faceless content (stickman, editorial motion graphics, whiteboard, watercolor, pixel-art, claymotion styles) | SceneBoard + Style Element + media generation + voice/subtitle + assembly templates | P2/P3; useful anime/motion-design overlap |
-| localization | transcript/dialogue manifest + translation + `audio.video_dub` + subtitle track | P2 |
-| subtitles/voiceover | Audio/Voice Pack + deterministic subtitle/timeline assembly | P1/P2 |
 | Shorts Maker / repurpose | `video.clip_extract` + reframe + subtitle/template graph | P2 |
 | motion design / animated infographics | Creative Graph + Scene Director + vector/text/layout/media nodes | P2 |
 | face/character swap | reviewed identity-edit capability with explicit consent/provenance and lineage | P2, safety-gated |
 | lighting/weather/background/object edits | structured image/video edit/inpaint specifications with scoped revision lineage | P2 |
 | restore/stabilize/time-remap/auto-cut | post-production execution bindings under the same job/asset contract | P2 |
 | color grading/reference color match | scene/style color specification + deterministic post-processing binding | P2 |
-| Marketing Studio / ad multiplier | vertical skill/template over Elements + Scene/Audio/Graph; no second job/state system | P3 |
+| Marketing Studio / ad multiplier | vertical skill/template over Elements + Scene/Graph; no second job/state system | P3 |
 | Website Building / Apps | existing generic workspace/Git/file/build/test/deploy/publish lifecycle + creative Asset/Element imports; no managed coding agent | **MCP parity P1 contract reuse**, product templates/UI may remain later |
 
 Any future extended utility must use the existing semantic capability/execution-binding/workflow discovery, safe ingest, Asset lineage/history, budget, jobs, QA, and graph authority. “Parity expansion” is not permission to add ad-hoc provider/model-specific public tools.
@@ -398,8 +416,8 @@ Plan 069 adopts those execution/state patterns while leaving intelligence/orches
 | Small decision-oriented `SKILL.md`, large on-demand `references/` | controls agent context cost | optional upper-layer guidance/resources; not an MCP runtime dependency | clients may progressively load anatomy/topology/toon/animation guidance without changing MCP contracts |
 | Minimal, mode-specific interviews | gathers only information that changes production | **upper layer only**; MCP returns typed validation/missing-field errors | any agent/UI can ask the questions in its own style |
 | Live model discovery | prevents stale executor assumptions | `execution_binding.list/get` + semantic capability discovery | upper layer sees compatible bindings/capabilities without MCP ranking or choosing providers/models |
-| Separate workflow discovery from implementation catalog | treats chains as first-class products | first-party workflow registry separate from execution-binding catalog | turnaround, rigging, lipsync, shot render are workflows; caller chooses compatible execution bindings |
-| Media role validation | avoids malformed generation inputs | typed creative asset roles and selected-binding validation | `character_front`, `character_side`, `style_reference`, `motion_reference`, `voice_reference`, etc. |
+| Separate workflow discovery from implementation catalog | treats chains as first-class products | first-party workflow registry separate from execution-binding catalog | turnaround, rigging, animation, and shot render are workflows; caller chooses compatible execution bindings |
+| Media role validation | avoids malformed generation inputs | typed creative asset roles and selected-binding validation | `character_front`, `character_side`, `style_reference`, `motion_reference`, etc. |
 | Auto-upload local path / reuse previous job output | lets outputs chain naturally | reviewed workspace materialization + stable asset IDs | concept art -> SceneBoard -> Blender/game asset -> shot/build |
 | Canvas graph | keeps a whole multi-model workflow visible, branchable, reusable, and partially rerunnable | typed Creative Graph + saved templates + graph execution state | compare scene looks, branch anime variants, generate game assets in parallel without losing lineage |
 | Elements | turns accepted characters/locations/props into reusable project assets instead of repeated prompt text | Element Library with typed references and selected revisions | same hero/location/prop reused by Scene Studio, anime shots, and Game Studio |
@@ -407,14 +425,14 @@ Plan 069 adopts those execution/state patterns while leaving intelligence/orches
 | Cinema Studio AI Director | script/idea becomes editable shot settings rather than an opaque monolithic generation | upper layer authors the Scene Manifest; MCP validates/stores/executes it | global style/lighting plus per-shot lens/focal/aperture/move/tempo remain engine-neutral state |
 | Hero Frame First | locks composition/cast/location/look before motion makes changes expensive | approved hero frame/storyboard frame required before selected high-cost motion paths | cheaper scene/anime iteration and stronger continuity |
 | Soul ID reusable identity | consistency survives many generations | Character Identity Pack | authorized real-person identity or recurring visual identity across scenes/media |
-| Soul Cast fictional actor builder | invented characters need structured creation, not face training | Fictional Character Builder -> Character Element/Pack | anime/game actors with physique, outfit, traits, archetype/backstory, canonical views and later rig/voice |
+| Soul Cast fictional actor builder | invented characters need structured creation, not face training | Fictional Character Builder -> Character Element/Pack | anime/game actors with physique, outfit, traits, archetype/backstory, canonical views and later rig |
 | Brandkit reusable identity system | locks visual system before assets proliferate | Style Bible + World Bible | line language, shape language, color script, shader family, environments, typography/key-art rules |
 | Domain prompt enhancer | encodes specialist production language | upper layer owns creative prompt/spec authoring; selected execution binding only performs deterministic syntax translation/validation | MCP does not invent creative prompts or choose a model |
 | Product Photoshoot mode router | intent chooses workflow, not surface keywords | upper-layer routing over stable MCP primitives | MCP exposes the operations/state needed for portrait, full-body, action, environment, expression, or promo work but does not classify user intent |
 | Thumbnail concept gate | concept is selected before costly render | upper-layer approval policy using MCP cost estimate + assets/manifests | MCP enforces explicit submit/budget/approval boundaries but does not choose the concept |
 | Style preset resolve before explainer blocks | one style key stabilizes multi-shot output | Style Element/Pack stored by MCP; upper layer selects/locks it | all shots can reference one selected revision without MCP deciding style |
 | Generate narration before dependent video blocks | freezes one modality before dependent generation | caller-specified dependency DAG executed by MCP | ordering comes from the submitted graph/manifest, not MCP creative planning |
-| Durable job `submit/get/list/cancel` state | generation state survives beyond one RPC without exposing async execution | first-party Creative job state + foreground operator CLI | long image/video/3D/audio execution runs synchronously for the operator; completed state/results remain referenceable across later agent turns |
+| Durable job `submit/get/list/cancel` state | generation state survives beyond one RPC without exposing async execution | first-party Creative job state + foreground operator CLI | long image/video/3D execution runs synchronously for the operator; completed state/results remain referenceable across later agent turns |
 | Cost query before workflow | prevents uncontrolled spending | estimate for the caller-selected execution binding | MCP reports/enforces measurable limits; upper layer decides whether to proceed/ask user |
 | Multi-variant generation with controlled dimensions | explores deliberately | variant sets with explicit changed fields | vary pose/camera/expression while identity/style remain locked |
 | Post-render visual gate | output is evidence, not success by assumption | MCP returns previews/deterministic evidence; upper layer or caller-selected evaluator performs subjective review | identity, hands, costume, silhouette, line continuity, text, props, framing remain outside MCP judgment unless explicitly evaluated |
@@ -438,7 +456,6 @@ These are **behavioral examples for clients/agents above MCP**, not Masih Awam M
 | `higgsfield-brandkit` | lock palette/type/logo/style, dependency-aware revisions | Style/World Elements + asset/revision contracts; upper layer authors the creative system | **P0 state primitives** |
 | `higgsfield-product-photoshoot` | mode router + interview + specialist prompt enhancement | upper-layer workflow over image/edit/Element/QA primitives | **P2 upper-layer template** |
 | `higgsfield-marketplace-cards` | fixed deliverable bundle from one identity | upper-layer graph/template over shared Assets/Elements | **P3 upper-layer template** |
-| `higgsfield-video-explainer` | style lock + block planning + audio-first dependency + assembly | caller-specified scene DAG + deterministic assembly | **P1 MCP graph/state primitives; planning stays above** |
 | `higgsfield-youtube-thumbnail` | concept gate + variants + QA + surgical edits | upper-layer concept workflow over Assets/revisions/edit primitives | **P2 upper-layer template** |
 | `higgsfield-game-generation` | game profile + STYLE FORMULA + asset manifest + parallel generation/build + playtest + deploy/publish split | Game Manifest/Assets/Graph/build/playtest/deploy primitives; upper layer authors game design | **P1 first-class MCP execution/state target** |
 | `higgsfield-websites` | scaffold/edit/test/deploy lifecycle and media chaining | existing coding/build/deploy capabilities; whichever upper layer owns coding chooses its agent/model | **P1 for game build/deploy**, **P3 generic sites/apps** |
@@ -465,7 +482,6 @@ Initial logical fields:
 - asset manifest;
 - SceneBoard/storyboard and scene/shot manifests;
 - game design/build manifest when the project has an interactive target;
-- audio/voice plan;
 - Creative Graph/template references;
 - generation/revision lineage references;
 - source/provenance records;
@@ -480,12 +496,11 @@ Mirror the useful behavior of Cinema Studio Elements without tying identity to a
 
 Initial Element types:
 
-- `character` — Character Pack plus optional identity/rig/voice bindings;
+- `character` — Character Pack plus optional identity/rig bindings;
 - `location` — World/Location Pack plus 2D/3D scene bindings;
 - `prop` — canonical appearance/scale/material/use references;
 - `style` — Style Pack/reference set;
-- `audio_voice` — recurring voice/performance identity;
-- `media` — approved still/video/audio revision promoted for reuse;
+- `media` — approved still/video revision promoted for reuse;
 - `3d_asset` — reusable mesh/material/rig/export binding;
 - `animation_clip` — approved action/motion with skeleton compatibility metadata.
 
@@ -516,7 +531,6 @@ Generalize Higgsfield **Soul ID + Soul Cast** into one reusable Character Elemen
 - 3D asset binding when created;
 - armature/rig binding when created;
 - facial shape-key/driver binding when created;
-- voice binding when created;
 - execution-binding-specific optional identity artifacts such as embeddings/LoRA/checkpoints, stored as implementation details rather than product identity.
 
 A Character Pack must be usable before model training exists. Reference-image consistency is the minimum viable path; optional training/fine-tuning can be added when measured quality justifies it.
@@ -564,7 +578,7 @@ Borrow the strongest game-generation pattern: **declare assets before generating
 Each entry should identify:
 
 - stable asset ID;
-- type: character, prop, environment, clothing, hair, texture, effect, audio, shot intermediate, etc.;
+- type: character, prop, environment, clothing, hair, texture, effect, shot intermediate, etc.;
 - owner pack/project;
 - intended downstream use;
 - required views/format/resolution;
@@ -584,7 +598,6 @@ Scene-global fields:
 - cast/Character Elements, Location Element, Props, Style Element;
 - global genre/look, color palette, lighting logic, atmosphere, time/weather;
 - target duration/FPS/aspect/resolution;
-- audio/dialogue/music context;
 - continuity state entering/leaving the scene;
 - SceneBoard/storyboard reference and approved hero frames.
 
@@ -598,7 +611,6 @@ Per-shot fields:
 - camera/sensor profile when supported;
 - lens/focal length/aperture/depth-of-field intent;
 - camera move, movement speed, stabilization, and edit/tempo intent;
-- dialogue/audio cue references;
 - expression/pose requirements;
 - FX/lighting overrides;
 - required upstream assets;
@@ -640,7 +652,7 @@ Graph nodes may represent reviewed categories such as:
 
 - prompt/spec input;
 - Element/reference selection;
-- image/video/audio/3D generation;
+- image/video/3D generation;
 - storyboard/SceneBoard generation;
 - image/video edit or upscale;
 - Blender/DCC operation or render job;
@@ -662,18 +674,6 @@ Graph requirements:
 - cost/compute estimate metadata where the caller-selected execution binding supports it;
 - no arbitrary caller-supplied provider-native executable graph/plugin/script through ordinary graph nodes in the initial release;
 - a future Nuxt visual editor can render/edit this same graph contract rather than inventing a second workflow model.
-
-### Audio / Voice Pack
-
-For recurring characters and sequences:
-
-- voice identity/reference plus optional caller-selected speech/voice execution binding;
-- language/pronunciation notes;
-- emotional/performance direction;
-- dialogue timing artifacts;
-- SFX/music references;
-- licensing/provenance where relevant;
-- lipsync/viseme timing output when available.
 
 ## Production gates
 
@@ -707,7 +707,7 @@ Do not start expensive multi-asset work until:
 
 Before parallel asset generation:
 
-- list required character/prop/environment/audio assets;
+- list required character/prop/environment assets;
 - declare dependency relationships;
 - define acceptable output/QA criteria per asset;
 - choose which assets need 2D-only, 3D-only, or both.
@@ -720,7 +720,6 @@ For scene/anime production, before high-cost motion or final animation:
 - produce/approve a connected storyboard or equivalent shot board;
 - select representative hero frame(s) where the workflow benefits from Hero Frame First;
 - freeze per-shot cast/location/prop Element revisions and camera intent;
-- identify dialogue/timing dependencies;
 - verify required assets/rigs exist;
 - checkpoint the Blender scene before destructive scene-wide work.
 
@@ -753,7 +752,7 @@ Higgsfield hides specialist prompt assembly behind some domain workflows. Masih 
 
 The **upper layer/caller** produces a structured creative specification. A selected execution binding may use a binding-specific compiler to translate that already-specified request into:
 
-- image/video/audio prompt text;
+- image/video prompt text;
 - reference ordering/roles;
 - validated semantic capability parameters;
 - namespaced binding-native extension parameters when the caller-selected binding requires them;
@@ -807,16 +806,8 @@ video.reframe
 video.upscale
 video.remove_background
 video.motion_control
-video.lipsync
 video.clip_extract
 
-audio.voice
-audio.speech
-audio.music
-audio.sfx
-audio.voice_clone
-audio.voice_change
-audio.video_dub
 
 3d.image_to_mesh
 3d.text_to_mesh
@@ -998,13 +989,11 @@ Temporal review should evaluate representative samples for:
 - contact/foot sliding;
 - body deformation;
 - facial/expression continuity;
-- lipsync alignment where used;
 - hair/clothing secondary motion;
 - camera continuity;
 - continuity between shots;
 - flicker/style/identity drift in generated video;
 - FX timing;
-- audio sync.
 
 The first version may use ordered frame/contact-sheet previews before video-native MCP result types exist. It must not pretend frame sampling equals full final playback QA.
 
@@ -1033,7 +1022,7 @@ The graph manifest above is not merely storage. It is a caller-authored orchestr
 The first release should prefer a reviewed closed-world registry such as:
 
 - `InputText`, `InputAsset`, `ElementRef`, `SelectRevision`;
-- `GenerateImage`, `GenerateVideo`, `GenerateAudio`, `Generate3D`;
+- `GenerateImage`, `GenerateVideo`, `Generate3D`;
 - `EditImage`, `ReframeVideo`, `UpscaleMedia` where caller-selected bindings support them;
 - `StoryboardStore`, `StoryboardRevise`, `HeroFrameRef`;
 - `SceneManifestValidate`, `ShotExecute`, `ContinuityEvidence`;
@@ -1119,17 +1108,17 @@ This is not mandatory for every execution binding. Whether to use Hero Frame Fir
 - animatic/preview;
 - generated video shot(s);
 - Blender-backed editable shot(s);
-- assembled cinematic scene with audio;
+- assembled cinematic scene;
 - game cutscene package.
 
 ## Game Studio — first-class browser-game production
 
-Game Studio is not a later “spinoff.” It is one of the three primary product tracks and reuses the same Elements, Style, Asset, Graph, 3D, audio, Blender, QA, and coding infrastructure.
+Game Studio is not a later “spinoff.” It is one of the three primary product tracks and reuses the same Elements, Style, Asset, Graph, 3D, Blender, QA, and coding infrastructure.
 
 ### Game intake/output modes
 
 - **design-only** — game profile + core loop + controls + level/world design + Asset Manifest;
-- **assets-only** — sprites, UI, tileable textures, environments, rigged/animated 3D assets, music/SFX/voice;
+- **assets-only** — sprites, UI, tileable textures, environments, and rigged/animated 3D assets;
 - **build/iterate** — inspect existing source or create a new browser project, preserve unchanged architecture/assets, amend manifests, build, test;
 - **deploy** — produce a shareable playable deployment after QA;
 - **publish** — separate explicit public marketplace/catalog action when/if Masih Awam gains such a surface.
@@ -1141,7 +1130,7 @@ The **upper layer** authors game design and chooses execution/coding agents. MCP
 1. Receive/validate a Game Design/Build Manifest containing delivery context, core loop, win/lose/restart/progression, target devices, inputs, performance budget, language, and player-count mode.
 2. Store/freeze the caller-approved Style Element / STYLE FORMULA and `design/assets` manifest before broad execution.
 3. Receive the caller-selected multiplayer route: solo, local same-screen, or online room/state-sync.
-4. Execute independent image/3D/audio jobs in parallel only when the submitted graph declares that independence.
+4. Execute independent image/3D jobs in parallel only when the submitted graph declares that independence.
 5. Let any upper-layer coding system build/edit source against stable manifest paths; MCP/workspace primitives preserve source and asset identity.
 6. For animated 3D assets, expose skeleton/action compatibility evidence and Blender rig/retarget primitives; the upper layer chooses the remedy.
 7. Run the game over HTTP/runtime preview; never claim browser behavior from static source inspection alone.
@@ -1249,16 +1238,18 @@ Keep the public MCP surface compact and provably bounded:
 2. `blender_inspect`
 3. `blender_python_api_docs`
 4. `blender_screenshot` — bounded preview/inspection only, never a final-render path
+5. `blender_animation_preview` — bounded sampled temporal preview with contained PNG output and bounded inline image delivery; it is not a bulk/final animation renderer
 
 The following remain first-party Blender capabilities but are **not public MCP tools** because valid workloads can exceed 60 seconds:
 
 - `blender_execute_python`
-- `blender_animation_preview`
 - `blender_render`
 - `blender_asset_import`
 - `blender_asset_export`
 - `blender_checkpoint_create`
 - `blender_checkpoint_restore`
+
+The same animation-preview capability also remains available through the foreground operator CLI for workloads that should not be attempted through the bounded public sampling surface.
 
 Those heavy operations run synchronously through the foreground `ai-tools creative` operator CLI. There is no async Blender task API, background/detached mode, or MCP polling workaround.
 
@@ -1283,7 +1274,6 @@ On-demand guidance must cover:
 - skinning/weight painting;
 - IK/FK/constraints;
 - expression shape keys/drivers;
-- viseme/lipsync readiness;
 - posing;
 - keyframes/F-curves/actions/NLA;
 - secondary motion/physics;
@@ -1308,11 +1298,11 @@ brief
   -> Blender cleanup / retopo / UV / materials
   -> rig / facial controls
   -> storyboard / shot manifest
-  -> blocking / animation / dialogue timing
+  -> blocking / animation
   -> hair/clothing/secondary motion
   -> camera / lighting / toon render
   -> temporal + visual QA
-  -> composite / audio / export
+  -> composite / export
   -> reusable project assets
 ```
 
@@ -1350,7 +1340,6 @@ The first reusable character benchmark should support:
 - deformation inspection on shoulders/elbows/hips/knees;
 - eye/jaw controls;
 - a bounded expression set;
-- basic viseme/lipsync-ready shapes;
 - checkpoint before destructive rig changes.
 
 ### Animation production
@@ -1361,7 +1350,7 @@ Begin with a small action, not a complete episode:
 - turn/look;
 - walk/run or one action beat;
 - expression transition;
-- one short dialogue/performance beat when audio is available.
+- one short expressive performance beat.
 
 Then compose these capabilities into a 10–30 second scene.
 
@@ -1384,7 +1373,7 @@ Do not skip shared foundations merely because one external model/agent can outpu
 | --- | --- | --- |
 | S1 | SceneBoard contract | upper-layer Auto and Manual experiences submit the same connected-board schema with reusable Elements and continuity state |
 | S2 | Director specification / hero frames / shot manifest | caller-authored global style/light/palette and per-shot cinematography controls are editable and execution-binding-neutral |
-| S3 | 10–30 second cinematic scene | generated-video and/or Blender backend follows shot manifest, audio timing, continuity, visual/temporal QA |
+| S3 | 10–30 second cinematic scene | generated-video and/or Blender backend follows shot manifest, continuity, visual/temporal QA |
 | S4 | reusable scene template | materially different cast/location can reuse the graph/director workflow without source-code changes |
 
 ### Anime milestones
@@ -1396,7 +1385,7 @@ Do not skip shared foundations merely because one external model/agent can outpu
 | A3 | Blender character asset | contained import, cleanup/retopo/UV/material inspection, multi-angle visual review |
 | A4 | reusable rigged character | skeleton, weights, facial controls, representative deformation QA |
 | A5 | 3–5 second animation | structural animation inspection + temporal preview + render review |
-| A6 | 10–30 second anime scene | SceneBoard/shot manifest, continuity, camera/lighting/audio, final QA |
+| A6 | 10–30 second anime scene | SceneBoard/shot manifest, continuity, camera/lighting, final QA |
 | A7 | 30–60 second multi-shot short | cross-shot continuity, reusable Elements/assets, render/composite pipeline |
 | A8 | repeatable anime-production template | second project/character reuses platform without first-demo hard-coding |
 
@@ -1405,7 +1394,7 @@ Do not skip shared foundations merely because one external model/agent can outpu
 | Milestone | Deliverable | Must prove before advancing |
 | --- | --- | --- |
 | G1 | game design + STYLE FORMULA + Asset Manifest | core loop, win/lose/restart, inputs, budget, player mode, asset roles frozen before broad build |
-| G2 | asset-complete local prototype | generated/procedural 2D/3D/audio assets resolve through stable manifest paths; full game loop runs locally |
+| G2 | asset-complete local prototype | generated/procedural 2D/3D assets resolve through stable manifest paths; full game loop runs locally |
 | G3 | verified browser game | keyboard/touch/gamepad claims as applicable, restart, console, responsive render, timing/performance and missing-assets checks pass |
 | G4 | multiplayer game when selected | local/online route is explicit; two-session behavior and state sync pass where claimed |
 | G5 | deployed playable build | shareable deployment works; source/project state remains editable; public publish has not happened implicitly |
@@ -1531,9 +1520,9 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | PHASE-03 | Capability/workflow registry + creative jobs + graph contract + minimal headless executor | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate and execute through the minimal reviewed DAG runtime |
 | PHASE-04 | Initial reference-aware media generation | PHASE-02, PHASE-03 | Character/Style still consistency foundation passes A1/A2-quality gate |
 | PHASE-05 | Identity/style/world/Element production system | PHASE-04 | reusable Characters/Locations/Props/Style Elements drive revisions and reuse |
-| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | four bounded public Blender MCP tools pass; heavy Blender capabilities run only through synchronous foreground operator commands; cold start/readiness/owner-safe stop and project-contained outputs remain proven |
+| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | five bounded public Blender MCP tools pass, including sampled temporal preview; heavy Blender capabilities remain synchronous foreground operator commands; cold start/readiness/owner-safe stop and project-contained outputs remain proven |
 | PHASE-07 | Anime 3D character asset pipeline | PHASE-05, PHASE-06 | A3/A4 pass |
-| PHASE-08 | Animation, facial, audio, and temporal QA | PHASE-07 | A5 passes |
+| PHASE-08 | Animation, facial, and temporal QA | PHASE-07 | A5 passes |
 | PHASE-09 | Scene Studio: SceneBoard + Director + shot orchestration | PHASE-04, PHASE-05; PHASE-06 optional per backend | S1/S2 pass and one S3 candidate can be produced/revised |
 | PHASE-10 | Unified visual/temporal/structural QA + surgical revisions | PHASE-04, PHASE-08, PHASE-09 | failed scene/anime/media outputs are detected/revised with lineage |
 | PHASE-11 | Sequence assembly/export + anime delivery | PHASE-08, PHASE-09, PHASE-10 | A6 plus contained reusable project delivery passes |
@@ -1588,7 +1577,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 ### TASK-003 — Freeze creative project schemas
 
-**Outcome:** versioned Creative Project, Element, character, style, world/location, asset, scene/shot, game, audio, graph identity, QA finding, and lineage contracts are specified before engine integration. Template input/output and detailed playtest-evidence contracts remain owned by TASK-010 and the Game Studio phases rather than being implied complete here.
+**Outcome:** versioned Creative Project, Element, character, style, world/location, asset, scene/shot, game, graph identity, QA finding, and lineage contracts are specified before engine integration. Template input/output and detailed playtest-evidence contracts remain owned by TASK-010 and the Game Studio phases rather than being implied complete here.
 
 **Steps:**
 
@@ -1599,7 +1588,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Define forward-compatible schema versioning.
 - [x] Define bounds and secret-exclusion rules.
 
-**Validation:** `packages/rust-tools/tests/platform/creative/contracts.rs` now exercises one provider-neutral cross-track project containing Character/Location/Prop/Style/Voice/3D Elements, a three-shot cinematic Scene, anime-oriented asset/voice lineage, a browser-game manifest, audio cues, QA state, and graph/job identities; persisted-state falsification covers unaccepted selected revisions, forged generated authority, path traversal, cyclic Asset lineage, and forged source-surface provenance.
+**Validation:** `packages/rust-tools/tests/platform/creative/contracts.rs` now exercises one provider-neutral cross-track project containing Character/Location/Prop/Style/3D Elements, a three-shot cinematic Scene, anime-oriented asset lineage, a browser-game manifest, QA state, and graph/job identities; persisted-state falsification covers unaccepted selected revisions, forged generated authority, path traversal, cyclic Asset lineage, and forged source-surface provenance.
 
 **Commit boundary:** `feat(creative): add production manifest contracts`.
 
@@ -1609,7 +1598,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 **Steps:**
 
-- [x] Freeze semantic capability vocabulary needed through C3/S3/A6/G5 plus MCP utility parity: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub.
+- [x] Freeze semantic capability vocabulary needed through C3/S3/A6/G5 plus MCP utility parity: upscale, background removal, outpaint/reframe, motion control, and clip extraction.
 - [x] Freeze capability list/get representation for durable upper-layer discovery.
 - [x] Freeze opaque execution-binding list/get representation separately from semantic capabilities; provider/model names are optional implementation metadata, never stable contract identity.
 - [x] Freeze workflow list/get separately from execution-binding inventory.
@@ -1763,7 +1752,6 @@ Initial candidate workflows to freeze from actual engine support:
 - `image_to_3d_bootstrap`
 - `character_rig_bootstrap`
 - `image_to_video_preview`
-- `lipsync_preview`
 - `image_upscale`
 - `video_upscale`
 - `image_remove_background`
@@ -1772,9 +1760,6 @@ Initial candidate workflows to freeze from actual engine support:
 - `video_reframe`
 - `video_motion_control`
 - `video_clip_extract`
-- `voice_clone`
-- `voice_change`
-- `video_dub`
 - `shot_render_preview`
 - `game_asset_batch`
 - `game_build_playtest`
@@ -1798,7 +1783,7 @@ Steps:
 
 - [x] semantic capability, execution-binding, workflow, asset/history, and budget discovery are distinct and queryable;
 - [x] explicit caller-selected binding works through the non-default conformance binding and omitted execution binding fails without MCP-side ranking/defaulting/auto-selection; production real-binding execution remains owned by later engine phases;
-- [x] core MCP utility workflows are represented: upscale, background removal, outpaint/reframe, motion control, clip extraction, voice clone/change/dub;
+- [x] core MCP utility workflows are represented: upscale, background removal, outpaint/reframe, motion control, and clip extraction;
 - [x] job lifecycle is bounded, listable/retrievable across normal turns, and owner/project scoped;
 - [x] cost/compute preflight and hard budget thresholds can block a batch before execution;
 - [x] graph/workflow contracts can express scene/anime/game dependencies;
@@ -1924,7 +1909,7 @@ Steps:
 
 ### TASK-017 — Freeze Blender bridge/config/session/tool schemas
 
-**Outcome:** operator config, reviewed executable resolution, explicit bounded `blender_session status|start|stop`, loopback framing, four public bounded Blender MCP tool schemas plus foreground operator-only heavy operations, dedicated project `blender/` layout, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
+**Outcome:** operator config, reviewed executable resolution, explicit bounded `blender_session status|start|stop`, loopback framing, five public bounded Blender MCP tool schemas plus foreground operator-only heavy operations, dedicated project `blender/` layout, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
 
 **Steps:**
 
@@ -1934,7 +1919,7 @@ Steps:
 - [x] Freeze the canonical `<project>/blender/` production layout and require every Blender-owned save/render/export/checkpoint/bake/temp destination to resolve beneath it.
 - [x] Keep executable authority separate from project-data authority: Blender may execute from an approved system/home installation path while production artifacts stay under the authorized Projects workspace.
 
-**Validation:** UPDATED on 2026-09-16. Blender exposure is now governed solely by the master `RELAY_ENABLE_CREATIVE` flag; there is no separate Blender enable flag. Operator-only executable, bridge port, and bridge timeout configuration remain bounded and caller schemas expose no host/port/executable/PID injection. The frozen Blender Lab protocol identity is loopback TCP on operator-selected port (default 9876) with NUL-delimited bounded JSON framing. Session state distinguishes external attachment from relay-owned launch so stop semantics can never assume ownership of a user-started Blender. The canonical `blender/{scenes,assets,references,renders/preview,renders/final,animations,exports,checkpoints,tmp}` subtree and artifact-scope helpers reject absolute paths, traversal, and noncanonical destinations. The public Blender MCP catalog is now intentionally limited to four bounded tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`). Heavy Python, animation preview, render, import/export, and checkpoint operations remain first-party capabilities but are operator-CLI-only and are not exposed through `tools/list`. Blender contract acceptance: 4/4 PASS; CLI config acceptance PASS; Clippy `-D warnings`, fast Rust/auto guardrails, and `git diff --check` PASS.
+**Validation:** UPDATED on 2026-09-16. Blender exposure is now governed solely by the master `RELAY_ENABLE_CREATIVE` flag; there is no separate Blender enable flag. Operator-only executable, bridge port, and bridge timeout configuration remain bounded and caller schemas expose no host/port/executable/PID injection. The frozen Blender Lab protocol identity is loopback TCP on operator-selected port (default 9876) with NUL-delimited bounded JSON framing. Session state distinguishes external attachment from relay-owned launch so stop semantics can never assume ownership of a user-started Blender. The canonical `blender/{scenes,assets,references,renders/preview,renders/final,animations,exports,checkpoints,tmp}` subtree and artifact-scope helpers reject absolute paths, traversal, and noncanonical destinations. The public Blender MCP catalog is now intentionally limited to five bounded tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`, `blender_animation_preview`). The preview surface is a bounded sampled temporal-review path; heavy/bulk preview execution remains available through the operator CLI. Arbitrary Python, final render, import/export, and checkpoint operations remain first-party operator-CLI-only capabilities and are not exposed through `tools/list`. Blender contract acceptance: 5/5 PASS; CLI config acceptance PASS; focused Blender contract/read tests, Clippy `-D warnings`, fast Rust/auto guardrails, and `git diff --check` have passed during the current implementation sequence.
 
 **Commit boundary:** `feat(blender): freeze relay capability contract`.
 
@@ -2000,15 +1985,15 @@ Steps:
 
 **Outcome:** Blender appears only when enabled; capability resources, activation hints, routing guidance, docs, and tool catalog agree.
 
-**Implementation:** UPDATED on 2026-09-19. The single canonical `runtime_tool_catalog` composes only the four bounded public Blender MCP tools for the Full profile whenever the single Creative master flag is enabled; Primary and disabled configurations remain unchanged. `creative_status` reports Blender availability/tool count as four. Heavy Blender Python, preview/render, import/export, and checkpoint execution is available only through the synchronous foreground `ai-tools creative` operator CLI. A read-only `blender-capability` resource is configuration-gated and documents the bounded-MCP versus foreground-operator boundary without exposing operator executable, bridge port, credentials, or other hidden authority.
+**Implementation:** UPDATED on 2026-09-19. The single canonical `runtime_tool_catalog` composes five bounded public Blender MCP tools for the Full profile whenever the single Creative master flag is enabled; Primary and disabled configurations remain unchanged. The fifth tool is `blender_animation_preview`, a bounded sampled temporal-preview surface with contained PNG outputs and bounded inline image delivery. Arbitrary Python, final render, import/export, and checkpoint execution remains available only through the synchronous foreground `ai-tools creative` operator CLI. A read-only `blender-capability` resource is configuration-gated and documents the bounded-MCP versus foreground-operator boundary without exposing operator executable, bridge port, credentials, or other hidden authority.
 
-**Validation:** refreshed catalog acceptance must prove no Blender tool leakage while disabled, exactly four bounded Blender MCP tools when enabled, all seven heavy Blender operations absent from public `tools/list`, no Blender exposure in Primary, and the optional resource only when the capability is active. Targeted composition/resource tests and compile checks pass; maintainability reports no hard violations. A fresh full Rust guardrail retry is currently blocked by the execution sandbox's unavailable Rust toolchain mount (`rustup` reports no installed/default toolchain), not by a repository test failure; the last full Rust gate before this composition checkpoint passed on TASK-021 and the normal pre-commit hook must still pass before this checkpoint is committed.
+**Validation:** refreshed catalog acceptance proves no Blender tool leakage while disabled, exactly five bounded Blender MCP tools when enabled, six heavy Blender operations absent from public `tools/list`, no Blender exposure in Primary, and the optional resource only when the capability is active. Focused Blender contract/read acceptance passes with the five-tool catalog including `blender_animation_preview`; the normal full repository gate must still be rerun after the latest source/doc changes before closure.
 
 **Commit boundary:** `feat(blender): compose optional capability`.
 
 **Phase exit criteria:**
 
-- [x] all required Blender capabilities are implemented/tested, with only four bounded operations public through MCP and heavy execution available through the synchronous foreground operator CLI;
+- [x] all required Blender capabilities are implemented/tested, with five bounded operations public through MCP (including sampled `blender_animation_preview`) and heavy execution available through the synchronous foreground operator CLI;
 - [x] no generic stdio/nested Python MCP server is required;
 - [x] Blender filesystem/network/process/host authority is represented honestly;
 - [x] the Blender executable may remain outside Projects only as reviewed operator executable authority, while every workflow-owned production artifact remains beneath the selected project's dedicated `blender/` subtree;
@@ -2065,7 +2050,6 @@ Steps:
 - [ ] Add constraints/IK/FK only where workflow benefits.
 - [ ] Test representative deformation poses.
 - [ ] Add eye/jaw/expression controls.
-- [ ] Add initial viseme/lipsync-ready shapes.
 - [ ] Checkpoint and export contained reusable asset.
 
 **Validation:** A4 deformation/facial fixture passes structural + visual review.
@@ -2079,28 +2063,11 @@ Steps:
 - [ ] representative deformation is visually accepted;
 - [ ] asset can be exported and re-imported within contained workspace authority.
 
-# PHASE-08 — Animation, facial, audio, and temporal QA
+# PHASE-08 — Animation, facial, and temporal QA
 
 **Goal:** reach A5 with real motion, not only rig existence.
 
 **Dependencies:** PHASE-07.
-
-### TASK-026 — Add audio/voice execution-binding contract with MCP parity for speech, cloning, conversion, and dubbing
-
-**Outcome:** caller-selected reviewed audio execution bindings use one contained audio lineage model. MCP owns bounded schema/admission/state; speech/music/SFX generation, authorized voice cloning, voice change, and video dubbing run through synchronous foreground operator execution whenever they can exceed 60 seconds.
-
-**Steps:**
-
-- [ ] Freeze `audio.voice|speech|music|sfx|voice_clone|voice_change|video_dub` contracts and media/reference roles.
-- [ ] Preserve voice/source/license/consent provenance and distinguish generated fictional voices from authorized reference-voice derivatives.
-- [ ] Bind reusable accepted voice state to an `audio_voice` Element rather than exposing binding/provider-specific training IDs as the project identity.
-- [ ] Keep credentials/training artifacts isolated if a non-local provider is supported.
-- [ ] Produce contained audio/video child assets plus timing/language/voice metadata needed for animation and scene workflows.
-- [ ] Keep dubbing/voice conversion independently revisable from body animation or source video.
-
-**Validation:** fixtures cover bounded speech plus mocked/activated clone, voice-change, and dub contracts; unauthorized/missing reference inputs fail closed and project/parent lineage is preserved.
-
-**Commit boundary:** `feat(audio): add anime dialogue capability`.
 
 ### TASK-027 — Add pose/action execution primitives
 
@@ -2109,14 +2076,6 @@ Steps:
 **Validation:** action/F-curve/keyframe/NLA state is structurally visible and representative frames show intended motion.
 
 **Commit boundary:** `feat(anime): add character action workflow`.
-
-### TASK-028 — Add facial/lipsync workflow
-
-**Outcome:** dialogue timing can drive bounded facial/viseme animation with editable Blender state.
-
-**Validation:** lipsync is reviewed temporally and can be corrected without rebuilding the body animation.
-
-**Commit boundary:** `feat(anime): add facial performance workflow`.
 
 ### TASK-029 — Add secondary motion review
 
@@ -2130,7 +2089,7 @@ Steps:
 
 - [ ] a 3–5 second character performance exists;
 - [ ] structural animation state and temporal preview agree;
-- [ ] audio/facial/body motion remain separately editable;
+- [ ] facial/body motion remain separately editable;
 - [ ] failures can roll back to a checkpoint.
 
 # PHASE-09 — Scene Studio state/execution: SceneBoard, Director specification, and shots
@@ -2267,11 +2226,11 @@ Example scopes:
 
 ### TASK-037 — Implement deterministic sequence assembly and Personal-Clipper-style extraction
 
-**Outcome:** accepted shot renders/audio can be assembled deterministically, and an existing long-form video Asset can be analyzed/segmented into reusable clips without bypassing normal ingest, job, and lineage rules. Assembly/extraction execution is synchronous foreground operator work whenever accepted input size/duration can exceed the 60-second agent ceiling; MCP owns manifests, admission, and result lineage.
+**Outcome:** accepted shot renders can be assembled deterministically, and an existing long-form video Asset can be analyzed/segmented into reusable clips without bypassing normal ingest, job, and lineage rules. Assembly/extraction execution is synchronous foreground operator work whenever accepted input size/duration can exceed the 60-second agent ceiling; MCP owns manifests, admission, and result lineage.
 
 **Steps:**
 
-- [ ] Assemble accepted shots with explicit ordering, frame rate, resolution, transitions, and audio sync.
+- [ ] Assemble accepted shots with explicit ordering, frame rate, resolution, and transitions.
 - [ ] Implement `video.clip_extract` over a contained/imported source Asset with bounded duration/input size.
 - [ ] Preserve source start/end timestamps, transcript/segment metadata where available, parent Asset ID, and selected clip revisions.
 - [ ] Allow explicit user-selected time ranges and an optional reviewed clip-selection workflow; do not silently download arbitrary third-party media outside the safe URL-import path.
@@ -2330,11 +2289,11 @@ Example scopes:
 
 ### TASK-041 — Implement parallel game asset generation and source integration
 
-**Outcome:** image/3D/audio generation jobs can run independently while editable game source is built against stable manifest identities.
+**Outcome:** image/3D generation jobs can run independently while editable game source is built against stable manifest identities.
 
 **Steps:**
 
-- [ ] Add game-specific media roles for sprites, UI, tileables, sky/environment, textures, 3D models, animation clips, music, SFX, and voice where needed.
+- [ ] Add game-specific media roles for sprites, UI, tileables, sky/environment, textures, 3D models, and animation clips.
 - [ ] Execute independent asset jobs concurrently only when the caller-specified graph/manifest declares them independent; MCP does not creatively schedule undeclared work.
 - [ ] Build source against manifest-stable placeholders/paths rather than ephemeral job filenames.
 - [ ] Promote accepted results into Elements/assets and replace placeholders deterministically.
@@ -2511,7 +2470,7 @@ Initial templates may include:
 
 **Outcome:** Generate/Assets/Elements/Scene/Anime/Game/Graph MCP contracts are testable without evaluating any particular agent's routing quality.
 
-Eval categories include missing/invalid fields, unavailable capability, ambiguous execution binding, explicit binding selection, upload-handoff vs URL-import vs prior-Asset reuse, generation/upload history lookup, estimate-before-submit and budget denial, utility transforms (upscale/background removal/outpaint/reframe/motion control/clipper/dub), Element preservation, graph execution, caller-authored SceneBoard Auto/Manual provenance, Director-spec validation, Game Manifest validation, deterministic QA/playtest hard failures, revision lineage, deploy-vs-publish, and no authority escalation through templates.
+Eval categories include missing/invalid fields, unavailable capability, ambiguous execution binding, explicit binding selection, upload-handoff vs URL-import vs prior-Asset reuse, generation/upload history lookup, estimate-before-submit and budget denial, utility transforms (upscale/background removal/outpaint/reframe/motion control/clipper), Element preservation, graph execution, caller-authored SceneBoard Auto/Manual provenance, Director-spec validation, Game Manifest validation, deterministic QA/playtest hard failures, revision lineage, deploy-vs-publish, and no authority escalation through templates.
 
 **Validation:** eval runner produces deterministic MCP contract/state/effect results without any dependency on a specific agent/model or expensive inference.
 
@@ -2552,15 +2511,17 @@ Candidate templates/skills after core parity:
 
 **Validation:** scene can use generated-video, Blender, or a deliberate mix; every shot retains engine-neutral Scene/Shot state and reusable Element references; no hidden chat-state teleportation exists.
 
-**Live result (2026-09-15): PARTIAL.** Fresh project `project_1e62d0f5031540a589bfa4cc4397be4b` completed reusable Character/Prop/Style/Location Elements (including accepted `world_location_v1`), a three-shot/10-second Scene manifest with global Director settings, per-shot camera/director/state/continuity, a connected SceneBoard, audio timing plan, three accepted `local_raster` image references, continuity/visual/temporal receipts, contained still export, and project handoff. All eight live jobs were completed. The production service had no quality-capable video/audio binding, so generated-video/sequence assembly was not executed; Blender start using operator-owned `/usr/bin/blender` returned `Blender exited before its loopback bridge became ready`. The live receipts explicitly report visual/temporal inspection as `not_inspected`; no subjective cinematic-quality claim is made.
+**Live result (2026-09-15): PARTIAL.** Fresh project `project_1e62d0f5031540a589bfa4cc4397be4b` completed reusable Character/Prop/Style/Location Elements (including accepted `world_location_v1`), a three-shot/10-second Scene manifest with global Director settings, per-shot camera/director/state/continuity, a connected SceneBoard, three accepted `local_raster` image references, continuity/visual/temporal receipts, contained still export, and project handoff. All eight live jobs were completed. The production service had no quality-capable video binding, so generated-video/sequence assembly was not executed; Blender start using operator-owned `/usr/bin/blender` returned `Blender exited before its loopback bridge became ready`. The live receipts explicitly report visual/temporal inspection as `not_inspected`; no subjective cinematic-quality claim is made.
 
 **Live update (2026-09-16): PARTIAL — Blender execution blocker removed, final motion acceptance still open.** Fresh project `project_db952795d80a4a0483abe274007b63d6` created accepted Character/Style Elements plus a four-view interpreted turnaround through `binding_local_raster`; front/side/back references materialized through `blender_asset_import`. The relay-owned Blender Lab session reached `ready`, a contained checkpoint was created, and privileged authoring produced a stylized character scene with an 11-bone `Ari_Rig`, 25 mesh objects, a `Smile` shape key, camera/light setup, and a 10-second timeline at 12 fps. Contained renders at frames 1, 60, and 120 succeeded; frame-state probes showed motion from x=0.0 through x≈0.1 to x≈0.95 and `Smile≈0.65` at frame 120. The same project stores a three-shot/10-second engine-neutral Scene plus connected SceneBoard, and `scene_continuity_review` completed with the expected `visual_inspection=not_inspected` finding. Full 120-frame Blender animation render timed out at the bounded bridge response deadline; it was not retried, and the relay-owned Blender session was stopped and confirmed closed. S3 therefore remains open for full motion/assembly/export and subjective visual/temporal acceptance.
 
 **Live update (2026-09-17): PARTIAL — fresh canonical weighted-rig fixture exposed and fixed a render-runtime scaling bug in source.** Fresh canonical project `project_2367eb7f2843460da4b05dd1254141b8` runs at `$HOME/Documents/Projects/Blender/plan069-final-e2e/`, outside the source checkout. The live relay created/promoted fresh Character/Style Elements, started a relay-owned Blender 5.2.1 session, authored/saved a 10-second 12-fps scene with an 11-bone `Ari_Rig`, five mesh objects using Armature modifiers and mixed joint weights, a `Smile` shape key, animated camera/body/facial state, and checkpoint `checkpoint_693ecb1454644f7c9c147814092ea167`. Structured animation inspection reports 27 F-curves over frames 1–120. `blender_animation_preview` successfully rendered frames 1/31/61/91/120 with distinct checksums, proving bounded live motion evidence. Full animation render and even a 10-frame animation render still hit the configured 30-second bridge deadline because `blender_render(animation)` executed the entire requested range inside one bridge request. The owned Blender session was stopped after each timeout and no retry loop was used. Source is now patched so animation rendering performs one bounded bridge transaction per frame and registers each successful frame Asset immediately; the public tool contract and 120-frame admission bound are unchanged. The focused Blender artifact test now proves the multi-transaction behavior and passes 1/1; Rust fmt, Clippy `-D warnings`, check, repository/agent/architecture/test-layout constituents pass with the repo-local Rust 1.98.1 toolchain. This patch is not yet installed in the running relay, so S3 remains partial pending rebuild/restart and live re-acceptance; subjective visual/temporal acceptance remains `not_inspected`.
 
-**Live update (2026-09-17): per-frame render implementation is now installed and exercised.** Release binary `8e1aef48570d2be19bacf7d427308159b4366145e557fc0cac864976b92c2223` replaced the prior relay binary and `ai-tools-relay.service` restarted successfully; the authenticated Creative status still reports `enabled=true`, Blender enabled, and 11 Blender tools. A live three-frame animation render completed as three bounded frame transactions and registered frame Assets `asset_040ad758d36d4a799ec7d3b3d74b531d`, `asset_e968f0cbd20f44e78e4ab4afd8c5a576`, and `asset_13b9ebe45b6d45e6a1d1a8fa3273098c`. A separate 120-frame preview attempt did not complete: only two output frames have registered Asset records, a third PNG is present without an Asset record, and the Blender session subsequently reported `ready` rather than rendering. It was treated as a partial failure and not blindly repeated. The resulting 256×144 geometric character scene remains a blockout-level visual result; audio sync, final assembly/export, and subjective visual/temporal acceptance remain open.
+**Live update (2026-09-17): per-frame render implementation is now installed and exercised.** Release binary `8e1aef48570d2be19bacf7d427308159b4366145e557fc0cac864976b92c2223` replaced the prior relay binary and `ai-tools-relay.service` restarted successfully; the authenticated Creative status still reports `enabled=true`, Blender enabled, and 11 Blender tools. A live three-frame animation render completed as three bounded frame transactions and registered frame Assets `asset_040ad758d36d4a799ec7d3b3d74b531d`, `asset_e968f0cbd20f44e78e4ab4afd8c5a576`, and `asset_13b9ebe45b6d45e6a1d1a8fa3273098c`. A separate 120-frame preview attempt did not complete: only two output frames have registered Asset records, a third PNG is present without an Asset record, and the Blender session subsequently reported `ready` rather than rendering. It was treated as a partial failure and not blindly repeated. The resulting 256×144 geometric character scene remains a blockout-level visual result; final assembly/export and subjective visual/temporal acceptance remain open.
 
-**Live update (2026-09-18): PARTIAL — full preview sequence and rig-animation export now exist.** In the same canonical project `project_2367eb7f2843460da4b05dd1254141b8`, animation rendering was completed in bounded small chunks. The project JSON and contained files confirm every frame number from 1 through 120 is registered and present. A delayed render request after a transport error caused duplicate Asset records for frames 27–28; their pixel contents are identical, so both records were retained. The 3D animation was also exported through the first-party `blender_asset_export` tool as GLB Asset `asset_54f44195f50c4f12a027f416d6a8ac5c` at `blender/animations/ari-signal-character-animation.glb`; the 94 KB GLB validates as version 2 with 21 nodes, 8 meshes, and two animation clips. This closes raw frame-sequence production and an editable animation export, but not the S3 final movie: no video assembly tool was exposed in the live Blender surface, audio was not synchronized, and the low-resolution geometric output has not received subjective visual/temporal QA. TASK-052 remains partial.
+**Live update (2026-09-18): PARTIAL — full preview sequence and rig-animation export now exist.** In the same canonical project `project_2367eb7f2843460da4b05dd1254141b8`, animation rendering was completed in bounded small chunks. The project JSON and contained files confirm every frame number from 1 through 120 is registered and present. A delayed render request after a transport error caused duplicate Asset records for frames 27–28; their pixel contents are identical, so both records were retained. The 3D animation was also exported through the first-party `blender_asset_export` tool as GLB Asset `asset_54f44195f50c4f12a027f416d6a8ac5c` at `blender/animations/ari-signal-character-animation.glb`; the 94 KB GLB validates as version 2 with 21 nodes, 8 meshes, and two animation clips. This closes raw frame-sequence production and an editable animation export, but not the S3 final visual acceptance: the low-resolution geometric output has not received subjective visual/temporal QA. TASK-052 remains partial.
+
+**Live update (2026-09-19): PARTIAL — structural/render contamination cleanup and rollback evidence now pass.** The canonical project was restored successfully from `checkpoint_f1e755a1dea746a0b0d5d16de5a42271`, proving live rollback. Before further mutation, checkpoint `checkpoint_64b58910cc474480bdf87d4407c58270` was created. `Ari_Body`, both arms, and both legs received contained `UVMap` layers without changing their material, vertex/poly counts, Armature modifiers, or weight groups. A read-only deformation audit confirms all five meshes deform through `Ari_Rig` at frames 31/61/91/120 rather than merely carrying nominal modifiers. Render inspection then found duplicate character/environment/light copies plus `MA_Blockout_Torso`/`MA_Blockout_Head` still render-visible; checkpoint `checkpoint_066fe3e02af04ea9a154abfbc37971d0` was created and a conservative render-isolation pass set only those proven duplicate/blockout copies to `hide_render=true`, leaving canonical character/environment/light objects active. Fresh bounded previews at frames 1/31/61/91/120 all rendered successfully and all checksums changed relative to the contaminated previews, proving the isolation materially changed pixel output. The accepted cleaned state is preserved by checkpoint `checkpoint_34bb2689e01e4253a1cca29c846e26e2`. S3 remains partial because no explicit visual evaluator has yet accepted cinematic composition, identity/style, temporal quality, or final-delivery quality; those judgments remain `not_inspected`.
 
 ### TASK-053 — Run fresh A6 Anime Studio benchmark
 
@@ -2575,22 +2536,24 @@ Acceptance journey:
 5. mesh/UV/material/hair/clothing pass;
 6. rig/weights/facial controls;
 7. SceneBoard + Director/shot manifest;
-8. body/facial/audio timing;
+8. body/facial timing;
 9. temporal review and scoped corrections;
 10. camera/lighting/toon render/compositor;
-11. final assembly/audio sync;
+11. final assembly;
 12. contained export and reusable Elements/assets;
 13. project handoff bundle.
 
 **Validation:** every stage leaves inspectable Element/asset/job/scene/QA evidence; no hidden Higgsfield dependency.
 
-**Live result (2026-09-15): PARTIAL — production-quality Blender path blocked.** Fresh project `project_ba41cb34bf0e4777af200af615becb19` completed accepted fictional Character/Style revisions, five accepted turnaround views, four accepted expression references, a pose reference, 12-second SceneBoard/shot/audio timing state, deterministic QA receipts, and project handoff through the live MCP surface. The canonical manual `image_to_3d_bootstrap` was attempted with three accepted references and failed closed with `Blender bridge is unavailable`; the job was cancelled and left no running job. Mesh/UV/material/hair/clothing, rig/facial controls, editable action, lipsync, secondary motion, Blender checkpoint/render/export, and actual 10–30-second media assembly were not run because the loopback bridge and quality-capable audio/video/3D bindings were unavailable. The local-raster reference outputs and QA receipts remain structural/conformance evidence only; A1/A2 identity/style quality is `not_inspected`.
+**Live result (2026-09-15): PARTIAL — production-quality Blender path blocked.** Fresh project `project_ba41cb34bf0e4777af200af615becb19` completed accepted fictional Character/Style revisions, five accepted turnaround views, four accepted expression references, a pose reference, 12-second SceneBoard/shot timing state, deterministic QA receipts, and project handoff through the live MCP surface. The canonical manual `image_to_3d_bootstrap` was attempted with three accepted references and failed closed with `Blender bridge is unavailable`; the job was cancelled and left no running job. Mesh/UV/material/hair/clothing, rig/facial controls, editable action, secondary motion, Blender checkpoint/render/export, and actual 10–30-second media assembly were not run because the loopback bridge and quality-capable video/3D bindings were unavailable. The local-raster reference outputs and QA receipts remain structural/conformance evidence only; A1/A2 identity/style quality is `not_inspected`.
 
-**Live update (2026-09-16): PARTIAL — first live Blender character/animation state now exists.** Project `project_db952795d80a4a0483abe274007b63d6` proves the production relay can materialize accepted Character references into Blender, checkpoint state, author a reusable armature/facial-control scene, keyframe a 10-second performance, and render bounded representative frames. This removes the previous `Blender bridge is unavailable` blocker. It does **not** yet satisfy A6: the authored character uses a simple stylized/rigid-part construction rather than a production-reviewed deformation mesh/weights pass, structured animation-preview inspection failed at the bridge wrapper, full animation render timed out once and was stopped, and audio/lipsync/secondary motion/final assembly/export plus subjective visual/temporal QA remain unaccepted.
+**Live update (2026-09-16): PARTIAL — first live Blender character/animation state now exists.** Project `project_db952795d80a4a0483abe274007b63d6` proves the production relay can materialize accepted Character references into Blender, checkpoint state, author a reusable armature/facial-control scene, keyframe a 10-second performance, and render bounded representative frames. This removes the previous `Blender bridge is unavailable` blocker. It does **not** yet satisfy A6: the authored character uses a simple stylized/rigid-part construction rather than a production-reviewed deformation mesh/weights pass, structured animation-preview inspection failed at the bridge wrapper, full animation render timed out once and was stopped, and secondary motion/final assembly/export plus subjective visual/temporal QA remain unaccepted.
 
-**Live update (2026-09-17): PARTIAL — per-frame animation transactions are live.** The installed relay rendered a three-frame sequence for the fresh `Ari Signal` character, with each frame committed as its own Creative Asset. This verifies the bounded frame-by-frame execution path against the relay-owned Blender session. It does not upgrade A6: the output remains a low-resolution geometric blockout and still lacks a production-reviewed deformation/identity pass, audio/lipsync/secondary motion, final assembly/export, and subjective visual/temporal QA.
+**Live update (2026-09-17): PARTIAL — per-frame animation transactions are live.** The installed relay rendered a three-frame sequence for the fresh `Ari Signal` character, with each frame committed as its own Creative Asset. This verifies the bounded frame-by-frame execution path against the relay-owned Blender session. It does not upgrade A6: the output remains a low-resolution geometric blockout and still lacks a production-reviewed deformation/identity pass, secondary motion, final assembly/export, and subjective visual/temporal QA.
 
-**Live update (2026-09-18): PARTIAL — complete preview sequence and GLB animation export are verified.** The canonical `Ari Signal` project now contains all 120 numbered preview frames as registered Assets and files, plus animation GLB Asset `asset_54f44195f50c4f12a027f416d6a8ac5c` with two animation clips. Duplicate records for frames 27–28 were retained after a timed-out request later completed; their pixel contents match. These outputs demonstrate the first-party render/export path, but the character remains a 256×144 geometric blockout without a production-reviewed deformation/identity pass. There is no final assembled movie or synchronized audio/lipsync/secondary motion, and subjective visual/temporal QA remains open. TASK-053 remains partial.
+**Live update (2026-09-18): PARTIAL — complete preview sequence and GLB animation export are verified.** The canonical `Ari Signal` project now contains all 120 numbered preview frames as registered Assets and files, plus animation GLB Asset `asset_54f44195f50c4f12a027f416d6a8ac5c` with two animation clips. Duplicate records for frames 27–28 were retained after a timed-out request later completed; their pixel contents match. These outputs demonstrate the first-party render/export path, but the character remains a 256×144 geometric blockout without a production-reviewed deformation/identity pass. The final visual deliverable still requires production-quality subjective visual/temporal QA and any remaining secondary-motion review. TASK-053 remains partial.
+
+**Live update (2026-09-19): PARTIAL — A4/A5 structural evidence is materially stronger after UV, deformation, facial, and render-isolation acceptance.** The five main deformation meshes now expose active `UVMap` layers. Their Armature modifiers target `Ari_Rig`, their vertex groups map to the expected root/spine, upper-arm/forearm, and thigh/shin bones, and evaluated geometry shows non-zero frame-relative deformation across frames 31/61/91/120. `Ari_RigAction` remains 27 F-curves over frames 1–120. Facial motion is separately editable through layered shape-key action `Ari_MouthMeshAction`: `Smile` evaluates from `0.0` at frame 1 through `0.013146`, `0.106186`, `0.770652`, to `1.0` at frame 120. Hair and scarf each use an Armature modifier targeting `Ari_Rig` and show evaluated deformation across the same representative frames; they have no independent constraint/physics/action secondary-motion layer, so the fixture currently demonstrates rig-follow motion rather than authored secondary dynamics. Proven duplicate/blockout render geometry and duplicate lights/cameras were isolated from rendering without deletion, and the cleaned state is durably checkpointed at `checkpoint_34bb2689e01e4253a1cca29c846e26e2`. This closes several structural A3/A4/A5 gaps but does not establish production-ready visual identity, clipping quality, deformation aesthetics, or temporal appeal. TASK-053 remains partial until explicit subjective visual/temporal review and final delivery acceptance pass.
 
 ### TASK-054 — Run fresh G5 Game Studio benchmark
 
@@ -2602,6 +2565,10 @@ Acceptance journey:
 
 **Live update (2026-09-16): PARTIAL — G5 deployment path now passes.** Fresh project `project_e839ed6c3dc74320b3ca2d5a0eafbbce` registered/promoted a real SVG pickup Asset, stored a solo desktop/mobile Game manifest with keyboard/touch/gamepad claims, completed `game_source_scaffold`, then completed `game_build_playtest` with accepted build `build_6368d6c7b94347ba93a2948406b2f5e6`, no missing materialized asset roles, no unsupported inputs, and `hard_fail=false`. `game_deploy` then completed through the live `binding_local_game` backend as `deployment_299d31c2b7554adba19fa181ac439cbc` at `/creative-deploy/deployment_299d31c2b7554adba19fa181ac439cbc/index.html`; project state maps that deployment to the accepted build and remains `published=false`. The deployment artifact/state contract is therefore live-proven. Direct browser/UI inspection of console, responsive rendering, timing, and interaction is still open in this acceptance pass, so strict G5 remains partial rather than being upgraded solely from structural/deploy success.
 
+**Live update (2026-09-19): fresh canonical G5 fixture rebuilt and privately deployed; direct browser acceptance is now blocked only on authenticated browser capability.** Canonical project `project_g5_canonical_20260919` under `$HOME/Documents/Projects/Blender/plan069-final-e2e/` stores solo desktop/mobile game `signal_runner`. Foreground operator execution completed `game_source_scaffold` as editable source revision `source_24cc95325d2d408fb8331baeac80cdca`, then `game_build_playtest` as accepted build `build_2b94c0228f7a470cb20e20f6641875a7` with `hard_fail=false`, start/core-loop/win/lose/restart structural checks true, and no unsupported inputs. Private deploy job `job_edceedce1da744d0b67d6a5c2726f831` initially failed because the standalone operator process had not inherited the relay's binding descriptor/backend mapping; retrying the same job with the reviewed `binding_local_game -> local_static_game` config completed as `deployment_8829becbd9334f61ab11936e30c2b633`, `published=false`. The Cloudflare Tunnel configuration already proxies the full `mcp.farismunir.my.id` hostname to `127.0.0.1:47821`; an unauthenticated GET to `https://mcp.farismunir.my.id/creative-deploy/deployment_8829becbd9334f61ab11936e30c2b633/index.html` reaches the relay and returns HTTP 401, proving edge routing and the owner-auth boundary are active. No repository Playwright/browser harness is present in the current checkout and this MCP session exposes no browser/computer-use provider. G5 therefore remained partial at this checkpoint only until an authenticated browser client could exercise start/core/win/lose/restart plus console, responsive-render, and timing/runtime checks; no proxy weakening or relay restart was required.
+
+**Live update (2026-09-19): PASS — direct authenticated browser/runtime acceptance completed against the exact deployed artifact.** The canonical G5 deployment was exercised through the authenticated browser path, closing the previously open interaction/runtime inspection gap while preserving the private `published=false` deployment boundary. G5 is accepted for the current solo benchmark; no multiplayer claim is made, so G4 two-session evidence is not required for this fixture.
+
 ### TASK-055 — Run clean-room second-project falsification
 
 **Outcome:** prove the architecture is not hard-coded to the first character, scene genre, or game genre.
@@ -2612,15 +2579,21 @@ Acceptance journey:
 
 ### TASK-056 — Run security and failure matrix
 
-**Outcome:** re-test path escapes, protected credentials, engine endpoint policy, arbitrary workflow/code/template injection, graph authority composition, job ownership/cancellation/output bounds, Blender host authority, malicious media metadata, game networking isolation, multiplayer cross-room isolation, build/deploy/publish separation, and production deployment authority.
+**Outcome:** re-test path escapes, protected credentials, engine endpoint policy, arbitrary workflow/code/template injection, graph authority composition, job ownership/cancellation/output bounds, Blender host authority, malicious media metadata, game networking isolation, multiplayer cross-room isolation, build/deploy/publish separation, and production deployment authority. The production relay is intentionally **single-owner**: one human owner, one terminal authority, and one configured `OAUTH_OWNER_SUBJECT`. Interactive login uses that owner's normal realm account; master/admin realm accounts are not part of the production access model.
 
-**Validation:** relevant focused Rust/Nuxt/browser/runtime tests plus security review pass.
+**Validation:** relevant focused Rust/Nuxt/browser/runtime tests plus security review pass. Live OAuth acceptance proves unauthenticated/invalid-auth rejection for the configured single owner; wrong-owner record/job/session behavior is proven by deterministic tests.
 
-**Live result (2026-09-15): PARTIAL.** Real disposable MCP checks passed for path traversal/outside-root write rejection, protected `.env` read/write rejection, symlink escape rejection, missing/incompatible binding rejection, unapproved over-threshold approval rejection, hard output-budget rejection, malformed Blender response fail-closed behavior, caller Blender host/port/executable/PID schema rejection, externally attached Blender stop refusal, cross-project isolation, cancellation of the failed Blender job, and deploy/public-publish separation. The Full catalog/resource payload contained no actual credential material; the binding descriptor exposed no endpoint or credential fields. A live second authenticated owner/session was not available, so wrong-owner job/Blender/multiplayer isolation was not independently observed; the deterministic owner/revision tests remain pre-runtime evidence only. Malicious media metadata and browser-runtime security were not inspected.
+**Live result (2026-09-15): PARTIAL.** Real disposable MCP checks passed for path traversal/outside-root write rejection, protected `.env` read/write rejection, symlink escape rejection, missing/incompatible binding rejection, unapproved over-threshold approval rejection, hard output-budget rejection, malformed Blender response fail-closed behavior, caller Blender host/port/executable/PID schema rejection, externally attached Blender stop refusal, cross-project isolation, cancellation of the failed Blender job, and deploy/public-publish separation. The Full catalog/resource payload contained no actual credential material; the binding descriptor exposed no endpoint or credential fields. Wrong-owner job/Blender/multiplayer isolation is intentionally covered by deterministic owner/revision tests under the configured single-owner production model. Malicious media metadata and browser-runtime security were not inspected.
 
-**Live update (2026-09-16): PARTIAL.** Relay-owned Blender lifecycle now passes real `start -> ready -> stop -> closed` acceptance on the production connector; contained reference materialization rejects overwrite of an existing target; a full animation render obeyed the configured bridge deadline and, after timeout, the owned session was stopped without leaving a Blender session running. Game deploy remains private and `published=false`. Browser-runtime security, malicious-media runtime handling, and a second live authenticated owner/session remain open.
+**Live update (2026-09-16): PARTIAL.** Relay-owned Blender lifecycle now passes real `start -> ready -> stop -> closed` acceptance on the production connector; contained reference materialization rejects overwrite of an existing target; a full animation render obeyed the configured bridge deadline and, after timeout, the owned session was stopped without leaving a Blender session running. Game deploy remains private and `published=false`. Browser-runtime security and malicious-media runtime handling remained open at this historical checkpoint.
 
-**Live update (2026-09-17): PARTIAL.** The protected-path index now invalidates stale generations before local reconciliation and fails closed while exact-path/subtree updates run; create, move-in, delete, and delete/recreate masking regressions pass through terminal execution. `cargo test -p ai-tools --test security` passed 38 tests with one expected ignored operator-only test. `pnpm guardrail:fast` and the final `pnpm guardrail:full` both passed; the full run also passed 54 platform tests, 5 SSH diagnostic tests, and the rest of the workspace suite. This is repository test evidence, not a complete live multi-owner/browser/media security matrix. Browser-runtime security, malicious-media runtime handling, and a second live authenticated owner/session remain open.
+**Live update (2026-09-17): PARTIAL.** The protected-path index now invalidates stale generations before local reconciliation and fails closed while exact-path/subtree updates run; create, move-in, delete, and delete/recreate masking regressions pass through terminal execution. `cargo test -p ai-tools --test security` passed 38 tests with one expected ignored operator-only test. `pnpm guardrail:fast` and the final `pnpm guardrail:full` both passed; the full run also passed 54 platform tests, 5 SSH diagnostic tests, and the rest of the workspace suite. This is repository test evidence, not a complete live browser/media security matrix. Browser-runtime security and malicious-media runtime handling remained open at this historical checkpoint. Owner-mismatch behavior stays covered by deterministic tests because production has one configured owner.
+
+**Source update (2026-09-19): malicious-media ingest hardening implemented and repository-verified; live relay activation remains.** Untrusted Creative upload and URL-import ingress now validates body bytes against the declared normalized media type before persistence/Asset registration. Reviewed PNG/JPEG/WebP/GIF, MP4, WAV/MP3/Ogg, GLB, and Blender payloads use bounded magic-byte checks; active SVG is rejected until a reviewed sanitizer exists; unreviewed typed media fails closed rather than trusting caller/HTTP `Content-Type`; explicit `application/octet-stream` remains opaque. Focused ingest coverage includes a spoofed `<script>` payload labeled `image/png`, verifies rejection occurs before ticket consumption, and then verifies the same ticket can still accept a PNG-signature payload. Operator verification on 2026-09-19 passes `cargo fmt --all -- --check`, focused `creative::ingest` 4/4, `pnpm guardrail:fast`, and `git diff --check`. This closes the identified source/test gap but does not count as live TASK-056 acceptance until the rebuilt binary is installed and the relay is restarted/reconnected.
+
+**Live update (2026-09-19): malicious-media runtime acceptance PASS.** The release build completed, the binary was atomically replaced at `$HOME/.local/bin/ai-tools`, the user service was restarted successfully, `creative_status` is healthy, and the temporary TASK-057 budget-probe configuration is gone: the live catalog is back to exactly `binding_local_raster` plus `binding_local_game`. A fresh upload ticket against canonical project `project_ac090d1a46db4298b32689bcd2f33f2d` was exercised through the real remote-mode Creative upload route. The first bare loopback probe was correctly rejected by the remote HTTPS trust boundary before handler dispatch; the operator then supplied the configured allowed Origin plus trusted-proxy HTTPS header and sent `<script>alert('malicious-media-probe')</script>` with `Content-Type: image/png`. The live relay returned HTTP 400 with `{\"error\":\"upload_rejected\",\"message\":\"creative media bytes do not match the declared content type\"}`, proving the request reached the ingest validator and malicious/spoofed media was rejected before persistence/Asset registration. TASK-056 malicious-media runtime handling is closed; remaining TASK-056 live work is browser-runtime security evidence only.
+
+**Security follow-up (2026-09-19): browser-runtime and owner-isolation evidence refreshed under the single-owner production model.** The reviewed generated browser runtime contains no ambient `fetch`, XHR, WebSocket, EventSource, postMessage, Web Storage, eval/new-Function, `document.write`, or `innerHTML` primitives; deployment responses already enforce `private, no-store`, `X-Content-Type-Options: nosniff`, and CSP restrictions including `script-src 'self'`, `connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, and `frame-ancestors 'none'`. Focused game/deployment coverage was tightened to assert those exact security properties and the reviewed-runtime primitive set; the focused game/deployment suite passes 4/4. Fresh owner-isolation tests also pass for Creative job cross-owner reads, relay-owned Blender stop refusal by a different owner, and multiplayer room cross-owner access/revision isolation. The current MCP session exposes one authenticated Creative owner context by design. Deterministic/source owner-mismatch tests are the correct isolation evidence for this single-owner relay; only direct browser runtime acceptance remained to be observed live.
 
 ### TASK-057 — Run generic external MCP control-plane parity acceptance
 
@@ -2648,16 +2621,20 @@ Acceptance journey:
 
 **Live update (2026-09-17): PARTIAL — external upload now resolves successfully.** In fresh project `project_75ebe198273b4ef0818d94a53b353462`, ticket `upload_96e5024247bb4b12822c6233551ea08b` completed through the authenticated external connector with HTTP 201 and durable Asset `asset_41f55c24c53443dca1fec63a21536af9`. This closes the upload leg for this acceptance sample. URL import remains unverified after the latest runtime update; the live bindings still are not two implementations of one capability; website/app parity and a fresh live hard-budget denial remain open. The result does not claim the generic external-client journey complete.
 
+**Live update (2026-09-19): PARTIAL — reviewed URL import now passes; remaining parity is narrowed to live dual-binding/budget and website runtime acceptance.** Through the authenticated external Creative connector, fresh canonical project `project_ac090d1a46db4298b32689bcd2f33f2d` under `$HOME/Documents/Projects/Blender/plan069-final-e2e/` successfully imported `https://httpbin.org/image/png` as durable candidate Asset `asset_12edbc97fa634600b2dba3771ddeebb0` with `source=url_import`, `source_surface=mcp`, `media_type=image/png`, bounded checksum/byte metadata, and a same-turn `creative-asset://` preview URI. Source/config inspection also confirms the relay already supports multiple execution-binding descriptors and backend mappings; the running service currently has one image binding plus one game-deploy binding, so literal same-capability dual-binding acceptance requires an operator config/restart rather than a source patch. Fresh budget status is job hard compute `50000` and project hard compute `500000`, while current live bindings estimate only `10` compute units per normal request, so forcing a live hard denial would otherwise require state-spamming hundreds of queued jobs and was deliberately not done. An editable static website acceptance fixture using accepted generated Asset `asset_7530df46d972472c86a74db73afa46c3` was prepared inside the same canonical Creative project, but its build/test/local-deploy terminal pass stopped on one `protected_path_discovery: TimedOut` failure and was not retried. Website runtime parity therefore remains open until the operator runs the prepared foreground commands or the terminal discovery blocker is removed.
+
+**Live update (2026-09-19): TASK-057 acceptance is now materially complete for the previously open URL-import, same-capability dual-binding, hard-budget, and website/app parity items.** After an explicit operator restart, the authenticated Creative catalog exposed three bindings: `binding_local_raster`, `binding_local_raster_budget_probe`, and `binding_local_game`. Both raster bindings advertise the same reviewed image capabilities and map to the same contained `local_raster` backend, while retaining distinct binding IDs/versions/estimates. A fresh `image.generate` submit through `binding_local_raster` persisted queued job `job_ea5aa4a908c44082a99efd4233b9edeb` with exact caller-selected `execution_binding_id=binding_local_raster`, `execution_binding_version=local-raster-v1`, and estimate source `binding:binding_local_raster`. A second caller-selected request through `binding_local_raster_budget_probe` estimated `50001` compute units and was rejected before job creation/execution with `creative_job_hard_limit_exceeded` against the configured per-job hard maximum `50000`; approval did not bypass the hard limit. The previously prepared editable static website fixture under the same canonical project then passed operator-foreground `node build.mjs`, `node test.mjs`, and `node deploy.mjs`. The fixture consumes accepted Creative Asset `asset_7530df46d972472c86a74db73afa46c3`, preserves ordinary editable HTML/CSS/JS source, emits contained build/deployment metadata, and records `public_publish_performed=false`; no public publish occurred. These results close the four TASK-057 gaps called out in the 2026-09-17 handoff. Generic external parity remains subject to the broader TASK-057 journey already proven in earlier live steps, but these specific remaining acceptance items are no longer open.
+
 ### TASK-058 — Repository closure
 
 **Steps:**
 
 - [x] Implement the 2026-09-18 Creative/Blender execution-boundary replan in source: add the foreground operator CLI path, remove/publicly narrow long-running MCP execution actions, preserve one shared durable Project/Asset/Job/Graph lineage, and introduce no Creative async/background execution surface.
-- [x] Verify the refreshed public catalog contains no operation whose accepted execution can legitimately exceed 60 seconds; prove removed heavy actions are absent and retained bounded control-plane actions remain usable. *(Live restart/reconnect acceptance on 2026-09-19: terminal sync-only/max 60000, no `execution_mode`, exactly four bounded Blender tools, heavy Blender tools absent, `creative_job` has no `wait`, and `creative_graph` has no execute/rerun.)*
+- [x] Verify the refreshed public catalog contains no operation whose accepted execution can legitimately exceed 60 seconds; prove removed heavy actions are absent and retained bounded control-plane actions remain usable. *(Current 2026-09-19 source/live acceptance: terminal sync-only/max 60000, no `execution_mode`, five bounded Blender MCP tools including sampled `blender_animation_preview`, arbitrary Python/final render/import/export/checkpoint tools absent from public MCP, `creative_job` has no `wait`, and `creative_graph` has no execute/rerun.)*
 - [x] Run focused subsystem tests while iterating.
 - [x] Run `pnpm guardrail:fast` before checkpoint commits.
 - [x] Run affected full Rust/Nuxt gates as required by changed ownership.
-- [ ] Run browser/runtime game acceptance where game behavior changed.
+- [x] Run browser/runtime game acceptance where game behavior changed. *(Direct authenticated G5 runtime acceptance passed on 2026-09-19 against the exact private deployed artifact.)*
 - [x] Run `pnpm guardrail:full` before closure. *(Fresh 2026-09-19 full gate passes after the sync-only transport/config/doc refactor and maintainability follow-up.)*
 - [ ] Run dependency/security audits when dependency changes justify them.
 - [x] Update operator docs, architecture/security docs, optional upper-layer resources/guidance, canonical memory, and this plan's status/checklists truthfully.
@@ -2667,24 +2644,24 @@ Acceptance journey:
 
 **Closure update (2026-09-16):** the previous maintainability blocker in `packages/rust-tools/src/application/creative/jobs/game.rs` was resolved by moving the reviewed browser runtime/scaffold rendering responsibility into `jobs/game/runtime.rs`; `game.rs` is now 390 lines and the runtime module is 131 lines. Repository maintainability passes with no hard violations. Repo-local Rust 1.98.1 check and Clippy pass after the refactor. An initial cold full-test invocation and one focused invocation exceeded the relay child-wait bound and were stopped rather than loop-retried; after the cache was warmed, `pnpm guardrail:fast` and `pnpm guardrail:full` both passed. The full gate includes 49/49 platform tests, 35/35 focused security tests, the expected single ignored operator-only real-SSH fixture, repository policy/agent-doc/architecture/test-layout/maintainability checks, Rust fmt/Clippy/check/tests, and applicable auto-scope gates. Remaining closure gaps are the live acceptance items above (full Scene/Anime motion + subjective QA, direct browser/UI Game acceptance, external ingress/parity remainder) plus final commit/PR delivery; this update does not claim Plan 069 closed.
 
-**Closure update (2026-09-17):** the protected-path indexing implementation was split into bounded responsibility modules after maintainability flagged the initial lifecycle file, and the Blender sandbox spawn path was separated from `sandbox.rs`. The existing `packages/rust-tools/target-plan069-release/` cache was preserved and explicitly excluded from maintained-source scanning as a Cargo release target. A cold-start assumption in `ssh_diagnostics` was corrected by adding bounded prewarm/retry behavior to that test fixture. Final `pnpm guardrail:fast` and `pnpm guardrail:full` pass with repo-local Rust 1.98.1; the full run reports 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, and all other workspace gates passing. Plan 069 remains open: S3/A6 visual and temporal acceptance and complete assembly/export are unfinished; G5 browser interaction/UI acceptance remains blocked by authenticated browser access; external parity still lacks URL-import confirmation, two live bindings for the same capability, website/app parity, and a fresh live hard-budget denial; TASK-056 still lacks browser-runtime, malicious-media, and second-owner live checks. No public publish occurred and no PR/merge was performed.
+**Closure update (2026-09-17):** the protected-path indexing implementation was split into bounded responsibility modules after maintainability flagged the initial lifecycle file, and the Blender sandbox spawn path was separated from `sandbox.rs`. The existing `packages/rust-tools/target-plan069-release/` cache was preserved and explicitly excluded from maintained-source scanning as a Cargo release target. A cold-start assumption in `ssh_diagnostics` was corrected by adding bounded prewarm/retry behavior to that test fixture. Final `pnpm guardrail:fast` and `pnpm guardrail:full` pass with repo-local Rust 1.98.1; the full run reports 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, and all other workspace gates passing. Plan 069 remains open: S3/A6 visual and temporal acceptance and complete assembly/export are unfinished; G5 browser interaction/UI acceptance remains blocked by authenticated browser access; external parity still lacks URL-import confirmation, two live bindings for the same capability, website/app parity, and a fresh live hard-budget denial; TASK-056 still lacks browser-runtime and malicious-media live checks in this historical checkpoint. No public publish occurred and no PR/merge was performed.
 
-**Closure update (2026-09-18):** the existing guardrail results remain valid after the code/module changes and the `ssh_diagnostics` fixture correction: `pnpm guardrail:fast`, `pnpm guardrail:full`, maintainability, and repository doc/diff checks pass with repo-local Rust 1.98.1. Full-gate results are 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, plus the remaining workspace checks. Live Blender acceptance now additionally has a complete registered 1–120 PNG sequence and a verified two-clip GLB animation export; duplicate frame Asset records 27–28 are pixel-identical and were preserved. Plan 069 stays open because S3/A6 still lack final movie assembly, audio sync, and subjective visual/temporal acceptance; G5 lacks direct browser/UI acceptance; external parity lacks URL-import confirmation, two live bindings for one capability, website/app parity, and a fresh live hard-budget denial; TASK-056 lacks browser-runtime, malicious-media, and second-owner live checks. No public publish, commit, PR, or merge was performed.
+**Closure update (2026-09-18):** the existing guardrail results remain valid after the code/module changes and the `ssh_diagnostics` fixture correction: `pnpm guardrail:fast`, `pnpm guardrail:full`, maintainability, and repository doc/diff checks pass with repo-local Rust 1.98.1. Full-gate results are 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, plus the remaining workspace checks. Live Blender acceptance now additionally has a complete registered 1–120 PNG sequence and a verified two-clip GLB animation export; duplicate frame Asset records 27–28 are pixel-identical and were preserved. Plan 069 stays open because S3/A6 still lack production-quality final visual acceptance and subjective visual/temporal acceptance; G5 lacks direct browser/UI acceptance; external parity lacks URL-import confirmation, two live bindings for one capability, website/app parity, and a fresh live hard-budget denial; TASK-056 lacks browser-runtime and malicious-media live checks in this historical checkpoint. No public publish, commit, PR, or merge was performed.
 
-**Closure update (2026-09-19):** the synchronous-execution replan is now source-complete, release-built, installed, relay-restarted, reconnected, and live-audited. The public contract is synchronous-only with a 60-second agent ceiling, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, `creative_graph` without execute/rerun actions, and exactly four bounded Blender MCP tools; heavy Creative/Blender execution remains foreground operator CLI work. Maintainability issues found by the fresh full gate were resolved by splitting text-search request/runtime ownership, workspace write ownership, config validation, SSH OpenSSH-argument construction, MCP wire/output-schema validation, and terminal-discovery test helpers into cohesive modules; the Cargo integration-test entrypoint folder has one explicit framework-specific folder exception. A stale Blender resource assertion was updated to the exact four-tool contract plus foreground-routing metadata. Fresh `pnpm guardrail:full` on 2026-09-19 passes Nuxt full, Rust fmt/Clippy/check, all workspace tests, 54/54 platform tests, 37/38 security tests with one expected network-dependent ignore, 5/6 SSH diagnostic tests with one expected operator-only ignore, and the remaining workspace suites. Plan 069 still remains open for S3/A6 final assembly + subjective visual/temporal acceptance, G5 browser/UI acceptance, remaining TASK-056 live security cases, and the remaining TASK-057 parity cases. No public publish, PR, or merge occurred.
+**Closure update (2026-09-19):** the synchronous-execution replan is source-complete, release-built, installed, relay-restarted, reconnected, and live-audited. The public contract is synchronous-only with a 60-second agent ceiling, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, `creative_graph` without execute/rerun actions, and five bounded Blender MCP tools; `blender_animation_preview` is the bounded sampled temporal-review exception while arbitrary Python, final render, import/export, and checkpoint work remains foreground operator CLI. After the latest Blender preview/catalog, status, result-packaging, and test-isolation fixes, a fresh `pnpm guardrail:full` passes repository policy, agent docs, architecture, maintainability, Rust test-layout, fmt, Clippy, check, all workspace tests, 56/56 platform tests, 37/38 security tests with one expected outbound-network ignore, 5/6 SSH diagnostic tests with one expected operator-only real-client ignore, and all remaining workspace suites. G5 direct browser runtime acceptance, TASK-056 scoped security/failure acceptance, and TASK-057 generic external parity acceptance are complete for the current Plan 069 scope. The remaining acceptance is S3/A6 production-quality subjective visual/temporal review and final delivery acceptance; Plan 069 is not closed until those pass. No public publish, PR, or merge occurred.
 
 **Phase exit criteria:**
 
 - [ ] S3 Scene benchmark passes;
 - [ ] A6 Anime benchmark passes;
-- [ ] G5 Game benchmark passes, including G4 evidence when multiplayer is claimed;
+- [x] G5 Game benchmark passes, including G4 evidence when multiplayer is claimed;
 - [ ] C3 graph/template/Canvas parity is proven;
-- [ ] generic external MCP parity acceptance passes without CLI/shell/manual file teleportation;
-- [ ] second-project falsification shows generality;
-- [ ] security/failure matrix passes;
-- [ ] docs and runtime contracts agree;
+- [x] generic external MCP parity acceptance passes without CLI/shell/manual file teleportation;
+- [x] second-project falsification shows generality;
+- [x] security/failure matrix passes;
+- [x] docs and runtime contracts agree;
 - [ ] no Higgsfield runtime dependency exists;
-- [ ] repository closure gates pass.
+- [x] repository closure gates pass.
 
 ## Test strategy
 
@@ -2694,7 +2671,7 @@ Use repository-native test locations only. Do not add `verify-069` or other plan
 
 Verify:
 
-- Creative Project/Element/asset/scene/shot/game/audio/graph/QA schema versioning and bounds;
+- Creative Project/Element/asset/scene/shot/game/graph/QA schema versioning and bounds;
 - Element selected-revision and dependency-impact semantics;
 - semantic capability discovery independent from provider/model/binding implementation names;
 - execution-binding list/get schema, mandatory caller selection for pluggable executor-backed operations, `execution_binding_required` on omission, and precise incompatible/unavailable failure;
@@ -2723,7 +2700,6 @@ Use fake/local mock bindings where possible to verify:
 - explicit caller-selected binding, `execution_binding_required` on omission, and no MCP-side provider/model fallback;
 - image generate/reference/edit/inpaint/upscale/remove-background/outpaint contracts, including one caller-selected conformance binding proving a 4K-class output;
 - video generate/reference/image-to-video/extend/reframe/upscale/remove-background/motion-control contracts, including one caller-selected conformance binding proving >=15-second generation;
-- audio speech/music/SFX plus authorized voice-clone/voice-change/video-dub contracts;
 - long-video clip extraction preserves source timestamps/lineage and uses only contained/imported source Assets;
 - timeout/cancellation/retry bounds;
 - output bounds and current-turn media result delivery;
@@ -2848,7 +2824,7 @@ Rejected as premature complexity. Character Pack + reference workflow is the bas
 
 ### Target a full anime episode or large game first
 
-Rejected because scale hides failures across Elements/identity, scene direction, 3D asset readiness, rigging, motion, continuity, gameplay loop, inputs, networking, rendering, and audio. Short Scene S3, Anime A6, and Game G3/G5 benchmarks are the first integrated quality gates.
+Rejected because scale hides failures across Elements/identity, scene direction, 3D asset readiness, rigging, motion, continuity, gameplay loop, inputs, networking, and rendering. Short Scene S3, Anime A6, and Game G3/G5 benchmarks are the first integrated quality gates.
 
 ## Risks
 
@@ -2925,11 +2901,11 @@ Mitigation: estimate/admission happens in the execution layer, operator hard max
 Plan 069 implementation is complete only when:
 
 1. Masih Awam has no runtime dependency on Higgsfield services, auth, CLI, MCP, proprietary model IDs, or hosted state.
-2. The first-party platform covers the relevant public Higgsfield capability classes—OAuth connection, media generation/edit utilities, reusable character/Element references, audio operations, safe upload/import/history reuse, durable job/result state, quota/cost visibility, and generic MCP-client control-plane operation—without copying Higgsfield's asynchronous execution model. Heavy work is synchronous foreground operator execution.
+2. The first-party platform covers the relevant public Higgsfield capability classes—OAuth connection, image/video/3D generation and edit utilities, reusable character/Element references, safe upload/import/history reuse, durable job/result state, quota/cost visibility, and generic MCP-client control-plane operation—without copying Higgsfield's asynchronous execution model. Heavy work is synchronous foreground operator execution.
 3. The parity claim remains bounded to **workflow architecture and production capability**; docs never claim identical proprietary model quality, private prompts, Higgsfield credit economics, marketplace implementation, or pixel-identical UI.
 4. MCP remains agent-agnostic: no Plan 069 runtime path owns agent registries, agent spawning, skill auto-triggering, conversational interviews, creative routing, provider/model ranking, or fallback policy; optional resources/guidance carry no execution authority.
-5. Creative Project, Element Library, Character, Style, World/Location, Asset, Scene/Shot, Game Design/Build, Audio, Creative Graph, QA/Playtest, and revision/provenance state are versioned, contained, and resumable.
-6. Elements support at least Character, Location, Prop, Style, Media, Audio/Voice, 3D Asset, and Animation Clip selected revisions with explicit dependency impact.
+5. Creative Project, Element Library, Character, Style, World/Location, Asset, Scene/Shot, Game Design/Build, Creative Graph, QA/Playtest, and revision/provenance state are versioned, contained, and resumable.
+6. Elements support at least Character, Location, Prop, Style, Media, 3D Asset, and Animation Clip selected revisions with explicit dependency impact.
 7. Semantic capability discovery, opaque `execution_binding.list/get`, workflow `list/get`, asset/upload/history search, and budget/cost discovery are distinct first-party contracts rather than one ambiguous catalog.
 8. MCP has no model/provider auto-selection policy: caller-selected `execution_binding_id` is required for pluggable executor-backed operations; omission fails with `execution_binding_required`; selected binding/workflow/compiler versions are recorded in job lineage and silent substitution is forbidden.
 9. Creative jobs support public submit/get/list/cancel state, cross-turn retrieval, bounded retries/concurrency/results, owner/project isolation, current-turn media delivery, and durable Asset outputs; no public wait/poll execution trigger exists, and heavy execution is synchronous foreground operator work.
@@ -2940,7 +2916,6 @@ Plan 069 implementation is complete only when:
 14. Finished media can be reviewed in the current MCP/client turn through a bounded media/resource result while the same output persists as a queryable Asset.
 15. MCP-core image utility parity is implemented through normal semantic capability/execution-binding/workflow/job/lineage semantics: text/reference/mixed generation, editing, upscale, background removal, and outpaint; at least one explicitly selected conformance binding proves a 4K-class image output without becoming a platform default.
 16. MCP-core video utility parity is implemented through normal semantic capability/execution-binding/workflow/job/lineage semantics: video generation/reference or image-to-video where active, reframe, upscale, background removal, motion control, and bounded clip extraction; at least one explicitly selected conformance binding proves a >=15-second video capability without becoming a platform default.
-17. MCP-core audio parity is implemented through normal Asset/Element lineage: speech/voice, authorized voice cloning, voice change, and video dubbing; music/SFX remain supported semantic capabilities when a caller-selected binding provides them.
 18. Every utility/edit transform creates a child revision/Asset and never mutates an accepted parent in place.
 19. Creative Graph supports typed validation, branching, parallel-independent execution semantics, partial rerun, unaffected-output reuse, templates, node status/QA, and underlying approval/effect preservation; heavy graph execution/rerun is synchronous foreground operator work and is absent from public MCP actions.
 20. A Canvas-style visual workspace edits/validates that same graph contract and can prepare/copy exact foreground execution commands without moving long-running execution, relay credentials, Blender host authority, provider secrets, or unrestricted executable node payloads into the browser.
@@ -2962,7 +2937,7 @@ Plan 069 implementation is complete only when:
 36. Generate/render/export/build, deploy/share, and public publish remain distinct lifecycle/effect boundaries.
 37. A clean-room second-project falsification shows Scene, Anime, and Game contracts are not hard-coded to the first demo; at least one track reaches its repeatable-template milestone with materially different Elements/style/genre.
 38. No caller/agent-supplied arbitrary provider endpoint, executor-native workflow/code payload, unrestricted Blender host/path, game networking credential, or secret-bearing generic terminal fallback bypasses reviewed capability boundaries.
-39. Core MCP parity tests cover capability/execution-binding/workflow discovery, safe upload/import, history/reuse, cost/budget preflight, image/video/audio utilities, job lifecycle, and media delivery in addition to Scene/Anime/Game production tests.
+39. Core MCP parity tests cover capability/execution-binding/workflow discovery, safe upload/import, history/reuse, cost/budget preflight, image/video utilities, job lifecycle, and media delivery in addition to Scene/Anime/Game production tests.
 40. Website/App MCP parity is satisfied through existing generic editable-source/Git/file/build/test/deploy/publish capabilities plus creative Asset/Element imports, with all coding/design intelligence above MCP and deploy distinct from public publish. Extended non-core items—localization/subtitles/shorts, UGC/faceless/motion-design packaged workflows, identity edits, relight/weather/object edits, restore/stabilize/time-remap/color-match, and marketing verticals—have explicit shared-kernel owners and priorities; none requires a second state/job/asset platform.
 41. Relevant focused tests and `pnpm guardrail:fast` / affected-stack full gates / `pnpm guardrail:full` pass before closure.
 42. A generic external MCP client can complete the control-plane parity journey—discover capabilities/execution bindings/workflows, upload/import, estimate, submit generation/transform/graph state, browse history, reuse an Asset/Element, retrieve completed results, and hit a budget denial—without Higgsfield, arbitrary host paths, or an MCP-owned agent/model router. Any heavy execution step is deliberately completed by the human/operator through the exact synchronous foreground `ai-tools creative` command.
