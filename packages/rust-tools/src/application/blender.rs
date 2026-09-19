@@ -27,7 +27,22 @@ pub const DEFAULT_BLENDER_LAB_PORT: u16 = 9876;
 pub const MAX_BLENDER_REQUEST_BYTES: usize = 1024 * 1024;
 pub const MAX_BLENDER_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_BLENDER_PYTHON_BYTES: usize = 256 * 1024;
+pub const PUBLIC_MCP_BLENDER_TIMEOUT_MS: u64 = 50_000;
 pub const REVIEWED_BLENDER_PATH_NAMES: &[&str] = &["blender", "blender.exe"];
+
+pub fn bounded_mcp_config(config: &ServerConfig) -> ServerConfig {
+    let mut bounded = config.clone();
+    bounded.blender_bridge_timeout_ms = bounded
+        .blender_bridge_timeout_ms
+        .min(PUBLIC_MCP_BLENDER_TIMEOUT_MS);
+    bounded
+}
+
+pub fn unbounded_operator_config(config: &ServerConfig) -> ServerConfig {
+    let mut unbounded = config.clone();
+    unbounded.blender_bridge_timeout_ms = 0;
+    unbounded
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

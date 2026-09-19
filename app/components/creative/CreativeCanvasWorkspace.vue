@@ -3,12 +3,12 @@ import { useCreativeCanvasWorkspace } from './useCreativeCanvasWorkspace'
 
 const props = defineProps<{ workspaceId: string }>()
 const {
-  projectId, graphId, previousJobId, selectedNodeId, compareNodeIds, graphText,
+  projectId, graphId, selectedNodeId, compareNodeIds, graphText,
   selectedInputsText, selectedBindingId, projectState, lastResult, templates,
   templateId, templateDescription, instantiateGraphId, replacementsText,
   bindingOverridesText, pending, pan, parsedGraph, selectedNode,
-  comparedNodes, qaFindings, loadProject, loadGraph, validateGraph, executeGraph,
-  rerun, saveTemplate, listTemplates, instantiateTemplate, selectNode,
+  comparedNodes, qaFindings, loadProject, loadGraph, validateGraph,
+  saveTemplate, listTemplates, instantiateTemplate, selectNode,
   applyNodeEdits, toggleCompare, nodePosition, beginPan, movePan, endPan, zoom
 } = useCreativeCanvasWorkspace(() => props.workspaceId)
 </script>
@@ -135,44 +135,13 @@ const {
               Execution
             </div>
           </template>
-          <div class="space-y-2">
-            <UButton
-              label="Run graph"
-              icon="i-lucide-play"
-              block
-              :loading="pending"
-              @click="executeGraph"
-            />
-            <UInput
-              v-model="previousJobId"
-              placeholder="Previous job ID for rerun"
-            />
-            <div class="grid grid-cols-3 gap-1">
-              <UButton
-                label="Selected"
-                size="xs"
-                color="neutral"
-                variant="outline"
-                :disabled="!selectedNodeId || !previousJobId"
-                @click="rerun('rerun_selected')"
-              />
-              <UButton
-                label="Subgraph"
-                size="xs"
-                color="neutral"
-                variant="outline"
-                :disabled="!selectedNodeId || !previousJobId"
-                @click="rerun('rerun_subgraph')"
-              />
-              <UButton
-                label="Dirty"
-                size="xs"
-                color="neutral"
-                variant="outline"
-                :disabled="(!selectedNodeId && !compareNodeIds.length) || !previousJobId"
-                @click="rerun('rerun_all_dirty')"
-              />
-            </div>
+          <div class="space-y-2 text-sm text-muted">
+            <p>
+              Heavy graph execution and reruns run through the foreground operator CLI, not the MCP request path.
+            </p>
+            <p class="text-xs">
+              Validate, edit, save, and instantiate graphs here. Run the resulting graph with <code>ai-tools creative</code> from an operator shell.
+            </p>
           </div>
         </UCard>
 

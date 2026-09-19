@@ -188,7 +188,21 @@ fn creative_action_schemas_require_action_specific_inputs() {
                 "authority": "authoritative"
             }),
         ),
-        ("creative_graph", json!({"action": "execute"})),
+        ("creative_graph", json!({"action": "execute", "graph": {}})),
+        (
+            "creative_graph",
+            json!({
+                "action": "partial_rerun",
+                "project_id": "project_schema",
+                "graph_id": "graph_schema",
+                "previous_job_id": "job_schema",
+                "changed_node_ids": ["node_a"]
+            }),
+        ),
+        (
+            "creative_job",
+            json!({"action": "wait", "project_id": "project_schema", "job_id": "job_schema"}),
+        ),
         (
             "creative_job",
             json!({"action": "get", "project_id": "project_schema"}),

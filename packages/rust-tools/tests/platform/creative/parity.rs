@@ -67,25 +67,31 @@ fn plan069_mcp_contract_parity_matrix_is_present_and_fail_closed() {
         .iter()
         .find(|tool| tool.name == "creative_project")
         .expect("creative_project");
+    let graph_actions = graph
+        .input_schema
+        .pointer("/properties/action/enum")
+        .and_then(|v| v.as_array())
+        .expect("graph action enum");
+    for action in ["validate", "get", "template_save", "template_instantiate"] {
+        assert!(
+            graph_actions
+                .iter()
+                .any(|value| value.as_str() == Some(action)),
+            "missing bounded graph action {action}"
+        );
+    }
     for action in [
         "execute",
         "partial_rerun",
         "rerun_selected",
         "rerun_subgraph",
         "rerun_all_dirty",
-        "template_save",
-        "template_instantiate",
     ] {
-        let enum_values = graph
-            .input_schema
-            .pointer("/properties/action/enum")
-            .and_then(|v| v.as_array())
-            .expect("graph action enum");
         assert!(
-            enum_values
+            !graph_actions
                 .iter()
                 .any(|value| value.as_str() == Some(action)),
-            "missing graph action {action}"
+            "heavy graph action {action} must be operator CLI only"
         );
     }
     for action in [

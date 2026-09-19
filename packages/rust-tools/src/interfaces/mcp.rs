@@ -243,7 +243,6 @@ impl DiscoverResult {
                 "tools": { "listChanged": false },
                 "resources": {},
                 "extensions": {
-                    "io.modelcontextprotocol/tasks": {},
                     "io.masihawam/activity-bootstrap": { "version": "1" }
                 }
             }),

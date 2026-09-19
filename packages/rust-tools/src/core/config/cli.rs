@@ -83,7 +83,7 @@ pub struct Cli {
     #[arg(long)]
     pub execution_root: Option<String>,
 
-    /// Default terminal deadline in milliseconds; zero means no deadline.
+    /// Default terminal deadline in milliseconds. Agent terminal execution is always capped at 60000 ms.
     #[arg(
         long,
         env = "RELAY_DEFAULT_TERMINAL_TIMEOUT_MS",
@@ -91,8 +91,8 @@ pub struct Cli {
     )]
     pub default_terminal_timeout_ms: u64,
 
-    /// Maximum terminal deadline in milliseconds; zero means no operator maximum.
-    #[arg(long, env = "RELAY_MAX_TERMINAL_TIMEOUT_MS", default_value_t = 0)]
+    /// Maximum agent terminal deadline in milliseconds. Values above 60000 are clamped by the runtime hard ceiling.
+    #[arg(long, env = "RELAY_MAX_TERMINAL_TIMEOUT_MS", default_value_t = 60_000)]
     pub max_terminal_timeout_ms: u64,
 
     /// Completed-job retention in milliseconds.

@@ -1,8 +1,5 @@
-//! MCP HTTP request parsing, protocol dispatch, tools, and task lifecycle handlers.
-use super::{
-    err_response, json_error_response, AppState, AuthContext, AuthDecision, JsonErr,
-    TOOLS_LIST_TTL_MS,
-};
+//! MCP HTTP request parsing, protocol dispatch, and synchronous tool handlers.
+use super::{err_response, json_error_response, AppState, AuthContext, JsonErr, TOOLS_LIST_TTL_MS};
 use crate::core::error::McpError;
 use crate::infrastructure::observability::{audit, CorrelationId, RequestId};
 use crate::infrastructure::telemetry::extract_traceparent;
@@ -154,15 +151,6 @@ pub(super) async fn handle_mcp(
             crate::application::dispatcher::Dispatch::ResourcesRead => {
                 handle_resources_read(&request, &state)
             }
-            crate::application::dispatcher::Dispatch::TasksGet => {
-                handle_task_get(&request, state, &auth_ctx).await
-            }
-            crate::application::dispatcher::Dispatch::TasksUpdate => {
-                handle_task_update(&request, state, &auth_ctx).await
-            }
-            crate::application::dispatcher::Dispatch::TasksCancel => {
-                handle_task_cancel(&request, state, &auth_ctx).await
-            }
             crate::application::dispatcher::Dispatch::AgentSessionStart => {
                 super::tools::handle_agent_session_start(&request, state).await
             }
@@ -297,7 +285,6 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
                 "tools": { "listChanged": false },
                 "resources": {},
                 "extensions": {
-                    "io.modelcontextprotocol/tasks": {},
                     "io.masihawam/activity-bootstrap": { "version": "1" }
                 }
             }),
@@ -363,141 +350,3 @@ fn handle_resources_read(request: &mcp::Request, state: &Arc<AppState>) -> JsonE
 /// [`AxumResponse`] by `.into_response()` in [`handle_mcp`] — this alias
 /// just keeps their signatures short.
 type JsonErr2 = Result<Json<Value>, JsonErr>;
-fn task_id(request: &mcp::Request) -> Result<&str, JsonErr> {
-    request
-        .params
-        .as_ref()
-        .and_then(|value| value.get("taskId"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            err_response(
-                StatusCode::BAD_REQUEST,
-                Some(request.id.clone()),
-                &McpError::InvalidParams("taskId is required".into()),
-            )
-        })
-}
-async fn handle_task_get(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-    auth_ctx: &AuthContext,
-) -> JsonErr2 {
-    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
-        return Err(err_response(
-            StatusCode::UNAUTHORIZED,
-            Some(request.id.clone()),
-            &McpError::InvalidRequest("authentication is required".into()),
-        ));
-    }
-    let id = task_id(request)?;
-    let (owner, session) = task_context(request, auth_ctx);
-    let task = state
-        .jobs
-        .get_for(id, &owner, session.as_deref())
-        .await
-        .ok_or_else(|| {
-            err_response(
-                StatusCode::NOT_FOUND,
-                Some(request.id.clone()),
-                &McpError::InvalidParams("unknown task".into()),
-            )
-        })?;
-    Ok(Json(
-        serde_json::to_value(Response::new(
-            request.id.clone(),
-            task.task_json(state.config.completed_job_ttl_ms),
-        ))
-        .unwrap_or(json!({})),
-    ))
-}
-async fn handle_task_update(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-    auth_ctx: &AuthContext,
-) -> JsonErr2 {
-    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
-        return Err(err_response(
-            StatusCode::UNAUTHORIZED,
-            Some(request.id.clone()),
-            &McpError::InvalidRequest("authentication is required".into()),
-        ));
-    }
-    let id = task_id(request)?;
-    let (owner, session) = task_context(request, auth_ctx);
-    let has_input_responses = request
-        .params
-        .as_ref()
-        .and_then(|value| value.get("inputResponses"))
-        .and_then(Value::as_object)
-        .is_some();
-    if !has_input_responses {
-        return Err(err_response(
-            StatusCode::BAD_REQUEST,
-            Some(request.id.clone()),
-            &McpError::InvalidParams("inputResponses is required".into()),
-        ));
-    }
-    if state
-        .jobs
-        .get_for(id, &owner, session.as_deref())
-        .await
-        .is_none()
-    {
-        return Err(err_response(
-            StatusCode::NOT_FOUND,
-            Some(request.id.clone()),
-            &McpError::InvalidParams("unknown task".into()),
-        ));
-    }
-    Ok(Json(
-        serde_json::to_value(Response::new(
-            request.id.clone(),
-            json!({ "resultType": "complete" }),
-        ))
-        .unwrap_or(json!({})),
-    ))
-}
-async fn handle_task_cancel(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-    auth_ctx: &AuthContext,
-) -> JsonErr2 {
-    if !matches!(auth_ctx.decision, AuthDecision::Authorized) {
-        return Err(err_response(
-            StatusCode::UNAUTHORIZED,
-            Some(request.id.clone()),
-            &McpError::InvalidRequest("authentication is required".into()),
-        ));
-    }
-    let id = task_id(request)?;
-    let (owner, session) = task_context(request, auth_ctx);
-    state
-        .jobs
-        .cancel_for(id, &owner, session.as_deref())
-        .await
-        .map_err(|err| err_response(StatusCode::BAD_REQUEST, Some(request.id.clone()), &err))?;
-    Ok(Json(
-        serde_json::to_value(Response::new(
-            request.id.clone(),
-            json!({ "resultType": "complete" }),
-        ))
-        .unwrap_or(json!({})),
-    ))
-}
-
-fn task_context(request: &mcp::Request, auth_ctx: &AuthContext) -> (String, Option<String>) {
-    let owner = auth_ctx
-        .claims
-        .as_ref()
-        .and_then(|claims| claims.sub.as_deref())
-        .unwrap_or("local")
-        .to_owned();
-    let session = request
-        .params
-        .as_ref()
-        .and_then(|params| params.get("_meta"))
-        .and_then(|meta| meta.get("io.modelcontextprotocol/agentSession"))
-        .and_then(Value::as_str)
-        .map(|value| value.chars().take(128).collect());
-    (owner, session)
-}

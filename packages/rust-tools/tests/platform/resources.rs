@@ -100,9 +100,27 @@ fn blender_resource_is_exposed_only_with_the_creative_master_flag() {
     let content = read(&enabled, "workspace://ai-code/blender-capability").unwrap();
     let value: serde_json::Value = serde_json::from_str(&content.text).unwrap();
     assert_eq!(value["capability"], "blender");
-    assert_eq!(value["tools"].as_array().unwrap().len(), 11);
-    assert_eq!(value["routing"]["default"], "structured_first");
-    assert_eq!(value["routing"]["raw_python"], "explicit_high_risk_only");
+    let tools = value["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 4);
+    assert_eq!(
+        tools,
+        &[
+            "blender_session",
+            "blender_inspect",
+            "blender_python_api_docs",
+            "blender_screenshot",
+        ]
+        .map(serde_json::Value::from)
+    );
+    assert_eq!(value["routing"]["default"], "bounded_mcp_control_plane");
+    assert_eq!(
+        value["routing"]["heavy_execution"],
+        "foreground_operator_cli"
+    );
+    assert_eq!(
+        value["routing"]["raw_python"],
+        "foreground_operator_cli_only"
+    );
     assert_eq!(value["authority"]["caller_executable_override"], false);
     assert_eq!(
         value["authority"]["production_artifacts_project_contained"],

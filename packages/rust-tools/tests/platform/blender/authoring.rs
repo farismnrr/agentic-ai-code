@@ -186,14 +186,12 @@ async fn privileged_python_is_bounded_unsandboxed_and_activity_safe() {
     assert!(!action.contains("private_api_key"));
     assert!(!action.contains("activity-secret"));
 
-    let tool = blender_tool_catalog()
-        .into_iter()
-        .find(|tool| tool.name == "blender_execute_python")
-        .expect("Blender Python tool");
-    let annotations = tool.annotations.expect("tool annotations");
-    assert!(!annotations.read_only_hint);
-    assert!(!annotations.idempotent_hint);
-    assert!(annotations.open_world_hint);
+    assert!(
+        blender_tool_catalog()
+            .into_iter()
+            .all(|tool| tool.name != "blender_execute_python"),
+        "privileged Blender Python must not be public MCP"
+    );
 
     let oversized = "x".repeat(blender::MAX_BLENDER_PYTHON_BYTES + 1);
     let error = blender::dispatch_tool(

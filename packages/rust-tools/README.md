@@ -5,6 +5,7 @@ This package contains the native implementation of the unified `ai-tools` binary
 - `terminal`
 - `curl`
 - `searxng`
+- `creative`
 - `relay`
 
 The separate tool CLIs were migrated from JavaScript during historical Plan 027 and unified into a single binary during Plan 033. There is no supported JavaScript CLI fallback path.
@@ -24,9 +25,22 @@ The unified native executor (`ai-tools`) exposes the following subcommands:
 - `terminal` — process execution with explicit guard/allow controls and timeout/process-group handling.
 - `curl` — HTTP client with SSRF protections unless the explicit guard bypass is requested.
 - `searxng` — SearXNG query client.
+- `creative` — foreground operator execution for reviewed Creative/Blender operations that are not safe to expose as <=60-second MCP calls; requests are supplied as JSON files and reuse the same project/job/graph/owner configuration and durable state.
 - `relay` — MCP `2026-07-28` server exposing controlled coding capabilities through the relay security boundary.
 
 The `relay` subcommand executes other subcommands relative to its own executable rather than trusting arbitrary `$PATH`. The installation directory is therefore part of the trust boundary and must not be writable by the unprivileged runtime user.
+
+### Creative foreground operator execution
+
+Long-running Creative/Blender work is not a public MCP execution surface. Prepare a reviewed JSON request file containing the same project/job/graph arguments, then run it in the foreground with the same reviewed `RELAY_*` environment used by the relay:
+
+```bash
+RELAY_ENABLE_CREATIVE=true ai-tools creative \
+  --tool blender-render \
+  --input /path/to/request.json
+```
+
+Supported operator-only tool selectors include `creative-job`, `creative-graph`, `blender-execute-python`, `blender-animation-preview`, `blender-render`, `blender-asset-import`, `blender-asset-export`, `blender-checkpoint-create`, and `blender-checkpoint-restore`. `creative-job` accepts only the internal `wait` execution action; `creative-graph` accepts only execute/rerun actions. The command intentionally has no background/detach mode and no 60-second wrapper; normal stdout/stderr remains operator-visible. It reuses the same workspace, owner, binding, budget, and durable Creative state rather than creating a second execution model.
 
 ### MCP coding tool surface
 

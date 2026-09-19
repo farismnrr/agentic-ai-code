@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::time::timeout;
+use tokio::time::{timeout_at, Instant};
 
 const READY_PROBE_CODE: &str = r#"import bpy
 result = {
@@ -59,24 +59,38 @@ pub async fn execute(
         ));
     }
 
-    let deadline = Duration::from_millis(config.blender_bridge_timeout_ms);
+    let deadline = (config.blender_bridge_timeout_ms > 0)
+        .then(|| Instant::now() + Duration::from_millis(config.blender_bridge_timeout_ms));
     let address = bridge_address(config);
-    let mut stream = timeout(deadline, TcpStream::connect(address))
-        .await
-        .map_err(|_| McpError::InvalidRequest("Blender bridge connection timed out".into()))?
-        .map_err(|_| McpError::InvalidRequest("Blender bridge is unavailable".into()))?;
+    let mut stream = if let Some(deadline) = deadline {
+        timeout_at(deadline, TcpStream::connect(address))
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge connection timed out".into()))?
+            .map_err(|_| McpError::InvalidRequest("Blender bridge is unavailable".into()))?
+    } else {
+        TcpStream::connect(address)
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge is unavailable".into()))?
+    };
 
-    timeout(deadline, async {
+    let write = async {
         stream.write_all(&request).await?;
         stream.write_all(&[0]).await?;
         stream.flush().await
-    })
-    .await
-    .map_err(|_| McpError::InvalidRequest("Blender bridge write timed out".into()))?
-    .map_err(|_| McpError::InvalidRequest("Blender bridge write failed".into()))?;
+    };
+    if let Some(deadline) = deadline {
+        timeout_at(deadline, write)
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge write timed out".into()))?
+            .map_err(|_| McpError::InvalidRequest("Blender bridge write failed".into()))?;
+    } else {
+        write
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge write failed".into()))?;
+    }
 
     let mut response = Vec::new();
-    let frame = timeout(deadline, async {
+    let read_frame = async {
         let mut chunk = [0u8; 16 * 1024];
         loop {
             let read = stream.read(&mut chunk).await?;
@@ -95,10 +109,17 @@ pub async fn execute(
             }
             response.extend_from_slice(&chunk[..read]);
         }
-    })
-    .await
-    .map_err(|_| McpError::InvalidRequest("Blender bridge response timed out".into()))?
-    .map_err(|_| McpError::InvalidRequest("Blender bridge response read failed".into()))?
+    };
+    let frame = if let Some(deadline) = deadline {
+        timeout_at(deadline, read_frame)
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge response timed out".into()))?
+            .map_err(|_| McpError::InvalidRequest("Blender bridge response read failed".into()))?
+    } else {
+        read_frame
+            .await
+            .map_err(|_| McpError::InvalidRequest("Blender bridge response read failed".into()))?
+    }
     .ok_or_else(|| {
         McpError::InvalidRequest("Blender bridge response is missing or exceeds bounds".into())
     })?;

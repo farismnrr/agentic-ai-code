@@ -164,12 +164,7 @@ pub(super) async fn access_policy(
             .headers()
             .get(HDR_MCP_METHOD)
             .and_then(|value| value.to_str().ok())
-            .map(|method| {
-                matches!(
-                    method,
-                    "tools/call" | "tasks/get" | "tasks/update" | "tasks/cancel"
-                )
-            })
+            .map(|method| method == "tools/call")
             .unwrap_or(false);
 
         if !auth_header.starts_with("Bearer ") {

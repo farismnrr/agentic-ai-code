@@ -375,15 +375,21 @@ blender/
   tmp/
 ```
 
-The frozen 11-tool v1 contract accepts contained Asset IDs, reviewed enums, and
-bounded leaf file names rather than arbitrary URLs or host paths. The single
-runtime catalog composes those tools only for the Full profile when both
-Creative and Blender are enabled. When disabled, `creative_status` reports the
-required Blender activation step and the optional Blender capability resource is
-absent. When enabled, that read-only resource documents the canonical project
-layout and structured-first routing: prefer session/inspect/docs/import/render/
-checkpoint tools, and use `blender_execute_python` only for explicit high-risk
-host-user authoring that the structured tools cannot express.
+The public Blender MCP contract exposes only bounded agent operations:
+`blender_session`, `blender_inspect`, `blender_python_api_docs`, and
+`blender_screenshot`. Heavy or workload-dependent Blender execution is
+foreground operator work through `ai-tools creative --tool ... --input ...`,
+including arbitrary Blender Python, animation preview/render, asset import/export,
+and checkpoint create/restore. This keeps accepted MCP calls inside the public
+60-second execution boundary instead of hiding long work behind polling or
+background tasks.
+
+The single runtime catalog composes the bounded Blender tools only for the Full
+profile when Creative is enabled. When disabled, `creative_status` reports the
+required activation step and the optional Blender capability resource is absent.
+All Creative/Blender production artifacts remain constrained to the canonical
+project layout; moving execution to the operator CLI does not broaden path,
+owner, binding, or provenance authority.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 

@@ -151,9 +151,11 @@ async fn generic_terminal_shell_cannot_reach_masked_ssh_clients() {
 #[tokio::test]
 #[ignore = "requires an operator-provided disposable key-only SSH fixture"]
 async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
-    use ai_tools::application::execution::{start_tool_task, JobManager, JobState};
+    use ai_tools::application::execution::{dispatch_tool_call, JobManager};
+    use ai_tools::application::hooks::HookManager;
+    use ai_tools::application::lsp::LspSessionManager;
     use ai_tools::interfaces::mcp::find_tool;
-    use std::time::Duration;
+    use std::sync::Arc;
 
     let ssh_root = std::env::var("RELAY_SSH_SMOKE_ROOT")
         .expect("set RELAY_SSH_SMOKE_ROOT to a disposable fixture credential directory");
@@ -173,32 +175,20 @@ async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
         .expect("valid disposable SSH fixture config");
 
     let manager = JobManager::new(config.clone());
+    let lsp = Arc::new(LspSessionManager::new(config.clone()).expect("LSP manager"));
+    let hooks = Arc::new(HookManager::load(Arc::new(config.clone())).expect("hook manager"));
     let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
-    let task = start_tool_task(
+    let result = dispatch_tool_call(
         &tool,
         &json!({"alias": alias, "command": "docker", "args": ["ps"], "timeout_ms": 30_000}),
         &config,
         &manager,
-        None,
-        "ssh-smoke".into(),
+        &lsp,
+        &hooks,
+        "local",
     )
     .await
-    .expect("SSH smoke job admitted");
+    .expect("SSH smoke sync dispatch");
 
-    for _ in 0..100 {
-        let snapshot = manager.get(&task).await.expect("retained SSH smoke job");
-        match snapshot.state {
-            JobState::Completed => {
-                assert_eq!(snapshot.exit_code, Some(0));
-                return;
-            }
-            JobState::Failed | JobState::TimedOut | JobState::Cancelled => {
-                panic!("SSH smoke failed: {}", snapshot.stderr);
-            }
-            JobState::Queued | JobState::Running => {
-                tokio::time::sleep(Duration::from_millis(100)).await
-            }
-        }
-    }
-    panic!("SSH smoke did not complete within the fixture wait bound");
+    assert!(!result.is_error, "{:?}", result.content);
 }

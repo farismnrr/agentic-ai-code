@@ -139,7 +139,7 @@ fn status(config: &ServerConfig) -> Value {
         "execution_bindings_registered": registry::execution_bindings(config).map(|items| items.len()).unwrap_or(0),
         "blender": {
             "enabled": config.enable_creative,
-            "tool_count": if config.enable_creative { 11 } else { 0 },
+            "tool_count": if config.enable_creative { 4 } else { 0 },
             "activation": if config.enable_creative {
                 Value::Null
             } else {

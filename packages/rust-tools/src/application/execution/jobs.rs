@@ -185,31 +185,6 @@ impl JobManager {
         Ok(id)
     }
 
-    pub(super) async fn start_with_idempotency_key_for(
-        self: &Arc<Self>,
-        key: String,
-        fingerprint: String,
-        job: JobKind,
-        owner: &str,
-        session: Option<&str>,
-    ) -> Result<(String, bool), McpError> {
-        let mut identities = self.idempotency.lock().await;
-        if let Some((job_id, original_fingerprint)) = identities.get(&key).cloned() {
-            if original_fingerprint != fingerprint {
-                return Err(McpError::InvalidRequest(
-                    "idempotency key was reused for different execution arguments".into(),
-                ));
-            }
-            if self.jobs.lock().await.contains_key(&job_id) {
-                return Ok((job_id, true));
-            }
-            identities.remove(&key);
-        }
-        let job_id = self.start_for(job, owner, session).await?;
-        identities.insert(key, (job_id.clone(), fingerprint));
-        Ok((job_id, false))
-    }
-
     pub async fn existing_idempotency_key(
         &self,
         key: &str,

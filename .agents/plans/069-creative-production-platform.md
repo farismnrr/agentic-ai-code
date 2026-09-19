@@ -1,9 +1,63 @@
 # Plan 069 — Creative Production Platform for Games, Scenes, and Anime
 
-Status: **IMPLEMENTATION IN PROGRESS — TASK-023 through TASK-051 source implementation is present and the current relay is live on the single `RELAY_ENABLE_CREATIVE` master flag with Creative + the frozen 11 Blender tools enabled. Live acceptance has advanced: private Game deployment through `binding_local_game` now succeeds with `published=false`; the authenticated external connector exposes the Creative catalogs/jobs/assets/graph surface; external upload has resolved to a durable Asset; and a fresh Blender-backed 10-second Scene/Anime fixture now has a registered 120-frame preview sequence and an exported rig-animation GLB, alongside contained references, an 11-bone armature, facial control, keyframed motion, SceneBoard/Scene state, continuity evidence, and checkpoints. TASK-052/TASK-053 remain partial because final movie assembly/audio sync and subjective visual/temporal acceptance are not complete; the animation remains a geometric blockout. TASK-054 has deploy evidence but still lacks direct browser/UI acceptance; TASK-057 remains partial because URL ingress, same-capability dual-binding, website/app parity, and fresh hard-budget denial are open. TASK-058 closure remains open. No public publish occurred.**
+Status: **IMPLEMENTATION IN PROGRESS — the 2026-09-18/19 synchronous-execution replan is implemented, built, installed, restarted, reconnected, and live-accepted. The refreshed public relay now exposes synchronous-only agent execution with a 60-second maximum, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, `creative_graph` without execute/rerun actions, and exactly four bounded Blender MCP tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`); heavy Creative/Blender execution is operator-foreground through `ai-tools creative` with no Masih Awam-imposed timeout. `pnpm guardrail:fast` and the release build pass for the current refactor, but a fresh `pnpm guardrail:full` is still required after these latest changes. TASK-052/TASK-053 remain partial because final movie assembly/audio sync and subjective visual/temporal acceptance are incomplete; TASK-054 still lacks direct browser/UI runtime acceptance; TASK-056 still lacks browser-runtime, malicious-media runtime, and second-owner live checks; TASK-057 still lacks URL-import confirmation, two live bindings for the same capability, website/app parity, and a fresh hard-budget denial. TASK-058 therefore remains open. No public publish, PR, or merge occurred.**
 
 Created: 2026-09-11
-Updated: 2026-09-18
+Updated: 2026-09-19
+
+## Execution-boundary replan — 2026-09-18
+
+Plan 069 must align with the repository-wide synchronous execution invariant introduced on 2026-09-18: agent-executed process-like work has a hard 60-second ceiling, and work reasonably expected to exceed that ceiling is handed to the human operator as an exact foreground command instead of being started, polled, detached, or hidden behind a long-lived MCP call.
+
+Creative production therefore separates **MCP control-plane/state operations** from **operator-run heavy execution**. MCP remains the first-party contract for project/Element/Asset/job/graph state, validation, discovery, admission, lineage, bounded inspection, and cancellation. It must not expose an operation whose accepted request can legitimately spend minutes or hours executing Blender, media generation, builds, playtests, deployment pipelines, or a multi-node Creative Graph.
+
+### Creative/Blender runtime classification
+
+| Current surface | Plan 069 disposition | Reason |
+| --- | --- | --- |
+| `creative_status`, `creative_catalog` | **KEEP as MCP tools** | Pure bounded discovery/status. |
+| `creative_project`, `creative_element` | **KEEP as MCP tools** | Bounded durable state CRUD/validation; no long-running executor ownership. |
+| `creative_asset` metadata/history/upload-ticket actions | **KEEP as MCP tools** | Bounded registry/control-plane work. URL ingress and upload finalization must themselves remain under the public request ceiling; they must fail boundedly rather than turn into background work. |
+| `creative_job compile_spec|cost_estimate|budget_status|submit|get|list|cancel` | **KEEP as MCP tools** | Admission and durable job-state control are short-lived. `submit` may create queued durable state but must not synchronously perform the heavy job. |
+| `creative_job wait` as an execution trigger | **REMOVE from the public MCP execution contract** | Current implementation can execute a queued job synchronously and accepts job timeouts up to 24 hours. That directly conflicts with the 60-second agent-execution invariant. Agents inspect state with `get/list`; heavy execution is operator-run. |
+| `creative_graph validate|get, template_*` | **KEEP as MCP tools** | Graph validation/state/template operations are bounded control-plane work. |
+| `creative_graph execute|partial_rerun|rerun_selected|rerun_subgraph|rerun_all_dirty` when they execute nodes inline | **REMOVE from the public MCP execution contract** | A graph may contain multiple media/Blender/build nodes and legitimately exceed 60 seconds even when each node is valid. Heavy graph execution belongs to the operator CLI; MCP may store/validate the graph and later inspect resulting job state. |
+| `blender_session status` | **KEEP as MCP tool** | Bounded loopback probe. |
+| `blender_session start|stop` | **KEEP only with the public MCP lifecycle budget capped below 60s** | Public Blender MCP dispatch uses a 50-second internal bridge/lifecycle budget so cleanup/reap retains headroom before the repository-wide 60-second hard ceiling. Session startup shares one total deadline across the initial probe and readiness loop; it does not reset the full timeout per probe. No async/session polling workaround. |
+| `blender_inspect`, `blender_python_api_docs` | **KEEP as MCP tools** | Bounded read-only inspection/knowledge. Public Blender MCP bridge transactions use one total deadline (connect + write + response share the same budget) rather than one full timeout per phase. |
+| `blender_screenshot` | **KEEP only as a tightly bounded preview tool** | Public screenshot execution shares the same 50-second total bridge budget and must fail boundedly; it must not silently become a final render path. |
+| `blender_execute_python` | **MOVE to operator CLI; do not expose as a public MCP tool** | Caller-authored Blender Python has unbounded algorithm/runtime behavior and host-user authority; no input-size limit can prove <=60-second completion. |
+| `blender_animation_preview` for arbitrary/bulk frame ranges | **MOVE heavy execution to operator CLI** | Current schema permits up to 240 sampled frames and scene-dependent rendering; accepted requests can exceed 60 seconds. MCP may retain only a small bounded inspection/sample variant if its worst-case runtime is proven <=60s. |
+| `blender_render` | **MOVE to operator CLI; do not expose final/animation rendering as a public MCP tool** | Even one complex still can exceed 60 seconds; animation rendering is inherently long-running. Per-frame MCP transactions avoid one bridge timeout but do not solve the agent execution boundary. |
+| `blender_asset_import`, `blender_asset_export` | **MOVE heavy forms to operator CLI; retain MCP only if a strict <=60s bounded subset is proven** | Large meshes/textures/conversion/export work is scene/asset-dependent and can exceed the ceiling. |
+| `blender_checkpoint_create|restore` | **MOVE heavy forms to operator CLI; retain MCP only if a strict <=60s bound is proven** | Saving/loading a large .blend file is workload-dependent. Destructive restore must never be hidden behind retry/background behavior. |
+| Creative media generation/transforms, 3D generation, Game build/playtest/deploy, Scene/Anime assembly, and other binding-backed execution | **OPERATOR CLI when execution can exceed 60s** | These are production execution paths, not bounded agent RPCs. MCP owns manifests/admission/result registration and state inspection, while the human-visible foreground process owns long runtime with no Masih Awam-imposed timeout. |
+
+### Required operator CLI path
+
+Plan 069 must add a first-party foreground CLI surface before removing the long-running MCP actions. The exact command grammar is an implementation task, but it must support the same stable project/job/graph identities and security boundaries rather than inventing a second production model. At minimum it needs operator-visible commands for:
+
+- executing one admitted Creative job by `project_id` + `job_id`;
+- executing a validated graph/rerun from durable graph/job identity;
+- Blender Python from an explicit contained script/file or otherwise reviewed operator input;
+- Blender render/animation preview;
+- Blender import/export/checkpoint operations that are not provably <=60 seconds;
+- Game build/playtest/deploy and final Scene/Anime assembly when those routes can exceed the agent ceiling.
+
+Operator commands are foreground commands run directly by the human/operator. **Masih Awam must not impose the agent 60-second ceiling or any platform timeout wrapper on these foreground CLI executions.** Do not wrap them in `timeout`, do not background/detach them, and do not suppress normal progress output. They may run for minutes or hours until the underlying engine/workload completes, fails, or the human interrupts it. The CLI must write results back through the same Creative Project/Asset/Job/Graph lineage so the MCP agent can inspect the completed state on the next turn.
+
+### Public-contract acceptance rule
+
+Before Plan 069 closure:
+
+1. no agent-invoked MCP/tool operation may own execution that can legitimately exceed 60 seconds;
+2. the relay must not advertise or expose an asynchronous MCP Tasks execution surface (`io.modelcontextprotocol/tasks`, `tasks/get`, `tasks/update`, `tasks/cancel`) as a workaround for long-running tool calls;
+3. long execution must have an exact synchronous foreground operator CLI equivalent with **no Masih Awam-imposed execution timeout**, and must preserve durable job/asset/graph lineage;
+4. MCP control-plane operations must fail boundedly if their own work cannot finish inside the public ceiling;
+5. tests must prove that removed heavy actions and async task execution surfaces are absent, bounded retained actions still work, and operator-run completion is visible through retained MCP state/read tools;
+6. a live catalog/protocol change requires rebuild/install + relay restart and then MCP client reconnect/refresh before acceptance, because connected clients may cache capabilities and `tools/list`.
+
+This replan supersedes the earlier assumption that durable Creative jobs should be executed by a long-running `creative_job wait` RPC or that long Blender work should remain exposed merely because it is internally chunked.
 
 ## Current implementation state — 2026-09-15
 
@@ -34,7 +88,7 @@ Acceptance rule: any Scene/Anime/Game/Blender fixture that materializes producti
 - **Contracts / project state:** aligned. One active Creative schema (`v1`) covers shared project, Element revision, Asset/provenance, Scene/Shot, Game, Audio, QA, graph/job identity, and production target state. Cross-track fixtures prove Scene + Anime-oriented asset/voice/3D state + Game can coexist without provider/model/agent IDs as source of truth. Template input/output and detailed playtest-evidence contracts remain explicitly deferred to their owning later tasks.
 - **Contained state / Assets:** aligned for the implemented subset. Project/graph/job JSON is contained and atomically written; manual file registration is selected-workspace-contained, protected-path-aware, SHA-256 lineaged, queryable, and cannot claim generated/upload/URL provenance. Conversation/device upload and URL import remain TASK-006 and are not emulated through arbitrary host paths.
 - **Capability / workflow discovery:** aligned. Semantic capabilities and workflow descriptors are independent from an intentionally empty execution-binding inventory; pluggable nodes require a caller-selected binding and fail boundedly when omitted/unavailable. Positive multi-binding conformance remains TASK-011 rather than introducing a fake default provider/model.
-- **Graph / jobs:** aligned only to the minimal foundation claimed by this slice. Typed DAG validation, deterministic topological ordering, control/reference execution, persisted terminal graph-job records, cycle rejection, and endpoint/credential/executable-payload rejection are implemented. Parallel independent-node scheduling, dirty-descendant invalidation, accepted-ancestor reuse, templates, async submit/wait lifecycle, cost/budget enforcement, and binding-backed execution remain open exactly where the plan says they are open.
+- **Graph / jobs (historical 2026-09-15 slice):** the initial implementation used inline execution and an async-style submit/wait concept. That execution model is superseded by the 2026-09-18/19 boundary: public MCP owns durable graph/job validation/admission/state, while heavy graph/job execution is synchronous foreground operator work with no public wait/poll path.
 - **Authority boundary:** aligned. No agent registry, prompt authoring, provider/model ranking, fallback router, arbitrary executor endpoint, raw executable graph payload, Blender host authority, or implicit deploy/publish path was added.
 - **Operational boundary:** aligned. Creative remains disabled by default; `creative_status` is the activation hint; no relay restart/reload or deployment was performed during this slice.
 
@@ -42,12 +96,12 @@ Acceptance rule: any Scene/Anime/Game/Blender fixture that materializes producti
 
 Build a first-party **Masih Awam Creative Production Platform** whose MCP layer provides model-agnostic and agent-agnostic creative capabilities, reusable Elements/assets, durable jobs, scene/anime/game production state, Blender/DCC execution, browser-game build/playtest primitives, QA evidence, and export/deploy boundaries **without depending on Higgsfield accounts, Higgsfield MCP, Higgsfield CLI, Higgsfield APIs, or Higgsfield-hosted generation**.
 
-The strict interoperability benchmark is the **public Higgsfield MCP surface** documented in 2026: OAuth connection, media generation/edit utilities, reusable characters/Elements, audio operations, upload/import/history reuse, asynchronous jobs/results, quota/cost visibility, and MCP-compatible-client operation. Higgsfield's broader Canvas/Popcorn/Cinema/Games surfaces remain product references for the Scene/Anime/Game tracks, but Masih Awam deliberately does **not** copy Higgsfield's agent/model routing responsibility.
+The strict interoperability benchmark is the **public Higgsfield MCP surface** documented in 2026: OAuth connection, media generation/edit utilities, reusable characters/Elements, audio operations, upload/import/history reuse, durable jobs/results, quota/cost visibility, and MCP-compatible-client operation. Higgsfield's execution model may be asynchronous; Masih Awam deliberately does **not** copy that part. Masih Awam uses bounded synchronous MCP control-plane calls plus synchronous foreground operator execution for heavy work.
 
 The architectural boundary is non-negotiable:
 
 - **upper layer owns intelligence** — user interaction, interviews, prompt authoring, agent choice, model/provider choice, fallback policy, creative direction, and workflow/graph planning;
-- **Masih Awam MCP owns capabilities and execution state** — validated semantic operations, project/Element/asset state, job lifecycle, graph execution of an already-specified DAG, Blender/DCC primitives, build/playtest/runtime primitives, deterministic/structural QA evidence, and export/deploy policy boundaries;
+- **Masih Awam MCP owns capabilities and execution state** — validated semantic operations, project/Element/asset state, bounded job/graph admission and inspection, bounded Blender/DCC inspection/control primitives, deterministic/structural QA evidence, and export/deploy policy boundaries; heavy graph/media/Blender/build/playtest/deploy execution that can exceed 60 seconds is synchronous foreground operator work;
 - **execution bindings are operator/runtime configuration, not product logic** — MCP may expose compatible opaque execution-binding descriptors so the upper layer can choose one, but MCP never decides that tool/capability A must use provider/model B;
 - **no agent management** — Plan 069 does not add agent registries, agent spawning, role routing, skill auto-triggering, conversational interview logic, or model-selection policy to the MCP server.
 
@@ -67,7 +121,7 @@ Plan 069 is successful when Masih Awam can eventually demonstrate all of the fol
 2. One **Creative Project** owns reusable Elements and manifests for characters, locations, props, style, audio, scenes/shots, game assets, generated outputs, QA, and provenance.
 3. The stable MCP contract is **capability-centric, not agent/model-centric**: no public tool name, project schema, workflow identity, or guidance/resource requires a particular provider/model or agent implementation.
 4. Runtime capability, workflow, and compatible execution-binding discovery can report validated semantic schemas before the upper layer commits to execution; discovery never ranks or auto-selects a model/provider/agent.
-5. Generation/build jobs have first-party create/get/wait/cancel/result semantics, deterministic project ownership, bounded outputs, and retained source metadata.
+5. Generation/build jobs have first-party submit/get/list/cancel/result state semantics with deterministic project ownership, bounded outputs, and retained source metadata; execution that can exceed 60 seconds is never a public wait/poll path and instead runs synchronously in the operator foreground.
 6. A Canvas-style production graph can compose typed inputs, Elements, generation/edit nodes, storyboard/scene stages, Blender/DCC stages, game-build stages, QA, and delivery with partial reruns and reusable templates.
 7. Reusable **Elements** provide stable project-scoped identities for Character, Location, Prop, Style, Audio/Voice, 3D Asset, Animation Clip, and approved media revisions; Elements can be reused across scenes, anime shots, and games.
 8. Character identity supports both explicitly authorized real-person identity-capable execution bindings and **fictional-character creation** comparable to Soul Cast: structured appearance, outfit, archetype/personality/backstory, canonical views, later rig/voice bindings, and cross-scene consistency.
@@ -277,9 +331,9 @@ The official MCP surface is narrower than the whole Higgsfield website but broad
 | Credit balance check | `creative budget/status` | selected bindings report configured compute/quota state where measurable; paid bindings report remaining quota/cost data only when their API safely provides it |
 | Cost before generation | `creative estimate` | estimate model/workflow cost or local compute class before submit; estimates carry units/source/confidence |
 | “Ask before spending” user workflow | enforceable budget/approval policy | support per-job/batch/session/project thresholds and approval gates; unlike Higgsfield's prompt-only cap, hard limits should fail closed where platform policy can enforce them |
-| Generation is asynchronous and the connected agent polls/results arrive later | first-party creative job lifecycle | `submit/get/wait/list/cancel`, retained status, bounded failures, stable result assets, cross-turn retrieval; MCP does not require one long blocking agent turn |
+| Higgsfield generation is asynchronous and its connected agent may poll later | durable Creative job state + synchronous foreground operator execution | Public MCP exposes `submit/get/list/cancel` state only. Masih Awam intentionally does **not** copy the async/polling execution model; heavy work is one foreground operator command and results persist as stable Assets for later MCP retrieval. |
 | Separate workflow catalog from model catalog | `workflow.list/get` separate from `execution_binding.list/get` | higher-level chains have schemas/cost inputs/results and create normal jobs; execution bindings are discoverable but never selected by MCP policy |
-| Full multi-step production through an MCP-connected agent | caller-specified Creative Graph + Scene/Game manifests + reusable Assets/Elements | the **upper layer/agent** owns skills, planning, interviews, creative decisions, and graph construction; MCP validates/executes the submitted graph/manifests without managing agents or auto-triggering skills |
+| Full multi-step production through an MCP-connected agent | caller-specified Creative Graph + Scene/Game manifests + reusable Assets/Elements | the **upper layer/agent** owns skills, planning, interviews, creative decisions, and graph construction; MCP validates/stores/admit state, while heavy graph execution is a synchronous foreground operator command without MCP-managed agents or auto-triggered skills |
 | Website/App building through supported connected agents | existing generic workspace/Git/file/terminal/build/test/deploy capabilities + creative Assets/Elements | upper layer owns design/coding/model/agent choice; MCP supplies editable source/project operations and keeps build/deploy/public-publish authority distinct; no dedicated website agent is introduced |
 | Browser game creation through MCP/Supercomputer surface | Game Manifest + generic workspace/build/playtest/deploy primitives + optional multiplayer binding | upper layer owns game design/code generation; MCP owns durable source/assets/build/playtest/deploy state and verification boundaries |
 | Agent auto-selects a model when user does not specify one | **upper-layer responsibility; intentionally not implemented in MCP** | Higgsfield's own docs attribute this behavior to the connected agent. Masih Awam MCP exposes compatible execution bindings only; the caller supplies one for pluggable executor-backed operations. Omission returns `execution_binding_required`, never server-side selection/defaulting |
@@ -327,7 +381,7 @@ Higgsfield's strongest pattern is not any individual model. It separates **decis
 - Higgsfield-style skills/references, trigger rules, interviews, prompt strategy, model/provider choice, and creative decision trees are **upper-layer concerns** and may inspire clients/agents, but are not MCP server runtime;
 - MCP exposes typed capability/workflow/execution-binding schemas instead of assuming static parameters forever;
 - media has typed roles and validation before submission;
-- generation/edit/build work creates durable jobs that can be waited on/retrieved later;
+- generation/edit/build work creates durable state/results that can be retrieved later, while execution itself is synchronous foreground operator work when it can exceed 60 seconds;
 - completed outputs become reusable Assets/Elements for later calls;
 - deterministic/structural evidence is returned by MCP while subjective creative review stays with the upper layer unless it explicitly supplies an evaluator binding;
 - revisions are lineage-preserving child operations rather than in-place mutation;
@@ -360,7 +414,7 @@ Plan 069 adopts those execution/state patterns while leaving intelligence/orches
 | Thumbnail concept gate | concept is selected before costly render | upper-layer approval policy using MCP cost estimate + assets/manifests | MCP enforces explicit submit/budget/approval boundaries but does not choose the concept |
 | Style preset resolve before explainer blocks | one style key stabilizes multi-shot output | Style Element/Pack stored by MCP; upper layer selects/locks it | all shots can reference one selected revision without MCP deciding style |
 | Generate narration before dependent video blocks | freezes one modality before dependent generation | caller-specified dependency DAG executed by MCP | ordering comes from the submitted graph/manifest, not MCP creative planning |
-| Explicit job `create/get/wait/list` | generation is durable work, not one RPC | first-party creative job lifecycle | long image/video/3D/audio jobs survive normal agent turns and can be referenced later |
+| Durable job `submit/get/list/cancel` state | generation state survives beyond one RPC without exposing async execution | first-party Creative job state + foreground operator CLI | long image/video/3D/audio execution runs synchronously for the operator; completed state/results remain referenceable across later agent turns |
 | Cost query before workflow | prevents uncontrolled spending | estimate for the caller-selected execution binding | MCP reports/enforces measurable limits; upper layer decides whether to proceed/ask user |
 | Multi-variant generation with controlled dimensions | explores deliberately | variant sets with explicit changed fields | vary pose/camera/expression while identity/style remain locked |
 | Post-render visual gate | output is evidence, not success by assumption | MCP returns previews/deterministic evidence; upper layer or caller-selected evaluator performs subjective review | identity, hands, costume, silhouette, line continuity, text, props, framing remain outside MCP judgment unless explicitly evaluated |
@@ -844,13 +898,19 @@ An execution-binding descriptor exposes only bounded non-secret facts needed by 
 
 ## Creative job lifecycle
 
-Mirror the useful Higgsfield job semantics as a first-party contract:
+Creative jobs use durable state, but **not an asynchronous agent execution API**. Public MCP owns bounded admission and state transitions only; any execution path that can legitimately exceed 60 seconds is run synchronously by the human/operator through the foreground `ai-tools creative` CLI.
 
 ```text
-submit -> queued/running -> completed|failed|cancelled
-                 |                |
-                 +---- get/wait --+
+MCP: submit -> queued
+              |
+              +-> operator runs exact foreground command
+                    |
+                    +-> completed|failed|cancelled
+
+MCP: get/list/cancel inspect or mutate durable state only
 ```
+
+There is no public `wait` execution trigger, no Creative async task surface, no background/detached escape hatch, and no agent-side polling loop whose purpose is to bypass the 60-second execution ceiling.
 
 A job record should return bounded metadata:
 
@@ -868,7 +928,7 @@ A job record should return bounded metadata:
 
 Raw prompts, giant workflow JSON, credentials, and unrestricted engine logs must not become routine client-visible metadata.
 
-Jobs should be resumable/retrievable across normal agent turns. Exact persistence ownership is frozen only after auditing the current relay/product task model so we do not build a competing job manager unnecessarily.
+Jobs remain durably retrievable across normal agent turns, but durability does not imply asynchronous agent execution. A foreground operator process may run for as long as the workload legitimately requires, then write completion/failure/output lineage back into the same durable Project/Job/Asset/Graph state for later MCP inspection.
 
 ## Asset and revision lineage
 
@@ -950,7 +1010,7 @@ The first version may use ordered frame/contact-sheet previews before video-nati
 
 ## Creative Graph / Canvas execution model
 
-The graph manifest above is not merely storage. It is a caller-authored orchestration contract that gives Masih Awam the useful execution behavior of Higgsfield Canvas while preserving stronger boundaries. MCP executes/validates graphs; it does not invent the graph or choose its agents/models.
+The graph manifest above is not merely storage. It is a caller-authored orchestration contract that gives Masih Awam the useful execution behavior of Higgsfield Canvas while preserving stronger boundaries. MCP validates/stores graph state and bounded metadata; graph execution/rerun that can legitimately exceed 60 seconds is synchronous foreground operator work through `ai-tools creative`. MCP does not invent the graph or choose its agents/models.
 
 ### Required graph behavior
 
@@ -958,9 +1018,9 @@ The graph manifest above is not merely storage. It is a caller-authored orchestr
 - validate node schemas/asset-role compatibility before execution;
 - connect one node output to one or many downstream consumers;
 - branch variants from one accepted Element/output;
-- run independent branches in parallel;
+- allow the foreground operator executor to run declared-independent branches concurrently inside one synchronous operator process;
 - compare/select results and promote one revision;
-- rerun only the changed node and its invalidated descendants;
+- allow the foreground operator executor to rerun only the changed node and its invalidated descendants;
 - retain accepted unaffected ancestors;
 - save a graph as a reusable typed template;
 - instantiate templates with new Characters/Locations/Props/Style without rewriting graph structure;
@@ -994,7 +1054,7 @@ After the graph contract is proven headlessly, add a Nuxt visual workspace compa
 - node run/status/error indicators;
 - reusable template save/load;
 - inspect selected revision/provenance/QA from a node;
-- execute selected node/subgraph/all valid dirty nodes;
+- prepare/validate selected-node/subgraph/all-dirty execution requests and show the exact foreground operator command instead of launching long-running work from the browser/MCP request path;
 - no hidden direct browser access to privileged relay credentials or Blender host authority.
 
 Real-time multi-user collaboration is later; graph/project identities must still be designed so it can be added without replacing the workflow model.
@@ -1037,7 +1097,7 @@ Mirror the useful Cinema Studio **state contract**, not its internal intelligenc
 - Element bindings;
 - hero-frame choices and required references.
 
-MCP validates required fields/references, stores/version-controls the Director specification, estimates/enforces execution bounds, and executes requested shots through caller-selected bindings or Blender. It does **not** invent creative settings, choose an agent/model/provider, or infer an autonomy policy.
+MCP validates required fields/references, stores/version-controls the Director specification, and estimates/enforces admission bounds. Shot generation/rendering that can exceed 60 seconds is executed synchronously by the human/operator through the foreground Creative CLI using the caller-selected binding or Blender path; MCP later inspects the durable results. MCP does **not** invent creative settings, choose an agent/model/provider, or infer an autonomy policy.
 
 ### Hero Frame First
 
@@ -1181,27 +1241,32 @@ $HOME/Documents/Projects/Blender/<creative-project>/blender/
 
 The Blender executable itself is not project data and may live in an operator-approved system/home installation path. By contrast, `.blend` files, Blender-authored assets, materialized references, previews, final renders, animation outputs, exports, checkpoints, controlled bake/cache outputs, and session temp files owned by the workflow must resolve beneath `<project>/blender/`. System/GPU/application caches that Blender or the OS owns independently are outside this production-artifact contract and are never treated as project deliverables.
 
-### Retained Blender v1 tool surface
+### Blender v1 public MCP surface and foreground operator surface
 
-Keep the compact **11-tool** design while making session ownership explicit:
+Keep the public MCP surface compact and provably bounded:
 
-1. `blender_session` — `status|start|stop`
+1. `blender_session` — `status|start|stop`, retained only with a hard <=60-second lifecycle bound
 2. `blender_inspect`
 3. `blender_python_api_docs`
-4. `blender_execute_python`
-5. `blender_screenshot`
-6. `blender_animation_preview`
-7. `blender_render`
-8. `blender_asset_import`
-9. `blender_asset_export`
-10. `blender_checkpoint_create`
-11. `blender_checkpoint_restore`
+4. `blender_screenshot` — bounded preview/inspection only, never a final-render path
 
-`blender_session status` probes bridge compatibility without mutation. `start` launches only the reviewed operator-resolved Blender executable when no compatible bridge is already available, then waits for the bounded loopback bridge readiness contract. `stop` is owner-safe and refuses to terminate a Blender process the relay did not launch.
+The following remain first-party Blender capabilities but are **not public MCP tools** because valid workloads can exceed 60 seconds:
 
-`blender_inspect` should retain scoped structured reads for at least `scene|object|mesh|uv|rig|animation|material|nodes|physics|asset|render|character`.
+- `blender_execute_python`
+- `blender_animation_preview`
+- `blender_render`
+- `blender_asset_import`
+- `blender_asset_export`
+- `blender_checkpoint_create`
+- `blender_checkpoint_restore`
 
-Ordinary authoring remains `bpy`-driven through the privileged execution tool rather than multiplying the catalog into hundreds of atomic wrappers.
+Those heavy operations run synchronously through the foreground `ai-tools creative` operator CLI. There is no async Blender task API, background/detached mode, or MCP polling workaround.
+
+`blender_session status` probes bridge compatibility without mutation. `start` launches only the reviewed operator-resolved Blender executable when no compatible bridge is already available and must fail boundedly if readiness cannot be established within the public ceiling. `stop` is owner-safe and refuses to terminate a Blender process the relay did not launch.
+
+`blender_inspect` retains scoped structured reads for at least `scene|object|mesh|uv|rig|animation|material|nodes|physics|asset|render|character`.
+
+Ordinary heavy authoring remains `bpy`-driven through the privileged operator execution path rather than multiplying the public MCP catalog into hundreds of atomic wrappers.
 
 ### Blender workflow guidance
 
@@ -1270,7 +1335,7 @@ The **upper layer** may choose:
 - manual/scripted Blender blockout;
 - hybrid workflows where generated mesh is only a starting point.
 
-MCP validates/executes the requested route but does not rank these options or choose one from quality heuristics.
+MCP validates the requested route and durable state but does not rank these options or choose one from quality heuristics. Any bootstrap execution that can exceed 60 seconds runs synchronously through the foreground operator CLI.
 
 A generated mesh is never automatically “production ready.” It must pass Blender inspection and cleanup/retopo/UV/material/rig readiness gates.
 
@@ -1466,7 +1531,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 | PHASE-03 | Capability/workflow registry + creative jobs + graph contract + minimal headless executor | PHASE-01 | C2 contracts work without hard-coded model names; representative graphs validate and execute through the minimal reviewed DAG runtime |
 | PHASE-04 | Initial reference-aware media generation | PHASE-02, PHASE-03 | Character/Style still consistency foundation passes A1/A2-quality gate |
 | PHASE-05 | Identity/style/world/Element production system | PHASE-04 | reusable Characters/Locations/Props/Style Elements drive revisions and reuse |
-| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | retained 11-tool contract passes, including cold start/readiness/owner-safe stop and project-contained Blender production outputs |
+| PHASE-06 | Blender first-class production engine | PHASE-02, PHASE-03 | four bounded public Blender MCP tools pass; heavy Blender capabilities run only through synchronous foreground operator commands; cold start/readiness/owner-safe stop and project-contained outputs remain proven |
 | PHASE-07 | Anime 3D character asset pipeline | PHASE-05, PHASE-06 | A3/A4 pass |
 | PHASE-08 | Animation, facial, audio, and temporal QA | PHASE-07 | A5 passes |
 | PHASE-09 | Scene Studio: SceneBoard + Director + shot orchestration | PHASE-04, PHASE-05; PHASE-06 optional per backend | S1/S2 pass and one S3 candidate can be produced/revised |
@@ -1552,7 +1617,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Freeze Asset/history `list/get/search` filters, source/source-surface tags, stable IDs, typed media metadata, acceptance state, and lineage. *(Upload-specific records and current-turn preview/resource delivery remain open under TASK-006 and the result-delivery item below.)*
 - [ ] Freeze secure external-client upload request/complete and bounded URL-import contracts.
 - [ ] Freeze cost/compute estimate plus global/project/session/job budget-status and hard-limit semantics.
-- [ ] Freeze job submit/get/wait/list/cancel behavior and cross-turn retrieval.
+- [x] Freeze public job submit/get/list/cancel behavior and cross-turn retrieval; no public wait/poll execution trigger exists, and heavy execution is synchronous foreground operator work.
 - [ ] Freeze result and failure bounds, including current-turn preview/resource delivery plus durable Asset registration.
 - [x] Freeze external-cost/network vs local-compute effect classifications.
 - [x] Decide whether existing relay Tasks can own creative long-running jobs directly or need a thin creative domain layer over the same manager. *(Decision: current process-only/in-memory manager is not forced to own creative state; use a thin project-persisted creative domain layer and preserve a replaceable lifecycle boundary.)*
@@ -1665,7 +1730,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 
 ### TASK-009 — Add first-party creative job lifecycle, cost preflight, and enforceable budgets
 
-**Outcome:** generation/transform work can be estimated, approved when required, started, polled, waited, listed, cancelled, and retrieved with stable project ownership and bounded spend/compute authority.
+**Outcome:** generation/transform work can be estimated and admitted through bounded MCP state, then executed synchronously in the operator foreground when it can exceed 60 seconds; jobs remain listable/cancellable/retrievable with stable project ownership and bounded spend/compute authority. No async/poll/wait execution API is part of the public contract.
 
 **Steps:**
 
@@ -1674,7 +1739,7 @@ Do not put a generic arbitrary media-engine process spawner into Nitro and do no
 - [x] Add `budget.status` for measurable operator limits: compute approval/hard limits, project admitted/remaining compute, output bounds, concurrency, retries, and explicit `binding_owned_not_reported` provider quota when the binding cannot expose credits safely.
 - [x] Enforce operator-configured thresholds before expensive jobs/batches; approval can cross only the soft approval threshold and cannot override job/project/output hard maxima.
 - [x] Add domain metadata only where creative workflows need it: owner, graph/capability/workflow target, binding, estimate, retry/timeout, output lineage, and bounded failure code.
-- [x] Support submit/get/wait/list/cancel and cross-turn retrieval through durable project job records.
+- [x] Support public submit/get/list/cancel and cross-turn retrieval through durable project job records; heavy execution/wait semantics are operator-CLI-only and synchronous foreground work.
 - [x] Bound concurrent jobs/batches and retry count.
 - [x] Persist/recover only if current platform task semantics cannot satisfy cross-turn retrieval safely. *(Current task state is in-memory/process-oriented, so creative graph/job records are project-persisted.)*
 - [x] Keep failure diagnostics bounded/classified; provider/cost diagnostics remain absent until bindings/cost estimation exist.
@@ -1859,7 +1924,7 @@ Steps:
 
 ### TASK-017 — Freeze Blender bridge/config/session/tool schemas
 
-**Outcome:** operator config, reviewed executable resolution, explicit `blender_session status|start|stop`, loopback framing, 11 tool schemas, dedicated project `blender/` layout, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
+**Outcome:** operator config, reviewed executable resolution, explicit bounded `blender_session status|start|stop`, loopback framing, four public bounded Blender MCP tool schemas plus foreground operator-only heavy operations, dedicated project `blender/` layout, inspection scopes, docs source, bounds, effects, and approval policy are frozen against current Blender Lab integration.
 
 **Steps:**
 
@@ -1869,7 +1934,7 @@ Steps:
 - [x] Freeze the canonical `<project>/blender/` production layout and require every Blender-owned save/render/export/checkpoint/bake/temp destination to resolve beneath it.
 - [x] Keep executable authority separate from project-data authority: Blender may execute from an approved system/home installation path while production artifacts stay under the authorized Projects workspace.
 
-**Validation:** UPDATED on 2026-09-16. Blender exposure is now governed solely by the master `RELAY_ENABLE_CREATIVE` flag; there is no separate Blender enable flag. Operator-only executable, bridge port, and bridge timeout configuration remain bounded and caller schemas expose no host/port/executable/PID injection. The frozen Blender Lab protocol identity is loopback TCP on operator-selected port (default 9876) with NUL-delimited bounded JSON framing. Session state distinguishes external attachment from relay-owned launch so stop semantics can never assume ownership of a user-started Blender. The canonical `blender/{scenes,assets,references,renders/preview,renders/final,animations,exports,checkpoints,tmp}` subtree and artifact-scope helpers reject absolute paths, traversal, and noncanonical destinations. Exactly 11 bounded Blender v1 tool schemas are defined without creating a numbered successor catalog, with read/start-stop/raw-Python/render/checkpoint effect classes kept distinct. Blender contract acceptance: 4/4 PASS; CLI config acceptance PASS; Clippy `-D warnings`, fast Rust/auto guardrails, and `git diff --check` PASS.
+**Validation:** UPDATED on 2026-09-16. Blender exposure is now governed solely by the master `RELAY_ENABLE_CREATIVE` flag; there is no separate Blender enable flag. Operator-only executable, bridge port, and bridge timeout configuration remain bounded and caller schemas expose no host/port/executable/PID injection. The frozen Blender Lab protocol identity is loopback TCP on operator-selected port (default 9876) with NUL-delimited bounded JSON framing. Session state distinguishes external attachment from relay-owned launch so stop semantics can never assume ownership of a user-started Blender. The canonical `blender/{scenes,assets,references,renders/preview,renders/final,animations,exports,checkpoints,tmp}` subtree and artifact-scope helpers reject absolute paths, traversal, and noncanonical destinations. The public Blender MCP catalog is now intentionally limited to four bounded tools (`blender_session`, `blender_inspect`, `blender_python_api_docs`, `blender_screenshot`). Heavy Python, animation preview, render, import/export, and checkpoint operations remain first-party capabilities but are operator-CLI-only and are not exposed through `tools/list`. Blender contract acceptance: 4/4 PASS; CLI config acceptance PASS; Clippy `-D warnings`, fast Rust/auto guardrails, and `git diff --check` PASS.
 
 **Commit boundary:** `feat(blender): freeze relay capability contract`.
 
@@ -1935,15 +2000,15 @@ Steps:
 
 **Outcome:** Blender appears only when enabled; capability resources, activation hints, routing guidance, docs, and tool catalog agree.
 
-**Implementation:** UPDATED on 2026-09-16. The single canonical `runtime_tool_catalog` now composes the frozen 11-tool Blender surface for the Full profile whenever the single Creative master flag is enabled; Primary and disabled configurations remain unchanged. `creative_status` reports Blender availability/tool count without introducing a twelfth Blender status tool. A read-only `blender-capability` resource is likewise configuration-gated and exposes only stable tool names, the canonical project layout, structured-first routing guidance, and the explicit high-risk/unsandboxed Python boundary—never operator executable, bridge port, credentials, or other hidden authority. Operator documentation now matches the canonical bridge CLI/env names and the implemented runtime-composition rule.
+**Implementation:** UPDATED on 2026-09-19. The single canonical `runtime_tool_catalog` composes only the four bounded public Blender MCP tools for the Full profile whenever the single Creative master flag is enabled; Primary and disabled configurations remain unchanged. `creative_status` reports Blender availability/tool count as four. Heavy Blender Python, preview/render, import/export, and checkpoint execution is available only through the synchronous foreground `ai-tools creative` operator CLI. A read-only `blender-capability` resource is configuration-gated and documents the bounded-MCP versus foreground-operator boundary without exposing operator executable, bridge port, credentials, or other hidden authority.
 
-**Validation:** deterministic disabled/enabled catalog acceptance proves no Blender tool leakage while disabled, exactly 11 Blender tools when enabled, no Blender exposure in Primary, and the optional resource only when the capability is active. Targeted composition/resource tests and compile checks pass; maintainability reports no hard violations. A fresh full Rust guardrail retry is currently blocked by the execution sandbox's unavailable Rust toolchain mount (`rustup` reports no installed/default toolchain), not by a repository test failure; the last full Rust gate before this composition checkpoint passed on TASK-021 and the normal pre-commit hook must still pass before this checkpoint is committed.
+**Validation:** refreshed catalog acceptance must prove no Blender tool leakage while disabled, exactly four bounded Blender MCP tools when enabled, all seven heavy Blender operations absent from public `tools/list`, no Blender exposure in Primary, and the optional resource only when the capability is active. Targeted composition/resource tests and compile checks pass; maintainability reports no hard violations. A fresh full Rust guardrail retry is currently blocked by the execution sandbox's unavailable Rust toolchain mount (`rustup` reports no installed/default toolchain), not by a repository test failure; the last full Rust gate before this composition checkpoint passed on TASK-021 and the normal pre-commit hook must still pass before this checkpoint is committed.
 
 **Commit boundary:** `feat(blender): compose optional capability`.
 
 **Phase exit criteria:**
 
-- [x] all 11 Blender tools are implemented and tested, including explicit cold-start/readiness/owner-safe stop through `blender_session`;
+- [x] all required Blender capabilities are implemented/tested, with only four bounded operations public through MCP and heavy execution available through the synchronous foreground operator CLI;
 - [x] no generic stdio/nested Python MCP server is required;
 - [x] Blender filesystem/network/process/host authority is represented honestly;
 - [x] the Blender executable may remain outside Projects only as reviewed operator executable authority, while every workflow-owned production artifact remains beneath the selected project's dedicated `blender/` subtree;
@@ -2022,7 +2087,7 @@ Steps:
 
 ### TASK-026 — Add audio/voice execution-binding contract with MCP parity for speech, cloning, conversion, and dubbing
 
-**Outcome:** caller-selected reviewed audio execution bindings can create speech/voice/music/SFX and, where activated, perform authorized voice cloning, voice change, and video dubbing through one contained audio lineage model.
+**Outcome:** caller-selected reviewed audio execution bindings use one contained audio lineage model. MCP owns bounded schema/admission/state; speech/music/SFX generation, authorized voice cloning, voice change, and video dubbing run through synchronous foreground operator execution whenever they can exceed 60 seconds.
 
 **Steps:**
 
@@ -2039,7 +2104,7 @@ Steps:
 
 ### TASK-027 — Add pose/action execution primitives
 
-**Outcome:** any upper layer can author a short action using inspected rig state, API docs/resources, checkpoints, and preview while MCP exposes the editable Blender execution/state primitives.
+**Outcome:** any upper layer can author a short action using inspected rig state, API docs/resources, and durable project state; MCP exposes bounded inspection/control state while Blender authoring/preview that can exceed 60 seconds is synchronous foreground operator work.
 
 **Validation:** action/F-curve/keyframe/NLA state is structurally visible and representative frames show intended motion.
 
@@ -2070,7 +2135,7 @@ Steps:
 
 # PHASE-09 — Scene Studio state/execution: SceneBoard, Director specification, and shots
 
-**Goal:** reach S1/S2 and produce an S3 candidate while keeping storyboard/directing intelligence above MCP: MCP stores/validates caller-authored SceneBoard/Director state and executes requested shots through caller-selected bindings.
+**Goal:** reach S1/S2 and produce an S3 candidate while keeping storyboard/directing intelligence above MCP: MCP stores/validates caller-authored SceneBoard/Director state and admits bounded job state; requested shot generation/rendering that can exceed 60 seconds runs synchronously in the foreground operator CLI.
 
 **Dependencies:** PHASE-04, PHASE-05. PHASE-06/08 are required only for Blender-backed animated shots; generated-video scenes use caller-selected compatible execution bindings.
 
@@ -2103,7 +2168,7 @@ Steps:
 - [ ] Add global scene settings: genre/look, Style Element, lighting, color palette, atmosphere, era/time where relevant.
 - [ ] Add per-shot settings: shot size/framing, camera profile, lens/focal/aperture/DoF intent, move, movement speed/stabilization, tempo/edit intent.
 - [ ] Store a caller-selected Hero Frame First route when requested; MCP does not decide when it is creatively beneficial.
-- [ ] Execute a shot through the caller-selected generated-video binding, Blender path, or explicit mixed graph without changing the engine-neutral manifest.
+- [ ] Prepare/admit a shot through the caller-selected generated-video binding, Blender path, or explicit mixed graph without changing the engine-neutral manifest; execute heavy shot work through the exact synchronous foreground operator command.
 - [ ] Route active video capabilities through semantic capability/execution-binding/job/asset contracts: text/reference/image-to-video generation, extend, reframe, upscale, remove-background, and motion-control when supported.
 - [ ] Validate distinct media roles for motion-control inputs (character/reference image vs motion-reference video) and preserve timestamp/duration lineage.
 - [ ] Expose video utility workflows outside Scene Studio too; a user should be able to reframe/upscale/remove-background an existing Asset without manufacturing a Scene Manifest.
@@ -2202,7 +2267,7 @@ Example scopes:
 
 ### TASK-037 — Implement deterministic sequence assembly and Personal-Clipper-style extraction
 
-**Outcome:** accepted shot renders/audio can be assembled deterministically, and an existing long-form video Asset can be analyzed/segmented into bounded reusable clips without bypassing normal ingest, job, and lineage rules.
+**Outcome:** accepted shot renders/audio can be assembled deterministically, and an existing long-form video Asset can be analyzed/segmented into reusable clips without bypassing normal ingest, job, and lineage rules. Assembly/extraction execution is synchronous foreground operator work whenever accepted input size/duration can exceed the 60-second agent ceiling; MCP owns manifests, admission, and result lineage.
 
 **Steps:**
 
@@ -2398,9 +2463,9 @@ Example scopes:
 **Steps:**
 
 - [ ] Preserve the PHASE-03 dependency resolution, bounded concurrency, invalidation, and authority model as the single graph execution path.
-- [ ] Harden scheduling/recovery for larger graphs and mixed long-running jobs within existing admission bounds.
+- [ ] Harden deterministic foreground scheduling/recovery for larger graphs and mixed long-running jobs within existing admission bounds; do not introduce an async/background agent executor.
 - [ ] Enrich node run state with output Asset IDs, QA, cost/compute metadata, and failure classification where available.
-- [ ] Support selected-node/subgraph/all-dirty execution and production-grade resumability semantics.
+- [ ] Support selected-node/subgraph/all-dirty execution through synchronous foreground operator commands while preserving durable state for later MCP inspection.
 - [ ] Expand reusable accepted-output/cache behavior only where lineage and selected revisions make reuse safe.
 - [ ] Map every graph node to an existing reviewed capability/tool/effect rather than granting graph-wide authority; do not create a second Scene/Game-specific DAG engine.
 
@@ -2434,7 +2499,7 @@ Initial templates may include:
 - [ ] Render pannable graph workspace with typed ports/nodes.
 - [ ] Show Element/media thumbnails, selected revisions, node status/errors, and QA summaries.
 - [ ] Support branch/compare/select and template save/load.
-- [ ] Support run selected node/subgraph/all dirty nodes through server/relay ownership.
+- [ ] Support preparing/validating selected-node/subgraph/all-dirty requests and present the exact synchronous foreground operator command; the browser/server MCP request path must not start long-running execution.
 - [ ] Keep secret credentials and Blender host authority server/relay-side.
 - [ ] Defer realtime multi-user collaboration while keeping project/node identities collaboration-ready.
 
@@ -2557,9 +2622,9 @@ Acceptance journey:
 
 **Live update (2026-09-17): PARTIAL.** The protected-path index now invalidates stale generations before local reconciliation and fails closed while exact-path/subtree updates run; create, move-in, delete, and delete/recreate masking regressions pass through terminal execution. `cargo test -p ai-tools --test security` passed 38 tests with one expected ignored operator-only test. `pnpm guardrail:fast` and the final `pnpm guardrail:full` both passed; the full run also passed 54 platform tests, 5 SSH diagnostic tests, and the rest of the workspace suite. This is repository test evidence, not a complete live multi-owner/browser/media security matrix. Browser-runtime security, malicious-media runtime handling, and a second live authenticated owner/session remain open.
 
-### TASK-057 — Run generic external MCP parity acceptance
+### TASK-057 — Run generic external MCP control-plane parity acceptance
 
-**Outcome:** prove the creative platform is usable as a real MCP creative connector from a generic authenticated external MCP client, not only from Masih Awam's own UI or a local coding shell.
+**Outcome:** prove the Creative control plane is usable from a generic authenticated external MCP client while preserving the synchronous foreground execution boundary. Generic MCP clients can discover, upload/import, validate, estimate, submit state, inspect results/history, and prepare graph/job requests; heavy generation/graph/build/render execution is never turned into an async MCP process and is handed to the human/operator as an exact foreground `ai-tools creative` command.
 
 Acceptance journey:
 
@@ -2567,15 +2632,15 @@ Acceptance journey:
 2. inspect semantic capabilities, compatible opaque execution bindings, and workflows separately;
 3. query budget/cost status and preflight one small generation;
 4. create an external-client upload handoff (or use a safely imported URL) and resolve it to an Asset ID;
-5. submit/wait/retrieve one bounded generation and receive both an in-conversation media/resource result and durable Asset ID;
-6. run at least one core utility transform on that Asset (for example upscale, background removal, outpaint/reframe as appropriate) and verify child lineage;
+5. submit one generation job through MCP; if actual execution can exceed 60 seconds, receive the exact foreground operator command, run it synchronously outside the agent tool call, then retrieve the durable result/Asset through MCP;
+6. prepare at least one core utility transform on that Asset (for example upscale, background removal, outpaint/reframe as appropriate); execute it through MCP only if provably bounded <=60 seconds, otherwise through the exact foreground operator command, then verify child lineage;
 7. list/search recent generations/uploads and reuse a previous Asset or Element directly in a second job;
-8. run one caller-specified multi-step graph/workflow through the same connector surface without any MCP-owned skill/agent runtime;
+8. validate/prepare one caller-specified multi-step graph/workflow through the connector, execute heavy graph work synchronously through the foreground operator CLI, then inspect the resulting graph/job/Asset state through MCP without any MCP-owned skill/agent runtime;
 9. register/discover two compatible mock execution bindings, verify the caller-selected binding is honored, verify an incompatible binding fails precisely, and verify omission returns `execution_binding_required` rather than triggering MCP default/auto-selection;
 10. verify a configured hard budget/approval threshold prevents an over-budget request before execution;
 11. use a generated Asset in one editable website/app project driven by a thin upper-layer test client, then exercise existing source/build/test/deploy primitives and verify public publish remains a separate action with no MCP-managed coding agent.
 
-**Validation:** the flow requires no Higgsfield account/CLI, no local shell command, no arbitrary host path, and no manual download/re-upload between jobs. Client-specific rendering differences are allowed, but the MCP contracts and stable IDs remain identical.
+**Validation:** the flow requires no Higgsfield account/CLI, no arbitrary host path, and no manual download/re-upload between jobs. Heavy execution may require the first-party `ai-tools creative` foreground operator command by design; this is not an async/background escape hatch. Client-specific rendering differences are allowed, but MCP contracts and stable IDs remain identical.
 
 **Live result (2026-09-15): BLOCKED.** The available authenticated connector session was `mcp__codex_apps__masih_awam_mcp` through the Masih Awam connector, which exposed the retained/base surface plus `creative_status` but no generic arbitrary-MCP dispatch for the newly composed Creative tools. No separate authenticated external generic MCP client/session or access token was available. The local Node MCP client used against the disposable same-binary relay proved the transport/catalog and fresh projects, but it is an internal disposable runtime probe and does not count as external parity. No parity claim is made.
 
@@ -2587,11 +2652,13 @@ Acceptance journey:
 
 **Steps:**
 
+- [x] Implement the 2026-09-18 Creative/Blender execution-boundary replan in source: add the foreground operator CLI path, remove/publicly narrow long-running MCP execution actions, preserve one shared durable Project/Asset/Job/Graph lineage, and introduce no Creative async/background execution surface.
+- [x] Verify the refreshed public catalog contains no operation whose accepted execution can legitimately exceed 60 seconds; prove removed heavy actions are absent and retained bounded control-plane actions remain usable. *(Live restart/reconnect acceptance on 2026-09-19: terminal sync-only/max 60000, no `execution_mode`, exactly four bounded Blender tools, heavy Blender tools absent, `creative_job` has no `wait`, and `creative_graph` has no execute/rerun.)*
 - [x] Run focused subsystem tests while iterating.
 - [x] Run `pnpm guardrail:fast` before checkpoint commits.
 - [x] Run affected full Rust/Nuxt gates as required by changed ownership.
 - [ ] Run browser/runtime game acceptance where game behavior changed.
-- [x] Run `pnpm guardrail:full` before closure.
+- [x] Run `pnpm guardrail:full` before closure. *(Fresh 2026-09-19 full gate passes after the sync-only transport/config/doc refactor and maintainability follow-up.)*
 - [ ] Run dependency/security audits when dependency changes justify them.
 - [x] Update operator docs, architecture/security docs, optional upper-layer resources/guidance, canonical memory, and this plan's status/checklists truthfully.
 - [x] Review `.agents/knowledge/self-improvement.md`.
@@ -2603,6 +2670,8 @@ Acceptance journey:
 **Closure update (2026-09-17):** the protected-path indexing implementation was split into bounded responsibility modules after maintainability flagged the initial lifecycle file, and the Blender sandbox spawn path was separated from `sandbox.rs`. The existing `packages/rust-tools/target-plan069-release/` cache was preserved and explicitly excluded from maintained-source scanning as a Cargo release target. A cold-start assumption in `ssh_diagnostics` was corrected by adding bounded prewarm/retry behavior to that test fixture. Final `pnpm guardrail:fast` and `pnpm guardrail:full` pass with repo-local Rust 1.98.1; the full run reports 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, and all other workspace gates passing. Plan 069 remains open: S3/A6 visual and temporal acceptance and complete assembly/export are unfinished; G5 browser interaction/UI acceptance remains blocked by authenticated browser access; external parity still lacks URL-import confirmation, two live bindings for the same capability, website/app parity, and a fresh live hard-budget denial; TASK-056 still lacks browser-runtime, malicious-media, and second-owner live checks. No public publish occurred and no PR/merge was performed.
 
 **Closure update (2026-09-18):** the existing guardrail results remain valid after the code/module changes and the `ssh_diagnostics` fixture correction: `pnpm guardrail:fast`, `pnpm guardrail:full`, maintainability, and repository doc/diff checks pass with repo-local Rust 1.98.1. Full-gate results are 54 platform tests, 38 security tests passed with one expected network-dependent ignored test, 5 SSH diagnostic tests passed with one expected operator-only ignored test, plus the remaining workspace checks. Live Blender acceptance now additionally has a complete registered 1–120 PNG sequence and a verified two-clip GLB animation export; duplicate frame Asset records 27–28 are pixel-identical and were preserved. Plan 069 stays open because S3/A6 still lack final movie assembly, audio sync, and subjective visual/temporal acceptance; G5 lacks direct browser/UI acceptance; external parity lacks URL-import confirmation, two live bindings for one capability, website/app parity, and a fresh live hard-budget denial; TASK-056 lacks browser-runtime, malicious-media, and second-owner live checks. No public publish, commit, PR, or merge was performed.
+
+**Closure update (2026-09-19):** the synchronous-execution replan is now source-complete, release-built, installed, relay-restarted, reconnected, and live-audited. The public contract is synchronous-only with a 60-second agent ceiling, no `execution_mode`, no public MCP Tasks surface, `creative_job` without `wait`, `creative_graph` without execute/rerun actions, and exactly four bounded Blender MCP tools; heavy Creative/Blender execution remains foreground operator CLI work. Maintainability issues found by the fresh full gate were resolved by splitting text-search request/runtime ownership, workspace write ownership, config validation, SSH OpenSSH-argument construction, MCP wire/output-schema validation, and terminal-discovery test helpers into cohesive modules; the Cargo integration-test entrypoint folder has one explicit framework-specific folder exception. A stale Blender resource assertion was updated to the exact four-tool contract plus foreground-routing metadata. Fresh `pnpm guardrail:full` on 2026-09-19 passes Nuxt full, Rust fmt/Clippy/check, all workspace tests, 54/54 platform tests, 37/38 security tests with one expected network-dependent ignore, 5/6 SSH diagnostic tests with one expected operator-only ignore, and the remaining workspace suites. Plan 069 still remains open for S3/A6 final assembly + subjective visual/temporal acceptance, G5 browser/UI acceptance, remaining TASK-056 live security cases, and the remaining TASK-057 parity cases. No public publish, PR, or merge occurred.
 
 **Phase exit criteria:**
 
@@ -2635,7 +2704,7 @@ Verify:
 - asset/upload/generation history list/get/search filters, source tags, stable IDs, and previous-Asset reuse;
 - current-turn media preview/resource delivery remains linked to a durable Asset record;
 - cost/compute estimate, budget status, approval threshold, and hard-limit denial happen before job execution;
-- job submit/get/wait/list/cancel lifecycle, ownership, cross-turn retrieval, and cancellation;
+- public job submit/get/list/cancel lifecycle, ownership, cross-turn retrieval, and cancellation, plus operator-CLI-only synchronous execution with no public `wait` trigger;
 - utility transforms preserve parent/child lineage instead of overwriting inputs;
 - workflow registry and typed graph node/edge/port validation;
 - graph invalidation, branch/parallel, partial-rerun, template instantiation, and underlying-effect composition;
@@ -2856,14 +2925,14 @@ Mitigation: estimate/admission happens in the execution layer, operator hard max
 Plan 069 implementation is complete only when:
 
 1. Masih Awam has no runtime dependency on Higgsfield services, auth, CLI, MCP, proprietary model IDs, or hosted state.
-2. The first-party MCP surface covers the public Higgsfield MCP capability classes 1:1 where they are relevant—OAuth connection, media generation/edit utilities, reusable character/Element references, audio operations, safe upload/import/history reuse, async job/result delivery, quota/cost visibility, and generic MCP-client operation—while broader Canvas/Scene/Game contracts provide the requested Scene/Anime/Game production substrate.
+2. The first-party platform covers the relevant public Higgsfield capability classes—OAuth connection, media generation/edit utilities, reusable character/Element references, audio operations, safe upload/import/history reuse, durable job/result state, quota/cost visibility, and generic MCP-client control-plane operation—without copying Higgsfield's asynchronous execution model. Heavy work is synchronous foreground operator execution.
 3. The parity claim remains bounded to **workflow architecture and production capability**; docs never claim identical proprietary model quality, private prompts, Higgsfield credit economics, marketplace implementation, or pixel-identical UI.
 4. MCP remains agent-agnostic: no Plan 069 runtime path owns agent registries, agent spawning, skill auto-triggering, conversational interviews, creative routing, provider/model ranking, or fallback policy; optional resources/guidance carry no execution authority.
 5. Creative Project, Element Library, Character, Style, World/Location, Asset, Scene/Shot, Game Design/Build, Audio, Creative Graph, QA/Playtest, and revision/provenance state are versioned, contained, and resumable.
 6. Elements support at least Character, Location, Prop, Style, Media, Audio/Voice, 3D Asset, and Animation Clip selected revisions with explicit dependency impact.
 7. Semantic capability discovery, opaque `execution_binding.list/get`, workflow `list/get`, asset/upload/history search, and budget/cost discovery are distinct first-party contracts rather than one ambiguous catalog.
 8. MCP has no model/provider auto-selection policy: caller-selected `execution_binding_id` is required for pluggable executor-backed operations; omission fails with `execution_binding_required`; selected binding/workflow/compiler versions are recorded in job lineage and silent substitution is forbidden.
-9. Creative jobs support submit/get/wait/list/cancel, cross-turn retrieval, bounded retries/concurrency/results, owner/project isolation, current-turn media delivery, and durable Asset outputs.
+9. Creative jobs support public submit/get/list/cancel state, cross-turn retrieval, bounded retries/concurrency/results, owner/project isolation, current-turn media delivery, and durable Asset outputs; no public wait/poll execution trigger exists, and heavy execution is synchronous foreground operator work.
 10. Cost/compute preflight plus enforceable job/batch/session/project hard limits can block expensive work before execution; paid-binding secrets/quota data remain binding-owned and redacted.
 11. Conversation attachments, external-client device uploads, reviewed web-URL imports, prior generations, and promoted Elements can all become reusable stable Assets through reviewed ingest paths.
 12. External-client upload handoff is OAuth/owner/project bound, expiring, bounded, and replay-safe; URL import obeys shared SSRF/redirect/DNS/content-type/size policy; arbitrary local host paths are never the normal MCP upload mechanism.
@@ -2873,13 +2942,13 @@ Plan 069 implementation is complete only when:
 16. MCP-core video utility parity is implemented through normal semantic capability/execution-binding/workflow/job/lineage semantics: video generation/reference or image-to-video where active, reframe, upscale, background removal, motion control, and bounded clip extraction; at least one explicitly selected conformance binding proves a >=15-second video capability without becoming a platform default.
 17. MCP-core audio parity is implemented through normal Asset/Element lineage: speech/voice, authorized voice cloning, voice change, and video dubbing; music/SFX remain supported semantic capabilities when a caller-selected binding provides them.
 18. Every utility/edit transform creates a child revision/Asset and never mutates an accepted parent in place.
-19. Creative Graph execution supports typed validation, branching, parallel independent nodes, partial rerun, unaffected-output reuse, templates, node status/QA, and underlying approval/effect preservation.
-20. A Canvas-style visual workspace edits/runs that same graph contract without moving relay credentials, Blender host authority, provider secrets, or unrestricted executable node payloads into the browser.
+19. Creative Graph supports typed validation, branching, parallel-independent execution semantics, partial rerun, unaffected-output reuse, templates, node status/QA, and underlying approval/effect preservation; heavy graph execution/rerun is synchronous foreground operator work and is absent from public MCP actions.
+20. A Canvas-style visual workspace edits/validates that same graph contract and can prepare/copy exact foreground execution commands without moving long-running execution, relay credentials, Blender host authority, provider secrets, or unrestricted executable node payloads into the browser.
 21. SceneBoard contracts support connected frames, reusable Elements, frame-level revision, continuity constraints, hero-frame promotion, and `auto|manual` provenance; any actual Auto planning is performed by the upper layer and submitted through the same MCP contract.
-22. Scene/Director state stores engine-neutral global look/lighting/palette plus per-shot framing/camera/lens/focal/aperture/movement/tempo; MCP validates/executes caller-authored settings and does not generate AI Director suggestions itself.
+22. Scene/Director state stores engine-neutral global look/lighting/palette plus per-shot framing/camera/lens/focal/aperture/movement/tempo; MCP validates/stores/admit caller-authored settings, while heavy shot execution is synchronous foreground operator work. MCP does not generate AI Director suggestions itself.
 23. One fresh **S3 Scene Studio** benchmark produces a coherent 10–30 second cinematic scene with inspectable Scene/Shot/Element/job/QA state through generated-video, Blender, or a deliberate mixed backend.
 24. Character identity supports a fictional-character path with structured visual/narrative fields independent of training; optional real-person identity-capable execution bindings require explicit intent and never replace Character Element authority.
-25. Blender is implemented as the retained 11-tool first-class optional capability with loopback-only bridge and truthful host-authority semantics.
+25. Blender is a first-class optional capability with a loopback-only bridge and truthful host-authority semantics: exactly four bounded public MCP tools, with heavy Python/preview/render/import/export/checkpoint operations available only through the synchronous foreground operator CLI.
 26. One anime character reaches production-ready-enough mesh/UV/material/hair/clothing state for the chosen benchmark, receives a reusable body rig plus initial facial controls, and passes representative deformation QA.
 27. A 3–5 second anime character performance passes structural and temporal review.
 28. One fresh **A6 Anime Studio** benchmark produces a 10–30 second anime sequence with SceneBoard/Director state, continuity, Blender-editable assets where selected, visual/temporal/render/export QA, and reusable Elements/assets.
@@ -2896,7 +2965,7 @@ Plan 069 implementation is complete only when:
 39. Core MCP parity tests cover capability/execution-binding/workflow discovery, safe upload/import, history/reuse, cost/budget preflight, image/video/audio utilities, job lifecycle, and media delivery in addition to Scene/Anime/Game production tests.
 40. Website/App MCP parity is satisfied through existing generic editable-source/Git/file/build/test/deploy/publish capabilities plus creative Asset/Element imports, with all coding/design intelligence above MCP and deploy distinct from public publish. Extended non-core items—localization/subtitles/shorts, UGC/faceless/motion-design packaged workflows, identity edits, relight/weather/object edits, restore/stabilize/time-remap/color-match, and marketing verticals—have explicit shared-kernel owners and priorities; none requires a second state/job/asset platform.
 41. Relevant focused tests and `pnpm guardrail:fast` / affected-stack full gates / `pnpm guardrail:full` pass before closure.
-42. A generic external MCP client can complete the parity acceptance journey—discover capabilities/execution bindings/workflows, upload/import, estimate, generate, receive media, transform, browse history, reuse an Asset/Element, run a caller-specified multi-step graph, and hit a budget denial—without Higgsfield, CLI, local shell, arbitrary host paths, or an MCP-owned agent/model router.
+42. A generic external MCP client can complete the control-plane parity journey—discover capabilities/execution bindings/workflows, upload/import, estimate, submit generation/transform/graph state, browse history, reuse an Asset/Element, retrieve completed results, and hit a budget denial—without Higgsfield, arbitrary host paths, or an MCP-owned agent/model router. Any heavy execution step is deliberately completed by the human/operator through the exact synchronous foreground `ai-tools creative` command.
 43. Operator-only actions such as executor/provider/model installation, Blender/add-on setup, relay restart, production deployment credentials, or external public publishing are reported explicitly and are not performed implicitly by Plan 069 MCP runtime.
 44. Final Scene/Anime/Game/Blender acceptance uses canonical project roots beneath `$HOME/Documents/Projects`; Blender projects specifically run from `$HOME/Documents/Projects/Blender/<creative-project>/`. No production or final acceptance artifact rooted beneath the `ai-code` source checkout can satisfy closure.
 
@@ -2904,4 +2973,4 @@ Plan 069 implementation is complete only when:
 
 Earlier Plan 069 drafts, release branches, planning SHAs, and numbered tool-catalog snapshots are preserved only for audit/history. They are **not** alternate active implementations or versions. Git history is the source for detailed chronology.
 
-The only active Plan 069 truth is this file plus the current `feat/plan-069-creative-core` implementation rebased conceptually on the reconciled `main` baseline above. The current architecture has one shared Scene/Anime/Game creative kernel, one runtime catalog composition path, one active Creative schema version (`1`), and one minimal Creative Graph executor that downstream phases must extend rather than replace.
+The only active Plan 069 truth is this file plus the current `feat/plan-069-complete` implementation rebased conceptually on the reconciled `main` baseline above. The current architecture has one shared Scene/Anime/Game creative kernel, one runtime catalog composition path, one active Creative schema version (`1`), and one minimal Creative Graph executor that downstream phases must extend rather than replace.

@@ -33,7 +33,6 @@ export function useCreativeCanvasWorkspace(workspaceId: () => string) {
   const toast = useToast()
   const projectId = ref('')
   const graphId = ref('')
-  const previousJobId = ref('')
   const selectedNodeId = ref<string | null>(null)
   const compareNodeIds = ref<string[]>([])
   const graphText = ref(JSON.stringify({
@@ -127,34 +126,6 @@ export function useCreativeCanvasWorkspace(workspaceId: () => string) {
     const payload = await invoke('creative_graph', { action: 'validate', graph })
     const valid = payload.validation && (payload.validation as { valid?: boolean }).valid
     toast.add({ title: valid ? 'Graph valid' : 'Graph has diagnostics', color: valid ? 'success' : 'warning' })
-  }
-
-  async function executeGraph() {
-    const graph = parsedGraph.value
-    if (!graph) return invalidGraphToast()
-    const payload = await invoke('creative_graph', { action: 'execute', graph })
-    previousJobId.value = String((payload.job as { job_id?: string } | undefined)?.job_id ?? '')
-  }
-
-  async function rerun(scope: 'rerun_selected' | 'rerun_subgraph' | 'rerun_all_dirty') {
-    const graph = parsedGraph.value
-    if (!graph || !previousJobId.value) return
-    const base: Record<string, unknown> = {
-      action: scope,
-      project_id: graph.project_id,
-      graph_id: graph.graph_id,
-      previous_job_id: previousJobId.value
-    }
-    if (scope === 'rerun_selected') {
-      if (!selectedNodeId.value) return
-      base.node_id = selectedNodeId.value
-    } else {
-      const dirty = compareNodeIds.value.length ? compareNodeIds.value : selectedNodeId.value ? [selectedNodeId.value] : []
-      if (!dirty.length) return
-      base.changed_node_ids = dirty
-    }
-    const payload = await invoke('creative_graph', base)
-    previousJobId.value = String((payload.job as { job_id?: string } | undefined)?.job_id ?? previousJobId.value)
   }
 
   async function saveTemplate() {
@@ -268,12 +239,12 @@ export function useCreativeCanvasWorkspace(workspaceId: () => string) {
   }
 
   return {
-    projectId, graphId, previousJobId, selectedNodeId, compareNodeIds, graphText,
+    projectId, graphId, selectedNodeId, compareNodeIds, graphText,
     selectedInputsText, selectedBindingId, projectState, lastResult, templates,
     templateId, templateDescription, instantiateGraphId, replacementsText,
     bindingOverridesText, pending, pan, dragging, parsedGraph, selectedNode,
-    comparedNodes, qaFindings, loadProject, loadGraph, validateGraph, executeGraph,
-    rerun, saveTemplate, listTemplates, instantiateTemplate, selectNode,
+    comparedNodes, qaFindings, loadProject, loadGraph, validateGraph,
+    saveTemplate, listTemplates, instantiateTemplate, selectNode,
     applyNodeEdits, toggleCompare, nodePosition, beginPan, movePan, endPan, zoom
   }
 }

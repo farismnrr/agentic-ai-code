@@ -95,8 +95,9 @@ fn blender_capability() -> String {
         "tools": tools,
         "project_layout": crate::application::blender::project_layout(),
         "routing": {
-            "default": "structured_first",
-            "raw_python": "explicit_high_risk_only",
+            "default": "bounded_mcp_control_plane",
+            "heavy_execution": "foreground_operator_cli",
+            "raw_python": "foreground_operator_cli_only",
             "session": "attach_external_or_explicit_relay_start",
             "network": "loopback_only"
         },

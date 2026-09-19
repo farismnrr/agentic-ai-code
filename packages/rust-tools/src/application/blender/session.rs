@@ -74,12 +74,23 @@ pub async fn start(
     project_id: &str,
 ) -> Result<BlenderSessionStatus, McpError> {
     ensure_enabled(config)?;
+    let deadline = (config.blender_bridge_timeout_ms > 0)
+        .then(|| Instant::now() + Duration::from_millis(config.blender_bridge_timeout_ms));
     let project_root = project_root(cwd, config)?;
     ensure_project_layout(cwd, config)?;
 
     let mut guard = state().lock().await;
     reap_finished(&mut guard).await?;
-    match bridge::probe(config).await {
+    let initial_probe = match deadline {
+        Some(deadline) => match config_for_deadline(config, deadline) {
+            Some(probe_config) => bridge::probe(&probe_config).await,
+            None => Err(McpError::InvalidRequest(
+                "Blender bridge did not become ready before timeout".into(),
+            )),
+        },
+        None => bridge::probe(config).await,
+    };
+    match initial_probe {
         Ok(_) => {
             let ownership = ownership_for(&guard, owner, project_id, &project_root);
             return Ok(session_status(
@@ -153,9 +164,21 @@ pub async fn start(
     });
     drop(guard);
 
-    let deadline = Instant::now() + Duration::from_millis(config.blender_bridge_timeout_ms);
     loop {
-        if bridge::probe(config).await.is_ok() {
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            stop_owned_process(owner, project_id, &project_root).await?;
+            return Err(McpError::InvalidRequest(
+                "Blender bridge did not become ready before timeout".into(),
+            ));
+        }
+        let probe_ready = match deadline {
+            Some(deadline) => match config_for_deadline(config, deadline) {
+                Some(probe_config) => bridge::probe(&probe_config).await.is_ok(),
+                None => false,
+            },
+            None => bridge::probe(config).await.is_ok(),
+        };
+        if probe_ready {
             return Ok(session_status(
                 BlenderSessionState::Ready,
                 Some(BlenderSessionOwnership::RelayOwned),
@@ -179,12 +202,6 @@ pub async fn start(
                     ));
                 }
             }
-        }
-        if Instant::now() >= deadline {
-            stop_owned_process(owner, project_id, &project_root).await?;
-            return Err(McpError::InvalidRequest(
-                "Blender bridge did not become ready before timeout".into(),
-            ));
         }
         sleep(Duration::from_millis(READY_POLL_MS)).await;
     }
@@ -403,6 +420,17 @@ fn session_status(
         loopback_port: config.blender_bridge_port,
         project_root: project_root.map(|path| path.to_string_lossy().into_owned()),
     }
+}
+
+fn config_for_deadline(config: &ServerConfig, deadline: Instant) -> Option<ServerConfig> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return None;
+    }
+    let remaining_ms = remaining.as_millis().min(u128::from(u64::MAX)) as u64;
+    let mut scoped = config.clone();
+    scoped.blender_bridge_timeout_ms = scoped.blender_bridge_timeout_ms.min(remaining_ms.max(1));
+    Some(scoped)
 }
 
 fn is_unavailable(error: &McpError) -> bool {

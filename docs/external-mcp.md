@@ -170,16 +170,15 @@ This does not change the relay's authorization requirement: tool tokens must sti
 
 ## Long-running and slow MCP operations
 
-The relay no longer has an unconditional five-minute terminal ceiling. It also avoids requiring one HTTP request to remain open for work whose latency is legitimately unpredictable.
+The relay uses a synchronous-only agent execution model. Every agent-invoked process-like MCP tool must complete or fail within a hard 60-second ceiling; there is no MCP Tasks escape hatch for longer execution.
 
-- `timeout_ms: 0` means no terminal command deadline unless the operator configured `RELAY_MAX_TERMINAL_TIMEOUT_MS`.
-- `ssh_readonly_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. A Tasks-capable client may receive a task handle and retrieve the final result through `tasks/get`; bounded native reads remain synchronous.
-- The first-party Nuxt MCP client applies a separate per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds). That deadline is not the durable task lifetime.
-- Task polling honors the relay's `pollIntervalMs` hint and uses bounded backoff rather than a hot fixed polling loop.
-- A dropped/timed-out HTTP round trip is not treated as implicit task cancellation. Explicit task cancellation still targets the authoritative relay job and process tree.
-- Task input handoff is not currently used by these relay tools. If a future task reports `input_required`, the current first-party client fails explicitly rather than waiting indefinitely until a reviewed input contract exists.
+- `terminal_exec` accepts `timeout_ms` only within the effective `1..=60000` millisecond ceiling. A supplied `0` is normalized to the effective configured maximum, which itself cannot exceed 60 seconds.
+- `ssh_readonly_exec`, `web_search`, `http_fetch`, and other process-like tools remain synchronous. They do not return task handles and the relay does not expose `tasks/get`, `tasks/update`, or `tasks/cancel`.
+- The first-party Nuxt MCP client may apply its own shorter per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds), but that never extends relay execution beyond the server-side ceiling.
+- Work that can legitimately take longer than 60 seconds is not started in the agent tool call. The agent must hand the human/operator an exact foreground command instead.
+- Human/operator foreground commands are outside the agent timeout policy: Masih Awam does not wrap them in a platform timeout, background them, or detach them merely to fit the MCP boundary.
 
-external MCP client controls how progress/tool cards are rendered. The relay can provide protocol task state and results, but it cannot force external MCP client to render raw terminal output like a native terminal UI.
+External MCP clients control how progress/tool cards are rendered. The relay returns the final synchronous result for bounded calls, while long-running operator work is observed through the user's foreground terminal and later state inspection.
 
 ## What a successful connection proves
 

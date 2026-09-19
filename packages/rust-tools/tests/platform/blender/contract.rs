@@ -1,8 +1,9 @@
 use ai_tools::application::blender::{
-    artifact_relative_path, bridge_address, project_layout, validate_blender_project_root_path,
-    validate_blender_relative_path, BlenderArtifactScope, BlenderSessionOwnership,
-    BlenderSessionState, BlenderSessionStatus, BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT,
-    MAX_BLENDER_PYTHON_BYTES, MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES,
+    artifact_relative_path, bounded_mcp_config, bridge_address, project_layout,
+    unbounded_operator_config, validate_blender_project_root_path, validate_blender_relative_path,
+    BlenderArtifactScope, BlenderSessionOwnership, BlenderSessionState, BlenderSessionStatus,
+    BLENDER_LAB_PROTOCOL, DEFAULT_BLENDER_LAB_PORT, MAX_BLENDER_PYTHON_BYTES,
+    MAX_BLENDER_REQUEST_BYTES, MAX_BLENDER_RESPONSE_BYTES, PUBLIC_MCP_BLENDER_TIMEOUT_MS,
     REVIEWED_BLENDER_PATH_NAMES,
 };
 use ai_tools::application::hooks::effect_classes_for_call;
@@ -21,6 +22,7 @@ fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
     assert_eq!(MAX_BLENDER_REQUEST_BYTES, 1024 * 1024);
     assert_eq!(MAX_BLENDER_RESPONSE_BYTES, 8 * 1024 * 1024);
     assert_eq!(MAX_BLENDER_PYTHON_BYTES, 256 * 1024);
+    assert_eq!(PUBLIC_MCP_BLENDER_TIMEOUT_MS, 50_000);
     assert_eq!(REVIEWED_BLENDER_PATH_NAMES, &["blender", "blender.exe"]);
     let external = BlenderSessionStatus {
         state: BlenderSessionState::Ready,
@@ -44,6 +46,20 @@ fn blender_operator_config_is_creative_gated_loopback_only_and_bounded() {
     let mut privileged_port = enabled.clone();
     privileged_port.blender_bridge_port = 80;
     assert!(privileged_port.validate().is_err());
+
+    let mut operator_timeout = enabled.clone();
+    operator_timeout.blender_bridge_timeout_ms = 120_000;
+    operator_timeout
+        .validate()
+        .expect("operator foreground timeout may exceed MCP ceiling");
+    assert_eq!(
+        bounded_mcp_config(&operator_timeout).blender_bridge_timeout_ms,
+        PUBLIC_MCP_BLENDER_TIMEOUT_MS
+    );
+    assert_eq!(
+        unbounded_operator_config(&operator_timeout).blender_bridge_timeout_ms,
+        0
+    );
 
     let mut unbounded_timeout = enabled.clone();
     unbounded_timeout.blender_bridge_timeout_ms = 120_001;
@@ -108,7 +124,7 @@ fn blender_project_layout_rejects_escape_and_noncanonical_destinations() {
 }
 
 #[test]
-fn blender_v1_contract_has_exactly_eleven_bounded_tools_without_authority_injection() {
+fn blender_public_contract_exposes_only_bounded_agent_tools() {
     let tools = blender_tool_catalog();
     let names = tools.iter().map(|tool| tool.name).collect::<Vec<_>>();
     assert_eq!(
@@ -117,16 +133,24 @@ fn blender_v1_contract_has_exactly_eleven_bounded_tools_without_authority_inject
             "blender_session",
             "blender_inspect",
             "blender_python_api_docs",
-            "blender_execute_python",
             "blender_screenshot",
-            "blender_animation_preview",
-            "blender_render",
-            "blender_asset_import",
-            "blender_asset_export",
-            "blender_checkpoint_create",
-            "blender_checkpoint_restore",
         ]
     );
+
+    for removed in [
+        "blender_execute_python",
+        "blender_animation_preview",
+        "blender_render",
+        "blender_asset_import",
+        "blender_asset_export",
+        "blender_checkpoint_create",
+        "blender_checkpoint_restore",
+    ] {
+        assert!(
+            !names.contains(&removed),
+            "{removed} must be operator CLI only"
+        );
+    }
 
     for tool in &tools {
         let schema_text = tool.input_schema.to_string();
@@ -155,49 +179,6 @@ fn blender_v1_contract_has_exactly_eleven_bounded_tools_without_authority_inject
             "project_id":"project_demo",
             "action":"start",
             "host":"10.0.0.9"
-        }),
-    )
-    .is_err());
-
-    let render = tools
-        .iter()
-        .find(|tool| tool.name == "blender_render")
-        .unwrap();
-    validate_tool_arguments(
-        render,
-        &json!({
-            "cwd":"/workspace/project",
-            "project_id":"project_demo",
-            "mode":"still",
-            "output_scope":"final",
-            "file_name":"hero_frame.png"
-        }),
-    )
-    .expect("contained render schema");
-    assert!(validate_tool_arguments(
-        render,
-        &json!({
-            "cwd":"/workspace/project",
-            "project_id":"project_demo",
-            "mode":"still",
-            "output_scope":"final",
-            "file_name":"../escape.png"
-        }),
-    )
-    .is_err());
-
-    let import = tools
-        .iter()
-        .find(|tool| tool.name == "blender_asset_import")
-        .unwrap();
-    assert!(validate_tool_arguments(
-        import,
-        &json!({
-            "cwd":"/workspace/project",
-            "project_id":"project_demo",
-            "asset_id":"asset_ref",
-            "purpose":"reference",
-            "url":"https://example.invalid/ref.png"
         }),
     )
     .is_err());

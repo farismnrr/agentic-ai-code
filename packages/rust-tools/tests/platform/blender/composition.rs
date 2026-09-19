@@ -21,7 +21,7 @@ async fn blender_catalog_and_status_follow_the_single_creative_master_flag() {
         .into_iter()
         .map(|tool| tool.name)
         .collect::<Vec<_>>();
-    assert_eq!(blender_names.len(), 11);
+    assert_eq!(blender_names.len(), 4);
 
     for names in [
         tool_names(ToolProfile::Full, false),
@@ -67,6 +67,6 @@ async fn blender_catalog_and_status_follow_the_single_creative_master_flag() {
             .expect("enabled status result"),
     );
     assert_eq!(enabled_status["blender"]["enabled"], true);
-    assert_eq!(enabled_status["blender"]["tool_count"], 11);
+    assert_eq!(enabled_status["blender"]["tool_count"], 4);
     assert!(enabled_status["blender"]["activation"].is_null());
 }

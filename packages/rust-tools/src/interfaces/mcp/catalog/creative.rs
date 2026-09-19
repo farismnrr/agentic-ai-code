@@ -219,25 +219,18 @@ fn graph_tool() -> Tool {
     Tool {
         name: "creative_graph",
         title: Some("Creative Graph Runtime"),
-        description: "Validate, execute, partially rerun, or retrieve a caller-authored typed Creative Graph. Independent DAG levels are scheduled concurrently; partial reruns invalidate only changed descendants and reuse completed unaffected outputs. The graph grants no authority beyond reviewed node capabilities." ,
+        description: "Validate, retrieve, save, or instantiate caller-authored typed Creative Graph state and templates. Heavy graph execution/rerun is foreground operator work through ai-tools creative, not a public MCP action." ,
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["validate", "execute", "partial_rerun", "rerun_selected", "rerun_subgraph", "rerun_all_dirty", "get", "template_save", "template_get", "template_list", "template_instantiate"] },
+                "action": { "type": "string", "enum": ["validate", "get", "template_save", "template_get", "template_list", "template_instantiate"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph": { "type": "object", "maxProperties": 16 },
-                "previous_job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "node_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "changed_node_ids": {
-                    "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
-                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
-                },
                 "template_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
                 "description": { "type": "string", "maxLength": 1024 },
-                "approved": { "type": "boolean", "default": false },
                 "replacements": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 128 } },
                 "binding_overrides": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 } },
                 "input_node_ids": {
@@ -252,7 +245,7 @@ fn graph_tool() -> Tool {
             "allOf": [
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["validate", "execute"] } },
+                        "properties": { "action": { "const": "validate" } },
                         "required": ["action"]
                     },
                     "then": { "required": ["graph"] }
@@ -260,14 +253,6 @@ fn graph_tool() -> Tool {
                 {
                     "if": { "properties": { "action": { "const": "get" } }, "required": ["action"] },
                     "then": { "required": ["project_id", "graph_id"] }
-                },
-                {
-                    "if": { "properties": { "action": { "enum": ["partial_rerun", "rerun_subgraph", "rerun_all_dirty"] } }, "required": ["action"] },
-                    "then": { "required": ["project_id", "graph_id", "previous_job_id", "changed_node_ids"] }
-                },
-                {
-                    "if": { "properties": { "action": { "const": "rerun_selected" } }, "required": ["action"] },
-                    "then": { "required": ["project_id", "graph_id", "previous_job_id", "node_id"] }
                 },
                 {
                     "if": { "properties": { "action": { "const": "template_save" } }, "required": ["action"] },
@@ -299,13 +284,13 @@ fn job_tool() -> Tool {
     Tool {
         name: "creative_job",
         title: Some("Creative Job, Cost, and Budget State"),
-        description: "Estimate, admit, submit, wait, retrieve, list, or cancel durable owner/project-scoped Creative jobs. Operator hard compute/output/project limits are enforced before submit; approval can satisfy only the configured soft threshold and never overrides hard maxima.",
+        description: "Estimate, admit, submit, retrieve, list, or cancel durable owner/project-scoped Creative jobs. Submit creates durable queued state only; heavy execution is foreground operator work through ai-tools creative. Operator hard compute/output/project limits are enforced before submit.",
         input_schema: json!({
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["compile_spec", "cost_estimate", "budget_status", "submit", "get", "wait", "list", "cancel"]
+                    "enum": ["compile_spec", "cost_estimate", "budget_status", "submit", "get", "list", "cancel"]
                 },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -327,13 +312,12 @@ fn job_tool() -> Tool {
                 },
                 "approved": { "type": "boolean", "default": false },
                 "max_retries": { "type": "integer", "minimum": 0, "maximum": 16 },
-                "timeout_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 },
-                "retry": { "type": "boolean", "default": false }
+                "timeout_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 }
             },
             "allOf": [
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["get", "wait", "cancel"] } },
+                        "properties": { "action": { "enum": ["get", "cancel"] } },
                         "required": ["action"]
                     },
                     "then": { "required": ["job_id"] }

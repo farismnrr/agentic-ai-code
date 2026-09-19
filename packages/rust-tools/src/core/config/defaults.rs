@@ -17,7 +17,7 @@ impl Default for ServerConfig {
             trusted_proxy: false,
             trusted_proxy_cidr: None,
             default_terminal_timeout_ms: 30_000,
-            max_terminal_timeout_ms: 0,
+            max_terminal_timeout_ms: 60_000,
             completed_job_ttl_ms: 3_600_000,
             max_retained_output_bytes: 1_048_576,
             max_running_jobs: 16,
