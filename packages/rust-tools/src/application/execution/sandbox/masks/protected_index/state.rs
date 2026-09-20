@@ -1,5 +1,6 @@
 use super::index::ProtectedPathIndex;
 use super::watcher::IndexChange;
+use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -31,6 +32,11 @@ pub(super) enum RootState {
         retry_after: Instant,
         reason: &'static str,
     },
+    Failed {
+        generation: u64,
+        error_kind: io::ErrorKind,
+        reason: &'static str,
+    },
 }
 
 impl RootState {
@@ -40,7 +46,8 @@ impl RootState {
             | Self::Initializing { generation }
             | Self::Ready { generation, .. }
             | Self::Reconciling { generation, .. }
-            | Self::NeedsFullScan { generation, .. } => *generation,
+            | Self::NeedsFullScan { generation, .. }
+            | Self::Failed { generation, .. } => *generation,
         }
     }
 }
@@ -75,6 +82,7 @@ impl RootIndexController {
 pub(in crate::application::execution::sandbox) struct ProtectedPathFreshness {
     pub(super) controller: Arc<RootIndexController>,
     pub(super) snapshot: Arc<ProtectedMaskSnapshot>,
+    pub(super) deadline: Option<Instant>,
 }
 
 impl ProtectedPathFreshness {
@@ -87,7 +95,11 @@ impl ProtectedPathFreshness {
     }
 
     pub(in crate::application::execution::sandbox) fn watcher_enabled(&self) -> bool {
-        true
+        let state = self.controller.state();
+        match &*state {
+            RootState::Ready { index, .. } => index.watcher_enabled(),
+            _ => false,
+        }
     }
 }
 

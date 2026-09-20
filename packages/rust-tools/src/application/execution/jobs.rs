@@ -73,10 +73,10 @@ pub struct JobManager {
 
 impl JobManager {
     pub fn new(config: ServerConfig) -> Arc<Self> {
-        // Start the bounded background workspace warmup as soon as an
-        // execution manager is created. The relay's serving hook separately
-        // primes small toolchain roots and deduplicates this request.
-        super::sandbox::schedule_workspace_protected_path_indexes(&config);
+        // Workspace protected-path indexes are demand-driven from the exact
+        // sandbox root selected for an invocation. Do not prewarm broad
+        // authorization roots here: a Projects-style root can monopolize the
+        // single index worker and delay a much smaller repository request.
         Arc::new(Self {
             jobs: Mutex::new(HashMap::new()),
             idempotency: Mutex::new(HashMap::new()),

@@ -33,6 +33,7 @@ impl From<&Cli> for ServerConfig {
             allow_tailscale: cli.allow_tailscale,
             tailscale_socket: cli.tailscale_socket.clone(),
             toolchain_paths: cli.toolchain_paths.clone(),
+            toolchain_state_paths: cli.toolchain_state_paths.clone(),
             lsp_servers: cli.lsp_servers.clone(),
             enable_creative: cli.enable_creative,
             blender_executable: cli.blender_executable.clone(),

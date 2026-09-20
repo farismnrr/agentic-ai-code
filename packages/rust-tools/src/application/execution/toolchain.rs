@@ -28,33 +28,46 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
     ];
     let mut entries = Vec::new();
     for path in config.toolchain_paths.iter().map(PathBuf::from) {
-        push_safe_directory(&mut entries, path, false);
-    }
-    if let Ok(home) = super::sandbox::runtime_home() {
-        for sub in [
-            ".cargo/bin",
-            ".local/bin",
-            ".local/share/fnm",
-            ".volta/bin",
-            ".asdf/shims",
-            ".bun/bin",
-            ".npm-global/bin",
-            ".local/share/pnpm",
-            ".nvm/current/bin",
-            ".conda/bin",
-            "miniconda3/bin",
-            "anaconda3/bin",
-            ".local/share/mamba/bin",
-        ] {
-            push_safe_directory(&mut entries, home.join(sub), false);
+        if path.is_dir() && !entries.iter().any(|existing| existing == &path) {
+            entries.push(path);
         }
-        for env_root in [
-            home.join(".conda/envs"),
-            home.join("miniconda3/envs"),
-            home.join("anaconda3/envs"),
-            home.join(".local/share/mamba/envs"),
-        ] {
-            discover_conda_bins(&mut entries, &env_root);
+    }
+    // Explicit RELAY_TOOLCHAIN_PATH is authoritative for user-managed runtimes.
+    // Preserve legacy safe auto-discovery only when the operator has not
+    // supplied any reviewed toolchain directories.
+    if config.toolchain_paths.is_empty() {
+        if let Ok(home) = super::sandbox::runtime_home() {
+            if let Some(cargo_home) = std::env::var_os("CARGO_HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute())
+            {
+                push_safe_directory(&mut entries, cargo_home.join("bin"), false);
+            }
+            for sub in [
+                ".cargo/bin",
+                ".local/bin",
+                ".local/share/fnm",
+                ".volta/bin",
+                ".asdf/shims",
+                ".bun/bin",
+                ".npm-global/bin",
+                ".local/share/pnpm",
+                ".nvm/current/bin",
+                ".conda/bin",
+                "miniconda3/bin",
+                "anaconda3/bin",
+                ".local/share/mamba/bin",
+            ] {
+                push_safe_directory(&mut entries, home.join(sub), false);
+            }
+            for env_root in [
+                home.join(".conda/envs"),
+                home.join("miniconda3/envs"),
+                home.join("anaconda3/envs"),
+                home.join(".local/share/mamba/envs"),
+            ] {
+                discover_conda_bins(&mut entries, &env_root);
+            }
         }
     }
     // Reviewed owner-managed runtimes intentionally precede conflicting

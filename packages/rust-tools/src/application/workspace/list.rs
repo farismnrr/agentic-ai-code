@@ -144,7 +144,11 @@ fn visit_directory(
             kind,
         });
 
-        if file_type.is_dir() && remaining_depth > 1 {
+        if file_type.is_dir()
+            && remaining_depth > 1
+            && !super::search::DEPENDENCY_OR_GENERATED_DIRECTORIES
+                .contains(&child.name.to_str().unwrap())
+        {
             let child_directory = directory.open_child(&child)?;
             visit_directory(
                 &child_directory,

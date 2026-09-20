@@ -21,13 +21,6 @@ pub(super) fn lock_protected_path_freshness<'a>(
         .map(|_guard| ProtectedPathFreshnessGuard { _guard })
 }
 
-pub(super) fn schedule_protected_path_index(
-    root: &Path,
-    budget: std::time::Duration,
-) -> Result<(), std::io::Error> {
-    protected_index::schedule_initialization(root, budget)
-}
-
 pub(super) fn mask_executables_from(
     args: &mut Vec<String>,
     directories: impl IntoIterator<Item = PathBuf>,
@@ -230,9 +223,45 @@ pub(super) fn mask_state(
     Ok(())
 }
 
-pub(super) fn prime_protected_path_index(
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_prime_protected_path_index_with_entry_limit(
     root: &Path,
     budget: std::time::Duration,
+    max_entries: usize,
 ) -> Result<usize, std::io::Error> {
-    protected_index::prime(root, budget)
+    protected_index::prime_with_entry_limit(root, budget, max_entries)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_discover_protected_path_index(root: &Path) -> Result<(), std::io::Error> {
+    protected_index::discover(root, None).map(|_| ())
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_snapshot_rejects_new_protected_path(
+    root: &Path,
+    relative: &Path,
+) -> Result<(), std::io::Error> {
+    let (_, freshness, _) = protected_index::discover(root, None)?;
+    let path = root.join(relative);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, "secret")?;
+    let checks = [freshness];
+    let _guard = protected_index::lock_and_validate_freshness(&checks)?;
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_schedule_protected_path_index(
+    root: &Path,
+    budget: std::time::Duration,
+) -> Result<(), std::io::Error> {
+    protected_index::schedule_initialization(root, budget)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_is_permanent_index_error(kind: std::io::ErrorKind) -> bool {
+    protected_index::is_permanent_index_error(kind)
 }

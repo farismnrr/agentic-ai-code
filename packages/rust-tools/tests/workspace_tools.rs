@@ -160,6 +160,46 @@ fn workspace_output_schemas_match_public_runtime_results() {
 }
 
 #[test]
+fn ai_discovery_skips_dependency_and_generated_tree_contents() {
+    let (root, config) = fixture();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
+    fs::create_dir_all(root.join("target/debug")).unwrap();
+    fs::create_dir_all(root.join("vendor/lib")).unwrap();
+    fs::write(root.join("src/main.txt"), "source").unwrap();
+    fs::write(root.join("node_modules/pkg/dependency.txt"), "dependency").unwrap();
+    fs::write(root.join("target/debug/artifact.txt"), "artifact").unwrap();
+    fs::write(root.join("vendor/lib/vendor.txt"), "vendor").unwrap();
+
+    let search =
+        to_value(file_search(&json!({"pattern":"**/*.txt","max_results":100}), &config).unwrap())
+            .unwrap();
+    let matches = search["matches"].as_array().unwrap();
+    assert_eq!(matches, &vec![Value::String("src/main.txt".into())]);
+
+    let listing = to_value(
+        directory_list(&json!({"path":".","depth":4,"max_entries":100}), &config).unwrap(),
+    )
+    .unwrap();
+    let listed_paths = listing["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["path"].as_str())
+        .collect::<Vec<_>>();
+    assert!(listed_paths.contains(&"node_modules"));
+    assert!(listed_paths.contains(&"target"));
+    assert!(listed_paths.contains(&"vendor"));
+    assert!(!listed_paths
+        .iter()
+        .any(|path| path.starts_with("node_modules/")));
+    assert!(!listed_paths.iter().any(|path| path.starts_with("target/")));
+    assert!(!listed_paths.iter().any(|path| path.starts_with("vendor/")));
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn workspace_read_write_edit_search_lifecycle_is_concurrency_safe() {
     let (root, config) = fixture();
 

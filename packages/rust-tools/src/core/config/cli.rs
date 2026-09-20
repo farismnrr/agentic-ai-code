@@ -180,6 +180,15 @@ pub struct Cli {
     )]
     pub toolchain_paths: Vec<String>,
 
+    /// Explicit user-owned runtime/toolchain state directories mounted read-only
+    /// into terminal sandboxes without being added to executable PATH.
+    #[arg(
+        long = "toolchain-state-path",
+        env = "RELAY_TOOLCHAIN_STATE_PATH",
+        value_delimiter = ','
+    )]
+    pub toolchain_state_paths: Vec<String>,
+
     /// Operator-approved language-server executable mappings. Values are
     /// `language=executable`; executable resolution is restricted to the relay
     /// safe PATH and no repository file can supply command arguments.

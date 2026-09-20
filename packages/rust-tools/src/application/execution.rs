@@ -14,6 +14,40 @@ mod ssh;
 mod toolchain;
 pub(crate) use process::kill_process_group;
 pub use toolchain::resolve_safe_executable;
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+#[doc(hidden)]
+pub mod protected_index_test_support {
+    use super::sandbox;
+    use std::io;
+    use std::path::Path;
+    use std::time::Duration;
+
+    pub fn prime_with_entry_limit(root: &Path, max_entries: usize) -> io::Result<usize> {
+        sandbox::test_prime_protected_path_index_with_entry_limit(
+            root,
+            Duration::from_secs(5),
+            max_entries,
+        )
+    }
+
+    pub fn discover(root: &Path) -> io::Result<()> {
+        sandbox::test_discover_protected_path_index(root)
+    }
+
+    pub fn snapshot_rejects_new_protected_path(root: &Path, relative: &Path) -> io::Result<()> {
+        sandbox::test_snapshot_rejects_new_protected_path(root, relative)
+    }
+
+    pub fn schedule_initialization(root: &Path) -> io::Result<()> {
+        sandbox::test_schedule_protected_path_index(root, Duration::from_secs(5))
+    }
+
+    pub fn is_permanent_error(kind: io::ErrorKind) -> bool {
+        sandbox::test_is_permanent_index_error(kind)
+    }
+}
+
 #[derive(Clone)]
 enum InvocationProgram {
     SelfBinary,

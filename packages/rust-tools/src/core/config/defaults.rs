@@ -33,6 +33,7 @@ impl Default for ServerConfig {
             allow_tailscale: false,
             tailscale_socket: "/var/run/tailscale/tailscaled.sock".into(),
             toolchain_paths: Vec::new(),
+            toolchain_state_paths: Vec::new(),
             lsp_servers: Vec::new(),
             enable_creative: false,
             blender_executable: None,

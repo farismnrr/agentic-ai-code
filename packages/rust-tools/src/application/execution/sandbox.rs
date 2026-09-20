@@ -11,16 +11,48 @@ use tokio::sync::watch;
 mod managed_process;
 mod masks;
 mod paths;
-mod protected_paths;
 mod spawn;
 mod ssh_material;
 mod toolchain_mounts;
 
 pub(super) use managed_process::spawn;
 pub(crate) use managed_process::{spawn_hook, spawn_lsp};
-pub(crate) use protected_paths::{
-    prime_protected_path_indexes, schedule_workspace_protected_path_indexes,
-};
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(crate) fn test_prime_protected_path_index_with_entry_limit(
+    root: &Path,
+    budget: std::time::Duration,
+    max_entries: usize,
+) -> Result<usize, std::io::Error> {
+    masks::test_prime_protected_path_index_with_entry_limit(root, budget, max_entries)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(crate) fn test_discover_protected_path_index(root: &Path) -> Result<(), std::io::Error> {
+    masks::test_discover_protected_path_index(root)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(crate) fn test_snapshot_rejects_new_protected_path(
+    root: &Path,
+    relative: &Path,
+) -> Result<(), std::io::Error> {
+    masks::test_snapshot_rejects_new_protected_path(root, relative)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(crate) fn test_schedule_protected_path_index(
+    root: &Path,
+    budget: std::time::Duration,
+) -> Result<(), std::io::Error> {
+    masks::test_schedule_protected_path_index(root, budget)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(crate) fn test_is_permanent_index_error(kind: std::io::ErrorKind) -> bool {
+    masks::test_is_permanent_index_error(kind)
+}
+
 use spawn::spawn_with_profile;
 
 #[derive(Clone, Copy)]
@@ -35,6 +67,11 @@ pub(crate) struct SpawnControl<'a> {
 }
 
 impl SpawnControl<'_> {
+    pub(crate) fn remaining(&self) -> Option<std::time::Duration> {
+        self.deadline
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+
     pub(crate) fn check(&self) -> Result<(), io::Error> {
         if self
             .deadline

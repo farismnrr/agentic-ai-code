@@ -10,6 +10,8 @@ test-gh-provider = []
 # Non-default feature used only by deterministic Creative execution-binding fixtures.
 # It never registers a binding by itself; tests must still supply an explicit descriptor.
 test-creative-binding = []
+# Deterministic integration seams for bounded protected-path indexing regressions.
+test-protected-index = []
 
 [[bin]]
 name = "ai-tools"

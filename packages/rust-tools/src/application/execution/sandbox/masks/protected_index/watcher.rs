@@ -2,51 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::{CString, OsString};
 use std::fs::File;
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct DirectorySignature {
-    pub(super) device: u64,
-    pub(super) inode: u64,
-    mode: u32,
-    modified_seconds: i64,
-    modified_nanoseconds: i64,
-    changed_seconds: i64,
-    changed_nanoseconds: i64,
-    length: u64,
-}
-
-impl DirectorySignature {
-    pub(super) fn read(directory: &File) -> io::Result<Self> {
-        let mut stat = std::mem::MaybeUninit::<libc::stat>::zeroed();
-        if unsafe { libc::fstat(directory.as_raw_fd(), stat.as_mut_ptr()) } < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let stat = unsafe { stat.assume_init() };
-        if stat.st_mode & libc::S_IFMT != libc::S_IFDIR {
-            return Err(io::Error::new(
-                io::ErrorKind::NotADirectory,
-                "protected-path index entry changed type",
-            ));
-        }
-        Ok(Self {
-            device: stat.st_dev,
-            inode: stat.st_ino,
-            mode: stat.st_mode,
-            modified_seconds: stat.st_mtime,
-            modified_nanoseconds: stat.st_mtime_nsec,
-            changed_seconds: stat.st_ctime,
-            changed_nanoseconds: stat.st_ctime_nsec,
-            length: stat.st_size.max(0) as u64,
-        })
-    }
-}
-
 #[derive(Clone)]
 pub(super) struct DirectoryRecord {
-    pub(super) signature: DirectorySignature,
     pub(super) child_directories: Vec<OsString>,
 }
 
@@ -81,18 +42,6 @@ pub(super) struct DirectoryWatcher {
 }
 
 impl DirectoryWatcher {
-    pub(super) fn new() -> io::Result<Self> {
-        let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC | libc::IN_NONBLOCK) };
-        if fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(Self {
-            fd: unsafe { File::from_raw_fd(fd) },
-            watch_paths: HashMap::new(),
-            expected_ignored: HashSet::new(),
-        })
-    }
-
     pub(super) fn watch_directory(&mut self, directory: &File, path: &Path) -> io::Result<()> {
         let proc_fd_path = CString::new(format!("/proc/self/fd/{}", directory.as_raw_fd()))
             .expect("proc fd path contains no NUL bytes");

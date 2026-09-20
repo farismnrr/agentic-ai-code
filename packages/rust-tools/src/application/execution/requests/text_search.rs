@@ -206,6 +206,9 @@ fn build_text_search_invocation(
     for excluded in crate::core::protected_paths::ripgrep_exclusion_globs() {
         args.extend(["--glob".into(), excluded]);
     }
+    for directory in crate::application::workspace::DEPENDENCY_OR_GENERATED_DIRECTORIES {
+        args.extend(["--glob".into(), format!("!**/{directory}/**")]);
+    }
     if !regex {
         args.push("--fixed-strings".into());
     }

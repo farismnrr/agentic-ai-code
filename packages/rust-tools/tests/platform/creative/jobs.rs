@@ -35,6 +35,7 @@ pub(super) fn binding_descriptor_for_workflow_tests() -> String {
     .to_string()
 }
 
+#[cfg(feature = "test-creative-binding")]
 pub(super) fn test_binding_descriptor() -> String {
     json!({
         "binding_id": "test_mock_image",

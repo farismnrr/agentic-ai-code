@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const MAX_PROTECTED_SCAN_ENTRIES: usize = 500_000;
+const MAX_PROTECTED_SCAN_DIRECTORIES: usize = 100_000;
 const CONTROL_CHECK_INTERVAL: usize = 64;
 
 pub(in crate::application::execution::sandbox) struct ProtectedPathFreshness {
@@ -60,7 +60,15 @@ fn discover_with_budget(
     let mut pending = vec![root.clone()];
     let mut protected = BTreeSet::new();
     let mut scanned_entries = 0usize;
+    let mut scanned_directories = 0usize;
     while let Some(directory) = pending.pop() {
+        scanned_directories = scanned_directories.saturating_add(1);
+        if scanned_directories > MAX_PROTECTED_SCAN_DIRECTORIES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "protected-path scan exceeds bounded directory maximum",
+            ));
+        }
         if Instant::now() >= deadline {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
@@ -73,11 +81,6 @@ fn discover_with_budget(
         for entry in std::fs::read_dir(&directory)? {
             let entry = entry?;
             scanned_entries = scanned_entries.saturating_add(1);
-            if scanned_entries > MAX_PROTECTED_SCAN_ENTRIES {
-                return Err(io::Error::other(
-                    "protected-path scan exceeds bounded workspace maximum",
-                ));
-            }
             if scanned_entries % CONTROL_CHECK_INTERVAL == 0 {
                 if Instant::now() >= deadline {
                     return Err(io::Error::new(

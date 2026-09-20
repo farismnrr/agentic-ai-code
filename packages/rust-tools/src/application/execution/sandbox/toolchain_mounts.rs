@@ -5,6 +5,16 @@ use super::{paths, SandboxError, SpawnControl};
 use crate::core::config::ServerConfig;
 use std::path::{Path, PathBuf};
 
+fn runtime_tool_home(variable: &str, fallback: PathBuf) -> PathBuf {
+    if let Some(value) = std::env::var_os(variable) {
+        let path = PathBuf::from(value);
+        if path.is_absolute() && path.is_dir() {
+            return path;
+        }
+    }
+    fallback
+}
+
 pub(super) struct ToolchainMounts {
     pub(super) cargo_home: Option<String>,
     pub(super) rustup_home: Option<String>,
@@ -22,8 +32,30 @@ pub(super) fn mount_toolchains(
     let mut rustup_home = None;
     let mut toolchain_roots = std::collections::BTreeSet::new();
     let mut freshness_checks: Vec<ProtectedPathFreshness> = Vec::new();
-    let home_cargo_bin = host_home.join(".cargo/bin");
-    let canonical_home_cargo_bin = std::fs::canonicalize(&home_cargo_bin).ok();
+    let cargo_store = runtime_tool_home("CARGO_HOME", host_home.join(".cargo"));
+    let rustup_store = runtime_tool_home("RUSTUP_HOME", host_home.join(".rustup"));
+    // User-toolchain commands must see the same resolved Cargo/Rustup stores
+    // that executable discovery used. Mount these homes eagerly instead of
+    // depending on a later path-shape branch to rediscover them.
+    if cargo_store.is_dir() {
+        let value = cargo_store.to_string_lossy().into_owned();
+        if !cargo_store.starts_with(sandbox_root) {
+            args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+            toolchain_roots.insert(cargo_store.clone());
+        }
+        for file in ["credentials", "credentials.toml"] {
+            mask_protected_file(args, &cargo_store.join(file))?;
+        }
+        cargo_home = Some(value);
+    }
+    if rustup_store.is_dir() {
+        let value = rustup_store.to_string_lossy().into_owned();
+        if !rustup_store.starts_with(sandbox_root) {
+            args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
+            toolchain_roots.insert(rustup_store.clone());
+        }
+        rustup_home = Some(value);
+    }
 
     for path in &config.toolchain_paths {
         if let Some(control) = control {
@@ -63,66 +95,25 @@ pub(super) fn mount_toolchains(
             let value = toolchain_root.to_string_lossy().into_owned();
             args.extend(["--ro-bind".into(), value.clone(), value]);
         }
-        if canonical_home_cargo_bin.as_ref() == Some(&canonical) {
-            let candidate = host_home.join(".cargo");
-            if candidate.is_dir() {
-                let value = candidate.to_string_lossy().into_owned();
-                if !candidate.starts_with(sandbox_root) {
-                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                    toolchain_roots.insert(candidate.clone());
-                }
-                for file in ["credentials", "credentials.toml"] {
-                    mask_protected_file(args, &candidate.join(file))?;
-                }
-                cargo_home = Some(value);
-            }
-            let candidate = host_home.join(".rustup");
-            if candidate.is_dir() {
-                let value = candidate.to_string_lossy().into_owned();
-                if !candidate.starts_with(sandbox_root) {
-                    args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                    toolchain_roots.insert(candidate.clone());
-                }
-                rustup_home = Some(value);
-            }
+    }
+
+    for path in &config.toolchain_state_paths {
+        if let Some(control) = control {
+            control.check()?;
         }
+        let configured = PathBuf::from(path);
+        let canonical = std::fs::canonicalize(&configured)
+            .map_err(|_| std::io::Error::other("invalid toolchain state path"))?;
+        let source = canonical.to_string_lossy().into_owned();
+        let destination = configured.to_string_lossy().into_owned();
+        if configured.starts_with(host_home) {
+            paths::add_bwrap_parent_dirs(args, configured.parent(), host_home);
+        }
+        args.extend(["--ro-bind".into(), source, destination]);
+        toolchain_roots.insert(canonical);
     }
 
     let safe_path_entries = super::super::toolchain::safe_path_entries(config);
-
-    // Automatic ~/.cargo/bin discovery must carry the rustup state that makes
-    // rustup's cargo/rustc proxy shims functional. Keep the state read-only and
-    // mask Cargo credential files exactly as for an explicit toolchain path.
-    if cargo_home.is_none()
-        && canonical_home_cargo_bin.as_ref().is_some_and(|cargo_bin| {
-            safe_path_entries
-                .iter()
-                .filter_map(|path| std::fs::canonicalize(path).ok())
-                .any(|path| &path == cargo_bin)
-        })
-    {
-        let candidate = host_home.join(".cargo");
-        if candidate.is_dir() {
-            let value = candidate.to_string_lossy().into_owned();
-            if !candidate.starts_with(sandbox_root) {
-                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                toolchain_roots.insert(candidate.clone());
-            }
-            for file in ["credentials", "credentials.toml"] {
-                mask_protected_file(args, &candidate.join(file))?;
-            }
-            cargo_home = Some(value);
-        }
-        let candidate = host_home.join(".rustup");
-        if candidate.is_dir() {
-            let value = candidate.to_string_lossy().into_owned();
-            if !candidate.starts_with(sandbox_root) {
-                args.extend(["--ro-bind".into(), value.clone(), value.clone()]);
-                toolchain_roots.insert(candidate.clone());
-            }
-            rustup_home = Some(value);
-        }
-    }
 
     // Expose only validated executable directories from user-managed runtimes,
     // never their surrounding profiles or credential stores.

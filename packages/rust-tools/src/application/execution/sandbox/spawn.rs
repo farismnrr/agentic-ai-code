@@ -14,6 +14,34 @@ use std::process::Stdio;
 use std::time::Instant;
 use tokio::process::{Child, Command};
 
+fn needs_user_toolchain_mounts(program_path: &Path) -> bool {
+    let name = program_path.file_name().and_then(|name| name.to_str());
+    if matches!(
+        name,
+        Some(
+            "cargo"
+                | "rustc"
+                | "rustdoc"
+                | "rustup"
+                | "clippy-driver"
+                | "rustfmt"
+                | "git"
+                | "sh"
+                | "bash"
+                | "fish"
+                | "zsh"
+                | "env"
+        )
+    ) {
+        return true;
+    }
+
+    !["/usr", "/bin", "/sbin", "/lib", "/opt"]
+        .into_iter()
+        .map(Path::new)
+        .any(|root| program_path.starts_with(root))
+}
+
 pub(super) fn spawn_with_profile(
     config: &ServerConfig,
     invocation: &ToolInvocation,
@@ -177,9 +205,10 @@ pub(super) fn spawn_with_profile(
     } else {
         program_path.clone()
     };
+    let mount_user_toolchains = !workspace_hidden && needs_user_toolchain_mounts(&program_path);
     let (cargo_home, rustup_home, mut protected_path_freshness_checks) = if workspace_hidden {
         (None, None, Vec::new())
-    } else {
+    } else if mount_user_toolchains {
         let sandbox_root =
             sandbox_root.ok_or_else(|| std::io::Error::other("workspace mount is unavailable"))?;
         let toolchain_mounts = toolchain_mounts::mount_toolchains(
@@ -194,6 +223,8 @@ pub(super) fn spawn_with_profile(
             toolchain_mounts.rustup_home,
             toolchain_mounts.freshness_checks,
         )
+    } else {
+        (None, None, Vec::new())
     };
     let ssh_root = if matches!(&invocation.security, InvocationSecurity::Ssh { .. }) {
         Some(config.resolved_ssh_root().map_err(std::io::Error::other)?)
@@ -366,7 +397,9 @@ pub(super) fn spawn_with_profile(
         command.stdin(Stdio::piped());
     }
     if let Some(rustup_home) = rustup_home {
-        command.env("RUSTUP_HOME", rustup_home);
+        command
+            .env("RUSTUP_HOME", rustup_home)
+            .env("RUSTUP_AUTO_INSTALL", "0");
     }
     match (
         matches!(profile.workspace_mount, WorkspaceMount::Fixed(_)),

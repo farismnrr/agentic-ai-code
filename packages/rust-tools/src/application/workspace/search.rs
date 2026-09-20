@@ -21,8 +21,65 @@ const MAX_FILE_SEARCH_PATH_BYTES: usize = 3_500;
 const MAX_FILE_SEARCH_DEPTH: usize = 64;
 const MAX_FILE_SEARCH_EXCLUDES: usize = 16;
 
-const FILE_SEARCH_SKIPPED_DIRECTORIES: [&str; 5] =
-    [".git", "node_modules", "target", ".nuxt", ".output"];
+/// Dependency, package-manager, generated-output, and tool-cache trees that
+/// are not source-authoritative. Keep this ecosystem-agnostic: callers use the
+/// same policy for AI discovery and protected-path scans so large dependency
+/// trees never dominate workspace traversal.
+///
+/// Do not add ordinary source-container names such as `packages`, `src`,
+/// `lib`, or `crates`.
+pub(crate) const DEPENDENCY_OR_GENERATED_DIRECTORIES: &[&str] = &[
+    // VCS / generic generated output and caches.
+    ".git",
+    ".cache",
+    "cache",
+    "coverage",
+    "dist",
+    "build",
+    "out",
+    // JavaScript / TypeScript.
+    "node_modules",
+    ".pnpm-store",
+    ".yarn",
+    ".npm",
+    ".nuxt",
+    ".next",
+    ".output",
+    ".turbo",
+    ".parcel-cache",
+    // Rust.
+    "target",
+    // Python.
+    ".venv",
+    "venv",
+    ".tox",
+    ".nox",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    // JVM / Gradle / Maven.
+    ".gradle",
+    ".m2",
+    // .NET.
+    "obj",
+    ".nuget",
+    // C / C++ / native generators.
+    "CMakeFiles",
+    "cmake-build-debug",
+    "cmake-build-release",
+    // Swift / Xcode.
+    ".build",
+    "DerivedData",
+    // Ruby / PHP / Dart.
+    ".bundle",
+    "vendor",
+    ".dart_tool",
+    // Common vendored dependency roots.
+    "deps",
+    "third_party",
+    "third-party",
+];
 
 #[derive(Debug, Serialize)]
 pub struct FileSearchResult {
@@ -179,7 +236,7 @@ fn visit_file_search(
             continue;
         }
         if file_type.is_dir() {
-            if FILE_SEARCH_SKIPPED_DIRECTORIES.contains(&name) {
+            if DEPENDENCY_OR_GENERATED_DIRECTORIES.contains(&name) {
                 continue;
             }
             let child_directory = directory.open_child(&child)?;

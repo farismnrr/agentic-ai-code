@@ -266,21 +266,38 @@ impl ServerConfig {
                 ));
             }
         }
-        for path in &self.toolchain_paths {
-            let candidate = std::fs::canonicalize(path).map_err(|_| {
-                RelayError::InvalidConfig(
-                    "toolchain-path must resolve to an existing directory".into(),
-                )
-            })?;
-            // Explicit toolchain paths are mounted read-only by the sandbox and
-            // are an operator-approved exception to the workspace boundary.
-            // They may live under the operator home while the execution root is
-            // narrowed to a single workspace (for example when SSH credentials
-            // remain at ~/.ssh outside that boundary).
-            if !candidate.is_dir() {
-                return Err(RelayError::InvalidConfig(
-                    "toolchain-path must be an existing directory".into(),
-                ));
+        for (kind, paths) in [
+            ("toolchain-path", &self.toolchain_paths),
+            ("toolchain-state-path", &self.toolchain_state_paths),
+        ] {
+            for path in paths {
+                let candidate = std::fs::canonicalize(path).map_err(|_| {
+                    RelayError::InvalidConfig(format!(
+                        "{kind} must resolve to an existing directory"
+                    ))
+                })?;
+                // Explicit toolchain paths and state directories are mounted
+                // read-only by the sandbox and are operator-approved exceptions
+                // to the workspace boundary.
+                let metadata = candidate.metadata().map_err(|_| {
+                    RelayError::InvalidConfig(format!("{kind} metadata is unavailable"))
+                })?;
+                if !metadata.is_dir() {
+                    return Err(RelayError::InvalidConfig(format!(
+                        "{kind} must be an existing directory"
+                    )));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+                    if metadata.uid() != unsafe { libc::geteuid() }
+                        || metadata.permissions().mode() & 0o022 != 0
+                    {
+                        return Err(RelayError::InvalidConfig(format!(
+                            "{kind} must be owner-controlled and not writable by group/other"
+                        )));
+                    }
+                }
             }
         }
         Ok(())

@@ -171,7 +171,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "directory_list",
             title: Some("Directory List"),
-            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories. depth=1 lists direct children; larger values include descendants.",
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories. depth=1 lists direct children; larger values include descendants. Dependency/generated directories remain visible as directory entries but are treated as opaque and are not recursively scanned.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -196,7 +196,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_search",
             title: Some("File Search"),
-            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Optional exclude[] globs prune matching files/directories. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Optional exclude[] globs prune matching files/directories. Hidden files are searchable; dependency/generated trees such as .git, node_modules, target, .pnpm-store, .nuxt, .output, dist, coverage, vendor, and .cache are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",

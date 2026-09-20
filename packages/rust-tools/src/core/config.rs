@@ -57,6 +57,9 @@ pub struct ServerConfig {
     pub allow_tailscale: bool,
     pub tailscale_socket: String,
     pub toolchain_paths: Vec<String>,
+    /// Operator-approved read-only runtime/toolchain state directories. These
+    /// are mounted into the sandbox but are never added to executable PATH.
+    pub toolchain_state_paths: Vec<String>,
     /// Operator-approved LSP executable mappings (`language=executable`).
     pub lsp_servers: Vec<String>,
     /// Master switch for the complete first-party Creative production platform,

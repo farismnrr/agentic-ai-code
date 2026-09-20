@@ -51,12 +51,17 @@ fn broad_home_sandbox() {
 }
 
 pub(super) async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> JobSnapshot {
+    // Protected-index transient failures deliberately back off for 30 seconds
+    // to avoid a retry storm. Keep this fixture's command window long enough
+    // to observe recovery after it repairs an intentionally inaccessible tree.
+    const SHELL_TIMEOUT_MS: u64 = 45_000;
+    const SHELL_RECOVERY_WINDOW: Duration = Duration::from_secs(45);
     let manager = JobManager::new(config.clone());
     manager.prepare_for_serving().await;
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + SHELL_RECOVERY_WINDOW;
     loop {
         let id = start_terminal_job(
-            &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":10000}),
+            &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":SHELL_TIMEOUT_MS}),
             config,
             &manager,
         )
@@ -69,9 +74,10 @@ pub(super) async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> Jo
             .and_then(|tool_result| tool_result.content.first())
             .map(|content| content.text.as_str())
             .unwrap_or_default();
-        let index_retry = result.state == JobState::Failed
+        let index_retry = matches!(result.state, JobState::Failed | JobState::TimedOut)
             && (diagnostic.contains("protected_path_discovery: Interrupted")
-                || diagnostic.contains("protected_path_discovery: WouldBlock"));
+                || diagnostic.contains("protected_path_discovery: WouldBlock")
+                || diagnostic.contains("protected_path_discovery: TimedOut"));
         if !index_retry || std::time::Instant::now() >= deadline {
             manager.shutdown().await;
             return result;
@@ -116,7 +122,6 @@ async fn home_fixture_child() {
         ".cargo/credentials.toml",
         "project-a/.env",
         "project-b/.env.production",
-        "project-a/node_modules/dependency/.env.local",
         "project-a/deep/.ssh/id_rsa",
         "project-a/deep/.gnupg/secring.gpg",
         "project-a/deep/.aws/credentials",
@@ -142,6 +147,14 @@ async fn home_fixture_child() {
         let path = root.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, "fixture-protected-canary").unwrap();
+    }
+    for path in [
+        "project-a/node_modules/dependency/.env.local",
+        "project-a/target/generated/.env.test",
+    ] {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "fixture-skipped-canary").unwrap();
     }
     fs::create_dir(root.join("relay-state")).unwrap();
     fs::write(
@@ -174,11 +187,12 @@ async fn home_fixture_child() {
         );
         assert_eq!(result.stdout, "ordinary");
     }
-    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat deep/.env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local deep/.env deep/.ssh/id_rsa deep/.aws/credentials 2>/dev/null; test ! -S ../agent.sock; test ! -S deep/auth_helper.sock && echo nested-sock-masked").await;
+    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat deep/.env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local target/generated/.env.test deep/.env deep/.ssh/id_rsa deep/.aws/credentials 2>/dev/null; test ! -S ../agent.sock; test ! -S deep/auth_helper.sock && echo nested-sock-masked").await;
     assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
     assert!(result.stdout.contains("public-example"));
     assert!(result.stdout.contains("nested-public-example"));
     assert!(!result.stdout.contains("fixture-protected-canary"));
+    assert!(result.stdout.contains("fixture-skipped-canary"));
     assert!(result.stdout.contains("nested-sock-masked"));
     for path in protected.into_iter().chain(["relay-state/payload.key"]) {
         let result = shell(
@@ -260,14 +274,14 @@ async fn home_fixture_child() {
             .exit_code,
         Some(0)
     );
-    // Complete scans include dependency/build/cache trees. A modest synthetic
-    // home has thousands of entries; none may be skipped because of its name.
+    // Dependency/build/cache trees are intentionally outside protected-path
+    // discovery. Their contents stay visible inside the authorized workspace.
     let cache = root.join("project-b/target");
     fs::create_dir(&cache).unwrap();
     for i in 0..10_000 {
         fs::write(cache.join(format!("entry-{i}")), "ordinary").unwrap();
     }
-    fs::write(cache.join(".env.hidden"), "fixture-protected-canary").unwrap();
+    fs::write(cache.join(".env.hidden"), "fixture-skipped-canary").unwrap();
     let result = shell(
         &config,
         &root,
@@ -275,7 +289,11 @@ async fn home_fixture_child() {
     )
     .await;
     assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
-    assert_eq!(result.stdout, "ordinary", "{}", result.stderr);
+    assert_eq!(
+        result.stdout, "fixture-skipped-canaryordinary",
+        "{}",
+        result.stderr
+    );
     let redacted = shell(
         &config,
         &root,

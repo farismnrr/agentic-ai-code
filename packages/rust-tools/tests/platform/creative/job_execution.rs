@@ -1,8 +1,11 @@
-use super::jobs::{configured_workspace, test_binding_descriptor};
+use super::jobs::configured_workspace;
+#[cfg(feature = "test-creative-binding")]
+use super::jobs::test_binding_descriptor;
 use super::{call, create_project, dispatch_sync};
 use serde_json::{json, Value};
 use std::fs;
 
+#[cfg(feature = "test-creative-binding")]
 #[test]
 fn test_binding_proves_running_timeout_actual_output_and_terminal_lifecycle() {
     let (_workspace, mut config) = configured_workspace();

@@ -7,26 +7,11 @@ use std::time::Instant;
 use tokio::time::{timeout, Duration};
 
 impl JobManager {
-    /// Prime bounded toolchain indexes and enqueue configured workspace roots
-    /// for the dedicated background index worker before serving requests.
-    /// Broad workspace traversal never runs inside a terminal command or
-    /// delays the relay from accepting requests.
-    pub async fn prepare_for_serving(&self) {
-        let config = self.config.clone();
-        if tokio::task::spawn_blocking(move || {
-            super::super::sandbox::prime_protected_path_indexes(&config);
-        })
-        .await
-        .is_err()
-        {
-            tracing::warn!(
-                event = "relay.sandbox.stage",
-                stage = "protected_path_cache_prime",
-                outcome = "failed",
-                error_kind = ?std::io::ErrorKind::Other,
-            );
-        }
-    }
+    /// Protected-path indexes are initialized on demand from the exact trees
+    /// selected for an invocation. Serving startup intentionally performs no
+    /// filesystem priming so unrelated workspace/toolchain roots cannot
+    /// contend with the first terminal request.
+    pub async fn prepare_for_serving(&self) {}
 
     pub async fn wait(&self, id: &str) -> Result<JobSnapshot, McpError> {
         let timeout_ms = {

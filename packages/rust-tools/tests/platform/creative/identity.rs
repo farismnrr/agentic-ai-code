@@ -1,5 +1,9 @@
-use super::media::{configured_workspace, run_capability};
-use super::{call, create_project, dispatch_sync};
+#[cfg(feature = "test-creative-binding")]
+use super::call;
+use super::media::configured_workspace;
+#[cfg(feature = "test-creative-binding")]
+use super::media::run_capability;
+use super::{create_project, dispatch_sync};
 use serde_json::json;
 
 fn identity_binding_descriptor(version: &str) -> String {
@@ -17,6 +21,7 @@ fn identity_binding_descriptor(version: &str) -> String {
     .to_string()
 }
 
+#[cfg(feature = "test-creative-binding")]
 fn create_character(
     config: &ai_tools::core::config::ServerConfig,
     project_id: &str,
@@ -50,6 +55,7 @@ fn create_character(
     (element_id, revision_id)
 }
 
+#[cfg(feature = "test-creative-binding")]
 fn prepare_identity(
     config: &ai_tools::core::config::ServerConfig,
     project_id: &str,
@@ -83,6 +89,7 @@ fn prepare_identity(
     )
 }
 
+#[cfg(feature = "test-creative-binding")]
 #[test]
 fn identity_preparation_is_explicit_optional_traceable_and_replaceable() {
     let (_workspace, mut config) = configured_workspace();
