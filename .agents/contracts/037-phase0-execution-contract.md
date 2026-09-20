@@ -1,6 +1,8 @@
-# Plan 037 Phase 0 — execution contract
+# Plan 037 Phase 0 — execution contract — HISTORICAL / SUPERSEDED
 
-Status: audited before implementation on 2026-08-16.
+> **Historical audit snapshot, not the live execution contract.** The public terminal/MCP Tasks design below was superseded on 2026-09-18. Current public execution is synchronous-only: `terminal_exec` has a 60-second hard ceiling, no caller `execution_mode`, no public `terminal_job_start/get/cancel`, and no MCP Tasks escape hatch for longer work. See current source/tests, `.agents/memories/README.md`, and operator docs.
+
+Status: audited before implementation on 2026-08-16; retained as historical evidence.
 
 ## Protocol target
 

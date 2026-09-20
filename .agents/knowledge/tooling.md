@@ -24,10 +24,7 @@ beneath that tree can be selected with `cwd`, while paths outside it are denied.
 Setting the workspace root and an explicit `--execution-root` to `$HOME` is a
 deliberate full-home scope and should not be the default. Bubblewrap, a scrubbed
 environment and credential masking remain mandatory; direct and shell-wrapped
-privilege brokers and generic SSH remain unavailable. Protected discovery scans
-visible dependency/cache/build directories too and fails closed on incomplete
-traversal or the 500,000-entry limit. Do not bypass that failure by pruning
-visible directories. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
+privilege brokers and generic SSH remain unavailable. Protected discovery indexes the ordinary visible user tree and fails closed on incomplete traversal, watcher invalidation, or the 500,000-entry ceiling. Canonical dependency/generated roots (`node_modules`, `target`, recognized cache/build/output roots, etc.) are intentionally pruned for bounded performance; their contents remain visible when the workspace is visible and are not recursively credential-masked. Never store credentials or secret `.env*` files in those skipped roots, and do not add new arbitrary skip names merely to make a slow scan pass. See [terminal security](../../docs/security.md#terminal-filesystem-and-credential-boundary).
 
 Host `systemctl --user` and `journalctl --user` are intentionally unavailable
 through generic terminal execution: `/run/user`, the host session/system bus,

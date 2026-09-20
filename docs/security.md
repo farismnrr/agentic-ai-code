@@ -99,22 +99,13 @@ credentials, all `.env` / `.env.*` except `.env.example`, and known browser,
 keyring, password-manager and CLI authentication stores. Relay state uses its
 canonical configured location and is hidden even when placed inside HOME.
 Protected stores are empty private mounts; file masks prevent host reads and
-writes. Masking applies recursively to nested credential directories (e.g.
-`deep/.ssh`, `deep/.aws`, `deep/.cargo/credentials`, `deep/.env.*`) and nested
-Unix domain sockets across visible trees. Non-secret templates such as `.env.example`
+writes. Within indexed trees, masking applies recursively to nested credential directories (e.g. `deep/.ssh`, `deep/.aws`, `deep/.cargo/credentials`, `deep/.env.*`) and nested Unix domain sockets. Canonical dependency/generated roots are the explicit indexing exception described below; do not infer recursive credential masking inside those skipped roots. Non-secret templates such as `.env.example`
 remain explicitly readable. The child environment is cleared and rebuilt with
 runtime-only values (`LANG`, `PATH`, `TMPDIR`, `HOME`); host secrets, SSH/GPG/keyring,
 and session-bus variables are never forwarded. Existing output and job-retention
 redaction remains mandatory.
 
-Every visible user tree is scanned before spawn, without following directory
-symlinks. Protected symlinks, traversal/metadata failures and the 500,000-entry
-limit abort execution. Dependency/build/cache directories cannot be skipped
-while still visible: they can contain credentials too. Filesystem Unix sockets
-found in the tree are masked. This is a path-based credential policy, not a
-content classifier for secrets copied into arbitrary ordinary files. Operators
-must keep credential material in protected stores, and must not concurrently
-replace the filesystem being prepared for sandbox execution.
+Before spawn, the selected user tree must have a valid protected-path index; the relay reuses a watched index when possible and reconciles filesystem changes fail-closed before execution. Traversal does not follow directory symlinks, and protected symlinks, unsafe traversal/metadata failures, watcher overflow/removal, or the 500,000 indexed-entry ceiling abort execution. For bounded performance, the canonical dependency/generated roots in `DEPENDENCY_OR_GENERATED_DIRECTORIES` (for example `node_modules`, `target`, cache/build/output roots, and similar vendor/generated trees) are intentionally pruned from protected-path discovery. Their contents remain visible when the containing workspace is visible and are **not** recursively credential-masked merely because a filename looks protected; do not store credentials or secret `.env*` files inside those skipped generated roots. A newly created ordinary subtree is reconciled conservatively so pre-populated protected files cannot bypass masking, while a newly created canonical generated root remains intentionally skipped. Filesystem Unix sockets found in indexed trees are masked. This is a path-based credential policy, not a content classifier for secrets copied into arbitrary ordinary files. Operators must keep credential material in protected stores and avoid relying on generated/dependency trees as secret storage.
 
 Host `/run/user`, host `/tmp`, host processes, session/system D-Bus and journal
 mounts remain absent. HOME scope never authorizes host-service control.

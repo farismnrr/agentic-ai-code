@@ -49,7 +49,7 @@ Do not confuse the Nuxt UI documentation MCP above with this application's own M
 
 - [`project.md`](project.md) for architecture orientation;
 - [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) for current relay behavior;
-- the canonical [`../memories/README.md`](../memories/README.md#relay-agent-and-mcp-security-invariants) for durable security/protocol decisions;
+- the canonical [`../memories/README.md`](../memories/README.md#rustnative-tool-invariants) for durable security/protocol decisions;
 - [`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) only when historical Plan 028/029/029b context is useful;
 - any current `031+` plan file if a new MCP effort has been opened;
 - [`../contracts/`](../contracts/) before changing client-visible frozen descriptors.

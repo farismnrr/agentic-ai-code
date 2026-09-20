@@ -190,11 +190,7 @@ Blender creative projects use
 beneath the `ai-code` checkout.
 
 This profile still uses Bubblewrap and a rebuilt minimal environment. It does
-not inherit login-shell credentials or PATH. Credential files, session/keyring
-stores, relay state and discovered Unix sockets remain masked; `.env.example`
-is the intentional non-secret exception. Discovery must complete within
-500,000 entries per visible tree, including dependency/build/cache directories,
-or execution fails closed. A larger home should use narrower explicit roots.
+not inherit login-shell credentials or PATH. Credential files, session/keyring stores, relay state and discovered Unix sockets remain masked in indexed trees; `.env.example` is the intentional non-secret exception. Protected-path indexing must stay within the 500,000-entry bound or execution fails closed. Canonical dependency/generated roots such as `node_modules`, `target`, and recognized cache/build/output directories are intentionally pruned from this recursive credential scan for bounded performance; their contents stay visible when the workspace is visible, so never use those skipped roots to store credentials or secret `.env*` files. A larger home should use narrower explicit roots.
 See [security](security.md#terminal-filesystem-and-credential-boundary).
 
 Tools use dedicated MCP capabilities first for operations they cover. Terminal
@@ -232,7 +228,7 @@ RELAY_ALLOW_TAILSCALE
 RELAY_TAILSCALE_SOCKET
 ```
 
-`RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
+`RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks known credential paths and Unix domain sockets throughout the protected-path indexed tree. Canonical dependency/generated roots are the intentional indexing exception described below; their contents are not recursively credential-masked.
 
 `terminal_exec` is synchronous-only. Its caller-visible `timeout_ms` range is
 `1..=60000` milliseconds with a 30 second default. The terminal hard ceiling is

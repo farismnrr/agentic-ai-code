@@ -1,6 +1,8 @@
-# Plan 050 Implementation Agent Instructions
+# Plan 050 Implementation Agent Instructions — HISTORICAL / SUPERSEDED
 
-Implement `.agents/plans/050-workspace-activity-ledger-roadmap.md` end-to-end in the `ai-code` repository.
+> **Do not execute this prompt as current repository guidance.** It is preserved only as Plan 050 implementation history. Its `execution_mode: sync|async|auto`, MCP Tasks, and `terminal_job_*` execution requirements were superseded by the 2026-09-18 synchronous-only runtime invariant: public `terminal_exec` is synchronous-only, capped at 60 seconds, and long work is handed to the human/operator as an exact foreground command. Current work must start from `AGENTS.md`, `.agents/README.md`, current knowledge, canonical memory, source/tests, and the explicitly current plan status.
+
+Historically, this prompt instructed an implementation agent to implement `.agents/plans/050-workspace-activity-ledger-roadmap.md` end-to-end in the `ai-code` repository.
 
 This file is an execution prompt, not a separate plan. The single source of truth for scope, phases, tasks, architecture, and Definition of Done remains `.agents/plans/050-workspace-activity-ledger-roadmap.md`.
 

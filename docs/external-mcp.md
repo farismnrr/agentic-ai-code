@@ -4,7 +4,7 @@ external MCP client connects to the same public OAuth-protected MCP resource use
 
 Before starting, complete:
 
-1. [Keycloak / Authorization Server setup](keycloak.md)
+1. [OAuth/OIDC Authorization Server setup](oauth-provider.md)
 2. [Remote MCP deployment](remote-mcp.md)
 3. unauthenticated public smoke checks
 4. preferably an authenticated owner-token `server/discover` + `tools/list` smoke check
@@ -53,7 +53,7 @@ During OAuth setup, external MCP client will provide/use a callback URI. Configu
 
 Do not reuse a callback URI copied from another account/session/environment and do not broadly allow arbitrary redirects.
 
-For dynamic registration, apply the restrictions described in [keycloak.md](keycloak.md).
+For dynamic registration, apply the restrictions described in [oauth-provider.md](oauth-provider.md).
 
 ## 5. Complete owner login
 
@@ -172,7 +172,7 @@ This does not change the relay's authorization requirement: tool tokens must sti
 
 The relay uses a synchronous-only agent execution model. Every agent-invoked process-like MCP tool must complete or fail within a hard 60-second ceiling; there is no MCP Tasks escape hatch for longer execution.
 
-- `terminal_exec` accepts `timeout_ms` only within the effective `1..=60000` millisecond ceiling. A supplied `0` is normalized to the effective configured maximum, which itself cannot exceed 60 seconds.
+- Public `terminal_exec` accepts `timeout_ms` only within the effective `1..=60000` millisecond ceiling; the schema default is 30 seconds. `0` is not a valid MCP caller value. Internal defensive normalization of legacy/internal zero values does not expand the public contract.
 - `ssh_readonly_exec`, `web_search`, `http_fetch`, and other process-like tools remain synchronous. They do not return task handles and the relay does not expose `tasks/get`, `tasks/update`, or `tasks/cancel`.
 - The first-party Nuxt MCP client may apply its own shorter per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds), but that never extends relay execution beyond the server-side ceiling.
 - Work that can legitimately take longer than 60 seconds is not started in the agent tool call. The agent must hand the human/operator an exact foreground command instead.

@@ -85,7 +85,7 @@ Prefer an active dedicated MCP tool for an operation it fully covers, including 
 - **Timeout policy.** Public process-like tool runtimes are capped at 60 seconds. `terminal_exec`, `ssh_readonly_exec`, `http_fetch`, and `web_search` use a 30-second default where caller-selectable timeout is exposed; schemas reject values outside `1..=60000`. Operator terminal configuration may lower but never raise the terminal ceiling. Work expected to exceed it must be handed to the human operator as a foreground command without a timeout wrapper.
 - **Output policy.** stdout/stderr are drained continuously into bounded retained tails; exceeding retention omits older bytes instead of killing an otherwise valid process.
 
-See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), the canonical [memory](../../.agents/memories/README.md#rust-cli-migration-invariants), and [Plan 030 history](../../.agents/plans/030-previous-plans-summary.md) before changing these boundaries.
+See [`../relay-agent/SKILL.md`](../relay-agent/SKILL.md), the canonical [memory](../../.agents/memories/README.md#rustnative-tool-invariants), and [Plan 030 history](../../.agents/plans/030-previous-plans-summary.md) before changing these boundaries.
 
 ## Build
 

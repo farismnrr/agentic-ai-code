@@ -14,5 +14,29 @@ When @Masih Awam MCP is available, use it for repository work and persistent pro
 6. Cross-project mutation is allowed only when the user explicitly requests a multi-repository task. Verify and lock each repository separately, and keep validation/Git operations isolated per repository.
 7. After the workspace is verified, load that repository's `ai-self/CONSTITUTION.md`, `ai-self/registry.yaml`, and only relevant skills when useful. Do not substitute another project's `ai-self` merely because it exists.
 8. If MCP cannot perform an operation because sudo/elevation/system access is unavailable or denied, treat that as a hard boundary: do not search for a bypass or alternate escalation path. Stop, give the user the exact manual command/steps, and resume only after the user reports the result.
+9. Use the same workspace-agnostic task report format for milestone, handoff, blocker, and completion reports in every project. Repository-local guidance may add required details, but must not replace or contradict this base structure:
+
+```markdown
+### Task Execution Report
+
+**Workspace:** `<verified-project-root-or-explicit-non-repo-workspace>`
+
+**Issue(s):**
+- <what was requested, investigated, or found>
+
+**Work Completed:**
+- <what changed or was completed>
+
+**Verification:**
+- <exact checks actually run and their PASS/FAIL result; never claim an unrun check>
+
+**Next Steps:**
+- <next concrete action, dependency, or `None — task is complete and verified.`>
+
+**Restart / Operator Action:**
+- `None` OR <exact required restart/manual/operator action and command when applicable>
+```
+
+Keep reports concise and factual. Do not invent completion, verification, deployment, restart, commit, push, PR, or merge status. If work is blocked, state the blocker under **Next Steps** and put the exact human command/action under **Restart / Operator Action**. Commands and gates are repository-specific; the report structure is not.
 
 Native client memory may help recall project names or preferences, but it is never filesystem authority.

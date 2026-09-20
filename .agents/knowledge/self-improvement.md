@@ -34,7 +34,7 @@ Do **not** create new `memories/<topic>.md` files. Prefer concise sections/bulle
 
 For new work:
 
-- next plan is `031-...md`, then `032-...md`, etc.;
+- use the next unused numeric plan ID; never reuse an existing plan number. With Plans 031–069 already present, the next numeric plan is `070-...md` unless repository inspection proves a later state;
 - one multi-step effort per file;
 - never reuse a number;
 - keep status inside the plan file;
@@ -56,26 +56,30 @@ Durable docs may summarize implementation facts when needed to orient future age
 
 ## Standard task execution report
 
-When presenting completion, handoffs, or milestone progress to the user, agents must format the report consistently in English:
+The workspace-agnostic base contract lives in [`../../ai-self/BOOTSTRAP.md`](../../ai-self/BOOTSTRAP.md) and applies to milestone, handoff, blocker, and completion reports. This repository specializes that contract without replacing it: use the verified absolute repository root for **Workspace**, report only checks actually executed under **Verification**, and include exact relay/operator commands under **Restart / Operator Action** when needed. Keep the report in English unless the user explicitly requests another language.
 
 ```markdown
 ### Task Execution Report
 
-**Workspace:** `<mandatory-full-absolute-path>`
+**Workspace:** `<verified-full-absolute-repository-root>`
 
 **Issue(s):**
-- <clear description of problem or task; use bullet points if multiple>
+- <clear description of the task, defect, blocker, or finding>
 
 **Work Completed:**
-- <concise bullet point detailing what was implemented, fixed, or modified>
-- <exact local verification executed, e.g., pnpm guardrail:fast>
+- <concise factual description of what changed or was completed>
+
+**Verification:**
+- <exact local check(s) actually run and PASS/FAIL result, e.g. `pnpm guardrail:fast` — PASS>
 
 **Next Steps:**
-- <actionable next task, dependency, or "None. Task is complete and locally verified.">
+- <actionable next task/dependency or `None — task is complete and verified.`>
 
-**Restart Required:**
-- `No` OR `Yes — <target service/process>` (include exact operator command if Yes, e.g., `systemctl --user restart ai-tools-relay.service`)
+**Restart / Operator Action:**
+- `None` OR <exact required restart/manual action and command>
 ```
+
+Never report a commit, push, PR, merge, deployment, restart, or verification as completed unless it actually occurred.
 
 ## General enforcement
 

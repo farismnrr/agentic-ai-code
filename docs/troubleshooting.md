@@ -65,9 +65,7 @@ tree can be selected directly with `cwd`; paths outside it are denied by
 default. Use a narrower root if Projects contains more than the relay should
 see. Credential and privilege boundaries still apply. A protected-path
 discovery failure means the sandbox did not start: check for protected
-symlinks, inaccessible directories or a tree above 500,000 entries. Use
-narrower authorized roots instead of disabling masking or skipping visible
-cache/build directories.
+symlinks, inaccessible indexed directories, watcher invalidation, or an indexed tree above 500,000 entries. Use narrower authorized roots instead of disabling masking. Canonical dependency/generated roots are already intentionally skipped by the protected-path index; do not "fix" discovery by adding new arbitrary skip names, and do not store credentials inside the existing skipped roots.
 
 `systemctl --user` failing to connect to a bus is expected in this profile.
 Host user-service control and journal mounts are not implicitly exposed by

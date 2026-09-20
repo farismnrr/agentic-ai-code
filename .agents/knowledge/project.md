@@ -21,7 +21,7 @@ Do not infer current architecture from historical plans alone. Current source/co
 - OpenTelemetry + Jaeger/Loki integration
 - MCP inbound/outbound integration
 - Rust workspace under `packages/rust-tools/`
-- Rust `relay-agent` with MCP Streamable HTTP and Linux Bubblewrap containment
+- unified Rust `ai-tools relay` subcommand with MCP Streamable HTTP and Linux Bubblewrap containment
 
 ## Repository orientation
 
@@ -53,7 +53,7 @@ Do not infer current architecture from historical plans alone. Current source/co
 - `packages/terminal-tool/` — TypeScript terminal-tool API/skill wrapper; executable CLI is Rust.
 - `packages/curl-tool/` — TypeScript curl-tool API/skill wrapper; executable CLI is Rust.
 - `packages/searxng-search-tool/` — TypeScript search-tool API/skill wrapper; executable CLI is Rust.
-- `packages/relay-agent/` — relay package metadata/skill; current executable is the Rust `relay-agent` binary from the Rust workspace.
+- `packages/relay-agent/` — relay integration metadata/skill; the current executable is the unified Rust `ai-tools` binary using the `relay` subcommand from `packages/rust-tools/`.
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
@@ -151,7 +151,7 @@ Prefer `pnpm build && pnpm preview` over trusting a long-lived `pnpm dev` when v
 
 `pnpm lint:rust`, `pnpm typecheck:rust`, and `pnpm test:rust` cover formatting, Clippy, warnings-denied `cargo check`, and Cargo tests without involving Nuxt. Security-sensitive Rust changes may additionally require `cargo audit`.
 
-The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
+The production `ai-tools relay` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
 
 ### Test layout and code length
 

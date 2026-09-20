@@ -24,7 +24,7 @@ The tracked pre-commit hook runs the fast guard after `pnpm install`; the pre-pu
 
 Implementation delivery always uses a short-lived branch from `main`: commit the focused change, push the branch, open a pull request into `main`, merge the approved PR, then return to `main` and verify the checkout is clean. Do not implement directly on `main` or treat a pushed branch as delivered without the PR merge.
 
-Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files. Historical references to removed acceptance scripts are evidence of past execution, not templates for new validation.
+Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Plans 031+ remain separate incrementing files and existing numbers must never be reused; with Plans through 069 present, the next unused numeric plan is **070** unless repository inspection proves a later state. Historical references to removed acceptance scripts are evidence of past execution, not templates for new validation.
 
 Before declaring work complete, follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md).
 

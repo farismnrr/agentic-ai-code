@@ -1,6 +1,6 @@
 # Relay Agent
 
-`relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/cli/src/commands/relay.rs`](../rust-tools/cli/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/cli/src/main.rs`](../rust-tools/cli/src/main.rs).
+The relay is the `ai-tools relay` subcommand of the unified native Rust binary used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/src/commands/relay.rs`](../rust-tools/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/src/main.rs`](../rust-tools/src/main.rs). `packages/relay-agent/` is integration guidance/package metadata, not a separate executable binary.
 
 This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted no-jail behavior are historical and must not be reintroduced.
 
@@ -13,7 +13,7 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Listener binding:** `--bind-host` / `RELAY_AGENT_BIND_HOST` defaults to
   `127.0.0.1`. Local mode remains loopback-only; remote non-loopback binds require
   an explicit browser Origin and OAuth configuration. `0.0.0.0` is never a client URL.
-- **Filesystem boundary:** execution is confined through relay policy plus Bubblewrap. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) is the single root setting and defaults to `$HOME/Documents/Projects`; it defines the primary workspace and, unless explicitly overridden by `--execution-root`, the hard ceiling. Child repositories beneath it can be selected with `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and recursively masks protected credential directories (`.ssh`, `.aws`, `.cargo/credentials`, `.env.*`) and Unix domain sockets across all visible depths. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
+- **Filesystem boundary:** execution is confined through relay policy plus Bubblewrap. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) is the single root setting and defaults to `$HOME/Documents/Projects`; it defines the primary workspace and, unless explicitly overridden by `--execution-root`, the hard ceiling. Child repositories beneath it can be selected with `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and masks protected credential directories/files plus Unix domain sockets throughout the indexed user tree. Canonical dependency/generated roots such as `node_modules`, `target`, and recognized cache/build/output directories are intentionally pruned from protected-path indexing for bounded performance; their contents are not recursively credential-masked, so they must not be used as secret storage. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
 - **Tools:** one runtime catalog builder composes a 50-tool retained Full base or 13-tool retained Primary core with explicitly enabled optional capabilities. The retained Full base includes local sandboxed execution (`terminal_exec`), configured network tools, Full-only read-only remote diagnostics (`ssh_readonly_exec`), bounded native workspace tools, remote Git transport, forge/issues/workflows, alerts, and Telegram integration. Plan 069 keeps `creative_status` discoverable and composes the remaining creative tools into Full only when `RELAY_ENABLE_CREATIVE=true`. Discovery and invocation are strictly aligned: tools advertised in `tools/list` match `tools/call` routing; invoking a capability-disabled tool returns structured revocation errors (`CAPABILITY_REVOKED`), and unknown tools return 404 errors. Local Git wrappers and LSP wrappers are not public catalog entries; use terminal for builds, tests, package managers, interpreters, scripts, and uncovered CLI work. Standard developer CLI tools are fully permitted inside the sandbox, while privilege escalation brokers (`sudo`, `su`, `doas`, `pkexec`, `runas`) and generic SSH clients are blocked and masked. Numbered catalog contracts under `.agents/contracts/` are immutable historical audit artifacts, not alternate active runtime versions.
 - **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
 - **Docker:** arbitrary terminal processes do not receive the Docker socket by default. Direct `docker` calls may use the configured socket only after their arguments pass the bounded read-only diagnostic policy; lifecycle mutations and unknown operations fail closed. `--allow-docker` / `RELAY_ALLOW_DOCKER=true` is a separate full-authority escape hatch for trusted single-owner development and should remain disabled unless the operator deliberately accepts host-level Docker authority.
@@ -122,40 +122,25 @@ Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure t
 
 ## Verification
 
-This repository intentionally has **no CI workflow and no unit-test suite**. The mandatory local commit gate is the baseline:
+This repository intentionally has **no CI workflow**; verification is repository-local and includes real Rust/web test suites. Use the tracked lifecycle rather than historical plan-numbered scripts:
 
 ```bash
-pnpm verify:commit
+# normal checkpoint commit gate
+pnpm guardrail:fast
+
+# closure gate
+pnpm guardrail:full
 ```
 
-For security-sensitive relay/MCP changes, also run applicable local checks, typically including:
+The guardrails run repository/agent/architecture/test-layout checks and the applicable stack gates. Rust full verification includes formatting, warnings-denied Clippy/check, and Cargo tests under `packages/rust-tools/tests/`. For a focused relay/security change, run the smallest directly relevant Cargo integration test while iterating, then the applicable full guardrail before closure. Dependency/security-sensitive changes additionally require the relevant audit (`cargo audit` and/or `pnpm audit`) when dependency changes justify it.
 
-```bash
-cargo audit
-bash scripts/phase4-black-box.sh
-Run the applicable remote-client contract acceptance script under `scripts/`.
-bash scripts/phase-039c-contract.sh
-bash scripts/phase8-zero-bypass.sh
-```
-
-
-For the Plan 039C protocol/session foundation, also run:
-
-```bash
-bash scripts/verify-lsp-foundation.sh
-```
-
-This deterministic fixture exercises framing, correlation, lifecycle, capability capture, process/sandbox isolation, bounded errors/output, and sibling-workspace isolation without depending on a real language server.
-
-The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
-
-Live external-client/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
+`scripts/` is reserved for current repository guardrails and hook installation; do not resurrect removed `phase-*`, `verify-*`, or other plan-numbered validation scripts from historical plans/contracts. Live external-client/OAuth behavior must still be verified separately when a task depends on it; repository/static checks are not proof of a live external integration.
 
 ## Durable design context
 
 Before changing the relay security model, read:
 
-- the canonical [relay/MCP memory](../../.agents/memories/README.md#relay-agent-and-mcp-security-invariants) for current durable invariants;
+- the canonical [relay/MCP memory](../../.agents/memories/README.md#rustnative-tool-invariants) for current durable invariants;
 - [Plan 030 historical summary](../../.agents/plans/030-previous-plans-summary.md) for compacted Plan 026/027/028/029/029b history;
 - current Rust source/config and deterministic contract/security scripts.
 
