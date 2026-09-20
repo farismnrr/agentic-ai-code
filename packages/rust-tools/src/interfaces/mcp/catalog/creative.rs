@@ -1,6 +1,9 @@
 use super::{coding_security_scheme, Tool, ToolAnnotations};
 use serde_json::json;
 
+mod project;
+use project::project_tool;
+
 pub(super) fn tools() -> Vec<Tool> {
     vec![
         status_tool(),
@@ -52,63 +55,22 @@ fn catalog_tool() -> Tool {
     }
 }
 
-fn project_tool() -> Tool {
-    Tool {
-        name: "creative_project",
-        title: Some("Creative Project State"),
-        description: "Create, read, or list versioned workspace-contained Creative Projects. Projects own reusable Elements, Assets, Scene/Game/Audio state, graph/job identities, QA, and provenance without provider/model identities as source of truth.",
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "action": { "type": "string", "enum": ["create", "get", "list"] },
-                "cwd": { "type": "string", "maxLength": 4096 },
-                "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-                "intent": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                "tracks": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "uniqueItems": true,
-                    "items": { "type": "string", "enum": ["scene", "anime", "game"] }
-                },
-                "target": { "type": "object", "maxProperties": 8 }
-            },
-            "allOf": [
-                {
-                    "if": { "properties": { "action": { "const": "create" } }, "required": ["action"] },
-                    "then": { "required": ["title", "intent", "tracks"] }
-                },
-                {
-                    "if": { "properties": { "action": { "const": "get" } }, "required": ["action"] },
-                    "then": { "required": ["project_id"] }
-                }
-            ],
-            "required": ["action"],
-            "additionalProperties": false
-        }),
-        annotations: Some(workspace_mutation()),
-        security_schemes: coding_security_scheme(),
-        execution: None,
-    }
-}
-
 fn element_tool() -> Tool {
     Tool {
         name: "creative_element",
         title: Some("Creative Element Library"),
-        description: "Create candidate Element revisions, explicitly promote an accepted revision, or read reusable Character/Location/Prop/Style/Voice/Media/3D/Animation Elements. Revisions preserve authoritative versus interpreted/generated provenance.",
+        description: "Create candidate Element revisions, explicitly promote an accepted revision, or read reusable Character/Location/Prop/Style/Media/3D/Animation Elements. Revisions preserve authoritative versus interpreted/generated provenance.",
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["create_revision", "promote", "get", "list"] },
+                "action": { "type": "string", "enum": ["create_revision", "promote", "reject", "get", "list"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "element_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "revision_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "kind": {
                     "type": "string",
-                    "enum": ["character", "location", "prop", "style", "audio_voice", "media", "asset3d", "animation_clip"]
+                    "enum": ["character", "location", "prop", "style", "media", "asset3d", "animation_clip"]
                 },
                 "name": { "type": "string", "minLength": 1, "maxLength": 200 },
                 "authority": {
@@ -134,7 +96,7 @@ fn element_tool() -> Tool {
                     }
                 },
                 {
-                    "if": { "properties": { "action": { "const": "promote" } }, "required": ["action"] },
+                    "if": { "properties": { "action": { "enum": ["promote", "reject"] } }, "required": ["action"] },
                     "then": { "required": ["element_id", "revision_id"] }
                 },
                 {
@@ -159,16 +121,21 @@ fn asset_tool() -> Tool {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["register", "promote", "get", "list", "search"] },
+                "action": { "type": "string", "enum": ["register", "promote", "reject", "get", "list", "search", "upload_request", "upload_complete", "upload_list", "import_url", "preview"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "asset_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                "url": { "type": "string", "minLength": 1, "maxLength": 8192 },
+                "ticket_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "filename": { "type": "string", "minLength": 1, "maxLength": 180 },
+                "max_bytes": { "type": "integer", "minimum": 1, "maximum": 67108864 },
+                "ttl_ms": { "type": "integer", "minimum": 1, "maximum": 1800000 },
                 "media_type": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "role": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "source": {
                     "type": "string",
-                    "enum": ["conversation_upload", "mcp_upload", "url_import", "generated_asset", "manual_import"]
+                    "enum": ["conversation_upload", "mcp_upload", "url_import", "generated_asset", "blender_materialized", "manual_import"]
                 },
                 "source_surface": {
                     "type": "string",
@@ -178,6 +145,12 @@ fn asset_tool() -> Tool {
                 "job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "parent_asset_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "element_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "dependency_element_ids": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
                 "metadata": {
                     "type": "object",
                     "properties": {
@@ -186,8 +159,6 @@ fn asset_tool() -> Tool {
                         "duration_ms": { "type": "integer", "minimum": 1, "maximum": 86400000 },
                         "frame_rate": { "type": "number", "minimum": 1, "maximum": 240 },
                         "language": { "type": "string", "minLength": 1, "maxLength": 32 },
-                        "sample_rate_hz": { "type": "integer", "minimum": 8000, "maximum": 384000 },
-                        "channels": { "type": "integer", "minimum": 1, "maximum": 32 }
                     },
                     "additionalProperties": false
                 },
@@ -215,10 +186,22 @@ fn asset_tool() -> Tool {
                 },
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["get", "promote"] } },
+                        "properties": { "action": { "enum": ["get", "promote", "reject", "preview"] } },
                         "required": ["action"]
                     },
                     "then": { "required": ["asset_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "upload_request" } }, "required": ["action"] },
+                    "then": { "required": ["media_type", "role", "filename"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "upload_complete" } }, "required": ["action"] },
+                    "then": { "required": ["ticket_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "import_url" } }, "required": ["action"] },
+                    "then": { "required": ["url", "role"] }
                 }
             ],
             "required": ["action", "project_id"],
@@ -234,20 +217,33 @@ fn graph_tool() -> Tool {
     Tool {
         name: "creative_graph",
         title: Some("Creative Graph Runtime"),
-        description: "Validate, execute, or retrieve a caller-authored typed Creative Graph. The minimal headless executor handles reviewed control/reference nodes, preserves DAG authority boundaries, and refuses pluggable executor nodes without an explicit compatible execution_binding_id.",
+        description: "Validate, retrieve, save, or instantiate caller-authored typed Creative Graph state and templates. Heavy graph execution/rerun is foreground operator work through ai-tools creative, not a public MCP action." ,
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["validate", "execute", "get"] },
+                "action": { "type": "string", "enum": ["validate", "get", "template_save", "template_get", "template_list", "template_instantiate"] },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "graph": { "type": "object", "maxProperties": 16 }
+                "graph": { "type": "object", "maxProperties": 16 },
+                "template_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+                "description": { "type": "string", "maxLength": 1024 },
+                "replacements": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 128 } },
+                "binding_overrides": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 } },
+                "input_node_ids": {
+                    "type": "array", "maxItems": 256, "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "output_node_ids": {
+                    "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+                }
             },
             "allOf": [
                 {
                     "if": {
-                        "properties": { "action": { "enum": ["validate", "execute"] } },
+                        "properties": { "action": { "const": "validate" } },
                         "required": ["action"]
                     },
                     "then": { "required": ["graph"] }
@@ -255,6 +251,22 @@ fn graph_tool() -> Tool {
                 {
                     "if": { "properties": { "action": { "const": "get" } }, "required": ["action"] },
                     "then": { "required": ["project_id", "graph_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_save" } }, "required": ["action"] },
+                    "then": { "required": ["template_id", "graph", "output_node_ids"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_get" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "template_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_list" } }, "required": ["action"] },
+                    "then": { "required": ["project_id"] }
+                },
+                {
+                    "if": { "properties": { "action": { "const": "template_instantiate" } }, "required": ["action"] },
+                    "then": { "required": ["project_id", "template_id", "graph_id"] }
                 }
             ],
             "required": ["action"],
@@ -269,15 +281,36 @@ fn graph_tool() -> Tool {
 fn job_tool() -> Tool {
     Tool {
         name: "creative_job",
-        title: Some("Creative Job State"),
-        description: "Read, list, or cancel durable project-owned creative job records. Current headless graph runs persist terminal job state; later executor-backed jobs reuse this contract rather than creating a second job system.",
+        title: Some("Creative Job, Cost, and Budget State"),
+        description: "Estimate, admit, submit, retrieve, list, or cancel durable owner/project-scoped Creative jobs. Submit creates durable queued state only; heavy execution is foreground operator work through ai-tools creative. Operator hard compute/output/project limits are enforced before submit.",
         input_schema: json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["get", "list", "cancel"] },
+                "action": {
+                    "type": "string",
+                    "enum": ["compile_spec", "cost_estimate", "budget_status", "submit", "get", "list", "cancel"]
+                },
                 "cwd": { "type": "string", "maxLength": 4096 },
                 "project_id": { "type": "string", "minLength": 1, "maxLength": 64 },
-                "job_id": { "type": "string", "minLength": 1, "maxLength": 64 }
+                "job_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "graph_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "capability_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "workflow_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "execution_binding_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "parameters": { "type": "object", "maxProperties": 64 },
+                "semantic_spec": { "type": "object", "maxProperties": 16 },
+                "changed_fields": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                        "type": "string",
+                        "enum": ["prompt", "references", "asset_id", "mask_asset_id", "element_id", "width", "height", "batch_count", "duration_ms", "binding_extensions"]
+                    }
+                },
+                "approved": { "type": "boolean", "default": false },
+                "max_retries": { "type": "integer", "minimum": 0, "maximum": 16 },
+                "timeout_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 }
             },
             "allOf": [
                 {
@@ -286,6 +319,38 @@ fn job_tool() -> Tool {
                         "required": ["action"]
                     },
                     "then": { "required": ["job_id"] }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "enum": ["cost_estimate", "submit"] } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "oneOf": [
+                            {
+                                "required": ["graph_id"],
+                                "not": { "anyOf": [{"required":["capability_id"]}, {"required":["workflow_id"]}] }
+                            },
+                            {
+                                "required": ["capability_id"],
+                                "not": { "anyOf": [{"required":["graph_id"]}, {"required":["workflow_id"]}] }
+                            },
+                            {
+                                "required": ["workflow_id"],
+                                "not": { "anyOf": [{"required":["graph_id"]}, {"required":["capability_id"]}] }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "compile_spec" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["capability_id", "execution_binding_id", "semantic_spec"],
+                        "not": { "anyOf": [{"required":["graph_id"]}, {"required":["workflow_id"]}, {"required":["parameters"]}] }
+                    }
                 }
             ],
             "required": ["action", "project_id"],

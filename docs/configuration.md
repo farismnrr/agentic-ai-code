@@ -181,12 +181,16 @@ an explicit `--execution-root` ceiling plus `workspace_add` for additional
 roots inside that ceiling. A broader ceiling does not authorize sibling paths
 by itself.
 
+The `ai-code` checkout is not a user-project root. It may be selected as `cwd`
+for developing this repository, but Creative/Blender production and final
+acceptance must use a sibling project beneath the canonical Projects tree.
+Blender creative projects use
+`$HOME/Documents/Projects/Blender/<creative-project>/...`; project-internal
+`blender/...` paths are resolved beneath that creative-project root, never
+beneath the `ai-code` checkout.
+
 This profile still uses Bubblewrap and a rebuilt minimal environment. It does
-not inherit login-shell credentials or PATH. Credential files, session/keyring
-stores, relay state and discovered Unix sockets remain masked; `.env.example`
-is the intentional non-secret exception. Discovery must complete within
-500,000 entries per visible tree, including dependency/build/cache directories,
-or execution fails closed. A larger home should use narrower explicit roots.
+not inherit login-shell credentials or PATH. Credential files, session/keyring stores, relay state and discovered Unix sockets remain masked in indexed trees; `.env.example` is the intentional non-secret exception. Protected-path indexing must stay within the 500,000-entry bound or execution fails closed. Canonical dependency/generated roots such as `node_modules`, `target`, and recognized cache/build/output directories are intentionally pruned from this recursive credential scan for bounded performance; their contents stay visible when the workspace is visible, so never use those skipped roots to store credentials or secret `.env*` files. A larger home should use narrower explicit roots.
 See [security](security.md#terminal-filesystem-and-credential-boundary).
 
 Tools use dedicated MCP capabilities first for operations they cover. Terminal
@@ -224,17 +228,17 @@ RELAY_ALLOW_TAILSCALE
 RELAY_TAILSCALE_SOCKET
 ```
 
-`RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks all known credential directories and Unix domain sockets regardless of nesting depth.
+`RELAY_WORKSPACE_ROOT` is the single default filesystem root. If unset, the CLI uses `$HOME/Documents/Projects`; it supplies the primary workspace and defaults the hard execution ceiling to the same path. Child repositories stay inside both boundaries. The optional `--execution-root` flag is an explicit advanced override; there is no separate `EXECUTION_ROOT` environment setting. Regardless of scope, Bubblewrap enforces read-only system runtime mounts (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`), isolated tmpfs `/tmp`, separate `/proc` and `/dev`, and masks known credential paths and Unix domain sockets throughout the protected-path indexed tree. Canonical dependency/generated roots are the intentional indexing exception described below; their contents are not recursively credential-masked.
 
-`timeout_ms: 0` means no command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` imposes an operator maximum.
+`terminal_exec` is synchronous-only. Its caller-visible `timeout_ms` range is
+`1..=60000` milliseconds with a 30 second default. The terminal hard ceiling is
+60 seconds; `RELAY_MAX_TERMINAL_TIMEOUT_MS` may lower that ceiling but cannot
+raise it. Terminal calls do not accept `execution_mode` and do not expose
+terminal job polling tools.
 
-`terminal_exec`, `http_fetch`, and `web_search` accept `execution_mode`:
-`sync` waits for the direct result, `async` returns an MCP task and requires a
-client that advertises Tasks, and `auto` uses async only when the client
-advertises Tasks. Primary and Full advertise the same Tasks capability. An
-explicit async request from an incompatible client is rejected; it is never
-silently converted to sync. Mutating HTTP methods remain synchronous until a
-request-level idempotency layer is available.
+All retained process-like relay tools are synchronous at the MCP boundary. `ssh_readonly_exec`,
+`http_fetch`, and `web_search` do not accept `execution_mode`; caller-selectable
+runtime is bounded to at most 60 seconds where `timeout_ms` is exposed.
 
 Terminal subprocesses use an isolated network namespace (`--unshare-net`) by default, preventing outbound TCP/UDP connects and raw sockets at the kernel level. Set `RELAY_ALLOW_TERMINAL_NETWORK=true` (or pass `--allow-terminal-network`) only for trusted workflows requiring network-capable CLI commands (e.g. package management, dependency installation, or loopback service communication). Dedicated Git, `http_fetch` and `web_search` remain separate network capabilities subject to their own SSRF, private-network, and domain allowlist policies; they do not require or influence this flag. Generic `ssh`, `scp` and `sftp` remain blocked; remote diagnostics use `ssh_readonly_exec`.
 
@@ -243,12 +247,159 @@ Conversation approval modes are `plan` (read-only), `workspace` (edits with revi
 `RELAY_TOOLCHAIN_PATH` is a comma-separated set of reviewed user-owned executable directories prepended to the relay safe PATH (the CLI equivalent is repeated `--toolchain-path`). Use it for version-manager/runtime directories such as Cargo, Bun, or the active fnm Node installation. The relay intentionally does not inherit the login-shell `$PATH`; this keeps executable discovery explicit, gives operator-selected runtimes precedence, and prevents unrelated user PATH entries from silently becoming agent capabilities.
 
 Provider-specific coding-CLI delegation is not part of the current relay
-surface. Long-running eligible tools use the standard MCP Tasks contract and
-the explicit `execution_mode` described above.
+surface. Retained coding tools do not expose caller-selected MCP task execution;
+operations that cannot finish within their bounded synchronous runtime must be
+handed back to the operator rather than detached in the relay.
+
+### Creative execution bindings
+
+Creative production remains disabled unless `RELAY_ENABLE_CREATIVE=true` (or
+`--enable-creative`) is set before relay startup. Public binding discovery and
+private execution configuration are intentionally separate. A discoverable
+binding descriptor contains semantic capabilities and bounded constraints only;
+it must not contain endpoints, credentials, executable paths, command payloads,
+or a product-wide default provider/model. Register descriptors with repeated
+`--creative-binding` flags or the semicolon-separated
+`RELAY_CREATIVE_BINDING` value.
+
+A concrete implementation is mapped separately with repeated
+`--creative-binding-backend binding_id=backend_kind` flags or
+`RELAY_CREATIVE_BINDING_BACKEND`. Built-in reviewed backends are:
+
+- `local_raster`: a pure-Rust contained PNG conformance/utility backend for the
+  reviewed image capabilities. It creates candidate Assets under the selected
+  Creative project's contained `creative/<project_id>/assets/generated/`
+  subtree and preserves job, parent-Asset, and optional Element lineage. It is
+  not an AI image model and is not a subjective quality guarantee.
+- `local_static_game`: a private authenticated deployment backend for
+  `game.deploy`. It snapshots one accepted build into relay-owned contained
+  deployment storage and exposes it under `/creative-deploy/<deployment_id>/`.
+  This is a deploy target, not public publication; `published` remains false.
+
+External quality-capable media providers remain explicit operator integrations;
+client-visible descriptors never carry provider endpoints or credentials.
+
+Example operator configuration:
+
+```text
+RELAY_ENABLE_CREATIVE=true
+RELAY_CREATIVE_BINDING={"binding_id":"binding_local_raster","binding_version":"local-raster-v1","capabilities":["image.generate","image.reference_generate","image.edit","image.inpaint","image.upscale","image.remove_background","image.outpaint"],"media_roles":["image","reference_image","mask"],"extension_schema":{"type":"object","additionalProperties":false},"constraints":{"max_width":4096,"max_height":4096,"estimate":{"base_compute_units":10,"base_output_bytes":4096}},"estimate_available":true,"availability":"available"}
+RELAY_CREATIVE_BINDING_BACKEND=binding_local_raster=local_raster
+```
+
+Optional private local Game deploy binding:
+
+```text
+RELAY_CREATIVE_BINDING={"binding_id":"binding_local_game","binding_version":"local-static-game-v1","capabilities":["game.deploy"],"media_roles":["deployment"],"extension_schema":{"type":"object","additionalProperties":false},"constraints":{"estimate":{"base_compute_units":10,"base_output_bytes":4096}},"estimate_available":true,"availability":"available"}
+RELAY_CREATIVE_BINDING_BACKEND=binding_local_game=local_static_game
+```
+
+When image and local Game deploy bindings are both enabled, join both repeated
+environment values with `;` as documented by the relay CLI parser.
+
+Creative admission limits are separately operator-controlled through
+`RELAY_CREATIVE_APPROVAL_COMPUTE_UNITS`,
+`RELAY_CREATIVE_JOB_HARD_COMPUTE_UNITS`,
+`RELAY_CREATIVE_PROJECT_HARD_COMPUTE_UNITS`,
+`RELAY_CREATIVE_MAX_JOB_OUTPUT_BYTES`,
+`RELAY_CREATIVE_MAX_CONCURRENT_JOBS`, and `RELAY_CREATIVE_MAX_RETRIES`.
+Approval can cross only the soft approval threshold; it never overrides a hard
+limit.
+
+Untrusted Creative upload and URL-import bytes are validated before they are
+persisted as ingest receipts or registered as Assets. Reviewed raster/image,
+MP4, GLB, and Blender payloads must match their declared content
+type by bounded magic-byte checks. Active SVG is rejected on untrusted ingress
+until a reviewed sanitizer exists, and other unreviewed media types fail closed
+instead of being accepted solely from a caller or HTTP `Content-Type` claim.
+`application/octet-stream` remains an explicitly opaque payload and downstream
+consumers must apply their own format-specific validation before execution.
+
+### Blender production engine
+
+Plan 069 uses one operator activation switch for the complete Creative production
+platform: `RELAY_ENABLE_CREATIVE=true` / `--enable-creative`. The same flag
+controls Scene, Anime/Blender, Game, graph, delivery, and related tool exposure;
+there is no separate Blender enable flag. The relay speaks directly to the
+official Blender Lab loopback TCP bridge; v1 deliberately has **no configurable host**.
+`RELAY_BLENDER_PORT` / `--blender-bridge-port` defaults to `9876`, and
+`RELAY_BLENDER_TIMEOUT_MS` / `--blender-bridge-timeout-ms` defaults to 30000 ms with a
+120000 ms hard maximum.
+
+`RELAY_BLENDER_EXECUTABLE` / `--blender-executable` is optional operator-only
+executable authority used by explicit `blender_session start`. It may point to a
+reviewed Blender installation outside the Projects workspace; callers cannot
+supply or override an executable, process ID, host, port, or launch arguments.
+When no executable is configured, session lifecycle code may resolve only a
+bounded reviewed standard Blender location/PATH entry. Relay-owned sessions use
+one execution-root-owned runtime profile `.masihawam/blender-runtime-home`, shared
+across Creative projects beneath that relay execution root, and invoke the
+installed official Blender Lab extension headlessly with the fixed CLI
+shape `--background --online-mode --command blender_mcp --host localhost
+--port <operator-port>`. The host is fixed loopback and the port remains
+operator-owned. The runtime profile must be prepared before relay start; the
+relay never downloads or installs Blender extensions implicitly. External
+interactive Blender sessions remain attach-only and never gain relay stop/kill
+ownership.
+
+Prepare the profile from a reviewed checkout of the official Blender Lab MCP
+repository with Blender's own extension tooling:
+
+```bash
+blender --background --command extension build \
+  --source-dir /path/to/blender_mcp/addon/blender_mcp_addon \
+  --output-dir /tmp/blender-mcp-build
+HOME="$PWD/.masihawam/blender-runtime-home" \
+  blender --online-mode --background --command extension install-file \
+  /tmp/blender-mcp-build/mcp-1.0.0.zip --repo user_default --enable
+HOME="$PWD/.masihawam/blender-runtime-home" \
+  blender --background --command help | grep blender_mcp
+```
+
+The last command is the pre-restart readiness check and must print
+`blender_mcp`. Prepare this profile once per relay execution root; individual
+Creative projects do not require separate extension installations. If the
+profile or command is unavailable, `blender_session start` fails closed instead
+of silently launching a process with no bridge. An already
+running official loopback bridge may still be attached as an external session
+and is never given relay stop/kill ownership.
+
+Every workflow-owned Blender production artifact is project data and must stay
+beneath the selected project's canonical subtree:
+
+```text
+blender/
+  scenes/
+  assets/
+  references/
+  renders/preview/
+  renders/final/
+  animations/
+  exports/
+  checkpoints/
+  tmp/
+```
+
+The public Blender MCP contract exposes only bounded agent operations:
+`blender_session`, `blender_inspect`, `blender_python_api_docs`,
+`blender_screenshot`, and bounded sampled `blender_animation_preview`. Heavy or
+workload-dependent Blender execution is foreground operator work through
+`ai-tools creative --tool ... --input ...`, including arbitrary Blender Python,
+final/bulk render or preview work, asset import/export, and checkpoint
+create/restore. This keeps accepted MCP calls inside the public 60-second
+execution boundary instead of hiding long work behind polling or background
+tasks.
+
+The single runtime catalog composes the bounded Blender tools only for the Full
+profile when Creative is enabled. When disabled, `creative_status` reports the
+required activation step and the optional Blender capability resource is absent.
+All Creative/Blender production artifacts remain constrained to the canonical
+project layout; moving execution to the operator CLI does not broaden path,
+owner, binding, or provenance authority.
 
 `RELAY_ALLOW_TAILSCALE=true` exposes only the configured Tailscale local API Unix socket to sandboxed commands. `RELAY_TAILSCALE_SOCKET` defaults to `/var/run/tailscale/tailscaled.sock` and may be changed for alternate installations. Keep it disabled unless local-development commands need to query the host Tailscale daemon.
 
-`RELAY_ALLOW_DOCKER=true` is an explicit local-development escape hatch. It permits the `docker` CLI and bind-mounts the host Docker daemon socket into the terminal sandbox. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Docker daemon access can provide host-level authority, so the default remains disabled and it should only be enabled for a trusted single-owner coding relay.
+Without `RELAY_ALLOW_DOCKER`, arbitrary terminal commands do not receive the Docker socket. Direct `docker` calls are instead normalized through a positive read-only diagnostic policy and receive the configured socket only for that validated invocation; Docker mutations and unknown subcommands are rejected. `RELAY_ALLOW_DOCKER=true` is the explicit local-development escape hatch for full Docker CLI authority and exposes the host daemon socket to ordinary terminal execution. `RELAY_DOCKER_SOCKET` can point at a non-default/rootless Unix socket and defaults to `/var/run/docker.sock`. Full Docker daemon access can provide host-level authority, so the escape hatch should only be enabled for a trusted single-owner coding relay.
 
 In local mode, `127.0.0.1:<port>` and `localhost:<port>` are always allowed. Use repeated `--allowed-host` flags or the comma-separated `RELAY_ALLOWED_HOSTS` value for explicitly permitted external Host authorities. Entries may include an exact port; an entry without a port matches only a Host without a port, and never implicitly allows arbitrary ports. Wildcards and URL syntax are rejected.
 
@@ -351,7 +502,7 @@ ownership cannot be proven without introducing a persistence system.
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary has a 15-tool retained core for the common coding fast path: terminal execution and job lifecycle plus structured workspace inspection/editing and workspace authorization. Full has a 52-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Eligible asynchronous tools accept `execution_mode=sync|async|auto`. `ssh_readonly_exec` is Full-only: clients provide only `{ alias, command, args, timeout_ms, execution_mode }`; SSH config/key resolution stays relay-owned.
+Primary has a 14-tool retained core for the common coding fast path: synchronous terminal execution plus structured workspace inspection/editing, workspace bootstrap, and workspace authorization. Full has a 51-tool retained base, adding remote Git transport, HTTP/web, SSH diagnostics, forge/issues/workflows, alerts, and Telegram integration. The client-visible runtime catalog is composed once from the selected profile plus explicit optional-capability flags; numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Local Git wrappers and LSP wrappers are intentionally removed from the public catalog; use terminal fallback when no retained structured capability covers an operation. Retained process-like tools are synchronous-only and bounded to at most 60 seconds per call. `ssh_readonly_exec` is Full-only: clients provide `{ alias, via?, command, args, timeout_ms }`; `via` is a bounded ordered alias chain and the diagnostic command executes only on the final alias. SSH config/include/key/jump resolution stays relay-owned.
 
 Plan 069 creative production is disabled by default with `RELAY_ENABLE_CREATIVE=false` / no `--enable-creative`. `creative_status` remains discoverable so clients can inspect activation state. When creative production is enabled, the additional creative mutation/discovery tools are composed into the Full runtime catalog through the same catalog builder; there is no second catalog version. Changing this process-start configuration requires an operator-controlled relay restart, not an implicit tool action.
 

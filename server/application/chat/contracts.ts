@@ -29,7 +29,7 @@ export interface ChatTurnDependencies {
   getLanggraphModel(provider: ChatProviderContext, modelId: string, maxOutputTokens?: number): ChatModelHandle
   resolveMessagesForModel(input: { messages: UIMessage[], conv: { id: string, contextSummary: string | null, contextSummaryUpToMessageId: string | null, lastMeasuredTokens: number | null, lastMeasuredMessageId: string | null }, contextWindow: number | null | undefined, maxOutputTokens: number | null | undefined, getSummarizerModel: () => ChatModelHandle }): Promise<UIMessage[]>
   resolveMcpExecutionContext(userId: string): Promise<{ terminalAvailable: boolean, enabledToolIds: string[] }>
-  buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode'], options?: { allowedEffects?: string[], abortSignal?: AbortSignal }): Promise<{ tools: ChatToolSet, toolApproval?: ChatToolApproval, close: () => Promise<void> }>
+  buildMcpTools(userId: string, enabledToolIds: string[], approvals: Record<string, string>, permissionMode: ChatConversation['permissionMode'], options?: { allowedEffects?: string[], abortSignal?: AbortSignal }): Promise<{ tools: ChatToolSet, toolApproval?: ChatToolApproval, instructions: string[], close: () => Promise<void> }>
   convertTurnMessages(messages: UIMessage[], tools: ChatToolSet): ChatMessageHandle
   prepareAiSdkModel(model: ChatModelHandle, thinkingEnabled: boolean): ChatModelHandle
   streamAiSdkAgent(input: Record<string, unknown>): ChatStreamResult

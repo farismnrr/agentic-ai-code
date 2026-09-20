@@ -2,6 +2,17 @@ use ai_tools::core::config::{Cli, SecurityMode, ServerConfig};
 use ai_tools::interfaces::mcp::{LEGACY_PROTOCOL_VERSIONS, PROTOCOL_VERSION};
 use clap::Parser;
 
+fn normalize_local_cli_fixture(config: &mut ServerConfig) {
+    config.mode = SecurityMode::Local;
+    config.bind_host = "127.0.0.1".into();
+    config.origin = None;
+    config.trusted_proxy = false;
+    config.trusted_proxy_cidr = None;
+    config.oauth_issuer = None;
+    config.oauth_audience = None;
+    config.oauth_owner_subject = None;
+}
+
 fn remote_config() -> ServerConfig {
     let root = env!("CARGO_MANIFEST_DIR").to_string();
     ServerConfig {
@@ -15,6 +26,33 @@ fn remote_config() -> ServerConfig {
         bind_host: "0.0.0.0".into(),
         ..ServerConfig::default()
     }
+}
+
+#[test]
+fn creative_master_flag_enables_blender_runtime_with_bounded_operator_settings() {
+    let cli = Cli::try_parse_from([
+        "ai-tools",
+        "--enable-creative",
+        "--blender-executable",
+        "/opt/blender/blender",
+        "--blender-bridge-port",
+        "9988",
+        "--blender-bridge-timeout-ms",
+        "45000",
+    ])
+    .expect("Blender operator flags should parse");
+    let mut config = ServerConfig::from(&cli);
+    normalize_local_cli_fixture(&mut config);
+    assert!(config.enable_creative);
+    assert_eq!(
+        config.blender_executable.as_deref(),
+        Some("/opt/blender/blender")
+    );
+    assert_eq!(config.blender_bridge_port, 9988);
+    assert_eq!(config.blender_bridge_timeout_ms, 45_000);
+    config.validate().expect("bounded Blender operator config");
+
+    assert!(Cli::try_parse_from(["ai-tools", "--enable-blender"]).is_err());
 }
 
 #[test]
@@ -69,6 +107,49 @@ fn cli_accepts_explicit_bind_host_and_preserves_it_in_server_config() {
     .expect("bind-host should be a supported relay option");
 
     assert_eq!(ServerConfig::from(&cli).bind_host, "0.0.0.0");
+}
+
+#[test]
+fn creative_backend_mapping_is_operator_only_bounded_and_validated() {
+    let cli = Cli::try_parse_from([
+        "ai-tools",
+        "--creative-binding-backend",
+        "binding_local_raster=local_raster",
+    ])
+    .expect("creative backend mapping should be a supported operator option");
+    let mut config = ServerConfig::from(&cli);
+    normalize_local_cli_fixture(&mut config);
+    assert_eq!(
+        config.creative_binding_backends,
+        vec!["binding_local_raster=local_raster"]
+    );
+    assert!(config.validate().is_ok());
+
+    let local_deploy = ServerConfig {
+        creative_binding_backends: vec!["binding_local_game=local_static_game".into()],
+        ..ServerConfig::default()
+    };
+    assert!(local_deploy.validate().is_ok());
+
+    for mapping in [
+        "missing_separator",
+        "binding=unknown_backend",
+        "../escape=local_raster",
+    ] {
+        let config = ServerConfig {
+            creative_binding_backends: vec![mapping.into()],
+            ..ServerConfig::default()
+        };
+        assert!(
+            config.validate().is_err(),
+            "accepted invalid mapping: {mapping}"
+        );
+    }
+    let duplicate = ServerConfig {
+        creative_binding_backends: vec!["same=local_raster".into(), "same=local_raster".into()],
+        ..ServerConfig::default()
+    };
+    assert!(duplicate.validate().is_err());
 }
 
 #[test]
@@ -141,15 +222,17 @@ fn ssh_fixture() -> (ServerConfig, std::path::PathBuf) {
     let config_path = root.join("config");
     let key = root.join("id_ed25519");
     let known = root.join("known_hosts");
+    let redis_password = root.join("redis_readonly.pass");
     std::fs::write(&key, "dummy").unwrap();
     std::fs::write(&known, "dummy").unwrap();
+    std::fs::write(&redis_password, "fixture-secret").unwrap();
     std::fs::write(
         &config_path,
         "Host fixture\n HostName example.invalid\n User diagnostic\n IdentityFile id_ed25519\n UserKnownHostsFile known_hosts\n",
     )
     .unwrap();
     #[cfg(unix)]
-    for path in [&config_path, &key, &known] {
+    for path in [&config_path, &key, &known, &redis_password] {
         chmod(path, 0o600);
     }
     let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -161,6 +244,7 @@ fn ssh_fixture() -> (ServerConfig, std::path::PathBuf) {
         ssh_config: Some(config_path.to_string_lossy().into_owned()),
         ssh_readonly_db_user: Some("relay_reader".into()),
         ssh_readonly_redis_user: Some("relay_reader".into()),
+        ssh_readonly_redis_password_file: Some(redis_password.to_string_lossy().into_owned()),
         ..ServerConfig::default()
     };
     (config, root)

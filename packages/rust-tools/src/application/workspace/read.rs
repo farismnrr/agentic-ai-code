@@ -1,6 +1,6 @@
 //! Bounded UTF-8 file reads.
 
-use super::protected::reject_protected_path;
+use super::{evidence::content_sha256, protected::reject_protected_path};
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use crate::core::workspace_path::EntryKind;
@@ -10,6 +10,8 @@ use std::io::{BufRead, BufReader, Read};
 pub const DEFAULT_FILE_READ_LINES: usize = 200;
 pub const MAX_FILE_READ_LINES: usize = 1_000;
 pub const MAX_FILE_READ_BYTES: usize = 256 * 1024;
+pub const MAX_FILE_READ_MULTIPLE_BYTES: usize = 512 * 1024;
+const MAX_FILE_READ_MULTIPLE_PATHS: usize = 16;
 const MAX_FILE_READ_LINE_BYTES: usize = 64 * 1024;
 const MAX_FILE_READ_PATH_BYTES: usize = 4_096;
 const MAX_FILE_READ_CWD_BYTES: usize = 4_096;
@@ -21,6 +23,23 @@ pub struct FileReadResult {
     end_line: Option<u64>,
     content: String,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_offset_line: Option<u64>,
+}
+
+fn complete_file_sha256(path: &std::path::Path) -> Result<Option<String>, McpError> {
+    let file = std::fs::File::open(path)
+        .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
+    let mut bytes = Vec::new();
+    std::io::Read::take(file, (super::mutate::MAX_FILE_EDIT_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
+    if bytes.len() > super::mutate::MAX_FILE_EDIT_BYTES {
+        return Ok(None);
+    }
+    Ok(Some(content_sha256(&bytes)))
 }
 
 fn read_bounded_line_sync<R: BufRead>(
@@ -95,6 +114,70 @@ pub(crate) fn read_contained_text(
         .map_err(|_| McpError::InvalidRequest("file is not valid UTF-8 text".into()))
 }
 
+#[derive(Debug, Serialize)]
+pub struct FileReadMultipleResult {
+    files: Vec<FileReadMultipleItem>,
+    count: usize,
+    failed: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct FileReadMultipleItem {
+    path: String,
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<FileReadResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+pub fn file_read_multiple(
+    arguments: &Value,
+    config: &ServerConfig,
+) -> Result<FileReadMultipleResult, McpError> {
+    let paths = arguments
+        .get("paths")
+        .and_then(Value::as_array)
+        .ok_or_else(|| McpError::InvalidRequest("file read multiple paths are required".into()))?;
+    if paths.is_empty() || paths.len() > MAX_FILE_READ_MULTIPLE_PATHS {
+        return Err(McpError::InvalidRequest(
+            "file read multiple path count exceeds allowed bounds".into(),
+        ));
+    }
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        let path = path.as_str().ok_or_else(|| {
+            McpError::InvalidRequest("file read multiple paths must be strings".into())
+        })?;
+        let mut request = serde_json::Map::new();
+        request.insert("path".into(), Value::String(path.to_owned()));
+        for key in ["cwd", "offset_line", "limit_lines"] {
+            if let Some(value) = arguments.get(key) {
+                request.insert(key.into(), value.clone());
+            }
+        }
+        match file_read(&Value::Object(request), config) {
+            Ok(result) => files.push(FileReadMultipleItem {
+                path: path.to_owned(),
+                ok: true,
+                result: Some(result),
+                error: None,
+            }),
+            Err(error) => files.push(FileReadMultipleItem {
+                path: path.to_owned(),
+                ok: false,
+                result: None,
+                error: Some(error.to_string()),
+            }),
+        }
+    }
+    Ok(FileReadMultipleResult {
+        count: files.len(),
+        failed: files.iter().filter(|item| !item.ok).count(),
+        files,
+    })
+}
+
 pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadResult, McpError> {
     let path = arguments
         .get("path")
@@ -141,6 +224,7 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
         McpError::InvalidRequest("file is outside authorized workspace roots".into())
     })?;
     reject_protected_path(root, &target)?;
+    let sha256 = complete_file_sha256(&target)?;
     let file = std::fs::File::open(&target)
         .map_err(|_| McpError::InvalidRequest("file is inaccessible".into()))?;
     let mut reader = BufReader::new(file);
@@ -153,6 +237,8 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
                 end_line: None,
                 content: String::new(),
                 truncated: false,
+                sha256,
+                next_offset_line: None,
             });
         }
         current += 1;
@@ -189,5 +275,11 @@ pub fn file_read(arguments: &Value, config: &ServerConfig) -> Result<FileReadRes
         end_line,
         content,
         truncated,
+        sha256,
+        next_offset_line: if truncated {
+            end_line.map(|line| line.saturating_add(1))
+        } else {
+            None
+        },
     })
 }

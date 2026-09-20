@@ -9,6 +9,7 @@ export interface McpToolComposition {
   tools: ToolSet
   toolApproval: McpToolApprovalMap
   toolOwners: ReadonlyMap<string, string>
+  instructions: string[]
 }
 
 /** Claim a model-facing key only for one exact stable MCP tool owner. */
@@ -28,6 +29,7 @@ export function scopeMcpTools(composition: McpToolComposition, allowedStableIds:
   return {
     tools: Object.fromEntries(retainedKeys.map(name => [name, composition.tools[name]])) as ToolSet,
     toolApproval: Object.fromEntries(Object.entries(composition.toolApproval).filter(([name]) => retained.has(name))),
-    toolOwners: new Map(retainedKeys.map(name => [name, composition.toolOwners.get(name) as string]))
+    toolOwners: new Map(retainedKeys.map(name => [name, composition.toolOwners.get(name) as string])),
+    instructions: [...composition.instructions]
   }
 }

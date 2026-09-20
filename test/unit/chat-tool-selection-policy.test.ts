@@ -7,18 +7,21 @@ import { intersectSubagentAuthority } from '../../server/application/subagents/p
 import { loadAgentProfile } from '../../server/application/subagents/profiles.ts'
 
 test('routing prefers exact active dedicated keys deterministically', () => {
-  const keys = ['relay_git_status', 'relay_git_diff', 'terminal_exec', 'file_read', 'text_search', 'code_definition', 'code_references', 'http_fetch', 'web_search', 'change_request_get', 'ssh_readonly_exec', 'telegram_send_message']
+  const keys = ['relay_git_status', 'relay_git_diff', 'terminal_exec', 'file_read', 'file_read_multiple', 'text_search', 'code_definition', 'code_references', 'http_fetch', 'web_search', 'change_request_get', 'ssh_readonly_exec', 'telegram_send_message']
   const policy = buildToolSelectionPolicy(keys)
   assert.equal(policy, buildToolSelectionPolicy([...keys].reverse()))
   for (const name of keys) assert.ok(policy.includes(name), name)
   assert.match(policy, /covered Git operations, even when a shell/)
+  assert.match(policy, /do not replace a covered structured read, write, edit, search/)
+  assert.match(policy, /CLI fallback only after dedicated-tool routing/)
+  assert.match(policy, /cat\/sed\/grep\/find/)
   assert.match(policy, /no active dedicated tool fully covers/)
   assert.match(policy, /grants no tools, effects, or approvals/)
 })
 
 test('empty and terminal-only turns do not invent dedicated capabilities', () => {
   assert.equal(buildToolSelectionPolicy([]), '')
-  const policy = buildToolSelectionPolicy(['terminal_exec', 'terminal_job_start'])
+  const policy = buildToolSelectionPolicy(['terminal_exec'])
   assert.doesNotMatch(policy, /git_status|file_read|ssh_readonly_exec|Prefer active/)
   assert.match(policy, /builds, tests, package managers, interpreters/)
 })
@@ -57,9 +60,11 @@ test('delegation uses intersected child tools and accounts for policy context', 
 test('primary and child composition use final model tools without changing approvals', () => {
   const primary = readFileSync(new URL('../../server/application/chat/execute-chat-turn.ts', import.meta.url), 'utf8')
   const child = readFileSync(new URL('../../server/infrastructure/ai/subagent-tool.ts', import.meta.url), 'utf8')
-  assert.match(primary, /system: \[buildWorkspaceSystemPrompt\(\), buildToolSelectionPolicy\(Object.keys\(tools\)\)\]/)
+  assert.match(primary, /mcpInstructions = mcp\.instructions/)
+  assert.match(primary, /system: \[buildWorkspaceSystemPrompt\(\), \.\.\.mcpInstructions, buildToolSelectionPolicy\(Object.keys\(tools\)\)\]/)
   assert.match(primary, /if \(!toolTurn\)[\s\S]*?system: systemPrompt/)
   assert.match(child, /scopeMcpTools\(mcp, new Set\(authority.tools\)\)/)
+  assert.match(child, /instructions: \[profile\.instructions, \.\.\.scopedMcp\.instructions\]/)
   assert.match(child, /toolNames: Object.keys\(tools\)/)
   assert.match(child, /toolApproval: scopedMcp.toolApproval/)
 })

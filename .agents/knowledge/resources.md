@@ -10,7 +10,7 @@ Use this page as the discoverability index for agent-facing skills and external 
 
 ## First-party MCP resources
 
-The Rust relay exposes optional, authenticated, read-only MCP resources for the verified execution repository. `resources/list` returns deterministic `workspace://<repo-name>/{manifest,agent-guidance,status,head}` entries; `resources/read` accepts only one of those server-owned URIs. Content is bounded and sanitized. `agent-guidance` is limited to approved `AGENTS.md` and `.agents/knowledge/resources.md`; status/head use safe bounded Git metadata. Resources are never arbitrary file browsing and are not automatically fetched into chat context.
+The Rust relay exposes optional, authenticated, read-only MCP resources. Existing repository resources remain deterministic `workspace://<repo-name>/{manifest,agent-guidance,status,head}` entries, with the optional Creative/Blender capability resource when enabled. `resources/read` accepts only server-owned URIs. Content is bounded and sanitized; resources are never arbitrary file browsing and are not automatically fetched into chat context. Media-resource extensions preserve that invariant: binary Resource contents use the MCP-standard base64 `blob` plus correct `mimeType`, resolve through server-derived contained Creative Asset identity/project context, and enforce MIME/byte/dimension/provenance checks without caller-controlled raw media paths. Producer tools should return standard MCP `resource_link` content when they create a reviewable resource so compatible hosts can follow it directly; bounded inline media may remain a compatibility fallback. Binary/blob payloads and resource-link bodies must not be copied into activity detail, credential redaction, logs, or telemetry.
 
 The implementation targets MCP `2026-07-28`: self-describing request metadata, `MCP-Protocol-Version`/`Mcp-Method` routing validation, deterministic list results, and `ttlMs`/`cacheScope` on list/read results. Resource templates, subscriptions, and list-change notifications are intentionally not implemented; no watcher is required.
 
@@ -20,6 +20,7 @@ First-party agent UX may summarize resource/tool capability state, but external 
 
 Current entries:
 
+- **`masih-awam-workspace-workflow`** — canonical ChatGPT/workspace workflow Skill for fresh workspace resolution, Masih Awam MCP usage, explicit manual `/init` governance reconciliation, authorization boundaries, bounded execution, evidence separation, self-improvement discipline, and exact Task Execution Report formatting. This tracked copy is the canonical source used to build the uploadable Skill ZIP.
 - **`nuxt`** — Nuxt project structure, routing, data fetching, SSR-safe state, middleware, plugins, server routes, runtime config, and layers. Source tracked by `skills-lock.json`.
 - **`nuxt-ui`** — Nuxt UI components, theming, forms, layouts, props/slots/events, and targeted references. Source tracked by `skills-lock.json`.
 - **`ui-animation`** — UI motion/animation guidance for application interactions.
@@ -49,7 +50,7 @@ Do not confuse the Nuxt UI documentation MCP above with this application's own M
 
 - [`project.md`](project.md) for architecture orientation;
 - [`../../packages/relay-agent/SKILL.md`](../../packages/relay-agent/SKILL.md) for current relay behavior;
-- the canonical [`../memories/README.md`](../memories/README.md#relay-agent-and-mcp-security-invariants) for durable security/protocol decisions;
+- the canonical [`../memories/README.md`](../memories/README.md#rustnative-tool-invariants) for durable security/protocol decisions;
 - [`../plans/030-previous-plans-summary.md`](../plans/030-previous-plans-summary.md) only when historical Plan 028/029/029b context is useful;
 - any current `031+` plan file if a new MCP effort has been opened;
 - [`../contracts/`](../contracts/) before changing client-visible frozen descriptors.

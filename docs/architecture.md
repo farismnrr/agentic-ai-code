@@ -89,6 +89,8 @@ summary/unavailable evidence unless the relay can prove more.
 
 The default relay root is `RELAY_WORKSPACE_ROOT=$HOME/Documents/Projects`. It supplies the primary workspace and the default hard execution ceiling, so child repositories beneath `Projects` can be selected directly with `cwd`. Deployments can choose a narrower primary workspace and an explicit broader `--execution-root`; in that profile, sibling projects still need `workspace_add`, and no workspace can extend beyond the hard ceiling. Workspace path resolution retains these two authorization checks. Recursive native traversal does not follow symlink directories; edit/write operations additionally use no-follow directory/file descriptors and same-directory atomic replacement semantics so validation-time containment is not treated as sufficient mutation safety.
 
+Repository source location and user-project placement are intentionally separate. The `ai-code` checkout may be selected as `cwd` for source development, but it is never a user/Creative production root. Creative projects live as sibling projects beneath the canonical Projects tree; Blender projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`, and their contained `blender/...` artifact layout is resolved beneath that project directory rather than beneath the source checkout.
+
 ## Remote MCP and OAuth
 
 The remote relay is an **OAuth Resource Server**, not an Authorization Server.
@@ -135,7 +137,7 @@ The coding relay does not expose the host Tailscale local API socket by default.
 
 ## Docker boundary
 
-The coding relay does **not** expose the host Docker socket by default. For trusted single-owner local development, an operator may explicitly opt in with `RELAY_ALLOW_DOCKER=true`; that escape hatch permits the `docker` CLI and bind-mounts the daemon socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`) into the Bubblewrap sandbox. Docker daemon access is effectively host-level authority and therefore weakens the filesystem boundary. Production/remote deployments should keep it disabled unless the operator deliberately accepts that trust expansion.
+The coding relay does **not** expose the host Docker socket to arbitrary terminal commands by default. A direct `docker` invocation may receive the configured daemon socket only after its arguments pass the relay's positive read-only diagnostic policy (bounded list/logs/stats/top/safe-inspect/Compose diagnostics); lifecycle mutations and unknown Docker operations fail closed. For trusted single-owner local development, `RELAY_ALLOW_DOCKER=true` remains an explicit full-authority escape hatch: it permits unrestricted Docker CLI use from terminal execution and exposes the socket selected by `RELAY_DOCKER_SOCKET` (default `/var/run/docker.sock`). Full Docker daemon access is effectively host-level authority and should stay disabled unless the operator deliberately accepts that trust expansion.
 
 The Nuxt production image and the Rust relay are separate deployments. The
 Nuxt Docker build excludes `packages/rust-tools`, `packages/relay-agent`, Rust

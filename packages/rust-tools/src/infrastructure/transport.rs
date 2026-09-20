@@ -40,7 +40,7 @@ use axum::{
     http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response as AxumResponse},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use std::sync::Arc;
@@ -59,9 +59,10 @@ use crate::infrastructure::observability::{CorrelationId, RequestId};
 use crate::interfaces::mcp::{ErrorResponse, Id};
 
 mod access;
+mod creative_deploy;
+mod creative_upload;
 mod mcp_http;
 mod subagent_lifecycle;
-mod task_lifecycle;
 mod tools;
 
 /// Frozen in `.agents/plans/028-phase0-contract-audit.md` section 6: MCP
@@ -188,11 +189,17 @@ pub fn create_router_with_jobs_and_hooks(
         HeaderName::from_static(HDR_PROTOCOL_VERSION),
         HeaderName::from_static(HDR_MCP_METHOD),
         HeaderName::from_static(HDR_MCP_NAME),
+        HeaderName::from_static("x-creative-upload-token"),
     ];
 
     let cors = CorsLayer::new()
         .allow_origin(cors_origin)
-        .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods(vec![
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::OPTIONS,
+        ])
         .allow_headers(cors_headers);
 
     // A misconfigured `--lsp-server` mapping (e.g. an executable missing
@@ -227,6 +234,15 @@ pub fn create_router_with_jobs_and_hooks(
     });
 
     let mcp_router = Router::new().route("/mcp", post(mcp_http::handle_mcp));
+    let upload_router = Router::new()
+        .route("/creative-upload/:ticket_id", put(creative_upload::handle))
+        .layer(DefaultBodyLimit::max(
+            crate::application::workspace::MAX_INTERNAL_BINARY_WRITE_BYTES,
+        ));
+    let deploy_router = Router::new().route(
+        "/creative-deploy/:deployment_id/*path",
+        get(creative_deploy::handle),
+    );
     let mut well_known_router = Router::new().route(
         "/.well-known/oauth-protected-resource",
         get(handle_well_known_oauth),
@@ -248,6 +264,8 @@ pub fn create_router_with_jobs_and_hooks(
     Router::new()
         .route("/health", get(handle_health))
         .merge(mcp_router)
+        .merge(upload_router)
+        .merge(deploy_router)
         .merge(well_known_router)
         .layer(middleware::from_fn_with_state(
             state.clone(),

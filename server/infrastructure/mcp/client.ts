@@ -33,6 +33,7 @@ export type McpClientTool = {
   name: string
   description?: string
   inputSchema: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
   annotations?: {
     readOnlyHint?: boolean
     destructiveHint?: boolean
@@ -44,11 +45,12 @@ export type McpClientTool = {
 export type McpClientCallResult = {
   content: unknown[]
   isError?: boolean
+  structuredContent?: unknown
   [key: string]: unknown
 }
 
 export type McpClientResource = { uri: string, name: string, description?: string, mimeType?: string }
-export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, mimeType?: string }>, [key: string]: unknown }
+export type McpClientResourceReadResult = { contents: Array<{ uri: string, text?: string, blob?: string, mimeType?: string }>, [key: string]: unknown }
 
 export interface McpClientLike {
   trustedProvenance?: 'first-party-relay' | 'external'
@@ -58,6 +60,7 @@ export interface McpClientLike {
   readResource?(uri: string): Promise<McpClientResourceReadResult>
   close(): Promise<void>
   subagentStop?(parentSessionId: string, childSessionId: string, status: string): Promise<boolean>
+  serverInstructions?(): string | undefined
   supportsActivityBootstrap?(): boolean
   activityStatus?(): Promise<{ configured: boolean, sourceId?: string }>
   configureActivity?(input: { sinkUrl: string, sourceToken: string }): Promise<void>

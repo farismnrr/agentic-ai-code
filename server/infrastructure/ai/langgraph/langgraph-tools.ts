@@ -4,6 +4,13 @@ import { createConfiguredFirstPartyRelayClient, type McpClientCallResult, type M
 
 function contentText(result: McpClientCallResult) {
   if (result.isError) return 'Tool execution failed'
+  if (result.structuredContent !== undefined) {
+    try {
+      return JSON.stringify(result.structuredContent)
+    } catch {
+      return 'Tool execution failed'
+    }
+  }
 
   const text = result.content.flatMap((item) => {
     if (typeof item === 'object' && item !== null && 'text' in item && typeof item.text === 'string') {

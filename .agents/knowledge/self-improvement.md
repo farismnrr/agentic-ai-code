@@ -34,7 +34,7 @@ Do **not** create new `memories/<topic>.md` files. Prefer concise sections/bulle
 
 For new work:
 
-- next plan is `031-...md`, then `032-...md`, etc.;
+- use the next unused numeric plan ID; never reuse an existing plan number. With Plans 031–070 already present, the next numeric plan is `071-...md` unless repository inspection proves a later state;
 - one multi-step effort per file;
 - never reuse a number;
 - keep status inside the plan file;
@@ -53,6 +53,33 @@ The pre-030 plans were explicitly closed for a planning refresh. Historical unch
 - A completed status that has not met the **current** plan's own acceptance definition.
 
 Durable docs may summarize implementation facts when needed to orient future agents, but point to authoritative code/config rather than pretending Markdown is runtime source of truth.
+
+## Standard task execution report
+
+The workspace-agnostic base contract lives in [`../../ai-self/BOOTSTRAP.md`](../../ai-self/BOOTSTRAP.md) and applies to milestone, handoff, blocker, and completion reports. This repository specializes that contract without replacing it: use the verified absolute repository root for **Workspace**, report only checks actually executed under **Verification**, and include exact relay/operator commands under **Restart / Operator Action** when needed. Keep the report in English unless the user explicitly requests another language.
+
+```markdown
+### Task Execution Report
+
+**Workspace:** `<verified-full-absolute-repository-root>`
+
+**Issue(s):**
+- <clear description of the task, defect, blocker, or finding>
+
+**Work Completed:**
+- <concise factual description of what changed or was completed>
+
+**Verification:**
+- <exact local check(s) actually run and PASS/FAIL result, e.g. `pnpm guardrail:fast` — PASS>
+
+**Next Steps:**
+- <actionable next task/dependency or `None — task is complete and verified.`>
+
+**Restart / Operator Action:**
+- `None` OR <exact required restart/manual action and command>
+```
+
+Never report a commit, push, PR, merge, deployment, restart, or verification as completed unless it actually occurred.
 
 ## General enforcement
 

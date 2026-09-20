@@ -4,7 +4,7 @@ external MCP client connects to the same public OAuth-protected MCP resource use
 
 Before starting, complete:
 
-1. [Keycloak / Authorization Server setup](keycloak.md)
+1. [OAuth/OIDC Authorization Server setup](oauth-provider.md)
 2. [Remote MCP deployment](remote-mcp.md)
 3. unauthenticated public smoke checks
 4. preferably an authenticated owner-token `server/discover` + `tools/list` smoke check
@@ -53,7 +53,7 @@ During OAuth setup, external MCP client will provide/use a callback URI. Configu
 
 Do not reuse a callback URI copied from another account/session/environment and do not broadly allow arbitrary redirects.
 
-For dynamic registration, apply the restrictions described in [keycloak.md](keycloak.md).
+For dynamic registration, apply the restrictions described in [oauth-provider.md](oauth-provider.md).
 
 ## 5. Complete owner login
 
@@ -73,7 +73,9 @@ The relay will fail closed if any of these do not match.
 
 ## 6. Verify tool discovery
 
-Tool discovery comes from one current runtime catalog composition path. Primary starts from the 15-tool retained terminal/workspace core; Full starts from the 52-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
+Tool discovery comes from one current runtime catalog composition path. The retained `workspace_bootstrap` capability is available in both profiles for explicit `/init` / governance-initialization workflows only: `inspect` is read-only governance/stack discovery, while `reconcile` re-detects the current repository stack, creates missing portable governance, and refreshes only Masih Awam-managed generated governance/guardrail files. Existing unowned guidance/configuration and durable memory are preserved; generated stack checks may be added or removed as the repository evolves. The tool never installs dependencies and ordinary repository work must not bootstrap implicitly.
+
+ Primary starts from the 14-tool retained terminal/workspace core; Full starts from the 51-tool retained base. Explicitly enabled optional capabilities are then composed into that selected profile. Structured workspace read/write/search tools advertise MCP `outputSchema`; successful calls return conforming `structuredContent` as the single payload while the required MCP `content` array remains empty. Local Git and LSP wrappers are intentionally absent from this public surface, so terminal remains their fallback. Numbered catalog snapshots under `.agents/contracts/` are historical audit artifacts only. Refresh/recreate a client connection after upgrading or changing process-start capability flags so `tools/list` is rediscovered.
 
 ```text
 terminal_exec
@@ -85,6 +87,7 @@ file_search
 file_write
 file_edit
 file_read
+file_read_multiple
 text_search
 git_remote_list
 git_remote_branch_get
@@ -102,9 +105,6 @@ change_request_checks
 change_request_merge
 apply_patch
 telegram_send_message
-terminal_job_start
-terminal_job_get
-terminal_job_cancel
 issue_list
 issue_get
 issue_create
@@ -139,12 +139,12 @@ git_remote_list, git_remote_branch_get, git_fetch, git_push
 change_request_*, issue_*, workflow_*
 ssh_readonly_exec, http_fetch, web_search, telegram_send_message
 workspace_add, workspace_list, workspace_get, workspace_remove
-terminal_exec, terminal_job_start, terminal_job_get, terminal_job_cancel
+terminal_exec
 ```
 
 Server hard limits remain authoritative even when a caller supplies its own limit. `directory_list` caps depth at 4 and returned entries at 100; `file_search` and `text_search` cap returned matches at 100; `file_read` caps a request at 1,000 lines and 256 KiB; `file_edit` and `file_write` cap file/payload content at 1 MiB. Mutation defaults are deliberately conservative: an ambiguous `file_edit` fails, and `file_write` never replaces an existing file unless `overwrite=true`.
 
-Prefer an active dedicated MCP capability when it fully covers the operation: workspace tools for structured file work, remote Git transport for fetch/push, forge/issues/workflows for hosted changes, SSH diagnostics for remote inspection, and HTTP/web/messaging tools for their supported requests. Keep `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and unsupported CLIs. Terminal arguments use direct argv semantics and the same credential, privilege, SSH, and socket boundaries as the synchronous path; `terminal_job_*` provides explicit polling/cancellation for clients without MCP Tasks.
+Prefer an active dedicated MCP capability when it fully covers the operation: workspace tools for structured file work, remote Git transport for fetch/push, forge/issues/workflows for hosted changes, SSH diagnostics for remote inspection, and HTTP/web/messaging tools for their supported requests. Keep `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and unsupported CLIs. Terminal arguments use direct argv semantics and the same credential, privilege, SSH, and socket boundaries as the synchronous path. `terminal_exec` itself is synchronous-only with a 60-second hard ceiling; longer operator work is handed off as a foreground manual command rather than a background terminal job.
 
 The same MCP endpoint can also advertise the bounded read-only `workspace://<repo-name>/{manifest,agent-guidance,status,head}` resources. Resource availability does not grant arbitrary file browsing.
 
@@ -172,17 +172,15 @@ This does not change the relay's authorization requirement: tool tokens must sti
 
 ## Long-running and slow MCP operations
 
-The relay no longer has an unconditional five-minute terminal ceiling. It also avoids requiring one HTTP request to remain open for work whose latency is legitimately unpredictable.
+The relay uses a synchronous-only agent execution model. Every agent-invoked process-like MCP tool must complete or fail within a hard 60-second ceiling; there is no MCP Tasks escape hatch for longer execution.
 
-- `timeout_ms: 0` means no terminal command deadline unless the operator configured `RELAY_MAX_TERMINAL_TIMEOUT_MS`.
-- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. A Tasks-capable client may receive a task handle and retrieve the final result through `tasks/get`; bounded native reads remain synchronous.
-- The first-party Nuxt MCP client applies a separate per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds). That deadline is not the durable task lifetime.
-- Task polling honors the relay's `pollIntervalMs` hint and uses bounded backoff rather than a hot fixed polling loop.
-- A dropped/timed-out HTTP round trip is not treated as implicit task cancellation. Explicit task cancellation still targets the authoritative relay job and process tree.
-- Clients that do not negotiate Tasks can still use `terminal_job_start`, poll with `terminal_job_get`, and stop terminal work with `terminal_job_cancel`.
-- Task input handoff is not currently used by these relay tools. If a future task reports `input_required`, the current first-party client fails explicitly rather than waiting indefinitely until a reviewed input contract exists.
+- Public `terminal_exec` accepts `timeout_ms` only within the effective `1..=60000` millisecond ceiling; the schema default is 30 seconds. `0` is not a valid MCP caller value. Internal defensive normalization of legacy/internal zero values does not expand the public contract.
+- `ssh_readonly_exec`, `web_search`, `http_fetch`, and other process-like tools remain synchronous. They do not return task handles and the relay does not expose `tasks/get`, `tasks/update`, or `tasks/cancel`.
+- The first-party Nuxt MCP client may apply its own shorter per-HTTP-round-trip deadline (`NUXT_REMOTE_MCP_REQUEST_TIMEOUT_MS`, default 45 seconds), but that never extends relay execution beyond the server-side ceiling.
+- Work that can legitimately take longer than 60 seconds is not started in the agent tool call. The agent must hand the human/operator an exact foreground command instead.
+- Human/operator foreground commands are outside the agent timeout policy: Masih Awam does not wrap them in a platform timeout, background them, or detach them merely to fit the MCP boundary.
 
-external MCP client controls how progress/tool cards are rendered. The relay can provide protocol task state and results, but it cannot force external MCP client to render raw terminal output like a native terminal UI.
+External MCP clients control how progress/tool cards are rendered. The relay returns the final synchronous result for bounded calls, while long-running operator work is observed through the user's foreground terminal and later state inspection.
 
 ## What a successful connection proves
 
@@ -194,6 +192,6 @@ It does not automatically prove every negative case, hosted-Nuxt token ownership
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is a external MCP client routing/UX subset and does not delete capabilities. Future tools are full-only until explicitly reviewed for promotion.
 
-Primary has a 15-tool retained core for terminal plus structured workspace work. Full has a 52-tool retained base, including remote Git transport, HTTP/web, Full-only SSH diagnostics, forge/issues/workflows, alerts, and Telegram. The runtime catalog composes explicitly enabled optional capabilities on top of that base; Plan 069 keeps `creative_status` discoverable and adds the remaining creative tools only to Full when `RELAY_ENABLE_CREATIVE=true`. Local Git and LSP wrappers are not in the public catalog; terminal remains the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered CLI operations. `ssh_readonly_exec` is a normal discoverable Full tool and does not require client-side SSH parsing; clients provide only structured alias/command/args while the relay owns SSH config/key resolution and read-only enforcement. Historical numbered snapshots are immutable audit records and are not alternate active runtime versions.
+Primary has a 14-tool retained core for synchronous terminal plus structured workspace work. Full has a 51-tool retained base, including remote Git transport, HTTP/web, Full-only SSH diagnostics, forge/issues/workflows, alerts, and Telegram. The runtime catalog composes explicitly enabled optional capabilities on top of that base; Plan 069 keeps `creative_status` discoverable and adds the remaining creative tools only to Full when `RELAY_ENABLE_CREATIVE=true`. Local Git and LSP wrappers are not in the public catalog; terminal remains the fallback for builds, tests, package managers, interpreters, scripts, pipelines, and uncovered CLI operations. `ssh_readonly_exec` is a normal discoverable Full tool and does not require client-side SSH parsing; clients provide a structured final alias, optional bounded `via` alias chain, command, and args while the relay owns SSH config/include/key/jump resolution and read-only enforcement. Intermediate hops are transport-only; the diagnostic command executes only on the final alias. Historical numbered snapshots are immutable audit records and are not alternate active runtime versions.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where external MCP client Action Control can hide actions client-side, that can be used for A/B testing without a second endpoint.

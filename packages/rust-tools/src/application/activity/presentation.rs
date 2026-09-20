@@ -53,12 +53,8 @@ pub(super) fn action_for_tool(
         // out of the activity journal altogether instead of relying only on
         // credential-shaped redaction for a potentially sensitive message.
         "telegram_send_message" => "Send Telegram message".into(),
-        "terminal_exec" | "terminal_job_start" => terminal_action(arguments, root),
+        "terminal_exec" => terminal_action(arguments, root),
         "ssh_readonly_exec" => ssh_readonly_action(arguments),
-        "terminal_job_get" => identifier_action("Get terminal job", arguments, "taskId", root),
-        "terminal_job_cancel" => {
-            identifier_action("Cancel terminal job", arguments, "taskId", root)
-        }
         "file_read" => {
             let target = target_for_tool(tool_id, arguments, root)
                 .unwrap_or_else(|| "workspace file".into());
@@ -74,6 +70,17 @@ pub(super) fn action_for_tool(
                 ),
                 None => format!("Read {target}"),
             }
+        }
+        "file_read_multiple" => {
+            let count = arguments
+                .get("paths")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0);
+            format!(
+                "Read {count} workspace file{}",
+                if count == 1 { "" } else { "s" }
+            )
         }
         "file_write" => {
             let target = target_for_tool(tool_id, arguments, root)
@@ -238,14 +245,6 @@ fn patch_action(arguments: &Value, root: Option<&Path>) -> String {
     }
 }
 
-fn identifier_action(label: &str, arguments: &Value, key: &str, root: Option<&Path>) -> String {
-    arguments
-        .get(key)
-        .and_then(Value::as_str)
-        .map(|value| format!("{label} · {}", sanitize_action_text(value, root)))
-        .unwrap_or_else(|| label.into())
-}
-
 fn generic_action(tool_id: &str, arguments: &Value, root: Option<&Path>) -> String {
     let mut action = friendly_tool_name(tool_id);
     let Some(object) = arguments.as_object() else {
@@ -257,7 +256,7 @@ fn generic_action(tool_id: &str, arguments: &Value, root: Option<&Path>) -> Stri
             || sensitive_argument_key(key)
             || matches!(
                 key.as_str(),
-                "content" | "data" | "headers" | "edits" | "patch"
+                "content" | "code" | "data" | "headers" | "edits" | "patch"
             )
         {
             continue;

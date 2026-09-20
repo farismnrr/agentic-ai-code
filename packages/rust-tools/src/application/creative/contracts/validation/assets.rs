@@ -1,6 +1,7 @@
 use super::validate_text;
 use crate::application::creative::contracts::{
     AssetMetadata, AssetRecord, AssetSource, AssetSurface, CreativeProject,
+    MAX_ELEMENT_DEPENDENCIES,
 };
 use crate::core::error::McpError;
 use std::collections::HashSet;
@@ -64,6 +65,21 @@ pub(super) fn validate_asset(
             ));
         }
     }
+    if asset.dependency_element_ids.len() > MAX_ELEMENT_DEPENDENCIES {
+        return Err(McpError::InvalidRequest(
+            "asset element dependency count exceeds maximum".into(),
+        ));
+    }
+    let mut dependencies = HashSet::new();
+    for dependency_id in &asset.dependency_element_ids {
+        super::validate_id(dependency_id, "asset dependency element id")?;
+        if !dependencies.insert(dependency_id.as_str()) || project.element(dependency_id).is_none()
+        {
+            return Err(McpError::InvalidRequest(
+                "asset element dependency is unknown or duplicated".into(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -88,9 +104,11 @@ pub(super) fn validate_asset_lineage(project: &CreativeProject) -> Result<(), Mc
 fn validate_asset_media_type(value: &str) -> Result<(), McpError> {
     let allowed = value.starts_with("image/")
         || value.starts_with("video/")
-        || value.starts_with("audio/")
         || value.starts_with("model/")
-        || matches!(value, "application/octet-stream");
+        || matches!(
+            value,
+            "application/json" | "application/octet-stream" | "application/x-blender"
+        );
     if value.is_empty() || value.len() > 128 || value.chars().any(char::is_control) || !allowed {
         return Err(McpError::InvalidRequest(
             "creative asset media type is unsupported".into(),
@@ -112,12 +130,6 @@ fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
         || metadata
             .frame_rate
             .is_some_and(|value| !value.is_finite() || !(1.0..=240.0).contains(&value))
-        || metadata
-            .sample_rate_hz
-            .is_some_and(|value| !(8_000..=384_000).contains(&value))
-        || metadata
-            .channels
-            .is_some_and(|value| value == 0 || value > 32)
     {
         return Err(McpError::InvalidRequest(
             "creative asset media metadata is outside allowed bounds".into(),
@@ -125,6 +137,15 @@ fn validate_asset_metadata(metadata: &AssetMetadata) -> Result<(), McpError> {
     }
     if let Some(language) = metadata.language.as_deref() {
         validate_text(language, 1, 32, "asset language")?;
+    }
+    if let Some(kind) = metadata.artifact_kind.as_deref() {
+        validate_text(kind, 1, 64, "asset artifact kind")?;
+    }
+    if let Some(version) = metadata.artifact_version.as_deref() {
+        validate_text(version, 1, 128, "asset artifact version")?;
+    }
+    if let Some(notes) = metadata.license_notes.as_deref() {
+        validate_text(notes, 1, 1024, "asset license notes")?;
     }
     Ok(())
 }

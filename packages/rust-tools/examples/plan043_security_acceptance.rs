@@ -100,6 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -112,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -125,6 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &jobs,
             &lsp,
             &hooks,
+            "local",
         )
         .await?;
         assert!(!result.is_error);
@@ -138,6 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -150,6 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -163,6 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     let amend = find_tool("git_commit_amend").unwrap();
@@ -173,6 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!result.is_error);
@@ -192,6 +199,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(repo.join("pick.txt").exists());
@@ -204,6 +212,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!repo.join("pick.txt").exists());
@@ -217,6 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert_eq!(fs::read_to_string(repo.join("tracked.txt"))?, "amended\n");
@@ -231,6 +241,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!repo.join("scratch.tmp").exists());
@@ -250,6 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(repo.join(".env.local").exists());
@@ -261,6 +273,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert_eq!(fs::read_to_string(repo.join("tracked.txt"))?, "stashed\n");
@@ -271,6 +284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     let stash_drop = find_tool("git_stash_drop").unwrap();
@@ -281,6 +295,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     fs::remove_file(repo.join(".env.local"))?;
@@ -293,6 +308,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -303,6 +319,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .is_err());
@@ -316,6 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &jobs,
         &lsp,
         &hooks,
+        "local",
     )
     .await?;
     assert!(!result.is_error);

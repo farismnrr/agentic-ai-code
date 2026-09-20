@@ -6,6 +6,8 @@ Authoritative guidance for **any coding agent** working in this repository lives
 
 This is a **Nuxt 4 application plus a Rust native-tool workspace**. Use Nuxt-native mechanisms for web application work, and preserve the explicit Rust/MCP security boundaries for native execution work.
 
+**Workspace-root invariant:** `$HOME/Documents/Projects` is the canonical relay authorization/execution root. The `ai-code` repository checkout is source code only: agents may select it as `cwd` while editing/testing this repository, but must never use it as the root for user workspaces, Creative Projects, Blender production, or acceptance artifacts. Blender creative projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`; any project-internal `blender/` layout lives beneath that creative-project directory.
+
 Before changing anything, read the files relevant to the task:
 
 1. [`knowledge/project.md`](knowledge/project.md) — current stack, layout, and verification commands.
@@ -23,7 +25,7 @@ Before changing anything, read the files relevant to the task:
 | [`skills/`](skills/) | Framework/UI/tool skills and package skill links | Before work covered by a skill |
 | [`memories/README.md`](memories/README.md) | All durable decisions, constraints, incidents, and traps | At task start and closeout |
 | [`plans/`](plans/) | Plan 030 historical snapshot plus future incrementing plan files | Before continuing planned work |
-| [`contracts/`](contracts/) | Frozen client-visible contracts used by acceptance gates | Before changing a published contract |
+| [`contracts/`](contracts/) | Frozen contract/evidence snapshots used by acceptance gates; only entries explicitly marked current remain live contract guidance | Before changing a published contract or interpreting historical acceptance evidence |
 
 ### knowledge/
 
@@ -36,6 +38,10 @@ Before changing anything, read the files relevant to the task:
 | [`git.md`](knowledge/git.md) | Branching, commits, PRs, and local commit gates |
 | [`tooling.md`](knowledge/tooling.md) | Environment/runtime config, lint/typecheck, and local hook tooling |
 | [`resources.md`](knowledge/resources.md) | Installed skills, MCP resources, and Agentation |
+
+### Contract snapshot rule
+
+Files under `contracts/` may be current frozen contracts or dated Phase-0/baseline/evidence snapshots. A historical date, `Phase 0`, `baseline`, or explicit `HISTORICAL / SUPERSEDED` marker means the file records that checkpoint and does not override current source/tests, current operator docs, current knowledge/memory, or a later explicit contract. Do not revive a removed tool/protocol simply because it appears in an older contract snapshot.
 
 ## Memory model
 
@@ -52,7 +58,7 @@ The repository deliberately keeps **one durable memory file**: [`memories/README
 
 Future planning remains normal and incremental:
 
-- next plan: **031**;
+- next unused numeric plan after active Plan 070 is **071**;
 - filename: `NNN-kebab-case.md`;
 - never reuse a number;
 - keep each new plan as its own file, including after completion;
@@ -60,6 +66,10 @@ Future planning remains normal and incremental:
 - there is no `plans/README.md` index; the numbered plan files are the source of truth for their own status.
 
 An old unchecked item inside the Plan 030 history is not active work. Re-audit current source/external state and create a fresh numbered plan when needed.
+
+**Supersession rule for Plan 031+:** numbered plan files preserve chronological implementation history, so older sections may truthfully describe a runtime or contract that was later replaced. Never treat an older dated checkpoint, unchecked historical item, historical tool count, or superseded design paragraph as current merely because it remains in the file. Resolve ambiguity in this order: current source/config and tests -> the plan's top-level current `Status`/explicit supersession note -> the latest dated closure/update for the relevant concern -> canonical memory/current knowledge. Historical checkpoints remain evidence only. When a plan changes direction mid-stream, update its top status and add an explicit supersession note rather than silently rewriting the old evidence.
+
+**Active-plan rule:** many older Plan 031+ files predate the top-level `Status:` convention. Absence of a `Status:` line is **not** evidence that a plan is active, open, or safe to resume; unchecked boxes in such files are historical planning data until current source/external state is re-audited. Before resuming one of those plans, add an explicit current status/supersession note to that plan. Only a plan that explicitly identifies itself as current/in-progress (or is explicitly named by the user for re-audit) may drive new implementation work.
 
 ## Local quality policy
 
@@ -91,5 +101,5 @@ The repository deliberately has **no client/vendor-specific lifecycle hook**. Sh
 - Do **not** add repository-owned client/vendor agent directories, settings, discovery links, or alternate instruction entrypoints.
 - `skills-lock.json` remains at repo root because the `skills` CLI expects it there.
 - Durable memory stays in exactly one file: `memories/README.md`.
-- Plan 030 is the historical compaction snapshot; new plans are separate incrementing files starting at 031.
+- Plan 030 is the historical compaction snapshot; Plans 031+ remain separate incrementing files. Do not reuse an existing number; after Plan 070, the next unused numeric plan is 071 unless a previously reserved number is proven unused by the repository.
 - Delete or amend durable guidance when it stops being true; stale memory is worse than missing memory.

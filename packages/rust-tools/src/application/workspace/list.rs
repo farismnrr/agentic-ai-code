@@ -48,7 +48,7 @@ pub fn directory_list(
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(DEFAULT_DIRECTORY_DEPTH)
-        .min(MAX_DIRECTORY_DEPTH);
+        .clamp(1, MAX_DIRECTORY_DEPTH);
     let max_entries = arguments
         .get("max_entries")
         .and_then(Value::as_u64)
@@ -144,7 +144,11 @@ fn visit_directory(
             kind,
         });
 
-        if file_type.is_dir() && remaining_depth > 1 {
+        if file_type.is_dir()
+            && remaining_depth > 1
+            && !super::search::DEPENDENCY_OR_GENERATED_DIRECTORIES
+                .contains(&child.name.to_str().unwrap())
+        {
             let child_directory = directory.open_child(&child)?;
             visit_directory(
                 &child_directory,

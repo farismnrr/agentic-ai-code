@@ -42,7 +42,7 @@ This directory intentionally does not duplicate native client memory.
 
 ## Project identity and workspace isolation
 
-`BOOTSTRAP.md` contains the global MCP client instructions needed to enforce workspace isolation before any project-local skill is selected.
+`BOOTSTRAP.md` contains the global MCP client instructions that apply before any project-local skill is selected: fresh workspace isolation/identity plus the workspace-agnostic Task Execution Report contract used for milestone, blocker, handoff, and completion reporting across repositories.
 
 `project.yaml` identifies this repository using stable Git/project evidence. Before repository mutation, use `skills/workspace-scope/SKILL.md` to resolve and verify the requested project and establish an ephemeral task-local workspace lock.
 

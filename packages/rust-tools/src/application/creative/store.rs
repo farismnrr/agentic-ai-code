@@ -1,25 +1,40 @@
 use super::contracts::{
-    validate_id, validate_spec, AssetSource, CreativeProject, CreativeTrack, ElementKind,
-    ElementRecord, ElementRevision, ProductionTarget, ReferenceAuthority, RevisionState,
-    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_REFERENCES_PER_REVISION,
+    validate_id, validate_spec, AssetSource, CreativeProject, CreativeProjectLayout, CreativeTrack,
+    ElementKind, ElementRecord, ElementRevision, GameManifest, MultiplayerRoomState,
+    ProductionTarget, QaFinding, ReferenceAuthority, RevisionState, SceneBoard, SceneManifest,
+    CREATIVE_SCHEMA_VERSION, MAX_PROJECT_ELEMENTS, MAX_PROJECT_GAMES, MAX_PROJECT_SCENES,
+    MAX_PROJECT_SCENE_BOARDS, MAX_QA_FINDINGS, MAX_REFERENCES_PER_REVISION,
     MAX_REVISIONS_PER_ELEMENT,
 };
 use super::graph::{
-    validate_graph, validate_job_record, CreativeGraph, CreativeJobRecord, CreativeJobStatus,
+    validate_graph, validate_job_record, CreativeGraph, CreativeJobKind, CreativeJobRecord,
 };
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde_json::Value;
 
 mod assets;
+mod dependencies;
 mod io;
+mod production;
 mod support;
+mod templates;
+mod uploads;
 pub use assets::{
-    promote_asset, register_asset, search_assets, AssetRegistrationInput, AssetSearch,
+    promote_asset, register_asset, reject_asset, search_assets, AssetRegistrationInput, AssetSearch,
 };
 use io::*;
+pub use production::{
+    add_qa_finding, list_projects, load_multiplayer_room, load_project, project_layout,
+    store_multiplayer_room, upsert_game, upsert_scene, upsert_scene_board,
+};
 use support::new_id;
 pub use support::now_ms;
+pub use templates::{list_templates, load_template, store_template};
+pub use uploads::{
+    list_upload_tickets, load_upload_receipt, load_upload_ticket, store_upload_receipt,
+    store_upload_ticket,
+};
 
 const STATE_PREFIX: &str = ".masihawam/creative";
 const MAX_REGISTER_ASSET_BYTES: u64 = 1024 * 1024 * 1024;
@@ -44,11 +59,53 @@ pub struct ElementRevisionInput {
     pub spec: Value,
 }
 
+pub fn resolve_registered_asset_path(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<std::path::PathBuf, McpError> {
+    validate_id(asset_id, "asset_id")?;
+    let project = load_project(cwd, config, project_id)?;
+    let asset = project
+        .asset(asset_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
+    Ok(io::resolve_asset_path(cwd, config, &asset.relative_path)?.absolute)
+}
+
+pub(crate) fn store_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+    value: &Value,
+) -> Result<(), McpError> {
+    validate_id(project_id, "project_id")?;
+    validate_id(checkpoint_id, "checkpoint_id")?;
+    let path =
+        format!("{STATE_PREFIX}/projects/{project_id}/blender/checkpoints/{checkpoint_id}.json");
+    write_json(cwd, config, &path, value, false)
+}
+
+pub(crate) fn load_blender_checkpoint_state(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    checkpoint_id: &str,
+) -> Result<Value, McpError> {
+    validate_id(project_id, "project_id")?;
+    validate_id(checkpoint_id, "checkpoint_id")?;
+    let path =
+        format!("{STATE_PREFIX}/projects/{project_id}/blender/checkpoints/{checkpoint_id}.json");
+    read_json(cwd, config, &path)
+}
+
 pub fn create_project(
     cwd: Option<&str>,
     config: &ServerConfig,
     input: NewProject,
 ) -> Result<CreativeProject, McpError> {
+    io::ensure_creative_project_root(cwd, config)?;
     let project_id = input.project_id.unwrap_or_else(|| new_id("project"));
     validate_id(&project_id, "project_id")?;
     let project_path = project_path(&project_id);
@@ -78,9 +135,9 @@ pub fn create_project(
         target: input.target,
         elements: Vec::new(),
         assets: Vec::new(),
+        scene_boards: Vec::new(),
         scenes: Vec::new(),
         games: Vec::new(),
-        audio_plans: Vec::new(),
         graph_ids: Vec::new(),
         job_ids: Vec::new(),
         qa_findings: Vec::new(),
@@ -95,21 +152,6 @@ pub fn create_project(
     index.project_ids.dedup();
     write_json(cwd, config, index_path(), &index, true)?;
     Ok(project)
-}
-
-pub fn load_project(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    project_id: &str,
-) -> Result<CreativeProject, McpError> {
-    validate_id(project_id, "project_id")?;
-    let project: CreativeProject = read_json(cwd, config, &project_path(project_id))?;
-    project.validate()?;
-    Ok(project)
-}
-
-pub fn list_projects(cwd: Option<&str>, config: &ServerConfig) -> Result<Vec<String>, McpError> {
-    Ok(read_project_index(cwd, config)?.project_ids)
 }
 
 pub fn add_element_revision(
@@ -222,28 +264,74 @@ pub fn promote_element_revision(
     validate_id(element_id, "element_id")?;
     validate_id(revision_id, "revision_id")?;
     let mut project = load_project(cwd, config, project_id)?;
+    let (is_style, previous_selected) = {
+        let element = project
+            .elements
+            .iter_mut()
+            .find(|value| value.element_id == element_id)
+            .ok_or_else(|| McpError::InvalidRequest("unknown creative element".into()))?;
+        if !element
+            .revisions
+            .iter()
+            .any(|value| value.revision_id == revision_id)
+        {
+            return Err(McpError::InvalidRequest("unknown element revision".into()));
+        }
+        let previous_selected = element.selected_revision_id.clone();
+        for revision in &mut element.revisions {
+            revision.state = if revision.revision_id == revision_id {
+                RevisionState::Accepted
+            } else if revision.state == RevisionState::Accepted {
+                RevisionState::Candidate
+            } else {
+                revision.state.clone()
+            };
+        }
+        element.selected_revision_id = Some(revision_id.to_owned());
+        (element.kind == ElementKind::Style, previous_selected)
+    };
+    let timestamp = now_ms();
+    if is_style
+        && previous_selected
+            .as_deref()
+            .is_some_and(|value| value != revision_id)
+    {
+        dependencies::mark_style_dependents_for_review(
+            &mut project,
+            element_id,
+            revision_id,
+            timestamp,
+        )?;
+    }
+    project.updated_at_ms = timestamp;
+    save_project(cwd, config, &project)?;
+    Ok(project)
+}
+
+pub fn reject_element_revision(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    element_id: &str,
+    revision_id: &str,
+) -> Result<CreativeProject, McpError> {
+    validate_id(element_id, "element_id")?;
+    validate_id(revision_id, "revision_id")?;
+    let mut project = load_project(cwd, config, project_id)?;
     let element = project
         .elements
         .iter_mut()
         .find(|value| value.element_id == element_id)
         .ok_or_else(|| McpError::InvalidRequest("unknown creative element".into()))?;
-    for revision in &mut element.revisions {
-        revision.state = if revision.revision_id == revision_id {
-            RevisionState::Accepted
-        } else if revision.state == RevisionState::Accepted {
-            RevisionState::Candidate
-        } else {
-            revision.state.clone()
-        };
-    }
-    if !element
+    let revision = element
         .revisions
-        .iter()
-        .any(|value| value.revision_id == revision_id)
-    {
-        return Err(McpError::InvalidRequest("unknown element revision".into()));
+        .iter_mut()
+        .find(|value| value.revision_id == revision_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown element revision".into()))?;
+    revision.state = RevisionState::Rejected;
+    if element.selected_revision_id.as_deref() == Some(revision_id) {
+        element.selected_revision_id = None;
     }
-    element.selected_revision_id = Some(revision_id.to_owned());
     project.updated_at_ms = now_ms();
     save_project(cwd, config, &project)?;
     Ok(project)
@@ -257,7 +345,7 @@ pub fn store_graph(
     validate_id(&graph.project_id, "project_id")?;
     validate_id(&graph.graph_id, "graph_id")?;
     let mut project = load_project(cwd, config, &graph.project_id)?;
-    let validation = validate_graph(graph, &project)?;
+    let validation = validate_graph(graph, &project, config)?;
     if !validation.valid {
         return Err(McpError::InvalidRequest(
             "creative graph cannot be stored before validation succeeds".into(),
@@ -300,7 +388,7 @@ pub fn load_graph(
         return Err(McpError::InvalidRequest("unknown creative graph".into()));
     }
     let graph: CreativeGraph = read_json(cwd, config, &graph_path(project_id, graph_id))?;
-    let validation = validate_graph(&graph, &project)?;
+    let validation = validate_graph(&graph, &project, config)?;
     if !validation.valid {
         return Err(McpError::InvalidRequest(
             "stored creative graph is invalid".into(),
@@ -316,10 +404,15 @@ pub fn store_job(
 ) -> Result<(), McpError> {
     validate_job_record(job)?;
     let mut project = load_project(cwd, config, &job.project_id)?;
-    if !project.graph_ids.iter().any(|value| value == &job.graph_id) {
-        return Err(McpError::InvalidRequest(
-            "creative job references an unknown stored graph".into(),
-        ));
+    if job.kind == CreativeJobKind::Graph {
+        let graph_id = job.graph_id.as_deref().ok_or_else(|| {
+            McpError::InvalidRequest("graph creative job requires graph_id".into())
+        })?;
+        if !project.graph_ids.iter().any(|value| value == graph_id) {
+            return Err(McpError::InvalidRequest(
+                "creative job references an unknown stored graph".into(),
+            ));
+        }
     }
     let is_new = !project.job_ids.iter().any(|value| value == &job.job_id);
     if is_new && project.job_ids.len() >= MAX_JOBS_PER_PROJECT {
@@ -377,24 +470,4 @@ pub fn list_jobs(
         .take(200)
         .map(|job_id| load_job(cwd, config, project_id, job_id))
         .collect()
-}
-
-pub fn cancel_job(
-    cwd: Option<&str>,
-    config: &ServerConfig,
-    project_id: &str,
-    job_id: &str,
-) -> Result<CreativeJobRecord, McpError> {
-    let mut job = load_job(cwd, config, project_id, job_id)?;
-    match job.status {
-        CreativeJobStatus::Queued | CreativeJobStatus::Running => {
-            job.status = CreativeJobStatus::Cancelled;
-            job.updated_at_ms = now_ms();
-            store_job(cwd, config, &job)?;
-            Ok(job)
-        }
-        _ => Err(McpError::InvalidRequest(
-            "creative job is already terminal".into(),
-        )),
-    }
 }

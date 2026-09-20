@@ -1,11 +1,11 @@
 //! Real Bubblewrap execution against disposable HOME fixtures, never owner secrets.
 #![cfg(target_os = "linux")]
 use ai_tools::application::execution::{
-    start_terminal_job, start_terminal_job_for, JobManager, JobSnapshot,
+    start_terminal_job, start_terminal_job_for, JobManager, JobSnapshot, JobState,
 };
 use ai_tools::core::config::{ActivityConfig, ServerConfig};
 use serde_json::json;
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path, process::Command, time::Duration};
 
 #[test]
 fn broad_home_sandbox() {
@@ -51,17 +51,39 @@ fn broad_home_sandbox() {
 }
 
 pub(super) async fn shell(config: &ServerConfig, cwd: &Path, script: &str) -> JobSnapshot {
+    // Protected-index transient failures deliberately back off for 30 seconds
+    // to avoid a retry storm. Keep this fixture's command window long enough
+    // to observe recovery after it repairs an intentionally inaccessible tree.
+    const SHELL_TIMEOUT_MS: u64 = 45_000;
+    const SHELL_RECOVERY_WINDOW: Duration = Duration::from_secs(45);
     let manager = JobManager::new(config.clone());
-    let id = start_terminal_job(
-        &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":10000}),
-        config,
-        &manager,
-    )
-    .await
-    .unwrap();
-    let result = manager.wait(&id).await.unwrap();
-    manager.shutdown().await;
-    result
+    manager.prepare_for_serving().await;
+    let deadline = std::time::Instant::now() + SHELL_RECOVERY_WINDOW;
+    loop {
+        let id = start_terminal_job(
+            &json!({"command":"sh", "args":["-c", script], "cwd":cwd, "timeout_ms":SHELL_TIMEOUT_MS}),
+            config,
+            &manager,
+        )
+        .await
+        .unwrap();
+        let result = manager.wait(&id).await.unwrap();
+        let diagnostic = result
+            .result
+            .as_ref()
+            .and_then(|tool_result| tool_result.content.first())
+            .map(|content| content.text.as_str())
+            .unwrap_or_default();
+        let index_retry = matches!(result.state, JobState::Failed | JobState::TimedOut)
+            && (diagnostic.contains("protected_path_discovery: Interrupted")
+                || diagnostic.contains("protected_path_discovery: WouldBlock")
+                || diagnostic.contains("protected_path_discovery: TimedOut"));
+        if !index_retry || std::time::Instant::now() >= deadline {
+            manager.shutdown().await;
+            return result;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 #[tokio::test]
@@ -100,7 +122,6 @@ async fn home_fixture_child() {
         ".cargo/credentials.toml",
         "project-a/.env",
         "project-b/.env.production",
-        "project-a/node_modules/dependency/.env.local",
         "project-a/deep/.ssh/id_rsa",
         "project-a/deep/.gnupg/secring.gpg",
         "project-a/deep/.aws/credentials",
@@ -126,6 +147,14 @@ async fn home_fixture_child() {
         let path = root.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, "fixture-protected-canary").unwrap();
+    }
+    for path in [
+        "project-a/node_modules/dependency/.env.local",
+        "project-a/target/generated/.env.test",
+    ] {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "fixture-skipped-canary").unwrap();
     }
     fs::create_dir(root.join("relay-state")).unwrap();
     fs::write(
@@ -158,11 +187,12 @@ async fn home_fixture_child() {
         );
         assert_eq!(result.stdout, "ordinary");
     }
-    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat deep/.env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local deep/.env deep/.ssh/id_rsa deep/.aws/credentials 2>/dev/null; test ! -S ../agent.sock; test ! -S deep/auth_helper.sock && echo nested-sock-masked").await;
+    let result = shell(&config, &root.join("project-a"), "cat ../project-b/ordinary.txt; cat .env.example; cat deep/.env.example; cat .env ../.ssh/key ../.cargo/credentials node_modules/dependency/.env.local target/generated/.env.test deep/.env deep/.ssh/id_rsa deep/.aws/credentials 2>/dev/null; test ! -S ../agent.sock; test ! -S deep/auth_helper.sock && echo nested-sock-masked").await;
     assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
     assert!(result.stdout.contains("public-example"));
     assert!(result.stdout.contains("nested-public-example"));
     assert!(!result.stdout.contains("fixture-protected-canary"));
+    assert!(result.stdout.contains("fixture-skipped-canary"));
     assert!(result.stdout.contains("nested-sock-masked"));
     for path in protected.into_iter().chain(["relay-state/payload.key"]) {
         let result = shell(
@@ -244,14 +274,14 @@ async fn home_fixture_child() {
             .exit_code,
         Some(0)
     );
-    // Complete scans include dependency/build/cache trees. A modest synthetic
-    // home has thousands of entries; none may be skipped because of its name.
+    // Dependency/build/cache trees are intentionally outside protected-path
+    // discovery. Their contents stay visible inside the authorized workspace.
     let cache = root.join("project-b/target");
     fs::create_dir(&cache).unwrap();
     for i in 0..10_000 {
         fs::write(cache.join(format!("entry-{i}")), "ordinary").unwrap();
     }
-    fs::write(cache.join(".env.hidden"), "fixture-protected-canary").unwrap();
+    fs::write(cache.join(".env.hidden"), "fixture-skipped-canary").unwrap();
     let result = shell(
         &config,
         &root,
@@ -259,7 +289,11 @@ async fn home_fixture_child() {
     )
     .await;
     assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
-    assert_eq!(result.stdout, "ordinary", "{}", result.stderr);
+    assert_eq!(
+        result.stdout, "fixture-skipped-canaryordinary",
+        "{}",
+        result.stderr
+    );
     let redacted = shell(
         &config,
         &root,
@@ -284,6 +318,42 @@ async fn home_fixture_child() {
     fs::set_permissions(&inaccessible, fs::Permissions::from_mode(0o700)).unwrap();
     assert_ne!(result.exit_code, Some(0));
     assert!(!result.stdout.contains("must-not-run"));
+
+    // Auto-discovered ~/.cargo/bin must win over packaged system rustup shims
+    // and carry the owner's read-only rustup state even when HOME is outside
+    // the narrowed project execution root.
+    let cargo_bin = root.join(".cargo/bin");
+    let rustup_marker = root.join(".rustup/toolchains/fixture/marker");
+    fs::create_dir_all(&cargo_bin).unwrap();
+    fs::create_dir_all(rustup_marker.parent().unwrap()).unwrap();
+    fs::write(
+        cargo_bin.join("cargo"),
+        "#!/bin/sh\n\
+         test \"$CARGO_HOME\" = \"$HOME/.cargo\" || exit 41\n\
+         test \"$RUSTUP_HOME\" = \"$HOME/.rustup\" || exit 42\n\
+         test \"$(cat \"$CARGO_HOME/credentials\" 2>/dev/null)\" != \"fixture-protected-canary\" || exit 43\n\
+         cat \"$RUSTUP_HOME/toolchains/fixture/marker\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(cargo_bin.join("cargo"), fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(&rustup_marker, "auto-rustup-ok").unwrap();
+    let rust_project = root.join("project-a");
+    let rust_config = ServerConfig {
+        dir: Some(rust_project.to_string_lossy().into()),
+        execution_root: Some(rust_project.to_string_lossy().into()),
+        ..ServerConfig::default()
+    };
+    let result = shell(&rust_config, &rust_project, "cargo").await;
+    assert_eq!(
+        result.exit_code,
+        Some(0),
+        "auto-discovered Cargo/Rust failed: {}",
+        result.stderr
+    );
+    assert_eq!(result.stdout.trim(), "auto-rustup-ok");
+    fs::remove_file(cargo_bin.join("cargo")).unwrap();
+    fs::remove_dir_all(root.join(".rustup")).unwrap();
+
     // Reviewed Rust and a symlink-based Node installation are available without
     // inheriting the parent PATH, auth environment, or toolchain credentials.
     let node_link = root.join("node-bin");

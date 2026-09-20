@@ -1,5 +1,5 @@
 //! Complete bounded masking for every exposed user tree; never prune visible caches.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[cfg(target_os = "linux")]
@@ -8,14 +8,27 @@ mod protected_index;
 #[path = "masks/protected_index_portable.rs"]
 mod protected_index;
 
-pub(super) fn mask_executables(
+pub(super) use protected_index::ProtectedPathFreshness;
+
+pub(super) struct ProtectedPathFreshnessGuard<'a> {
+    _guard: protected_index::PreSpawnFreshnessGuard<'a>,
+}
+
+pub(super) fn lock_protected_path_freshness<'a>(
+    checks: &'a [ProtectedPathFreshness],
+) -> Result<ProtectedPathFreshnessGuard<'a>, std::io::Error> {
+    protected_index::lock_and_validate_freshness(checks)
+        .map(|_guard| ProtectedPathFreshnessGuard { _guard })
+}
+
+pub(super) fn mask_executables_from(
     args: &mut Vec<String>,
-    config: &crate::core::config::ServerConfig,
+    directories: impl IntoIterator<Item = PathBuf>,
     names: &[&str],
     control: Option<&super::SpawnControl<'_>>,
 ) -> Result<(), std::io::Error> {
     let mut masked = std::collections::BTreeSet::new();
-    for directory in super::safe_path_entries(config) {
+    for directory in directories {
         for name in names {
             if let Some(control) = control {
                 control.check()?;
@@ -77,14 +90,6 @@ pub(super) fn mask_protected_file(
     Ok(())
 }
 
-pub(super) struct ProtectedPathFreshness(std::sync::Arc<protected_index::ProtectedPathIndex>);
-
-impl ProtectedPathFreshness {
-    pub(super) fn is_fresh(&self) -> Result<bool, std::io::Error> {
-        self.0.is_fresh()
-    }
-}
-
 pub(super) fn add_optional_socket(
     args: &mut Vec<String>,
     enabled: bool,
@@ -133,14 +138,14 @@ pub(super) fn add_protected_paths(
                 )
             })?;
         let paths = index
-            .protected_paths
+            .protected_paths()
             .iter()
             .filter(|path| path.strip_prefix(&canonical_root).is_ok())
             .cloned()
             .collect::<Vec<_>>();
-        let scanned_entries = index.scanned_entries;
+        let scanned_entries = index.scanned_entries();
         let watch_enabled = index.watcher_enabled();
-        freshness_checks.push(ProtectedPathFreshness(index));
+        freshness_checks.push(index);
         (paths, scanned_entries, cache_hit, watch_enabled)
     } else {
         (
@@ -218,6 +223,45 @@ pub(super) fn mask_state(
     Ok(())
 }
 
-pub(super) fn prime_protected_path_index(root: &Path) -> Result<usize, std::io::Error> {
-    protected_index::prime(root)
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_prime_protected_path_index_with_entry_limit(
+    root: &Path,
+    budget: std::time::Duration,
+    max_entries: usize,
+) -> Result<usize, std::io::Error> {
+    protected_index::prime_with_entry_limit(root, budget, max_entries)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_discover_protected_path_index(root: &Path) -> Result<(), std::io::Error> {
+    protected_index::discover(root, None).map(|_| ())
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_snapshot_rejects_new_protected_path(
+    root: &Path,
+    relative: &Path,
+) -> Result<(), std::io::Error> {
+    let (_, freshness, _) = protected_index::discover(root, None)?;
+    let path = root.join(relative);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, "secret")?;
+    let checks = [freshness];
+    let _guard = protected_index::lock_and_validate_freshness(&checks)?;
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_schedule_protected_path_index(
+    root: &Path,
+    budget: std::time::Duration,
+) -> Result<(), std::io::Error> {
+    protected_index::schedule_initialization(root, budget)
+}
+
+#[cfg(all(target_os = "linux", feature = "test-protected-index"))]
+pub(super) fn test_is_permanent_index_error(kind: std::io::ErrorKind) -> bool {
+    protected_index::is_permanent_index_error(kind)
 }

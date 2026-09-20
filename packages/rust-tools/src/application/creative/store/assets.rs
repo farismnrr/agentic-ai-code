@@ -3,7 +3,7 @@ use super::support::{new_id, validate_media_type};
 use super::{load_project, now_ms, MAX_REGISTER_ASSET_BYTES, STATE_PREFIX};
 use crate::application::creative::contracts::{
     validate_id, AssetMetadata, AssetRecord, AssetSource, AssetState, AssetSurface,
-    CreativeProject, MAX_PROJECT_ASSETS,
+    CreativeProject, MAX_ELEMENT_DEPENDENCIES, MAX_PROJECT_ASSETS,
 };
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
@@ -18,6 +18,7 @@ pub struct AssetRegistrationInput {
     pub job_id: Option<String>,
     pub parent_asset_id: Option<String>,
     pub element_id: Option<String>,
+    pub dependency_element_ids: Vec<String>,
     pub metadata: AssetMetadata,
 }
 
@@ -55,6 +56,25 @@ pub fn promote_asset(
     Ok(project)
 }
 
+pub fn reject_asset(
+    cwd: Option<&str>,
+    config: &ServerConfig,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<CreativeProject, McpError> {
+    validate_id(asset_id, "asset_id")?;
+    let mut project = load_project(cwd, config, project_id)?;
+    let asset = project
+        .assets
+        .iter_mut()
+        .find(|value| value.asset_id == asset_id)
+        .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
+    asset.state = AssetState::Rejected;
+    project.updated_at_ms = now_ms();
+    save_project(cwd, config, &project)?;
+    Ok(project)
+}
+
 pub fn register_asset(
     cwd: Option<&str>,
     config: &ServerConfig,
@@ -82,6 +102,22 @@ pub fn register_asset(
     if let Some(element) = input.element_id.as_deref() {
         if project.element(element).is_none() {
             return Err(McpError::InvalidRequest("unknown asset element".into()));
+        }
+    }
+    if input.dependency_element_ids.len() > MAX_ELEMENT_DEPENDENCIES {
+        return Err(McpError::InvalidRequest(
+            "asset element dependency count exceeds maximum".into(),
+        ));
+    }
+    let mut dependency_ids = std::collections::HashSet::new();
+    for dependency_id in &input.dependency_element_ids {
+        validate_id(dependency_id, "asset dependency element id")?;
+        if !dependency_ids.insert(dependency_id.as_str())
+            || project.element(dependency_id).is_none()
+        {
+            return Err(McpError::InvalidRequest(
+                "asset element dependency is unknown or duplicated".into(),
+            ));
         }
     }
 
@@ -115,6 +151,7 @@ pub fn register_asset(
         job_id: input.job_id,
         parent_asset_id: input.parent_asset_id,
         element_id: input.element_id,
+        dependency_element_ids: input.dependency_element_ids,
         metadata: input.metadata,
         created_at_ms: now_ms(),
     });

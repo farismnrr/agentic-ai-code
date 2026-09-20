@@ -1,13 +1,14 @@
 //! Workspace-owned MCP result adaptation for native workspace capabilities.
 
 use crate::core::{config::ServerConfig, error::McpError};
-use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
+use crate::interfaces::mcp::ToolCallResult;
 use serde::Serialize;
 use serde_json::Value;
 
 use super::{
-    apply_patch, directory_list, file_edit, file_read, file_search, file_write,
-    MAX_DIRECTORY_RESULT_BYTES, MAX_FILE_READ_BYTES, MAX_FILE_SEARCH_RESULT_BYTES,
+    apply_patch, directory_list, file_edit, file_read, file_read_multiple, file_search, file_write,
+    workspace_bootstrap, MAX_DIRECTORY_RESULT_BYTES, MAX_FILE_READ_BYTES,
+    MAX_FILE_READ_MULTIPLE_BYTES, MAX_FILE_SEARCH_RESULT_BYTES,
 };
 
 /// Dispatch a native workspace tool while keeping result serialization and
@@ -60,6 +61,19 @@ pub fn dispatch_native_tool(
                 "file read result exceeds output maximum",
             )),
         )?,
+        "file_read_multiple" => complete_json(
+            &file_read_multiple(arguments, config)?,
+            "failed to serialize multiple file read result",
+            Some((
+                MAX_FILE_READ_MULTIPLE_BYTES,
+                "multiple file read result exceeds output maximum",
+            )),
+        )?,
+        "workspace_bootstrap" => complete_json(
+            &workspace_bootstrap(arguments, config)?,
+            "failed to serialize workspace bootstrap result",
+            None,
+        )?,
         "workspace_add" => complete_json(
             &super::allowlist::workspace_add(arguments, config)?,
             "failed to serialize workspace add result",
@@ -91,15 +105,14 @@ fn complete_json<T: Serialize>(
     serialization_error: &'static str,
     output_limit: Option<(usize, &'static str)>,
 ) -> Result<ToolCallResult, McpError> {
-    let text = serde_json::to_string(result)
+    let structured_content = serde_json::to_value(result)
         .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
     if let Some((max_bytes, error)) = output_limit {
-        if text.len() > max_bytes {
+        let bytes = serde_json::to_vec(&structured_content)
+            .map_err(|_| McpError::Internal(serialization_error.to_owned()))?;
+        if bytes.len() > max_bytes {
             return Err(McpError::InvalidRequest(error.to_owned()));
         }
     }
-    Ok(ToolCallResult::complete(vec![ToolResultContent {
-        kind: "text",
-        text,
-    }]))
+    Ok(ToolCallResult::complete(Vec::new()).with_structured_content(structured_content))
 }

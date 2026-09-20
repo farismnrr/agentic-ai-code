@@ -62,11 +62,12 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   const tools: ToolSet = {}
   const toolApproval: McpToolApprovalMap = {}
   const modelToolOwners = new Map<string, string>()
+  const trustedInstructions = new Set<string>()
   const allowedEffects = new Set(options.allowedEffects)
   let toolCalls = 0
 
   if (enabledToolIds.length === 0) {
-    return { tools, toolApproval, toolOwners: modelToolOwners, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
+    return { tools, toolApproval, toolOwners: modelToolOwners, instructions: [], close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
@@ -81,6 +82,10 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       continue
     }
     clients.push(client)
+    if (client.trustedProvenance === 'first-party-relay') {
+      const instructions = client.serverInstructions?.()
+      if (instructions) trustedInstructions.add(instructions)
+    }
 
     let listed
     try {
@@ -125,6 +130,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       tools[modelName] = tool({
         description: mcpTool.description ?? '',
         inputSchema: jsonSchema(mcpTool.inputSchema),
+        ...(mcpTool.outputSchema ? { outputSchema: jsonSchema(mcpTool.outputSchema) } : {}),
         execute: async (input: unknown) => {
           if (options.maxToolCalls !== undefined && toolCalls >= options.maxToolCalls) throw new Error('subagent tool-call budget exhausted')
           toolCalls++
@@ -135,8 +141,14 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
             const result = client.trustedProvenance === 'first-party-relay'
               ? await withMcpSpan('mcp.tools_call', attributes, () => client.callTool(call, options.abortSignal))
               : await withMcpSpan('mcp.tools_call', attributes, () => client.callTool(call))
+            const structuredBytes = result.structuredContent === undefined
+              ? 0
+              : JSON.stringify(result.structuredContent).length
             const resultText = Array.isArray(result.content) ? result.content.map(part => typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' ? part.text.length : 0).reduce((sum, n) => sum + n, 0) : 0
-            logger.info('chat.tool.action', { 'operation': 'chat.tool.action', 'outcome': 'ok', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': resultText > 65_536 ? 'large' : resultText > 0 ? 'bounded' : 'structured', 'result.truncated': resultText > 65_536 })
+            const resultBytes = Math.max(structuredBytes, resultText)
+            logger.info('chat.tool.action', { 'operation': 'chat.tool.action', 'outcome': 'ok', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': resultBytes > 65_536 ? 'large' : structuredBytes > 0 ? 'structured' : resultText > 0 ? 'bounded' : 'empty', 'result.truncated': resultBytes > 65_536 })
+            if (result.isError) return result.content
+            if (result.structuredContent !== undefined) return result.structuredContent
             return result.content
           } catch (err) {
             logger.error('chat.tool.action', err, { 'operation': 'chat.tool.action', 'outcome': options.abortSignal?.aborted ? 'cancelled' : 'error', ...attributes, 'duration_ms': Date.now() - started, 'result.classification': options.abortSignal?.aborted ? 'cancelled' : classifyRawCause(err) })
@@ -157,6 +169,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     tools,
     toolApproval,
     toolOwners: modelToolOwners,
+    instructions: [...trustedInstructions],
     close: async () => {
       await Promise.all(clients.map(c => c.close().catch((err: unknown) => logger.error('[mcp-tools] error closing client', err))))
     },

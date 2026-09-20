@@ -29,7 +29,7 @@ Record only durable, reusable lessons discovered from completed work or user cor
 
 - Date: 2026-08-16
 - Context: Extending the Bubblewrap-backed MCP coding relay with host Docker debugging.
-- Lesson: Treat Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Keep Docker denied by default, require an opt-in flag/environment setting, bind only the selected Unix socket, support configurable/rootless socket paths, and document that daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics unless a shell-aware policy parser exists; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
+- Lesson: Treat unrestricted Docker daemon access as an explicit operator trust expansion, not as ordinary command allowlisting. Without full opt-in, expose the selected Docker socket only to a direct `docker` invocation whose argv has passed a positive semantic read-only policy; never expose it generically to shells or unrelated executables. Keep `RELAY_ALLOW_DOCKER=true` as the separate trusted full-authority escape hatch, support configurable/rootless socket paths, and document that unrestricted daemon access can escape the filesystem sandbox. Preserve direct-argv terminal semantics; silently wrapping commands in `sh -lc` would bypass executable-level deny rules.
 - Applies to: Sandboxed local-development relays, coding agents, and terminal execution services that expose privileged host daemons.
 - Action taken: Added opt-in Docker configuration and socket plumbing with default-deny policy/tests, clarified terminal shell semantics, and kept the relay self-update boundary intact.
 
@@ -44,6 +44,12 @@ Record only durable, reusable lessons discovered from completed work or user cor
 - Lesson: Keep the filesystem ceiling and active workspace authority as separate checks. The canonical root is `RELAY_WORKSPACE_ROOT`/`--workspace-root`, defaulting to `$HOME/Documents/Projects`; absent an explicit `--execution-root`, it supplies both the primary workspace and hard ceiling, so child project directories can be selected with `cwd`. A narrower primary root still needs bounded `workspace_add` for sibling projects within an explicit ceiling. Setting the canonical root and ceiling to `$HOME` intentionally authorizes the whole home tree and must remain deliberate. Toolchain mounts may live elsewhere beneath the ceiling without becoming workspaces.
 - Applies to: Masih Awam MCP local coding relay and similar sandboxed multi-project coding environments.
 - Action taken: Split execution-boundary vs workspace-allowlist semantics in core containment, updated Bubblewrap/Git/file-tool integration, and corrected operator/agent documentation.
+
+- Date: 2026-09-16
+- Context: Plan 069 Blender acceptance accidentally used the `ai-code` source checkout as the Creative Project root because the tool `cwd` and the intended production workspace root were conflated.
+- Lesson: Source-repository `cwd` and user-project workspace roots are different concepts. Keep the relay root at `$HOME/Documents/Projects`; use `ai-code` as `cwd` only for repository development. Creative production must use its own sibling project directory, and Blender work specifically belongs under `$HOME/Documents/Projects/Blender/<creative-project>/...`. Repo-local creative artifacts are smoke/debug evidence only and must never be promoted into final production acceptance.
+- Applies to: Plan 069, Creative Projects, Blender production, acceptance fixtures, and any future tool that materializes user project data.
+- Action taken: Updated Plan 069, repository agent guidance, canonical memory, operator docs, and relay skill guidance to freeze the distinction and require canonical Blender project placement.
 
 - Date: 2026-08-16
 - Context: Adding native read/search/edit/write tools to a filesystem-contained MCP coding relay.

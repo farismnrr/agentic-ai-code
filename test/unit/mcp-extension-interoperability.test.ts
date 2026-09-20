@@ -38,11 +38,12 @@ assert.deepEqual(parsed.skills, ['implementation-planning'])
 assert.equal(nativeToolMatchesProfile('file_read', parsed), true)
 assert.equal(nativeToolMatchesProfile('terminal_exec', parsed), false)
 const owners = new Map([[modelName, stableId]])
-const composition = { tools: { [modelName]: { name: modelName } }, toolApproval: { [modelName]: 'user-approval' as const }, toolOwners: owners }
+const composition = { tools: { [modelName]: { name: modelName } }, toolApproval: { [modelName]: 'user-approval' as const }, toolOwners: owners, instructions: ['trusted relay bootstrap'] }
 const scoped = scopeMcpTools(composition, new Set([stableId]))
 assert.deepEqual(Object.keys(scoped.tools), [modelName])
 assert.deepEqual(Object.keys(scoped.toolApproval), [modelName])
 assert.equal(scoped.toolApproval[modelName], 'user-approval')
+assert.deepEqual(scoped.instructions, ['trusted relay bootstrap'])
 assert.equal(mcpModelToolName('server-123', 'file_read'), modelName)
 assert.equal(scopeMcpTools(composition, new Set()).tools[modelName], undefined)
 assert.equal(scopeMcpTools(composition, new Set()).toolApproval[modelName], undefined)

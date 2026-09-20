@@ -1,7 +1,7 @@
-use super::{
-    control_check, DirectoryRecord, DirectorySignature, DirectoryWatcher, ProtectedPathIndex,
-    CONTROL_CHECK_INTERVAL, MAX_PROTECTED_SCAN_ENTRIES,
-};
+use super::index::{ProtectedPathIndex, ProtectedPathInventory};
+pub(super) use super::reconciliation::reconcile;
+use super::watcher::{DirectoryRecord, DirectoryWatcher};
+use super::IndexScanBudget;
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fs::File;
@@ -51,26 +51,26 @@ impl DirectoryStream {
                     name,
                     directory: false,
                     socket: true,
-                    device: 0,
-                    inode: 0,
                 }));
             }
-            if entry_type != libc::DT_DIR && entry_type != libc::DT_UNKNOWN {
+            if entry_type == libc::DT_DIR {
+                return Ok(Some(ScannedEntry {
+                    name,
+                    directory: true,
+                    socket: false,
+                }));
+            }
+            if entry_type != libc::DT_UNKNOWN {
                 return Ok(Some(ScannedEntry {
                     name,
                     directory: false,
                     socket: false,
-                    device: 0,
-                    inode: 0,
                 }));
             }
 
-            // Most entries in developer workspaces are regular files or
-            // symlinks. Their dirent type is sufficient: the parent
-            // directory signature is checked after traversal, so concurrent
-            // replacement invalidates this scan. Stat only directories (to
-            // preserve the openat identity check) and filesystems that report
-            // DT_UNKNOWN.
+            // Filesystems that report DT_UNKNOWN need one no-follow stat to
+            // classify the entry. Normal Linux developer filesystems provide
+            // d_type, so ordinary directories avoid an extra fstatat syscall.
             let name_c = CString::new(name.as_bytes()).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "invalid directory entry")
             })?;
@@ -92,8 +92,6 @@ impl DirectoryStream {
                 name,
                 directory: kind == libc::S_IFDIR,
                 socket: kind == libc::S_IFSOCK,
-                device: stat.st_dev,
-                inode: stat.st_ino,
             }));
         }
     }
@@ -111,19 +109,16 @@ struct ScannedEntry {
     name: OsString,
     directory: bool,
     socket: bool,
-    device: u64,
-    inode: u64,
 }
 
 struct ScanFrame {
     path: PathBuf,
     directory: File,
-    signature: DirectorySignature,
     stream: DirectoryStream,
     child_directories: Vec<OsString>,
 }
 
-fn open_directory(path: &Path) -> io::Result<File> {
+pub(super) fn open_directory(path: &Path) -> io::Result<File> {
     let path = CString::new(path.as_os_str().as_bytes())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid directory path"))?;
     let descriptor = unsafe {
@@ -138,7 +133,7 @@ fn open_directory(path: &Path) -> io::Result<File> {
     Ok(unsafe { File::from_raw_fd(descriptor) })
 }
 
-fn open_child_directory(parent: &File, name: &OsStr) -> io::Result<File> {
+pub(super) fn open_child_directory(parent: &File, name: &OsStr) -> io::Result<File> {
     let name = CString::new(name.as_bytes())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid directory entry"))?;
     let descriptor = unsafe {
@@ -154,12 +149,9 @@ fn open_child_directory(parent: &File, name: &OsStr) -> io::Result<File> {
     Ok(unsafe { File::from_raw_fd(descriptor) })
 }
 
-pub(super) fn scan(
-    root: &Path,
-    control: Option<&super::super::super::SpawnControl<'_>>,
-) -> io::Result<ProtectedPathIndex> {
-    control_check(control)?;
-    let mut watcher = match DirectoryWatcher::new() {
+pub(super) fn scan(root: &Path, budget: &mut IndexScanBudget) -> io::Result<ProtectedPathIndex> {
+    budget.check()?;
+    let watcher = match DirectoryWatcher::new() {
         Ok(watcher) => Some(watcher),
         Err(error) => {
             tracing::warn!(
@@ -168,296 +160,159 @@ pub(super) fn scan(
                 outcome = "unavailable",
                 error_kind = ?error.kind(),
             );
-            None
+            return super::external_scan::build_external_inventory(root, budget)?.ok_or(error);
         }
     };
+    scan_with_walker(root, budget, watcher)
+}
+
+fn scan_with_walker(
+    root: &Path,
+    budget: &mut IndexScanBudget,
+    watcher: Option<DirectoryWatcher>,
+) -> io::Result<ProtectedPathIndex> {
+    budget.check()?;
     let root_directory = open_directory(root)?;
-    install_directory_watch(&mut watcher, &root_directory);
-    let root_signature = DirectorySignature::read(&root_directory)?;
-    let root_stream = DirectoryStream::open(&root_directory)?;
+    let mut inventory = ProtectedPathInventory {
+        directories: HashMap::new(),
+        protected_paths: BTreeSet::new(),
+        scanned_entries: 0,
+        watcher,
+    };
+    scan_directory_into(root, root, root_directory, &mut inventory, budget, true)?;
+    inventory.scanned_entries = budget.scanned_entries();
+
+    if let Some(watcher) = inventory.watcher.as_mut() {
+        match watcher.drain_changes(root)? {
+            super::watcher::WatchChanges::Clean => {}
+            super::watcher::WatchChanges::Changes(_)
+            | super::watcher::WatchChanges::FullScan(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "workspace changed during protected-path discovery",
+                ));
+            }
+        }
+    }
+
+    Ok(ProtectedPathIndex {
+        inventory: std::sync::Mutex::new(inventory),
+    })
+}
+
+fn install_directory_watch(
+    watcher: &mut DirectoryWatcher,
+    directory: &File,
+    path: &Path,
+) -> io::Result<()> {
+    watcher
+        .watch_directory(directory, path)
+        .inspect_err(|error| {
+            tracing::warn!(
+                event = "relay.sandbox.stage",
+                stage = "protected_path_watch",
+                outcome = "unavailable",
+                error_kind = ?error.kind(),
+            );
+        })
+}
+
+pub(super) fn scan_directory_into(
+    root: &Path,
+    path: &Path,
+    directory: File,
+    inventory: &mut ProtectedPathInventory,
+    budget: &mut IndexScanBudget,
+    skip_generated: bool,
+) -> io::Result<()> {
+    budget.consume_directory()?;
+    if let Some(watcher) = inventory.watcher.as_mut() {
+        install_directory_watch(watcher, &directory, path)?;
+    }
+    let stream = DirectoryStream::open(&directory)?;
     let mut stack = vec![ScanFrame {
-        path: root.to_path_buf(),
-        directory: root_directory,
-        signature: root_signature,
-        stream: root_stream,
+        path: path.to_path_buf(),
+        directory,
+        stream,
         child_directories: Vec::new(),
     }];
-    let mut directories = HashMap::new();
-    let mut protected_paths = BTreeSet::new();
-    let mut scanned_entries = 0usize;
 
     while !stack.is_empty() {
-        let (path, directory) = {
-            let frame = stack.last().expect("scan stack is non-empty");
-            (frame.path.clone(), frame.directory.as_raw_fd())
-        };
         let next = {
             let frame = stack.last_mut().expect("scan stack is non-empty");
             frame.stream.next(&frame.directory)?
         };
         let Some(entry) = next else {
             let frame = stack.pop().expect("scan stack is non-empty");
-            if DirectorySignature::read(&frame.directory)? != frame.signature {
-                return Err(io::Error::new(
-                    io::ErrorKind::Interrupted,
-                    "workspace changed during protected-path discovery",
-                ));
+            if inventory.watcher.is_some() {
+                inventory.directories.insert(
+                    frame.path,
+                    DirectoryRecord {
+                        child_directories: frame.child_directories,
+                    },
+                );
             }
-            directories.insert(
-                frame.path,
-                DirectoryRecord {
-                    signature: frame.signature,
-                    child_directories: frame.child_directories,
-                },
-            );
             continue;
         };
 
-        scanned_entries = scanned_entries.saturating_add(1);
-        if scanned_entries > MAX_PROTECTED_SCAN_ENTRIES {
-            tracing::warn!(
-                event = "relay.sandbox.stage",
-                stage = "protected_path_discovery",
-                outcome = "failed",
-                error_kind = ?io::ErrorKind::InvalidData,
-                scanned_entries,
-            );
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "protected-path scan exceeds bounded workspace maximum",
-            ));
-        }
-        if scanned_entries.is_multiple_of(CONTROL_CHECK_INTERVAL) {
-            if let Err(error) = control_check(control) {
-                tracing::warn!(
-                    event = "relay.sandbox.stage",
-                    stage = "protected_path_discovery",
-                    outcome = "failed",
-                    error_kind = ?error.kind(),
-                    scanned_entries,
-                );
-                return Err(error);
-            }
-        }
-
+        budget.consume_entry()?;
         let may_be_protected = crate::core::protected_paths::may_be_protected_entry(&entry.name);
-        if may_be_protected
-            && crate::core::protected_paths::is_protected_relative(&entry_path_relative(
-                root,
-                &path,
-                &entry.name,
-            )?)
-        {
-            protected_paths.insert(path.join(&entry.name));
+        if !entry.directory && !entry.socket && !may_be_protected {
             continue;
         }
+
+        let path = stack
+            .last()
+            .expect("scan stack is non-empty")
+            .path
+            .join(&entry.name);
+        if may_be_protected {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| io::Error::other("protected-path traversal escaped workspace"))?;
+            if crate::core::protected_paths::is_protected_relative(relative) {
+                inventory.protected_paths.insert(path);
+                continue;
+            }
+        }
         if entry.socket {
-            protected_paths.insert(path.join(&entry.name));
+            inventory.protected_paths.insert(path);
             continue;
         }
         if !entry.directory {
             continue;
         }
+        if skip_generated
+            && crate::application::workspace::DEPENDENCY_OR_GENERATED_DIRECTORIES
+                .iter()
+                .any(|directory| entry.name == OsStr::new(directory))
+        {
+            continue;
+        }
 
         let parent = stack.last().expect("scan stack is non-empty");
-        if parent.directory.as_raw_fd() != directory {
-            return Err(io::Error::other("protected-path traversal lost its parent"));
-        }
         let child = open_child_directory(&parent.directory, &entry.name)?;
-        install_directory_watch(&mut watcher, &child);
-        let signature = DirectorySignature::read(&child)?;
-        if (entry.device != 0 || entry.inode != 0)
-            && (signature.device != entry.device || signature.inode != entry.inode)
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "workspace changed during protected-path discovery",
-            ));
+        budget.consume_directory()?;
+        // The parent is already watched before its stream is read, so a
+        // concurrent child replacement queues an invalidating event. Watch the
+        // child before opening its stream so deeper changes are covered too.
+        if let Some(watcher) = inventory.watcher.as_mut() {
+            install_directory_watch(watcher, &child, &path)?;
         }
         let stream = DirectoryStream::open(&child)?;
-        let entry_path = path.join(&entry.name);
-        stack
-            .last_mut()
-            .expect("scan stack is non-empty")
-            .child_directories
-            .push(entry.name);
+        if inventory.watcher.is_some() {
+            stack
+                .last_mut()
+                .expect("scan stack is non-empty")
+                .child_directories
+                .push(entry.name);
+        }
         stack.push(ScanFrame {
-            path: entry_path,
+            path,
             directory: child,
-            signature,
             stream,
             child_directories: Vec::new(),
         });
     }
-
-    if let Some(watcher) = watcher.as_mut() {
-        match watcher.has_events() {
-            Ok(false) => {}
-            Ok(true) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Interrupted,
-                    "workspace changed during protected-path discovery",
-                ));
-            }
-            Err(error) => {
-                tracing::warn!(
-                    event = "relay.sandbox.stage",
-                    stage = "protected_path_watch",
-                    outcome = "failed",
-                    error_kind = ?error.kind(),
-                );
-                return Err(error);
-            }
-        }
-    }
-
-    Ok(ProtectedPathIndex {
-        directories,
-        protected_paths,
-        scanned_entries,
-        watcher: watcher.map(std::sync::Mutex::new),
-    })
-}
-
-fn install_directory_watch(watcher: &mut Option<DirectoryWatcher>, directory: &File) {
-    let error = watcher
-        .as_mut()
-        .and_then(|watcher| watcher.watch_directory(directory).err());
-    if let Some(error) = error {
-        tracing::warn!(
-            event = "relay.sandbox.stage",
-            stage = "protected_path_watch",
-            outcome = "unavailable",
-            error_kind = ?error.kind(),
-        );
-        *watcher = None;
-    }
-}
-
-fn entry_path_relative(root: &Path, directory: &Path, name: &OsStr) -> io::Result<PathBuf> {
-    let mut relative = directory
-        .strip_prefix(root)
-        .map_err(|_| io::Error::other("protected-path scan escaped workspace"))?
-        .to_path_buf();
-    relative.push(name);
-    Ok(relative)
-}
-
-struct ValidationFrame {
-    path: PathBuf,
-    directory: File,
-    signature: DirectorySignature,
-    child_directories: Vec<OsString>,
-    next_child: usize,
-}
-
-pub(super) fn validate(
-    root: &Path,
-    index: &ProtectedPathIndex,
-    control: Option<&super::super::super::SpawnControl<'_>>,
-) -> io::Result<bool> {
-    if let Err(error) = control_check(control) {
-        tracing::warn!(
-            event = "relay.sandbox.stage",
-            stage = "protected_path_index_validation",
-            outcome = "failed",
-            error_kind = ?error.kind(),
-            scanned_entries = index.scanned_entries,
-        );
-        return Err(error);
-    }
-    if index.watcher.is_some() {
-        let fresh = index.is_fresh()?;
-        if !fresh {
-            tracing::info!(
-                event = "relay.sandbox.stage",
-                stage = "protected_path_index_validation",
-                outcome = "invalidated",
-                reason = "filesystem_event",
-                scanned_entries = index.scanned_entries,
-            );
-        }
-        return Ok(fresh);
-    }
-    let root_directory = match open_directory(root) {
-        Ok(directory) => directory,
-        Err(_) => return Ok(false),
-    };
-    let Some(root_record) = index.directories.get(root) else {
-        return Ok(false);
-    };
-    let root_signature = DirectorySignature::read(&root_directory)?;
-    if root_signature != root_record.signature {
-        return Ok(false);
-    }
-    let mut stack = vec![ValidationFrame {
-        path: root.to_path_buf(),
-        directory: root_directory,
-        signature: root_signature,
-        child_directories: root_record.child_directories.clone(),
-        next_child: 0,
-    }];
-    let mut steps = 0usize;
-    let mut visited = 0usize;
-
-    while !stack.is_empty() {
-        steps = steps.saturating_add(1);
-        if steps.is_multiple_of(CONTROL_CHECK_INTERVAL) {
-            if let Err(error) = control_check(control) {
-                tracing::warn!(
-                    event = "relay.sandbox.stage",
-                    stage = "protected_path_index_validation",
-                    outcome = "failed",
-                    error_kind = ?error.kind(),
-                    scanned_entries = index.scanned_entries,
-                    checked_directories = visited,
-                );
-                return Err(error);
-            }
-        }
-        let child = {
-            let frame = stack.last_mut().expect("validation stack is non-empty");
-            if frame.next_child < frame.child_directories.len() {
-                let name = frame.child_directories[frame.next_child].clone();
-                frame.next_child += 1;
-                Some((frame.path.join(&name), name, frame.directory.as_raw_fd()))
-            } else {
-                None
-            }
-        };
-
-        if let Some((path, name, parent_fd)) = child {
-            let parent = stack.last().expect("validation stack is non-empty");
-            if parent.directory.as_raw_fd() != parent_fd {
-                return Ok(false);
-            }
-            let child_directory = match open_child_directory(&parent.directory, &name) {
-                Ok(directory) => directory,
-                Err(_) => return Ok(false),
-            };
-            let Some(record) = index.directories.get(&path) else {
-                return Ok(false);
-            };
-            let signature = DirectorySignature::read(&child_directory)?;
-            if signature != record.signature {
-                return Ok(false);
-            }
-            stack.push(ValidationFrame {
-                path,
-                directory: child_directory,
-                signature,
-                child_directories: record.child_directories.clone(),
-                next_child: 0,
-            });
-            continue;
-        }
-
-        let frame = stack.pop().expect("validation stack is non-empty");
-        if DirectorySignature::read(&frame.directory)? != frame.signature {
-            return Ok(false);
-        }
-        visited = visited.saturating_add(1);
-    }
-
-    Ok(visited == index.directories.len())
+    Ok(())
 }

@@ -19,9 +19,67 @@ const MAX_FILE_SEARCH_PATTERN_SEGMENTS: usize = 128;
 const MAX_FILE_SEARCH_SEGMENT_BYTES: usize = 255;
 const MAX_FILE_SEARCH_PATH_BYTES: usize = 3_500;
 const MAX_FILE_SEARCH_DEPTH: usize = 64;
+const MAX_FILE_SEARCH_EXCLUDES: usize = 16;
 
-const FILE_SEARCH_SKIPPED_DIRECTORIES: [&str; 5] =
-    [".git", "node_modules", "target", ".nuxt", ".output"];
+/// Dependency, package-manager, generated-output, and tool-cache trees that
+/// are not source-authoritative. Keep this ecosystem-agnostic: callers use the
+/// same policy for AI discovery and protected-path scans so large dependency
+/// trees never dominate workspace traversal.
+///
+/// Do not add ordinary source-container names such as `packages`, `src`,
+/// `lib`, or `crates`.
+pub(crate) const DEPENDENCY_OR_GENERATED_DIRECTORIES: &[&str] = &[
+    // VCS / generic generated output and caches.
+    ".git",
+    ".cache",
+    "cache",
+    "coverage",
+    "dist",
+    "build",
+    "out",
+    // JavaScript / TypeScript.
+    "node_modules",
+    ".pnpm-store",
+    ".yarn",
+    ".npm",
+    ".nuxt",
+    ".next",
+    ".output",
+    ".turbo",
+    ".parcel-cache",
+    // Rust.
+    "target",
+    // Python.
+    ".venv",
+    "venv",
+    ".tox",
+    ".nox",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    // JVM / Gradle / Maven.
+    ".gradle",
+    ".m2",
+    // .NET.
+    "obj",
+    ".nuget",
+    // C / C++ / native generators.
+    "CMakeFiles",
+    "cmake-build-debug",
+    "cmake-build-release",
+    // Swift / Xcode.
+    ".build",
+    "DerivedData",
+    // Ruby / PHP / Dart.
+    ".bundle",
+    "vendor",
+    ".dart_tool",
+    // Common vendored dependency roots.
+    "deps",
+    "third_party",
+    "third-party",
+];
 
 #[derive(Debug, Serialize)]
 pub struct FileSearchResult {
@@ -47,6 +105,7 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
         }
     }
 
+    let excludes = parse_excludes(arguments)?;
     let max_results = arguments
         .get("max_results")
         .and_then(Value::as_u64)
@@ -74,6 +133,7 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
     let mut state = FileSearchState {
         pattern,
         path_pattern,
+        excludes: &excludes,
         max_results: crate::application::continuation::MAX_TOTAL_ENTRIES,
         matches: Vec::new(),
         visited_entries: 0,
@@ -113,6 +173,7 @@ pub fn file_search(arguments: &Value, config: &ServerConfig) -> Result<FileSearc
 struct FileSearchState<'a> {
     pattern: &'a str,
     path_pattern: bool,
+    excludes: &'a [String],
     max_results: usize,
     matches: Vec<String>,
     visited_entries: usize,
@@ -156,6 +217,16 @@ fn visit_file_search(
             ));
         }
         let relative = append_search_path(relative_directory, name)?;
+        let excluded = state.excludes.iter().any(|pattern| {
+            if pattern.contains('/') {
+                glob_match_path(pattern, &relative)
+            } else {
+                glob_match_segment(pattern, name)
+            }
+        });
+        if excluded {
+            continue;
+        }
         let child_path = directory.path_for_child(&child.name);
         if is_protected_discovered_path(directory.root(), &child_path) {
             continue;
@@ -165,7 +236,7 @@ fn visit_file_search(
             continue;
         }
         if file_type.is_dir() {
-            if FILE_SEARCH_SKIPPED_DIRECTORIES.contains(&name) {
+            if DEPENDENCY_OR_GENERATED_DIRECTORIES.contains(&name) {
                 continue;
             }
             let child_directory = directory.open_child(&child)?;
@@ -194,6 +265,30 @@ fn visit_file_search(
         }
     }
     Ok(())
+}
+
+fn parse_excludes(arguments: &Value) -> Result<Vec<String>, McpError> {
+    let Some(values) = arguments.get("exclude") else {
+        return Ok(Vec::new());
+    };
+    let values = values
+        .as_array()
+        .ok_or_else(|| McpError::InvalidRequest("file search exclude must be an array".into()))?;
+    if values.len() > MAX_FILE_SEARCH_EXCLUDES {
+        return Err(McpError::InvalidRequest(
+            "file search exclude count exceeds maximum".into(),
+        ));
+    }
+    values
+        .iter()
+        .map(|value| {
+            let pattern = value.as_str().ok_or_else(|| {
+                McpError::InvalidRequest("file search exclude entries must be strings".into())
+            })?;
+            validate_file_search_pattern(pattern)?;
+            Ok(pattern.to_owned())
+        })
+        .collect()
 }
 
 fn validate_file_search_pattern(pattern: &str) -> Result<(), McpError> {

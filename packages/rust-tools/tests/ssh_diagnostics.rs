@@ -2,6 +2,7 @@ use ai_tools::application::{activity, hooks};
 use ai_tools::core::config::ServerConfig;
 use serde_json::json;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 fn fixture_config() -> ServerConfig {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -60,19 +61,25 @@ fn ssh_activity_persists_metadata_not_remote_query_literals() {
 
 #[tokio::test]
 async fn dedicated_ssh_tool_fails_closed_when_operator_capability_is_disabled() {
-    use ai_tools::application::execution::{start_tool_task, JobManager};
+    use ai_tools::application::execution::{dispatch_tool_call, JobManager};
+    use ai_tools::application::hooks::HookManager;
+    use ai_tools::application::lsp::LspSessionManager;
     use ai_tools::interfaces::mcp::find_tool;
+    use std::sync::Arc;
 
     let config = fixture_config();
     let manager = JobManager::new(config.clone());
+    let lsp = Arc::new(LspSessionManager::new(config.clone()).expect("LSP manager"));
+    let hooks = Arc::new(HookManager::load(Arc::new(config.clone())).expect("hook manager"));
     let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
-    let error = start_tool_task(
+    let error = dispatch_tool_call(
         &tool,
         &json!({"alias":"fixture","command":"docker","args":["ps"]}),
         &config,
         &manager,
-        None,
-        "disabled-ssh".into(),
+        &lsp,
+        &hooks,
+        "local",
     )
     .await
     .expect_err("disabled SSH capability must fail before spawn");
@@ -102,30 +109,53 @@ async fn generic_terminal_shell_cannot_reach_masked_ssh_clients() {
     let mut config = fixture_config();
     config.allow_terminal_network = true;
     let manager = JobManager::new(config.clone());
-    let task = start_terminal_job(
-        &json!({
-            "command": "sh",
-            "args": ["-lc", "test ! -x /usr/bin/ssh && test ! -x /usr/bin/scp && test ! -x /usr/bin/sftp"]
-        }),
-        &config,
-        &manager,
-    )
-    .await
-    .expect("generic shell job admitted");
-    let snapshot = manager
-        .wait(&task)
+    manager.prepare_for_serving().await;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let task = start_terminal_job(
+            &json!({
+                "command": "sh",
+                "args": ["-lc", "test ! -x /usr/bin/ssh && test ! -x /usr/bin/scp && test ! -x /usr/bin/sftp"]
+            }),
+            &config,
+            &manager,
+        )
         .await
-        .expect("generic shell job completed");
-    assert_eq!(snapshot.state, JobState::Completed);
-    assert_eq!(snapshot.exit_code, Some(0));
+        .expect("generic shell job admitted");
+        let snapshot = manager
+            .wait(&task)
+            .await
+            .expect("generic shell job completed");
+        if snapshot.state == JobState::Completed {
+            assert_eq!(snapshot.exit_code, Some(0));
+            break;
+        }
+        let diagnostic = snapshot
+            .result
+            .as_ref()
+            .and_then(|result| result.content.first())
+            .map(|content| content.text.as_str())
+            .unwrap_or_default();
+        assert!(
+            snapshot.state == JobState::Failed && diagnostic.contains("protected_path_discovery"),
+            "unexpected shell sandbox failure: {diagnostic}"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "protected-path index prewarm did not complete within 30 seconds"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 #[tokio::test]
 #[ignore = "requires an operator-provided disposable key-only SSH fixture"]
 async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
-    use ai_tools::application::execution::{start_tool_task, JobManager, JobState};
+    use ai_tools::application::execution::{dispatch_tool_call, JobManager};
+    use ai_tools::application::hooks::HookManager;
+    use ai_tools::application::lsp::LspSessionManager;
     use ai_tools::interfaces::mcp::find_tool;
-    use std::time::Duration;
+    use std::sync::Arc;
 
     let ssh_root = std::env::var("RELAY_SSH_SMOKE_ROOT")
         .expect("set RELAY_SSH_SMOKE_ROOT to a disposable fixture credential directory");
@@ -145,32 +175,20 @@ async fn opt_in_real_client_smoke_uses_the_relay_ssh_path() {
         .expect("valid disposable SSH fixture config");
 
     let manager = JobManager::new(config.clone());
+    let lsp = Arc::new(LspSessionManager::new(config.clone()).expect("LSP manager"));
+    let hooks = Arc::new(HookManager::load(Arc::new(config.clone())).expect("hook manager"));
     let tool = find_tool("ssh_readonly_exec").expect("dedicated SSH tool");
-    let task = start_tool_task(
+    let result = dispatch_tool_call(
         &tool,
         &json!({"alias": alias, "command": "docker", "args": ["ps"], "timeout_ms": 30_000}),
         &config,
         &manager,
-        None,
-        "ssh-smoke".into(),
+        &lsp,
+        &hooks,
+        "local",
     )
     .await
-    .expect("SSH smoke job admitted");
+    .expect("SSH smoke sync dispatch");
 
-    for _ in 0..100 {
-        let snapshot = manager.get(&task).await.expect("retained SSH smoke job");
-        match snapshot.state {
-            JobState::Completed => {
-                assert_eq!(snapshot.exit_code, Some(0));
-                return;
-            }
-            JobState::Failed | JobState::TimedOut | JobState::Cancelled => {
-                panic!("SSH smoke failed: {}", snapshot.stderr);
-            }
-            JobState::Queued | JobState::Running => {
-                tokio::time::sleep(Duration::from_millis(100)).await
-            }
-        }
-    }
-    panic!("SSH smoke did not complete within the fixture wait bound");
+    assert!(!result.is_error, "{:?}", result.content);
 }

@@ -1,5 +1,6 @@
 pub mod config;
 pub mod error;
+pub mod network;
 pub mod protected_paths;
 pub mod redaction;
 pub mod ssh_policy;

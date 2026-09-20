@@ -122,6 +122,8 @@ export RELAY_WORKSPACE_ROOT="$HOME/Documents/Projects"
 
 The relay remains loopback-only. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) defaults to `$HOME/Documents/Projects` and supplies both the primary authorized workspace and the default hard execution boundary. Child repositories beneath it can be selected directly with `cwd` without `workspace_add`. `--execution-root` remains an explicit advanced override; additional workspace roots still must remain beneath it. Setting the workspace root and execution boundary to `$HOME` intentionally authorizes the whole non-protected home tree.
 
+Do not point the relay's user-project root at the `ai-code` repository checkout. That checkout is source code and may be selected as `cwd` only for repository development. User projects belong beneath `$HOME/Documents/Projects`; Blender creative projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`, with generated scenes/renders/exports contained beneath that project rather than beneath `ai-code`.
+
 For routine repository work, prefer the relay's active dedicated MCP tools when they fully cover the operation: workspace inspection/editing tools, remote Git transport, forge/issues/workflows, HTTP/web, SSH diagnostics, alerts, and messaging. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and operations without an active structured contract; ordinary terminal execution remains credential-isolated. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
 
 The relay also exposes bounded read-only repository resources for manifest/agent-guidance/status/HEAD context; these resources are server-owned views, not arbitrary file reads. Language-server and local Git workflows remain terminal fallback operations unless a future reviewed dedicated capability is explicitly added to the single runtime catalog composition path.
@@ -136,7 +138,7 @@ After changing relay access, socket, or toolchain configuration, rebuild/restart
 
 For local development that needs the host Tailscale daemon, add `--allow-tailscale` (or set `RELAY_ALLOW_TAILSCALE=true`). The socket defaults to `/var/run/tailscale/tailscaled.sock`; override it with `--tailscale-socket` or `RELAY_TAILSCALE_SOCKET` when needed.
 
-For trusted local debugging that needs Docker, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`). For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. This explicitly exposes the selected host Docker daemon socket to terminal commands and therefore grants substantially more authority than the default sandbox.
+Read-only Docker diagnostics do not require full Docker opt-in: direct `docker` commands are accepted only when they match the relay's bounded diagnostic policy and the selected socket is exposed only to that invocation. For Docker lifecycle/build/pull/push or other unrestricted Docker work, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`) only in a trusted single-owner environment. For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. Full opt-in exposes the selected host Docker daemon socket to ordinary terminal commands and therefore grants substantially more authority than the default sandbox.
 
 ## Next step
 

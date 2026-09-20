@@ -56,3 +56,13 @@ test('backend derives tools from Settings and fails stale Agent state closed', (
   assert.match(executeTurn, /if \(!toolTurn\)/)
   assert.doesNotMatch(executeTurn, /conv\.enabledToolIds\.filter/)
 })
+
+test('trusted relay bootstrap instructions reach chat system prompts without trusting external MCP instructions', () => {
+  const mcpTools = read('server/infrastructure/mcp/mcp-tools.ts')
+  const executeTurn = read('server/application/chat/execute-chat-turn.ts')
+  const modernClient = read('server/infrastructure/mcp/modern-http-client.ts')
+  assert.match(mcpTools, /client\.trustedProvenance === 'first-party-relay'/)
+  assert.match(mcpTools, /client\.serverInstructions\?\.\(\)/)
+  assert.match(executeTurn, /\.\.\.mcpInstructions/)
+  assert.match(modernClient, /this\.trustedProvenance === 'first-party-relay'/)
+})

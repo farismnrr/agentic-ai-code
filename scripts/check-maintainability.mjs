@@ -9,7 +9,7 @@ const POLICY = Object.freeze({
   sourceRoots: ['app', 'server', 'shared', 'packages'],
   sourceExtensions: new Set(['.ts', '.tsx', '.js', '.mjs', '.vue', '.rs', '.css', '.scss', '.sass', '.less', '.styl', '.stylus']),
   excludedSegments: new Set([
-    'node_modules', 'target', '.nuxt', '.output', 'dist', 'coverage', 'vendor', 'generated',
+    'node_modules', 'target', 'target-plan069-release', '.nuxt', '.output', 'dist', 'coverage', 'vendor', 'generated',
     'migrations', '.agents', '.tmp'
   ]),
   file: { review: 400, hard: 500 },
@@ -19,7 +19,8 @@ const POLICY = Object.freeze({
       ['packages/rust-tools/examples/hooks_acceptance.rs', 'single deterministic Plan 039E acceptance entrypoint keeps adversarial lifecycle and approval coverage together so the gate exercises one real hook runtime']
     ]),
     folders: new Map([
-      ['app/composables', 'Nuxt public use* auto-import entrypoints form one framework-owned API surface; splitting or wrapper re-exports would add indirection without reducing responsibility.']
+      ['app/composables', 'Nuxt public use* auto-import entrypoints form one framework-owned API surface; splitting or wrapper re-exports would add indirection without reducing responsibility.'],
+      ['packages/rust-tools/tests', 'Cargo integration-test entrypoints must remain direct children of tests/ so Cargo discovers each independent test crate; implementation helpers stay in nested modules.']
     ])
   }
 })

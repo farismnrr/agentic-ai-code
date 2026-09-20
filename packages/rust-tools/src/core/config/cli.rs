@@ -83,7 +83,7 @@ pub struct Cli {
     #[arg(long)]
     pub execution_root: Option<String>,
 
-    /// Default terminal deadline in milliseconds; zero means no deadline.
+    /// Default terminal deadline in milliseconds. Agent terminal execution is always capped at 60000 ms.
     #[arg(
         long,
         env = "RELAY_DEFAULT_TERMINAL_TIMEOUT_MS",
@@ -91,8 +91,8 @@ pub struct Cli {
     )]
     pub default_terminal_timeout_ms: u64,
 
-    /// Maximum terminal deadline in milliseconds; zero means no operator maximum.
-    #[arg(long, env = "RELAY_MAX_TERMINAL_TIMEOUT_MS", default_value_t = 0)]
+    /// Maximum agent terminal deadline in milliseconds. Values above 60000 are clamped by the runtime hard ceiling.
+    #[arg(long, env = "RELAY_MAX_TERMINAL_TIMEOUT_MS", default_value_t = 60_000)]
     pub max_terminal_timeout_ms: u64,
 
     /// Completed-job retention in milliseconds.
@@ -138,15 +138,21 @@ pub struct Cli {
 
     /// Dedicated least-privilege Redis ACL diagnostic principal.
     /// This is an identity name only, never a password or secret.
-    #[arg(long, env = "RELAY_SSH_REDIS_READONLY_USER")]
+    #[arg(long, env = "RELAY_SSH_READONLY_REDIS_USER")]
     pub ssh_readonly_redis_user: Option<String>,
 
-    /// Explicit local-development access to a host Docker daemon socket.
-    /// This is intentionally opt-in because Docker daemon access can escape the filesystem sandbox.
+    /// Operator-owned file containing only the Redis ACL password used by
+    /// read-only SSH diagnostics. The file must remain beneath RELAY_SSH_ROOT
+    /// and be owner-readable only; its contents are never exposed to clients.
+    #[arg(long, env = "RELAY_SSH_READONLY_REDIS_PASSWORD_FILE")]
+    pub ssh_readonly_redis_password_file: Option<String>,
+
+    /// Explicit full-authority local-development access to a host Docker daemon socket.
+    /// Without this flag, direct Docker calls are limited to the semantic read-only diagnostic policy.
     #[arg(long, env = "RELAY_ALLOW_DOCKER", default_value_t = false)]
     pub allow_docker: bool,
 
-    /// Host Docker socket to expose when --allow-docker is enabled.
+    /// Host Docker socket used for validated read-only Docker diagnostics and full opt-in mode.
     #[arg(
         long,
         env = "RELAY_DOCKER_SOCKET",
@@ -174,6 +180,15 @@ pub struct Cli {
     )]
     pub toolchain_paths: Vec<String>,
 
+    /// Explicit user-owned runtime/toolchain state directories mounted read-only
+    /// into terminal sandboxes without being added to executable PATH.
+    #[arg(
+        long = "toolchain-state-path",
+        env = "RELAY_TOOLCHAIN_STATE_PATH",
+        value_delimiter = ','
+    )]
+    pub toolchain_state_paths: Vec<String>,
+
     /// Operator-approved language-server executable mappings. Values are
     /// `language=executable`; executable resolution is restricted to the relay
     /// safe PATH and no repository file can supply command arguments.
@@ -184,10 +199,78 @@ pub struct Cli {
     #[arg(long, value_enum, env = "RELAY_TOOL_PROFILE", default_value = "full")]
     pub tool_profile: ToolProfile,
 
-    /// Enable the first-party creative production capability group. Disabled by
-    /// default; execution bindings remain separately operator-registered.
+    /// Master switch for the complete first-party Creative production platform,
+    /// including Scene, Anime/Blender, Game, graph, delivery, and related tools.
+    /// Disabled by default; execution bindings remain separately operator-registered.
     #[arg(long, env = "RELAY_ENABLE_CREATIVE", default_value_t = false)]
     pub enable_creative: bool,
+
+    /// Optional operator-approved Blender executable path/name. This is never a
+    /// client-supplied tool argument.
+    #[arg(long, env = "RELAY_BLENDER_EXECUTABLE")]
+    pub blender_executable: Option<String>,
+
+    /// Official Blender Lab loopback TCP port. No host flag exists in v1.
+    #[arg(long, env = "RELAY_BLENDER_PORT", default_value_t = 9876)]
+    pub blender_bridge_port: u16,
+
+    /// Blender Lab loopback request/response timeout in milliseconds.
+    #[arg(long, env = "RELAY_BLENDER_TIMEOUT_MS", default_value_t = 30_000)]
+    pub blender_bridge_timeout_ms: u64,
+
+    /// Bounded JSON execution-binding descriptors. Descriptors expose semantic
+    /// support/constraints only; endpoints and credentials are forbidden.
+    #[arg(
+        long = "creative-binding",
+        env = "RELAY_CREATIVE_BINDING",
+        value_delimiter = ';'
+    )]
+    pub creative_binding_descriptors: Vec<String>,
+
+    /// Operator-only execution backend mappings (`binding_id=backend_kind`).
+    /// Backend details are never exposed through Creative discovery responses.
+    #[arg(
+        long = "creative-binding-backend",
+        env = "RELAY_CREATIVE_BINDING_BACKEND",
+        value_delimiter = ';'
+    )]
+    pub creative_binding_backends: Vec<String>,
+
+    /// Creative compute threshold requiring explicit submit approval.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_APPROVAL_COMPUTE_UNITS",
+        default_value_t = 5_000
+    )]
+    pub creative_approval_compute_units: u64,
+
+    /// Hard compute ceiling for one Creative job.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_JOB_HARD_COMPUTE_UNITS",
+        default_value_t = 50_000
+    )]
+    pub creative_job_hard_compute_units: u64,
+
+    /// Hard cumulative compute ceiling for one Creative Project.
+    #[arg(
+        long,
+        env = "RELAY_CREATIVE_PROJECT_HARD_COMPUTE_UNITS",
+        default_value_t = 500_000
+    )]
+    pub creative_project_hard_compute_units: u64,
+
+    /// Hard output-byte ceiling for one Creative job.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_JOB_OUTPUT_BYTES", default_value_t = 64 * 1024 * 1024)]
+    pub creative_max_job_output_bytes: u64,
+
+    /// Maximum Creative jobs concurrently in running state per project.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_CONCURRENT_JOBS", default_value_t = 4)]
+    pub creative_max_concurrent_jobs: usize,
+
+    /// Maximum bounded retry count admitted for one Creative job.
+    #[arg(long, env = "RELAY_CREATIVE_MAX_RETRIES", default_value_t = 2)]
+    pub creative_max_retries: u32,
 
     /// Explicitly enable the repository-owned deterministic lifecycle hooks.
     /// Hook configuration is never trusted merely because it exists.

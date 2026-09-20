@@ -65,9 +65,7 @@ tree can be selected directly with `cwd`; paths outside it are denied by
 default. Use a narrower root if Projects contains more than the relay should
 see. Credential and privilege boundaries still apply. A protected-path
 discovery failure means the sandbox did not start: check for protected
-symlinks, inaccessible directories or a tree above 500,000 entries. Use
-narrower authorized roots instead of disabling masking or skipping visible
-cache/build directories.
+symlinks, inaccessible indexed directories, watcher invalidation, or an indexed tree above 500,000 entries. Use narrower authorized roots instead of disabling masking. Canonical dependency/generated roots are already intentionally skipped by the protected-path index; do not "fix" discovery by adding new arbitrary skip names, and do not store credentials inside the existing skipped roots.
 
 `systemctl --user` failing to connect to a bus is expected in this profile.
 Host user-service control and journal mounts are not implicitly exposed by
@@ -79,9 +77,9 @@ Do not unmask credentials just to make a tool call convenient. Use an explicit s
 
 ## `docker` says the daemon/socket is unavailable from MCP
 
-Expected. The relay intentionally does not expose `/var/run/docker.sock`.
+Read-only diagnostics such as bounded `docker ps`, `docker logs`, `docker stats`, `docker top`, safe `docker inspect`, and reviewed Compose diagnostics are supported through direct `docker` terminal calls. The relay exposes the configured socket only to a call whose argv passes that semantic read-only policy.
 
-Run Docker-dependent operations—such as `pnpm release:publish`—from a trusted host shell with Docker configured. Do not use sudo/socket mounts/privileged-container tricks to bypass the relay boundary.
+Lifecycle/build/pull/push and other unrestricted Docker operations remain unavailable unless the operator explicitly enables `RELAY_ALLOW_DOCKER=true`. For long-running or full-authority Docker work—such as `pnpm release:publish`—run the foreground command from a trusted host shell instead of weakening the relay boundary.
 
 ## `ls /etc` works or commands can read `/etc/resolv.conf`
 

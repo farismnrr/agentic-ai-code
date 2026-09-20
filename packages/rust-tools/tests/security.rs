@@ -2,6 +2,8 @@ use ai_tools::core::config::ServerConfig;
 use ai_tools::infrastructure::security::enforce_local_access_policy;
 use axum::http::{header::HOST, header::ORIGIN, HeaderMap, HeaderValue};
 
+#[path = "security/network.rs"]
+mod network;
 #[path = "security/terminal_discovery.rs"]
 mod terminal_discovery;
 #[cfg(target_os = "linux")]

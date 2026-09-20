@@ -1,6 +1,7 @@
 //! Cohesive workspace capabilities behind stable application exports.
 
 mod allowlist;
+mod bootstrap;
 mod dispatch;
 mod evidence;
 mod list;
@@ -16,6 +17,7 @@ mod secure;
 mod secure;
 
 pub use allowlist::*;
+pub use bootstrap::*;
 pub use dispatch::dispatch_native_tool;
 pub use list::*;
 pub use mutate::*;

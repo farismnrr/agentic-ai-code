@@ -3,7 +3,7 @@
 //! Types and pure logic only — no transport/axum concerns here (kept in
 //! `transport.rs`) so the protocol layer remains transport-independent.
 
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_json::{json, Value};
 
 use crate::core::error::McpError;
@@ -210,6 +210,8 @@ pub fn decode_header_value(raw: &str) -> Option<String> {
     }
 }
 
+pub const SERVER_INSTRUCTIONS: &str = "Masih Awam coding relay. Before repository mutation, resolve and verify the target workspace fresh for the current task; never treat a remembered cwd as write authority. Workspace governance initialization is manual: only when the user explicitly requests /init or asks to initialize/reconcile workspace governance, use workspace_bootstrap inspect and then reconcile as authorized. Ordinary repository work and read-only tasks must not bootstrap the repository implicitly. Reconcile re-detects the current stack, creates missing portable governance, refreshes only Masih Awam-managed governance/guardrail files, preserves unowned project guidance, and installs no dependencies. Read the server's agent-guidance resource when available and follow repository-local guidance without weakening relay safety. For milestone, blocker, handoff, and completion reporting, use: Task Execution Report with Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action. Report only checks/actions that actually occurred; do not invent verification, commit, push, PR, merge, deployment, or restart status. Long-running work that exceeds a public tool deadline must be handed to the operator as an exact foreground command rather than hidden/background execution.";
+
 /// The result of `server/discover` (`server/discover#discoverresult`).
 /// `server/discover` is the modern replacement for the removed
 /// `initialize` handshake: servers **MUST** implement it, but calling it is
@@ -243,11 +245,10 @@ impl DiscoverResult {
                 "tools": { "listChanged": false },
                 "resources": {},
                 "extensions": {
-                    "io.modelcontextprotocol/tasks": {},
                     "io.masihawam/activity-bootstrap": { "version": "1" }
                 }
             }),
-            instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
+            instructions: SERVER_INSTRUCTIONS,
             ttl_ms: 0,
             cache_scope: "private",
         }
@@ -256,8 +257,9 @@ impl DiscoverResult {
 
 mod catalog;
 pub use catalog::{
-    find_tool, find_tool_for_profile, retained_tool_catalog, runtime_tool_catalog,
-    validate_tool_arguments, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
+    blender_tool_catalog, find_tool, find_tool_for_profile, output_schema_for_tool,
+    retained_tool_catalog, runtime_tool_catalog, tool_for_wire, validate_tool_arguments,
+    validate_tool_output, Tool, ToolAnnotations, ToolSecurityScheme, CODING_SCOPE,
     PRIMARY_TOOL_NAMES,
 };
 
@@ -283,18 +285,76 @@ pub mod resources {
     #[derive(Debug, Clone, Serialize)]
     pub struct ResourceContent {
         pub uri: String,
-        pub text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub text: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub blob: Option<String>,
         #[serde(rename = "mimeType")]
-        pub mime_type: &'static str,
+        pub mime_type: String,
     }
 }
 
-/// `tools/call` result content block (MCP text-content convention).
-#[derive(Debug, Clone, Serialize)]
+/// `tools/call` result content block. Existing text callers retain the
+/// in-memory `text` field; `kind="image"` serializes that field as MCP
+/// base64 image data so binary previews can be returned without widening every
+/// existing call site.
+#[derive(Debug, Clone)]
 pub struct ToolResultContent {
-    #[serde(rename = "type")]
     pub kind: &'static str,
     pub text: String,
+}
+
+impl ToolResultContent {
+    pub fn png(data_base64: String) -> Self {
+        Self {
+            kind: "image",
+            text: data_base64,
+        }
+    }
+
+    pub fn image_resource_link(uri: String) -> Self {
+        Self {
+            kind: "resource_link",
+            text: uri,
+        }
+    }
+}
+
+impl Serialize for ToolResultContent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self.kind {
+            "image" => {
+                let mut state = serializer.serialize_struct("ToolResultContent", 3)?;
+                state.serialize_field("type", "image")?;
+                state.serialize_field("data", &self.text)?;
+                state.serialize_field("mimeType", "image/png")?;
+                state.end()
+            }
+            "resource_link" => {
+                let name = self
+                    .text
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("creative-image");
+                let mut state = serializer.serialize_struct("ToolResultContent", 4)?;
+                state.serialize_field("type", "resource_link")?;
+                state.serialize_field("uri", &self.text)?;
+                state.serialize_field("name", name)?;
+                state.serialize_field("mimeType", "image/png")?;
+                state.end()
+            }
+            _ => {
+                let mut state = serializer.serialize_struct("ToolResultContent", 2)?;
+                state.serialize_field("type", self.kind)?;
+                state.serialize_field("text", &self.text)?;
+                state.end()
+            }
+        }
+    }
 }
 
 /// `tools/call` result envelope. A failing tool call (including "not
@@ -307,6 +367,8 @@ pub struct ToolCallResult {
     pub content: Vec<ToolResultContent>,
     #[serde(rename = "isError")]
     pub is_error: bool,
+    #[serde(rename = "structuredContent", skip_serializing_if = "Option::is_none")]
+    pub structured_content: Option<Value>,
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<Value>,
 }
@@ -318,6 +380,11 @@ impl ToolCallResult {
 
     pub fn error(content: Vec<ToolResultContent>) -> Self {
         Self::new(content, true)
+    }
+
+    pub fn with_structured_content(mut self, structured_content: Value) -> Self {
+        self.structured_content = Some(structured_content);
+        self
     }
 
     pub fn with_meta(mut self, meta: Value) -> Self {
@@ -352,6 +419,7 @@ impl ToolCallResult {
             result_type: "complete",
             content,
             is_error,
+            structured_content: None,
             meta: None,
         }
     }

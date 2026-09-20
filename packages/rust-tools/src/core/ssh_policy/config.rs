@@ -3,7 +3,13 @@ use crate::core::error::McpError;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod args;
+pub use args::{openssh_args, openssh_args_for_chain, openssh_args_for_chain_with_program};
+
 const MAX_ALIAS_BYTES: usize = 255;
+const MAX_INCLUDE_DEPTH: usize = 4;
+const MAX_INCLUDE_FILES: usize = 64;
+const MAX_PROXY_HOPS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SshConnectionSpec {
@@ -13,6 +19,7 @@ pub struct SshConnectionSpec {
     pub port: u16,
     pub identity_file: PathBuf,
     pub known_hosts_file: PathBuf,
+    pub proxy_jump: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +35,7 @@ struct PartialSpec {
     port: Option<u16>,
     identity_file: Option<String>,
     known_hosts_file: Option<String>,
+    proxy_jump: Option<Vec<String>>,
 }
 
 pub fn validate_alias(alias: &str) -> Result<(), McpError> {
@@ -57,9 +65,8 @@ pub fn resolve_connection_spec(
         return Err(policy_error("SSH credential root must be a directory"));
     }
     let config = canonical_file_within(&root, config_path, "SSH config")?;
-    let text =
-        fs::read_to_string(&config).map_err(|_| policy_error("SSH config is unavailable"))?;
-    let blocks = parse_config(&text)?;
+    let lines = load_config_lines(&root, &config, 0, &mut 0)?;
+    let blocks = parse_config(&lines)?;
     let mut spec = PartialSpec::default();
 
     // OpenSSH applies the first obtained value for each parameter. We preserve
@@ -98,6 +105,9 @@ pub fn resolve_connection_spec(
                     }
                     spec.known_hosts_file = Some(value);
                 }
+                "proxyjump" if spec.proxy_jump.is_none() => {
+                    spec.proxy_jump = Some(parse_proxy_jump(&value)?);
+                }
                 _ => {}
             }
         }
@@ -121,137 +131,220 @@ pub fn resolve_connection_spec(
         port: spec.port.unwrap_or(22),
         identity_file,
         known_hosts_file,
+        proxy_jump: spec.proxy_jump.unwrap_or_default(),
     })
 }
 
-pub fn openssh_args(
-    spec: &SshConnectionSpec,
-    remote: &super::ValidatedRemoteCommand,
-) -> Vec<String> {
-    let mut args = vec![
-        "-F".into(),
-        "/dev/null".into(),
-        "-o".into(),
-        "BatchMode=yes".into(),
-        "-o".into(),
-        "PasswordAuthentication=no".into(),
-        "-o".into(),
-        "KbdInteractiveAuthentication=no".into(),
-        "-o".into(),
-        "PreferredAuthentications=publickey".into(),
-        "-o".into(),
-        "NumberOfPasswordPrompts=0".into(),
-        "-o".into(),
-        "IdentitiesOnly=yes".into(),
-        "-o".into(),
-        "IdentityAgent=none".into(),
-        "-o".into(),
-        "ClearAllForwardings=yes".into(),
-        "-o".into(),
-        "ForwardAgent=no".into(),
-        "-o".into(),
-        "ForwardX11=no".into(),
-        "-o".into(),
-        "PermitLocalCommand=no".into(),
-        "-o".into(),
-        "ControlMaster=no".into(),
-        "-o".into(),
-        "ControlPersist=no".into(),
-        "-o".into(),
-        "RequestTTY=no".into(),
-        "-o".into(),
-        "StdinNull=yes".into(),
-        "-o".into(),
-        "EscapeChar=none".into(),
-        "-o".into(),
-        "StrictHostKeyChecking=yes".into(),
-        "-o".into(),
-        "UpdateHostKeys=no".into(),
-        "-o".into(),
-        "ConnectionAttempts=1".into(),
-        "-o".into(),
-        "ConnectTimeout=10".into(),
-        "-o".into(),
-        format!("UserKnownHostsFile={}", spec.known_hosts_file.display()),
-        "-i".into(),
-        spec.identity_file.to_string_lossy().into_owned(),
-        "-p".into(),
-        spec.port.to_string(),
-    ];
-    if let Some(user) = &spec.user {
-        args.extend(["-l".into(), user.clone()]);
+pub fn resolve_connection_chain(
+    ssh_root: &Path,
+    config_path: &Path,
+    alias: &str,
+    explicit_via: &[String],
+) -> Result<Vec<SshConnectionSpec>, McpError> {
+    let target = resolve_connection_spec(ssh_root, config_path, alias)?;
+    let hops = if explicit_via.is_empty() {
+        target.proxy_jump.clone()
+    } else {
+        explicit_via.to_vec()
+    };
+    if hops.len() > MAX_PROXY_HOPS {
+        return Err(policy_error("SSH jump chain exceeds allowed bounds"));
     }
-    args.push(spec.hostname.clone());
-    args.push(remote.rendered.clone());
-    args
+    let mut seen = std::collections::BTreeSet::new();
+    let mut chain = Vec::with_capacity(hops.len() + 1);
+    for hop in hops {
+        validate_alias(&hop)?;
+        if hop == alias || !seen.insert(hop.clone()) {
+            return Err(policy_error(
+                "SSH jump chain contains a cycle or duplicate alias",
+            ));
+        }
+        chain.push(resolve_connection_spec(ssh_root, config_path, &hop)?);
+    }
+    chain.push(target);
+    Ok(chain)
 }
 
-fn parse_config(text: &str) -> Result<Vec<HostBlock>, McpError> {
+fn parse_config(lines: &[String]) -> Result<Vec<HostBlock>, McpError> {
     let mut blocks = Vec::<HostBlock>::new();
-    let mut current: Option<HostBlock> = None;
-    for raw_line in text.lines() {
+    let mut current = HostBlock {
+        patterns: vec!["*".into()],
+        directives: Vec::new(),
+    };
+    let mut current_is_global = true;
+    let mut in_match = false;
+    for raw_line in lines {
         let line = strip_config_comment(raw_line).trim();
         if line.is_empty() {
             continue;
         }
         let (key, value) = split_directive(line)?;
         let key_lower = key.to_ascii_lowercase();
-        if matches!(
-            key_lower.as_str(),
-            "include"
-                | "match"
-                | "proxycommand"
-                | "proxyjump"
-                | "localcommand"
-                | "knownhostscommand"
-                | "remotecommand"
-                | "identityagent"
-                | "pkcs11provider"
-                | "securitykeyprovider"
-                | "controlmaster"
-                | "controlpath"
-                | "controlpersist"
-                | "localforward"
-                | "remoteforward"
-                | "dynamicforward"
-        ) {
-            return Err(policy_error(
-                "SSH config contains an unsupported capability directive",
-            ));
+        if key_lower == "include" {
+            return Err(policy_error("SSH Include must be expanded before parsing"));
         }
-        if matches!(
-            key_lower.as_str(),
-            "forwardagent" | "forwardx11" | "forwardx11trusted" | "permitlocalcommand"
-        ) && !matches!(value.to_ascii_lowercase().as_str(), "no" | "false")
-        {
-            return Err(policy_error(
-                "SSH config attempts to enable a forbidden capability",
-            ));
+        if key_lower == "match" {
+            if !current.directives.is_empty() || !current_is_global {
+                blocks.push(current);
+            }
+            current = HostBlock {
+                patterns: vec!["*".into()],
+                directives: Vec::new(),
+            };
+            current_is_global = true;
+            in_match = true;
+            continue;
         }
         if key_lower == "host" {
-            if let Some(block) = current.take() {
-                blocks.push(block);
+            if !current.directives.is_empty() || !current_is_global {
+                blocks.push(current);
             }
             let patterns = shell_words::split(value)
                 .map_err(|_| policy_error("SSH Host pattern could not be parsed"))?;
             if patterns.is_empty() {
                 return Err(policy_error("SSH Host pattern must not be empty"));
             }
-            current = Some(HostBlock {
+            current = HostBlock {
                 patterns,
                 directives: Vec::new(),
-            });
+            };
+            current_is_global = false;
+            in_match = false;
             continue;
         }
-        let block = current.as_mut().ok_or_else(|| {
-            policy_error("SSH config directives before the first Host block are unsupported")
-        })?;
-        block.directives.push((key_lower, value.to_owned()));
+        if in_match {
+            continue;
+        }
+        // Only the reviewed connectivity subset is consumed later. Other
+        // directives are intentionally inert because raw operator config is
+        // never passed to OpenSSH.
+        current.directives.push((key_lower, value.to_owned()));
     }
-    if let Some(block) = current {
-        blocks.push(block);
+    if !current.directives.is_empty() || !current_is_global {
+        blocks.push(current);
     }
     Ok(blocks)
+}
+
+fn parse_proxy_jump(value: &str) -> Result<Vec<String>, McpError> {
+    if value.eq_ignore_ascii_case("none") {
+        return Ok(Vec::new());
+    }
+    let mut result = Vec::new();
+    for raw in value.split(',') {
+        let alias = raw.trim();
+        validate_alias(alias)?;
+        result.push(alias.to_owned());
+    }
+    if result.is_empty() || result.len() > MAX_PROXY_HOPS {
+        return Err(policy_error("SSH ProxyJump chain exceeds allowed bounds"));
+    }
+    Ok(result)
+}
+
+fn load_config_lines(
+    root: &Path,
+    path: &Path,
+    depth: usize,
+    included_files: &mut usize,
+) -> Result<Vec<String>, McpError> {
+    if depth > MAX_INCLUDE_DEPTH {
+        return Err(policy_error("SSH Include nesting exceeds allowed bounds"));
+    }
+    *included_files += 1;
+    if *included_files > MAX_INCLUDE_FILES {
+        return Err(policy_error(
+            "SSH Include file count exceeds allowed bounds",
+        ));
+    }
+    let canonical = canonical_file_within(root, path, "SSH config")?;
+    let text =
+        fs::read_to_string(&canonical).map_err(|_| policy_error("SSH config is unavailable"))?;
+    if text.len() > 512 * 1024 {
+        return Err(policy_error("SSH config exceeds allowed bounds"));
+    }
+    let mut lines = Vec::new();
+    for raw_line in text.lines() {
+        let line = strip_config_comment(raw_line).trim();
+        if line.is_empty() {
+            lines.push(raw_line.to_owned());
+            continue;
+        }
+        let Ok((key, value)) = split_directive(line) else {
+            lines.push(raw_line.to_owned());
+            continue;
+        };
+        if !key.eq_ignore_ascii_case("include") {
+            lines.push(raw_line.to_owned());
+            continue;
+        }
+        for include in shell_words::split(value)
+            .map_err(|_| policy_error("SSH Include could not be parsed"))?
+        {
+            for include_path in expand_include_pattern(root, canonical.parent(), &include)? {
+                lines.extend(load_config_lines(
+                    root,
+                    &include_path,
+                    depth + 1,
+                    included_files,
+                )?);
+            }
+        }
+    }
+    Ok(lines)
+}
+
+fn expand_include_pattern(
+    root: &Path,
+    base: Option<&Path>,
+    value: &str,
+) -> Result<Vec<PathBuf>, McpError> {
+    if value.contains('$') || value.contains('`') || value.contains('%') {
+        return Err(policy_error("SSH Include path expansion is unsupported"));
+    }
+    let raw = if let Some(relative) = value.strip_prefix("~/.ssh/") {
+        root.join(relative)
+    } else if Path::new(value).is_absolute() {
+        PathBuf::from(value)
+    } else {
+        base.unwrap_or(root).join(value)
+    };
+    let raw_text = raw.to_string_lossy();
+    if !raw_text.contains('*') && !raw_text.contains('?') {
+        return Ok(vec![canonical_file_within(root, &raw, "SSH Include")?]);
+    }
+    let parent = raw
+        .parent()
+        .ok_or_else(|| policy_error("SSH Include pattern is invalid"))?;
+    let file_pattern = raw
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| policy_error("SSH Include pattern is invalid"))?;
+    if parent.to_string_lossy().contains('*') || parent.to_string_lossy().contains('?') {
+        return Err(policy_error(
+            "SSH Include wildcards are supported only in the final path component",
+        ));
+    }
+    let parent = fs::canonicalize(parent)
+        .map_err(|_| policy_error("SSH Include directory is unavailable"))?;
+    if !parent.starts_with(root) || !parent.is_dir() {
+        return Err(policy_error(
+            "SSH Include escapes the approved credential root",
+        ));
+    }
+    let mut matches = fs::read_dir(parent)
+        .map_err(|_| policy_error("SSH Include directory is unavailable"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| glob_matches(file_pattern, name))
+                && path.is_file()
+        })
+        .collect::<Vec<_>>();
+    matches.sort();
+    Ok(matches)
 }
 
 fn split_directive(line: &str) -> Result<(&str, &str), McpError> {

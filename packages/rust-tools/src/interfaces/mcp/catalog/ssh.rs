@@ -5,7 +5,7 @@ pub(super) fn tool() -> Tool {
     Tool {
         name: "ssh_readonly_exec",
         title: Some("Read-Only SSH Diagnostics"),
-        description: "Run one server-validated read-only diagnostic command on an operator-configured SSH alias. Alias/config/key resolution is relay-owned; raw SSH options, interactive access, forwarding, and remote mutation are unavailable.",
+        description: "Run one server-validated read-only diagnostic command on an operator-configured SSH alias, optionally through a bounded relay-owned SSH jump chain. Alias/config/key resolution is relay-owned; raw SSH options, interactive access, user-selected forwarding, and remote mutation are unavailable.",
         input_schema: json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
@@ -14,7 +14,19 @@ pub(super) fn tool() -> Tool {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255,
-                    "description": "Operator-configured SSH alias resolved by the relay."
+                    "description": "Final operator-configured SSH alias where the diagnostic command executes."
+                },
+                "via": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "pattern": "^[A-Za-z0-9._-]+$"
+                    },
+                    "maxItems": 8,
+                    "default": [],
+                    "description": "Optional ordered SSH alias chain traversed before the final alias. No diagnostic command executes on intermediate hops."
                 },
                 "command": {
                     "type": "string",
@@ -31,16 +43,10 @@ pub(super) fn tool() -> Tool {
                 },
                 "timeout_ms": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 60000,
                     "default": 30000,
-                    "description": "Requested remote diagnostic runtime in milliseconds; 0 uses the bounded relay SSH default."
-                },
-                "execution_mode": {
-                    "type": "string",
-                    "enum": ["sync", "async", "auto"],
-                    "default": "auto",
-                    "description": "Use sync for immediate results, async for task-backed execution, or auto to use MCP Tasks when negotiated."
+                    "description": "Requested synchronous remote diagnostic runtime in milliseconds. The absolute maximum is 60000 ms."
                 }
             },
             "required": ["alias", "command"],
@@ -53,6 +59,6 @@ pub(super) fn tool() -> Tool {
             open_world_hint: true,
         }),
         security_schemes: coding_security_scheme(),
-        execution: Some(json!({ "taskSupport": "optional" })),
+        execution: None,
     }
 }

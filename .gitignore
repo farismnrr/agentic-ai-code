@@ -30,6 +30,7 @@ logs
 !.env.example
 
 target/
+.masihawam/blender-runtime-home/
 
 # Local external coding-client session runtime (not repository-owned agent guidance)
 .client-session/
@@ -57,3 +58,7 @@ workspaces/
 
 # Local temporary build/verification artifacts
 .tmp/
+/packages/rust-tools/target-plan069-release/
+
+# Local upload/export packages built from tracked canonical sources
+exports/*.zip

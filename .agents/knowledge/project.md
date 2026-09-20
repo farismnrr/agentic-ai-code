@@ -21,9 +21,19 @@ Do not infer current architecture from historical plans alone. Current source/co
 - OpenTelemetry + Jaeger/Loki integration
 - MCP inbound/outbound integration
 - Rust workspace under `packages/rust-tools/`
-- Rust `relay-agent` with MCP Streamable HTTP and Linux Bubblewrap containment
+- unified Rust `ai-tools relay` subcommand with MCP Streamable HTTP and Linux Bubblewrap containment
 
 ## Repository orientation
+
+### Workspace placement invariant
+
+`$HOME/Documents/Projects` is the canonical relay workspace/execution root. Keep repository source and user project data conceptually separate:
+
+- the `ai-code` checkout may be the selected `cwd` only while developing/testing this repository;
+- never create a user workspace, Creative Project, Blender production project, acceptance fixture, render, export, checkpoint, or other production artifact with the `ai-code` checkout as its project root;
+- Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`;
+- the existing project-internal Blender layout (`blender/scenes`, `blender/assets`, `blender/renders`, `blender/exports`, and related subtrees) is relative to that creative-project root, not relative to the `ai-code` repository;
+- acceptance that accidentally writes creative artifacts beneath `ai-code` is smoke/debug evidence only and cannot satisfy final Plan 069 production acceptance.
 
 ### Web application
 
@@ -43,7 +53,7 @@ Do not infer current architecture from historical plans alone. Current source/co
 - `packages/terminal-tool/` — TypeScript terminal-tool API/skill wrapper; executable CLI is Rust.
 - `packages/curl-tool/` — TypeScript curl-tool API/skill wrapper; executable CLI is Rust.
 - `packages/searxng-search-tool/` — TypeScript search-tool API/skill wrapper; executable CLI is Rust.
-- `packages/relay-agent/` — relay package metadata/skill; current executable is the Rust `relay-agent` binary from the Rust workspace.
+- `packages/relay-agent/` — relay integration metadata/skill; the current executable is the unified Rust `ai-tools` binary using the `relay` subcommand from `packages/rust-tools/`.
 
 The TypeScript package APIs remain valid application integration surfaces. Historical Plan 027 migrated the **executable CLI layer**, not the entire Nuxt runtime, to Rust.
 
@@ -97,6 +107,7 @@ The remediation also restored application ownership boundaries across API compos
 
 - `docs/` — human/operator installation, deployment, MCP client, development, and release handbook.
 - `AGENTS.md` — single repository agent entrypoint.
+- `.agents/` — single repository-owned agent context tree. Do not add parallel root-level `agents/`, `.ai-self/`, or `agent-prompts/` trees; temporary external-agent runtime state belongs outside the tracked repository, while portable workspace bootstrap/governance remains under tracked `ai-self/`.
 - `.agents/knowledge/` — stable operating guidance.
 - `.agents/skills/` — shared framework/tool skill discovery.
 - `.agents/memories/README.md` — single canonical durable memory.
@@ -141,7 +152,7 @@ Prefer `pnpm build && pnpm preview` over trusting a long-lived `pnpm dev` when v
 
 `pnpm lint:rust`, `pnpm typecheck:rust`, and `pnpm test:rust` cover formatting, Clippy, warnings-denied `cargo check`, and Cargo tests without involving Nuxt. Security-sensitive Rust changes may additionally require `cargo audit`.
 
-The production `relay-agent` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
+The production `ai-tools relay` contract is Linux + Bubblewrap. Do not document macOS/Windows relay support unless the sandbox/release contract changes deliberately.
 
 ### Test layout and code length
 

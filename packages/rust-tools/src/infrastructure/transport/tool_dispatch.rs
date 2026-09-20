@@ -6,23 +6,26 @@ use serde_json::Value;
 use std::sync::Arc;
 use std::time::Instant;
 
-pub(super) async fn handle(
-    request: &mcp::Request,
-    state: Arc<AppState>,
-    tool: &mcp::Tool,
-    arguments: &Value,
-    effects: Vec<&'static str>,
-    activity_start: &ActivityEvent,
-    request_started: Instant,
-) -> JsonErr2 {
+pub(super) struct ToolDispatchContext<'a> {
+    pub request: &'a mcp::Request,
+    pub tool: &'a mcp::Tool,
+    pub arguments: &'a Value,
+    pub owner: &'a str,
+    pub effects: Vec<&'static str>,
+    pub activity_start: &'a ActivityEvent,
+    pub request_started: Instant,
+}
+
+pub(super) async fn handle(state: Arc<AppState>, context: ToolDispatchContext<'_>) -> JsonErr2 {
     let tool_dispatch_started = Instant::now();
     let dispatch_result = crate::application::execution::dispatch_tool_call(
-        tool,
-        arguments,
+        context.tool,
+        context.arguments,
         &state.config,
         &state.jobs,
         &state.lsp,
         &state.hooks,
+        context.owner,
     )
     .await;
     let dispatch_ms = tool_dispatch_started.elapsed().as_millis() as u64;
@@ -33,18 +36,18 @@ pub(super) async fn handle(
         } else {
             "error"
         },
-        tool = tool.name,
+        tool = context.tool.name,
         duration_ms = dispatch_ms,
     );
     finish_tool_call(ToolCompletionContext {
-        request,
+        request: context.request,
         state,
-        tool_name: tool.name,
-        arguments,
-        effects,
-        activity_start,
+        tool_name: context.tool.name,
+        arguments: context.arguments,
+        effects: context.effects,
+        activity_start: context.activity_start,
         dispatch_result,
-        request_started,
+        request_started: context.request_started,
         dispatch_ms,
     })
     .await

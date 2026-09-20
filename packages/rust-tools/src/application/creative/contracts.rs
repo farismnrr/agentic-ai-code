@@ -8,17 +8,18 @@ pub const MAX_SPEC_BYTES: usize = 32 * 1024;
 pub const MAX_PROJECT_ELEMENTS: usize = 256;
 pub const MAX_PROJECT_ASSETS: usize = 2_048;
 pub const MAX_PROJECT_SCENES: usize = 128;
+pub const MAX_PROJECT_SCENE_BOARDS: usize = 128;
 pub const MAX_PROJECT_GAMES: usize = 32;
-pub const MAX_PROJECT_AUDIO_PLANS: usize = 128;
 pub const MAX_QA_FINDINGS: usize = 2_048;
 pub const MAX_PROJECT_GRAPHS: usize = 1_024;
 pub const MAX_PROJECT_JOBS: usize = 4_096;
 pub const MAX_REVISIONS_PER_ELEMENT: usize = 128;
 pub const MAX_REFERENCES_PER_REVISION: usize = 64;
+pub const MAX_ELEMENT_DEPENDENCIES: usize = 64;
 pub const MAX_SCENE_SHOTS: usize = 256;
+pub const MAX_SCENE_BOARD_FRAMES: usize = 512;
 pub const MAX_GAME_LIST_ITEMS: usize = 128;
 pub const MAX_GAME_ASSET_ROLES: usize = 512;
-pub const MAX_AUDIO_CUES: usize = 512;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -49,7 +50,6 @@ pub enum ElementKind {
     Location,
     Prop,
     Style,
-    AudioVoice,
     Media,
     Asset3d,
     AnimationClip,
@@ -95,6 +95,40 @@ pub struct ElementRecord {
     pub revisions: Vec<ElementRevision>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocationVariantSpec {
+    pub variant_id: String,
+    #[serde(default)]
+    pub time_of_day: Option<String>,
+    #[serde(default)]
+    pub weather: Option<String>,
+    #[serde(default)]
+    pub lighting: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocationPackSpec {
+    pub spec_type: String,
+    pub concept: String,
+    pub scale: String,
+    pub architecture_language: String,
+    pub set_dressing_language: String,
+    #[serde(default)]
+    pub canonical_landmarks: Vec<String>,
+    #[serde(default)]
+    pub variants: Vec<LocationVariantSpec>,
+    #[serde(default)]
+    pub style_element_id: Option<String>,
+    #[serde(default)]
+    pub asset3d_element_ids: Vec<String>,
+    #[serde(default)]
+    pub camera_landmarks: Vec<String>,
+    #[serde(default)]
+    pub continuity_notes: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetState {
@@ -110,6 +144,7 @@ pub enum AssetSource {
     McpUpload,
     UrlImport,
     GeneratedAsset,
+    BlenderMaterialized,
     ManualImport,
 }
 
@@ -138,9 +173,11 @@ pub struct AssetMetadata {
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
-    pub sample_rate_hz: Option<u32>,
+    pub artifact_kind: Option<String>,
     #[serde(default)]
-    pub channels: Option<u16>,
+    pub artifact_version: Option<String>,
+    #[serde(default)]
+    pub license_notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -161,133 +198,26 @@ pub struct AssetRecord {
     #[serde(default)]
     pub element_id: Option<String>,
     #[serde(default)]
+    pub dependency_element_ids: Vec<String>,
+    #[serde(default)]
     pub metadata: AssetMetadata,
     pub created_at_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct CameraSpec {
-    #[serde(default)]
-    pub shot_size: Option<String>,
-    #[serde(default)]
-    pub focal_length_mm: Option<f32>,
-    #[serde(default)]
-    pub aperture_f: Option<f32>,
-    #[serde(default)]
-    pub movement: Option<String>,
-    #[serde(default)]
-    pub framing: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ShotManifest {
-    pub shot_id: String,
-    pub order: u32,
-    pub duration_ms: u64,
-    #[serde(default)]
-    pub element_ids: Vec<String>,
-    #[serde(default)]
-    pub camera: CameraSpec,
-    #[serde(default)]
-    pub action: String,
-    #[serde(default)]
-    pub continuity: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SceneManifest {
-    pub scene_id: String,
-    pub title: String,
-    #[serde(default)]
-    pub cast_element_ids: Vec<String>,
-    #[serde(default)]
-    pub location_element_id: Option<String>,
-    #[serde(default)]
-    pub style_element_id: Option<String>,
-    #[serde(default)]
-    pub target_duration_ms: Option<u64>,
-    #[serde(default)]
-    pub shots: Vec<ShotManifest>,
-}
+mod production;
+pub use production::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PlayerMode {
-    Solo,
-    LocalMultiplayer,
-    OnlineMultiplayer,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GameAssetRole {
-    pub role: String,
-    pub runtime_path: String,
-    #[serde(default)]
-    pub asset_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GameManifest {
-    pub game_id: String,
-    pub title: String,
-    pub genre: String,
-    pub perspective: String,
-    pub core_loop: String,
-    pub win_condition: String,
-    pub lose_condition: String,
-    pub restart_behavior: String,
-    pub player_mode: PlayerMode,
-    #[serde(default)]
-    pub target_devices: Vec<String>,
-    #[serde(default)]
-    pub verbs: Vec<String>,
-    #[serde(default)]
-    pub inputs: Vec<String>,
-    #[serde(default)]
-    pub style_element_id: Option<String>,
-    #[serde(default)]
-    pub asset_roles: Vec<GameAssetRole>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AudioCue {
-    pub cue_id: String,
-    pub start_ms: u64,
-    #[serde(default)]
-    pub duration_ms: Option<u64>,
-    #[serde(default)]
-    pub asset_id: Option<String>,
-    #[serde(default)]
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AudioPlan {
-    pub audio_plan_id: String,
-    #[serde(default)]
-    pub voice_element_id: Option<String>,
-    #[serde(default)]
-    pub language: Option<String>,
-    #[serde(default)]
-    pub cues: Vec<AudioCue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum QaSeverity {
-    HardFail,
-    SoftFinding,
-    NotInspected,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct QaFinding {
-    pub finding_id: String,
-    pub domain: String,
-    pub severity: QaSeverity,
-    pub subject_id: String,
-    pub message: String,
-    pub created_at_ms: u128,
+pub struct CreativeProjectLayout {
+    pub state_root: String,
+    pub production_root: String,
+    pub assets_root: String,
+    pub scene_boards_root: String,
+    pub graphs_root: String,
+    pub templates_root: String,
+    pub games_root: String,
+    pub qa_root: String,
+    pub exports_root: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -305,11 +235,11 @@ pub struct CreativeProject {
     #[serde(default)]
     pub assets: Vec<AssetRecord>,
     #[serde(default)]
+    pub scene_boards: Vec<SceneBoard>,
+    #[serde(default)]
     pub scenes: Vec<SceneManifest>,
     #[serde(default)]
     pub games: Vec<GameManifest>,
-    #[serde(default)]
-    pub audio_plans: Vec<AudioPlan>,
     #[serde(default)]
     pub graph_ids: Vec<String>,
     #[serde(default)]

@@ -10,6 +10,7 @@ const MAX_EXEC_ARG_BYTES: usize = 64 * 1024;
 const MAX_SSH_TIMEOUT_MS: u64 = 60_000;
 const MAX_ALIAS_BYTES: usize = 255;
 const MAX_COMMAND_BYTES: usize = 255;
+const MAX_SSH_HOPS: usize = 8;
 
 pub(super) fn build_invocation(
     arguments: &Value,
@@ -38,16 +39,9 @@ pub(super) fn build_invocation(
                 .default_terminal_timeout_ms
                 .clamp(1, MAX_SSH_TIMEOUT_MS),
         );
-    let timeout_ms = if timeout_ms == 0 {
-        config
-            .default_terminal_timeout_ms
-            .clamp(1, MAX_SSH_TIMEOUT_MS)
-    } else {
-        timeout_ms
-    };
-    if timeout_ms > MAX_SSH_TIMEOUT_MS {
+    if !(1..=MAX_SSH_TIMEOUT_MS).contains(&timeout_ms) {
         return Err(McpError::InvalidRequest(
-            "timeout_ms exceeds SSH diagnostic maximum".into(),
+            "timeout_ms must be between 1 and 60000 ms".into(),
         ));
     }
 
@@ -65,8 +59,37 @@ pub(super) fn build_invocation(
     let ssh_config = config
         .resolved_ssh_config()
         .map_err(|_| McpError::InvalidRequest("SSH config is unavailable".into()))?;
-    let spec = crate::core::ssh_policy::resolve_connection_spec(&ssh_root, &ssh_config, alias)?;
-    let args = crate::core::ssh_policy::openssh_args(&spec, &remote);
+    let via = optional_alias_list(arguments, "via")?;
+    let chain =
+        crate::core::ssh_policy::resolve_connection_chain(&ssh_root, &ssh_config, alias, &via)?;
+    let stdin_file = if remote.requires_redis_password {
+        Some(
+            config
+                .resolved_ssh_redis_password_file()
+                .map_err(|_| {
+                    McpError::InvalidRequest(
+                        "SSH Redis password file is unavailable or unsafe".into(),
+                    )
+                })?
+                .ok_or_else(|| {
+                    McpError::InvalidRequest(
+                        "Redis diagnostics require a configured password file".into(),
+                    )
+                })?,
+        )
+    } else {
+        None
+    };
+    let openssh_client = resolve_openssh_client()?;
+    let args = crate::core::ssh_policy::openssh_args_for_chain_with_program(
+        &chain,
+        &remote,
+        &openssh_client,
+    );
+    let material_files = chain
+        .iter()
+        .flat_map(|spec| [spec.identity_file.clone(), spec.known_hosts_file.clone()])
+        .collect::<Vec<_>>();
     let cwd = config
         .resolved_dir()
         .and_then(|path| {
@@ -79,18 +102,41 @@ pub(super) fn build_invocation(
         .map_err(|_| McpError::InvalidRequest("workspace directory is unavailable".into()))?;
 
     Ok(ToolInvocation {
-        program: InvocationProgram::Direct(resolve_openssh_client()?),
+        program: InvocationProgram::Direct(openssh_client),
         args,
+        stdin_file,
         cwd: Some(cwd),
         timeout_ms,
         allow_network: true,
         expose_optional_sockets: false,
+        readonly_docker_socket: false,
         expose_authorized_siblings: false,
-        security: InvocationSecurity::Ssh {
-            identity_file: spec.identity_file,
-            known_hosts_file: spec.known_hosts_file,
-        },
+        security: InvocationSecurity::Ssh { material_files },
     })
+}
+
+fn optional_alias_list(arguments: &Value, key: &str) -> Result<Vec<String>, McpError> {
+    let Some(values) = arguments.get(key) else {
+        return Ok(Vec::new());
+    };
+    let values = values
+        .as_array()
+        .ok_or_else(|| McpError::InvalidRequest(format!("{key} must be an array")))?;
+    if values.len() > MAX_SSH_HOPS {
+        return Err(McpError::InvalidRequest(format!(
+            "{key} exceeds the maximum SSH hop count"
+        )));
+    }
+    values
+        .iter()
+        .map(|value| {
+            let alias = value.as_str().ok_or_else(|| {
+                McpError::InvalidRequest(format!("{key} must contain only SSH aliases"))
+            })?;
+            crate::core::ssh_policy::validate_alias(alias)?;
+            Ok(alias.to_owned())
+        })
+        .collect()
 }
 
 fn required_bounded_string<'a>(
@@ -173,7 +219,7 @@ pub(super) fn normalized_failure(stderr: &str) -> Option<&'static str> {
     {
         return Some("SSH host-key verification failed");
     }
-    if value.contains("permission denied")
+    if value.contains("permission denied (publickey")
         || value.contains("authentication failed")
         || value.contains("no more authentication methods")
         || value.contains("sign_and_send_pubkey")

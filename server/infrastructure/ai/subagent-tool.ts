@@ -50,7 +50,7 @@ const runtime = new SubagentRuntime({
       try {
         const response = await generateText({
           model: model as LanguageModel,
-          ...buildSubagentPrompt({ instructions: profile.instructions, skills: context.skill_instructions ?? [], context: { ...context, skill_instructions: undefined }, toolNames: Object.keys(tools), maxContextTokens: budget.max_context_tokens }),
+          ...buildSubagentPrompt({ instructions: [profile.instructions, ...scopedMcp.instructions].filter(Boolean).join('\n'), skills: context.skill_instructions ?? [], context: { ...context, skill_instructions: undefined }, toolNames: Object.keys(tools), maxContextTokens: budget.max_context_tokens }),
           tools,
           toolApproval: scopedMcp.toolApproval,
           toolChoice: 'auto',

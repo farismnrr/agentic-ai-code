@@ -73,7 +73,7 @@ assert.ok(modernMcpClient.includes('\'io.masihawam/activity-bootstrap\''))
 assert.ok(modernMcpClient.includes('this.request(\'server/activity_configure\''))
 
 const activityPresentation = read('packages/rust-tools/src/application/activity/presentation.rs')
-assert.ok(activityPresentation.includes('"terminal_exec" | "terminal_job_start" => terminal_action'))
+assert.ok(activityPresentation.includes('"terminal_exec" => terminal_action'))
 assert.ok(activityPresentation.includes('name => generic_action(name, arguments, root)'))
 assert.ok(activityPresentation.includes('sensitive_argument_key'))
 

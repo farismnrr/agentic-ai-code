@@ -1,6 +1,6 @@
 # Relay Agent
 
-`relay-agent` is the native Rust MCP coding server used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/cli/src/commands/relay.rs`](../rust-tools/cli/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/cli/src/main.rs`](../rust-tools/cli/src/main.rs).
+The relay is the `ai-tools relay` subcommand of the unified native Rust binary used by AI Code for controlled local or remote tool execution. The current implementation lives in [`../rust-tools/src/commands/relay.rs`](../rust-tools/src/commands/relay.rs) with the unified binary entrypoint at [`../rust-tools/src/main.rs`](../rust-tools/src/main.rs). `packages/relay-agent/` is integration guidance/package metadata, not a separate executable binary.
 
 This document describes the **current Rust implementation**. The old Node/WebSocket relay, pairing-token flow, `bin/cli.mjs`, and unrestricted no-jail behavior are historical and must not be reintroduced.
 
@@ -13,10 +13,11 @@ This document describes the **current Rust implementation**. The old Node/WebSoc
 - **Listener binding:** `--bind-host` / `RELAY_AGENT_BIND_HOST` defaults to
   `127.0.0.1`. Local mode remains loopback-only; remote non-loopback binds require
   an explicit browser Origin and OAuth configuration. `0.0.0.0` is never a client URL.
-- **Filesystem boundary:** execution is confined through relay policy plus Bubblewrap. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) is the single root setting and defaults to `$HOME/Documents/Projects`; it defines the primary workspace and, unless explicitly overridden by `--execution-root`, the hard ceiling. Child repositories beneath it can be selected with `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and recursively masks protected credential directories (`.ssh`, `.aws`, `.cargo/credentials`, `.env.*`) and Unix domain sockets across all visible depths. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
-- **Tools:** one runtime catalog builder composes a 52-tool retained Full base or 15-tool retained Primary core with explicitly enabled optional capabilities. The retained Full base includes local sandboxed execution (`terminal_exec`, `terminal_job_start`, `terminal_job_get`, `terminal_job_cancel`), configured network tools, Full-only read-only remote diagnostics (`ssh_readonly_exec`), bounded native workspace tools, remote Git transport, forge/issues/workflows, alerts, and Telegram integration. Plan 069 keeps `creative_status` discoverable and composes the remaining creative tools into Full only when `RELAY_ENABLE_CREATIVE=true`. Discovery and invocation are strictly aligned: tools advertised in `tools/list` match `tools/call` routing; invoking a capability-disabled tool returns structured revocation errors (`CAPABILITY_REVOKED`), and unknown tools return 404 errors. Local Git wrappers and LSP wrappers are not public catalog entries; use terminal for builds, tests, package managers, interpreters, scripts, and uncovered CLI work. Standard developer CLI tools are fully permitted inside the sandbox, while privilege escalation brokers (`sudo`, `su`, `doas`, `pkexec`, `runas`) and generic SSH clients are blocked and masked. Numbered catalog contracts under `.agents/contracts/` are immutable historical audit artifacts, not alternate active runtime versions.
-- **Resources:** bounded read-only repository manifest, approved agent guidance, Git status, and HEAD metadata via server-owned `workspace://` URIs; no arbitrary resource templates/subscriptions/file browsing.
-- **Docker:** denied by default. Trusted single-owner local development may explicitly opt in with `--allow-docker` / `RELAY_ALLOW_DOCKER=true`, which exposes only the configured Docker socket; treat that socket as effectively host-level authority and keep it disabled for remote/production deployments unless the operator deliberately accepts that expansion.
+- **Filesystem boundary:** execution is confined through relay policy plus Bubblewrap. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) is the single root setting and defaults to `$HOME/Documents/Projects`; it defines the primary workspace and, unless explicitly overridden by `--execution-root`, the hard ceiling. Child repositories beneath it can be selected with `cwd`. Bubblewrap mounts system runtime paths (`/usr`, `/lib`, `/etc`, `/bin`, `/sbin`) read-only, isolates `/tmp` on tmpfs, keeps `/proc` and `/dev` minimal, clears child environment variables except standard runtime keys, and masks protected credential directories/files plus Unix domain sockets throughout the indexed user tree. Canonical dependency/generated roots such as `node_modules`, `target`, and recognized cache/build/output directories are intentionally pruned from protected-path indexing for bounded performance; their contents are not recursively credential-masked, so they must not be used as secret storage. Network namespace is unshared (`--unshare-net`) by default; `RELAY_ALLOW_TERMINAL_NETWORK=true` explicitly permits outbound/loopback terminal network.
+- **Tools:** one runtime catalog builder composes a 51-tool retained Full base or 14-tool retained Primary core with explicitly enabled optional capabilities. The retained Full base includes local sandboxed execution (`terminal_exec`), configured network tools, Full-only read-only remote diagnostics (`ssh_readonly_exec`), bounded native workspace tools, remote Git transport, forge/issues/workflows, alerts, and Telegram integration. Plan 069 keeps `creative_status` discoverable and composes the remaining creative tools into Full only when `RELAY_ENABLE_CREATIVE=true`. Discovery and invocation are strictly aligned: tools advertised in `tools/list` match `tools/call` routing; invoking a capability-disabled tool returns structured revocation errors (`CAPABILITY_REVOKED`), and unknown tools return 404 errors. Local Git wrappers and LSP wrappers are not public catalog entries; use terminal for builds, tests, package managers, interpreters, scripts, and uncovered CLI work. Standard developer CLI tools are fully permitted inside the sandbox, while privilege escalation brokers (`sudo`, `su`, `doas`, `pkexec`, `runas`) and generic SSH clients are blocked and masked. Numbered catalog contracts under `.agents/contracts/` are immutable historical audit artifacts, not alternate active runtime versions.
+- **Workspace bootstrap:** the retained `workspace_bootstrap` tool is available in Primary and Full and is intended for explicit `/init` / governance-initialization requests only. `action=inspect` is read-only and resolves the verified Git root, reports governance state, detects Node/Rust/Python/Go markers, package-manager state, and stack-native validation commands. `action=reconcile` re-detects the current stack, creates missing portable `ai-self/` + `.agents/` governance, and refreshes only files carrying the Masih Awam managed marker; unowned project guidance/configuration and durable canonical memory are preserved. This lets a later `/init` add newly introduced backend/frontend checks or remove stale generated checks when the stack changes. Reconcile installs no dependencies and must never run implicitly during ordinary or read-only repository work.
+- **Bootstrap and resources:** `server/discover.instructions` (and the legacy-compatible `initialize.instructions`) advertise one bounded workspace/reporting bootstrap on every relay connection. The approved `workspace://<repo>/agent-guidance` resource includes `ai-self/BOOTSTRAP.md` when present, then repository `AGENTS.md` and `.agents/knowledge/resources.md`. The first-party Nuxt MCP path explicitly promotes discovered instructions into top-level chat and delegated-subagent system context only when provenance is `first-party-relay`; external/third-party MCP server instructions are never promoted by this mechanism. Arbitrary external MCP hosts may ignore server instructions/resources, so behavioral policy for ChatGPT is carried by the installed Masih Awam Workspace Workflow Skill rather than encoded into factual MCP tool descriptions. Other bounded read-only resources expose repository manifest, Git status, and HEAD metadata; there are no arbitrary resource templates/subscriptions/file-browsing resources.
+- **Docker:** arbitrary terminal processes do not receive the Docker socket by default. Direct `docker` calls may use the configured socket only after their arguments pass the bounded read-only diagnostic policy; lifecycle mutations and unknown operations fail closed. `--allow-docker` / `RELAY_ALLOW_DOCKER=true` is a separate full-authority escape hatch for trusted single-owner development and should remain disabled unless the operator deliberately accepts host-level Docker authority.
 
 ### Workspace activity ledger (Plan 050)
 
@@ -43,12 +44,14 @@ The security boundary is server-side authorization plus the Bubblewrap sandbox. 
 
 ### Long-running / slow-operation contract
 
-- `terminal_exec`, `web_search`, and read-like `http_fetch` methods (`GET`, `HEAD`, `OPTIONS`) can use optional MCP Tasks. `execution_mode=sync` waits, `async` requires Tasks, and `auto` uses async only when Tasks are advertised. Mutating HTTP methods remain synchronous until a later remote-mutation layer provides request-level idempotency/deduplication. Tasks-capable clients use the standard `io.modelcontextprotocol/tasks` lifecycle; fast bounded native reads remain synchronous.
-- The first-party client honors task `pollIntervalMs`, uses bounded backoff, and applies its own bounded HTTP round-trip deadline independently of the task lifetime.
-- First-party/non-Tasks clients that need live terminal output use `terminal_job_start/get/cancel`; those fallback tools reuse the same job manager rather than creating a second process runner.
-- `timeout_ms: 0` means no terminal command deadline unless `RELAY_MAX_TERMINAL_TIMEOUT_MS` sets an operator cap. There is no unconditional five-minute terminal ceiling.
-- Running pipes are drained continuously. Output retention is bounded and reports omitted earlier bytes rather than killing noisy commands solely for exceeding the retained log window.
-- Manual cancel, timeout, and relay shutdown terminate/reap the sandbox process tree through the same authoritative job manager. A transport timeout/disconnect is not implicit task cancellation.
+- `terminal_exec` is synchronous-only. It does not advertise MCP Tasks, does not accept `execution_mode`, and has no public `terminal_job_start/get/cancel` fallback.
+- Terminal `timeout_ms` is bounded to `1..=60000` milliseconds with a 30 second default. `RELAY_MAX_TERMINAL_TIMEOUT_MS` may lower the effective ceiling but cannot raise terminal execution above 60 seconds.
+- Agents must not start terminal work that is reasonably expected to exceed 60 seconds. For builds, tests, package-manager work, or other long operations, return the exact shell-compatible foreground operator command instead.
+- The same rule applies to Creative production. Public MCP owns bounded project/Element/Asset/job/graph state, discovery, admission, cancellation, and bounded Blender inspection. Heavy Creative/Blender execution that can legitimately exceed 60 seconds is not a public MCP action; use the foreground `ai-tools creative --tool ... --input ...` operator path instead. In particular, public Creative job `wait`, graph execute/rerun, arbitrary Blender Python, render/bulk preview, import/export, and checkpoint execution are operator-only.
+- The 60-second terminal ceiling applies to agent-executed relay calls only. Commands handed to the human operator must not be wrapped in `timeout`, backgrounded/detached, or have normal progress output redirected/suppressed merely to bound runtime; operator-run commands may run longer and should remain directly observable.
+- If a terminal command reaches its deadline, the relay terminates and reaps the sandbox process tree. Agents must not retry it as background work.
+- The internal job manager remains the single lifecycle owner for synchronous process spawn, pipe draining, bounded output retention, timeout, cancellation-on-request-drop, and process cleanup.
+- `ssh_readonly_exec`, `http_fetch`, and `web_search` follow the same synchronous-only public execution model; no retained coding tool accepts caller-selected `execution_mode`, and exposed `timeout_ms` values are capped at 60 seconds.
 
 ## Build
 
@@ -79,7 +82,7 @@ cargo run --manifest-path packages/rust-tools/Cargo.toml --bin ai-tools -- relay
 
 Important:
 
-- `RELAY_WORKSPACE_ROOT` / `--workspace-root` sets the primary root; it defaults to `$HOME/Documents/Projects`, and `--dir` remains a compatibility alias.
+- `RELAY_WORKSPACE_ROOT` / `--workspace-root` sets the primary root; it defaults to `$HOME/Documents/Projects`, and `--dir` remains a compatibility alias. Keep that Projects tree as the user-project root: the `ai-code` checkout is source-only and may be selected as `cwd` for repository development, but must never be used as a Creative/Blender project root or final acceptance-output root. Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`.
 - `--execution-root` is an explicit hard-ceiling override. When omitted, it uses the same root. Child folders under Projects are selectable directly with `cwd`; siblings outside a narrower primary root require `workspace_add` and must remain inside the ceiling.
 - The execution root must resolve to an allowed user-owned path; unsafe/shallow system roots are rejected.
 - Bubblewrap must be installed before startup.
@@ -120,40 +123,25 @@ Trusted proxy behavior is explicit. If `--trusted-proxy` is enabled, configure t
 
 ## Verification
 
-This repository intentionally has **no CI workflow and no unit-test suite**. The mandatory local commit gate is the baseline:
+This repository intentionally has **no CI workflow**; verification is repository-local and includes real Rust/web test suites. Use the tracked lifecycle rather than historical plan-numbered scripts:
 
 ```bash
-pnpm verify:commit
+# normal checkpoint commit gate
+pnpm guardrail:fast
+
+# closure gate
+pnpm guardrail:full
 ```
 
-For security-sensitive relay/MCP changes, also run applicable local checks, typically including:
+The guardrails run repository/agent/architecture/test-layout checks and the applicable stack gates. Rust full verification includes formatting, warnings-denied Clippy/check, and Cargo tests under `packages/rust-tools/tests/`. For a focused relay/security change, run the smallest directly relevant Cargo integration test while iterating, then the applicable full guardrail before closure. Dependency/security-sensitive changes additionally require the relevant audit (`cargo audit` and/or `pnpm audit`) when dependency changes justify it.
 
-```bash
-cargo audit
-bash scripts/phase4-black-box.sh
-Run the applicable remote-client contract acceptance script under `scripts/`.
-bash scripts/phase-039c-contract.sh
-bash scripts/phase8-zero-bypass.sh
-```
-
-
-For the Plan 039C protocol/session foundation, also run:
-
-```bash
-bash scripts/verify-lsp-foundation.sh
-```
-
-This deterministic fixture exercises framing, correlation, lifecycle, capability capture, process/sandbox isolation, bounded errors/output, and sibling-workspace isolation without depending on a real language server.
-
-The tracked pre-commit gate already covers Rust formatting, warnings-denied Clippy, and warnings-denied `cargo check` through root lint/typecheck. The deterministic scripts above are targeted security/protocol checks, not a unit-test suite.
-
-Live external-client/OAuth behavior must be verified separately when a future task depends on it; repository/static checks are not proof of a live external integration.
+`scripts/` is reserved for current repository guardrails and hook installation; do not resurrect removed `phase-*`, `verify-*`, or other plan-numbered validation scripts from historical plans/contracts. Live external-client/OAuth behavior must still be verified separately when a task depends on it; repository/static checks are not proof of a live external integration.
 
 ## Durable design context
 
 Before changing the relay security model, read:
 
-- the canonical [relay/MCP memory](../../.agents/memories/README.md#relay-agent-and-mcp-security-invariants) for current durable invariants;
+- the canonical [relay/MCP memory](../../.agents/memories/README.md#rustnative-tool-invariants) for current durable invariants;
 - [Plan 030 historical summary](../../.agents/plans/030-previous-plans-summary.md) for compacted Plan 026/027/028/029/029b history;
 - current Rust source/config and deterministic contract/security scripts.
 
@@ -163,6 +151,6 @@ All plans through 029b were explicitly closed for a planning refresh. Current 03
 
 The relay supports `RELAY_TOOL_PROFILE=full|primary` (or `--tool-profile`). `full` is the default and canonical superset; `primary` is the smaller public routing/UX fast path and does not change the underlying authorization or filesystem boundaries. The repository remote launcher pins Primary.
 
-Primary has a 15-tool retained terminal/workspace core. Full has a 52-tool retained base. The current runtime catalog is the selected base plus explicitly enabled optional capabilities; numbered snapshots are immutable history only. Dedicated SSH diagnostics are Full-only and relay-owned: no client parses SSH config or receives raw SSH options/key paths. Agents receive only the selected active runtime schemas and should prefer a supplied dedicated tool before terminal fallback.
+Primary has a 14-tool retained terminal/workspace core. Full has a 51-tool retained base. The current runtime catalog is the selected base plus explicitly enabled optional capabilities; numbered snapshots are immutable history only. Dedicated SSH diagnostics are Full-only and relay-owned: clients may select a final alias plus a bounded ordered `via` alias chain, but no client parses SSH config or receives raw SSH options/key paths. The relay resolves contained Include files, alias-only ProxyJump, per-hop identity/known-host material, and transport; diagnostic execution occurs only on the final alias. Agents receive only the selected active runtime schemas and should prefer a supplied dedicated tool before terminal fallback.
 
 A simultaneous public Full + Primary deployment is a separate operator decision because separate endpoints may require reviewed OAuth/resource configuration. Where a client can hide actions client-side, that can be used for A/B testing without a second endpoint.

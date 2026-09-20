@@ -7,14 +7,67 @@ pub fn effect_classes_for_call(
     open_world_hint: bool,
     arguments: &serde_json::Value,
 ) -> Vec<&'static str> {
+    if tool_id == "workspace_bootstrap" {
+        return match arguments.get("action").and_then(serde_json::Value::as_str) {
+            Some("reconcile") => vec!["workspace_read", "workspace_write"],
+            _ => vec!["workspace_read"],
+        };
+    }
+    if tool_id.starts_with("blender_") {
+        let action = arguments.get("action").and_then(serde_json::Value::as_str);
+        return match (tool_id, action) {
+            ("blender_session", Some("status"))
+            | ("blender_inspect", _)
+            | ("blender_python_api_docs", _) => vec!["workspace_read", "privileged_bridge"],
+            ("blender_session", Some("start")) => {
+                vec!["process_exec", "workspace_write", "privileged_bridge"]
+            }
+            ("blender_session", Some("stop")) => vec!["process_exec", "privileged_bridge"],
+            ("blender_checkpoint_restore", _) => {
+                vec![
+                    "workspace_read",
+                    "workspace_write",
+                    "workspace_delete",
+                    "privileged_bridge",
+                ]
+            }
+            ("blender_execute_python", _) => vec![
+                "process_exec",
+                "workspace_read",
+                "workspace_write",
+                "external_mutation",
+                "privileged_bridge",
+            ],
+            ("blender_screenshot", _) | ("blender_animation_preview", _) => {
+                vec!["workspace_read", "workspace_write", "privileged_bridge"]
+            }
+            _ => vec!["workspace_read", "workspace_write", "privileged_bridge"],
+        };
+    }
     if tool_id.starts_with("creative_") {
         let action = arguments.get("action").and_then(serde_json::Value::as_str);
         return match (tool_id, action) {
+            ("creative_job", Some("submit"))
+                if matches!(
+                    arguments
+                        .get("workflow_id")
+                        .and_then(serde_json::Value::as_str),
+                    Some(
+                        "image_to_3d_bootstrap"
+                            | "character_mesh_production"
+                            | "character_rig_production"
+                            | "character_action"
+                            | "character_secondary_motion"
+                    )
+                ) =>
+            {
+                vec!["workspace_write", "external_mutation", "privileged_bridge"]
+            }
             ("creative_project", Some("create"))
-            | ("creative_element", Some("create_revision" | "promote"))
-            | ("creative_asset", Some("register" | "promote"))
-            | ("creative_graph", Some("execute"))
-            | ("creative_job", Some("cancel")) => vec!["workspace_write"],
+            | ("creative_element", Some("create_revision" | "promote" | "reject"))
+            | ("creative_asset", Some("register" | "promote" | "reject"))
+            | ("creative_graph", Some("execute" | "partial_rerun" | "template_save"))
+            | ("creative_job", Some("submit" | "wait" | "cancel")) => vec!["workspace_write"],
             _ => vec!["workspace_read"],
         };
     }
@@ -27,7 +80,7 @@ pub fn effect_classes(
     open_world_hint: bool,
 ) -> Vec<&'static str> {
     match tool_id {
-        "terminal_exec" | "terminal_job_start" => vec![
+        "terminal_exec" => vec![
             "process_exec",
             "workspace_write",
             "network_read",

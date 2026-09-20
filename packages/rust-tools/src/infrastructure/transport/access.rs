@@ -30,8 +30,11 @@ pub(super) async fn access_policy(
     mut req: Request,
     next: Next,
 ) -> AxumResponse {
-    // Only apply policy to /mcp
-    if req.uri().path() != "/mcp" {
+    // Apply the relay trust boundary to MCP plus reviewed first-party Creative
+    // upload/deployment surfaces. Health and OAuth metadata remain public.
+    let path = req.uri().path();
+    let is_creative_upload = path.starts_with("/creative-upload/");
+    if path != "/mcp" && !is_creative_upload && !path.starts_with("/creative-deploy/") {
         return next.run(req).await;
     }
 
@@ -95,6 +98,24 @@ pub(super) async fn access_policy(
                 .into_response();
         }
 
+        // Upload tickets are issued only through an authenticated Creative
+        // tool call and carry a short-lived, single-use capability token bound
+        // to the ticket's owner and project. External MCP clients cannot
+        // forward their relay OAuth bearer through a separate HTTP PUT, so
+        // permit a bearerless upload request to reach the handler, which
+        // verifies that capability before writing any bytes. A supplied
+        // Authorization header still follows the normal OAuth validation path.
+        if is_creative_upload
+            && req
+                .headers()
+                .get(axum::http::header::AUTHORIZATION)
+                .is_none()
+        {
+            auth_ctx.decision = AuthDecision::Missing;
+            req.extensions_mut().insert(auth_ctx);
+            return next.run(req).await;
+        }
+
         let oauth_issuer = match &state.config.oauth_issuer {
             Some(i) => i.clone(),
             None => {
@@ -143,12 +164,7 @@ pub(super) async fn access_policy(
             .headers()
             .get(HDR_MCP_METHOD)
             .and_then(|value| value.to_str().ok())
-            .map(|method| {
-                matches!(
-                    method,
-                    "tools/call" | "tasks/get" | "tasks/update" | "tasks/cancel"
-                )
-            })
+            .map(|method| method == "tools/call")
             .unwrap_or(false);
 
         if !auth_header.starts_with("Bearer ") {

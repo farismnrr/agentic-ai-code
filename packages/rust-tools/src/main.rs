@@ -15,6 +15,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Run reviewed long-running Creative/Blender work in the foreground
+    Creative(commands::creative::Args),
     /// Fetch a URL and return its response
     Curl(commands::curl::Args),
     /// Run the relay agent
@@ -37,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let command_name = match &cli.command {
+        Commands::Creative(_) => "creative",
         Commands::Curl(_) => "curl",
         Commands::Relay(_) => "relay",
         Commands::Searxng(_) => "searxng",
@@ -47,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = command_span.set_parent(extract_ai_tools_traceparent());
     let result = async move {
         match cli.command {
+            Commands::Creative(args) => commands::creative::run(args).await,
             Commands::Curl(args) => {
                 commands::curl::run(args).await;
                 Ok(())

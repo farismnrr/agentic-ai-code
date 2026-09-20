@@ -201,6 +201,7 @@ pub(super) fn redis(
     }
     let mut result = vec![
         "redis-cli".into(),
+        "--askpass".into(),
         "--user".into(),
         user.into(),
         "--no-auth-warning".into(),

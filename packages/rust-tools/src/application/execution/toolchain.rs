@@ -28,37 +28,54 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
     ];
     let mut entries = Vec::new();
     for path in config.toolchain_paths.iter().map(PathBuf::from) {
-        push_safe_directory(&mut entries, path, false);
+        if path.is_dir() && !entries.iter().any(|existing| existing == &path) {
+            entries.push(path);
+        }
     }
+    // Explicit RELAY_TOOLCHAIN_PATH is authoritative for user-managed runtimes.
+    // Preserve legacy safe auto-discovery only when the operator has not
+    // supplied any reviewed toolchain directories.
+    if config.toolchain_paths.is_empty() {
+        if let Ok(home) = super::sandbox::runtime_home() {
+            if let Some(cargo_home) = std::env::var_os("CARGO_HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute() && path.starts_with(&home))
+            {
+                push_safe_directory(&mut entries, cargo_home.join("bin"), false);
+            }
+            for sub in [
+                ".cargo/bin",
+                ".local/bin",
+                ".local/share/fnm",
+                ".volta/bin",
+                ".asdf/shims",
+                ".bun/bin",
+                ".npm-global/bin",
+                ".local/share/pnpm",
+                ".nvm/current/bin",
+                ".conda/bin",
+                "miniconda3/bin",
+                "anaconda3/bin",
+                ".local/share/mamba/bin",
+            ] {
+                push_safe_directory(&mut entries, home.join(sub), false);
+            }
+            for env_root in [
+                home.join(".conda/envs"),
+                home.join("miniconda3/envs"),
+                home.join("anaconda3/envs"),
+                home.join(".local/share/mamba/envs"),
+            ] {
+                discover_conda_bins(&mut entries, &env_root);
+            }
+        }
+    }
+    // Reviewed owner-managed runtimes intentionally precede conflicting
+    // packaged system shims. This is required for rustup-style multi-call
+    // proxies such as ~/.cargo/bin/cargo to select the owner's installed
+    // toolchain instead of an unrelated /usr/bin rustup proxy.
     for path in DEFAULT_PATHS.iter().map(PathBuf::from) {
         push_safe_directory(&mut entries, path, true);
-    }
-    if let Ok(home) = super::sandbox::runtime_home() {
-        for sub in [
-            ".cargo/bin",
-            ".local/bin",
-            ".local/share/fnm",
-            ".volta/bin",
-            ".asdf/shims",
-            ".bun/bin",
-            ".npm-global/bin",
-            ".local/share/pnpm",
-            ".nvm/current/bin",
-            ".conda/bin",
-            "miniconda3/bin",
-            "anaconda3/bin",
-            ".local/share/mamba/bin",
-        ] {
-            push_safe_directory(&mut entries, home.join(sub), false);
-        }
-        for env_root in [
-            home.join(".conda/envs"),
-            home.join("miniconda3/envs"),
-            home.join("anaconda3/envs"),
-            home.join(".local/share/mamba/envs"),
-        ] {
-            discover_conda_bins(&mut entries, &env_root);
-        }
     }
     #[cfg(target_os = "macos")]
     for path in [
@@ -137,7 +154,15 @@ fn is_safe_directory(metadata: &std::fs::Metadata, allow_system: bool) -> bool {
 }
 
 pub fn resolve_safe_executable(config: &ServerConfig, binary: &str) -> Result<PathBuf, McpError> {
-    crate::core::terminal_policy::validate_executable(binary, config.allow_docker)?;
+    resolve_safe_executable_for(config, binary, config.allow_docker)
+}
+
+pub(crate) fn resolve_safe_executable_for(
+    config: &ServerConfig,
+    binary: &str,
+    allow_docker_for_call: bool,
+) -> Result<PathBuf, McpError> {
+    crate::core::terminal_policy::validate_executable(binary, allow_docker_for_call)?;
     let safe_entries = safe_path_entries(config);
     let mut canonical_safe_entries = safe_entries
         .iter()

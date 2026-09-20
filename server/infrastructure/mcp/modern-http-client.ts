@@ -1,4 +1,6 @@
 import { Buffer } from 'node:buffer'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 import { asMcpTaskEnvelope, fetchWithMcpDeadline, McpRoundTripTimeoutError, mcpRoutingName, taskPollDelayMs } from './task-reliability.ts'
 import type { McpClientCallResult, McpClientLike, McpClientTool } from './client'
 import { redactSecrets } from '../observability/sanitize.ts'
@@ -38,6 +40,9 @@ function encodeMcpHeaderValue(value: string) {
 export class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
   private activityBootstrapSupported = false
+  private discoveredInstructions?: string
+  private toolOutputValidators = new Map<string, JsonSchemaValidator<unknown>>()
+  private readonly outputValidatorProvider = new AjvJsonSchemaValidator()
   private readonly url: URL
   private readonly accessToken: string
   private readonly fetchImpl: typeof fetch
@@ -65,10 +70,20 @@ export class ModernHttpMcpClient implements McpClientLike {
       || !result.supportedVersions.includes(MODERN_MCP_VERSION)) {
       throw new Error('Remote MCP server does not advertise the required protocol version')
     }
+    this.discoveredInstructions = this.trustedProvenance === 'first-party-relay'
+      && typeof result.instructions === 'string'
+      && result.instructions.length > 0
+      && result.instructions.length <= 16_384
+      ? result.instructions
+      : undefined
     const capabilities = isJsonRecord(result.capabilities) ? result.capabilities : undefined
     const extensions = capabilities && isJsonRecord(capabilities.extensions) ? capabilities.extensions : undefined
     const bootstrap = extensions?.['io.masihawam/activity-bootstrap']
     this.activityBootstrapSupported = isJsonRecord(bootstrap) && bootstrap.version === '1'
+  }
+
+  serverInstructions() {
+    return this.discoveredInstructions
   }
 
   supportsActivityBootstrap() {
@@ -101,17 +116,26 @@ export class ModernHttpMcpClient implements McpClientLike {
       throw new Error('Remote MCP server returned an invalid tools/list result')
     }
 
+    const outputValidators = new Map<string, JsonSchemaValidator<unknown>>()
     const tools = result.tools.map((tool) => {
       if (!isJsonRecord(tool)
         || typeof tool.name !== 'string'
         || !isJsonRecord(tool.inputSchema)) {
         throw new Error('Remote MCP server returned an invalid tool definition')
       }
+      const outputSchema = isJsonRecord(tool.outputSchema) ? tool.outputSchema : undefined
+      if (outputSchema) {
+        outputValidators.set(
+          tool.name,
+          this.outputValidatorProvider.getValidator(outputSchema as JsonSchemaType)
+        )
+      }
       return {
         ...tool,
         name: tool.name,
         description: typeof tool.description === 'string' ? tool.description : undefined,
         inputSchema: tool.inputSchema,
+        outputSchema,
         annotations: isJsonRecord(tool.annotations)
           ? {
               readOnlyHint: typeof tool.annotations.readOnlyHint === 'boolean' ? tool.annotations.readOnlyHint : undefined,
@@ -123,6 +147,7 @@ export class ModernHttpMcpClient implements McpClientLike {
       } satisfies McpClientTool
     })
 
+    this.toolOutputValidators = outputValidators
     return { ...result, tools }
   }
 
@@ -139,8 +164,14 @@ export class ModernHttpMcpClient implements McpClientLike {
     if (uri.length === 0 || uri.length > 4096) throw new Error('Resource URI is invalid')
     const result = await this.request('resources/read', { uri })
     if (!isJsonRecord(result) || !Array.isArray(result.contents)) throw new Error('Remote MCP server returned an invalid resources/read result')
-    const contents = result.contents.filter(isJsonRecord).flatMap(content => typeof content.uri === 'string' && (typeof content.text === 'string' || content.text === undefined)
-      ? [{ uri: content.uri, text: content.text, mimeType: typeof content.mimeType === 'string' ? content.mimeType : undefined }]
+    const contents = result.contents.filter(isJsonRecord).flatMap(content => typeof content.uri === 'string'
+      && (typeof content.text === 'string' || typeof content.blob === 'string')
+      ? [{
+          uri: content.uri,
+          text: typeof content.text === 'string' ? content.text : undefined,
+          blob: typeof content.blob === 'string' ? content.blob : undefined,
+          mimeType: typeof content.mimeType === 'string' ? content.mimeType : undefined
+        }]
       : [])
     return { ...result, contents }
   }
@@ -150,6 +181,7 @@ export class ModernHttpMcpClient implements McpClientLike {
     // Do not bind caller cancellation to the initial HTTP round trip. A task
     // id must be received before cancellation can target durable relay work
     // rather than merely abandoning a request whose outcome is unknown.
+    const outputValidator = this.toolOutputValidators.get(params.name)
     const result = await this.request('tools/call', {
       name: params.name,
       arguments: params.arguments ?? {}
@@ -157,20 +189,24 @@ export class ModernHttpMcpClient implements McpClientLike {
     if (!isJsonRecord(result) || !Array.isArray(result.content)) {
       const task = asMcpTaskEnvelope(result)
       if (task) {
-        // An explicit async call is an acceptance operation. Return the
-        // durable task identity immediately so the model can poll the latest
-        // state instead of keeping an AI step open until its timeout.
-        if (params.arguments?.execution_mode === 'async') {
-          return taskProgressResult(task, 'Task accepted asynchronously. Use terminal_job_get with this taskId to read the latest status and output; do not start the command again.')
-        }
         return this.awaitTask(task, signal)
       }
       throw new Error('Remote MCP server returned an invalid tools/call result')
     }
+    if (outputValidator && result.isError !== true) {
+      if (!('structuredContent' in result)) {
+        throw new Error('Remote MCP tool declared an output schema but returned no structured content')
+      }
+      const validation = outputValidator(result.structuredContent)
+      if (!validation.valid) {
+        throw new Error('Remote MCP tool returned structured content that does not match its output schema')
+      }
+    }
     return {
       ...result,
       content: result.content,
-      ...(typeof result.isError === 'boolean' && { isError: result.isError })
+      ...(typeof result.isError === 'boolean' && { isError: result.isError }),
+      ...('structuredContent' in result && { structuredContent: result.structuredContent })
     }
   }
 
@@ -185,20 +221,20 @@ export class ModernHttpMcpClient implements McpClientLike {
           current = await this.request('tasks/get', { taskId })
         } catch (error) {
           if (error instanceof McpRoundTripTimeoutError) {
-            return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+            return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use standard MCP tasks/get with this taskId to resume from the latest known output.')
           }
           throw error
         }
         if (!isJsonRecord(current)) throw new Error('Remote MCP task returned an invalid result')
         if (current.status !== 'working') return taskResult(current)
-        return taskProgressResult(current, 'The request ended while the task was working. The relay task continues; use terminal_job_get with this taskId to resume from the latest output. Do not start the command again.')
+        return taskProgressResult(current, 'The request ended while the task was working. The relay task continues; use standard MCP tasks/get with this taskId to resume from the latest output. Do not start the command again.')
       }
       let task: unknown
       try {
         task = await this.request('tasks/get', { taskId })
       } catch (error) {
         if (error instanceof McpRoundTripTimeoutError) {
-          return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use terminal_job_get with this taskId to resume from the latest known output.')
+          return taskProgressResult(latestTask, 'The status poll timed out. The relay task is still durable; use standard MCP tasks/get with this taskId to resume from the latest known output.')
         }
         throw error
       }
@@ -294,17 +330,18 @@ export class ModernHttpMcpClient implements McpClientLike {
 
 function taskResult(task: Record<string, unknown>): McpClientCallResult {
   const status = typeof task.status === 'string' ? task.status : ''
-  if (status === 'failed') return taskProgressResult(task, 'Task execution failed. Use terminal_job_get with this taskId to inspect the retained output.', true)
-  if (status === 'cancelled') return taskProgressResult(task, 'Task execution was cancelled. Use terminal_job_get with this taskId to inspect the retained output.', true)
+  if (status === 'failed') return taskProgressResult(task, 'Task execution failed. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
+  if (status === 'cancelled') return taskProgressResult(task, 'Task execution was cancelled. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
   if (task.executionStatus === 'timed_out') return taskProgressResult(task, 'Task execution timed out. The retained output below is the last known log; do not start the command again unless a new execution is intentional.', true)
 
   const result = isJsonRecord(task.result) ? task.result : undefined
   if (!result || !Array.isArray(result.content)) {
-    return taskProgressResult(task, 'Task returned no result. Use terminal_job_get with this taskId to inspect the retained output.', true)
+    return taskProgressResult(task, 'Task returned no result. Use standard MCP tasks/get with this taskId to inspect the retained output.', true)
   }
   return {
     content: result.content,
-    ...(typeof result.isError === 'boolean' && { isError: result.isError })
+    ...(typeof result.isError === 'boolean' && { isError: result.isError }),
+    ...('structuredContent' in result && { structuredContent: result.structuredContent })
   }
 }
 

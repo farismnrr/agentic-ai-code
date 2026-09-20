@@ -3,7 +3,8 @@ export function buildToolSelectionPolicy(toolNames: Iterable<string>): string {
   const names = [...new Set(toolNames)].filter(name => /^[a-zA-Z0-9_.-]{1,128}$/.test(name)).sort()
   if (!names.length) return ''
   const groups: [string, RegExp][] = [
-    ['structured filesystem/search', /(?:^|[_.])(?:directory_list|file_(?:search|read|write|edit)|text_search|apply_patch)$/],
+    ['structured filesystem', /(?:^|[_.])(?:directory_list|file_(?:read(?:_multiple)?|write|edit)|apply_patch)$/],
+    ['structured search', /(?:^|[_.])(?:file_search|text_search)$/],
     ['structured Git', /(?:^|[_.])git_[a-z_]+$/],
     ['code intelligence', /(?:^|[_.])code_(?:symbols|definition|references|implementations|hover|diagnostics|rename_preview)$/],
     ['HTTP/web', /(?:^|[_.])(?:http_fetch|web_search)$/],
@@ -11,7 +12,7 @@ export function buildToolSelectionPolicy(toolNames: Iterable<string>): string {
     ['remote diagnostics', /(?:^|[_.])ssh_readonly_exec$/],
     ['messaging', /(?:^|[_.])telegram_send_message$/]
   ]
-  const lines = ['Tool selection: inspect the supplied tool schemas. Prefer a dedicated MCP tool when it fully covers the requested operation. This advice grants no tools, effects, or approvals; all permission and read-only constraints still apply.']
+  const lines = ['Tool selection: inspect the supplied tool schemas before choosing an execution path. Use an active dedicated MCP tool whenever it fully covers the requested operation; do not replace a covered structured read, write, edit, search, Git, code-intelligence, network, integration, diagnostics, or messaging operation with a terminal/shell equivalent. This advice grants no tools, effects, or approvals; all permission and read-only constraints still apply.']
   for (const [label, pattern] of groups) {
     const active = names.filter(name => pattern.test(name))
     if (!active.length) continue
@@ -21,7 +22,7 @@ export function buildToolSelectionPolicy(toolNames: Iterable<string>): string {
   }
   const terminals = names.filter(name => /(?:^|[_.])terminal_(?:exec|job_start|get|cancel)$/.test(name))
   if (terminals.length) {
-    lines.push(`CLI fallback: ${terminals.slice(0, 2).join(', ')}. Use for builds, tests, package managers, interpreters, project scripts, sandbox-local process/service commands, composite shell workflows, or operations no active dedicated tool fully covers. Covered Git/file/network operations should use their dedicated tools first. Do not request an extra tool-discovery call; the supplied schemas are the active inventory.`)
+    lines.push(`CLI fallback only after dedicated-tool routing: ${terminals.slice(0, 2).join(', ')}. Use for builds, tests, package managers, interpreters, project scripts, sandbox-local process/service commands, composite shell workflows, local Git operations without an active structured equivalent, or operations no active dedicated tool fully covers. Do not use terminal shell equivalents such as cat/sed/grep/find for file reads, edits, or searches when the supplied file/search tools cover the operation. Do not request an extra tool-discovery call; the supplied schemas are the active inventory.`)
   }
   return lines.join('\n')
 }

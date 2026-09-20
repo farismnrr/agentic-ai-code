@@ -1,10 +1,11 @@
+mod blender;
 mod creative;
 mod file_edit;
 mod forge;
 mod profile;
 mod ssh;
 mod telegram_message;
-use crate::core::error::McpError;
+mod wire;
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -60,12 +61,16 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "terminal_exec",
             title: Some("Sandboxed Coding Terminal"),
-            description: "General CLI fallback inside the authorized execution scope. Prefer an active dedicated MCP tool whenever it fully covers the operation, including structured Git, filesystem, code, and network tools. Use terminal for builds, tests, package managers, interpreters, scripts, process/user-service commands, shell pipelines, and unsupported operations. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
+            description: "General CLI fallback inside the authorized execution scope. Inspect and use active dedicated MCP tools first whenever they fully cover the operation, including structured filesystem read/write/edit/search, Git, code, network, integration, diagnostics, and messaging tools; do not substitute terminal shell equivalents for those covered operations. Use terminal for builds, tests, package managers, interpreters, project scripts, composite shell workflows, local Git without an active structured equivalent, and otherwise uncovered CLI work. Terminal execution is synchronous only and has an absolute 60 second deadline. Commands expected to exceed that limit must be run manually by the operator. Uses direct argv; shell syntax requires an explicit shell. Credentials, privilege brokers, and generic SSH remain unavailable. Returns stdout, stderr, and exit status.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
+                    "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 65536
+                    },
                     "args": {
                         "type": "array",
                         "items": { "type": "string", "maxLength": 65536 },
@@ -75,21 +80,10 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                     "cwd": { "type": "string" },
                     "timeout_ms": {
                         "type": "integer",
-                        "minimum": 0,
+                        "minimum": 1,
+                        "maximum": 60000,
                         "default": 30000,
-                        "description": "Requested command runtime in milliseconds. Choose a realistic value for the operation; 0 means no command deadline unless the relay operator configured a maximum."
-                    },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for short commands whose result is needed immediately, async for long-running work that should survive the initial request, or auto to use task execution when the client supports Tasks and the call is safe to resume."
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 128,
-                        "description": "Stable key for one logical async command. Required for async terminal execution so retries or lost responses resolve to the same accepted task instead of running the command twice."
+                        "description": "Requested synchronous command runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["command"],
@@ -102,7 +96,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         ssh::tool(),
         Tool {
@@ -127,22 +121,10 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                     "data": { "type": "string", "maxLength": 65536 },
                     "timeout_ms": {
                         "type": "integer",
-                        "minimum": 0,
-                        "maximum": 300000,
+                        "minimum": 1,
+                        "maximum": 60000,
                         "default": 30000,
-                        "description": "Requested HTTP operation timeout in milliseconds. Choose it based on expected latency; the relay still enforces this tool's maximum."
-                    },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for short requests, async for eligible long-running safe requests, or auto to use task execution when supported. Mutating HTTP methods remain synchronous until request-level idempotency is available."
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 128,
-                        "description": "Stable logical-operation key reserved for task-backed requests that require retry deduplication."
+                        "description": "Requested synchronous HTTP runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["url"],
@@ -155,7 +137,7 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         Tool {
             name: "web_search",
@@ -166,11 +148,12 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "minLength": 1, "maxLength": 65536 },
-                    "execution_mode": {
-                        "type": "string",
-                        "enum": ["sync", "async", "auto"],
-                        "default": "auto",
-                        "description": "Use sync for an immediate result, async when the search may take longer and the client can poll MCP Tasks, or auto to let the relay select task execution when supported."
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 60000,
+                        "default": 30000,
+                        "description": "Requested synchronous search runtime in milliseconds. The absolute maximum is 60000 ms."
                     }
                 },
                 "required": ["query"],
@@ -183,21 +166,21 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
                 open_world_hint: true,
             }),
             security_schemes: coding_security_scheme(),
-            execution: Some(json!({ "taskSupport": "optional" })),
+            execution: None,
         },
         Tool {
             name: "directory_list",
             title: Some("Directory List"),
-            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories.",
+            description: "List a workspace directory with deterministic ordering, bounded recursion, entry types, and explicit truncation without following symlink directories. depth=1 lists direct children; larger values include descendants. Dependency/generated directories remain visible as directory entries but are treated as opaque and are not recursively scanned.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "maxLength": 65536, "default": "." },
-                    "cwd": { "type": "string", "maxLength": 65536 },
-                    "depth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 },
-                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "path": { "type": "string", "maxLength": 65536, "default": ".", "description": "Contained directory path to list, relative to cwd or an authorized absolute workspace path." },
+                    "cwd": { "type": "string", "maxLength": 65536, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "depth": { "type": "integer", "minimum": 1, "maximum": 4, "default": 2, "description": "Traversal depth where 1 means direct children only." },
+                    "max_entries": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Maximum entries returned on this page." },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "additionalProperties": false
             }),
@@ -213,15 +196,21 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_search",
             title: Some("File Search"),
-            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Hidden files are searchable; .git, node_modules, target, .nuxt, and .output directories are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
+            description: "Search regular workspace files using a bounded glob subset (*, ?, and ** path segments) with deterministic cwd-relative results. Optional exclude[] globs prune matching files/directories. Hidden files are searchable; dependency/generated trees such as .git, node_modules, target, .pnpm-store, .nuxt, .output, dist, coverage, vendor, and .cache are skipped; symlinks observed during traversal are not followed recursively. On Linux, descendant traversal uses stable directory descriptors with no-follow opens. Native entries whose names are not valid UTF-8 are omitted from JSON results.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "pattern": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Relative filename/path glob using *, ?, and ** path segments." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used as the search root." },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Maximum matching file paths returned on this page." },
+                    "exclude": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Relative glob to prune matching files or directories from this search." },
+                        "description": "Optional exclusion globs applied before results are returned."
+                    },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "required": ["pattern"],
                 "additionalProperties": false
@@ -238,16 +227,17 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_write",
             title: Some("File Write"),
-            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
+            description: "Atomically create or explicitly overwrite a contained UTF-8 text file. overwrite=false and create_parents=false are the defaults. expected_sha256 may guard an overwrite against a stale complete-file version. Parent traversal uses no-follow directory descriptors; symlinked parents/final targets and root escapes are rejected. New files use mode 0644; overwrites preserve existing permissions.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "content": { "type": "string", "maxLength": 1048576 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "create_parents": { "type": "boolean", "default": false },
-                    "overwrite": { "type": "boolean", "default": false }
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to create or overwrite." },
+                    "content": { "type": "string", "maxLength": 1048576, "description": "Complete UTF-8 file content to write." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "create_parents": { "type": "boolean", "default": false, "description": "Create missing contained parent directories before creating a new file." },
+                    "overwrite": { "type": "boolean", "default": false, "description": "Permit replacement of an existing regular file." },
+                    "expected_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Optional lowercase SHA-256 of the complete existing file; only valid for guarded overwrites." }
                 },
                 "required": ["path", "content"],
                 "additionalProperties": false
@@ -262,15 +252,15 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool {
             name: "file_read",
             title: Some("File Read"),
-            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
+            description: "Read a contained UTF-8 text file using 1-based line ranges with hard line/byte bounds and explicit truncation. Returns a complete-file SHA-256 when the file is within the 1 MiB mutation ceiling and next_offset_line when another page is available. Directories, invalid UTF-8, external symlink targets, oversized lines, and out-of-root paths are rejected.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "offset_line": { "type": "integer", "minimum": 1, "default": 1 },
-                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+                    "path": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to read." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve a relative path." },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1, "description": "1-based first line to return." },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200, "description": "Maximum number of lines to return, subject to the byte ceiling." }
                 },
                 "required": ["path"],
                 "additionalProperties": false
@@ -282,20 +272,57 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
             execution: None,
         },
         Tool {
-            name: "text_search",
-            title: Some("Text Search"),
-            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            name: "file_read_multiple",
+            title: Some("Read Multiple Files"),
+            description: "Read the same bounded 1-based line range from up to 16 contained UTF-8 text files in one call. Each item reports success or a bounded per-file error so one failed read does not discard successful reads. Successful items return the same metadata as file_read, including complete-file SHA-256 when the file is within the mutation ceiling and next_offset_line when truncated. The combined response is bounded.",
             input_schema: json!({
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "cwd": { "type": "string", "maxLength": 4096 },
-                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                    "regex": { "type": "boolean", "default": false },
-                    "case_sensitive": { "type": "boolean", "default": true },
-                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
-                    "continuation": { "type": "string", "maxLength": 4096 }
+                    "paths": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Contained UTF-8 file path to read." },
+                        "description": "One to sixteen file paths. Individual failures are returned per item and do not abort successful reads."
+                    },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used to resolve relative paths." },
+                    "offset_line": { "type": "integer", "minimum": 1, "default": 1, "description": "1-based first line to return from every requested file." },
+                    "limit_lines": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200, "description": "Maximum lines per file, subject to the combined response ceiling." }
+                },
+                "required": ["paths"],
+                "additionalProperties": false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: true,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
+        Tool {
+            name: "text_search",
+            title: Some("Text Search"),
+            description: "Search workspace text with ripgrep using direct argv in a read-only execution-root sandbox. Defaults to literal, case-sensitive matching; regex=true enables regex syntax. Optional exclude[] globs are applied as negative ripgrep globs. Ripgrep's normal hidden/ignore behavior applies, symlinks are not followed, previews and total results are server-bounded.",
+            input_schema: json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Literal text to search for unless regex=true." },
+                    "cwd": { "type": "string", "maxLength": 4096, "description": "Optional authorized workspace directory used as the search root." },
+                    "glob": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Optional ripgrep include glob restricting searched paths." },
+                    "regex": { "type": "boolean", "default": false, "description": "Interpret query as a ripgrep regular expression instead of a fixed string." },
+                    "case_sensitive": { "type": "boolean", "default": true, "description": "Use case-sensitive matching when true." },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50, "description": "Maximum matches returned on this page." },
+                    "exclude": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": { "type": "string", "minLength": 1, "maxLength": 4096, "description": "Ripgrep glob to exclude; leading ! is not accepted." },
+                        "description": "Optional negative path globs."
+                    },
+                    "continuation": { "type": "string", "maxLength": 4096, "description": "Opaque signed continuation token returned by a previous matching call." }
                 },
                 "required": ["query"],
                 "additionalProperties": false
@@ -333,6 +360,36 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool { name: "git_remote_branch_get", title: Some("Git Remote Branch Get"), description: "Read one validated remote branch head through the narrow authenticated Git transport and return bounded identity facts.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "git_fetch", title: Some("Git Fetch"), description: "Fetch one validated GitHub branch into its bounded remote-tracking ref using the credential-isolated native transport.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:false, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "git_push", title: Some("Git Push"), description: "Push one validated local branch to the same-name branch of the validated GitHub remote without force, hooks, arbitrary refspecs, or credential exposure; verify the resulting remote head.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512},"set_upstream":{"type":"boolean","default":false}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:true, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
+        Tool {
+            name: "workspace_bootstrap",
+            title: Some("Workspace Bootstrap"),
+            description: "Manual /init support for portable Masih Awam workspace governance in the verified Git repository. inspect is read-only. reconcile re-detects the current stack and creates missing files or refreshes only Masih Awam-managed governance/guardrail files; unowned project guidance/configuration is preserved and no dependencies are installed.",
+            input_schema: json!({
+                "type":"object",
+                "properties":{
+                    "action":{
+                        "type":"string",
+                        "enum":["inspect","reconcile"],
+                        "default":"inspect",
+                        "description":"inspect reports bootstrap state without mutation; reconcile creates missing files and refreshes only Masih Awam-managed files."
+                    },
+                    "cwd":{
+                        "type":"string",
+                        "maxLength":4096,
+                        "description":"Contained directory inside the target Git repository."
+                    }
+                },
+                "additionalProperties":false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
         Tool { name: "workspace_add", title: Some("Workspace Add"), description: "Explicitly authorize an additional existing directory as a workspace root for the current session. Rejects root/system directories and credential paths.", input_schema: json!({"type":"object","properties":{"path":{"type":"string","minLength":1,"maxLength":4096}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "workspace_list", title: Some("Workspace List"), description: "List all currently authorized workspace roots, including primary and dynamically authorized roots.", input_schema: json!({"type":"object","properties":{},"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "workspace_get", title: Some("Workspace Get"), description: "Inspect an authorized workspace root by path.", input_schema: json!({"type":"object","properties":{"path":{"type":"string","minLength":1,"maxLength":4096}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
@@ -375,48 +432,6 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool { name: "code_diagnostics", title: Some("Code Diagnostics"), description: "Bounded normalized diagnostics for one contained source file, including severity, stable diagnostic code when available, source, and document version (when the server reports one), so a stale result can be detected.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"severity":{"type":"integer","minimum":1,"maximum":4},"max_results":{"type":"integer","minimum":1,"maximum":128,"default":50},"continuation":{"type":"string","maxLength":64}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "code_rename_preview", title: Some("Code Rename Preview"), description: "Preview-only bounded rename: normalizes the language server's WorkspaceEdit into per-file text replacements without applying anything. Apply the result yourself through apply_patch/file_edit after review. Rejects edits outside the contained workspace, protected paths, unsafe symlinks, and any unsupported resource operation (file create/rename/delete).", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"path":{"type":"string","minLength":1,"maxLength":4096},"line":{"type":"integer","minimum":0},"column":{"type":"integer","minimum":0},"new_name":{"type":"string","minLength":1,"maxLength":4096}},"required":["path","line","column","new_name"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         telegram_message::tool(),
-        Tool {
-            name: "terminal_job_start",
-            title: Some("Start Terminal Job"),
-            description: "Start a bounded sandboxed general CLI fallback job for builds, tests, package managers, interpreters, scripts, or unsupported operations. Prefer an active dedicated MCP tool when it fully covers the operation. Returns a task ID for polling; the same credential, privilege, and SSH boundaries as terminal_exec apply.",
-            input_schema: json!({ "type": "object", "properties": { "command": { "type": "string", "minLength": 1, "maxLength": 65536 }, "args": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }, "cwd": { "type": "string" }, "timeout_ms": { "type": "integer", "minimum": 0 }, "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Stable key for retrying one logical legacy job start without running it twice." } }, "required": ["command"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: false,
-                destructive_hint: true,
-                idempotent_hint: false,
-                open_world_hint: true,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
-        Tool {
-            name: "terminal_job_get",
-            title: Some("Get Terminal Job"),
-            description: "Get bounded state and retained output for a terminal job.",
-            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: true,
-                destructive_hint: false,
-                idempotent_hint: true,
-                open_world_hint: false,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
-        Tool {
-            name: "terminal_job_cancel",
-            title: Some("Cancel Terminal Job"),
-            description: "Cancel a running terminal job and its process group.",
-            input_schema: json!({ "type": "object", "properties": { "taskId": { "type": "string", "minLength": 1 } }, "required": ["taskId"], "additionalProperties": false }),
-            annotations: Some(ToolAnnotations {
-                read_only_hint: false,
-                destructive_hint: true,
-                idempotent_hint: true,
-                open_world_hint: true,
-            }),
-            security_schemes: coding_security_scheme(),
-            execution: None,
-        },
     ];
     tools.extend(forge::issue_tools());
     tools.extend(forge::action_tools());
@@ -429,6 +444,16 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
 }
 
 pub use profile::{PRIMARY_TOOL_NAMES, RETAINED_TOOL_NAMES};
+pub use wire::{
+    output_schema_for_tool, tool_for_wire, validate_tool_arguments, validate_tool_output,
+};
+
+/// Frozen Blender v1 tool contracts. Runtime composition reuses this exact
+/// source once the implementation gate is enabled; numbered historical
+/// catalogs remain untouched.
+pub fn blender_tool_catalog() -> Vec<Tool> {
+    blender::tools()
+}
 
 /// Canonical client-visible runtime catalog. Optional capabilities are composed
 /// here from operator configuration; there is no second active catalog version.
@@ -450,6 +475,7 @@ pub fn runtime_tool_catalog(
     }
     if creative_enabled && profile == crate::core::config::ToolProfile::Full {
         selected.extend(creative_tools);
+        selected.extend(blender_tool_catalog());
     }
     selected
 }
@@ -467,20 +493,4 @@ pub fn find_tool(name: &str) -> Option<Tool> {
     runtime_tool_catalog(crate::core::config::ToolProfile::Full, false)
         .into_iter()
         .find(|t| t.name == name)
-}
-
-/// Validate `arguments` against the declared JSON Schema before execution.
-/// Diagnostics are deliberately not returned because schema errors can echo
-/// attacker-controlled request values or property names through `Display`.
-pub fn validate_tool_arguments(tool: &Tool, arguments: &Value) -> Result<(), McpError> {
-    let validator = jsonschema::validator_for(&tool.input_schema)
-        .map_err(|_| McpError::Internal("invalid tool schema".to_string()))?;
-
-    if validator.iter_errors(arguments).next().is_some() {
-        return Err(McpError::InvalidParams(
-            "tool arguments do not match the required schema".to_string(),
-        ));
-    }
-
-    Ok(())
 }

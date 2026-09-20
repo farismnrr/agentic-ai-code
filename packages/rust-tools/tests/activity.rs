@@ -134,11 +134,11 @@ fn telegram_activity_action_omits_message_and_working_directory() {
 }
 
 #[test]
-fn terminal_job_start_uses_the_actual_command() {
+fn terminal_exec_uses_the_actual_command() {
     let config = ServerConfig::default();
     let event = event_for_tool(
         &config,
-        "terminal_job_start",
+        "terminal_exec",
         &["process_exec"],
         &json!({"command":"cat","args":["file.txt"]}),
         None,

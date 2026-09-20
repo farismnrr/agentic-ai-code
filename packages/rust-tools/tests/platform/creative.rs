@@ -1,10 +1,39 @@
+#[path = "creative/anime.rs"]
+mod anime;
+#[path = "creative/bootstrap.rs"]
+mod bootstrap;
+#[path = "creative/closure.rs"]
+mod closure;
+#[path = "creative/compiler.rs"]
+mod compiler;
 #[path = "creative/contracts.rs"]
 mod contracts;
+#[path = "creative/game/deployment.rs"]
+mod game_deployment;
 #[path = "creative/graph.rs"]
 mod graph;
+#[path = "creative/identity.rs"]
+mod identity;
+#[path = "creative/ingest.rs"]
+mod ingest;
+#[path = "creative/job_execution.rs"]
+mod job_execution;
+#[path = "creative/jobs.rs"]
+mod jobs;
+#[path = "creative/media.rs"]
+mod media;
+#[path = "creative/parity.rs"]
+mod parity;
+#[path = "creative/style_dependencies.rs"]
+mod style_dependencies;
+#[path = "creative/workflows.rs"]
+mod workflows;
+#[path = "creative/world.rs"]
+mod world;
 
 use ai_tools::application::creative::{dispatch_tool, CreativeTrack, CREATIVE_SCHEMA_VERSION};
 use ai_tools::core::config::{ServerConfig, ToolProfile};
+use ai_tools::core::error::McpError;
 use ai_tools::interfaces::mcp::{
     retained_tool_catalog, runtime_tool_catalog, validate_tool_arguments,
 };
@@ -16,11 +45,12 @@ struct TempWorkspace(PathBuf);
 
 impl TempWorkspace {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let base = std::env::temp_dir().join(format!(
             "creative-platform-test-{}-{}",
             std::process::id(),
             Uuid::new_v4()
         ));
+        let root = base.join("Blender").join("creative-fixture");
         fs::create_dir_all(&root).expect("creative test workspace");
         Self(root)
     }
@@ -45,8 +75,18 @@ impl Drop for TempWorkspace {
     }
 }
 
+fn dispatch_sync(
+    config: &ServerConfig,
+    name: &str,
+    arguments: &Value,
+) -> Result<Option<ai_tools::interfaces::mcp::ToolCallResult>, ai_tools::core::error::McpError> {
+    tokio::runtime::Runtime::new()
+        .expect("creative test runtime")
+        .block_on(dispatch_tool(name, arguments, config, "local"))
+}
+
 fn call(config: &ServerConfig, name: &str, arguments: Value) -> Value {
-    let result = dispatch_tool(name, &arguments, config)
+    let result = dispatch_sync(config, name, &arguments)
         .expect("creative dispatch")
         .expect("creative tool result");
     assert!(
@@ -71,12 +111,28 @@ fn create_project(config: &ServerConfig, project_id: &str) {
     );
     assert_eq!(result["project"]["schema_version"], CREATIVE_SCHEMA_VERSION);
     assert_eq!(result["project"]["project_id"], project_id);
+    assert_eq!(
+        result["layout"]["state_root"],
+        format!(".masihawam/creative/projects/{project_id}")
+    );
+    assert_eq!(
+        result["layout"]["production_root"],
+        format!("creative/{project_id}")
+    );
+    assert_eq!(
+        result["layout"]["assets_root"],
+        format!("creative/{project_id}/assets")
+    );
+    assert_eq!(
+        result["layout"]["exports_root"],
+        format!("creative/{project_id}/exports")
+    );
 }
 
 #[test]
 fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
     let retained = retained_tool_catalog();
-    assert_eq!(retained.len(), 52);
+    assert_eq!(retained.len(), 51);
     assert!(!retained
         .iter()
         .any(|tool| tool.name.starts_with("creative_")));
@@ -132,7 +188,21 @@ fn creative_action_schemas_require_action_specific_inputs() {
                 "authority": "authoritative"
             }),
         ),
-        ("creative_graph", json!({"action": "execute"})),
+        ("creative_graph", json!({"action": "execute", "graph": {}})),
+        (
+            "creative_graph",
+            json!({
+                "action": "partial_rerun",
+                "project_id": "project_schema",
+                "graph_id": "graph_schema",
+                "previous_job_id": "job_schema",
+                "changed_node_ids": ["node_a"]
+            }),
+        ),
+        (
+            "creative_job",
+            json!({"action": "wait", "project_id": "project_schema", "job_id": "job_schema"}),
+        ),
         (
             "creative_job",
             json!({"action": "get", "project_id": "project_schema"}),
@@ -142,6 +212,42 @@ fn creative_action_schemas_require_action_specific_inputs() {
             validate_tool_arguments(tool(name), &arguments).is_err(),
             "{name} accepted incomplete action arguments"
         );
+    }
+}
+
+#[test]
+fn creative_project_rejects_ai_code_source_checkout_root() {
+    let workspace = TempWorkspace::new();
+    fs::create_dir_all(workspace.path(".agents")).unwrap();
+    fs::create_dir_all(workspace.path("packages/rust-tools")).unwrap();
+    fs::write(workspace.path(".agents/README.md"), b"fixture").unwrap();
+    fs::write(workspace.path("nuxt.config.ts"), b"export default {}").unwrap();
+    fs::write(
+        workspace.path("packages/rust-tools/Cargo.toml"),
+        b"[package]\nname='fixture'",
+    )
+    .unwrap();
+    let config = workspace.config();
+    let result = dispatch_sync(
+        &config,
+        "creative_project",
+        &json!({
+            "action":"create",
+            "cwd":workspace.0.to_string_lossy(),
+            "project_id":"project_source_checkout",
+            "title":"Rejected source checkout",
+            "intent":"must not materialize production state in source",
+            "tracks":["anime"]
+        }),
+    );
+    match result {
+        Err(McpError::InvalidRequest(message)) => {
+            assert_eq!(
+                message,
+                "creative project root cannot be the ai-code source checkout"
+            )
+        }
+        other => panic!("unexpected creative source-root result: {other:?}"),
     }
 }
 
@@ -281,7 +387,8 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
         Some(64)
     );
 
-    let state_registration = dispatch_tool(
+    let state_registration = dispatch_sync(
+        &config,
         "creative_asset",
         &json!({
             "action": "register",
@@ -290,7 +397,6 @@ fn contained_asset_and_element_lineage_round_trip_without_forged_provenance() {
             "media_type": "application/json",
             "role": "forbidden_state"
         }),
-        &config,
     );
     assert!(state_registration.is_err());
 }

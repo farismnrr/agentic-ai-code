@@ -111,29 +111,30 @@ Anchors should include enough surrounding context to be unique and stable.
 Do not use `replace_all` for a broad token unless replacing every occurrence is
 intentional.
 
-## 5. Slow operations and tasks
+## 5. Automatic bootstrap guidance
 
-The relay separates the HTTP round-trip deadline from execution lifetime:
+The current Masih Awam relay source advertises a bounded universal bootstrap through `server/discover.instructions` and the legacy-compatible `initialize.instructions`. That instruction covers fresh workspace verification, approved repository guidance, the shared Task Execution Report structure, truthful verification/delivery reporting, and foreground handoff for work that cannot finish inside a public tool deadline.
 
-- `timeout_ms: 0` means no terminal command deadline unless the operator set
-  `RELAY_MAX_TERMINAL_TIMEOUT_MS`;
-- task-capable clients may use MCP Tasks for `terminal_exec`, `ssh_readonly_exec`, `web_search`, and
-  read-like `http_fetch` calls;
-- eligible tools accept `execution_mode: sync | async | auto`; `auto` selects
-  async only when the client advertises Tasks, while explicit async fails
-  clearly for clients without that capability;
-- clients without Tasks can use `terminal_job_start`,
-  `terminal_job_get`, and `terminal_job_cancel`;
-- a dropped HTTP request does not implicitly cancel the relay job; explicit
-  cancellation targets the authoritative process tree.
+The server-owned `workspace://<repo>/agent-guidance` resource separately exposes the verified repository's `ai-self/BOOTSTRAP.md` when present, followed by `AGENTS.md` and `.agents/knowledge/resources.md`. The first-party Nuxt modern-MCP path explicitly promotes only `first-party-relay` discovered instructions into top-level chat and delegated-subagent system context; instructions supplied by external/third-party MCP servers are not promoted by this mechanism.
 
-## 6. Execution modes
+An arbitrary external MCP client may ignore MCP server instructions or resources. Live ChatGPT connector acceptance confirmed that `server/discover.instructions` alone is not sufficient for every host. Keep MCP tool descriptions factual rather than using them as behavioral prompt surfaces. For ChatGPT, install the Masih Awam Workspace Workflow Skill as the behavioral layer; for another external client that lacks an equivalent skill mechanism, use its supported global-instruction facility as the fallback. Do not duplicate the bootstrap into each project when the client already honors the relay-provided contract.
 
-`sync` waits for a direct result, `async` returns a standard MCP task and
-requires a client that advertises Tasks, and `auto` selects async only when
-that capability is present. An explicit async request is rejected rather than
-silently converted to synchronous execution. Accepted tasks remain owned by
-the relay after the initiating HTTP request disconnects.
+## 6. Slow operations and tasks
+
+`terminal_exec` is synchronous-only. Its timeout is `1..=60000` milliseconds
+with a 30 second default. It does not expose MCP Tasks or terminal job polling
+tools. Commands expected to exceed 60 seconds must be run manually by the
+operator instead of being handed off to background execution.
+
+The retained process-like coding tools (`terminal_exec`, `ssh_readonly_exec`,
+`http_fetch`, and `web_search`) are synchronous-only at the MCP boundary.
+Where a tool exposes `timeout_ms`, its public range is `1..=60000`.
+
+## 7. Execution contract
+
+Retained coding tools do not accept `execution_mode`. They return a bounded
+direct result or a timeout/error result; work that cannot finish within the
+bounded call must be handed back to the operator instead of detached.
 
 ## What a successful connection proves
 

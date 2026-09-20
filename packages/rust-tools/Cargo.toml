@@ -7,6 +7,11 @@ rust-version = "1.88.0"
 [features]
 # Non-default feature used only by deterministic GitHub provider fixtures.
 test-gh-provider = []
+# Non-default feature used only by deterministic Creative execution-binding fixtures.
+# It never registers a binding by itself; tests must still supply an explicit descriptor.
+test-creative-binding = []
+# Deterministic integration seams for bounded protected-path indexing regressions.
+test-protected-index = []
 
 [[bin]]
 name = "ai-tools"
@@ -32,6 +37,7 @@ base64 = "0.22"
 ring = "0.17"
 rusqlite = { version = "0.37", features = ["bundled"] }
 jsonschema = { version = "0.49.9", default-features = false }
+image = { version = "0.25.8", default-features = false, features = ["png", "jpeg"] }
 jsonwebtoken = { version = "11.0.0", features = ["aws_lc_rs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

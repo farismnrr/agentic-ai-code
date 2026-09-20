@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 // 1. terminal_exec("true") completes
 #[tokio::test]
 async fn test_terminal_exec_true_completes() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "true",
@@ -33,7 +33,7 @@ async fn test_terminal_exec_true_completes() {
 // 2. terminal_exec("printf", ["ok"]) returns captured stdout
 #[tokio::test]
 async fn test_terminal_exec_printf_captures_stdout() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "printf",
@@ -57,7 +57,7 @@ async fn test_terminal_exec_printf_captures_stdout() {
 // 3. non-zero commands return without hanging
 #[tokio::test]
 async fn test_terminal_exec_nonzero_exit_without_hanging() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let start = Instant::now();
     let id = start_terminal_job(
         &json!({
@@ -80,7 +80,7 @@ async fn test_terminal_exec_nonzero_exit_without_hanging() {
 // 4. stderr is captured without hanging
 #[tokio::test]
 async fn test_terminal_exec_captures_stderr() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let id = start_terminal_job(
         &json!({
             "command": "sh",
@@ -103,7 +103,7 @@ async fn test_terminal_exec_captures_stderr() {
 // 5. timeout produces TimedOut
 #[tokio::test]
 async fn test_terminal_exec_timeout_produces_timed_out() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let warm_id = start_terminal_job(
         &json!({
             "command": "true",
@@ -159,7 +159,7 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
 // 6. process descendants cannot keep a completed request alive indefinitely
 #[tokio::test]
 async fn test_terminal_exec_descendants_do_not_hang() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let start = Instant::now();
     // Primary shell process exits immediately, but background descendant inherits stdout pipe
     let id = start_terminal_job(
@@ -186,38 +186,14 @@ async fn test_terminal_exec_descendants_do_not_hang() {
     );
 }
 
-// 7. cancellation produces a terminal job state
-#[tokio::test]
-async fn test_terminal_exec_cancellation_produces_terminal_state() {
-    let fixture = TestFixture::new();
-    let id = start_terminal_job(
-        &json!({
-            "command": "sleep",
-            "args": ["30"],
-            "cwd": fixture.root,
-            "timeout_ms": 10000
-        }),
-        &fixture.config,
-        &fixture.manager,
-    )
-    .await
-    .expect("failed to start cancellable job");
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    let cancel_res = fixture.manager.cancel(&id).await.expect("cancel failed");
-    assert_eq!(cancel_res.state, JobState::Cancelled);
-
-    let snapshot = fixture.manager.wait(&id).await.expect("wait failed");
-    assert_eq!(snapshot.state, JobState::Cancelled);
-}
-
 // 8. semaphore capacity is restored after timeout/cancellation
 #[tokio::test]
 async fn test_terminal_exec_semaphore_capacity_restored() {
     // Only 1 running job allowed
     let fixture = TestFixture::with_config(|c| {
         c.max_running_jobs = 1;
-    });
+    })
+    .await;
 
     // 1st job: times out quickly
     let id1 = start_terminal_job(
@@ -236,11 +212,11 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
     let snap1 = fixture.manager.wait(&id1).await.expect("job1 wait failed");
     assert_eq!(snap1.state, JobState::TimedOut);
 
-    // 2nd job: cancelled quickly
+    // 2nd job: a normal synchronous call should acquire the released semaphore
     let id2 = start_terminal_job(
         &json!({
-            "command": "sleep",
-            "args": ["10"],
+            "command": "printf",
+            "args": ["second-complete"],
             "cwd": fixture.root,
             "timeout_ms": 5000
         }),
@@ -250,12 +226,11 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
     .await
     .expect("job2 start failed");
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    let _ = fixture.manager.cancel(&id2).await;
     let snap2 = fixture.manager.wait(&id2).await.expect("job2 wait failed");
-    assert_eq!(snap2.state, JobState::Cancelled);
+    assert_eq!(snap2.state, JobState::Completed);
+    assert_eq!(snap2.stdout, "second-complete");
 
-    // 3rd job: should acquire the released semaphore immediately and complete
+    // 3rd job: should also acquire capacity immediately and complete
     let id3 = start_terminal_job(
         &json!({
             "command": "printf",
@@ -277,7 +252,7 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
 // 9. repeated terminal executions do not accumulate stuck jobs
 #[tokio::test]
 async fn test_terminal_exec_repeated_executions_do_not_accumulate() {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     for i in 0..10 {
         let id = start_terminal_job(
             &json!({
@@ -308,7 +283,8 @@ async fn test_synchronous_wait_has_bounded_watchdog() {
     let fixture = TestFixture::with_config(|c| {
         c.default_terminal_timeout_ms = 100;
         c.max_terminal_timeout_ms = 200;
-    });
+    })
+    .await;
 
     let start = Instant::now();
     let id = start_terminal_job(
@@ -336,12 +312,12 @@ async fn test_synchronous_wait_has_bounded_watchdog() {
     ));
 }
 
-// 11. task-backed execution reaches the same final result semantics as synchronous execution
+// 10. owner/session-aware synchronous execution reaches the same final result semantics
 #[tokio::test]
-async fn test_task_backed_and_sync_execution_parity() {
-    let fixture = TestFixture::new();
+async fn test_owner_aware_and_direct_sync_execution_parity() {
+    let fixture = TestFixture::new().await;
 
-    // Async task-backed path
+    // Owner/session-aware synchronous compatibility path
     let task_id = start_terminal_job_for(
         &json!({
             "command": "printf",
@@ -357,11 +333,11 @@ async fn test_task_backed_and_sync_execution_parity() {
     .await
     .expect("start task failed");
 
-    let async_snap = fixture
+    let owner_snap = fixture
         .manager
         .wait(&task_id)
         .await
-        .expect("async wait failed");
+        .expect("owner-aware result missing");
 
     // Synchronous dispatch path
     let catalog = retained_tool_catalog();
@@ -384,23 +360,25 @@ async fn test_task_backed_and_sync_execution_parity() {
         &fixture.manager,
         &lsp,
         &hooks,
+        "local",
     )
     .await
     .expect("sync dispatch failed");
 
-    assert_eq!(async_snap.exit_code, Some(0));
-    assert_eq!(async_snap.stdout, "parity-check");
+    assert_eq!(owner_snap.exit_code, Some(0));
+    assert_eq!(owner_snap.stdout, "parity-check");
     assert!(!sync_res.is_error);
     assert!(sync_res.content[0].text.contains("Exit: 0"));
     assert!(sync_res.content[0].text.contains("Stdout: parity-check"));
 }
 
-// 12. stdout/stderr truncation still respects configured limits
+// 11. stdout/stderr truncation still respects configured limits
 #[tokio::test]
 async fn test_output_truncation_respects_limits() {
     let fixture = TestFixture::with_config(|c| {
         c.max_retained_output_bytes = 100;
-    });
+    })
+    .await;
 
     let id = start_terminal_job(
         &json!({

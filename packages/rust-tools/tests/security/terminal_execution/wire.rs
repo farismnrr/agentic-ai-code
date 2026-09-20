@@ -51,7 +51,6 @@ async fn sync_terminal_exec_runs_minimal_commands_over_mcp_http() {
                         "command": command,
                         "cwd": root,
                         "timeout_ms": 5_000,
-                        "execution_mode": "sync"
                     },
                     "_meta": {
                         "io.modelcontextprotocol/protocolVersion": "2026-07-28",

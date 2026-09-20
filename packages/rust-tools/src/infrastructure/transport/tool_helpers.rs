@@ -8,26 +8,6 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Instant;
 
-pub(super) fn trace_task_routing(
-    tool: &str,
-    execute_async: bool,
-    client_has_tasks: bool,
-    tool_has_tasks: bool,
-) {
-    tracing::info!(
-        event = "relay.transport.stage",
-        stage = "task_routing",
-        outcome = if execute_async {
-            "task_dispatch"
-        } else {
-            "synchronous_dispatch"
-        },
-        tool,
-        client_has_tasks,
-        tool_has_tasks,
-    );
-}
-
 pub(super) fn record_activity_outcome(
     state: &AppState,
     start: &ActivityEvent,
@@ -90,16 +70,29 @@ pub(super) fn deny_activity(
 pub(super) fn extract_activity_evidence(
     mut result: ToolCallResult,
 ) -> (ToolCallResult, Option<Vec<u8>>, Evidence, bool) {
-    let Some(content) = result.content.first_mut() else {
-        return (result, None, Evidence::NotApplicable, false);
-    };
-    let Ok(mut value) = serde_json::from_str::<Value>(&content.text) else {
-        return (result, None, Evidence::Summary, false);
-    };
-    let Some(object) = value.as_object_mut() else {
-        return (result, None, Evidence::Summary, false);
-    };
-    let Some(activity) = object.remove("_activity") else {
+    let mut activity = result
+        .structured_content
+        .as_mut()
+        .and_then(Value::as_object_mut)
+        .and_then(|object| object.remove("_activity"));
+
+    if let Some(content) = result.content.first_mut() {
+        if let Ok(mut value) = serde_json::from_str::<Value>(&content.text) {
+            if let Some(object) = value.as_object_mut() {
+                let text_activity = object.remove("_activity");
+                let had_text_activity = text_activity.is_some();
+                if activity.is_none() {
+                    activity = text_activity;
+                }
+                if had_text_activity {
+                    content.text =
+                        serde_json::to_string(&value).unwrap_or_else(|_| content.text.clone());
+                }
+            }
+        }
+    }
+
+    let Some(activity) = activity else {
         return (result, None, Evidence::Summary, false);
     };
     let preview = activity
@@ -116,7 +109,6 @@ pub(super) fn extract_activity_evidence(
         .flatten()
         .filter(|payload| payload.len() <= 512 * 1024);
     let payload_available = payload.is_some();
-    content.text = serde_json::to_string(&value).unwrap_or_else(|_| content.text.clone());
     (
         result,
         payload,
@@ -137,19 +129,24 @@ pub(crate) fn activity_result_detail(
     if tool_name == "ssh_readonly_exec" {
         return None;
     }
-    let raw = result
-        .content
-        .iter()
-        .map(|content| content.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    if raw.trim().is_empty() {
-        return None;
-    }
-    let formatted = serde_json::from_str::<Value>(&raw)
-        .ok()
-        .and_then(|value| serde_json::to_string_pretty(&value).ok())
-        .unwrap_or(raw);
+    let formatted = if let Some(structured) = result.structured_content.as_ref() {
+        serde_json::to_string_pretty(structured).ok()?
+    } else {
+        let raw = result
+            .content
+            .iter()
+            .filter(|content| content.kind == "text")
+            .map(|content| content.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if raw.trim().is_empty() {
+            return None;
+        }
+        serde_json::from_str::<Value>(&raw)
+            .ok()
+            .and_then(|value| serde_json::to_string_pretty(&value).ok())
+            .unwrap_or(raw)
+    };
     let mut detail = crate::core::redaction::redact_credentials(&formatted);
     if let Some(cwd) = arguments
         .get("cwd")
@@ -289,7 +286,36 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
             text,
         }])
     });
-    let (result, payload, evidence, preview) = extract_activity_evidence(result);
+    let (mut result, payload, evidence, preview) = extract_activity_evidence(result);
+    let output_contract_error = if result.is_error {
+        None
+    } else {
+        state.tool_for_name(tool_name).and_then(|tool| {
+            crate::interfaces::mcp::output_schema_for_tool(tool.name).and_then(|_| {
+                let validation = result
+                    .structured_content
+                    .as_ref()
+                    .ok_or_else(|| {
+                        McpError::Internal(
+                            "tool declared output schema without structured content".into(),
+                        )
+                    })
+                    .and_then(|value| crate::interfaces::mcp::validate_tool_output(&tool, value));
+                validation.err()
+            })
+        })
+    };
+    if let Some(error) = output_contract_error {
+        tracing::error!(
+            event = "relay.tool_output_contract_error",
+            tool = tool_name,
+            error = %error,
+        );
+        result = ToolCallResult::error(vec![crate::interfaces::mcp::ToolResultContent {
+            kind: "text",
+            text: "Tool output failed contract validation".into(),
+        }]);
+    }
     let activity_status = if result.is_error {
         Status::Error
     } else {
@@ -348,7 +374,7 @@ pub(super) async fn finish_tool_call(context: ToolCompletionContext<'_>) -> Json
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-pub(super) async fn handle_agent_session_start(
+pub(crate) async fn handle_agent_session_start(
     request: &mcp::Request,
     state: Arc<AppState>,
 ) -> JsonErr2 {
@@ -418,7 +444,7 @@ pub(super) fn bounded_tool_error(
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))
 }
 
-pub(super) async fn handle_agent_pre_stop(
+pub(crate) async fn handle_agent_pre_stop(
     request: &mcp::Request,
     state: Arc<AppState>,
 ) -> JsonErr2 {
@@ -447,34 +473,4 @@ pub(super) fn agent_session_from_params(params: Option<&Value>) -> Option<String
         .get("io.modelcontextprotocol/agentSession")?
         .as_str()
         .map(|value| value.chars().take(128).collect())
-}
-
-pub(super) fn client_supports_tasks(params: Option<&Value>) -> bool {
-    params
-        .and_then(|value| value.get("_meta"))
-        .and_then(|value| value.get("io.modelcontextprotocol/clientCapabilities"))
-        .and_then(|value| value.get("extensions"))
-        .and_then(|value| value.get("io.modelcontextprotocol/tasks"))
-        .is_some()
-}
-
-pub(super) fn requires_idempotency_key(tool: &str, arguments: &Value) -> bool {
-    if tool == "ssh_readonly_exec" {
-        return false;
-    }
-    if tool == "terminal_exec" {
-        return true;
-    }
-    if tool != "http_fetch" {
-        return false;
-    }
-    !matches!(
-        arguments
-            .get("method")
-            .and_then(Value::as_str)
-            .unwrap_or("GET")
-            .to_ascii_uppercase()
-            .as_str(),
-        "GET" | "HEAD" | "OPTIONS"
-    )
 }

@@ -4,6 +4,8 @@ All repository-owned agent guidance lives in **[`.agents/`](.agents/)**. Start a
 
 This is the **only repository agent entrypoint**. Do not add client/vendor-specific agent instruction files or settings; shared guidance must remain usable by any coding agent.
 
+Workspace placement is a repository invariant. The relay authorization/execution root defaults to `$HOME/Documents/Projects`; the `ai-code` checkout may be used as `cwd` only for source development and must never be used as the root for user workspaces, Creative Projects, Blender production, or acceptance artifacts. Blender creative projects belong under `$HOME/Documents/Projects/Blender/<creative-project>/...`. See `.agents/knowledge/project.md` and the canonical memory for the full rule.
+
 This repository intentionally has **no CI**. Quality enforcement is local, but validation must stay proportional to the changed subsystem:
 
 - New permanent isolated JavaScript/TypeScript/Vue unit tests are forbidden; temporary unit tests must be removed before staging. Existing `test/unit/` files are legacy/manual coverage, while boundary tests live under top-level `test/`.
@@ -22,7 +24,7 @@ The tracked pre-commit hook runs the fast guard after `pnpm install`; the pre-pu
 
 Implementation delivery always uses a short-lived branch from `main`: commit the focused change, push the branch, open a pull request into `main`, merge the approved PR, then return to `main` and verify the checkout is clean. Do not implement directly on `main` or treat a pushed branch as delivered without the PR merge.
 
-Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Future plans start at **031** and remain separate incrementing files. Historical references to removed acceptance scripts are evidence of past execution, not templates for new validation.
+Historical plans through 029b are compacted and closed in [Plan 030](.agents/plans/030-previous-plans-summary.md). Plans 031+ remain separate incrementing files and existing numbers must never be reused; with Plans through 070 present, the next unused numeric plan is **071** unless repository inspection proves a later state. Historical references to removed acceptance scripts are evidence of past execution, not templates for new validation.
 
 Before declaring work complete, follow the closeout rules in [`.agents/knowledge/self-improvement.md`](.agents/knowledge/self-improvement.md).
 

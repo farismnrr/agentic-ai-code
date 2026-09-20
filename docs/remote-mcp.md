@@ -26,7 +26,7 @@ Hard rules:
 - keep the execution root explicit;
 - keep OAuth issuer, audience, owner, signature, time, and scope validation
   enabled; and
-- never expose the host Docker socket to the relay.
+- keep unrestricted Docker disabled; only the relay-owned read-only Docker diagnostic path may receive the configured socket per validated direct `docker` invocation.
 
 ## 1. Build or install `ai-tools`
 
@@ -62,9 +62,10 @@ directories through `RELAY_TOOLCHAIN_PATH`. Do not copy the entire interactive
 shell PATH into the relay.
 
 Provider-specific coding-CLI delegation is not part of the current relay
-surface. Long-running eligible tools use standard MCP Tasks with explicit
-`execution_mode=sync|async|auto`; `auto` selects async only when the client
-advertises Tasks.
+surface. Retained coding tools execute synchronously with a maximum per-call
+runtime of 60 seconds. The relay does not accept caller-selected
+`execution_mode`; longer operator work must be run manually rather than
+detached through the coding relay.
 
 ## 3. Configure OAuth values
 
@@ -182,18 +183,34 @@ deployments that intentionally need the larger catalog.
 
 ## 5. Publish through an HTTPS edge
 
-Configure the selected reverse proxy or outbound tunnel with one narrow route:
+Configure the selected reverse proxy or outbound tunnel with the narrow MCP
+route:
 
 ```text
 https://mcp.example.com/mcp  ->  http://127.0.0.1:47821/mcp
 ```
 
-The edge must preserve the `/mcp` path, forward the original HTTPS scheme in
-the reviewed proxy header, and avoid caching MCP responses or OAuth metadata.
-If the edge supports an allowlist, permit only the public hostname and the
-loopback upstream. Do not put a separate interactive login page in front of
-`/mcp` or `/.well-known/oauth-protected-resource*`; clients must receive the
-relay's own OAuth challenge and metadata.
+When the private reviewed Creative Game deployment backend is enabled and
+browser acceptance is required, expose only its authenticated deployment path
+through the same trusted HTTPS edge as well:
+
+```text
+https://mcp.example.com/creative-deploy/*  ->  http://127.0.0.1:47821/creative-deploy/*
+```
+
+This route does **not** publish the game publicly: deployment records remain
+owner-scoped and `published=false`, while the relay still applies its OAuth
+access boundary, private/no-store response policy, nosniff, and restrictive CSP.
+Do not expose port 47821 directly and do not proxy arbitrary relay paths merely
+to make browser testing convenient.
+
+The edge must preserve the requested path, forward the original HTTPS scheme in
+the reviewed proxy header, and avoid caching MCP/deployment responses or OAuth
+metadata. If the edge supports an allowlist, permit only the public hostname and
+the loopback upstream. Do not put a separate interactive login page in front of
+`/mcp`, `/creative-deploy/*`, or
+`/.well-known/oauth-protected-resource*`; clients must receive the relay's own
+OAuth challenge and metadata.
 
 The Authorization Server may use a separate HTTPS hostname and edge. Its
 public issuer and discovery/JWKS routes must remain stable and must match
