@@ -60,9 +60,11 @@ test('delegation uses intersected child tools and accounts for policy context', 
 test('primary and child composition use final model tools without changing approvals', () => {
   const primary = readFileSync(new URL('../../server/application/chat/execute-chat-turn.ts', import.meta.url), 'utf8')
   const child = readFileSync(new URL('../../server/infrastructure/ai/subagent-tool.ts', import.meta.url), 'utf8')
-  assert.match(primary, /system: \[buildWorkspaceSystemPrompt\(\), buildToolSelectionPolicy\(Object.keys\(tools\)\)\]/)
+  assert.match(primary, /mcpInstructions = mcp\.instructions/)
+  assert.match(primary, /system: \[buildWorkspaceSystemPrompt\(\), \.\.\.mcpInstructions, buildToolSelectionPolicy\(Object.keys\(tools\)\)\]/)
   assert.match(primary, /if \(!toolTurn\)[\s\S]*?system: systemPrompt/)
   assert.match(child, /scopeMcpTools\(mcp, new Set\(authority.tools\)\)/)
+  assert.match(child, /instructions: \[profile\.instructions, \.\.\.scopedMcp\.instructions\]/)
   assert.match(child, /toolNames: Object.keys\(tools\)/)
   assert.match(child, /toolApproval: scopedMcp.toolApproval/)
 })

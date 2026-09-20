@@ -34,7 +34,7 @@ Do **not** create new `memories/<topic>.md` files. Prefer concise sections/bulle
 
 For new work:
 
-- use the next unused numeric plan ID; never reuse an existing plan number. With Plans 031–069 already present, the next numeric plan is `070-...md` unless repository inspection proves a later state;
+- use the next unused numeric plan ID; never reuse an existing plan number. With Plans 031–070 already present, the next numeric plan is `071-...md` unless repository inspection proves a later state;
 - one multi-step effort per file;
 - never reuse a number;
 - keep status inside the plan file;

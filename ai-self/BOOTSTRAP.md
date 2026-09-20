@@ -1,6 +1,6 @@
 # External MCP Client Global Bootstrap
 
-Use this content in an external MCP client's instructions. The workspace-isolation rules are intentionally global because they must apply before a project-local skill can be selected.
+This is the canonical human-readable workspace-agnostic bootstrap. Current Masih Awam relay source also advertises a bounded equivalent through MCP `server/discover.instructions` / `initialize.instructions`, and exposes this file through the approved `agent-guidance` resource when it exists in the verified repository. The first-party Nuxt path explicitly consumes trusted relay instructions. For arbitrary external MCP clients that ignore server instructions/resources, install this content manually in the client's global instructions. The workspace-isolation rules are intentionally global because they must apply before a project-local skill can be selected.
 
 ## Bootstrap instruction
 

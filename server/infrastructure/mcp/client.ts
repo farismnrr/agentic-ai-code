@@ -60,6 +60,7 @@ export interface McpClientLike {
   readResource?(uri: string): Promise<McpClientResourceReadResult>
   close(): Promise<void>
   subagentStop?(parentSessionId: string, childSessionId: string, status: string): Promise<boolean>
+  serverInstructions?(): string | undefined
   supportsActivityBootstrap?(): boolean
   activityStatus?(): Promise<{ configured: boolean, sourceId?: string }>
   configureActivity?(input: { sinkUrl: string, sourceToken: string }): Promise<void>

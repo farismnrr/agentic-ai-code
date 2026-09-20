@@ -108,6 +108,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
   // into SDK-specific tool and approval structures.
   let tools: Record<string, unknown> = {}
   let toolApproval: Record<string, unknown> | undefined
+  let mcpInstructions: string[] = []
   let close: () => Promise<void> = async () => {}
 
   if (toolTurn) {
@@ -118,6 +119,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
     const mcp = await deps.buildMcpTools(userId, enabledMcpToolIds, conv.approvals, effectivePermissionMode, { allowedEffects, abortSignal })
     tools = mcp.tools
     toolApproval = mcp.toolApproval
+    mcpInstructions = mcp.instructions
     close = mcp.close
     if (enabledMcpToolIds.length > 0) telemetry?.event('chat.tool.mcp.dispatch', 'ok', { 'chat.mode': agentTurn ? 'agent' : 'chat' })
 
@@ -185,7 +187,7 @@ async function executeChatTurnInner({ userId, conversationId, trigger, message, 
 
   return deps.streamAiSdkAgent({
     model: baseModel,
-    system: [buildWorkspaceSystemPrompt(), buildToolSelectionPolicy(Object.keys(tools))].filter(Boolean).join('\n'),
+    system: [buildWorkspaceSystemPrompt(), ...mcpInstructions, buildToolSelectionPolicy(Object.keys(tools))].filter(Boolean).join('\n'),
     messages: await deps.convertTurnMessages(resolvedMessages, tools),
     originalMessages: messages,
     tools,

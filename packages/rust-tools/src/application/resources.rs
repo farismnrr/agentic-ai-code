@@ -32,7 +32,7 @@ pub fn list(config: &ServerConfig) -> Result<Vec<Resource>, McpError> {
             name: name.to_owned(),
             description: match name {
                 "manifest" => "Bounded repository identity and capability metadata.",
-                "agent-guidance" => "Approved AGENTS.md and resource-index guidance.",
+                "agent-guidance" => "Approved global bootstrap plus repository AGENTS.md and resource-index guidance.",
                 "status" => "Bounded non-mutating Git workspace status.",
                 "head" => "Current verified Git HEAD and ref metadata.",
                 BLENDER_RESOURCE_NAME => "Enabled Blender production capability, contained project layout, and structured-first routing guidance.",
@@ -318,7 +318,11 @@ fn parse_uri(value: &str) -> Option<(String, &str)> {
 
 fn guidance(root: &Path) -> Result<String, McpError> {
     let mut parts = Vec::new();
-    for relative in ["AGENTS.md", ".agents/knowledge/resources.md"] {
+    for relative in [
+        "ai-self/BOOTSTRAP.md",
+        "AGENTS.md",
+        ".agents/knowledge/resources.md",
+    ] {
         let path = root.join(relative);
         if !path.exists() {
             continue;

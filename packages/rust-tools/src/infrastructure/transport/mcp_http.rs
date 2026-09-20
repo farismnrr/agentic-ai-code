@@ -289,7 +289,7 @@ fn handle_initialize(request: &mcp::Request, _state: &Arc<AppState>) -> JsonErr2
                 }
             }),
             "serverInfo": { "name": "relay-agent", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy."
+            "instructions": mcp::SERVER_INSTRUCTIONS
         }),
     );
     Ok(Json(serde_json::to_value(response).unwrap_or(json!({}))))

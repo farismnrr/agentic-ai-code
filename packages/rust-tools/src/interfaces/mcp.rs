@@ -210,6 +210,8 @@ pub fn decode_header_value(raw: &str) -> Option<String> {
     }
 }
 
+pub const SERVER_INSTRUCTIONS: &str = "Masih Awam coding relay. Before repository mutation, resolve and verify the target workspace fresh for the current task; never treat a remembered cwd as write authority. Read the server's agent-guidance resource when available and follow repository-local guidance without weakening relay safety. For milestone, blocker, handoff, and completion reporting, use: Task Execution Report with Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action. Report only checks/actions that actually occurred; do not invent verification, commit, push, PR, merge, deployment, or restart status. Long-running work that exceeds a public tool deadline must be handed to the operator as an exact foreground command rather than hidden/background execution.";
+
 /// The result of `server/discover` (`server/discover#discoverresult`).
 /// `server/discover` is the modern replacement for the removed
 /// `initialize` handshake: servers **MUST** implement it, but calling it is
@@ -246,7 +248,7 @@ impl DiscoverResult {
                     "io.masihawam/activity-bootstrap": { "version": "1" }
                 }
             }),
-            instructions: "Coding server providing a sandboxed coding terminal, configured HTTP requests, and web search within the configured workspace policy.",
+            instructions: SERVER_INSTRUCTIONS,
             ttl_ms: 0,
             cache_scope: "private",
         }

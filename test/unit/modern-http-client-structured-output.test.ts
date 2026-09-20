@@ -27,7 +27,7 @@ const structuredContent = { path: 'README.md' }
 const fetchImpl: typeof fetch = async (_input, init) => {
   const body = await requestBody(init)
   if (body.method === 'server/discover') {
-    return response(body.id, { supportedVersions: ['2026-07-28'], capabilities: {} })
+    return response(body.id, { supportedVersions: ['2026-07-28'], capabilities: {}, instructions: 'trusted relay bootstrap' })
   }
   if (body.method === 'tools/list') {
     return response(body.id, {
@@ -58,6 +58,16 @@ const client = new ModernHttpMcpClient(
 )
 
 await client.connect()
+assert.equal(client.serverInstructions(), 'trusted relay bootstrap')
+const externalClient = new ModernHttpMcpClient(
+  new URL('https://relay.example.test/mcp'),
+  'test-token',
+  fetchImpl,
+  1_000,
+  'external'
+)
+await externalClient.connect()
+assert.equal(externalClient.serverInstructions(), undefined)
 const tools = await client.listTools()
 assert.deepEqual(tools.tools[0]?.outputSchema, outputSchema)
 

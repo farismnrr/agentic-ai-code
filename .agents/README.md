@@ -58,7 +58,7 @@ The repository deliberately keeps **one durable memory file**: [`memories/README
 
 Future planning remains normal and incremental:
 
-- next unused numeric plan after the closed Plan 069 line is **070**;
+- next unused numeric plan after active Plan 070 is **071**;
 - filename: `NNN-kebab-case.md`;
 - never reuse a number;
 - keep each new plan as its own file, including after completion;
@@ -101,5 +101,5 @@ The repository deliberately has **no client/vendor-specific lifecycle hook**. Sh
 - Do **not** add repository-owned client/vendor agent directories, settings, discovery links, or alternate instruction entrypoints.
 - `skills-lock.json` remains at repo root because the `skills` CLI expects it there.
 - Durable memory stays in exactly one file: `memories/README.md`.
-- Plan 030 is the historical compaction snapshot; Plans 031+ remain separate incrementing files. Do not reuse an existing number; after Plan 069, the next unused numeric plan is 070 unless a previously reserved number is proven unused by the repository.
+- Plan 030 is the historical compaction snapshot; Plans 031+ remain separate incrementing files. Do not reuse an existing number; after Plan 070, the next unused numeric plan is 071 unless a previously reserved number is proven unused by the repository.
 - Delete or amend durable guidance when it stops being true; stale memory is worse than missing memory.

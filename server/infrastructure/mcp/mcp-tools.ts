@@ -62,11 +62,12 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
   const tools: ToolSet = {}
   const toolApproval: McpToolApprovalMap = {}
   const modelToolOwners = new Map<string, string>()
+  const trustedInstructions = new Set<string>()
   const allowedEffects = new Set(options.allowedEffects)
   let toolCalls = 0
 
   if (enabledToolIds.length === 0) {
-    return { tools, toolApproval, toolOwners: modelToolOwners, close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
+    return { tools, toolApproval, toolOwners: modelToolOwners, instructions: [], close: async () => {}, toolCallCount: () => 0, subagentStop: async () => false }
   }
 
   const serverIds = [...new Set(enabledToolIds.map(id => id.split('.')[0]).filter((id): id is string => Boolean(id)))]
@@ -81,6 +82,10 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
       continue
     }
     clients.push(client)
+    if (client.trustedProvenance === 'first-party-relay') {
+      const instructions = client.serverInstructions?.()
+      if (instructions) trustedInstructions.add(instructions)
+    }
 
     let listed
     try {
@@ -164,6 +169,7 @@ export async function buildMcpTools(userId: string, enabledToolIds: string[], ap
     tools,
     toolApproval,
     toolOwners: modelToolOwners,
+    instructions: [...trustedInstructions],
     close: async () => {
       await Promise.all(clients.map(c => c.close().catch((err: unknown) => logger.error('[mcp-tools] error closing client', err))))
     },

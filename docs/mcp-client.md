@@ -111,7 +111,15 @@ Anchors should include enough surrounding context to be unique and stable.
 Do not use `replace_all` for a broad token unless replacing every occurrence is
 intentional.
 
-## 5. Slow operations and tasks
+## 5. Automatic bootstrap guidance
+
+The current Masih Awam relay source advertises a bounded universal bootstrap through `server/discover.instructions` and the legacy-compatible `initialize.instructions`. That instruction covers fresh workspace verification, approved repository guidance, the shared Task Execution Report structure, truthful verification/delivery reporting, and foreground handoff for work that cannot finish inside a public tool deadline.
+
+The server-owned `workspace://<repo>/agent-guidance` resource separately exposes the verified repository's `ai-self/BOOTSTRAP.md` when present, followed by `AGENTS.md` and `.agents/knowledge/resources.md`. The first-party Nuxt modern-MCP path explicitly promotes only `first-party-relay` discovered instructions into top-level chat and delegated-subagent system context; instructions supplied by external/third-party MCP servers are not promoted by this mechanism.
+
+An arbitrary external MCP client may ignore MCP server instructions or resources. For such a client, copy the repository's `ai-self/BOOTSTRAP.md` into that client's global instructions as a fallback. Do not duplicate the bootstrap into each project when the client already honors the relay-provided contract.
+
+## 6. Slow operations and tasks
 
 `terminal_exec` is synchronous-only. Its timeout is `1..=60000` milliseconds
 with a 30 second default. It does not expose MCP Tasks or terminal job polling
@@ -122,7 +130,7 @@ The retained process-like coding tools (`terminal_exec`, `ssh_readonly_exec`,
 `http_fetch`, and `web_search`) are synchronous-only at the MCP boundary.
 Where a tool exposes `timeout_ms`, its public range is `1..=60000`.
 
-## 6. Execution contract
+## 7. Execution contract
 
 Retained coding tools do not accept `execution_mode`. They return a bounded
 direct result or a timeout/error result; work that cannot finish within the

@@ -40,6 +40,7 @@ function encodeMcpHeaderValue(value: string) {
 export class ModernHttpMcpClient implements McpClientLike {
   private requestSequence = 0
   private activityBootstrapSupported = false
+  private discoveredInstructions?: string
   private toolOutputValidators = new Map<string, JsonSchemaValidator<unknown>>()
   private readonly outputValidatorProvider = new AjvJsonSchemaValidator()
   private readonly url: URL
@@ -69,10 +70,20 @@ export class ModernHttpMcpClient implements McpClientLike {
       || !result.supportedVersions.includes(MODERN_MCP_VERSION)) {
       throw new Error('Remote MCP server does not advertise the required protocol version')
     }
+    this.discoveredInstructions = this.trustedProvenance === 'first-party-relay'
+      && typeof result.instructions === 'string'
+      && result.instructions.length > 0
+      && result.instructions.length <= 16_384
+      ? result.instructions
+      : undefined
     const capabilities = isJsonRecord(result.capabilities) ? result.capabilities : undefined
     const extensions = capabilities && isJsonRecord(capabilities.extensions) ? capabilities.extensions : undefined
     const bootstrap = extensions?.['io.masihawam/activity-bootstrap']
     this.activityBootstrapSupported = isJsonRecord(bootstrap) && bootstrap.version === '1'
+  }
+
+  serverInstructions() {
+    return this.discoveredInstructions
   }
 
   supportsActivityBootstrap() {

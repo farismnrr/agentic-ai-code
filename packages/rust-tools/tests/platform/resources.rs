@@ -3,6 +3,7 @@ use ai_tools::application::{
     resources::{list, read, RESOURCE_NAMES},
 };
 use ai_tools::core::config::ServerConfig;
+use ai_tools::interfaces::mcp::{DiscoverResult, SERVER_INSTRUCTIONS};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf, process::Command};
@@ -105,6 +106,45 @@ fn lists_the_server_owned_resources() {
         .map(|resource| resource.name.as_str())
         .collect::<Vec<_>>();
     assert_eq!(names, RESOURCE_NAMES);
+}
+
+#[test]
+fn discover_advertises_the_portable_bootstrap_contract() {
+    let discover = DiscoverResult::current();
+    assert_eq!(discover.instructions, SERVER_INSTRUCTIONS);
+    assert!(discover.instructions.contains("Task Execution Report"));
+    assert!(discover.instructions.contains("agent-guidance"));
+    assert!(discover.instructions.contains("Restart / Operator Action"));
+}
+
+#[test]
+fn agent_guidance_includes_global_bootstrap_before_repository_guidance() {
+    let repository = TempRepo::new();
+    fs::create_dir_all(repository.0.join("ai-self")).unwrap();
+    fs::create_dir_all(repository.0.join(".agents/knowledge")).unwrap();
+    fs::write(
+        repository.0.join("ai-self/BOOTSTRAP.md"),
+        "GLOBAL BOOTSTRAP\n### Task Execution Report\n",
+    )
+    .unwrap();
+    fs::write(
+        repository.0.join("AGENTS.md"),
+        "REPOSITORY AGENT GUIDANCE\n",
+    )
+    .unwrap();
+    fs::write(
+        repository.0.join(".agents/knowledge/resources.md"),
+        "RESOURCE INDEX GUIDANCE\n",
+    )
+    .unwrap();
+
+    let content = read(&repository.config(), "workspace://ai-code/agent-guidance").unwrap();
+    let text = content.text.as_deref().expect("text resource content");
+    let bootstrap = text.find("GLOBAL BOOTSTRAP").unwrap();
+    let agents = text.find("REPOSITORY AGENT GUIDANCE").unwrap();
+    let resources = text.find("RESOURCE INDEX GUIDANCE").unwrap();
+    assert!(bootstrap < agents);
+    assert!(agents < resources);
 }
 
 #[test]
