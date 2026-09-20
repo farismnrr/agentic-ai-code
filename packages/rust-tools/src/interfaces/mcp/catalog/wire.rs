@@ -169,10 +169,18 @@ fn file_read_output_schema() -> Value {
 
 pub fn tool_for_wire(tool: &Tool) -> Value {
     let mut value = serde_json::to_value(tool).unwrap_or_else(|_| json!({}));
-    if let (Some(object), Some(output_schema)) =
-        (value.as_object_mut(), output_schema_for_tool(tool.name))
-    {
-        object.insert("outputSchema".into(), output_schema);
+    if let Some(object) = value.as_object_mut() {
+        object.insert(
+            "description".into(),
+            Value::String(format!(
+                "{} {}",
+                tool.description,
+                super::super::TOOL_DESCRIPTION_REPORTING_SUFFIX
+            )),
+        );
+        if let Some(output_schema) = output_schema_for_tool(tool.name) {
+            object.insert("outputSchema".into(), output_schema);
+        }
     }
     value
 }

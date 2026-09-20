@@ -117,7 +117,7 @@ The current Masih Awam relay source advertises a bounded universal bootstrap thr
 
 The server-owned `workspace://<repo>/agent-guidance` resource separately exposes the verified repository's `ai-self/BOOTSTRAP.md` when present, followed by `AGENTS.md` and `.agents/knowledge/resources.md`. The first-party Nuxt modern-MCP path explicitly promotes only `first-party-relay` discovered instructions into top-level chat and delegated-subagent system context; instructions supplied by external/third-party MCP servers are not promoted by this mechanism.
 
-An arbitrary external MCP client may ignore MCP server instructions or resources. For such a client, copy the repository's `ai-self/BOOTSTRAP.md` into that client's global instructions as a fallback. Do not duplicate the bootstrap into each project when the client already honors the relay-provided contract.
+An arbitrary external MCP client may ignore MCP server instructions or resources. Live ChatGPT connector acceptance confirmed that `server/discover.instructions` alone is not sufficient for every host, so the relay also appends the compact reporting contract to its MCP wire tool descriptions without changing internal catalog definitions or structured tool-result envelopes. This is compatibility reinforcement, not a guarantee that an external host must obey server guidance. If a client also ignores tool descriptions, copy the repository's `ai-self/BOOTSTRAP.md` into that client's global instructions as the final fallback. Do not duplicate the bootstrap into each project when the client already honors the relay-provided contract.
 
 ## 6. Slow operations and tasks
 

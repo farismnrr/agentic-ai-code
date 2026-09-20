@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use crate::core::error::McpError;
 
 pub const PROTOCOL_VERSION: &str = "2026-07-28";
+pub const TOOL_DESCRIPTION_REPORTING_SUFFIX: &str = "After tool-assisted work, report with sections Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action; never claim unperformed actions or checks.";
 // The relay exposes one fully implemented wire contract. Older stateful MCP
 // versions are intentionally not advertised until their complete session and
 // task lifecycle is implemented in Plan 068; accepting only initialize for an
