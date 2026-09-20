@@ -107,6 +107,7 @@ The remediation also restored application ownership boundaries across API compos
 
 - `docs/` — human/operator installation, deployment, MCP client, development, and release handbook.
 - `AGENTS.md` — single repository agent entrypoint.
+- `.agents/` — single repository-owned agent context tree. Do not add parallel root-level `agents/`, `.ai-self/`, or `agent-prompts/` trees; temporary external-agent runtime state belongs outside the tracked repository, while portable workspace bootstrap/governance remains under tracked `ai-self/`.
 - `.agents/knowledge/` — stable operating guidance.
 - `.agents/skills/` — shared framework/tool skill discovery.
 - `.agents/memories/README.md` — single canonical durable memory.
