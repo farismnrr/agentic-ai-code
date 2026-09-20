@@ -5,10 +5,10 @@ use super::{paths, SandboxError, SpawnControl};
 use crate::core::config::ServerConfig;
 use std::path::{Path, PathBuf};
 
-fn runtime_tool_home(variable: &str, fallback: PathBuf) -> PathBuf {
+fn runtime_tool_home(variable: &str, host_home: &Path, fallback: PathBuf) -> PathBuf {
     if let Some(value) = std::env::var_os(variable) {
         let path = PathBuf::from(value);
-        if path.is_absolute() && path.is_dir() {
+        if path.is_absolute() && path.is_dir() && path.starts_with(host_home) {
             return path;
         }
     }
@@ -32,8 +32,8 @@ pub(super) fn mount_toolchains(
     let mut rustup_home = None;
     let mut toolchain_roots = std::collections::BTreeSet::new();
     let mut freshness_checks: Vec<ProtectedPathFreshness> = Vec::new();
-    let cargo_store = runtime_tool_home("CARGO_HOME", host_home.join(".cargo"));
-    let rustup_store = runtime_tool_home("RUSTUP_HOME", host_home.join(".rustup"));
+    let cargo_store = runtime_tool_home("CARGO_HOME", host_home, host_home.join(".cargo"));
+    let rustup_store = runtime_tool_home("RUSTUP_HOME", host_home, host_home.join(".rustup"));
     // User-toolchain commands must see the same resolved Cargo/Rustup stores
     // that executable discovery used. Mount these homes eagerly instead of
     // depending on a later path-shape branch to rediscover them.

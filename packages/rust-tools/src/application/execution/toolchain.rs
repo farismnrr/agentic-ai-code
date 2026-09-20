@@ -39,7 +39,7 @@ pub(crate) fn safe_path_entries(config: &ServerConfig) -> Vec<PathBuf> {
         if let Ok(home) = super::sandbox::runtime_home() {
             if let Some(cargo_home) = std::env::var_os("CARGO_HOME")
                 .map(PathBuf::from)
-                .filter(|path| path.is_absolute())
+                .filter(|path| path.is_absolute() && path.starts_with(&home))
             {
                 push_safe_directory(&mut entries, cargo_home.join("bin"), false);
             }

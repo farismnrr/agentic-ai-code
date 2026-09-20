@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::{CString, OsString};
 use std::fs::File;
 use std::io;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +42,18 @@ pub(super) struct DirectoryWatcher {
 }
 
 impl DirectoryWatcher {
+    pub(super) fn new() -> io::Result<Self> {
+        let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC | libc::IN_NONBLOCK) };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self {
+            fd: unsafe { File::from_raw_fd(fd) },
+            watch_paths: HashMap::new(),
+            expected_ignored: HashSet::new(),
+        })
+    }
+
     pub(super) fn watch_directory(&mut self, directory: &File, path: &Path) -> io::Result<()> {
         let proc_fd_path = CString::new(format!("/proc/self/fd/{}", directory.as_raw_fd()))
             .expect("proc fd path contains no NUL bytes");

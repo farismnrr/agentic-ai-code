@@ -4,7 +4,7 @@ use super::{complete, optional_string, parse_optional, required_str};
 use crate::application::resources;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
-use crate::interfaces::mcp::ToolCallResult;
+use crate::interfaces::mcp::{ToolCallResult, ToolResultContent};
 use serde_json::{json, Value};
 
 pub(in crate::application::creative) async fn asset(
@@ -201,15 +201,26 @@ pub(in crate::application::creative) async fn asset(
             let asset = project
                 .asset(required_str(arguments, "asset_id")?)
                 .ok_or_else(|| McpError::InvalidRequest("unknown creative asset".into()))?;
-            complete(json!({
+            let resource_uri =
+                resources::creative_asset_resource_uri(cwd, config, project_id, &asset.asset_id)?;
+            let value = json!({
                 "preview": ingest::asset_preview(asset),
-                "resource_uri": resources::creative_asset_resource_uri(
-                    cwd,
-                    config,
-                    project_id,
-                    &asset.asset_id
-                )?
-            }))
+                "resource_uri": resource_uri.clone()
+            });
+            let text = serde_json::to_string(&value).map_err(|_| {
+                McpError::Internal("creative result could not be serialized".into())
+            })?;
+            let mut content = vec![
+                ToolResultContent { kind: "text", text },
+                ToolResultContent::image_resource_link(resource_uri.clone()),
+            ];
+            if asset.media_type == "image/png" {
+                let resource = resources::read(config, &resource_uri)?;
+                if let Some(blob) = resource.blob {
+                    content.push(ToolResultContent::png(blob));
+                }
+            }
+            Ok(ToolCallResult::complete(content))
         }
         _ => Err(McpError::InvalidRequest(
             "unsupported creative asset action".into(),

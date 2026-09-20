@@ -3,15 +3,20 @@ use std::io;
 use std::time::{Duration, Instant};
 
 mod controller;
+mod discovery;
+mod external_scan;
 mod index;
 mod operations;
+mod publication;
+mod reconciliation;
 mod state;
 mod traversal;
 mod watcher;
 
+pub(super) use discovery::discover;
+pub(super) use operations::lock_and_validate_freshness;
 #[cfg(feature = "test-protected-index")]
 pub(super) use operations::schedule_initialization;
-pub(super) use operations::{discover, lock_and_validate_freshness};
 pub(in crate::application::execution::sandbox) use state::{
     PreSpawnFreshnessGuard, ProtectedPathFreshness,
 };
