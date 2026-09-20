@@ -20,6 +20,7 @@ First-party agent UX may summarize resource/tool capability state, but external 
 
 Current entries:
 
+- **`masih-awam-workspace-workflow`** — canonical ChatGPT/workspace workflow Skill for fresh workspace resolution, Masih Awam MCP usage, explicit manual `/init` governance reconciliation, authorization boundaries, bounded execution, evidence separation, self-improvement discipline, and exact Task Execution Report formatting. This tracked copy is the canonical source used to build the uploadable Skill ZIP.
 - **`nuxt`** — Nuxt project structure, routing, data fetching, SSR-safe state, middleware, plugins, server routes, runtime config, and layers. Source tracked by `skills-lock.json`.
 - **`nuxt-ui`** — Nuxt UI components, theming, forms, layouts, props/slots/events, and targeted references. Source tracked by `skills-lock.json`.
 - **`ui-animation`** — UI motion/animation guidance for application interactions.

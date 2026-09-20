@@ -5,7 +5,6 @@ use ai_tools::application::{
 use ai_tools::core::config::ServerConfig;
 use ai_tools::interfaces::mcp::{
     retained_tool_catalog, tool_for_wire, DiscoverResult, SERVER_INSTRUCTIONS,
-    TOOL_DESCRIPTION_REPORTING_SUFFIX,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
@@ -118,6 +117,7 @@ fn discover_advertises_the_portable_bootstrap_contract() {
     assert!(discover.instructions.contains("Task Execution Report"));
     assert!(discover.instructions.contains("agent-guidance"));
     assert!(discover.instructions.contains("Restart / Operator Action"));
+    assert!(discover.instructions.contains("workspace_bootstrap"));
 }
 
 #[test]
@@ -151,25 +151,13 @@ fn agent_guidance_includes_global_bootstrap_before_repository_guidance() {
 }
 
 #[test]
-fn tool_wire_description_appends_reporting_contract_without_mutating_catalog() {
+fn tool_wire_description_matches_the_canonical_catalog_description() {
     let tool = retained_tool_catalog()
         .into_iter()
         .find(|tool| tool.name == "terminal_exec")
         .expect("terminal_exec retained tool");
-    let original = tool.description;
-    assert!(!original.contains(TOOL_DESCRIPTION_REPORTING_SUFFIX));
-
     let wire = tool_for_wire(&tool);
-    let description = wire["description"].as_str().unwrap();
-    assert!(description.starts_with(original));
-    assert!(description.ends_with(TOOL_DESCRIPTION_REPORTING_SUFFIX));
-    assert_eq!(
-        description
-            .matches(TOOL_DESCRIPTION_REPORTING_SUFFIX)
-            .count(),
-        1
-    );
-    assert_eq!(tool.description, original);
+    assert_eq!(wire["description"], tool.description);
 }
 
 #[test]

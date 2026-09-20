@@ -132,7 +132,7 @@ fn create_project(config: &ServerConfig, project_id: &str) {
 #[test]
 fn runtime_catalog_composes_creative_tools_without_changing_retained_base() {
     let retained = retained_tool_catalog();
-    assert_eq!(retained.len(), 50);
+    assert_eq!(retained.len(), 51);
     assert!(!retained
         .iter()
         .any(|tool| tool.name.starts_with("creative_")));

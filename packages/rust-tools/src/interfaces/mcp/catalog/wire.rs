@@ -65,6 +65,30 @@ pub fn output_schema_for_tool(name: &str) -> Option<Value> {
             "required": ["files", "count", "failed"],
             "additionalProperties": false
         }),
+        "workspace_bootstrap" => json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+                "action": { "type": "string", "enum": ["inspect", "reconcile"] },
+                "workspace": { "type": "string" },
+                "initialized": { "type": "boolean" },
+                "stacks": { "type": "array", "items": { "type": "string" } },
+                "package_manager": { "type": ["string", "null"] },
+                "existing": { "type": "array", "items": { "type": "string" } },
+                "created": { "type": "array", "items": { "type": "string" } },
+                "updated": { "type": "array", "items": { "type": "string" } },
+                "preserved": { "type": "array", "items": { "type": "string" } },
+                "would_create": { "type": "array", "items": { "type": "string" } },
+                "would_update": { "type": "array", "items": { "type": "string" } },
+                "guardrail_commands": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": [
+                "action", "workspace", "initialized", "stacks", "package_manager",
+                "existing", "created", "updated", "preserved", "would_create",
+                "would_update", "guardrail_commands"
+            ],
+            "additionalProperties": false
+        }),
         "file_write" => json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
@@ -170,14 +194,6 @@ fn file_read_output_schema() -> Value {
 pub fn tool_for_wire(tool: &Tool) -> Value {
     let mut value = serde_json::to_value(tool).unwrap_or_else(|_| json!({}));
     if let Some(object) = value.as_object_mut() {
-        object.insert(
-            "description".into(),
-            Value::String(format!(
-                "{} {}",
-                tool.description,
-                super::super::TOOL_DESCRIPTION_REPORTING_SUFFIX
-            )),
-        );
         if let Some(output_schema) = output_schema_for_tool(tool.name) {
             object.insert("outputSchema".into(), output_schema);
         }

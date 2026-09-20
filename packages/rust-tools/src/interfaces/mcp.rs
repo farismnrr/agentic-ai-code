@@ -9,7 +9,6 @@ use serde_json::{json, Value};
 use crate::core::error::McpError;
 
 pub const PROTOCOL_VERSION: &str = "2026-07-28";
-pub const TOOL_DESCRIPTION_REPORTING_SUFFIX: &str = "After tool-assisted work, report with sections Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action; never claim unperformed actions or checks.";
 // The relay exposes one fully implemented wire contract. Older stateful MCP
 // versions are intentionally not advertised until their complete session and
 // task lifecycle is implemented in Plan 068; accepting only initialize for an
@@ -211,7 +210,7 @@ pub fn decode_header_value(raw: &str) -> Option<String> {
     }
 }
 
-pub const SERVER_INSTRUCTIONS: &str = "Masih Awam coding relay. Before repository mutation, resolve and verify the target workspace fresh for the current task; never treat a remembered cwd as write authority. Read the server's agent-guidance resource when available and follow repository-local guidance without weakening relay safety. For milestone, blocker, handoff, and completion reporting, use: Task Execution Report with Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action. Report only checks/actions that actually occurred; do not invent verification, commit, push, PR, merge, deployment, or restart status. Long-running work that exceeds a public tool deadline must be handed to the operator as an exact foreground command rather than hidden/background execution.";
+pub const SERVER_INSTRUCTIONS: &str = "Masih Awam coding relay. Before repository mutation, resolve and verify the target workspace fresh for the current task; never treat a remembered cwd as write authority. Workspace governance initialization is manual: only when the user explicitly requests /init or asks to initialize/reconcile workspace governance, use workspace_bootstrap inspect and then reconcile as authorized. Ordinary repository work and read-only tasks must not bootstrap the repository implicitly. Reconcile re-detects the current stack, creates missing portable governance, refreshes only Masih Awam-managed governance/guardrail files, preserves unowned project guidance, and installs no dependencies. Read the server's agent-guidance resource when available and follow repository-local guidance without weakening relay safety. For milestone, blocker, handoff, and completion reporting, use: Task Execution Report with Workspace, Issue(s), Work Completed, Verification, Next Steps, and Restart / Operator Action. Report only checks/actions that actually occurred; do not invent verification, commit, push, PR, merge, deployment, or restart status. Long-running work that exceeds a public tool deadline must be handed to the operator as an exact foreground command rather than hidden/background execution.";
 
 /// The result of `server/discover` (`server/discover#discoverresult`).
 /// `server/discover` is the modern replacement for the removed

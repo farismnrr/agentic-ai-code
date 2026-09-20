@@ -1,8 +1,6 @@
 use ai_tools::core::config::{ActivityConfig, ServerConfig, ToolProfile};
 use ai_tools::infrastructure::transport::create_router;
-use ai_tools::interfaces::mcp::{
-    retained_tool_catalog, PRIMARY_TOOL_NAMES, TOOL_DESCRIPTION_REPORTING_SUFFIX,
-};
+use ai_tools::interfaces::mcp::{retained_tool_catalog, PRIMARY_TOOL_NAMES};
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -111,20 +109,6 @@ async fn wire_client_discovery_and_invocation_are_consistent() {
     assert!(tool_names.contains(&"ssh_readonly_exec"));
     assert!(tool_names.contains(&"telegram_send_message"));
     assert!(tool_names.contains(&"creative_status"));
-    for tool in tools {
-        let description = tool
-            .get("description")
-            .and_then(Value::as_str)
-            .expect("wire tool description");
-        assert!(
-            description.ends_with(TOOL_DESCRIPTION_REPORTING_SUFFIX),
-            "{} must expose the reporting suffix on the MCP wire",
-            tool.get("name")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown")
-        );
-    }
-
     // 2. tools/call on the same connection is consistent
     let call_res = post_mcp(
         &client,

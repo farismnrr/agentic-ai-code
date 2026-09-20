@@ -7,6 +7,12 @@ pub fn effect_classes_for_call(
     open_world_hint: bool,
     arguments: &serde_json::Value,
 ) -> Vec<&'static str> {
+    if tool_id == "workspace_bootstrap" {
+        return match arguments.get("action").and_then(serde_json::Value::as_str) {
+            Some("reconcile") => vec!["workspace_read", "workspace_write"],
+            _ => vec!["workspace_read"],
+        };
+    }
     if tool_id.starts_with("blender_") {
         let action = arguments.get("action").and_then(serde_json::Value::as_str);
         return match (tool_id, action) {

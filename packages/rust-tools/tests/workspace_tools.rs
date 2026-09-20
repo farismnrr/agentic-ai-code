@@ -21,6 +21,25 @@ fn public_output<T: Serialize>(tool_name: &str, result: T) -> Value {
     value
 }
 
+fn bootstrap_fixture() -> (std::path::PathBuf, ServerConfig) {
+    let root = std::env::temp_dir().join(format!("ai-tools-bootstrap-{}", Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let status = std::process::Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&root)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let config = ServerConfig {
+        dir: Some(root.to_string_lossy().into_owned()),
+        execution_root: Some(root.to_string_lossy().into_owned()),
+        ..ServerConfig::default()
+    };
+    (root, config)
+}
+
 fn fixture() -> (std::path::PathBuf, ServerConfig) {
     let root = std::env::temp_dir().join(format!("ai-tools-workspace-tools-{}", Uuid::new_v4()));
     fs::create_dir_all(&root).unwrap();
@@ -63,6 +82,7 @@ fn file_edit_schema_stays_flat_and_model_typed() {
         "file_read_multiple",
         "text_search",
         "apply_patch",
+        "workspace_bootstrap",
     ] {
         let schema = output_schema_for_tool(tool_name)
             .unwrap_or_else(|| panic!("missing output schema: {tool_name}"));
@@ -157,6 +177,26 @@ fn workspace_output_schemas_match_public_runtime_results() {
     );
 
     fs::remove_dir_all(root).unwrap();
+
+    let (bootstrap_root, bootstrap_config) = bootstrap_fixture();
+    let bootstrap_dispatch = dispatch_native_tool(
+        "workspace_bootstrap",
+        &json!({"action":"inspect","cwd":bootstrap_root.to_string_lossy()}),
+        &bootstrap_config,
+    )
+    .unwrap()
+    .expect("workspace_bootstrap dispatch");
+    let bootstrap_structured = bootstrap_dispatch
+        .structured_content
+        .as_ref()
+        .expect("structured workspace_bootstrap result");
+    assert!(bootstrap_dispatch.content.is_empty());
+    validate_tool_output(
+        &find_tool("workspace_bootstrap").unwrap(),
+        bootstrap_structured,
+    )
+    .unwrap();
+    fs::remove_dir_all(bootstrap_root).unwrap();
 }
 
 #[test]

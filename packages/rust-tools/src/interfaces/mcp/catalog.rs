@@ -360,6 +360,36 @@ pub fn retained_tool_catalog() -> Vec<Tool> {
         Tool { name: "git_remote_branch_get", title: Some("Git Remote Branch Get"), description: "Read one validated remote branch head through the narrow authenticated Git transport and return bounded identity facts.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "git_fetch", title: Some("Git Fetch"), description: "Fetch one validated GitHub branch into its bounded remote-tracking ref using the credential-isolated native transport.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:false, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "git_push", title: Some("Git Push"), description: "Push one validated local branch to the same-name branch of the validated GitHub remote without force, hooks, arbitrary refspecs, or credential exposure; verify the resulting remote head.", input_schema: json!({"type":"object","properties":{"cwd":{"type":"string","maxLength":4096},"remote":{"type":"string","minLength":1,"maxLength":64,"default":"origin"},"branch":{"type":"string","minLength":1,"maxLength":512},"set_upstream":{"type":"boolean","default":false}},"required":["branch"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:true, idempotent_hint:true, open_world_hint:true }), security_schemes:coding_security_scheme(), execution:None },
+        Tool {
+            name: "workspace_bootstrap",
+            title: Some("Workspace Bootstrap"),
+            description: "Manual /init support for portable Masih Awam workspace governance in the verified Git repository. inspect is read-only. reconcile re-detects the current stack and creates missing files or refreshes only Masih Awam-managed governance/guardrail files; unowned project guidance/configuration is preserved and no dependencies are installed.",
+            input_schema: json!({
+                "type":"object",
+                "properties":{
+                    "action":{
+                        "type":"string",
+                        "enum":["inspect","reconcile"],
+                        "default":"inspect",
+                        "description":"inspect reports bootstrap state without mutation; reconcile creates missing files and refreshes only Masih Awam-managed files."
+                    },
+                    "cwd":{
+                        "type":"string",
+                        "maxLength":4096,
+                        "description":"Contained directory inside the target Git repository."
+                    }
+                },
+                "additionalProperties":false
+            }),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: false,
+                destructive_hint: false,
+                idempotent_hint: true,
+                open_world_hint: false,
+            }),
+            security_schemes: coding_security_scheme(),
+            execution: None,
+        },
         Tool { name: "workspace_add", title: Some("Workspace Add"), description: "Explicitly authorize an additional existing directory as a workspace root for the current session. Rejects root/system directories and credential paths.", input_schema: json!({"type":"object","properties":{"path":{"type":"string","minLength":1,"maxLength":4096}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:false, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "workspace_list", title: Some("Workspace List"), description: "List all currently authorized workspace roots, including primary and dynamically authorized roots.", input_schema: json!({"type":"object","properties":{},"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },
         Tool { name: "workspace_get", title: Some("Workspace Get"), description: "Inspect an authorized workspace root by path.", input_schema: json!({"type":"object","properties":{"path":{"type":"string","minLength":1,"maxLength":4096}},"required":["path"],"additionalProperties":false}), annotations: Some(ToolAnnotations { read_only_hint:true, destructive_hint:false, idempotent_hint:true, open_world_hint:false }), security_schemes:coding_security_scheme(), execution:None },

@@ -7,8 +7,8 @@ use serde_json::Value;
 
 use super::{
     apply_patch, directory_list, file_edit, file_read, file_read_multiple, file_search, file_write,
-    MAX_DIRECTORY_RESULT_BYTES, MAX_FILE_READ_BYTES, MAX_FILE_READ_MULTIPLE_BYTES,
-    MAX_FILE_SEARCH_RESULT_BYTES,
+    workspace_bootstrap, MAX_DIRECTORY_RESULT_BYTES, MAX_FILE_READ_BYTES,
+    MAX_FILE_READ_MULTIPLE_BYTES, MAX_FILE_SEARCH_RESULT_BYTES,
 };
 
 /// Dispatch a native workspace tool while keeping result serialization and
@@ -68,6 +68,11 @@ pub fn dispatch_native_tool(
                 MAX_FILE_READ_MULTIPLE_BYTES,
                 "multiple file read result exceeds output maximum",
             )),
+        )?,
+        "workspace_bootstrap" => complete_json(
+            &workspace_bootstrap(arguments, config)?,
+            "failed to serialize workspace bootstrap result",
+            None,
         )?,
         "workspace_add" => complete_json(
             &super::allowlist::workspace_add(arguments, config)?,
