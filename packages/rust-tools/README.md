@@ -132,7 +132,9 @@ published separately as a Docker image to GHCR.
 The unified `ai-tools` binary is packaged for these targets:
 
 - `x86_64-unknown-linux-gnu` as a `.tar.gz` plus the direct binary;
+- `aarch64-unknown-linux-gnu` as a `.tar.gz` plus the direct binary;
 - `x86_64-apple-darwin` as a `.tar.gz` plus the direct binary;
+- `aarch64-apple-darwin` as a `.tar.gz` plus the direct binary;
 - `x86_64-pc-windows-gnu` as a `.zip` plus the `.exe` direct binary.
 
 The `relay` subcommand remains Linux-only because production containment
@@ -146,8 +148,9 @@ When publishing native artifacts manually:
   one of those targets;
 - run the mandatory local commit gate plus applicable Rust security checks;
 - build the reviewed CLI bundle with `pnpm release:build vX.Y.Z[-beta]`;
-- publish the generated archives, direct binaries, metadata, and `SHA256SUMS`
-  with `pnpm release:publish:cli vX.Y.Z[-beta]`;
+- publish the generated archives, direct binaries, the canonical Masih Awam
+  workspace-workflow Skill ZIP, metadata, and `SHA256SUMS` with
+  `pnpm release:publish:cli vX.Y.Z[-beta]`;
 - keep the CLI publisher fail-closed to a clean `main` checkout whose
   requested CLI tag points at `HEAD` and is already present on `origin`;
 - do not weaken sandbox/platform contracts merely to broaden the release

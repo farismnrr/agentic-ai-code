@@ -333,6 +333,8 @@ pub(crate) async fn kill_process_group(child: &mut Child) {
 
 pub(crate) async fn kill_process_group_by_pid(pid: Option<u32>) {
     if let Some(pid) = pid {
+        #[cfg(not(unix))]
+        let _ = pid;
         #[cfg(unix)]
         let outcome = unsafe {
             if libc::kill(-(pid as i32), libc::SIGKILL) == 0 {

@@ -31,16 +31,8 @@ impl ProtectedPathFreshness {
     }
 }
 
-pub(super) struct PreSpawnFreshnessGuard;
-
-impl ProtectedPathIndex {
-    pub(super) fn watcher_enabled(&self) -> bool {
-        false
-    }
-
-    pub(super) fn is_fresh(&self) -> io::Result<bool> {
-        Ok(true)
-    }
+pub(super) struct PreSpawnFreshnessGuard<'a> {
+    _checks: std::marker::PhantomData<&'a [ProtectedPathFreshness]>,
 }
 
 pub(super) fn discover(
@@ -121,18 +113,9 @@ fn discover_with_budget(
     ))
 }
 
-pub(super) fn prime(root: &Path, budget: Duration) -> io::Result<usize> {
-    let (_, index, _) = discover_with_budget(root, None, budget)?;
-    Ok(index.scanned_entries())
-}
-
-pub(super) fn schedule_initialization(_root: &Path, _budget: Duration) -> io::Result<()> {
-    Ok(())
-}
-
-pub(super) fn lock_and_validate_freshness(
-    checks: &[ProtectedPathFreshness],
-) -> io::Result<PreSpawnFreshnessGuard> {
+pub(super) fn lock_and_validate_freshness<'a>(
+    checks: &'a [ProtectedPathFreshness],
+) -> io::Result<PreSpawnFreshnessGuard<'a>> {
     for check in checks {
         if !check.is_fresh()? {
             return Err(io::Error::new(
@@ -141,7 +124,9 @@ pub(super) fn lock_and_validate_freshness(
             ));
         }
     }
-    Ok(PreSpawnFreshnessGuard)
+    Ok(PreSpawnFreshnessGuard {
+        _checks: std::marker::PhantomData,
+    })
 }
 
 fn is_socket(kind: &std::fs::FileType) -> bool {

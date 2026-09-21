@@ -13,17 +13,14 @@ impl Pidfile {
         let path = std::env::temp_dir().join(format!("relay-agent-{port}.pid"));
 
         if path.exists() {
+            #[cfg(unix)]
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(pid) = content.trim().parse::<i32>() {
-                    // Check if process is alive (Unix only)
-                    #[cfg(unix)]
-                    {
-                        if unsafe { libc::kill(pid, 0) } == 0 {
-                            return Err(McpError::Internal(format!(
-                                "relay-agent is already running on port {} with PID {}",
-                                port, pid
-                            )));
-                        }
+                    if unsafe { libc::kill(pid, 0) } == 0 {
+                        return Err(McpError::Internal(format!(
+                            "relay-agent is already running on port {} with PID {}",
+                            port, pid
+                        )));
                     }
                 }
             }
@@ -44,34 +41,35 @@ impl Pidfile {
     }
 
     pub fn stop(port: u16) -> Result<(), String> {
-        let path = std::env::temp_dir().join(format!("relay-agent-{port}.pid"));
-        if !path.exists() {
-            return Err(format!("pidfile not found: {}", path.display()));
+        #[cfg(not(unix))]
+        {
+            let _ = port;
+            Err("stop is only supported on Unix".to_string())
         }
-
-        let content =
-            fs::read_to_string(&path).map_err(|_| "Failed to read pidfile".to_string())?;
-
-        let pid = content
-            .trim()
-            .parse::<i32>()
-            .map_err(|_| "Invalid PID in pidfile".to_string())?;
-
         #[cfg(unix)]
         {
+            let path = std::env::temp_dir().join(format!("relay-agent-{port}.pid"));
+            if !path.exists() {
+                return Err(format!("pidfile not found: {}", path.display()));
+            }
+
+            let content =
+                fs::read_to_string(&path).map_err(|_| "Failed to read pidfile".to_string())?;
+
+            let pid = content
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| "Invalid PID in pidfile".to_string())?;
+
             if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
                 println!("Sent SIGTERM to process {}", pid);
             } else {
                 return Err("Process not found or cannot be killed".to_string());
             }
-        }
-        #[cfg(not(unix))]
-        {
-            return Err("stop is only supported on Unix".to_string());
-        }
 
-        let _ = fs::remove_file(&path);
-        Ok(())
+            let _ = fs::remove_file(&path);
+            Ok(())
+        }
     }
 }
 
