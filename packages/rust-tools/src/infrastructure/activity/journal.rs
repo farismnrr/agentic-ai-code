@@ -414,6 +414,8 @@ fn write_private(path: &Path, content: &[u8]) -> Result<(), JournalError> {
 }
 
 fn set_owner_only(path: &Path, directory: bool) -> Result<(), JournalError> {
+    #[cfg(not(unix))]
+    let _ = (path, directory);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

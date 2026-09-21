@@ -67,6 +67,7 @@ pub(crate) struct SpawnControl<'a> {
 }
 
 impl SpawnControl<'_> {
+    #[cfg(target_os = "linux")]
     pub(crate) fn remaining(&self) -> Option<std::time::Duration> {
         self.deadline
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))

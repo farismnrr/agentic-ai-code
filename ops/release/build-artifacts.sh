@@ -17,7 +17,9 @@ cli_version="${BASH_REMATCH[1]}"
 
 target_list=(
   x86_64-unknown-linux-gnu
+  aarch64-unknown-linux-gnu
   x86_64-apple-darwin
+  aarch64-apple-darwin
   x86_64-pc-windows-gnu
 )
 native_manifests=(
@@ -75,6 +77,14 @@ done
 host_target="$(rustc -vV | sed -n 's/^host: //p')"
 [[ -n "$host_target" ]] || fail 'unable to determine the active Rust host target'
 
+macos_sdk_root="${SDKROOT:-}"
+if [[ "$host_target" != *"-apple-darwin"* ]]; then
+  [[ -n "$macos_sdk_root" ]] \
+    || fail 'SDKROOT must point to a macOS SDK when cross-building Apple targets from a non-macOS host'
+  [[ -d "$macos_sdk_root" ]] \
+    || fail "SDKROOT is not a directory: $macos_sdk_root"
+fi
+
 printf 'release-build: verifying native CLI gates...\n'
 pnpm lint:rust
 pnpm typecheck:rust
@@ -86,7 +96,7 @@ build_target() {
   local target="$1"
   printf 'release-build: building ai-tools %s for %s...\n' "$rust_version" "$target"
   if [[ "$target" == "$host_target" ]]; then
-    cargo build \
+    RUSTFLAGS="-D warnings" cargo build \
       --manifest-path packages/rust-tools/Cargo.toml \
       --release \
       --locked \
@@ -101,14 +111,21 @@ build_target() {
       # aws-lc-sys ships verified x86_64 NASM objects for this target. Use
       # them explicitly so the release remains reproducible on Linux hosts
       # without installing a host NASM toolchain.
-      AWS_LC_SYS_PREBUILT_NASM=1 cargo zigbuild \
+      RUSTFLAGS="-D warnings" AWS_LC_SYS_PREBUILT_NASM=1 cargo zigbuild \
+        --manifest-path packages/rust-tools/Cargo.toml \
+        --release \
+        --locked \
+        --target "$target" \
+        --bin ai-tools
+    elif [[ "$target" == *"-apple-darwin"* && "$host_target" != *"-apple-darwin"* ]]; then
+      RUSTFLAGS="-D warnings" SDKROOT="$macos_sdk_root" cargo zigbuild \
         --manifest-path packages/rust-tools/Cargo.toml \
         --release \
         --locked \
         --target "$target" \
         --bin ai-tools
     else
-      cargo zigbuild \
+      RUSTFLAGS="-D warnings" cargo zigbuild \
         --manifest-path packages/rust-tools/Cargo.toml \
         --release \
         --locked \
@@ -120,7 +137,7 @@ build_target() {
 
 binary_path() {
   local target="$1"
-  if [[ "$target" == "x86_64-pc-windows-gnu" ]]; then
+  if [[ "$target" == *"-windows-"* ]]; then
     printf '%s\n' "$ROOT/target/$target/release/ai-tools.exe"
   else
     printf '%s\n' "$ROOT/target/$target/release/ai-tools"
@@ -137,9 +154,17 @@ validate_binary() {
       [[ "$format" == *'ELF 64-bit'*'x86-64'* ]] \
         || fail "$binary is not an x86_64 Linux ELF binary: $format"
       ;;
+    aarch64-unknown-linux-gnu)
+      [[ "$format" == *'ELF 64-bit'* && ( "$format" == *'ARM aarch64'* || "$format" == *'ARM64'* || "$format" == *'AArch64'* ) ]] \
+        || fail "$binary is not an arm64 Linux ELF binary: $format"
+      ;;
     x86_64-apple-darwin)
       [[ "$format" == *'Mach-O 64-bit'*'x86_64'* ]] \
         || fail "$binary is not an x86_64 macOS Mach-O binary: $format"
+      ;;
+    aarch64-apple-darwin)
+      [[ "$format" == *'Mach-O 64-bit'* && ( "$format" == *'arm64'* || "$format" == *'ARM64'* ) ]] \
+        || fail "$binary is not an arm64 macOS Mach-O binary: $format"
       ;;
     x86_64-pc-windows-gnu)
       [[ "$format" == *'PE32+'*'x86-64'* ]] \
@@ -171,7 +196,7 @@ mkdir -p "$release_dir" "$staging_dir"
 release_files=()
 for target in "${target_list[@]}"; do
   binary="$(binary_path "$target")"
-  if [[ "$target" == "x86_64-pc-windows-gnu" ]]; then
+  if [[ "$target" == *"-windows-"* ]]; then
     direct_name="ai-tools-$target.exe"
     package_name="ai-tools.exe"
     archive_name="ai-tools-v$rust_version-$target.zip"
@@ -201,13 +226,29 @@ for target in "${target_list[@]}"; do
   release_files+=("$direct_name" "$archive_name")
 done
 
+skill_name="masih-awam-workspace-workflow"
+skill_source="$ROOT/.agents/skills/$skill_name/SKILL.md"
+skill_archive_name="$skill_name-v$rust_version.zip"
+skill_package_dir="$staging_dir/skill/$skill_name"
+[[ -f "$skill_source" ]] || fail "canonical release Skill is missing: $skill_source"
+mkdir -p "$skill_package_dir"
+install -m 0644 "$skill_source" "$skill_package_dir/SKILL.md"
+(
+  cd "$staging_dir/skill"
+  zip -q -9 -r "$release_dir/$skill_archive_name" "$skill_name"
+)
+unzip -tq "$release_dir/$skill_archive_name"
+unzip -Z1 "$release_dir/$skill_archive_name" | grep -Fxq "$skill_name/SKILL.md" \
+  || fail "$skill_archive_name does not contain $skill_name/SKILL.md"
+release_files+=("$skill_archive_name")
+
 head="$(git rev-parse HEAD)"
 metadata_path="$release_dir/RELEASE-METADATA.json"
 node --input-type=module -e '
   import fs from "node:fs"
-  const [path, releaseTag, rustVersion, commit, ...targets] = process.argv.slice(1)
+  const [path, releaseTag, rustVersion, commit, skillArchive, ...targets] = process.argv.slice(1)
   const artifacts = targets.map((target) => {
-    const windows = target === "x86_64-pc-windows-gnu"
+    const windows = target.includes("-windows-")
     return {
       target,
       binary: "ai-tools-" + target + (windows ? ".exe" : ""),
@@ -221,8 +262,12 @@ node --input-type=module -e '
     commit,
     targets,
     artifacts,
+    skill: {
+      name: "masih-awam-workspace-workflow",
+      archive: skillArchive,
+    },
   }, null, 2) + "\n")
-' "$metadata_path" "$tag" "$rust_version" "$head" "${target_list[@]}"
+' "$metadata_path" "$tag" "$rust_version" "$head" "$skill_archive_name" "${target_list[@]}"
 release_files+=("RELEASE-METADATA.json")
 
 (

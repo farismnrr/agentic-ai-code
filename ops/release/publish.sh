@@ -62,8 +62,15 @@ metadata="$release_dir/RELEASE-METADATA.json"
 [[ "$(jq -r '.aiToolsVersion // empty' "$metadata")" == "$cli_version" ]] \
   || fail 'release metadata version does not match the requested CLI release'
 
+skill_archive="$(jq -r '.skill.archive // empty' "$metadata")"
+[[ -n "$skill_archive" && -f "$release_dir/$skill_archive" ]] \
+  || fail 'release metadata Skill archive is missing from the bundle'
+target_count="$(jq -r '.targets | length' "$metadata")"
+[[ "$target_count" =~ ^[0-9]+$ ]] || fail 'release metadata target count is invalid'
+expected_asset_count=$((target_count * 2 + 3))
 mapfile -t asset_names < <(find "$release_dir" -maxdepth 1 -type f -printf '%f\n' | sort)
-(( "${#asset_names[@]}" == 8 )) || fail 'release bundle must contain exactly eight CLI release assets'
+(( "${#asset_names[@]}" == expected_asset_count )) \
+  || fail "release bundle must contain exactly $expected_asset_count release assets"
 release_assets=()
 for asset_name in "${asset_names[@]}"; do
   release_assets+=("$release_dir/$asset_name")

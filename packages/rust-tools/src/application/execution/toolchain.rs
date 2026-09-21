@@ -148,7 +148,7 @@ fn is_safe_directory(metadata: &std::fs::Metadata, allow_system: bool) -> bool {
     }
     #[cfg(not(unix))]
     {
-        let _ = allow_system;
+        let _ = (metadata, allow_system);
         true
     }
 }

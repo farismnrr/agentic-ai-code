@@ -10,7 +10,7 @@ The repository publishes two products through two independent channels:
 | Product | Version metadata | Publication | Release output |
 | --- | --- | --- | --- |
 | Nuxt web application | Root `package.json` and private TypeScript web-adapter packages | Docker/Buildx to GHCR | OCI image and immutable digest |
-| Rust `ai-tools` CLI | `packages/rust-tools/Cargo.toml`, `Cargo.lock`, and native package metadata | GitHub Release | Linux, macOS, and Windows binaries, archives, and checksums |
+| Rust `ai-tools` CLI | `packages/rust-tools/Cargo.toml`, `Cargo.lock`, and native package metadata | GitHub Release | Linux, macOS, and Windows binaries/archives, the workspace-workflow Skill ZIP, metadata, and checksums |
 
 The lanes may use the same reviewed `main` commit, but their version numbers,
 tags, artifacts, and publication commands remain independent. A Nuxt container
@@ -101,61 +101,84 @@ The manual bundle currently contains the unified `ai-tools` binary for:
 | Target | Package | Runtime note |
 | --- | --- | --- |
 | `x86_64-unknown-linux-gnu` | `.tar.gz` plus direct binary | Full CLI and Linux/Bubblewrap relay contract |
-| `x86_64-apple-darwin` | `.tar.gz` plus direct binary | CLI surfaces; the relay remains Linux-only |
-| `x86_64-pc-windows-gnu` | `.zip` plus `.exe` direct binary | CLI surfaces; the relay remains Linux-only |
+| `aarch64-unknown-linux-gnu` | `.tar.gz` plus direct binary | Full CLI and Linux/Bubblewrap relay contract on ARM64 Linux |
+| `x86_64-apple-darwin` | `.tar.gz` plus direct binary | Portable CLI surfaces on Intel macOS; the relay remains Linux-only |
+| `aarch64-apple-darwin` | `.tar.gz` plus direct binary | Portable CLI surfaces on Apple Silicon; the relay remains Linux-only |
+| `x86_64-pc-windows-gnu` | `.zip` plus `.exe` direct binary | Portable CLI surfaces on 64-bit Windows; the relay remains Linux-only |
 
 The macOS and Windows artifacts are real cross-compiled binaries, not renamed
 Linux files. The build fails if the Rust target or cross-linker is unavailable.
 On the Linux release host, install the reviewed prerequisites once:
 
 ```bash
-rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu
+rustup target add aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
 cargo install cargo-zigbuild --locked
+
+# Non-macOS hosts must also provide an authorized macOS SDK.
+export SDKROOT=/absolute/path/to/MacOSX.sdk
 ```
 
 `cargo-zigbuild`/Zig is used only when the requested target is not the active
-host target. For `x86_64-pc-windows-gnu`, the script explicitly selects
-`aws-lc-sys`'s verified prebuilt x86_64 NASM objects so a Linux release host does
-not need a host NASM installation. The script validates ELF, Mach-O, or PE
-architecture metadata and checks every archive before publishing.
+host target. For Apple targets on a non-macOS release host, `SDKROOT` must point
+to a real macOS SDK directory; the script fails early instead of allowing Rust
+to probe the unavailable `xcrun` command. For `x86_64-pc-windows-gnu`, the
+script explicitly selects `aws-lc-sys`'s verified prebuilt x86_64 NASM objects
+so a Linux release host does not need a host NASM installation. The script
+validates ELF, Mach-O, or PE architecture metadata and checks every archive
+before publishing.
 
 ## Build and publish the CLI
 
 From a clean `main` checkout at the intended CLI tag commit:
 
 ```bash
-pnpm release:build v0.0.14
+pnpm release:build v0.0.15
 ```
 
 The CLI build runs the Rust format, clippy, typecheck, test, guardrail, and
-audit gates, then performs release-mode builds for all three targets. It
-creates `dist/v0.0.14/`:
+audit gates, then performs release-mode builds for all five native targets with
+Rust warnings denied (`-D warnings`) so platform-specific cfg drift cannot ship
+as warning-only output. It
+creates `dist/v0.0.15/`:
 
 ```text
 ai-tools-x86_64-unknown-linux-gnu
-ai-tools-v0.0.14-x86_64-unknown-linux-gnu.tar.gz
+ai-tools-v0.0.15-x86_64-unknown-linux-gnu.tar.gz
+ai-tools-aarch64-unknown-linux-gnu
+ai-tools-v0.0.15-aarch64-unknown-linux-gnu.tar.gz
 ai-tools-x86_64-apple-darwin
-ai-tools-v0.0.14-x86_64-apple-darwin.tar.gz
+ai-tools-v0.0.15-x86_64-apple-darwin.tar.gz
+ai-tools-aarch64-apple-darwin
+ai-tools-v0.0.15-aarch64-apple-darwin.tar.gz
 ai-tools-x86_64-pc-windows-gnu.exe
-ai-tools-v0.0.14-x86_64-pc-windows-gnu.zip
+ai-tools-v0.0.15-x86_64-pc-windows-gnu.zip
+masih-awam-workspace-workflow-v0.0.15.zip
 RELEASE-METADATA.json
 SHA256SUMS
 ```
 
+The Skill archive is generated from the tracked canonical
+`.agents/skills/masih-awam-workspace-workflow/SKILL.md` during the release
+build. The ZIP keeps the uploadable `masih-awam-workspace-workflow/SKILL.md`
+layout and is checksummed/published with the native CLI artifacts.
+
 Validate a copied bundle with:
 
 ```bash
-cd dist/v0.0.14
+cd dist/v0.0.15
 sha256sum --check SHA256SUMS
-tar -tzf ai-tools-v0.0.14-x86_64-unknown-linux-gnu.tar.gz
-tar -tzf ai-tools-v0.0.14-x86_64-apple-darwin.tar.gz
-unzip -t ai-tools-v0.0.14-x86_64-pc-windows-gnu.zip
+tar -tzf ai-tools-v0.0.15-x86_64-unknown-linux-gnu.tar.gz
+tar -tzf ai-tools-v0.0.15-aarch64-unknown-linux-gnu.tar.gz
+tar -tzf ai-tools-v0.0.15-x86_64-apple-darwin.tar.gz
+tar -tzf ai-tools-v0.0.15-aarch64-apple-darwin.tar.gz
+unzip -t ai-tools-v0.0.15-x86_64-pc-windows-gnu.zip
+unzip -t masih-awam-workspace-workflow-v0.0.15.zip
 ```
 
 After the CLI tag has been created and pushed from exact `main`:
 
 ```bash
-pnpm release:publish:cli v0.0.14
+pnpm release:publish:cli v0.0.15
 ```
 
 The CLI publisher fails closed unless the checkout is clean, the current

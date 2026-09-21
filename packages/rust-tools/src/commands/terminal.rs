@@ -130,11 +130,15 @@ async fn run_terminal(
         match timeout(Duration::from_millis(ms), child.wait()).await {
             Ok(result) => (result, false),
             Err(_) => {
+                #[cfg(unix)]
                 if let Some(pid) = child.id() {
-                    #[cfg(unix)]
                     unsafe {
                         libc::kill(-(pid as i32), libc::SIGKILL);
                     }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = child.kill().await;
                 }
                 (child.wait().await, true)
             }

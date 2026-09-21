@@ -2,7 +2,9 @@ use super::{
     bridge, BlenderSessionOwnership, BlenderSessionState, BlenderSessionStatus,
     BLENDER_LAB_PROTOCOL,
 };
-use crate::application::execution::{kill_process_group, resolve_safe_executable};
+#[cfg(unix)]
+use crate::application::execution::kill_process_group;
+use crate::application::execution::resolve_safe_executable;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use std::path::{Path, PathBuf};
