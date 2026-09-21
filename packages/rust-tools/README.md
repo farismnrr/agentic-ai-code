@@ -13,10 +13,10 @@ The separate tool CLIs were migrated from JavaScript during historical Plan 027 
 ## Toolchain
 
 - **Edition:** Rust 2021
-- **MSRV:** 1.88.0 (`Cargo.toml`)
-- **Repository-pinned toolchain:** Rust 1.95.0 (`rust-toolchain.toml`)
+- **MSRV:** declared in `Cargo.toml`
+- **Repository-pinned toolchain:** declared in `rust-toolchain.toml`
 
-Use the pinned toolchain for repository development/verification. The MSRV is a package compatibility floor, not the normal repository compiler.
+Use the toolchain pinned by `rust-toolchain.toml` for repository development and verification. The MSRV declared in `Cargo.toml` is a package compatibility floor, not the normal repository compiler.
 
 ## Architecture
 

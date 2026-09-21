@@ -1,47 +1,169 @@
 # Getting started
 
-This page gets the web application and native tools running from source. Remote MCP setup comes later.
+Choose the path that matches what you are installing. The released `ai-tools`
+CLI is portable across Linux, macOS, and Windows, while the production MCP
+relay is **Linux + Bubblewrap only**. Building the full AI Code application
+from source is a separate developer/operator workflow. Normal portable CLI
+users do **not** need Node.js, pnpm, Rust, PostgreSQL, Bubblewrap, Zig,
+`cargo-zigbuild`, or a macOS SDK.
 
-## 1. Prerequisites
+## 1. Install the released `ai-tools` CLI
+
+Download the current native release from the
+[GitHub Releases page](https://github.com/farismnrr/agentic-ai-code/releases).
+
+Download the artifact for your machine:
+
+| Platform | Architecture | Recommended artifact | Relay support |
+| --- | --- | --- | --- |
+| Linux | x86_64 / amd64 | `ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` | Yes, with Bubblewrap |
+| Linux | ARM64 / aarch64 | `ai-tools-vX.Y.Z-aarch64-unknown-linux-gnu.tar.gz` | Yes, with Bubblewrap |
+| macOS | Intel | `ai-tools-vX.Y.Z-x86_64-apple-darwin.tar.gz` | No |
+| macOS | Apple Silicon | `ai-tools-vX.Y.Z-aarch64-apple-darwin.tar.gz` | No |
+| Windows | x86_64 / amd64 | `ai-tools-vX.Y.Z-x86_64-pc-windows-gnu.zip` | No |
+
+The release also includes direct binaries for each target, plus
+`RELEASE-METADATA.json`, `SHA256SUMS`, and the workspace workflow Skill ZIP.
+The archive is usually the easiest installation choice.
+
+### Linux and macOS
+
+Extract the archive, place `ai-tools` somewhere on your `PATH`, and verify it:
+
+```bash
+tar -xzf ai-tools-vX.Y.Z-<target>.tar.gz
+mkdir -p "$HOME/.local/bin"
+install -m 0755 ai-tools "$HOME/.local/bin/ai-tools"
+ai-tools --version
+```
+
+Create `$HOME/.local/bin` first if needed and ensure it is on your shell
+`PATH`. You may also use another user-owned executable directory.
+
+### Windows PowerShell
+
+Extract the ZIP and place `ai-tools.exe` in a directory on your user `PATH`.
+For example:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Expand-Archive .\ai-tools-vX.Y.Z-x86_64-pc-windows-gnu.zip -DestinationPath "$HOME\bin" -Force
+$env:Path = "$HOME\bin;$env:Path"
+ai-tools.exe --version
+```
+
+Persist `$HOME\bin` in your user `PATH` if you want the command available in
+future PowerShell sessions.
+
+### Verify release checksums
+
+Download `SHA256SUMS` beside the artifact. On Linux:
+
+```bash
+sha256sum --check SHA256SUMS
+```
+
+On macOS:
+
+```bash
+shasum -a 256 -c SHA256SUMS
+```
+
+On Windows PowerShell, compare the artifact hash with its entry in
+`SHA256SUMS`:
+
+```powershell
+Get-FileHash .\ai-tools-vX.Y.Z-x86_64-pc-windows-gnu.zip -Algorithm SHA256
+Get-Content .\SHA256SUMS
+```
+
+## 2. Install the Masih Awam workspace workflow Skill
+
+The same release publishes
+`masih-awam-workspace-workflow-vX.Y.Z.zip`. It is generated from the tracked
+canonical source at
+`.agents/skills/masih-awam-workspace-workflow/SKILL.md`.
+
+For a client that supports Skill archive import, upload/import the ZIP unchanged.
+If the client expects an unpacked Skill directory instead, extract it and keep
+this layout intact:
+
+```text
+masih-awam-workspace-workflow/
+└── SKILL.md
+```
+
+The Skill describes the workspace-agnostic Masih Awam development workflow:
+resolve the active workspace, prefer available Masih Awam MCP capabilities,
+respect repository-local guidance and authorization boundaries, and report only
+verified work. Installing the Skill does not install the CLI or start a relay.
+
+## 3. Linux only: run the relay
+
+The `relay` subcommand is supported only on Linux because its production
+security boundary requires Bubblewrap (`bwrap`). The macOS and Windows release
+artifacts provide portable CLI surfaces only; they do **not** provide a
+supported relay server.
+
+Install Bubblewrap with your Linux distribution package manager, then configure
+a workspace root and start the relay from the installed binary. A local example:
+
+```bash
+export RELAY_WORKSPACE_ROOT="$HOME/Documents/Projects"
+
+ai-tools relay \
+  --mode local \
+  --origin http://localhost:3333
+```
+
+The relay refuses to run as root. Its default workspace/execution boundary is
+`$HOME/Documents/Projects`; use an explicit narrower root when you intentionally
+want a project-scoped relay. If a reverse proxy sends a different `Host` header,
+allow that exact host with repeated `--allowed-host` flags or
+`RELAY_ALLOWED_HOSTS`.
+
+For a production or public MCP endpoint, do not stop at this example. Follow
+[Remote MCP deployment](remote-mcp.md), then
+[Connect an MCP client](mcp-client.md). Read
+[Configuration](configuration.md) and [Security](security.md) before exposing
+the service.
+
+## 4. Develop or operate the full AI Code application from source
+
+You need this workflow only when you are developing the repository or operating
+the Nuxt application. A released portable `ai-tools` binary is independent of
+the web application's Node.js, pnpm, Rust, and PostgreSQL setup.
+
+### Prerequisites
 
 Install:
 
-- Node.js 22 or newer;
-- pnpm **11.18.0** (the repository pins it through `packageManager`);
-- Rust **1.95.0** for repository development;
+- a Node.js version compatible with the repository's current dependencies;
+- the pnpm version pinned by the repository `packageManager` field;
+- the Rust toolchain pinned by `rust-toolchain.toml` for repository development;
 - PostgreSQL;
 - Git;
-- Linux + `bwrap`/Bubblewrap if you plan to run `ai-tools relay`.
+- Linux + Bubblewrap only if this checkout will also run the relay.
 
-Optional integrations have additional requirements:
-
-- SMTP for email verification/password reset;
-- OAuth credentials for optional application login methods;
-- Jaeger/Loki-compatible endpoints for telemetry;
-- a compatible OAuth/OIDC Authorization Server for remote MCP;
-- an outbound HTTPS tunnel or reverse proxy for public MCP access.
-
-## 2. Clone and install
+Then clone and install:
 
 ```bash
-git clone <repository-url>
-cd ai-code
+git clone https://github.com/farismnrr/agentic-ai-code.git
+cd agentic-ai-code
 pnpm install
 ```
 
-`pnpm install` also:
+`pnpm install` installs JavaScript dependencies, prepares Nuxt generated files,
+and installs the tracked Git hooks. Build the native tools separately when
+needed with `pnpm build:tools`.
 
-- builds the Rust tools;
-- prepares generated Nuxt files;
-- installs the tracked Git pre-commit hook through `core.hooksPath=.githooks`.
-
-## 3. Create local configuration
+Create local configuration:
 
 ```bash
 cp .env.example .env
 ```
 
-At minimum for a normal local app setup, configure:
+At minimum for a normal local application setup, configure:
 
 ```dotenv
 NUXT_PUBLIC_SITE_URL=http://localhost:3333
@@ -51,100 +173,40 @@ NUXT_MODEL_PROVIDER_SECRET_KEY=<32-byte-hex-key>
 NUXT_WORKSPACES_ROOT=/absolute/path/to/your/workspaces
 ```
 
-Generate the provider-encryption key with:
+Generate local secrets with a password manager or, for example:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Generate a strong session password with a password manager or, for example:
-
-```bash
-openssl rand -hex 32
-```
-
-Read [configuration.md](configuration.md) before enabling external services.
-
-## 4. Prepare PostgreSQL
-
-Create the database named by `NUXT_DATABASE_URL`, then apply repository migrations:
+Create the database named by `NUXT_DATABASE_URL`, apply committed migrations,
+and start development:
 
 ```bash
 pnpm db:migrate
-```
-
-When schema changes are intentionally introduced during development, generate migrations with:
-
-```bash
-pnpm db:generate
-```
-
-Do not run `db:generate` merely as an installation step; committed migrations are the installation input.
-
-## 5. Start the application
-
-Development server:
-
-```bash
 pnpm dev
 ```
 
-Default URL:
-
-```text
-http://localhost:3333
-```
-
-For final local runtime verification, prefer a clean production build instead of relying on a long-lived dev watcher:
+The default local URL is `http://localhost:3333`. For final local runtime
+verification use a fresh production build:
 
 ```bash
 pnpm build
 pnpm preview
 ```
 
-## 6. Configure a model provider
+Do not run `pnpm db:generate` as an installation step; that command is for
+intentional schema development.
 
-Create/login to an AI Code account, then use the application settings to add a supported provider/model. Provider API keys and secret custom-header values are encrypted at rest using `NUXT_MODEL_PROVIDER_SECRET_KEY`.
+For contributor workflow and local validation, continue with
+[Development](development.md).
 
-The application also supports a router endpoint through `NUXT_ROUTER_BASE_URL` / `NUXT_ROUTER_API_KEY` when that deployment model is desired.
+## 5. Release maintainers
 
-## 7. Optional: run a local relay
+Cross-platform release-host setup is intentionally not part of normal
+installation. Maintainers who build the five-target native release matrix need
+additional Rust targets, Zig/cargo-zigbuild, and—when producing Apple targets
+from a non-macOS host—an authorized macOS SDK through `SDKROOT`.
 
-Install Bubblewrap, then from the repository root:
-
-```bash
-export RELAY_WORKSPACE_ROOT="$HOME/Documents/Projects"
-./target/release/ai-tools relay \
-  --mode local \
-  --origin http://localhost:3333 \
-  --allowed-host mcp.example.com
-```
-
-The relay remains loopback-only. `RELAY_WORKSPACE_ROOT` (or `--workspace-root`, with `--dir` as a compatibility alias) defaults to `$HOME/Documents/Projects` and supplies both the primary authorized workspace and the default hard execution boundary. Child repositories beneath it can be selected directly with `cwd` without `workspace_add`. `--execution-root` remains an explicit advanced override; additional workspace roots still must remain beneath it. Setting the workspace root and execution boundary to `$HOME` intentionally authorizes the whole non-protected home tree.
-
-Do not point the relay's user-project root at the `ai-code` repository checkout. That checkout is source code and may be selected as `cwd` only for repository development. User projects belong beneath `$HOME/Documents/Projects`; Blender creative projects use `$HOME/Documents/Projects/Blender/<creative-project>/...`, with generated scenes/renders/exports contained beneath that project rather than beneath `ai-code`.
-
-For routine repository work, prefer the relay's active dedicated MCP tools when they fully cover the operation: workspace inspection/editing tools, remote Git transport, forge/issues/workflows, HTTP/web, SSH diagnostics, alerts, and messaging. Use `terminal_exec` for builds, tests, package managers, interpreters, project scripts, shell pipelines, local Git, LSP-adjacent commands, and operations without an active structured contract; ordinary terminal execution remains credential-isolated. Its `args` are direct child-process argv values, so flags beginning with `-` or `--` are valid and should be passed explicitly (for example `command="cargo", args=["--help"]` or `args=["check", "--locked"]`).
-
-The relay also exposes bounded read-only repository resources for manifest/agent-guidance/status/HEAD context; these resources are server-owned views, not arbitrary file reads. Language-server and local Git workflows remain terminal fallback operations unless a future reviewed dedicated capability is explicitly added to the single runtime catalog composition path.
-
-Workspace paths must remain both beneath the hard `--execution-root` boundary and inside the primary or explicitly authorized workspace roots. Relative paths use the selected workspace/cwd; absolute paths are accepted only when they remain authorized. Read-style operations may follow a symlink only when its resolved target stays inside an authorized root. Mutation tools fail closed on final symlinks and symlinked mutation parents rather than writing through them.
-
-The relay always permits `localhost:<port>` and `127.0.0.1:<port>`. If the MCP client reaches the loopback listener using an externally-addressed Host, add that exact hostname with `--allowed-host` (or `RELAY_ALLOWED_HOSTS`). An entry without a port matches only that hostname without a port; configure `hostname:<port>` when a port must be allowed.
-
-The relay discovers common user-owned runtime bins (Cargo/Rust, Node managers, Bun, pnpm/npm prefixes, and bounded Conda environments) and adds them only when ownership and permissions are safe. Add other reviewed directories explicitly with repeated `--toolchain-path` arguments or `RELAY_TOOLCHAIN_PATH`; the relay never inherits the entire login-shell PATH. Python, Go, Git, compilers, and build tools installed in the fixed system PATH need no extra entry.
-
-After changing relay access, socket, or toolchain configuration, rebuild/restart the relay and verify capabilities through the MCP client itself. A useful smoke test covers a simple command plus the configured Node/package manager, Rust, Tailscale, and Docker commands; host-shell success alone does not prove the Bubblewrap execution environment can reach them.
-
-For local development that needs the host Tailscale daemon, add `--allow-tailscale` (or set `RELAY_ALLOW_TAILSCALE=true`). The socket defaults to `/var/run/tailscale/tailscaled.sock`; override it with `--tailscale-socket` or `RELAY_TAILSCALE_SOCKET` when needed.
-
-Read-only Docker diagnostics do not require full Docker opt-in: direct `docker` commands are accepted only when they match the relay's bounded diagnostic policy and the selected socket is exposed only to that invocation. For Docker lifecycle/build/pull/push or other unrestricted Docker work, add `--allow-docker` (or set `RELAY_ALLOW_DOCKER=true`) only in a trusted single-owner environment. For a non-default/rootless daemon, set `--docker-socket <absolute-path>` or `RELAY_DOCKER_SOCKET`. Full opt-in exposes the selected host Docker daemon socket to ordinary terminal commands and therefore grants substantially more authority than the default sandbox.
-
-## Next step
-
-For public/remote tool access, continue with:
-
-1. [Authentication](authentication.md)
-2. [OAuth/OIDC provider](oauth-provider.md)
-3. [Remote MCP deployment](remote-mcp.md)
-4. [Connect an MCP client](mcp-client.md)
+Those requirements and the release commands live only in
+[Releases](releases.md).
