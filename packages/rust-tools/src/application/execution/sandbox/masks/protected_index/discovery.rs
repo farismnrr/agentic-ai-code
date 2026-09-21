@@ -23,7 +23,16 @@ pub(in crate::application::execution::sandbox) fn discover(
                 if let Some(control) = control {
                     control.check()?;
                 }
-                std::thread::sleep(Duration::from_millis(2));
+                let sleep_for = control
+                    .and_then(|control| control.remaining())
+                    .map(|remaining| remaining.min(Duration::from_millis(2)))
+                    .unwrap_or_default();
+                if sleep_for.is_zero() {
+                    control
+                        .expect("control is present for bounded index retry")
+                        .check()?;
+                }
+                std::thread::sleep(sleep_for);
             }
             result => return result,
         }
@@ -37,9 +46,7 @@ fn discover_once(
     if let Some(control) = control {
         control.check()?;
     }
-    let freshness_deadline = control
-        .and_then(|control| control.remaining())
-        .map(|remaining| Instant::now() + remaining);
+    let freshness_deadline = control.and_then(|control| control.deadline());
     let root = std::fs::canonicalize(root)?;
     let controller = controller_for_root(&root)?;
     let cold = {
@@ -143,10 +150,26 @@ fn discover_once(
                 ));
             }
             Ok(WatchChanges::Changes(changes)) => {
+                if let Some(control) = control {
+                    control.check()?;
+                }
                 let generation = state.generation();
-                let mut budget = IndexScanBudget::new(INLINE_RECONCILIATION_BUDGET);
+                let remaining = control
+                    .and_then(|control| control.remaining())
+                    .unwrap_or(INLINE_RECONCILIATION_BUDGET)
+                    .min(INLINE_RECONCILIATION_BUDGET);
+                if remaining.is_zero() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "protected-path reconciliation has no remaining budget",
+                    ));
+                }
+                let mut budget = IndexScanBudget::new(remaining);
                 match super::traversal::reconcile(&root, &index, changes, &mut budget) {
                     Ok(()) => {
+                        if let Some(control) = control {
+                            control.check()?;
+                        }
                         let refreshed = index.snapshot(generation);
                         let freshness = ProtectedPathFreshness {
                             controller: controller.clone(),

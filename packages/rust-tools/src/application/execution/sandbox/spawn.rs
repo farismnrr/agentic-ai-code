@@ -429,8 +429,9 @@ pub(super) fn spawn_with_profile(
         });
     }
     let freshness_started = Instant::now();
-    let _freshness_guard = masks::lock_protected_path_freshness(&protected_path_freshness_checks)
-        .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
+    let _freshness_guard =
+        masks::lock_protected_path_freshness(&protected_path_freshness_checks, control)
+            .map_err(|error| SandboxError::at("protected_path_discovery", error))?;
     if let Some(control) = control {
         control.check()?;
     }

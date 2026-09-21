@@ -14,9 +14,11 @@ impl JobManager {
     pub async fn prepare_for_serving(&self) {}
 
     pub async fn wait(&self, id: &str) -> Result<JobSnapshot, McpError> {
-        let timeout_ms = {
+        let (timeout_ms, deadline) = {
             let jobs = self.jobs.lock().await;
-            jobs.get(id).map(|j| j.timeout_ms).unwrap_or(0)
+            jobs.get(id)
+                .map(|j| (j.timeout_ms, j.deadline))
+                .unwrap_or((0, None))
         };
         let effective = if timeout_ms > 0 {
             timeout_ms
@@ -24,6 +26,8 @@ impl JobManager {
             self.config.max_terminal_timeout_ms
         };
         let wait_start = Instant::now();
+        let deadline = deadline
+            .or_else(|| (effective > 0).then(|| wait_start + Duration::from_millis(effective)));
 
         loop {
             let snapshot = self
@@ -40,7 +44,7 @@ impl JobManager {
                 );
                 return Ok(snapshot);
             }
-            if effective > 0 && wait_start.elapsed() >= Duration::from_millis(effective) {
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
                 tracing::warn!(
                     event = "relay.process.stage",
                     stage = "job_wait",
@@ -74,10 +78,21 @@ impl JobManager {
                         );
                         return Ok(self.abort_stalled_job(id).await.unwrap_or(snapshot));
                     }
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    let sleep_for = cleanup_deadline
+                        .saturating_duration_since(Instant::now())
+                        .min(Duration::from_millis(10));
+                    if !sleep_for.is_zero() {
+                        tokio::time::sleep(sleep_for).await;
+                    }
                 }
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            let sleep_for = deadline
+                .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+                .unwrap_or_else(|| Duration::from_millis(10))
+                .min(Duration::from_millis(10));
+            if !sleep_for.is_zero() {
+                tokio::time::sleep(sleep_for).await;
+            }
         }
     }
 

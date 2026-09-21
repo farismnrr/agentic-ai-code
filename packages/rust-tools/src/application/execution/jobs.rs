@@ -5,7 +5,7 @@ use crate::core::redaction::redact_credentials;
 use crate::interfaces::mcp::ToolCallResult;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{watch, Mutex, Semaphore};
 use uuid::Uuid;
@@ -61,6 +61,7 @@ pub(crate) struct JobRecord {
     stdout: Arc<Mutex<process::OutputBuffer>>,
     stderr: Arc<Mutex<process::OutputBuffer>>,
     timeout_ms: u64,
+    deadline: Option<Instant>,
     task_abort: Option<tokio::task::AbortHandle>,
     pub(crate) child_pid: Option<u32>,
 }
@@ -157,6 +158,9 @@ impl JobManager {
         let timeout_ms = match &job {
             JobKind::Process(inv) => inv.timeout_ms,
         };
+        let deadline = match &job {
+            JobKind::Process(inv) => inv.execution_deadline,
+        };
         jobs.insert(
             id.clone(),
             JobRecord {
@@ -167,6 +171,7 @@ impl JobManager {
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
                 timeout_ms,
+                deadline,
                 task_abort: None,
                 child_pid: None,
             },

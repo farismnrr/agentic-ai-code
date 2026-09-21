@@ -14,6 +14,7 @@ use super::watcher::WatchChanges;
 use super::{IndexScanBudget, WORKSPACE_INDEX_BUDGET};
 #[cfg(feature = "test-protected-index")]
 use super::{CHURN_RETRY_DELAY, FAILED_INDEX_RETRY};
+use crate::application::execution::sandbox::SpawnControl;
 use std::io;
 #[cfg(feature = "test-protected-index")]
 use std::path::Path;
@@ -197,6 +198,7 @@ fn prime_with_budget(root: &Path, mut scan_budget: IndexScanBudget) -> io::Resul
 
 pub(in crate::application::execution::sandbox) fn lock_and_validate_freshness<'a>(
     checks: &'a [ProtectedPathFreshness],
+    control: Option<&SpawnControl<'_>>,
 ) -> io::Result<PreSpawnFreshnessGuard<'a>> {
     let mut ordered = checks.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| left.controller.root.cmp(&right.controller.root));
@@ -207,9 +209,12 @@ pub(in crate::application::execution::sandbox) fn lock_and_validate_freshness<'a
         guards.push(check.controller.gate());
     }
     for check in checks {
+        if let Some(control) = control {
+            control.check()?;
+        }
         check
             .controller
-            .ensure_snapshot_fresh(&check.snapshot, check.deadline)?;
+            .ensure_snapshot_fresh(&check.snapshot, check.deadline, control)?;
     }
     Ok(PreSpawnFreshnessGuard { _guards: guards })
 }
@@ -219,7 +224,11 @@ impl RootIndexController {
         self: &Arc<Self>,
         snapshot: &Arc<ProtectedMaskSnapshot>,
         deadline: Option<Instant>,
+        control: Option<&SpawnControl<'_>>,
     ) -> io::Result<()> {
+        if let Some(control) = control {
+            control.check()?;
+        }
         let mut state = self.state();
         let current_index = match &*state {
             RootState::Ready {
@@ -238,6 +247,9 @@ impl RootIndexController {
             ));
         };
         if !index.watcher_enabled() {
+            if let Some(control) = control {
+                control.check()?;
+            }
             let final_budget = deadline
                 .map(|deadline| {
                     deadline
@@ -254,6 +266,9 @@ impl RootIndexController {
             }
             let mut budget = IndexScanBudget::new(final_budget);
             let refreshed_index = Arc::new(super::traversal::scan(&self.root, &mut budget)?);
+            if let Some(control) = control {
+                control.check()?;
+            }
             let generation = state.generation().saturating_add(1);
             let refreshed = refreshed_index.snapshot(generation);
             let masks_unchanged = refreshed.protected_paths == snapshot.protected_paths;
@@ -272,12 +287,38 @@ impl RootIndexController {
             };
         }
         match index.take_changes(&self.root) {
-            Ok(WatchChanges::Clean) => Ok(()),
+            Ok(WatchChanges::Clean) => {
+                if let Some(control) = control {
+                    control.check()?;
+                }
+                Ok(())
+            }
             Ok(WatchChanges::Changes(changes)) => {
+                if let Some(control) = control {
+                    control.check()?;
+                }
                 let generation = state.generation();
-                let mut budget = IndexScanBudget::new(INLINE_RECONCILIATION_BUDGET);
+                let remaining = [
+                    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now())),
+                    control.and_then(|control| control.remaining()),
+                ]
+                .into_iter()
+                .flatten()
+                .min()
+                .unwrap_or(INLINE_RECONCILIATION_BUDGET)
+                .min(INLINE_RECONCILIATION_BUDGET);
+                if remaining.is_zero() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "protected-path reconciliation has no remaining budget",
+                    ));
+                }
+                let mut budget = IndexScanBudget::new(remaining);
                 match super::traversal::reconcile(&self.root, &index, changes, &mut budget) {
                     Ok(()) => {
+                        if let Some(control) = control {
+                            control.check()?;
+                        }
                         let refreshed = index.snapshot(generation);
                         let masks_unchanged = refreshed.protected_paths == snapshot.protected_paths;
                         *state = RootState::Ready {

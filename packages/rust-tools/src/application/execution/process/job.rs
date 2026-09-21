@@ -24,7 +24,11 @@ pub(in crate::application::execution) async fn run_job(
     let timeout_ms = match &job {
         JobKind::Process(inv) => effective_timeout(&manager.config, inv.timeout_ms),
     };
-    let deadline = (timeout_ms > 0).then(|| job_started + Duration::from_millis(timeout_ms));
+    let deadline = match &job {
+        JobKind::Process(invocation) => invocation
+            .execution_deadline
+            .or_else(|| (timeout_ms > 0).then(|| job_started + Duration::from_millis(timeout_ms))),
+    };
     let semaphore = manager.semaphore.clone();
     let semaphore_started = Instant::now();
     let permit = tokio::select! {
@@ -87,6 +91,17 @@ pub(in crate::application::execution) async fn run_job(
             return;
         }
     };
+    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        finish_failure(
+            &manager,
+            &id,
+            JobState::TimedOut,
+            ProcessFailure::new("semaphore_acquire", io::ErrorKind::TimedOut),
+            job_started.elapsed().as_millis() as u64,
+        )
+        .await;
+        return;
+    }
     if *cancel.borrow() {
         finish_failure(
             &manager,

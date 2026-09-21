@@ -5,6 +5,7 @@ use crate::interfaces::mcp::{Tool, ToolCallResult, ToolResultContent};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 mod jobs;
 mod paths;
 mod process;
@@ -76,6 +77,7 @@ pub(crate) struct ToolInvocation {
     expose_optional_sockets: bool,
     readonly_docker_socket: bool,
     expose_authorized_siblings: bool,
+    execution_deadline: Option<Instant>,
     security: InvocationSecurity,
 }
 

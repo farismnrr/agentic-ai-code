@@ -111,6 +111,7 @@ pub(super) fn build_invocation(
         expose_optional_sockets: false,
         readonly_docker_socket: false,
         expose_authorized_siblings: false,
+        execution_deadline: None,
         security: InvocationSecurity::Ssh { material_files },
     })
 }

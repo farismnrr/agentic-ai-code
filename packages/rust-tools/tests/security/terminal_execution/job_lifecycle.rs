@@ -141,7 +141,14 @@ async fn test_terminal_exec_timeout_produces_timed_out() {
 
     let snapshot = fixture.manager.wait(&id).await.expect("wait failed");
     let elapsed = start.elapsed();
-    assert_eq!(snapshot.state, JobState::TimedOut);
+    assert_eq!(
+        snapshot.state,
+        JobState::TimedOut,
+        "stdout={:?} stderr={:?} result={:?} elapsed={elapsed:?}",
+        snapshot.stdout,
+        snapshot.stderr,
+        snapshot.result
+    );
     let result = snapshot.result.as_ref().expect("timed-out tool result");
     assert!(result.is_error);
     let timeout_text = &result.content[0].text;
@@ -247,6 +254,104 @@ async fn test_terminal_exec_semaphore_capacity_restored() {
     let snap3 = fixture.manager.wait(&id3).await.expect("job3 wait failed");
     assert_eq!(snap3.state, JobState::Completed);
     assert_eq!(snap3.stdout, "capacity-restored");
+}
+
+#[tokio::test]
+async fn terminal_exec_semaphore_wait_uses_the_same_deadline_and_cannot_spawn_late() {
+    let fixture = TestFixture::with_config(|config| config.max_running_jobs = 1).await;
+    let manager = fixture.manager.clone();
+    let config = fixture.config.clone();
+    let first = tokio::spawn(async move {
+        start_terminal_job(
+            &json!({
+                "command": "sleep",
+                "args": ["30"],
+                "cwd": config.dir.clone(),
+                "timeout_ms": 5000
+            }),
+            &config,
+            &manager,
+        )
+        .await
+    });
+
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while fixture.manager.active_jobs_count().await == 0 {
+            if first.is_finished() {
+                panic!("first job finished before admission");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("first job did not acquire execution capacity");
+
+    let started = Instant::now();
+    let queued_id = start_terminal_job(
+        &json!({
+            "command": "printf",
+            "args": ["must-not-spawn"],
+            "cwd": fixture.root,
+            "timeout_ms": 100
+        }),
+        &fixture.config,
+        &fixture.manager,
+    )
+    .await
+    .expect("queued job failed to be admitted");
+    let queued = fixture
+        .manager
+        .wait(&queued_id)
+        .await
+        .expect("queued job wait");
+    assert_eq!(queued.state, JobState::TimedOut);
+    assert!(
+        queued.stdout.is_empty(),
+        "queued job spawned after its deadline"
+    );
+    assert!(started.elapsed() < Duration::from_secs(2));
+
+    first.abort();
+    let _ = first.await;
+    fixture.manager.shutdown().await;
+}
+
+#[tokio::test]
+async fn terminal_exec_accepts_60000_ms_and_rejects_larger_public_timeout() {
+    let fixture = TestFixture::new().await;
+    let accepted_id = start_terminal_job(
+        &json!({
+            "command": "true",
+            "cwd": fixture.root,
+            "timeout_ms": 60_000
+        }),
+        &fixture.config,
+        &fixture.manager,
+    )
+    .await
+    .expect("public 60000 ms timeout should be accepted");
+    assert_eq!(
+        fixture
+            .manager
+            .wait(&accepted_id)
+            .await
+            .expect("accepted timeout wait")
+            .state,
+        JobState::Completed
+    );
+
+    let rejected = start_terminal_job(
+        &json!({
+            "command": "true",
+            "cwd": fixture.root,
+            "timeout_ms": 60_001
+        }),
+        &fixture.config,
+        &fixture.manager,
+    )
+    .await
+    .expect_err("timeout above the public hard maximum must be rejected");
+    assert!(rejected.to_string().contains("terminal maximum"));
 }
 
 // 9. repeated terminal executions do not accumulate stuck jobs

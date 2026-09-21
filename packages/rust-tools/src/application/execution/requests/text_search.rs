@@ -9,8 +9,10 @@ use crate::interfaces::mcp::ToolCallResult;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, timeout_at, Instant as TokioInstant};
 
 const DEFAULT_TEXT_SEARCH_RESULTS: usize = 50;
 const MAX_TEXT_SEARCH_RESULTS: usize = 100;
@@ -96,6 +98,8 @@ fn build_text_search_invocation(
     arguments: &Value,
     config: &ServerConfig,
 ) -> Result<(ToolInvocation, usize), McpError> {
+    let execution_deadline =
+        Instant::now() + Duration::from_millis(super::TERMINAL_HARD_TIMEOUT_MS);
     let query = arguments
         .get("query")
         .and_then(Value::as_str)
@@ -228,11 +232,12 @@ fn build_text_search_invocation(
             args,
             stdin_file: None,
             cwd: Some(cwd),
-            timeout_ms: 0,
+            timeout_ms: super::TERMINAL_HARD_TIMEOUT_MS,
             allow_network: false,
             expose_optional_sockets: true,
             readonly_docker_socket: false,
-            expose_authorized_siblings: true,
+            expose_authorized_siblings: false,
+            execution_deadline: Some(execution_deadline),
             security: InvocationSecurity::Standard,
         },
         max_results,
@@ -245,11 +250,14 @@ pub(crate) async fn run_text_search(
 ) -> Result<ToolCallResult, McpError> {
     let (invocation, max_results) = build_text_search_invocation(arguments, config)?;
     let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    let deadline = invocation
+        .execution_deadline
+        .ok_or_else(|| McpError::Internal("text search deadline unavailable".into()))?;
     let mut child = sandbox::spawn(
         config,
         &invocation,
         sandbox::WorkspaceAccess::ReadOnly,
-        None,
+        Some(deadline),
         &cancel_rx,
     )
     .map_err(|_| McpError::Internal("failed to start text search".into()))?;
@@ -272,19 +280,29 @@ pub(crate) async fn run_text_search(
     let mut matches = Vec::new();
     let mut truncated = false;
     loop {
-        let line =
-            match read_bounded_line(&mut lines, MAX_TEXT_SEARCH_PREVIEW_BYTES.saturating_mul(8))
-                .await
-            {
-                Ok(Some(line)) => line,
-                Ok(None) => break,
-                Err(error) => {
-                    kill_process_group(&mut child).await;
-                    let _ = child.wait().await;
-                    let _ = stderr_task.await;
-                    return Err(error);
-                }
-            };
+        let line = match timeout_at(
+            TokioInstant::from_std(deadline),
+            read_bounded_line(&mut lines, MAX_TEXT_SEARCH_PREVIEW_BYTES.saturating_mul(8)),
+        )
+        .await
+        {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => break,
+            Ok(Err(error)) => {
+                kill_process_group(&mut child).await;
+                let _ = timeout(Duration::from_millis(500), child.wait()).await;
+                let _ = stderr_task.await;
+                return Err(error);
+            }
+            Err(_) => {
+                kill_process_group(&mut child).await;
+                let _ = timeout(Duration::from_millis(500), child.wait()).await;
+                let _ = stderr_task.await;
+                return Err(McpError::InvalidRequest(
+                    "text search exceeded terminal execution deadline".into(),
+                ));
+            }
+        };
         let event: Value = serde_json::from_slice(&line)
             .map_err(|_| McpError::InvalidRequest("text search output is invalid".into()))?;
         if event.get("type").and_then(Value::as_str) != Some("match") {
@@ -327,10 +345,18 @@ pub(crate) async fn run_text_search(
         });
     }
 
-    let status = child
-        .wait()
-        .await
-        .map_err(|_| McpError::Internal("text search process failed".into()))?;
+    let status = match timeout_at(TokioInstant::from_std(deadline), child.wait()).await {
+        Ok(Ok(status)) => status,
+        Ok(Err(_)) => return Err(McpError::Internal("text search process failed".into())),
+        Err(_) => {
+            kill_process_group(&mut child).await;
+            let _ = timeout(Duration::from_millis(500), child.wait()).await;
+            let _ = stderr_task.await;
+            return Err(McpError::InvalidRequest(
+                "text search exceeded terminal execution deadline".into(),
+            ));
+        }
+    };
     let _ = stderr_task.await;
     if !truncated {
         match status.code() {

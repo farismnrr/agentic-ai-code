@@ -16,8 +16,9 @@ pub(super) struct ProtectedPathFreshnessGuard<'a> {
 
 pub(super) fn lock_protected_path_freshness<'a>(
     checks: &'a [ProtectedPathFreshness],
+    control: Option<&super::SpawnControl<'_>>,
 ) -> Result<ProtectedPathFreshnessGuard<'a>, std::io::Error> {
-    protected_index::lock_and_validate_freshness(checks)
+    protected_index::lock_and_validate_freshness(checks, control)
         .map(|_guard| ProtectedPathFreshnessGuard { _guard })
 }
 
@@ -249,7 +250,7 @@ pub(super) fn test_snapshot_rejects_new_protected_path(
     }
     std::fs::write(&path, "secret")?;
     let checks = [freshness];
-    let _guard = protected_index::lock_and_validate_freshness(&checks)?;
+    let _guard = protected_index::lock_and_validate_freshness(&checks, None)?;
     Ok(())
 }
 
