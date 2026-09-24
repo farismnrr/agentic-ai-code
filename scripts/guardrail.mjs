@@ -44,6 +44,8 @@ async function walk(directory) {
     const content = await readFile(path, 'utf8')
     checkFileBudget(path, extension, content)
     checkArchitectureBoundary(path, content)
+    checkModuleManifest(path, content)
+    checkFrontendBarrel(path, content)
   }
 }
 
@@ -77,6 +79,51 @@ function checkArchitectureBoundary(path, content) {
         `${normalized}: inner architecture layer must not depend on ${dependency}.`
       )
     }
+  }
+}
+
+function checkModuleManifest(path, content) {
+  if (!path.endsWith('/mod.rs')) return
+
+  const allowed = [
+    /^\s*$/,
+    /^\s*\/\//,
+    /^\s*pub\s+mod\s+[A-Za-z0-9_]+\s*;\s*$/,
+    /^\s*mod\s+[A-Za-z0-9_]+\s*;\s*$/,
+    /^\s*pub\s+use\s+[^;]+;\s*$/
+  ]
+
+  const invalid = content
+    .split('\n')
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter(({ line }) => !allowed.some(pattern => pattern.test(line)))
+
+  if (invalid.length) {
+    violations.push(
+      `${relative(root, path)}: mod.rs is a module manifest only. Move implementation logic to dedicated files. Invalid lines: ${invalid.map(item => item.number).join(', ')}.`
+    )
+  }
+}
+
+function checkFrontendBarrel(path, content) {
+  if (!path.endsWith('/index.ts')) return
+
+  const allowed = [
+    /^\s*$/,
+    /^\s*\/\//,
+    /^\s*import\s+.+from\s+['"].+['"]\s*;?\s*$/,
+    /^\s*export\s+.+from\s+['"].+['"]\s*;?\s*$/
+  ]
+
+  const invalid = content
+    .split('\n')
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter(({ line }) => !allowed.some(pattern => pattern.test(line)))
+
+  if (invalid.length) {
+    violations.push(
+      `${relative(root, path)}: index.ts is a barrel only. Keep imports/re-exports here and move logic elsewhere. Invalid lines: ${invalid.map(item => item.number).join(', ')}.`
+    )
   }
 }
 

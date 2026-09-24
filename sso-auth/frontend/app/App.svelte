@@ -1,6 +1,5 @@
 <script lang="ts">
-  import AuthView from '../features/auth/components/AuthView.svelte'
-  import type { AuthState } from '../features/auth/model/auth-state'
+  import { AuthView, type AuthState } from '../features/auth'
 
   const authState: AuthState = { status: 'signed_out' }
 </script>
