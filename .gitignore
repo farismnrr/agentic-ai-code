@@ -1,0 +1,52 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Node / JavaScript
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+dist/
+build/
+.output/
+.nuxt/
+coverage/
+
+# Rust
+target/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache and temporary files
+.cache/
+.tmp/
+temp/
+tmp/
+*.swp
+*.swo
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local runtime/state
+*.pid
+*.pid.lock
+*.sqlite
+*.sqlite3
