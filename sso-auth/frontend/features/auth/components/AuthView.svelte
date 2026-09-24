@@ -3,7 +3,7 @@
   import AuthenticatedPanel from './AuthenticatedPanel.svelte'
   import CallbackPanel from './CallbackPanel.svelte'
   import ErrorPanel from './ErrorPanel.svelte'
-  import FlowPreview.svelte from './FlowPreview.svelte'
+  import FlowPreview from './FlowPreview.svelte'
   import LoginPanel from './LoginPanel.svelte'
   import SessionExpiredPanel from './SessionExpiredPanel.svelte'
 
