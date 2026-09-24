@@ -11,25 +11,35 @@ Lightweight GitHub SSO service for Masih Awam AI Code.
 - one runtime binary, one process, and one port
 - production-only Docker workflow; no hot-reload runtime
 
-## Current scope
+## Docker build cache
 
-The current milestone establishes the service shell. GitHub OAuth, sessions, and MCP integration come next.
+Docker's normal BuildKit layer cache is used by default.
 
-## Architecture
+The Dockerfile is arranged so unchanged work is reused:
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md).
+- Node dependencies are cached until `package.json` changes.
+- npm's download cache is persisted with a BuildKit cache mount.
+- Rust dependencies are compiled separately with `cargo-chef`.
+- Rust dependency compilation is reused while `Cargo.toml` dependency metadata is unchanged.
+- a frontend-only change rebuilds the Svelte assets and application binary, not all Rust dependencies.
+- an application Rust change recompiles the application while reusing dependency layers.
+- there are no source bind mounts or hot reload.
 
-## Docker
+Do not use `--no-cache` for normal rebuilds.
 
-The Docker build uses Debian-based Node and Rust builders, embeds the generated Svelte assets into the Rust release binary, then runs the binary in a minimal distroless Debian runtime.
-
-There are no package-manager install steps in the Dockerfile runtime path.
+## Run
 
 From the repository root:
 
 ```sh
 docker compose up -d --build --force-recreate sso-auth
 ```
+
+Docker automatically reuses every valid cached layer and rebuilds only invalidated steps.
+
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Guardrail
 
