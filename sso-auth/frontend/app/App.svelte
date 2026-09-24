@@ -1,9 +1,10 @@
 <script lang="ts">
-  import AuthCard from '../shared/components/AuthCard.svelte'
+  import AuthView from '../features/auth/components/AuthView.svelte'
+  import type { AuthState } from '../features/auth/model/auth-state'
+
+  const authState: AuthState = { status: 'signed_out' }
 </script>
 
-<main class="hero min-h-screen bg-base-200">
-  <div class="hero-content w-full">
-    <AuthCard />
-  </div>
+<main class="min-h-screen bg-base-200">
+  <AuthView state={authState} />
 </main>
