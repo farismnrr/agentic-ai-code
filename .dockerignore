@@ -1,0 +1,15 @@
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/target
+**/dist
+**/.cache
+**/.tmp
+**/tmp
+*.log
+.DS_Store
+.vscode
+.idea

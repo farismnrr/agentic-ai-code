@@ -7,16 +7,34 @@ Lightweight GitHub SSO service for Masih Awam AI Code.
 - Rust + Axum backend
 - Svelte + Vite frontend
 - Tailwind CSS + DaisyUI
-- Svelte builds to static assets served by the Rust process
-- one runtime process and one port
+- frontend assets are embedded into the release Rust binary
+- one runtime binary, one process, and one port
+- production-only Docker workflow; no hot-reload runtime
 
 ## Current scope
 
-The current milestone only establishes the service shell. GitHub OAuth, sessions, and MCP integration come next.
+The current milestone establishes the service shell. GitHub OAuth, sessions, and MCP integration come next.
 
 ## Architecture
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## Docker
+
+The Docker build compiles Svelte first, embeds its generated assets into the Rust release binary, and copies only the binary plus CA certificates into the runtime image.
+
+From the repository root:
+
+```sh
+docker compose build sso-auth
+docker compose up -d --force-recreate sso-auth
+```
+
+To rebuild and replace the running service after source changes:
+
+```sh
+docker compose up -d --build --force-recreate sso-auth
+```
 
 ## Guardrail
 

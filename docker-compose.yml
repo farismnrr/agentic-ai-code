@@ -1,0 +1,13 @@
+services:
+  sso-auth:
+    build:
+      context: .
+      dockerfile: sso-auth/Dockerfile
+    image: masih-awam/sso-auth:local
+    restart: unless-stopped
+    env_file:
+      - ./sso-auth/.env
+    environment:
+      PORT: "3000"
+    ports:
+      - "${SSO_PORT:-3000}:3000"
