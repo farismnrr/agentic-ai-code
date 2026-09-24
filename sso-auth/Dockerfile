@@ -7,7 +7,7 @@ WORKDIR /build
 COPY sso-auth/package.json ./
 
 RUN --mount=type=cache,target=/root/.npm \
-    npm install
+    npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 
 FROM frontend-deps AS frontend-builder
