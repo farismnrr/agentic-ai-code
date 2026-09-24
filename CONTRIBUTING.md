@@ -44,3 +44,14 @@ Current mandatory principles:
 - Clean Architecture
 - DRY and reusable code where a real repeated concern exists
 - split folders and files by responsibility; do not accumulate unrelated code in one directory
+
+
+## Automatic CI failure recovery
+
+For AI-authored changes, a failed GitHub Actions run must be treated as part of the active task.
+
+The agent should inspect the failed run, fix failures that remain within the current task scope, commit the correction, and re-check CI until it passes.
+
+Additional user approval is only required when the correction needs secrets, unavailable infrastructure access, a significant architecture/product decision, destructive changes, or work outside the requested scope.
+
+See `AGENTS.md` for the repository-level agent rules.
