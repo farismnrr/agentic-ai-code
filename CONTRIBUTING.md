@@ -28,7 +28,9 @@ Do not bypass the hook with `--no-verify`.
 
 ## Remote enforcement
 
-GitHub Actions runs the same `./scripts/check.sh` on the repository self-hosted runner for every push.
+GitHub Actions runs the same `./scripts/check.sh` on the repository self-hosted runner only when `.ci/trigger` is changed, or when the workflow is started manually.
+
+Normal implementation commits do not start CI. At the end of an AI-assisted task, the agent updates `.ci/trigger` in a dedicated commit, inspects the resulting run, and fixes/retriggers until CI passes.
 
 The workflow intentionally does not run on `pull_request` because this repository is public and untrusted fork code must not execute on the self-hosted runner.
 
