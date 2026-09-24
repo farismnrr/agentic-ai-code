@@ -25,7 +25,11 @@ Repository checks are defined by:
 ./scripts/check.sh
 ```
 
-A change is not considered complete until the relevant repository checks pass.
+Normal implementation commits must not trigger CI individually.
+
+When the active task is ready for final validation, update `.ci/trigger` in a dedicated commit. That push is the repository's CI trigger. Inspect the resulting GitHub Actions run and do not report the task as complete until it passes.
+
+A change is not considered complete until the final repository checks pass.
 
 ## Automatic CI failure recovery
 
@@ -34,9 +38,10 @@ When a GitHub Actions run triggered by an AI-authored change fails:
 1. Inspect the failed workflow run and job logs using the GitHub integration.
 2. Identify the root cause from the actual failure output.
 3. Fix the failure directly on the same working branch when the fix remains within the user's current requested scope.
-4. Commit the fix.
-5. Inspect the next CI run.
-6. Repeat until the CI run passes.
+4. Commit the fix without triggering CI for intermediate repair commits.
+5. Update `.ci/trigger` to start the next validation run.
+6. Inspect the resulting CI run.
+7. Repeat until the CI run passes.
 
 Do not wait for an additional user instruction merely to fix a CI/build/guardrail failure caused by the current change.
 
