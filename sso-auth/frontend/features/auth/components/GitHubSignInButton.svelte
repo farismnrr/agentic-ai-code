@@ -9,10 +9,11 @@
   class="btn btn-neutral btn-lg w-full"
   href={loading ? undefined : '/auth/github'}
   aria-disabled={loading}
+  aria-busy={loading}
 >
   {#if loading}
     <span class="loading loading-spinner loading-sm"></span>
-    Connecting...
+    Connecting…
   {:else}
     <GitHubIcon />
     Continue with GitHub

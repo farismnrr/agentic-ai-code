@@ -11,4 +11,6 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-base-200);
+  color: var(--color-base-content);
 }

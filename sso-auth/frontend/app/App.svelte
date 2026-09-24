@@ -4,6 +4,6 @@
   const authState: AuthState = { status: 'signed_out' }
 </script>
 
-<main class="min-h-screen bg-base-200">
+<main class="min-h-screen bg-base-200 text-base-content">
   <AuthView state={authState} />
 </main>

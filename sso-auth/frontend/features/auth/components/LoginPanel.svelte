@@ -12,7 +12,7 @@
 >
   <GitHubSignInButton {loading} />
 
-  <p class="text-center text-xs text-base-content/50">
+  <p class="text-center text-sm text-base-content/65">
     Authentication is handled securely through GitHub.
   </p>
 </AuthPanel>
