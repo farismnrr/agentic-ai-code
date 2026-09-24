@@ -6,6 +6,8 @@
   import FlowPreview from './FlowPreview.svelte'
   import LoginPanel from './LoginPanel.svelte'
   import SessionExpiredPanel from './SessionExpiredPanel.svelte'
+  import AuthArtwork from '../layout/AuthArtwork.svelte'
+  import BrandHeader from '../layout/BrandHeader.svelte'
 
   export let state: AuthState
   export let onSignIn: () => void
@@ -13,20 +15,45 @@
   export let onPreview: (state: AuthState) => void
 </script>
 
-<div class="hero min-h-screen px-4 py-10">
-  <div class="hero-content flex w-full max-w-lg flex-col gap-4">
-    {#if state.status === 'authenticated'}
-      <AuthenticatedPanel user={state.user} {onSignOut} />
-    {:else if state.status === 'callback_processing'}
-      <CallbackPanel />
-    {:else if state.status === 'session_expired'}
-      <SessionExpiredPanel {onSignIn} />
-    {:else if state.status === 'error'}
-      <ErrorPanel message={state.message} {onSignIn} />
-    {:else}
-      <LoginPanel loading={state.status === 'loading'} {onSignIn} />
-    {/if}
+<div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+  <BrandHeader />
 
-    <FlowPreview {onPreview} />
+  <div class="flex flex-1 items-center justify-center py-8 sm:py-12">
+    <div class="w-full max-w-4xl">
+      {#if state.status === 'signed_out'}
+        <div class="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <LoginPanel loading={false} {onSignIn} />
+          <AuthArtwork />
+        </div>
+      {:else if state.status === 'loading'}
+        <div class="mx-auto max-w-md">
+          <CallbackPanel phase="connecting" />
+        </div>
+      {:else if state.status === 'callback_processing'}
+        <div class="mx-auto max-w-md">
+          <CallbackPanel phase="callback" />
+        </div>
+      {:else if state.status === 'authenticated'}
+        <div class="mx-auto max-w-lg">
+          <AuthenticatedPanel user={state.user} {onSignOut} />
+        </div>
+      {:else if state.status === 'session_expired'}
+        <div class="mx-auto max-w-md">
+          <SessionExpiredPanel {onSignIn} />
+        </div>
+      {:else if state.status === 'error'}
+        <div class="mx-auto max-w-md">
+          <ErrorPanel message={state.message} {onSignIn} />
+        </div>
+      {/if}
+
+      <div class="mx-auto mt-8 max-w-2xl">
+        <FlowPreview {onPreview} />
+      </div>
+    </div>
   </div>
+
+  <p class="pb-2 text-center text-xs text-slate-400">
+    Secure authentication for Masih Awam services.
+  </p>
 </div>

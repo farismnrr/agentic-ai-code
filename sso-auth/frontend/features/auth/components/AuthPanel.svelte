@@ -1,23 +1,21 @@
 <script lang="ts">
-  export let badge: string
-  export let badgeClass = 'border-base-content/30 text-base-content/80'
   export let title: string
   export let message: string
+  export let eyebrow = ''
 </script>
 
-<section class="card w-full overflow-hidden border border-base-300 bg-base-100 text-base-content shadow-xl">
-  <div class="card-body gap-6 p-6 sm:p-10">
-    <header class="space-y-3">
-      <div class={`badge badge-outline ${badgeClass}`}>{badge}</div>
-
-      <div class="min-w-0 space-y-2">
-        <h1 class="card-title break-words text-3xl font-bold leading-tight text-base-content">
-          {title}
-        </h1>
-        <p class="text-base-content/80">{message}</p>
-      </div>
+<section class="w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="p-6 sm:p-8">
+    <header class="space-y-2">
+      {#if eyebrow}
+        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">{eyebrow}</p>
+      {/if}
+      <h1 class="text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.75rem]">{title}</h1>
+      <p class="max-w-md text-sm leading-6 text-slate-600">{message}</p>
     </header>
 
-    <slot />
+    <div class="mt-7">
+      <slot />
+    </div>
   </div>
 </section>

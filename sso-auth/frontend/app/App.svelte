@@ -29,7 +29,7 @@
   }
 </script>
 
-<main class="min-h-screen bg-base-200 text-base-content">
+<main class="min-h-screen bg-slate-50 text-slate-950">
   <AuthView
     state={authState}
     onSignIn={startSignIn}

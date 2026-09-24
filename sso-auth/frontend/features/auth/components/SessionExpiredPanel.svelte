@@ -6,10 +6,14 @@
 </script>
 
 <AuthPanel
-  badge="Session expired"
-  badgeClass="border-warning/60 text-warning"
-  title="Sign in again"
-  message="Your session is no longer active. Continue with GitHub to start a new session."
+  title="Session expired"
+  message="For your security, your session has ended. Sign in again to continue."
 >
-  <GitHubSignInButton {onSignIn} />
+  <div class="mb-6 flex justify-center">
+    <div class="grid size-14 place-items-center rounded-full border border-amber-200 bg-amber-50 text-2xl font-semibold text-amber-600">
+      !
+    </div>
+  </div>
+
+  <GitHubSignInButton label="Sign in again" {onSignIn} />
 </AuthPanel>
