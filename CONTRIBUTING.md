@@ -2,7 +2,7 @@
 
 ## Commit guardrail
 
-Every commit must pass the repository guardrail.
+Every commit must pass the repository checks.
 
 Enable the tracked Git hooks once after cloning:
 
@@ -13,12 +13,24 @@ Enable the tracked Git hooks once after cloning:
 After that, `git commit` automatically runs:
 
 ```sh
-node scripts/guardrail.mjs sso-auth
+./scripts/check.sh
 ```
 
-If the guardrail fails, the commit is blocked.
+The check script runs:
+
+- structural architecture guardrails
+- the production frontend build
+- the Rust backend release build through the Docker build target
+
+If any check fails, the local commit is blocked.
 
 Do not bypass the hook with `--no-verify`.
+
+## Remote enforcement
+
+GitHub Actions runs the same `./scripts/check.sh` on the repository self-hosted runner for every push.
+
+The workflow intentionally does not run on `pull_request` because this repository is public and untrusted fork code must not execute on the self-hosted runner.
 
 ## Engineering rules
 
