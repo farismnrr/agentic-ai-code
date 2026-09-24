@@ -3,15 +3,14 @@
   import GitHubSignInButton from './GitHubSignInButton.svelte'
 
   export let message: string
+  export let onSignIn: () => void
 </script>
 
 <AuthPanel
   badge="Authentication error"
-  badgeClass="badge-error badge-outline"
+  badgeClass="border-error/60 text-error"
   title="We couldn't sign you in"
   {message}
 >
-  <div class="card-actions">
-    <GitHubSignInButton />
-  </div>
+  <GitHubSignInButton {onSignIn} />
 </AuthPanel>

@@ -1,3 +1,7 @@
-<a class="btn btn-outline w-full" href="/auth/logout">
+<script lang="ts">
+  export let onSignOut: () => void
+</script>
+
+<button type="button" class="btn btn-outline w-full" on:click={onSignOut}>
   Sign out
-</a>
+</button>

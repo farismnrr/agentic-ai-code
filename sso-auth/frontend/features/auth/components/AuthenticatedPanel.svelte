@@ -4,11 +4,12 @@
   import LogoutButton from './LogoutButton.svelte'
 
   export let user: AuthenticatedUser
+  export let onSignOut: () => void
 </script>
 
 <AuthPanel
   badge="Authenticated"
-  badgeClass="badge-success badge-outline"
+  badgeClass="border-success/60 text-success"
   title={`@${user.login}`}
   message="Your GitHub session is active."
 >
@@ -22,12 +23,12 @@
     {/if}
 
     <div class="rounded-box bg-base-200 p-4 text-base-content">
-      <div class="text-xs font-medium uppercase tracking-wide text-base-content/65">
+      <div class="text-xs font-medium uppercase tracking-wide text-base-content/70">
         Signed in with
       </div>
       <div class="mt-1 font-semibold">GitHub</div>
     </div>
 
-    <LogoutButton />
+    <LogoutButton {onSignOut} />
   </div>
 </AuthPanel>

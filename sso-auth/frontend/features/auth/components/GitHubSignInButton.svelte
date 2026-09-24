@@ -2,14 +2,15 @@
   import GitHubIcon from '../../../shared/components/icons/GitHubIcon.svelte'
 
   export let loading = false
+  export let onSignIn: () => void
 </script>
 
-<a
-  class:btn-disabled={loading}
+<button
+  type="button"
   class="btn btn-neutral btn-lg w-full"
-  href={loading ? undefined : '/auth/github'}
-  aria-disabled={loading}
+  disabled={loading}
   aria-busy={loading}
+  on:click={onSignIn}
 >
   {#if loading}
     <span class="loading loading-spinner loading-sm"></span>
@@ -18,4 +19,4 @@
     <GitHubIcon />
     Continue with GitHub
   {/if}
-</a>
+</button>
