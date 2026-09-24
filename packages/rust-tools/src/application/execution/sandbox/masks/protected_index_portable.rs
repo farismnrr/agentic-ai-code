@@ -115,6 +115,7 @@ fn discover_with_budget(
 
 pub(super) fn lock_and_validate_freshness<'a>(
     checks: &'a [ProtectedPathFreshness],
+    _control: Option<&super::super::SpawnControl<'_>>,
 ) -> io::Result<PreSpawnFreshnessGuard<'a>> {
     for check in checks {
         if !check.is_fresh()? {

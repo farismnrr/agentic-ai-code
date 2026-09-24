@@ -74,6 +74,7 @@ pub(crate) fn spawn_lsp(
             expose_optional_sockets: false,
             readonly_docker_socket: false,
             expose_authorized_siblings: false,
+            execution_deadline: None,
             security: InvocationSecurity::Standard,
         },
         SandboxProfile {
@@ -110,6 +111,7 @@ pub(crate) fn spawn_hook(
             expose_optional_sockets: false,
             readonly_docker_socket: false,
             expose_authorized_siblings: false,
+            execution_deadline: None,
             security: InvocationSecurity::Standard,
         },
         SandboxProfile {

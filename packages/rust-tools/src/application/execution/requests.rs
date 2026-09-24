@@ -4,10 +4,11 @@ use super::{InvocationProgram, InvocationSecurity, ToolInvocation};
 mod text_search;
 pub(crate) use text_search::run_text_search;
 
-const TERMINAL_HARD_TIMEOUT_MS: u64 = 60_000;
+pub(super) const TERMINAL_HARD_TIMEOUT_MS: u64 = 60_000;
 use crate::core::config::ServerConfig;
 use crate::core::error::McpError;
 use serde_json::Value;
+use std::time::{Duration, Instant};
 const MAX_EXEC_ARGS: usize = 100;
 const MAX_EXEC_ARG_BYTES: usize = 64 * 1024;
 const MAX_HTTP_HEADERS: usize = 100;
@@ -47,6 +48,7 @@ pub(super) fn build_terminal_invocation(
             "timeout_ms exceeds terminal maximum of {operator_max} ms"
         )));
     }
+    let execution_deadline = Instant::now() + Duration::from_millis(timeout_ms);
     let cwd = resolve_authorized_cwd(arguments, config)?;
     let parts = shell_words::split(command)
         .map_err(|_| McpError::InvalidRequest("command could not be parsed".into()))?;
@@ -88,7 +90,8 @@ pub(super) fn build_terminal_invocation(
         allow_network: config.allow_terminal_network,
         expose_optional_sockets: true,
         readonly_docker_socket,
-        expose_authorized_siblings: true,
+        expose_authorized_siblings: false,
+        execution_deadline: Some(execution_deadline),
         security: InvocationSecurity::Standard,
     })
 }
@@ -191,6 +194,7 @@ pub(super) fn build_http_fetch_invocation(arguments: &Value) -> Result<ToolInvoc
         expose_optional_sockets: false,
         readonly_docker_socket: false,
         expose_authorized_siblings: false,
+        execution_deadline: None,
         security: InvocationSecurity::NetworkOnly,
     })
 }
@@ -224,6 +228,7 @@ pub(super) fn build_web_search_invocation(arguments: &Value) -> Result<ToolInvoc
         expose_optional_sockets: false,
         readonly_docker_socket: false,
         expose_authorized_siblings: false,
+        execution_deadline: None,
         security: InvocationSecurity::NetworkOnly,
     })
 }

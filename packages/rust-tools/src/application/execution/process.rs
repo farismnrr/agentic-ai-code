@@ -38,10 +38,16 @@ impl ProcessFailure {
     }
 
     fn diagnostic(&self) -> String {
-        format!(
+        let mut diagnostic = format!(
             "terminal execution failed at {}: {:?}",
             self.stage, self.kind
-        )
+        );
+        if self.stage == "protected_path_discovery" && self.kind == io::ErrorKind::TimedOut {
+            diagnostic.push_str(
+                "; protected-path preparation exhausted the bounded execution budget; use the most specific project or repository cwd instead of a broad authorized workspace root when possible",
+            );
+        }
+        diagnostic
     }
 }
 

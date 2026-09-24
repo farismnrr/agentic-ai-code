@@ -70,7 +70,7 @@ fn run_external_scan(
         if let Some(status) = child.try_wait()? {
             break status;
         }
-        thread::sleep(Duration::from_millis(2));
+        thread::sleep(budget.remaining().min(Duration::from_millis(2)));
     };
 
     let stdout = stdout_reader
