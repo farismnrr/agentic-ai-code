@@ -1,1 +1,0 @@
-{"jsonrpc":"2.0","id":3,"error":{"code":-32020,"message":"Header mismatch: required standard header 'mcp-name' is missing for method 'tools/call'"}}

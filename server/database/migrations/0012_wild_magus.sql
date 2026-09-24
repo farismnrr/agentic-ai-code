@@ -1,1 +1,0 @@
-ALTER TABLE "ai_code"."messages" ADD COLUMN "total_tokens" integer;

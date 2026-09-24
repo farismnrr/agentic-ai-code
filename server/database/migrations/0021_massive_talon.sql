@@ -1,1 +1,0 @@
-ALTER TABLE "ai_code"."relay_activity_workspace_bindings" ADD COLUMN "clear_through_sequence" integer DEFAULT 0 NOT NULL;
