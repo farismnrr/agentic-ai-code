@@ -1,4 +1,6 @@
+mod application;
 mod bootstrap;
+mod domain;
 mod infrastructure;
 mod interfaces;
 

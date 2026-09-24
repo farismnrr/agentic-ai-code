@@ -1,12 +1,29 @@
 # SSO Auth
 
-GitHub OAuth-based authentication service for Masih Awam AI Code.
+Lightweight GitHub SSO service for Masih Awam AI Code.
 
-## Initial scope
+## Runtime
 
-- GitHub SSO login
-- OAuth callback handling
-- Internal session/token issuance
-- Authentication boundary for connected services
+- Rust + Axum backend
+- Svelte + Vite frontend
+- Tailwind CSS + DaisyUI
+- Svelte builds to static assets served by the Rust process
+- one runtime process and one port
 
-Tool execution and relay responsibilities do not live in this service.
+## Current scope
+
+The current milestone only establishes the service shell. GitHub OAuth, sessions, and MCP integration come next.
+
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## Guardrail
+
+Run from `sso-auth/`:
+
+```sh
+npm run guardrail
+```
+
+The guardrail enforces source-file budgets, folder density, and inward Clean Architecture dependency boundaries. It complements review; SOLID and DRY still require design judgment.
