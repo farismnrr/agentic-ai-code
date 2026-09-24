@@ -18,10 +18,10 @@ publish does not create a CLI release, and a CLI release does not push an OCI
 image.
 
 The Nuxt beta line uses `0.1.x-beta`. The native CLI stable line uses its own
-`0.0.x` semantic version. For example, the public `v0.1.0-beta` container
-release and the CLI `v0.0.14` release are different product releases even when
-they are built from related commits. The historical beta GitHub Release must
-not be used to infer the CLI's next stable version.
+`0.0.x` semantic version. In the examples below, `vX.Y.Z-beta` is a web tag
+and `vX.Y.Z` is a native CLI tag; they are different product releases even
+when built from related commits. The historical beta GitHub Release must not
+be used to infer the CLI's next stable version.
 
 ## Version discovery
 
@@ -37,10 +37,9 @@ gh api --paginate '/users/<owner>/packages/container/ai-code/versions?per_page=1
 
 Do not infer a version from `latest`, a local build directory, or unrelated
 package metadata. Never rewrite a published Git tag or versioned GHCR tag.
-When no `0.1.x` beta exists, the first Nuxt beta is `v0.1.0-beta`; later beta
-versions increment the highest actually published `0.1.x` beta. The CLI
-version increments the highest published native `ai-tools` release and must
-match its Cargo package metadata exactly.
+For a new web beta, choose the next unpublished version in the `0.1.x-beta`
+line. The CLI version increments the highest published native `ai-tools`
+release and must match its Cargo package metadata exactly.
 
 ## Release branch and tags
 
@@ -55,9 +54,10 @@ release branch
       -> verify remotely and clean the checkout
 ```
 
-It is valid for `v0.1.1-beta` and `v0.0.14` to point at the same merged commit;
-the tags still drive different publishers. Do not publish from a release
-branch, feature branch, or stale checkout.
+It is valid for the selected web tag `vX.Y.Z-beta` and selected CLI tag
+`vX.Y.Z` to point at the same merged commit; the tags still drive different
+publishers. Do not publish from a release branch, feature branch, or stale
+checkout.
 
 ## Nuxt container release
 
@@ -78,7 +78,7 @@ Windows executables belong to the separate CLI release lane.
 From a clean `main` checkout at the intended container tag commit:
 
 ```bash
-pnpm release:publish:container v0.1.1-beta
+pnpm release:publish:container vX.Y.Z-beta
 ```
 
 The publisher uses Buildx with `linux/amd64,linux/arm64`, validates the pushed
@@ -86,8 +86,8 @@ manifest, pulls the immutable digest, checks the OCI labels, and verifies both
 version tags resolve to that digest. A beta image receives:
 
 ```text
-ghcr.io/farismnrr/ai-code:v0.1.1-beta
-ghcr.io/farismnrr/ai-code:0.1.1-beta
+ghcr.io/farismnrr/ai-code:vX.Y.Z-beta
+ghcr.io/farismnrr/ai-code:X.Y.Z-beta
 ```
 
 The mutable `latest` tag is not moved by a beta publish. A stable Nuxt image
@@ -132,27 +132,27 @@ before publishing.
 From a clean `main` checkout at the intended CLI tag commit:
 
 ```bash
-pnpm release:build v0.0.15
+pnpm release:build vX.Y.Z
 ```
 
 The CLI build runs the Rust format, clippy, typecheck, test, guardrail, and
 audit gates, then performs release-mode builds for all five native targets with
 Rust warnings denied (`-D warnings`) so platform-specific cfg drift cannot ship
 as warning-only output. It
-creates `dist/v0.0.15/`:
+creates `dist/vX.Y.Z/`:
 
 ```text
 ai-tools-x86_64-unknown-linux-gnu
-ai-tools-v0.0.15-x86_64-unknown-linux-gnu.tar.gz
+ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz
 ai-tools-aarch64-unknown-linux-gnu
-ai-tools-v0.0.15-aarch64-unknown-linux-gnu.tar.gz
+ai-tools-vX.Y.Z-aarch64-unknown-linux-gnu.tar.gz
 ai-tools-x86_64-apple-darwin
-ai-tools-v0.0.15-x86_64-apple-darwin.tar.gz
+ai-tools-vX.Y.Z-x86_64-apple-darwin.tar.gz
 ai-tools-aarch64-apple-darwin
-ai-tools-v0.0.15-aarch64-apple-darwin.tar.gz
+ai-tools-vX.Y.Z-aarch64-apple-darwin.tar.gz
 ai-tools-x86_64-pc-windows-gnu.exe
-ai-tools-v0.0.15-x86_64-pc-windows-gnu.zip
-masih-awam-workspace-workflow-v0.0.15.zip
+ai-tools-vX.Y.Z-x86_64-pc-windows-gnu.zip
+masih-awam-workspace-workflow-vX.Y.Z.zip
 RELEASE-METADATA.json
 SHA256SUMS
 ```
@@ -165,20 +165,20 @@ layout and is checksummed/published with the native CLI artifacts.
 Validate a copied bundle with:
 
 ```bash
-cd dist/v0.0.15
+cd dist/vX.Y.Z
 sha256sum --check SHA256SUMS
-tar -tzf ai-tools-v0.0.15-x86_64-unknown-linux-gnu.tar.gz
-tar -tzf ai-tools-v0.0.15-aarch64-unknown-linux-gnu.tar.gz
-tar -tzf ai-tools-v0.0.15-x86_64-apple-darwin.tar.gz
-tar -tzf ai-tools-v0.0.15-aarch64-apple-darwin.tar.gz
-unzip -t ai-tools-v0.0.15-x86_64-pc-windows-gnu.zip
-unzip -t masih-awam-workspace-workflow-v0.0.15.zip
+tar -tzf ai-tools-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz
+tar -tzf ai-tools-vX.Y.Z-aarch64-unknown-linux-gnu.tar.gz
+tar -tzf ai-tools-vX.Y.Z-x86_64-apple-darwin.tar.gz
+tar -tzf ai-tools-vX.Y.Z-aarch64-apple-darwin.tar.gz
+unzip -t ai-tools-vX.Y.Z-x86_64-pc-windows-gnu.zip
+unzip -t masih-awam-workspace-workflow-vX.Y.Z.zip
 ```
 
 After the CLI tag has been created and pushed from exact `main`:
 
 ```bash
-pnpm release:publish:cli v0.0.15
+pnpm release:publish:cli vX.Y.Z
 ```
 
 The CLI publisher fails closed unless the checkout is clean, the current

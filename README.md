@@ -18,7 +18,7 @@ The project is deliberately split into two trust zones: the **web application** 
 
 The human/operator documentation lives in [`docs/`](docs/README.md):
 
-- [Getting started](docs/getting-started.md) — clone, prerequisites, database, environment, build, and first run
+- [Getting started](docs/getting-started.md) — the canonical install guide for the portable CLI, workspace Skill, Linux relay, and full source setup
 - [Architecture](docs/architecture.md) — how the Nuxt app, MCP layer, Rust relay, OAuth, and tunnel fit together
 - [Configuration](docs/configuration.md) — runtime environment and security-sensitive settings
 - [Authentication](docs/authentication.md) — AI Code login versus remote MCP OAuth
@@ -75,8 +75,8 @@ ai-self/                Persistent MCP-assisted repository operating skills/poli
 
 ## Project policy at a glance
 
-- package manager: **pnpm 11.18.0**
-- development Rust toolchain: **Rust 1.95.0**
+- package manager: **pnpm**, using the version pinned by `package.json`
+- development Rust toolchain: use the version pinned by `rust-toolchain.toml`
 - normal Nuxt development port: **3333**
 - integration/release branch: **`main`**
 - implementation work: dedicated feature branch → PR → `main`

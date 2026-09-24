@@ -2,9 +2,9 @@
 
 This directory is the operator and contributor handbook for AI Code.
 
-If you are setting up a fresh installation, follow the pages in this order:
+If you are setting up AI Code, start with the installation path that matches your goal:
 
-1. **[Getting started](getting-started.md)** — prerequisites, database, `.env`, install, migrations, and first run.
+1. **[Getting started](getting-started.md)** — the canonical install guide for portable CLI installation on Linux/macOS/Windows, workspace Skill installation, Linux relay setup, and full source development.
 2. **[Configuration](configuration.md)** — understand the environment variables before exposing anything externally.
 3. **[Authentication](authentication.md)** — distinguish AI Code's own user login from the OAuth boundary used by the remote MCP relay.
 4. **[OAuth/OIDC provider](oauth-provider.md)** — configure the external Authorization Server used by the relay.
