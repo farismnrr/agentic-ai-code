@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend-builder
+FROM node:22-bookworm-slim AS frontend-builder
 
 WORKDIR /build
 
@@ -13,9 +13,7 @@ COPY sso-auth/frontend ./frontend
 RUN npm run build
 
 
-FROM rust:1-alpine AS backend-builder
-
-RUN apk add --no-cache musl-dev
+FROM rust:1-bookworm AS backend-builder
 
 WORKDIR /build
 
@@ -26,20 +24,12 @@ COPY --from=frontend-builder /build/dist ./dist
 RUN cargo build --release
 
 
-FROM alpine:3.22 AS certificates
-RUN apk add --no-cache ca-certificates
+FROM gcr.io/distroless/cc-debian12:nonroot
 
-
-FROM scratch
-
-COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=backend-builder /build/target/release/sso-auth /sso-auth
 
 ENV PORT=3000
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 EXPOSE 3000
-
-USER 65532:65532
 
 ENTRYPOINT ["/sso-auth"]

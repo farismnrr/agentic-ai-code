@@ -21,16 +21,11 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Docker
 
-The Docker build compiles Svelte first, embeds its generated assets into the Rust release binary, and copies only the binary plus CA certificates into the runtime image.
+The Docker build uses Debian-based Node and Rust builders, embeds the generated Svelte assets into the Rust release binary, then runs the binary in a minimal distroless Debian runtime.
+
+There are no package-manager install steps in the Dockerfile runtime path.
 
 From the repository root:
-
-```sh
-docker compose build sso-auth
-docker compose up -d --force-recreate sso-auth
-```
-
-To rebuild and replace the running service after source changes:
 
 ```sh
 docker compose up -d --build --force-recreate sso-auth
