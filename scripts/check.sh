@@ -34,6 +34,28 @@ build_target() {
   fi
 }
 
+build_relay_target() {
+  target="$1"
+  tag="$2"
+
+  if [ -n "${BUILDX_BUILDER:-}" ]; then
+    docker buildx build \
+      --builder "$BUILDX_BUILDER" \
+      --platform linux/amd64 \
+      --target "$target" \
+      --file relay-agent/Dockerfile \
+      --tag "$tag" \
+      --load \
+      .
+  else
+    docker build \
+      --target "$target" \
+      --file relay-agent/Dockerfile \
+      --tag "$tag" \
+      .
+  fi
+}
+
 echo "==> Structural guardrail"
 # shellcheck disable=SC2086
 docker run --rm \
@@ -43,10 +65,24 @@ docker run --rm \
   node:22-bookworm-slim \
   node scripts/guardrail.mjs sso-auth
 
+# shellcheck disable=SC2086
+docker run --rm \
+  $DOCKER_RUN_LIMITS \
+  --volume "$ROOT_DIR:/workspace" \
+  --workdir /workspace \
+  node:22-bookworm-slim \
+  node scripts/guardrail.mjs relay-agent
+
 echo "==> Frontend typecheck, Rust format, and Clippy"
 build_target backend-check masih-awam/sso-auth:check-quality
 
+echo "==> Relay format, Clippy, and tests"
+build_relay_target check masih-awam/relay-agent:check-quality
+
 echo "==> Production build check"
 build_target backend-builder masih-awam/sso-auth:check
+
+echo "==> Relay production build check"
+build_relay_target runtime masih-awam/relay-agent:check
 
 echo "==> All checks passed"
