@@ -10,29 +10,53 @@ Enable the tracked Git hooks once after cloning:
 ./scripts/setup-git-hooks.sh
 ```
 
-After that, `git commit` automatically runs:
-
-```sh
-./scripts/check.sh
-```
-
-The check script runs:
-
-- structural architecture guardrails
-- the production frontend build
-- the Rust backend release build through the Docker build target
-
-If any check fails, the local commit is blocked.
-
 Do not bypass the hook with `--no-verify`.
 
-## Remote enforcement
+## Remote CI model
 
-GitHub Actions runs the same `./scripts/check.sh` on the repository self-hosted runner only when `.ci/trigger` is changed, or when the workflow is started manually.
+GitHub Actions uses two separate validation levels on the repository self-hosted runner.
 
-Normal implementation commits do not start CI. At the end of an AI-assisted task, the agent updates `.ci/trigger` in a dedicated commit, inspects the resulting run, and fixes/retriggers until CI passes.
+### Fast CI
 
-The workflow intentionally does not run on `pull_request` because this repository is public and untrusted fork code must not execute on the self-hosted runner.
+Fast CI is the default validation after ordinary AI-assisted edits.
+
+It is triggered only when `.ci/fast-trigger` changes, or when its workflow is started manually.
+
+Order:
+
+1. lint/typecheck/Rust fmt/Clippy
+2. structural guardrail
+3. `linux/amd64` production build
+4. publish AMD64 validation image
+
+Fast CI publishes:
+
+```text
+ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast
+```
+
+and an immutable commit-specific AMD64 validation tag.
+
+Fast CI does not publish or modify the production `:latest` tag.
+
+### Full deployment CI
+
+Full CI is only for explicit deployment/full-validation requests.
+
+It is triggered when `.ci/trigger` changes, or when its workflow is started manually.
+
+Order:
+
+1. lint/typecheck/Rust fmt/Clippy
+2. structural guardrail
+3. tests
+4. serial `linux/amd64` and `linux/arm64` builds
+5. Playwright E2E
+6. publish and verify the multi-platform production image
+
+Normal implementation commits do not start either CI pipeline.
+
+The workflows intentionally do not run on `pull_request` because this repository is public and untrusted fork code must not execute on the self-hosted runner.
 
 ## Engineering rules
 
@@ -47,31 +71,29 @@ Current mandatory principles:
 - DRY and reusable code where a real repeated concern exists
 - split folders and files by responsibility; do not accumulate unrelated code in one directory
 
-
 ## Automatic CI failure recovery
 
 For AI-authored changes, a failed GitHub Actions run must be treated as part of the active task.
 
-The agent should inspect the failed run, fix failures that remain within the current task scope, commit the correction, and re-check CI until it passes.
+The agent should inspect the failed run, fix failures that remain within the current task scope, commit the correction, and re-check the same validation level until it passes.
 
 Additional user approval is only required when the correction needs secrets, unavailable infrastructure access, a significant architecture/product decision, destructive changes, or work outside the requested scope.
 
 See `AGENTS.md` for the repository-level agent rules.
 
-
 ## Deployment image
 
-Final CI validation publishes the production `sso-auth` image to GitHub Container Registry only after repository checks pass.
-
-Stable deployment image:
+Only successful full deployment CI publishes the production image:
 
 ```text
 ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest
 ```
 
-CI also publishes an immutable tag using the validated Git commit SHA.
+The production image is multi-platform and must support at least `linux/amd64` and `linux/arm64`.
 
-Normal local deployment should pull this image and recreate the service instead of rebuilding the application locally:
+Full CI also publishes an immutable tag using the validated Git commit SHA.
+
+Normal deployment should pull this image and recreate the service instead of rebuilding the application locally:
 
 ```sh
 git pull origin refactor/full-fe-be-relay
@@ -90,7 +112,5 @@ AGENTATION_ENABLED=true
 Set it to `false` to keep the inspector hidden.
 
 CI reads the GitHub Actions repository variable `AGENTATION_ENABLED` and passes it into the frontend production build. If the variable is absent, the build defaults to `false`.
-
-Useful shortcuts include `i` for inspect mode, `c` to copy annotations, `r` to reset toolbar position, `o` to open source context when available, and `esc` to cancel the current interaction.
 
 The inspector is a development utility and must not become part of the authentication product flow.

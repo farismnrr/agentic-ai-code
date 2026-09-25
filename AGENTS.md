@@ -17,19 +17,48 @@ These rules apply to AI-assisted changes in this repository.
 - Rust `mod.rs` files are module manifests only: module declarations and re-exports, no implementation logic.
 - Frontend `index.ts` files are barrel files only: imports/re-exports, no implementation logic.
 
-## Validation before completion
+## Validation model
 
-Repository checks are defined by:
+This repository has two CI pipelines.
 
-```sh
-./scripts/check.sh
-```
+### Fast pipeline — default after every completed edit/task
 
 Normal implementation commits must not trigger CI individually.
 
-When the active task is ready for final validation, update `.ci/trigger` in a dedicated commit. That push is the repository's CI trigger. Inspect the resulting GitHub Actions run and do not report the task as complete until it passes.
+When an AI-authored edit/task is ready to report back to the user, update `.ci/fast-trigger` in a dedicated commit. This starts the fast pipeline.
 
-A change is not considered complete until the final repository checks pass.
+The fast pipeline must run, in order:
+
+1. lint/typecheck/Rust fmt/Clippy with warnings denied
+2. structural guardrail
+3. production build for `linux/amd64`
+4. publish the non-deployment AMD64 validation image
+
+The fast pipeline is the default completion gate for ordinary edits. Inspect the resulting GitHub Actions run and do not report the edit/task as complete until it passes.
+
+Fast CI publishes validation-only tags:
+
+- `ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast`
+- an immutable AMD64 validation tag for the validated commit
+
+Fast CI must never overwrite the production `:latest` tag.
+
+### Full pipeline — deployment gate only
+
+Only run the full pipeline when the user explicitly asks to deploy, prepare for deployment, run the full pipeline, or otherwise requests deployment validation.
+
+Trigger it by updating `.ci/trigger` in a dedicated commit.
+
+The full pipeline must run, in order:
+
+1. lint/typecheck/Rust fmt/Clippy with warnings denied
+2. structural guardrail
+3. tests
+4. production builds for `linux/amd64` and `linux/arm64`, serially
+5. Playwright E2E
+6. publish the production multi-platform image and verify its manifest
+
+A deployment is not considered ready until the full pipeline passes.
 
 ## Automatic CI failure recovery
 
@@ -39,9 +68,11 @@ When a GitHub Actions run triggered by an AI-authored change fails:
 2. Identify the root cause from the actual failure output.
 3. Fix the failure directly on the same working branch when the fix remains within the user's current requested scope.
 4. Commit the fix without triggering CI for intermediate repair commits.
-5. Update `.ci/trigger` to start the next validation run.
+5. Retrigger the same pipeline that failed:
+   - fast validation: update `.ci/fast-trigger`
+   - deployment/full validation: update `.ci/trigger`
 6. Inspect the resulting CI run.
-7. Repeat until the CI run passes.
+7. Repeat until the required pipeline passes.
 
 Do not wait for an additional user instruction merely to fix a CI/build/guardrail failure caused by the current change.
 
@@ -55,16 +86,18 @@ Stop and ask the user before proceeding when a fix requires:
 
 Never claim a change is complete or verified while its required CI run is failing or has not been checked.
 
-
 ## CI-built deployment image
 
 The self-hosted CI runner is the source of deployable `sso-auth` container images.
 
-After the final repository checks pass, CI builds and publishes:
+Only the successful full/deployment pipeline publishes:
 
 - `ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest`
 - an immutable image tagged with the validated Git commit SHA
 
-Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful final CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
+The production `:latest` manifest must include at least:
 
-A task that changes deployable `sso-auth` code is not considered complete until the final CI run has successfully published the image.
+- `linux/amd64`
+- `linux/arm64`
+
+Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful full CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
