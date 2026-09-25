@@ -79,23 +79,18 @@ docker compose pull sso-auth
 docker compose up -d --force-recreate sso-auth
 ```
 
-
 ## Visual UI inspection
 
-The SSO frontend includes `sv-agentation` for local visual feedback.
-
-It is hidden during normal browsing. Enable it explicitly by opening the local SSO URL with:
+The SSO frontend includes `sv-agentation` for visual UI feedback. The integration uses the Svelte-native package and is controlled by one environment flag:
 
 ```text
-http://localhost:3000/?inspect=1
+AGENTATION_ENABLED=true
 ```
 
-Useful default shortcuts:
+Set it to `false` to keep the inspector hidden.
 
-- `i` toggles inspect mode
-- `c` copies annotations
-- `r` resets the toolbar position
-- `o` opens the hovered source location when source metadata is available
-- `esc` closes the current inspector interaction
+CI reads the GitHub Actions repository variable `AGENTATION_ENABLED` and passes it into the frontend production build. If the variable is absent, the build defaults to `false`.
+
+Useful shortcuts include `i` for inspect mode, `c` to copy annotations, `r` to reset toolbar position, `o` to open source context when available, and `esc` to cancel the current interaction.
 
 The inspector is a development utility and must not become part of the authentication product flow.
