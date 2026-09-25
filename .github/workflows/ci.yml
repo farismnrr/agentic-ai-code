@@ -16,6 +16,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-sso-auth
+  AGENTATION_ENABLED: ${{ vars.AGENTATION_ENABLED || 'false' }}
 
 jobs:
   check-and-publish:
@@ -39,7 +40,12 @@ jobs:
 
       - name: Build deployable image
         run: |
-          docker build             --file sso-auth/Dockerfile             --tag "$IMAGE_NAME:refactor-full-fe-be-relay"             --tag "$IMAGE_NAME:${{ github.sha }}"             .
+          docker build \
+            --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
+            --file sso-auth/Dockerfile \
+            --tag "$IMAGE_NAME:refactor-full-fe-be-relay" \
+            --tag "$IMAGE_NAME:${{ github.sha }}" \
+            .
 
       - name: Publish deployable image
         run: |
