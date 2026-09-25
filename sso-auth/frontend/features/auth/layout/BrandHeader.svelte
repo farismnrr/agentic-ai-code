@@ -1,14 +1,11 @@
 <header class="flex items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
   <a href="/" class="inline-flex items-center gap-3" aria-label="Masih Awam Auth home">
-    <div class="grid size-9 place-items-center rounded-xl bg-blue-600 text-sm font-black tracking-tight text-white shadow-sm">
-      ma
-    </div>
-    <div class="flex items-baseline gap-2">
-      <span class="text-lg font-extrabold tracking-[-0.04em] text-slate-950">
-        masih<span class="text-blue-600">awam</span>
-      </span>
-      <span class="text-sm font-semibold text-slate-400">Auth</span>
-    </div>
+    <img
+      src="/assets/masihawam-logo.png"
+      alt="Masih Awam"
+      class="h-9 w-auto object-contain"
+    />
+    <span class="text-sm font-semibold text-slate-400">Auth</span>
   </a>
 
   <a href="mailto:support@farismnrr.com" class="btn btn-ghost btn-sm gap-2 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700">
