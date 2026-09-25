@@ -18,7 +18,7 @@ pub struct SignedSessionCodec {
 
 impl SignedSessionCodec {
     pub fn new(secret: String, ttl_seconds: u64) -> Result<Self, AuthError> {
-        if secret.as_bytes().len() < 32 {
+        if secret.len() < 32 {
             return Err(AuthError::InvalidConfiguration(
                 "SESSION_SECRET must contain at least 32 bytes",
             ));

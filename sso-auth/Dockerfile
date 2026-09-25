@@ -95,6 +95,18 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cargo clippy --all-targets --all-features --target "${target}" -- -D warnings
 
 
+FROM backend-deps AS backend-test
+
+COPY sso-auth/Cargo.toml ./
+COPY sso-auth/src ./src
+COPY --from=frontend-builder /build/dist ./dist
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    target="$(cat /tmp/rust-target)" \
+    && cargo test --all-targets --all-features --target "${target}"
+
+
 FROM backend-deps AS backend-builder
 
 COPY sso-auth/Cargo.toml ./
