@@ -24,10 +24,6 @@
   function signOut() {
     authState = { status: 'signed_out' }
   }
-
-  function previewState(state: AuthState) {
-    authState = state
-  }
 </script>
 
 <main class="min-h-screen bg-slate-50 text-slate-950">
@@ -35,7 +31,6 @@
     state={authState}
     onSignIn={startSignIn}
     onSignOut={signOut}
-    onPreview={previewState}
   />
 </main>
 
