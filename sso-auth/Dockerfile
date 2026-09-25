@@ -68,7 +68,9 @@ RUN case "${TARGETARCH}" in \
     && printf '%s' "${target}" > /tmp/rust-target \
     && if [ "${TARGETARCH}" = "arm64" ]; then \
          apt-get update \
-         && apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu \
+         && apt-get install -y --no-install-recommends \
+              gcc-aarch64-linux-gnu \
+              libc6-dev-arm64-cross \
          && rm -rf /var/lib/apt/lists/*; \
        fi \
     && rustup target add "${target}"
