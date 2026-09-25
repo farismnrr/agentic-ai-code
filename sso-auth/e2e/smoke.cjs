@@ -28,7 +28,7 @@ async function main() {
       throw new Error(`broken images: ${brokenImages.join(', ')}`)
     }
 
-    const artwork = page.locator('img[src="/assets/security-auth.png"]')
+    const artwork = page.locator('img[src="/assets/security-auth.webp"]')
     await artwork.waitFor({ state: 'visible' })
 
     const artworkStats = await artwork.evaluate(image => {
