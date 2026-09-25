@@ -26,9 +26,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         config.session_secret(),
         config.session_ttl_seconds(),
     )?);
-    let access_policy = Arc::new(GitHubUserAllowlist::new(
-        config.allowed_github_user_ids(),
-    )?);
+    let access_policy = Arc::new(GitHubUserAllowlist::new(config.allowed_github_user_ids())?);
     let auth = Arc::new(AuthService::new(
         oauth,
         sessions,
