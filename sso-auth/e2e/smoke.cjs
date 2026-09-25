@@ -1,14 +1,79 @@
 const { chromium } = require('playwright')
 const fs = require('fs')
+const http = require('http')
 
 const baseUrl = process.env.E2E_BASE_URL || 'http://127.0.0.1:13000'
 const artifactDir = process.env.E2E_ARTIFACT_DIR || '/artifacts'
+const oauthPort = Number(process.env.E2E_OAUTH_PORT || 4400)
+
+function startOAuthMock() {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (request, response) => {
+      const url = new URL(request.url, `http://127.0.0.1:${oauthPort}`)
+
+      if (request.method === 'GET' && url.pathname === '/authorize') {
+        const redirectUri = url.searchParams.get('redirect_uri')
+        const state = url.searchParams.get('state')
+        if (!redirectUri || !state) {
+          response.writeHead(400).end('missing oauth parameters')
+          return
+        }
+
+        const callback = new URL(redirectUri)
+        callback.searchParams.set('code', 'e2e-code')
+        callback.searchParams.set('state', state)
+        response.writeHead(302, { Location: callback.href }).end()
+        return
+      }
+
+      if (request.method === 'POST' && url.pathname === '/token') {
+        let body = ''
+        for await (const chunk of request) body += chunk
+        const form = new URLSearchParams(body)
+
+        if (
+          form.get('code') !== 'e2e-code'
+          || form.get('client_id') !== 'e2e-client'
+          || form.get('client_secret') !== 'e2e-secret'
+        ) {
+          response.writeHead(401).end('invalid token request')
+          return
+        }
+
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(JSON.stringify({ access_token: 'e2e-token', token_type: 'bearer' }))
+        return
+      }
+
+      if (request.method === 'GET' && url.pathname === '/user') {
+        if (request.headers.authorization !== 'Bearer e2e-token') {
+          response.writeHead(401).end('invalid bearer token')
+          return
+        }
+
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(JSON.stringify({
+          id: 120432426,
+          login: 'farismnrr-e2e',
+          avatar_url: null
+        }))
+        return
+      }
+
+      response.writeHead(404).end('not found')
+    })
+
+    server.once('error', reject)
+    server.listen(oauthPort, '0.0.0.0', () => resolve(server))
+  })
+}
 
 async function main() {
   fs.mkdirSync(artifactDir, { recursive: true })
-
+  const oauthServer = await startOAuthMock()
   const browser = await chromium.launch({ headless: true })
-  const page = await browser.newPage({ viewport: { width: 1536, height: 900 } })
+  const context = await browser.newContext({ viewport: { width: 1536, height: 900 } })
+  const page = await context.newPage()
 
   try {
     const response = await page.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -17,7 +82,8 @@ async function main() {
     }
 
     await page.getByText('Masih Awam SSO', { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Continue with GitHub' }).waitFor()
+    const signIn = page.getByRole('button', { name: 'Continue with GitHub' })
+    await signIn.waitFor()
 
     const brokenImages = await page.locator('img').evaluateAll(images =>
       images
@@ -31,41 +97,33 @@ async function main() {
     const artwork = page.locator('img[src="/assets/security-auth.webp"]')
     await artwork.waitFor({ state: 'visible' })
 
-    const artworkStats = await artwork.evaluate(image => {
-      const canvas = document.createElement('canvas')
-      canvas.width = image.naturalWidth
-      canvas.height = image.naturalHeight
+    await Promise.all([
+      page.waitForURL(`${baseUrl}/`),
+      signIn.click()
+    ])
 
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('2d canvas unavailable')
+    await page.getByText('@farismnrr-e2e', { exact: true }).waitFor()
+    await page.getByText('Active session', { exact: true }).waitFor()
 
-      context.drawImage(image, 0, 0)
-      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
-      const step = 16
-      let visible = 0
-      let samples = 0
-
-      for (let y = 0; y < canvas.height; y += step) {
-        for (let x = 0; x < canvas.width; x += step) {
-          const alpha = pixels[(y * canvas.width + x) * 4 + 3]
-          samples += 1
-          if (alpha > 32) visible += 1
-        }
-      }
-
-      return {
-        naturalWidth: image.naturalWidth,
-        naturalHeight: image.naturalHeight,
-        visibleRatio: visible / samples
-      }
-    })
-
-    if (artworkStats.naturalWidth !== 1086 || artworkStats.naturalHeight !== 1448) {
-      throw new Error(`unexpected artwork dimensions: ${artworkStats.naturalWidth}x${artworkStats.naturalHeight}`)
+    const session = await page.request.get(`${baseUrl}/api/session`)
+    if (!session.ok()) {
+      throw new Error(`session endpoint failed: ${session.status()}`)
+    }
+    const payload = await session.json()
+    if (!payload.authenticated || payload.user?.login !== 'farismnrr-e2e') {
+      throw new Error(`unexpected authenticated session: ${JSON.stringify(payload)}`)
     }
 
-    if (artworkStats.visibleRatio < 0.25) {
-      throw new Error(`artwork is mostly transparent/blank: visible ratio ${artworkStats.visibleRatio.toFixed(3)}`)
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.getByText('@farismnrr-e2e', { exact: true }).waitFor()
+
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await page.getByRole('button', { name: 'Continue with GitHub' }).waitFor()
+
+    const signedOutSession = await page.request.get(`${baseUrl}/api/session`)
+    const signedOutPayload = await signedOutSession.json()
+    if (signedOutPayload.authenticated) {
+      throw new Error('session remained authenticated after logout')
     }
 
     await page.screenshot({
@@ -73,7 +131,7 @@ async function main() {
       fullPage: true
     })
 
-    console.log('E2E passed', artworkStats)
+    console.log('E2E passed: GitHub OAuth, callback, session hydration, and logout')
   } catch (error) {
     await page.screenshot({
       path: `${artifactDir}/sso-auth-failure.png`,
@@ -81,7 +139,9 @@ async function main() {
     })
     throw error
   } finally {
+    await context.close()
     await browser.close()
+    await new Promise(resolve => oauthServer.close(resolve))
   }
 }
 

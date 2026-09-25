@@ -59,24 +59,36 @@ jobs:
           set -eu
 
           network="sso-auth-e2e-${{ github.run_id }}"
-          app="sso-auth-e2e-${{ github.run_id }}"
+          app="sso-auth-e2e-app-${{ github.run_id }}"
+          runner="sso-auth-e2e-runner-${{ github.run_id }}"
           artifacts="$RUNNER_TEMP/sso-auth-e2e"
 
           mkdir -p "$artifacts"
           docker network create "$network"
-          docker run -d \
-            --name "$app" \
-            --network "$network" \
-            -e PORT=3000 \
-            "$IMAGE_NAME:${{ github.sha }}"
 
           cleanup() {
             docker rm -f "$app" >/dev/null 2>&1 || true
+            docker rm -f "$runner" >/dev/null 2>&1 || true
             docker network rm "$network" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
+          docker run -d \
+            --name "$app" \
+            --network "$network" \
+            -e PORT=3000 \
+            -e SSO_BASE_URL="http://$app:3000" \
+            -e GITHUB_CLIENT_ID=e2e-client \
+            -e GITHUB_CLIENT_SECRET=e2e-secret \
+            -e GITHUB_CALLBACK_URL="http://$app:3000/auth/github/callback" \
+            -e GITHUB_AUTHORIZE_URL=http://localhost:4400/authorize \
+            -e GITHUB_TOKEN_URL="http://$runner:4400/token" \
+            -e GITHUB_API_URL="http://$runner:4400/" \
+            -e SESSION_SECRET=e2e-session-secret-32-bytes-minimum-value \
+            "$IMAGE_NAME:${{ github.sha }}"
+
           docker run --rm \
+            --name "$runner" \
             --network "$network" \
             -e E2E_BASE_URL="http://$app:3000" \
             -e E2E_ARTIFACT_DIR=/artifacts \
