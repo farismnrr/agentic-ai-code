@@ -25,15 +25,11 @@
         </div>
       {:else if state.status === 'loading'}
         <div class="mx-auto max-w-md">
-          <CallbackPanel phase="connecting" />
-        </div>
-      {:else if state.status === 'callback_processing'}
-        <div class="mx-auto max-w-md">
           <CallbackPanel phase="callback" />
         </div>
       {:else if state.status === 'authenticated'}
         <div class="mx-auto max-w-lg">
-          <AuthenticatedPanel user={state.user} {onSignOut} />
+          <AuthenticatedPanel session={state.session} {onSignOut} />
         </div>
       {:else if state.status === 'session_expired'}
         <div class="mx-auto max-w-md">
