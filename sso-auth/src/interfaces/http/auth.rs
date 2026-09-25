@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
-    http::{
-        header::CACHE_CONTROL,
-        HeaderMap, HeaderValue, StatusCode,
-    },
+    http::{header::CACHE_CONTROL, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Json,
 };
@@ -147,11 +144,7 @@ fn callback_redirect(
     if let Some(token) = session_token {
         append_set_cookie(
             response.headers_mut(),
-            session_cookie(
-                &token,
-                state.session_ttl_seconds,
-                state.cookie_secure,
-            ),
+            session_cookie(&token, state.session_ttl_seconds, state.cookie_secure),
         );
     }
     response
@@ -173,4 +166,3 @@ fn session_response(body: SessionResponse) -> Response {
         .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
-
