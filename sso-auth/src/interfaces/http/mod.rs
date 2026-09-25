@@ -1,4 +1,5 @@
 mod auth;
+mod auth_cookie;
 mod frontend;
 mod health;
 mod router;
