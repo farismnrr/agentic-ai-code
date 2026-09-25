@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG BUILDPLATFORM
+ARG BUILDPLATFORM=linux/amd64
 
 FROM --platform=${BUILDPLATFORM} node:22-bookworm-slim AS frontend-deps
 
@@ -48,7 +48,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef-base AS backend-builder
 
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
