@@ -1,5 +1,6 @@
 <script lang="ts">
   import { AuthView, type AuthState } from '../features/auth'
+  import AgentationInspector from '../shared/dev/AgentationInspector.svelte'
 
   let authState: AuthState = { status: 'signed_out' }
 
@@ -37,3 +38,5 @@
     onPreview={previewState}
   />
 </main>
+
+<AgentationInspector />

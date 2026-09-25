@@ -78,3 +78,24 @@ git pull origin refactor/full-fe-be-relay
 docker compose pull sso-auth
 docker compose up -d --force-recreate sso-auth
 ```
+
+
+## Visual UI inspection
+
+The SSO frontend includes `sv-agentation` for local visual feedback.
+
+It is hidden during normal browsing. Enable it explicitly by opening the local SSO URL with:
+
+```text
+http://localhost:3000/?inspect=1
+```
+
+Useful default shortcuts:
+
+- `i` toggles inspect mode
+- `c` copies annotations
+- `r` resets the toolbar position
+- `o` opens the hovered source location when source metadata is available
+- `esc` closes the current inspector interaction
+
+The inspector is a development utility and must not become part of the authentication product flow.
