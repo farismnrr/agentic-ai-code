@@ -12,6 +12,9 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM frontend-deps AS frontend-builder
 
+ARG VITE_AGENTATION_ENABLED=false
+ENV VITE_AGENTATION_ENABLED=${VITE_AGENTATION_ENABLED}
+
 COPY sso-auth/index.html ./
 COPY sso-auth/tsconfig.json ./
 COPY sso-auth/vite.config.ts ./
