@@ -18,7 +18,7 @@ GitHub Actions uses two separate validation levels on the repository self-hosted
 
 ### Fast CI
 
-Fast CI is the default validation after ordinary AI-assisted edits.
+Fast CI is the default validation after ordinary AI-assisted edits that are not already part of an explicit deployment/full-validation flow.
 
 It is triggered only when `.ci/fast-trigger` changes, or when its workflow is started manually.
 
@@ -41,7 +41,7 @@ Fast CI does not publish or modify the production `:latest` tag.
 
 ### Full deployment CI
 
-Full CI is only for explicit deployment/full-validation requests.
+Full CI is only for explicit deployment/full-validation requests. Once a deployment/full-validation flow is active, fixes within that flow must be revalidated directly with Full CI; do not run Fast CI first for the same deployment task.
 
 It is triggered when `.ci/trigger` changes, or when its workflow is started manually.
 

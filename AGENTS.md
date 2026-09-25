@@ -34,7 +34,7 @@ The fast pipeline must run, in order:
 3. production build for `linux/amd64`
 4. publish the non-deployment AMD64 validation image
 
-The fast pipeline is the default completion gate for ordinary edits. Inspect the resulting GitHub Actions run and do not report the edit/task as complete until it passes.
+The fast pipeline is the default completion gate for ordinary edits that are not already in an explicit deployment/full-validation flow. Inspect the resulting GitHub Actions run and do not report the edit/task as complete until it passes.
 
 Fast CI publishes validation-only tags:
 
@@ -45,7 +45,7 @@ Fast CI must never overwrite the production `:latest` tag.
 
 ### Full pipeline — deployment gate only
 
-Only run the full pipeline when the user explicitly asks to deploy, prepare for deployment, run the full pipeline, or otherwise requests deployment validation.
+Only run the full pipeline when the user explicitly asks to deploy, prepare for deployment, run the full pipeline, or otherwise requests deployment validation. When the user has explicitly requested full/deployment validation, skip Fast CI entirely for fixes made within that deployment flow and validate only with the Full pipeline. Do not run Fast CI before Full CI for the same deployment task.
 
 Trigger it by updating `.ci/trigger` in a dedicated commit.
 
