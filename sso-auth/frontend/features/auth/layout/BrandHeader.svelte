@@ -5,7 +5,7 @@
       alt="Masih Awam"
       class="h-9 w-auto object-contain"
     />
-    <span class="text-sm font-semibold text-slate-400">Auth</span>
+    <span class="text-sm font-semibold text-slate-500">Masih Awam SSO</span>
   </a>
 
   <a href="mailto:support@farismnrr.com" class="btn btn-ghost btn-sm gap-2 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700">
