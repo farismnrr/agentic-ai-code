@@ -1,0 +1,8 @@
+services:
+  sso-auth:
+    image: ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest
+    restart: unless-stopped
+    env_file:
+      - ./sso-auth/.env
+    ports:
+      - "127.0.0.1:5000:3000"
