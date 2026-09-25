@@ -114,3 +114,12 @@ Set it to `false` to keep the inspector hidden.
 CI reads the GitHub Actions repository variable `AGENTATION_ENABLED` and passes it into the frontend production build. If the variable is absent, the build defaults to `false`.
 
 The inspector is a development utility and must not become part of the authentication product flow.
+
+
+## CI warning hygiene
+
+CI success is not sufficient when repository-controlled GitHub Actions deprecation annotations are still present.
+
+Docker actions should use supported Node 24-compatible major versions. Validation-only Buildx commands should explicitly use the `cacheonly` output exporter so they do not emit the default no-output warning.
+
+Agents must inspect CI annotations/logs after validation and fix repository-controlled warnings before reporting a clean result.

@@ -62,6 +62,7 @@ jobs:
             --target backend-check \
             --file sso-auth/Dockerfile \
             --progress plain \
+            --output type=cacheonly \
             .
 
   guardrail:
@@ -137,6 +138,7 @@ jobs:
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
             --progress plain \
+            --output type=cacheonly \
             .
 
   publish:

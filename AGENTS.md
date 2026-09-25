@@ -101,3 +101,18 @@ The production `:latest` manifest must include at least:
 - `linux/arm64`
 
 Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful full CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
+
+
+## CI warning hygiene
+
+A successful workflow is not considered clean if GitHub Actions reports deprecation annotations from actions used by this repository.
+
+After each required Fast CI or Full CI run:
+
+- inspect job annotations/logs for action runtime deprecations and workflow warnings
+- do not report the task as clean while repository-controlled deprecation warnings remain
+- keep Docker GitHub Actions on Node 24-compatible supported major versions
+- use explicit `--output type=cacheonly` for validation-only Buildx builds that intentionally do not export an image
+- fix repository-controlled warnings in the same branch and rerun the same validation level
+
+Warnings caused solely by host kernel/daemon capabilities may be reported separately when they cannot be fixed in repository code, but they must not be confused with repository/action deprecation warnings.
