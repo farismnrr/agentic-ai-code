@@ -55,7 +55,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef-base AS backend-deps
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc

@@ -52,7 +52,7 @@ Order:
 3. tests
 4. serial `linux/amd64` and `linux/arm64` builds
 5. Playwright E2E
-6. publish and verify the multi-platform production image
+6. publish the multi-platform production image, verify its manifest, and run an ARM64 runtime health smoke
 
 Normal implementation commits do not start either CI pipeline.
 
