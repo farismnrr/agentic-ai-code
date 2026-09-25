@@ -11,7 +11,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{application::AuthService, domain::AuthenticatedUser};
+use crate::{application::{AuthError, AuthService}, domain::AuthenticatedUser};
 
 const OAUTH_STATE_COOKIE: &str = "sso_oauth_state";
 const SESSION_COOKIE: &str = "sso_session";
@@ -79,6 +79,7 @@ pub async fn callback(
         .await
     {
         Ok(token) => callback_redirect(&state, true, Some(token)),
+        Err(AuthError::Forbidden) => forbidden_response(&state),
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");
             callback_redirect(&state, false, None)
@@ -151,6 +152,15 @@ fn callback_redirect(
             ),
         );
     }
+    response
+}
+
+fn forbidden_response(state: &AuthHttpState) -> Response {
+    let mut response = (StatusCode::FORBIDDEN, "Forbidden").into_response();
+    append_set_cookie(
+        response.headers_mut(),
+        clear_cookie(OAUTH_STATE_COOKIE, "/auth/github", state.cookie_secure),
+    );
     response
 }
 

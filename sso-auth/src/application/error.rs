@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub enum AuthError {
     ExternalProvider,
     InvalidSession,
+    Forbidden,
     InvalidConfiguration(&'static str),
 }
 
@@ -14,6 +15,7 @@ impl fmt::Display for AuthError {
                 formatter.write_str("external authentication provider failed")
             }
             Self::InvalidSession => formatter.write_str("authentication session is invalid"),
+            Self::Forbidden => formatter.write_str("authenticated user is not allowed"),
             Self::InvalidConfiguration(message) => formatter.write_str(message),
         }
     }

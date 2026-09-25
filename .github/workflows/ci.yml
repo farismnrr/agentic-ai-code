@@ -286,6 +286,7 @@ jobs:
             -e GITHUB_AUTHORIZE_URL=http://localhost:4400/authorize \
             -e GITHUB_TOKEN_URL="http://$runner:4400/token" \
             -e GITHUB_API_URL="http://$runner:4400/" \
+            -e ALLOWED_GITHUB_USER_IDS=120432426 \
             -e SESSION_SECRET=e2e-session-secret-32-bytes-minimum-value \
             "$IMAGE_NAME:${{ github.sha }}"
 

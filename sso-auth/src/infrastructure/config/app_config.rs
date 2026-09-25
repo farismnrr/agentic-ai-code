@@ -9,6 +9,7 @@ pub struct AppConfig {
     github_authorize_url: String,
     github_token_url: String,
     github_api_url: String,
+    allowed_github_user_ids: Vec<u64>,
     session_secret: String,
     session_ttl_seconds: u64,
     cookie_secure: bool,
@@ -32,6 +33,9 @@ impl AppConfig {
                 .unwrap_or_else(|_| "https://github.com/login/oauth/access_token".to_string()),
             github_api_url: env::var("GITHUB_API_URL")
                 .unwrap_or_else(|_| "https://api.github.com/".to_string()),
+            allowed_github_user_ids: parse_allowed_github_user_ids(&required(
+                "ALLOWED_GITHUB_USER_IDS",
+            )?)?,
             session_secret: required("SESSION_SECRET")?,
             session_ttl_seconds: env::var("SESSION_TTL_SECONDS")
                 .unwrap_or_else(|_| "604800".to_string())
@@ -68,6 +72,10 @@ impl AppConfig {
         self.github_api_url.clone()
     }
 
+    pub fn allowed_github_user_ids(&self) -> Vec<u64> {
+        self.allowed_github_user_ids.clone()
+    }
+
     pub fn session_secret(&self) -> String {
         self.session_secret.clone()
     }
@@ -87,4 +95,26 @@ fn required(name: &'static str) -> Result<String, Box<dyn Error>> {
         return Err(format!("{name} must not be empty").into());
     }
     Ok(value)
+}
+
+fn parse_allowed_github_user_ids(value: &str) -> Result<Vec<u64>, Box<dyn Error>> {
+    let mut ids = Vec::new();
+
+    for raw in value.split(',') {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err("ALLOWED_GITHUB_USER_IDS contains an empty entry".into());
+        }
+        ids.push(trimmed.parse::<u64>().map_err(|_| {
+            format!("ALLOWED_GITHUB_USER_IDS contains invalid GitHub user ID: {trimmed}")
+        })?);
+    }
+
+    if ids.is_empty() {
+        return Err("ALLOWED_GITHUB_USER_IDS must contain at least one GitHub user ID".into());
+    }
+
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
 }

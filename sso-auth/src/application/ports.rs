@@ -18,3 +18,7 @@ pub trait SessionCodec: Send + Sync {
 pub trait StateGenerator: Send + Sync {
     fn generate(&self) -> String;
 }
+
+pub trait UserAccessPolicy: Send + Sync {
+    fn is_allowed(&self, user: &AuthenticatedUser) -> bool;
+}

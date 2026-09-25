@@ -4,4 +4,4 @@ mod ports;
 
 pub use auth_service::AuthService;
 pub use error::AuthError;
-pub use ports::{OAuthProvider, SessionCodec, StateGenerator};
+pub use ports::{OAuthProvider, SessionCodec, StateGenerator, UserAccessPolicy};

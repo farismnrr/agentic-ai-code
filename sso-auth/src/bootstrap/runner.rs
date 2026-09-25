@@ -3,8 +3,8 @@ use std::{error::Error, sync::Arc};
 use crate::{
     application::AuthService,
     infrastructure::{
-        config::AppConfig, github::GitHubOAuthClient, random_state::SecureStateGenerator,
-        session::SignedSessionCodec,
+        access::GitHubUserAllowlist, config::AppConfig, github::GitHubOAuthClient,
+        random_state::SecureStateGenerator, session::SignedSessionCodec,
     },
     interfaces::http::{build_router, AuthHttpState},
 };
@@ -26,10 +26,14 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         config.session_secret(),
         config.session_ttl_seconds(),
     )?);
+    let access_policy = Arc::new(GitHubUserAllowlist::new(
+        config.allowed_github_user_ids(),
+    )?);
     let auth = Arc::new(AuthService::new(
         oauth,
         sessions,
         Arc::new(SecureStateGenerator),
+        access_policy,
     ));
     let http_state = AuthHttpState {
         auth,
