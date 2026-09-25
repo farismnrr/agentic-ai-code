@@ -3,8 +3,7 @@ use std::{error::Error, sync::Arc};
 use crate::{
     application::{AuthCallbackUseCase, AuthStartUseCase},
     infrastructure::{
-        config::AppConfig, sso::SsoLoginUrlBuilder,
-        verification::PendingSignedAssertionVerifier,
+        config::AppConfig, sso::SsoLoginUrlBuilder, verification::PendingSignedAssertionVerifier,
     },
     interfaces::http::{build_router, AuthHttpState},
 };
