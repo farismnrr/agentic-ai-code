@@ -3,7 +3,6 @@
   import AuthenticatedPanel from './AuthenticatedPanel.svelte'
   import CallbackPanel from './CallbackPanel.svelte'
   import ErrorPanel from './ErrorPanel.svelte'
-  import FlowPreview from './FlowPreview.svelte'
   import LoginPanel from './LoginPanel.svelte'
   import SessionExpiredPanel from './SessionExpiredPanel.svelte'
   import AuthArtwork from '../layout/AuthArtwork.svelte'
@@ -12,7 +11,6 @@
   export let state: AuthState
   export let onSignIn: () => void
   export let onSignOut: () => void
-  export let onPreview: (state: AuthState) => void
 </script>
 
 <div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -46,10 +44,6 @@
           <ErrorPanel message={state.message} {onSignIn} />
         </div>
       {/if}
-
-      <div class="mx-auto mt-8 max-w-2xl">
-        <FlowPreview {onPreview} />
-      </div>
     </div>
   </div>
 
