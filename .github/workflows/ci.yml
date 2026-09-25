@@ -74,7 +74,7 @@ jobs:
 
   guardrail:
     name: 2. Structural guardrail
-    needs: guardrail
+    needs: quality
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
 
@@ -104,7 +104,7 @@ jobs:
             node scripts/guardrail.mjs sso-auth
   test:
     name: 3. Rust tests
-    needs: quality
+    needs: guardrail
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
 
