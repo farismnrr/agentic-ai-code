@@ -8,6 +8,11 @@ echo "==> Structural guardrail"
 docker run --rm   --volume "$ROOT_DIR:/workspace"   --workdir /workspace   node:22-bookworm-slim   node scripts/guardrail.mjs sso-auth
 
 echo "==> Production build check"
-docker build   --target backend-builder   --file sso-auth/Dockerfile   --tag masih-awam/sso-auth:check   .
+docker build \
+  --build-arg VITE_AGENTATION_ENABLED="${AGENTATION_ENABLED:-false}" \
+  --target backend-builder \
+  --file sso-auth/Dockerfile \
+  --tag masih-awam/sso-auth:check \
+  .
 
 echo "==> All checks passed"
