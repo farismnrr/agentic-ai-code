@@ -1,9 +1,9 @@
-name: Fast CI (AMD64)
+name: Fast CI (ARM64)
 
 on:
   push:
     paths:
-      - .ci/fast-trigger
+      - .ci/fast-arm64-trigger
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: fast-ci-${{ github.ref }}
+  group: fast-arm64-ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -97,7 +97,7 @@ jobs:
             node scripts/guardrail.mjs sso-auth
 
   build:
-    name: 3. Build linux/amd64
+    name: 3. Build linux/arm64
     needs: guardrail
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
@@ -130,11 +130,11 @@ jobs:
           test -n "$container"
           docker update --cpus "$CI_CPU_LIMIT" --memory "$CI_MEMORY_LIMIT" --memory-swap "$CI_MEMORY_LIMIT" "$container"
 
-      - name: Validate production image build
+      - name: Validate ARM64 production image build
         run: |
           docker buildx build \
             --builder "$BUILDX_BUILDER" \
-            --platform linux/amd64 \
+            --platform linux/arm64 \
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
             --progress plain \
@@ -142,7 +142,7 @@ jobs:
             .
 
   publish:
-    name: 4. Publish AMD64 validation image
+    name: 4. Publish ARM64 validation image
     needs: build
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
@@ -189,25 +189,42 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=fast
-            type=raw,value=${{ github.sha }}-amd64
+            type=raw,value=fast-arm64
+            type=raw,value=${{ github.sha }}-arm64
 
-      - name: Publish AMD64 validation image
+      - name: Publish ARM64 validation image
         uses: docker/build-push-action@v7
         with:
           builder: ${{ steps.buildx.outputs.name }}
           context: .
           file: sso-auth/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_AGENTATION_ENABLED=${{ env.AGENTATION_ENABLED }}
 
-      - name: Verify validation image platform
+      - name: Verify ARM64 manifest and binary
         run: |
           set -eu
-          manifest="$(docker buildx imagetools inspect "$IMAGE_NAME:fast")"
+
+          manifest="$(docker buildx imagetools inspect "$IMAGE_NAME:fast-arm64")"
           printf '%s\n' "$manifest"
-          printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
+          printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)'
+
+          container="sso-auth-fast-arm64-inspect-${{ github.run_id }}"
+          binary="$RUNNER_TEMP/sso-auth-fast-arm64"
+
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            rm -f "$binary"
+          }
+          trap cleanup EXIT
+
+          docker pull --platform linux/arm64 "$IMAGE_NAME:fast-arm64"
+          docker create --platform linux/arm64 --name "$container" "$IMAGE_NAME:fast-arm64"
+          docker cp "$container:/sso-auth" "$binary"
+
+          file "$binary"
+          file "$binary" | grep -Eq 'ARM aarch64|aarch64'

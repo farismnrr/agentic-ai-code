@@ -14,9 +14,9 @@ Do not bypass the hook with `--no-verify`.
 
 ## Remote CI model
 
-GitHub Actions uses two separate validation levels on the repository self-hosted runner.
+GitHub Actions uses three separate validation lanes on the repository self-hosted runner.
 
-### Fast CI
+### Fast AMD64 CI
 
 Fast CI is the default validation after ordinary AI-assisted edits that are not already part of an explicit deployment/full-validation flow.
 
@@ -29,7 +29,7 @@ Order:
 3. `linux/amd64` production build
 4. publish AMD64 validation image
 
-Fast CI publishes:
+Fast AMD64 CI publishes:
 
 ```text
 ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast
@@ -37,7 +37,30 @@ ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast
 
 and an immutable commit-specific AMD64 validation tag.
 
-Fast CI does not publish or modify the production `:latest` tag.
+Fast AMD64 CI does not publish or modify the production `:latest` tag.
+
+### Fast ARM64 CI
+
+Fast ARM64 CI is only for explicit ARM64 debugging/validation work. Do not trigger it for ordinary edits.
+
+It is triggered only when `.ci/fast-arm64-trigger` changes, or when its workflow is started manually.
+
+Order:
+
+1. lint/typecheck/Rust fmt/Clippy
+2. structural guardrail
+3. `linux/arm64` production build
+4. publish and verify an ARM64 validation image
+
+Fast ARM64 publishes:
+
+```text
+ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast-arm64
+```
+
+and an immutable commit-specific ARM64 validation tag.
+
+Fast ARM64 must not modify `:fast` or production `:latest`. Do not run both fast lanes for the same task unless both architectures were explicitly requested.
 
 ### Full deployment CI
 
@@ -54,7 +77,7 @@ Order:
 5. Playwright E2E
 6. publish the multi-platform production image, verify its manifest, and run an ARM64 runtime health smoke
 
-Normal implementation commits do not start either CI pipeline.
+Normal implementation commits do not start any CI pipeline.
 
 The workflows intentionally do not run on `pull_request` because this repository is public and untrusted fork code must not execute on the self-hosted runner.
 

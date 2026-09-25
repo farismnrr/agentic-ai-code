@@ -19,29 +19,53 @@ These rules apply to AI-assisted changes in this repository.
 
 ## Validation model
 
-This repository has two CI pipelines.
+This repository has three CI pipelines.
 
-### Fast pipeline — default after every completed edit/task
+### Fast AMD64 pipeline — default after every completed edit/task
 
 Normal implementation commits must not trigger CI individually.
 
 When an AI-authored edit/task is ready to report back to the user, update `.ci/fast-trigger` in a dedicated commit. This starts the fast pipeline.
 
-The fast pipeline must run, in order:
+The Fast AMD64 pipeline must run, in order:
 
 1. lint/typecheck/Rust fmt/Clippy with warnings denied
 2. structural guardrail
 3. production build for `linux/amd64`
 4. publish the non-deployment AMD64 validation image
 
-The fast pipeline is the default completion gate for ordinary edits that are not already in an explicit deployment/full-validation flow. Inspect the resulting GitHub Actions run and do not report the edit/task as complete until it passes.
+The Fast AMD64 pipeline is the default completion gate for ordinary edits that are not already in an explicit deployment/full-validation flow. Inspect the resulting GitHub Actions run and do not report the edit/task as complete until it passes.
 
-Fast CI publishes validation-only tags:
+Fast AMD64 CI publishes validation-only tags:
 
 - `ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast`
 - an immutable AMD64 validation tag for the validated commit
 
-Fast CI must never overwrite the production `:latest` tag.
+Fast AMD64 CI must never overwrite the production `:latest` tag.
+
+### Fast ARM64 pipeline — explicit ARM64 debugging only
+
+Do not trigger this pipeline for ordinary edits.
+
+Only use Fast ARM64 when the user explicitly asks for ARM64 validation/debugging, or when the active task is specifically fixing an ARM64 build/image/runtime issue.
+
+Trigger it by updating `.ci/fast-arm64-trigger` in a dedicated commit.
+
+The Fast ARM64 pipeline must run, in order:
+
+1. lint/typecheck/Rust fmt/Clippy with warnings denied
+2. structural guardrail
+3. production build for `linux/arm64`
+4. publish an ARM64-only validation image and verify the published binary is AArch64
+
+Fast ARM64 publishes validation-only tags:
+
+- `ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast-arm64`
+- an immutable ARM64 validation tag for the validated commit
+
+Fast ARM64 must never overwrite `:fast`, `:latest`, or the production commit SHA tag.
+
+Do not run both Fast AMD64 and Fast ARM64 for the same task unless the user explicitly requests both architectures. For ARM64-specific debugging, use Fast ARM64 only.
 
 ### Full pipeline — deployment gate only
 
@@ -69,7 +93,8 @@ When a GitHub Actions run triggered by an AI-authored change fails:
 3. Fix the failure directly on the same working branch when the fix remains within the user's current requested scope.
 4. Commit the fix without triggering CI for intermediate repair commits.
 5. Retrigger the same pipeline that failed:
-   - fast validation: update `.ci/fast-trigger`
+   - Fast AMD64 validation: update `.ci/fast-trigger`
+   - Fast ARM64 validation: update `.ci/fast-arm64-trigger`
    - deployment/full validation: update `.ci/trigger`
 6. Inspect the resulting CI run.
 7. Repeat until the required pipeline passes.
@@ -109,7 +134,7 @@ Do not ask the user to rebuild `sso-auth` locally for normal deployment after a 
 
 A successful workflow is not considered clean if GitHub Actions reports deprecation annotations from actions used by this repository.
 
-After each required Fast CI or Full CI run:
+After each required Fast AMD64, Fast ARM64, or Full CI run:
 
 - inspect job annotations/logs for action runtime deprecations and workflow warnings
 - do not report the task as clean while repository-controlled deprecation warnings remain
