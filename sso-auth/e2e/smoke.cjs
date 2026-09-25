@@ -5,6 +5,7 @@ const http = require('http')
 const baseUrl = process.env.E2E_BASE_URL || 'http://127.0.0.1:13000'
 const artifactDir = process.env.E2E_ARTIFACT_DIR || '/artifacts'
 const oauthPort = Number(process.env.E2E_OAUTH_PORT || 4400)
+let oauthUserId = 120432426
 
 function startOAuthMock() {
   return new Promise((resolve, reject) => {
@@ -53,8 +54,8 @@ function startOAuthMock() {
 
         response.writeHead(200, { 'Content-Type': 'application/json' })
         response.end(JSON.stringify({
-          id: 120432426,
-          login: 'farismnrr-e2e',
+          id: oauthUserId,
+          login: oauthUserId === 120432426 ? 'farismnrr-e2e' : 'blocked-e2e',
           avatar_url: null
         }))
         return
@@ -118,7 +119,8 @@ async function main() {
     await page.getByText('@farismnrr-e2e', { exact: true }).waitFor()
 
     await page.getByRole('button', { name: 'Sign out' }).click()
-    await page.getByRole('button', { name: 'Continue with GitHub' }).waitFor()
+    const signInAgain = page.getByRole('button', { name: 'Continue with GitHub' })
+    await signInAgain.waitFor()
 
     const signedOutSession = await page.request.get(`${baseUrl}/api/session`)
     const signedOutPayload = await signedOutSession.json()
@@ -126,12 +128,30 @@ async function main() {
       throw new Error('session remained authenticated after logout')
     }
 
+    oauthUserId = 999999999
+    const [forbiddenResponse] = await Promise.all([
+      page.waitForResponse(response =>
+        response.url().includes('/auth/github/callback')
+        && response.status() === 403
+      ),
+      signInAgain.click()
+    ])
+    if (forbiddenResponse.status() !== 403) {
+      throw new Error(`blocked user callback returned ${forbiddenResponse.status()}`)
+    }
+
+    const blockedSession = await page.request.get(`${baseUrl}/api/session`)
+    const blockedPayload = await blockedSession.json()
+    if (blockedPayload.authenticated) {
+      throw new Error('blocked GitHub user received an authenticated session')
+    }
+
     await page.screenshot({
       path: `${artifactDir}/sso-auth-home.png`,
       fullPage: true
     })
 
-    console.log('E2E passed: GitHub OAuth, callback, session hydration, and logout')
+    console.log('E2E passed: allowed GitHub user session, logout, and blocked-user 403')
   } catch (error) {
     await page.screenshot({
       path: `${artifactDir}/sso-auth-failure.png`,
