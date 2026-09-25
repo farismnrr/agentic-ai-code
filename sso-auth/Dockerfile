@@ -36,6 +36,8 @@ RUN npx tsc --noEmit
 
 FROM --platform=${BUILDPLATFORM} rust:1-bookworm AS chef-base
 
+RUN rustup component add rustfmt clippy
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     cargo install cargo-chef --locked
