@@ -65,6 +65,17 @@ jobs:
             --output type=cacheonly \
             .
 
+      - name: Run Relay quality gates
+        run: |
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform linux/amd64 \
+            --target check \
+            --file relay-agent/Dockerfile \
+            --progress plain \
+            --output type=cacheonly \
+            .
+
   guardrail:
     name: 2. Structural guardrail
     needs: quality
@@ -95,6 +106,15 @@ jobs:
             --workdir /workspace \
             node:22-bookworm-slim \
             node scripts/guardrail.mjs sso-auth
+
+          docker run --rm \
+            --cpus "$CI_CPU_LIMIT" \
+            --memory "$CI_MEMORY_LIMIT" \
+            --memory-swap "$CI_MEMORY_LIMIT" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            node:22-bookworm-slim \
+            node scripts/guardrail.mjs relay-agent
 
   build:
     name: 3. Build linux/amd64
@@ -137,6 +157,16 @@ jobs:
             --platform linux/amd64 \
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
+            --progress plain \
+            --output type=cacheonly \
+            .
+
+      - name: Validate Relay production image build
+        run: |
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform linux/amd64 \
+            --file relay-agent/Dockerfile \
             --progress plain \
             --output type=cacheonly \
             .
