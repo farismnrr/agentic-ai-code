@@ -8,9 +8,7 @@ use axum::{
 use relay_agent::{
     application::{AuthCallbackUseCase, AuthError, AuthStartUseCase, SignedAssertionVerifier},
     domain::VerifiedPrincipal,
-    infrastructure::{
-        sso::SsoLoginUrlBuilder, verification::PendingSignedAssertionVerifier,
-    },
+    infrastructure::{sso::SsoLoginUrlBuilder, verification::PendingSignedAssertionVerifier},
     interfaces::http::{build_router, AuthHttpState},
 };
 use tower::ServiceExt;
