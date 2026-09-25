@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-bookworm-slim AS frontend-deps
+ARG BUILDPLATFORM
+
+FROM --platform=${BUILDPLATFORM} node:22-bookworm-slim AS frontend-deps
 
 WORKDIR /build
 
@@ -27,7 +29,7 @@ RUN node -e "const fs=require('fs'); const dir='assets/security-auth'; const dat
 RUN npm run build
 
 
-FROM rust:1-bookworm AS chef
+FROM --platform=${BUILDPLATFORM} rust:1-bookworm AS chef-base
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
@@ -36,7 +38,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 WORKDIR /build
 
 
-FROM chef AS planner
+FROM chef-base AS planner
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
@@ -44,13 +46,32 @@ COPY sso-auth/src ./src
 RUN cargo chef prepare --recipe-path recipe.json
 
 
-FROM chef AS backend-builder
+FROM chef-base AS backend-builder
+
+ARG TARGETARCH
+
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+RUN case "${TARGETARCH}" in \
+      amd64) target="x86_64-unknown-linux-gnu" ;; \
+      arm64) target="aarch64-unknown-linux-gnu" ;; \
+      *) echo "unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && printf '%s' "${target}" > /tmp/rust-target \
+    && if [ "${TARGETARCH}" = "arm64" ]; then \
+         apt-get update \
+         && apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu \
+         && rm -rf /var/lib/apt/lists/*; \
+       fi \
+    && rustup target add "${target}"
 
 COPY --from=planner /build/recipe.json recipe.json
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    cargo chef cook --release --recipe-path recipe.json
+    target="$(cat /tmp/rust-target)" \
+    && cargo chef cook --release --target "${target}" --recipe-path recipe.json
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
@@ -58,14 +79,16 @@ COPY --from=frontend-builder /build/dist ./dist
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    cargo build --release
+    target="$(cat /tmp/rust-target)" \
+    && cargo build --release --target "${target}" \
+    && cp "target/${target}/release/sso-auth" /build/sso-auth
 
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 
 LABEL org.opencontainers.image.source="https://github.com/farismnrr/agentic-ai-code"
 
-COPY --from=backend-builder /build/target/release/sso-auth /sso-auth
+COPY --from=backend-builder /build/sso-auth /sso-auth
 
 ENV PORT=3000
 
