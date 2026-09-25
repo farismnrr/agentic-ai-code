@@ -11,7 +11,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{application::{AuthError, AuthService}, domain::AuthenticatedUser};
+use crate::{
+    application::{AuthError, AuthService},
+    domain::AuthenticatedUser,
+};
 
 const OAUTH_STATE_COOKIE: &str = "sso_oauth_state";
 const SESSION_COOKIE: &str = "sso_session";
