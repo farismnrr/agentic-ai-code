@@ -1,8 +1,14 @@
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use crate::{
-    infrastructure::config::AppConfig,
-    interfaces::http::build_router,
+    application::AuthService,
+    infrastructure::{
+        config::AppConfig,
+        github::GitHubOAuthClient,
+        random_state::SecureStateGenerator,
+        session::SignedSessionCodec,
+    },
+    interfaces::http::{build_router, AuthHttpState},
 };
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
@@ -10,11 +16,28 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
 
     let config = AppConfig::from_env()?;
     let address = config.listen_address();
+    let oauth = Arc::new(GitHubOAuthClient::new(
+        config.github_client_id(),
+        config.github_client_secret(),
+        config.github_callback_url(),
+        config.github_authorize_url(),
+        config.github_token_url(),
+        config.github_api_url(),
+    )?);
+    let sessions = Arc::new(SignedSessionCodec::new(
+        config.session_secret(),
+        config.session_ttl_seconds(),
+    )?);
+    let auth = Arc::new(AuthService::new(oauth, sessions, Arc::new(SecureStateGenerator)));
+    let http_state = AuthHttpState {
+        auth,
+        cookie_secure: config.cookie_secure(),
+        session_ttl_seconds: config.session_ttl_seconds(),
+    };
+
     let listener = tokio::net::TcpListener::bind(address).await?;
-
     tracing::info!(%address, "sso-auth listening");
-    axum::serve(listener, build_router(config)).await?;
-
+    axum::serve(listener, build_router(http_state)).await?;
     Ok(())
 }
 

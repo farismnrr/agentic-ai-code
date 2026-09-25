@@ -1,1 +1,3 @@
-//! Framework-independent authentication domain concepts.
+mod auth;
+
+pub use auth::{AuthenticatedUser, AuthSession};

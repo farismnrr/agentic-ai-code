@@ -1,16 +1,19 @@
-use axum::Router;
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use tower_http::trace::TraceLayer;
 
-use crate::infrastructure::config::AppConfig;
+use super::{auth, frontend, health, AuthHttpState};
 
-use super::{
-    frontend,
-    health,
-};
-
-pub fn build_router(_config: AppConfig) -> Router {
+pub fn build_router(auth_state: AuthHttpState) -> Router {
     Router::new()
-        .route("/health", axum::routing::get(health::get))
+        .route("/health", get(health::get))
+        .route("/auth/github", get(auth::start))
+        .route("/auth/github/callback", get(auth::callback))
+        .route("/auth/logout", post(auth::logout))
+        .route("/api/session", get(auth::session))
         .fallback(frontend::serve)
+        .with_state(auth_state)
         .layer(TraceLayer::new_for_http())
 }
