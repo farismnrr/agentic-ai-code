@@ -15,6 +15,7 @@ FROM frontend-deps AS frontend-builder
 COPY sso-auth/index.html ./
 COPY sso-auth/tsconfig.json ./
 COPY sso-auth/vite.config.ts ./
+COPY sso-auth/public ./public
 COPY sso-auth/frontend ./frontend
 
 RUN npm run build
