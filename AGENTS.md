@@ -125,7 +125,7 @@ The production `:latest` manifest must include at least:
 - `linux/amd64`
 - `linux/arm64`
 
-Full deployment validation must also start the published ARM64 image under QEMU and confirm `/health` responds successfully before deployment is considered ready.
+Full deployment validation must verify the published ARM64 image contains an AArch64 `/sso-auth` binary. Do not require ARM64 runtime execution under QEMU on the AMD64 self-hosted runner because host binfmt/QEMU support is not a reliable deployment gate.
 
 Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful full CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
 

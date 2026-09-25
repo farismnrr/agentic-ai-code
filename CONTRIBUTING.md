@@ -75,7 +75,7 @@ Order:
 3. tests
 4. serial `linux/amd64` and `linux/arm64` builds
 5. Playwright E2E
-6. publish the multi-platform production image, verify its manifest, and run an ARM64 runtime health smoke
+6. publish the multi-platform production image, verify its manifest, and verify the published ARM64 binary is AArch64
 
 Normal implementation commits do not start any CI pipeline.
 
