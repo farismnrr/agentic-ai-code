@@ -17,6 +17,7 @@ concurrency:
 env:
   IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-sso-auth
   AGENTATION_ENABLED: ${{ vars.AGENTATION_ENABLED || 'false' }}
+  BUILDX_CACHE_DIR: /var/tmp/agentic-ai-code-buildx-cache/sso-auth
 
 jobs:
   check-and-publish:
@@ -32,6 +33,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Calculate CI resource limits
+        run: |
+          set -eu
+
+          cpu_count="$(nproc)"
+          cpu_limit="$(awk -v count="$cpu_count" 'BEGIN { printf "%.2f", count * 0.80 }')"
+          memory_kb="$(awk '/MemTotal:/ { print $2 }' /proc/meminfo)"
+          memory_limit="$((memory_kb * 1024 * 80 / 100))"
+
+          echo "CI_CPU_LIMIT=$cpu_limit" >> "$GITHUB_ENV"
+          echo "CI_MEMORY_LIMIT=$memory_limit" >> "$GITHUB_ENV"
+
+          echo "CI build limits: ${cpu_limit} CPUs, ${memory_limit} bytes RAM"
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Limit Buildx CPU and memory
+        run: |
+          set -eu
+
+          builder="${{ steps.buildx.outputs.name }}"
+          container="$(docker ps --filter "name=buildx_buildkit_${builder}" --format '{{.Names}}' | head -n 1)"
+
+          if [ -z "$container" ]; then
+            echo "Buildx container not found for builder: $builder" >&2
+            exit 1
+          fi
+
+          docker update \
+            --cpus "$CI_CPU_LIMIT" \
+            --memory "$CI_MEMORY_LIMIT" \
+            --memory-swap "$CI_MEMORY_LIMIT" \
+            "$container"
+
+          echo "BUILDX_BUILDER=$builder" >> "$GITHUB_ENV"
+          docker inspect "$container" --format 'Buildx limits: NanoCpus={{.HostConfig.NanoCpus}} Memory={{.HostConfig.Memory}} MemorySwap={{.HostConfig.MemorySwap}}'
+
       - name: Run repository checks
         run: ./scripts/check.sh
 
@@ -42,23 +82,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Prepare disk build cache
+        id: cache
+        run: |
+          set -eu
+
+          mkdir -p "$(dirname "$BUILDX_CACHE_DIR")"
+          rm -rf "${BUILDX_CACHE_DIR}.next"
+
+          if [ -f "$BUILDX_CACHE_DIR/index.json" ]; then
+            echo "cache_from=type=local,src=$BUILDX_CACHE_DIR" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache_from=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build local AMD64 image for E2E
         run: |
-          docker build \
+          set -eu
+
+          cache_args=""
+          if [ -n "${{ steps.cache.outputs.cache_from }}" ]; then
+            cache_args="--cache-from ${{ steps.cache.outputs.cache_from }}"
+          fi
+
+          # shellcheck disable=SC2086
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
             --platform linux/amd64 \
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
             --tag "$IMAGE_NAME:${{ github.sha }}" \
+            --load \
+            $cache_args \
             .
 
       - name: Build Playwright runner
         run: |
-          docker build \
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform linux/amd64 \
             --file sso-auth/e2e/Dockerfile \
             --tag masih-awam/sso-auth-e2e:${{ github.sha }} \
+            --load \
             .
 
       - name: Run Playwright E2E
@@ -123,6 +188,7 @@ jobs:
       - name: Build and publish multi-platform image
         uses: docker/build-push-action@v6
         with:
+          builder: ${{ steps.buildx.outputs.name }}
           context: .
           file: sso-auth/Dockerfile
           platforms: linux/amd64,linux/arm64
@@ -131,8 +197,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_AGENTATION_ENABLED=${{ env.AGENTATION_ENABLED }}
-          cache-from: type=gha,scope=sso-auth
-          cache-to: type=gha,mode=max,scope=sso-auth
+          cache-from: ${{ steps.cache.outputs.cache_from }}
+          cache-to: type=local,dest=${{ env.BUILDX_CACHE_DIR }}.next,mode=max
+
+      - name: Promote disk build cache
+        run: |
+          set -eu
+          rm -rf "$BUILDX_CACHE_DIR"
+          mv "${BUILDX_CACHE_DIR}.next" "$BUILDX_CACHE_DIR"
 
       - name: Verify published image platforms
         run: |

@@ -29,6 +29,11 @@ RUN node -e "const fs=require('fs'); const dir='assets/security-auth'; const dat
 RUN npm run build
 
 
+FROM frontend-builder AS frontend-check
+
+RUN npx tsc --noEmit
+
+
 FROM --platform=${BUILDPLATFORM} rust:1-bookworm AS chef-base
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -46,7 +51,7 @@ COPY sso-auth/src ./src
 RUN cargo chef prepare --recipe-path recipe.json
 
 
-FROM chef-base AS backend-builder
+FROM chef-base AS backend-deps
 
 ARG TARGETARCH=amd64
 
@@ -72,6 +77,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     target="$(cat /tmp/rust-target)" \
     && cargo chef cook --release --target "${target}" --recipe-path recipe.json
+
+
+FROM backend-deps AS backend-check
+
+COPY sso-auth/Cargo.toml ./
+COPY sso-auth/src ./src
+COPY --from=frontend-check /build/dist ./dist
+
+RUN cargo fmt --check
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    target="$(cat /tmp/rust-target)" \
+    && cargo clippy --all-targets --all-features --target "${target}" -- -D warnings
+
+
+FROM backend-deps AS backend-builder
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
