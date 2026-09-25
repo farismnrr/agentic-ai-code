@@ -63,10 +63,10 @@ See `AGENTS.md` for the repository-level agent rules.
 
 Final CI validation publishes the production `sso-auth` image to GitHub Container Registry only after repository checks pass.
 
-Stable branch image:
+Stable deployment image:
 
 ```text
-ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay
+ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest
 ```
 
 CI also publishes an immutable tag using the validated Git commit SHA.

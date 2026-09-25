@@ -1,8 +1,8 @@
 services:
   sso-auth:
-    image: ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay
+    image: ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest
     restart: unless-stopped
     env_file:
       - ./sso-auth/.env
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"

@@ -43,7 +43,7 @@ jobs:
           docker build \
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
-            --tag "$IMAGE_NAME:refactor-full-fe-be-relay" \
+            --tag "$IMAGE_NAME:latest" \
             --tag "$IMAGE_NAME:${{ github.sha }}" \
             .
 
@@ -106,5 +106,5 @@ jobs:
 
       - name: Publish deployable image
         run: |
-          docker push "$IMAGE_NAME:refactor-full-fe-be-relay"
+          docker push "$IMAGE_NAME:latest"
           docker push "$IMAGE_NAME:${{ github.sha }}"

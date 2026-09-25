@@ -62,7 +62,7 @@ The self-hosted CI runner is the source of deployable `sso-auth` container image
 
 After the final repository checks pass, CI builds and publishes:
 
-- `ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay`
+- `ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest`
 - an immutable image tagged with the validated Git commit SHA
 
 Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful final CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
