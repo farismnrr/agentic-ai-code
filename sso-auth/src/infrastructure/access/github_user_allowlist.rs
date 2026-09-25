@@ -10,9 +10,7 @@ pub struct GitHubUserAllowlist {
 }
 
 impl GitHubUserAllowlist {
-    pub fn new(
-        allowed_user_ids: impl IntoIterator<Item = u64>,
-    ) -> Result<Self, AuthError> {
+    pub fn new(allowed_user_ids: impl IntoIterator<Item = u64>) -> Result<Self, AuthError> {
         let allowed_user_ids = allowed_user_ids.into_iter().collect::<HashSet<_>>();
         if allowed_user_ids.is_empty() {
             return Err(AuthError::InvalidConfiguration(
