@@ -29,10 +29,9 @@ pub async fn callback(
     Query(query): Query<CallbackQuery>,
 ) -> Response {
     match state.callback.execute(query.assertion.as_deref()) {
-        Err(AuthError::MissingAssertion) => no_store(
-            StatusCode::BAD_REQUEST,
-            "callback assertion is required",
-        ),
+        Err(AuthError::MissingAssertion) => {
+            no_store(StatusCode::BAD_REQUEST, "callback assertion is required")
+        }
         Err(AuthError::VerificationNotImplemented) => no_store(
             StatusCode::NOT_IMPLEMENTED,
             "callback received; signed assertion verification is not implemented",
