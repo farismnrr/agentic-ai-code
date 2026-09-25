@@ -1,9 +1,6 @@
 services:
   sso-auth:
-    build:
-      context: .
-      dockerfile: sso-auth/Dockerfile
-    image: masih-awam/sso-auth:local
+    image: ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay
     restart: unless-stopped
     env_file:
       - ./sso-auth/.env

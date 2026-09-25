@@ -57,3 +57,24 @@ The agent should inspect the failed run, fix failures that remain within the cur
 Additional user approval is only required when the correction needs secrets, unavailable infrastructure access, a significant architecture/product decision, destructive changes, or work outside the requested scope.
 
 See `AGENTS.md` for the repository-level agent rules.
+
+
+## Deployment image
+
+Final CI validation publishes the production `sso-auth` image to GitHub Container Registry only after repository checks pass.
+
+Stable branch image:
+
+```text
+ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay
+```
+
+CI also publishes an immutable tag using the validated Git commit SHA.
+
+Normal local deployment should pull this image and recreate the service instead of rebuilding the application locally:
+
+```sh
+git pull origin refactor/full-fe-be-relay
+docker compose pull sso-auth
+docker compose up -d --force-recreate sso-auth
+```

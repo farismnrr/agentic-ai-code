@@ -54,3 +54,17 @@ Stop and ask the user before proceeding when a fix requires:
 - a change outside the user's requested scope
 
 Never claim a change is complete or verified while its required CI run is failing or has not been checked.
+
+
+## CI-built deployment image
+
+The self-hosted CI runner is the source of deployable `sso-auth` container images.
+
+After the final repository checks pass, CI builds and publishes:
+
+- `ghcr.io/farismnrr/agentic-ai-code-sso-auth:refactor-full-fe-be-relay`
+- an immutable image tagged with the validated Git commit SHA
+
+Do not ask the user to rebuild `sso-auth` locally for normal deployment after a successful final CI run. The normal local update flow is to pull the repository configuration, pull the already validated container image, and recreate the service.
+
+A task that changes deployable `sso-auth` code is not considered complete until the final CI run has successfully published the image.

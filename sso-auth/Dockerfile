@@ -57,6 +57,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 
+LABEL org.opencontainers.image.source="https://github.com/farismnrr/agentic-ai-code"
+
 COPY --from=backend-builder /build/target/release/sso-auth /sso-auth
 
 ENV PORT=3000
