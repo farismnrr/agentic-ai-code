@@ -19,7 +19,10 @@ COPY sso-auth/index.html ./
 COPY sso-auth/tsconfig.json ./
 COPY sso-auth/vite.config.ts ./
 COPY sso-auth/public ./public
+COPY sso-auth/assets ./assets
 COPY sso-auth/frontend ./frontend
+
+RUN node -e "const fs=require('fs'); const dir='assets/security-auth'; const data=fs.readdirSync(dir).sort().map(name=>fs.readFileSync(dir+'/'+name,'utf8')).join(''); fs.writeFileSync('public/assets/security-auth.png',Buffer.from(data,'base64'))"
 
 RUN npm run build
 
