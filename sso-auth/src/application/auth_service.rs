@@ -21,7 +21,11 @@ impl AuthService {
         sessions: Arc<dyn SessionCodec>,
         states: Arc<dyn StateGenerator>,
     ) -> Self {
-        Self { oauth, sessions, states }
+        Self {
+            oauth,
+            sessions,
+            states,
+        }
     }
 
     pub fn begin_login(&self) -> LoginStart {

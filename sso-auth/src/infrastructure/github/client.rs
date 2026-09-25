@@ -27,15 +27,16 @@ impl GitHubOAuthClient {
         token_url: String,
         api_url: String,
     ) -> Result<Self, AuthError> {
-        let authorize_url = Url::parse(&authorize_url)
-            .map_err(|_| AuthError::InvalidConfiguration("GITHUB_AUTHORIZE_URL must be a valid URL"))?;
+        let authorize_url = Url::parse(&authorize_url).map_err(|_| {
+            AuthError::InvalidConfiguration("GITHUB_AUTHORIZE_URL must be a valid URL")
+        })?;
         let token_url = Url::parse(&token_url)
             .map_err(|_| AuthError::InvalidConfiguration("GITHUB_TOKEN_URL must be a valid URL"))?;
         let api_url = Url::parse(&api_url)
             .map_err(|_| AuthError::InvalidConfiguration("GITHUB_API_URL must be a valid URL"))?;
-        let user_url = api_url
-            .join("user")
-            .map_err(|_| AuthError::InvalidConfiguration("GITHUB_API_URL must support relative paths"))?;
+        let user_url = api_url.join("user").map_err(|_| {
+            AuthError::InvalidConfiguration("GITHUB_API_URL must support relative paths")
+        })?;
 
         Ok(Self {
             client: reqwest::Client::new(),

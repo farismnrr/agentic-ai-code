@@ -1,14 +1,7 @@
 use axum::{
     body::Body,
-    http::{
-        header::CONTENT_TYPE,
-        StatusCode,
-        Uri,
-    },
-    response::{
-        IntoResponse,
-        Response,
-    },
+    http::{header::CONTENT_TYPE, StatusCode, Uri},
+    response::{IntoResponse, Response},
 };
 use rust_embed::RustEmbed;
 
@@ -34,7 +27,11 @@ pub async fn serve(uri: Uri) -> Response {
 
 fn normalized_path(uri: &Uri) -> &str {
     let path = uri.path().trim_start_matches('/');
-    if path.is_empty() { "index.html" } else { path }
+    if path.is_empty() {
+        "index.html"
+    } else {
+        path
+    }
 }
 
 fn should_use_spa_fallback(path: &str) -> bool {

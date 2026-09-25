@@ -10,7 +10,9 @@ pub enum AuthError {
 impl fmt::Display for AuthError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ExternalProvider => formatter.write_str("external authentication provider failed"),
+            Self::ExternalProvider => {
+                formatter.write_str("external authentication provider failed")
+            }
             Self::InvalidSession => formatter.write_str("authentication session is invalid"),
             Self::InvalidConfiguration(message) => formatter.write_str(message),
         }

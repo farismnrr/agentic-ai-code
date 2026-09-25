@@ -16,7 +16,9 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self, Box<dyn Error>> {
-        let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string()).parse::<u16>()?;
+        let port = env::var("PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse::<u16>()?;
         let base_url = url::Url::parse(&required("SSO_BASE_URL")?)?;
 
         Ok(Self {
@@ -42,15 +44,41 @@ impl AppConfig {
         SocketAddr::from(([0, 0, 0, 0], self.port))
     }
 
-    pub fn github_client_id(&self) -> String { self.github_client_id.clone() }
-    pub fn github_client_secret(&self) -> String { self.github_client_secret.clone() }
-    pub fn github_callback_url(&self) -> String { self.github_callback_url.clone() }
-    pub fn github_authorize_url(&self) -> String { self.github_authorize_url.clone() }
-    pub fn github_token_url(&self) -> String { self.github_token_url.clone() }
-    pub fn github_api_url(&self) -> String { self.github_api_url.clone() }
-    pub fn session_secret(&self) -> String { self.session_secret.clone() }
-    pub fn session_ttl_seconds(&self) -> u64 { self.session_ttl_seconds }
-    pub fn cookie_secure(&self) -> bool { self.cookie_secure }
+    pub fn github_client_id(&self) -> String {
+        self.github_client_id.clone()
+    }
+
+    pub fn github_client_secret(&self) -> String {
+        self.github_client_secret.clone()
+    }
+
+    pub fn github_callback_url(&self) -> String {
+        self.github_callback_url.clone()
+    }
+
+    pub fn github_authorize_url(&self) -> String {
+        self.github_authorize_url.clone()
+    }
+
+    pub fn github_token_url(&self) -> String {
+        self.github_token_url.clone()
+    }
+
+    pub fn github_api_url(&self) -> String {
+        self.github_api_url.clone()
+    }
+
+    pub fn session_secret(&self) -> String {
+        self.session_secret.clone()
+    }
+
+    pub fn session_ttl_seconds(&self) -> u64 {
+        self.session_ttl_seconds
+    }
+
+    pub fn cookie_secure(&self) -> bool {
+        self.cookie_secure
+    }
 }
 
 fn required(name: &'static str) -> Result<String, Box<dyn Error>> {

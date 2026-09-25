@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::domain::{AuthenticatedUser, AuthSession};
+use crate::domain::{AuthSession, AuthenticatedUser};
 
 use super::AuthError;
 

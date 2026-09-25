@@ -11,10 +11,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    application::AuthService,
-    domain::AuthenticatedUser,
-};
+use crate::{application::AuthService, domain::AuthenticatedUser};
 
 const OAUTH_STATE_COOKIE: &str = "sso_oauth_state";
 const SESSION_COOKIE: &str = "sso_session";
@@ -46,7 +43,10 @@ struct SessionResponse {
 pub async fn start(State(state): State<AuthHttpState>) -> Response {
     let login = state.auth.begin_login();
     let mut response = Redirect::temporary(&login.authorization_url).into_response();
-    append_set_cookie(response.headers_mut(), state_cookie(&login.state, state.cookie_secure));
+    append_set_cookie(
+        response.headers_mut(),
+        state_cookie(&login.state, state.cookie_secure),
+    );
     response
 }
 
@@ -58,17 +58,26 @@ pub async fn callback(
     let cookie_state = cookie_value(&headers, OAUTH_STATE_COOKIE);
     let valid_input = query.error.is_none()
         && query.code.as_deref().is_some_and(|value| !value.is_empty())
-        && query.state.as_deref().is_some_and(|value| !value.is_empty())
+        && query
+            .state
+            .as_deref()
+            .is_some_and(|value| !value.is_empty())
         && cookie_state
             .as_deref()
             .zip(query.state.as_deref())
-            .is_some_and(|(cookie, returned)| constant_time_eq(cookie.as_bytes(), returned.as_bytes()));
+            .is_some_and(|(cookie, returned)| {
+                constant_time_eq(cookie.as_bytes(), returned.as_bytes())
+            });
 
     if !valid_input {
         return callback_redirect(&state, false, None);
     }
 
-    match state.auth.complete_login(query.code.as_deref().unwrap_or_default()).await {
+    match state
+        .auth
+        .complete_login(query.code.as_deref().unwrap_or_default())
+        .await
+    {
         Ok(token) => callback_redirect(&state, true, Some(token)),
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");
@@ -101,7 +110,10 @@ pub async fn session(State(state): State<AuthHttpState>, headers: HeaderMap) -> 
                 issued_at: None,
                 expires_at: None,
             });
-            append_set_cookie(response.headers_mut(), clear_cookie(SESSION_COOKIE, "/", state.cookie_secure));
+            append_set_cookie(
+                response.headers_mut(),
+                clear_cookie(SESSION_COOKIE, "/", state.cookie_secure),
+            );
             response
         }
     }
@@ -109,12 +121,20 @@ pub async fn session(State(state): State<AuthHttpState>, headers: HeaderMap) -> 
 
 pub async fn logout(State(state): State<AuthHttpState>) -> Response {
     let mut response = StatusCode::NO_CONTENT.into_response();
-    append_set_cookie(response.headers_mut(), clear_cookie(SESSION_COOKIE, "/", state.cookie_secure));
+    append_set_cookie(
+        response.headers_mut(),
+        clear_cookie(SESSION_COOKIE, "/", state.cookie_secure),
+    );
     response
 }
 
-fn callback_redirect(state: &AuthHttpState, success: bool, session_token: Option<String>) -> Response {
-    let mut response = Redirect::to(if success { "/" } else { "/?auth_error=github" }).into_response();
+fn callback_redirect(
+    state: &AuthHttpState,
+    success: bool,
+    session_token: Option<String>,
+) -> Response {
+    let mut response =
+        Redirect::to(if success { "/" } else { "/?auth_error=github" }).into_response();
     append_set_cookie(
         response.headers_mut(),
         clear_cookie(OAUTH_STATE_COOKIE, "/auth/github", state.cookie_secure),
@@ -122,7 +142,13 @@ fn callback_redirect(state: &AuthHttpState, success: bool, session_token: Option
     if let Some(token) = session_token {
         append_set_cookie(
             response.headers_mut(),
-            build_cookie(SESSION_COOKIE, &token, "/", state.session_ttl_seconds, state.cookie_secure),
+            build_cookie(
+                SESSION_COOKIE,
+                &token,
+                "/",
+                state.session_ttl_seconds,
+                state.cookie_secure,
+            ),
         );
     }
     response
@@ -130,7 +156,9 @@ fn callback_redirect(state: &AuthHttpState, success: bool, session_token: Option
 
 fn session_response(body: SessionResponse) -> Response {
     let mut response = Json(body).into_response();
-    response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
@@ -143,12 +171,20 @@ fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
 }
 
 fn state_cookie(value: &str, secure: bool) -> String {
-    build_cookie(OAUTH_STATE_COOKIE, value, "/auth/github", STATE_MAX_AGE_SECONDS, secure)
+    build_cookie(
+        OAUTH_STATE_COOKIE,
+        value,
+        "/auth/github",
+        STATE_MAX_AGE_SECONDS,
+        secure,
+    )
 }
 
 fn build_cookie(name: &str, value: &str, path: &str, max_age: u64, secure: bool) -> String {
     let secure_attribute = if secure { "; Secure" } else { "" };
-    format!("{name}={value}; Path={path}; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_attribute}")
+    format!(
+        "{name}={value}; Path={path}; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_attribute}"
+    )
 }
 
 fn clear_cookie(name: &str, path: &str, secure: bool) -> String {
@@ -166,6 +202,9 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
     }
-    let diff = left.iter().zip(right).fold(0_u8, |acc, (a, b)| acc | (a ^ b));
+    let diff = left
+        .iter()
+        .zip(right)
+        .fold(0_u8, |acc, (a, b)| acc | (a ^ b));
     diff == 0
 }
