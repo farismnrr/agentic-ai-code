@@ -383,6 +383,26 @@ jobs:
           printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
           printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)'
 
+      - name: Verify ARM64 binary architecture
+        run: |
+          set -eu
+
+          container="sso-auth-arm64-inspect-${{ github.run_id }}"
+          binary="$RUNNER_TEMP/sso-auth-arm64"
+
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            rm -f "$binary"
+          }
+          trap cleanup EXIT
+
+          docker pull --platform linux/arm64 "$IMAGE_NAME:latest"
+          docker create --platform linux/arm64 --name "$container" "$IMAGE_NAME:latest"
+          docker cp "$container:/sso-auth" "$binary"
+
+          file "$binary"
+          file "$binary" | grep -Eq 'ARM aarch64|aarch64'
+
       - name: Verify ARM64 image boots and serves health
         run: |
           set -eu
