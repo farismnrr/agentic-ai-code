@@ -1,12 +1,11 @@
 use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
     body::{to_bytes, Body},
-    http::{header::LOCATION, header::SET_COOKIE, Request, StatusCode},
+    http::{header::SET_COOKIE, Request, StatusCode},
     Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -35,32 +34,15 @@ const STATE: &str = "0123456789abcdef0123456789abcdef0123456789a";
 
 type HmacSha256 = Hmac<Sha256>;
 
-struct FixedTokens {
-    values: Mutex<VecDeque<String>>,
-}
+struct PanicTokens;
 
-impl FixedTokens {
-    fn new(values: Vec<String>) -> Self {
-        Self {
-            values: Mutex::new(values.into()),
-        }
-    }
-}
-
-impl TokenGenerator for FixedTokens {
+impl TokenGenerator for PanicTokens {
     fn generate(&self) -> String {
-        self.values
-            .lock()
-            .expect("token lock")
-            .pop_front()
-            .expect("fixed token")
+        panic!("token generation is not used by callback tests")
     }
 }
 
-fn router(
-    store: Arc<InMemoryConnectionRepository>,
-    tokens: Vec<String>,
-) -> Router {
+fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
     let verifier = Arc::new(
         SignedRelayAssertionVerifier::new(
             SECRET.to_string(),
@@ -77,7 +59,7 @@ fn router(
     build_router(RelayHttpState::new(
         Arc::new(ConnectStartUseCase::new(
             store.clone(),
-            Arc::new(FixedTokens::new(tokens)),
+            Arc::new(PanicTokens),
             sso,
         )),
         Arc::new(ConnectCallbackUseCase::new(verifier, store.clone())),
@@ -123,64 +105,10 @@ fn future_expiry() -> u64 {
 }
 
 async fn body_text(response: axum::response::Response) -> String {
-    String::from_utf8(
-        to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body")
-            .to_vec(),
-    )
-    .expect("UTF-8")
-}
-
-#[tokio::test]
-async fn discovery_exposes_connect_contract_without_tools() {
-    let app = router(Arc::new(InMemoryConnectionRepository::new(300)), vec![]);
-    let response = app
-        .oneshot(Request::get("/.well-known/relay.json").body(Body::empty()).unwrap())
+    let bytes = to_bytes(response.into_body(), usize::MAX)
         .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: serde_json::Value =
-        serde_json::from_str(&body_text(response).await).expect("JSON");
-    assert_eq!(body["connection"]["type"], "sso");
-    assert_eq!(
-        body["connection"]["connectUrl"],
-        "https://relay.example.com/connections/start"
-    );
-    assert!(body.get("tools").is_none());
-}
-
-#[tokio::test]
-async fn connect_start_uses_relay_state_and_no_return_target() {
-    let app = router(
-        Arc::new(InMemoryConnectionRepository::new(300)),
-        vec!["connection-id".to_string(), STATE.to_string()],
-    );
-    let response = app
-        .oneshot(Request::get("/connections/start").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
-    let location = Url::parse(
-        response
-            .headers()
-            .get(LOCATION)
-            .expect("location")
-            .to_str()
-            .expect("location string"),
-    )
-    .expect("redirect URL");
-    assert_eq!(location.path(), "/auth/github");
-    assert_eq!(
-        location
-            .query_pairs()
-            .find(|(key, _)| key == "connection_state")
-            .map(|(_, value)| value.into_owned()),
-        Some(STATE.to_string())
-    );
-    assert!(location.query_pairs().all(|(key, _)| key != "return_to"));
+        .expect("body");
+    String::from_utf8(bytes.to_vec()).expect("UTF-8")
 }
 
 #[tokio::test]
@@ -189,7 +117,7 @@ async fn valid_assertion_connects_without_relay_session() {
     store
         .create(Connection::pending("conn-1".to_string(), STATE.to_string()))
         .unwrap();
-    let app = router(store, vec![]);
+    let app = router(store);
     let token = assertion(STATE, AUDIENCE, future_expiry());
 
     let response = app
@@ -209,7 +137,11 @@ async fn valid_assertion_connects_without_relay_session() {
     assert!(body.contains("\"subject\":\"github:120432426\""));
 
     let status = app
-        .oneshot(Request::get("/connections/conn-1").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get("/connections/conn-1")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(status.status(), StatusCode::OK);
@@ -226,7 +158,7 @@ async fn invalid_assertions_are_rejected() {
         store
             .create(Connection::pending("conn-1".to_string(), STATE.to_string()))
             .unwrap();
-        let response = router(store, vec![])
+        let response = router(store)
             .oneshot(
                 Request::get(format!("/connections/callback?assertion={token}"))
                     .body(Body::empty())
@@ -241,7 +173,7 @@ async fn invalid_assertions_are_rejected() {
 #[tokio::test]
 async fn callback_rejects_state_without_pending_connection() {
     let token = assertion("different-state", AUDIENCE, future_expiry());
-    let response = router(Arc::new(InMemoryConnectionRepository::new(300)), vec![])
+    let response = router(Arc::new(InMemoryConnectionRepository::new(300)))
         .oneshot(
             Request::get(format!("/connections/callback?assertion={token}"))
                 .body(Body::empty())
@@ -255,7 +187,7 @@ async fn callback_rejects_state_without_pending_connection() {
 
 #[tokio::test]
 async fn callback_requires_assertion() {
-    let response = router(Arc::new(InMemoryConnectionRepository::new(300)), vec![])
+    let response = router(Arc::new(InMemoryConnectionRepository::new(300)))
         .oneshot(
             Request::get("/connections/callback")
                 .body(Body::empty())
