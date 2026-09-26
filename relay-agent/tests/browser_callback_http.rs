@@ -134,3 +134,31 @@ async fn browser_callback_returns_to_sso_dashboard_after_connecting() {
         "https://sso.farismnrr.com/?relay_connection=connected&connection_id=conn-1"
     );
 }
+
+#[tokio::test]
+async fn browser_callback_returns_failure_to_sso_dashboard() {
+    let response = router(Arc::new(InMemoryConnectionRepository::new(300)))
+        .oneshot(
+            Request::get("/connections/callback?assertion=invalid")
+                .header(ACCEPT, "text/html,application/xhtml+xml")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let location = Url::parse(
+        response
+            .headers()
+            .get(LOCATION)
+            .expect("location")
+            .to_str()
+            .expect("location string"),
+    )
+    .expect("redirect URL");
+    assert_eq!(
+        location.as_str(),
+        "https://sso.farismnrr.com/?relay_connection=failed"
+    );
+}

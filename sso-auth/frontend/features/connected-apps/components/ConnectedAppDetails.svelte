@@ -2,6 +2,7 @@
   import GitHubIcon from '../../../shared/components/icons/GitHubIcon.svelte'
   import RelayIcon from '../../../shared/components/icons/RelayIcon.svelte'
   import type { ConnectedApp } from '../model/connected-app'
+  import type { RelayConnectionState } from '../model/relay-connection-state'
 
   export let app: ConnectedApp
   export let busy = false
@@ -9,6 +10,7 @@
   export let onEdit: (app: ConnectedApp) => void
   export let onToggle: (app: ConnectedApp) => void
   export let onRemove: (app: ConnectedApp) => void
+  export let relayConnection: RelayConnectionState
 
   let confirmOpen = false
   $: isGitHub = app.clientId.toLowerCase().includes('github')
@@ -47,9 +49,15 @@
         <div class="mt-2 flex flex-wrap items-center gap-5 text-sm text-slate-500">
           <span>{app.clientId}</span>
           <span class="inline-flex items-center gap-2">
-            <span class="size-2.5 rounded-full {app.enabled ? 'bg-emerald-400' : 'bg-slate-300'}"></span>
-            {app.enabled ? 'Enabled' : 'Disabled'}
+            <span class="size-2.5 rounded-full {app.enabled ? 'bg-blue-500' : 'bg-slate-300'}"></span>
+            Registry {app.enabled ? 'Enabled' : 'Disabled'}
           </span>
+          {#if isRelay}
+            <span class="inline-flex items-center gap-2 font-medium {relayConnection.status === 'connected' ? 'text-emerald-700' : relayConnection.status === 'failed' ? 'text-red-600' : 'text-slate-500'}">
+              <span class="size-2.5 rounded-full {relayConnection.status === 'connected' ? 'bg-emerald-500' : relayConnection.status === 'failed' ? 'bg-red-500' : 'bg-slate-300'}"></span>
+              {relayConnection.status === 'connected' ? 'Connected' : relayConnection.status === 'failed' ? 'Connection failed' : 'Not connected'}
+            </span>
+          {/if}
         </div>
       </div>
     </div>
@@ -62,7 +70,7 @@
           disabled={!app.enabled || busy}
           on:click={connect}
         >
-          Connect
+          {relayConnection.status === 'connected' ? 'Reconnect' : 'Connect'}
         </button>
       {/if}
       <button type="button" class="btn h-11 min-h-0 border-slate-200 bg-white px-7 text-slate-700 shadow-none hover:bg-slate-50" on:click={() => onEdit(app)}>
@@ -108,6 +116,17 @@
     <h2 class="py-5 text-lg font-semibold text-slate-950">Activity</h2>
     <dl class="divide-y divide-slate-200">
       <div class="grid gap-2 py-4 sm:grid-cols-[250px_1fr]"><dt class="text-sm text-slate-500">Registry status</dt><dd class="text-sm font-medium text-slate-900">{app.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+      {#if isRelay}
+        <div class="grid gap-2 py-4 sm:grid-cols-[250px_1fr]">
+          <dt class="text-sm text-slate-500">Relay connection</dt>
+          <dd class="text-sm font-medium {relayConnection.status === 'connected' ? 'text-emerald-700' : relayConnection.status === 'failed' ? 'text-red-600' : 'text-slate-500'}">
+            {relayConnection.status === 'connected' ? 'Connected' : relayConnection.status === 'failed' ? 'Connection failed' : 'Not connected'}
+          </dd>
+        </div>
+        {#if relayConnection.status === 'connected'}
+          <div class="grid gap-2 py-4 sm:grid-cols-[250px_1fr]"><dt class="text-sm text-slate-500">Connection ID</dt><dd class="break-all font-mono text-sm text-slate-700">{relayConnection.connectionId}</dd></div>
+        {/if}
+      {/if}
       <div class="grid gap-2 py-4 sm:grid-cols-[250px_1fr]"><dt class="text-sm text-slate-500">Usage history</dt><dd class="text-sm text-slate-500">Not tracked by SSO</dd></div>
     </dl>
   </section>

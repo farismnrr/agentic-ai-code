@@ -45,6 +45,7 @@ pub async fn callback(
             no_store_redirect(url.as_str())
         }
         Ok(connection) => no_store_json(StatusCode::OK, connection),
+        Err(_) if accepts_html(&headers) => browser_failure_redirect(&state),
         Err(AuthError::MissingAssertion) => {
             no_store(StatusCode::BAD_REQUEST, "callback assertion is required")
         }
@@ -83,6 +84,15 @@ fn accepts_html(headers: &HeaderMap) -> bool {
                 .split(',')
                 .any(|part| part.trim().starts_with("text/html"))
         })
+}
+
+fn browser_failure_redirect(state: &RelayHttpState) -> Response {
+    let mut url = state.sso_dashboard_url.clone();
+    url.set_path("/");
+    url.set_query(None);
+    url.set_fragment(None);
+    url.query_pairs_mut().append_pair("relay_connection", "failed");
+    no_store_redirect(url.as_str())
 }
 
 fn no_store_redirect(location: &str) -> Response {

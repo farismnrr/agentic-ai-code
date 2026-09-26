@@ -3,6 +3,12 @@
 
   import { deleteConnectedApp, listConnectedApps, saveConnectedApp } from '../api/connected-apps-api'
   import { emptyConnectedApp, type ConnectedApp } from '../model/connected-app'
+  import {
+    clearRelayConnection,
+    loadRelayConnectionState,
+    saveRelayConnection,
+    type RelayConnectionState
+  } from '../model/relay-connection-state'
   import ConnectedAppCard from './ConnectedAppCard.svelte'
   import ConnectedAppDetails from './ConnectedAppDetails.svelte'
   import ConnectedAppDialog from './ConnectedAppDialog.svelte'
@@ -16,6 +22,7 @@
   let busy = false
   let message = ''
   let error = ''
+  let relayConnection: RelayConnectionState = loadRelayConnectionState()
 
   onMount(() => {
     applyConnectionResult()
@@ -24,9 +31,19 @@
 
   function applyConnectionResult() {
     const url = new URL(window.location.href)
-    if (url.searchParams.get('relay_connection') !== 'connected') return
+    const result = url.searchParams.get('relay_connection')
+    if (!result) return
 
-    message = 'Relay connected successfully.'
+    const connectionId = url.searchParams.get('connection_id')
+    if (result === 'connected' && connectionId) {
+      relayConnection = saveRelayConnection(connectionId)
+      message = 'Relay connected successfully.'
+    } else if (result === 'failed') {
+      relayConnection = { status: 'failed' }
+      clearRelayConnection()
+      error = 'Relay connection failed. Try connecting again.'
+    }
+
     url.searchParams.delete('relay_connection')
     url.searchParams.delete('connection_id')
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
@@ -98,6 +115,7 @@
       await deleteConnectedApp(app.clientId)
       apps = apps.filter(item => item.clientId !== app.clientId)
       selected = null
+      if (app.clientId === 'relay-agent') relayConnection = clearRelayConnection()
       message = 'App registration removed.'
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Unable to remove app registration.'
@@ -121,6 +139,7 @@
     onEdit={edit}
     onToggle={toggle}
     onRemove={remove}
+    {relayConnection}
   />
 {:else}
   <div class="flex flex-wrap items-start justify-between gap-5">
@@ -143,7 +162,7 @@
     {:else}
       <div class="divide-y divide-slate-200">
         {#each apps as app (app.clientId)}
-          <ConnectedAppCard {app} onOpen={(item) => { selected = item }} />
+          <ConnectedAppCard {app} {relayConnection} onOpen={(item) => { selected = item }} />
         {/each}
 
         <button type="button" class="flex w-full items-center gap-5 px-8 py-6 text-left hover:bg-slate-50" on:click={createNew}>

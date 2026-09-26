@@ -2,11 +2,14 @@
   import GitHubIcon from '../../../shared/components/icons/GitHubIcon.svelte'
   import RelayIcon from '../../../shared/components/icons/RelayIcon.svelte'
   import type { ConnectedApp } from '../model/connected-app'
+  import type { RelayConnectionState } from '../model/relay-connection-state'
 
   export let app: ConnectedApp
   export let onOpen: (app: ConnectedApp) => void
+  export let relayConnection: RelayConnectionState
 
   $: isGitHub = app.clientId.toLowerCase().includes('github')
+  $: isRelay = app.clientId === 'relay-agent'
 </script>
 
 <button
@@ -27,9 +30,21 @@
     <span class="mt-0.5 block truncate text-sm text-slate-500">{app.clientId}</span>
   </span>
 
-  <span class="hidden items-center gap-2 text-sm sm:flex">
-    <span class="size-2.5 rounded-full {app.enabled ? 'bg-emerald-400' : 'bg-slate-300'}"></span>
-    <span class="text-slate-600">{app.enabled ? 'Enabled' : 'Disabled'}</span>
+  <span class="hidden text-sm sm:block">
+    {#if isRelay}
+      <span class="flex items-center gap-2">
+        <span class="size-2.5 rounded-full {relayConnection.status === 'connected' ? 'bg-emerald-500' : relayConnection.status === 'failed' ? 'bg-red-500' : 'bg-slate-300'}"></span>
+        <span class="{relayConnection.status === 'connected' ? 'text-emerald-700' : relayConnection.status === 'failed' ? 'text-red-600' : 'text-slate-600'}">
+          {relayConnection.status === 'connected' ? 'Connected' : relayConnection.status === 'failed' ? 'Failed' : 'Not connected'}
+        </span>
+      </span>
+      <span class="mt-1 block text-xs text-slate-400">Registry {app.enabled ? 'enabled' : 'disabled'}</span>
+    {:else}
+      <span class="flex items-center gap-2">
+        <span class="size-2.5 rounded-full {app.enabled ? 'bg-blue-500' : 'bg-slate-300'}"></span>
+        <span class="text-slate-600">{app.enabled ? 'Enabled' : 'Disabled'}</span>
+      </span>
+    {/if}
   </span>
 
   <svg aria-hidden="true" viewBox="0 0 24 24" class="size-5 fill-none stroke-slate-500 stroke-2">
