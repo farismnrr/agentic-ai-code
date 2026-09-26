@@ -1,5 +1,8 @@
 use axum::{
-    http::{header::{CONTENT_TYPE, ORIGIN}, HeaderMap, StatusCode},
+    http::{
+        header::{CONTENT_TYPE, ORIGIN},
+        HeaderMap, StatusCode,
+    },
     response::{IntoResponse, Response},
     Json,
 };
@@ -22,10 +25,7 @@ pub(super) struct JsonRpcRequest {
     pub(super) params: Value,
 }
 
-pub(super) fn validate_origin(
-    headers: &HeaderMap,
-    resource: &str,
-) -> Result<(), Response> {
+pub(super) fn validate_origin(headers: &HeaderMap, resource: &str) -> Result<(), Response> {
     let mut origins = headers.get_all(ORIGIN).iter();
     let Some(origin) = origins.next() else {
         return Ok(());
@@ -67,8 +67,8 @@ pub(super) fn validate_request(
         let Some(name) = request.params.get("name").and_then(Value::as_str) else {
             return Err(invalid_params(id));
         };
-        let Some(header_name) = header_string(headers, HEADER_MCP_NAME)
-            .and_then(decode_header_value)
+        let Some(header_name) =
+            header_string(headers, HEADER_MCP_NAME).and_then(decode_header_value)
         else {
             return Err(header_mismatch(id));
         };
@@ -164,23 +164,11 @@ fn decode_header_value(value: &str) -> Option<String> {
 }
 
 fn invalid_params(id: Option<Value>) -> Response {
-    rpc_error_response(
-        StatusCode::BAD_REQUEST,
-        id,
-        -32602,
-        "Invalid params",
-        None,
-    )
+    rpc_error_response(StatusCode::BAD_REQUEST, id, -32602, "Invalid params", None)
 }
 
 fn header_mismatch(id: Option<Value>) -> Response {
-    rpc_error_response(
-        StatusCode::BAD_REQUEST,
-        id,
-        -32020,
-        "Header mismatch",
-        None,
-    )
+    rpc_error_response(StatusCode::BAD_REQUEST, id, -32020, "Header mismatch", None)
 }
 
 pub(super) fn rpc_error_response(
