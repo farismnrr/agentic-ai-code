@@ -38,8 +38,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         config.sso_issuer(),
         mcp_resource_url.clone(),
     )?);
-    let mcp_resource =
-        ProtectedResourceMetadata::new(mcp_resource_url, config.sso_issuer());
+    let mcp_resource = ProtectedResourceMetadata::new(mcp_resource_url, config.sso_issuer());
 
     let discovery = DiscoveryDocument::new(
         client_id.to_string(),

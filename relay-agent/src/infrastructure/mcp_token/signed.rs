@@ -50,9 +50,7 @@ impl SignedMcpAccessTokenVerifier {
 
 impl McpAccessTokenVerifier for SignedMcpAccessTokenVerifier {
     fn verify(&self, token: &str, required_scope: &str) -> Result<VerifiedPrincipal, AuthError> {
-        let (payload, signature) = token
-            .split_once('.')
-            .ok_or(AuthError::InvalidAccessToken)?;
+        let (payload, signature) = token.split_once('.').ok_or(AuthError::InvalidAccessToken)?;
         let payload = URL_SAFE_NO_PAD
             .decode(payload)
             .map_err(|_| AuthError::InvalidAccessToken)?;
