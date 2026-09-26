@@ -47,10 +47,7 @@ pub async fn callback(
     }
 }
 
-pub async fn status(
-    State(state): State<RelayHttpState>,
-    Path(id): Path<String>,
-) -> Response {
+pub async fn status(State(state): State<RelayHttpState>, Path(id): Path<String>) -> Response {
     match state.status.execute(&id) {
         Ok(connection) => no_store_json(StatusCode::OK, connection),
         Err(AuthError::ConnectionNotFound) => {

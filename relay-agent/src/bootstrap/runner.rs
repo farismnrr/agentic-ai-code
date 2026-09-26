@@ -39,10 +39,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
             Arc::new(SecureTokenGenerator),
             sso_connect,
         )),
-        Arc::new(ConnectCallbackUseCase::new(
-            verifier,
-            connections.clone(),
-        )),
+        Arc::new(ConnectCallbackUseCase::new(verifier, connections.clone())),
         Arc::new(ConnectionStatusUseCase::new(connections)),
         discovery,
     );

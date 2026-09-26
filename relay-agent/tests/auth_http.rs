@@ -12,8 +12,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
 use relay_agent::{
     application::{
-        ConnectCallbackUseCase, ConnectStartUseCase, ConnectionRepository,
-        ConnectionStatusUseCase, TokenGenerator,
+        ConnectCallbackUseCase, ConnectStartUseCase, ConnectionRepository, ConnectionStatusUseCase,
+        TokenGenerator,
     },
     domain::Connection,
     infrastructure::{
@@ -52,8 +52,7 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
         .expect("verifier"),
     );
     let sso = Arc::new(
-        SsoConnectUrlBuilder::new(Url::parse(ISSUER).expect("SSO URL"))
-            .expect("connect URL"),
+        SsoConnectUrlBuilder::new(Url::parse(ISSUER).expect("SSO URL")).expect("connect URL"),
     );
 
     build_router(RelayHttpState::new(

@@ -30,7 +30,10 @@ impl InMemoryConnectionRepository {
 
 impl ConnectionRepository for InMemoryConnectionRepository {
     fn create(&self, connection: Connection) -> Result<(), AuthError> {
-        let mut entries = self.entries.lock().map_err(|_| AuthError::StorageUnavailable)?;
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| AuthError::StorageUnavailable)?;
         if entries.contains_key(&connection.id) {
             return Err(AuthError::ConnectionConflict);
         }
@@ -46,7 +49,10 @@ impl ConnectionRepository for InMemoryConnectionRepository {
     }
 
     fn find(&self, id: &str) -> Result<Connection, AuthError> {
-        let mut entries = self.entries.lock().map_err(|_| AuthError::StorageUnavailable)?;
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| AuthError::StorageUnavailable)?;
         let expired = entries
             .get(id)
             .is_some_and(|stored| stored.expires_at <= Instant::now());
@@ -66,7 +72,10 @@ impl ConnectionRepository for InMemoryConnectionRepository {
         principal: VerifiedPrincipal,
     ) -> Result<Connection, AuthError> {
         let now = Instant::now();
-        let mut entries = self.entries.lock().map_err(|_| AuthError::StorageUnavailable)?;
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| AuthError::StorageUnavailable)?;
         entries.retain(|_, stored| stored.expires_at > now);
 
         let stored = entries

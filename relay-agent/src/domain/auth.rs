@@ -9,7 +9,11 @@ pub struct VerifiedPrincipal {
 }
 
 impl VerifiedPrincipal {
-    pub fn new(subject: impl Into<String>, login: impl Into<String>, avatar_url: Option<String>) -> Self {
+    pub fn new(
+        subject: impl Into<String>,
+        login: impl Into<String>,
+        avatar_url: Option<String>,
+    ) -> Self {
         Self {
             subject: subject.into(),
             login: login.into(),
