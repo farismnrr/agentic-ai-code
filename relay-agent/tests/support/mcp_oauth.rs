@@ -3,11 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use axum::{
-    body::Body,
-    http::Request,
-    Router,
-};
+use axum::{body::Body, http::Request, Router};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
 use relay_agent::{
@@ -79,10 +75,7 @@ pub fn router() -> Router {
             .expect("MCP verifier"),
         ),
         ProtectedResourceMetadata::new(RESOURCE.to_string(), ISSUER.to_string()),
-        ProtectedResourceMetadata::new(
-            "https://relay.example.com".to_string(),
-            ISSUER.to_string(),
-        ),
+        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
         "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
