@@ -8,9 +8,7 @@ use reqwest::{
 use serde::Deserialize;
 use url::Url;
 
-use crate::application::{
-    AuthError, McpClientMetadata, McpClientMetadataResolver,
-};
+use crate::application::{AuthError, McpClientMetadata, McpClientMetadataResolver};
 
 const MAX_METADATA_BYTES: usize = 64 * 1024;
 
