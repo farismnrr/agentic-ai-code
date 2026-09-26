@@ -29,7 +29,7 @@
 
   <span class="hidden items-center gap-2 text-sm sm:flex">
     <span class="size-2.5 rounded-full {app.enabled ? 'bg-emerald-400' : 'bg-slate-300'}"></span>
-    <span class="text-slate-600">{app.enabled ? 'Connected' : 'Disabled'}</span>
+    <span class="text-slate-600">{app.enabled ? 'Enabled' : 'Disabled'}</span>
   </span>
 
   <svg aria-hidden="true" viewBox="0 0 24 24" class="size-5 fill-none stroke-slate-500 stroke-2">

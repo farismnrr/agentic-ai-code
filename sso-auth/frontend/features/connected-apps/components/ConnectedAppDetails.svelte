@@ -8,7 +8,7 @@
   export let onBack: () => void
   export let onEdit: (app: ConnectedApp) => void
   export let onToggle: (app: ConnectedApp) => void
-  export let onDisconnect: (app: ConnectedApp) => void
+  export let onRemove: (app: ConnectedApp) => void
 
   let confirmOpen = false
   $: isGitHub = app.clientId.toLowerCase().includes('github')
@@ -39,7 +39,7 @@
           <span>{app.clientId}</span>
           <span class="inline-flex items-center gap-2">
             <span class="size-2.5 rounded-full {app.enabled ? 'bg-emerald-400' : 'bg-slate-300'}"></span>
-            {app.enabled ? 'Connected' : 'Disabled'}
+            {app.enabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
       </div>
@@ -70,7 +70,7 @@
   </section>
 
   <section class="mt-6 rounded-xl border border-slate-200 bg-white px-6">
-    <h2 class="py-5 text-lg font-semibold text-slate-950">Connection</h2>
+    <h2 class="py-5 text-lg font-semibold text-slate-950">Connection settings</h2>
     <dl class="divide-y divide-slate-200">
       <div class="grid items-center gap-2 py-4 sm:grid-cols-[250px_1fr]">
         <dt class="text-sm text-slate-500">Trusted callback URL</dt>
@@ -95,7 +95,7 @@
 
   <div class="mt-7 border-t border-slate-200 pt-4">
     <button type="button" class="text-sm font-medium text-red-600 hover:text-red-700" on:click={() => { confirmOpen = true }}>
-      Disconnect app
+      Remove app
     </button>
   </div>
 
@@ -103,11 +103,11 @@
     <div class="fixed inset-0 z-50 grid place-items-center p-4">
       <button type="button" aria-label="Close confirmation" class="absolute inset-0 bg-slate-950/40" on:click={() => { confirmOpen = false }}></button>
       <div role="dialog" aria-modal="true" class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
-        <h2 class="text-lg font-semibold text-slate-950">Disconnect {app.name}?</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">This removes the app registration. You can add it again later.</p>
+        <h2 class="text-lg font-semibold text-slate-950">Remove {app.name}?</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">This removes the app registration from SSO. It does not represent an active Relay connection.</p>
         <div class="mt-6 flex justify-end gap-3">
           <button type="button" class="btn h-10 min-h-0 border-slate-200 bg-white text-slate-700 shadow-none" on:click={() => { confirmOpen = false }}>Cancel</button>
-          <button type="button" class="btn h-10 min-h-0 border-red-600 bg-red-600 text-white shadow-none hover:bg-red-700" disabled={busy} on:click={() => onDisconnect(app)}>Disconnect</button>
+          <button type="button" class="btn h-10 min-h-0 border-red-600 bg-red-600 text-white shadow-none hover:bg-red-700" disabled={busy} on:click={() => onRemove(app)}>Remove</button>
         </div>
       </div>
     </div>

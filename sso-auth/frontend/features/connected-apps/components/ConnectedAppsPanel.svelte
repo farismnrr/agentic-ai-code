@@ -56,7 +56,7 @@
         : [...apps, saved]
       if (selected?.clientId === saved.clientId) selected = saved
       dialogMode = null
-      message = exists ? 'Connected app updated.' : 'Connected app added.'
+      message = exists ? 'App registration updated.' : 'App registration added.'
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Unable to save connected app.'
     } finally {
@@ -78,16 +78,16 @@
     }
   }
 
-  async function disconnect(app: ConnectedApp) {
+  async function remove(app: ConnectedApp) {
     busy = true
     error = ''
     try {
       await deleteConnectedApp(app.clientId)
       apps = apps.filter(item => item.clientId !== app.clientId)
       selected = null
-      message = 'Connected app disconnected.'
+      message = 'App registration removed.'
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to disconnect app.'
+      error = cause instanceof Error ? cause.message : 'Unable to remove app registration.'
     } finally {
       busy = false
     }
@@ -107,14 +107,14 @@
     onBack={() => { selected = null }}
     onEdit={edit}
     onToggle={toggle}
-    onDisconnect={disconnect}
+    onRemove={remove}
   />
 {:else}
   <div class="flex flex-wrap items-start justify-between gap-5">
     <header>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Connected Apps</p>
       <h1 class="mt-2 text-4xl font-semibold tracking-tight text-slate-950">Connected Apps</h1>
-      <p class="mt-2 text-lg text-slate-500">Apps and services connected to your Masih Awam account.</p>
+      <p class="mt-2 text-lg text-slate-500">Apps and services registered to connect to your Masih Awam account.</p>
     </header>
     <button type="button" class="btn h-12 min-h-0 border-blue-600 bg-blue-600 px-7 text-white shadow-none hover:border-blue-700 hover:bg-blue-700" on:click={createNew}>
       Add app
@@ -139,7 +139,7 @@
           </span>
           <span>
             <span class="block text-base font-semibold text-slate-950">Add another app</span>
-            <span class="mt-0.5 block text-sm text-slate-500">Register a new connected app</span>
+            <span class="mt-0.5 block text-sm text-slate-500">Register a new app</span>
           </span>
           <svg aria-hidden="true" viewBox="0 0 24 24" class="ml-auto size-5 fill-none stroke-slate-500 stroke-2"><path d="m9 5 7 7-7 7"></path></svg>
         </button>
@@ -147,7 +147,7 @@
     {/if}
   </section>
 
-  <p class="mt-7 text-sm text-slate-500">Connected apps can only return users to callback URLs you register here.</p>
+  <p class="mt-7 text-sm text-slate-500">Registered apps can only return users to callback URLs you configure here.</p>
 {/if}
 
 {#if dialogMode}
