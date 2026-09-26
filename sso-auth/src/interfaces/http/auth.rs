@@ -1,33 +1,20 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{Query, State},
     http::{header::CACHE_CONTROL, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
-    Json,
 };
-use serde::{Deserialize, Serialize};
-use url::Url;
+use serde::Deserialize;
 
-use crate::{
-    application::{AuthError, AuthService, ConnectionService, LoginCompletion},
-    domain::AuthenticatedUser,
+use crate::application::{AuthError, LoginCompletion};
+
+use super::{
+    auth_cookie::{
+        append_set_cookie, clear_cookie, constant_time_eq, cookie_value,
+        relay_connection_state_cookie, session_cookie, state_cookie, OAUTH_STATE_COOKIE,
+        RELAY_CONNECTION_STATE_COOKIE,
+    },
+    AuthHttpState,
 };
-
-use super::auth_cookie::{
-    append_set_cookie, clear_cookie, constant_time_eq, cookie_value,
-    relay_connection_state_cookie, session_cookie, state_cookie, OAUTH_STATE_COOKIE,
-    RELAY_CONNECTION_STATE_COOKIE, SESSION_COOKIE,
-};
-
-#[derive(Clone)]
-pub struct AuthHttpState {
-    pub auth: Arc<AuthService>,
-    pub connections: Arc<ConnectionService>,
-    pub relay_callback_url: Url,
-    pub cookie_secure: bool,
-    pub session_ttl_seconds: u64,
-}
 
 #[derive(Deserialize)]
 pub struct StartQuery {
@@ -39,15 +26,6 @@ pub struct CallbackQuery {
     code: Option<String>,
     state: Option<String>,
     error: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionResponse {
-    authenticated: bool,
-    user: Option<AuthenticatedUser>,
-    issued_at: Option<u64>,
-    expires_at: Option<u64>,
 }
 
 pub async fn start(
@@ -134,56 +112,12 @@ fn complete_callback(
         .connections
         .issue_assertion(&completion.user, &connection_state)
     {
-        Ok(assertion) => {
-            connection_redirect(state, completion.session_token, assertion)
-        }
+        Ok(assertion) => connection_redirect(state, completion.session_token, assertion),
         Err(error) => {
             tracing::warn!(error = %error, "relay connection assertion failed");
             callback_redirect(state, false, None)
         }
     }
-}
-
-pub async fn session(State(state): State<AuthHttpState>, headers: HeaderMap) -> Response {
-    let Some(token) = cookie_value(&headers, SESSION_COOKIE) else {
-        return session_response(SessionResponse {
-            authenticated: false,
-            user: None,
-            issued_at: None,
-            expires_at: None,
-        });
-    };
-
-    match state.auth.read_session(&token) {
-        Ok(session) => session_response(SessionResponse {
-            authenticated: true,
-            user: Some(session.user),
-            issued_at: Some(session.issued_at),
-            expires_at: Some(session.expires_at),
-        }),
-        Err(_) => {
-            let mut response = session_response(SessionResponse {
-                authenticated: false,
-                user: None,
-                issued_at: None,
-                expires_at: None,
-            });
-            append_set_cookie(
-                response.headers_mut(),
-                clear_cookie(SESSION_COOKIE, "/", state.cookie_secure),
-            );
-            response
-        }
-    }
-}
-
-pub async fn logout(State(state): State<AuthHttpState>) -> Response {
-    let mut response = StatusCode::NO_CONTENT.into_response();
-    append_set_cookie(
-        response.headers_mut(),
-        clear_cookie(SESSION_COOKIE, "/", state.cookie_secure),
-    );
-    response
 }
 
 fn connection_redirect(
@@ -254,8 +188,4 @@ fn no_store_response(mut response: Response) -> Response {
         .headers_mut()
         .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
-}
-
-fn session_response(body: SessionResponse) -> Response {
-    no_store_response(Json(body).into_response())
 }

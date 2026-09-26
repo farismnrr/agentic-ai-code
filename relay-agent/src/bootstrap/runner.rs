@@ -28,8 +28,8 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     let discovery = DiscoveryDocument::new(
         public_url.join("/connections/start")?.to_string(),
         format!(
-            "{}connections/{{connectionId}}",
-            public_url.as_str().trim_end_matches('/').to_string() + "/"
+            "{}/connections/{{connectionId}}",
+            public_url.as_str().trim_end_matches('/')
         ),
     );
 

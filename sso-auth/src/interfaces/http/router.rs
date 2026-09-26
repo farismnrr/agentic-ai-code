@@ -4,15 +4,15 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 
-use super::{auth, frontend, health, AuthHttpState};
+use super::{auth, frontend, health, session, AuthHttpState};
 
 pub fn build_router(auth_state: AuthHttpState) -> Router {
     Router::new()
         .route("/health", get(health::get))
         .route("/auth/github", get(auth::start))
         .route("/auth/github/callback", get(auth::callback))
-        .route("/auth/logout", post(auth::logout))
-        .route("/api/session", get(auth::session))
+        .route("/auth/logout", post(session::logout))
+        .route("/api/session", get(session::get))
         .fallback(frontend::serve)
         .with_state(auth_state)
         .layer(TraceLayer::new_for_http())
