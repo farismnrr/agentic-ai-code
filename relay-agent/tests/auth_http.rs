@@ -5,7 +5,10 @@ use std::{
 
 use axum::{
     body::{to_bytes, Body},
-    http::{header::{ACCEPT, LOCATION, SET_COOKIE}, Request, StatusCode},
+    http::{
+        header::{ACCEPT, LOCATION, SET_COOKIE},
+        Request, StatusCode,
+    },
     Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -142,7 +145,10 @@ async fn browser_callback_returns_to_sso_dashboard_after_connecting() {
             .expect("location string"),
     )
     .expect("redirect URL");
-    assert_eq!(location.as_str(), "https://sso.farismnrr.com/?relay_connection=connected&connection_id=conn-1");
+    assert_eq!(
+        location.as_str(),
+        "https://sso.farismnrr.com/?relay_connection=connected&connection_id=conn-1"
+    );
 }
 
 #[tokio::test]

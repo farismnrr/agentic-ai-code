@@ -1,6 +1,9 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header::{ACCEPT, CACHE_CONTROL}, HeaderMap, HeaderValue, StatusCode},
+    http::{
+        header::{ACCEPT, CACHE_CONTROL},
+        HeaderMap, HeaderValue, StatusCode,
+    },
     response::{IntoResponse, Redirect, Response},
     Json,
 };
@@ -75,7 +78,11 @@ fn accepts_html(headers: &HeaderMap) -> bool {
     headers
         .get(ACCEPT)
         .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.split(',').any(|part| part.trim().starts_with("text/html")))
+        .is_some_and(|value| {
+            value
+                .split(',')
+                .any(|part| part.trim().starts_with("text/html"))
+        })
 }
 
 fn no_store_redirect(location: &str) -> Response {
