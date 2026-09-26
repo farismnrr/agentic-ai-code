@@ -1,8 +1,7 @@
 use axum::{
     extract::{Form, OriginalUri, Query, State},
-    http::{header::CACHE_CONTROL, HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Redirect, Response},
-    Json,
+    http::{HeaderMap, StatusCode},
+    response::Response,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -12,6 +11,13 @@ use crate::application::{McpAuthorizationRequest, McpTokenRequest, MCP_SCOPE};
 use super::{
     auth_cookie::{cookie_value, SESSION_COOKIE},
     AuthHttpState,
+};
+
+mod response;
+
+use response::{
+    authorization_redirect_error, direct_authorization_error, login_redirect, no_store_json,
+    no_store_redirect, token_error,
 };
 
 #[derive(Clone, Serialize)]
@@ -108,50 +114,13 @@ pub async fn authorize(
         );
     }
 
-    let Some(code_challenge) = query.code_challenge.as_deref() else {
+    let Some(request) = authorization_request(&query) else {
         return authorization_redirect_error(
             redirect_uri,
             "invalid_request",
             query.state.as_deref(),
             issuer,
         );
-    };
-    let Some(code_challenge_method) = query.code_challenge_method.as_deref() else {
-        return authorization_redirect_error(
-            redirect_uri,
-            "invalid_request",
-            query.state.as_deref(),
-            issuer,
-        );
-    };
-    let Some(scope) = query.scope.as_deref() else {
-        return authorization_redirect_error(
-            redirect_uri,
-            "invalid_scope",
-            query.state.as_deref(),
-            issuer,
-        );
-    };
-    let Some(state_value) = query.state.as_deref() else {
-        return authorization_redirect_error(redirect_uri, "invalid_request", None, issuer);
-    };
-    let Some(resource) = query.resource.as_deref() else {
-        return authorization_redirect_error(
-            redirect_uri,
-            "invalid_request",
-            query.state.as_deref(),
-            issuer,
-        );
-    };
-
-    let request = McpAuthorizationRequest {
-        client_id: client_id.to_string(),
-        redirect_uri: redirect_uri.to_string(),
-        code_challenge: code_challenge.to_string(),
-        code_challenge_method: code_challenge_method.to_string(),
-        scope: scope.to_string(),
-        state: state_value.to_string(),
-        resource: resource.to_string(),
     };
     let request = match state.oauth.validate_authorization_request(request, &client) {
         Ok(request) => request,
@@ -192,7 +161,7 @@ pub async fn authorize(
     redirect
         .query_pairs_mut()
         .append_pair("code", &code)
-        .append_pair("state", state_value)
+        .append_pair("state", query.state.as_deref().unwrap_or_default())
         .append_pair("iss", issuer);
     no_store_redirect(redirect.as_str())
 }
@@ -221,58 +190,14 @@ pub async fn token(State(state): State<AuthHttpState>, Form(form): Form<TokenFor
     }
 }
 
-fn authorization_redirect_error(
-    redirect_uri: &str,
-    error: &'static str,
-    state: Option<&str>,
-    issuer: &str,
-) -> Response {
-    let Ok(mut redirect) = Url::parse(redirect_uri) else {
-        return direct_authorization_error("invalid_request", issuer);
-    };
-    let mut query = redirect.query_pairs_mut();
-    query.append_pair("error", error);
-    if let Some(state) = state.filter(|value| !value.is_empty()) {
-        query.append_pair("state", state);
-    }
-    query.append_pair("iss", issuer);
-    drop(query);
-    no_store_redirect(redirect.as_str())
-}
-
-fn direct_authorization_error(error: &'static str, issuer: &str) -> Response {
-    no_store_json(
-        StatusCode::BAD_REQUEST,
-        serde_json::json!({ "error": error, "iss": issuer }),
-    )
-}
-
-fn login_redirect(return_to: &str) -> Response {
-    let query = url::form_urlencoded::Serializer::new(String::new())
-        .append_pair("return_to", return_to)
-        .finish();
-    no_store_redirect(&format!("/auth/github?{query}"))
-}
-
-fn token_error(error: &'static str) -> Response {
-    no_store_json(
-        StatusCode::BAD_REQUEST,
-        serde_json::json!({ "error": error }),
-    )
-}
-
-fn no_store_redirect(location: &str) -> Response {
-    let mut response = Redirect::to(location).into_response();
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
-}
-
-fn no_store_json<T: Serialize>(status: StatusCode, body: T) -> Response {
-    let mut response = (status, Json(body)).into_response();
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
+fn authorization_request(query: &AuthorizeQuery) -> Option<McpAuthorizationRequest> {
+    Some(McpAuthorizationRequest {
+        client_id: query.client_id.clone()?,
+        redirect_uri: query.redirect_uri.clone()?,
+        code_challenge: query.code_challenge.clone()?,
+        code_challenge_method: query.code_challenge_method.clone()?,
+        scope: query.scope.clone()?,
+        state: query.state.clone()?,
+        resource: query.resource.clone()?,
+    })
 }
