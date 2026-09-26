@@ -90,6 +90,7 @@ pub fn router() -> Router {
 pub fn mcp_request(method: &str, params: Value, authenticated: bool) -> Request<Body> {
     let mut builder = Request::post("/mcp")
         .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream")
         .header("mcp-protocol-version", PROTOCOL)
         .header("mcp-method", method);
     if method == "tools/call" {
