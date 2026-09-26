@@ -123,7 +123,10 @@ async fn tools_list_keeps_openai_oauth_security_schemes() {
     let body = response_json(response).await;
     let tool = &body["result"]["tools"][0];
     assert_eq!(tool["securitySchemes"][0]["type"], "oauth2");
-    assert_eq!(tool["securitySchemes"][0]["scopes"], json!(["identity.read"]));
+    assert_eq!(
+        tool["securitySchemes"][0]["scopes"],
+        json!(["identity.read"])
+    );
     assert_eq!(tool["_meta"]["securitySchemes"], tool["securitySchemes"]);
 }
 
