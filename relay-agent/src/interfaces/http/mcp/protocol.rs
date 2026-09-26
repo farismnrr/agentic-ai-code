@@ -56,38 +56,10 @@ pub(super) fn validate_request(
     request: &JsonRpcRequest,
 ) -> Result<(), Response> {
     let id = request.id.clone();
-    let Some(meta) = request.params.get("_meta").and_then(Value::as_object) else {
-        return Err(invalid_params(id));
+    let Some(header_version) = header_string(headers, HEADER_MCP_PROTOCOL_VERSION) else {
+        return Err(header_mismatch(id));
     };
-    let Some(protocol_version) = meta
-        .get("io.modelcontextprotocol/protocolVersion")
-        .and_then(Value::as_str)
-    else {
-        return Err(invalid_params(id));
-    };
-    if !meta
-        .get("io.modelcontextprotocol/clientCapabilities")
-        .is_some_and(Value::is_object)
-    {
-        return Err(invalid_params(id));
-    }
-
-    if protocol_version != PROTOCOL_VERSION {
-        return Err(rpc_error_response(
-            StatusCode::BAD_REQUEST,
-            id,
-            -32022,
-            "Unsupported protocol version",
-            Some(json!({
-                "supported": [PROTOCOL_VERSION],
-                "requested": protocol_version
-            })),
-        ));
-    }
-
-    if header_string(headers, HEADER_MCP_PROTOCOL_VERSION) != Some(protocol_version)
-        || header_string(headers, HEADER_MCP_METHOD) != Some(request.method.as_str())
-    {
+    if header_string(headers, HEADER_MCP_METHOD) != Some(request.method.as_str()) {
         return Err(header_mismatch(id));
     }
 
@@ -103,6 +75,37 @@ pub(super) fn validate_request(
         if header_name != name {
             return Err(header_mismatch(id));
         }
+    }
+
+    let Some(meta) = request.params.get("_meta").and_then(Value::as_object) else {
+        return Err(invalid_params(id));
+    };
+    let Some(protocol_version) = meta
+        .get("io.modelcontextprotocol/protocolVersion")
+        .and_then(Value::as_str)
+    else {
+        return Err(invalid_params(id));
+    };
+    if header_version != protocol_version {
+        return Err(header_mismatch(id));
+    }
+    if protocol_version != PROTOCOL_VERSION {
+        return Err(rpc_error_response(
+            StatusCode::BAD_REQUEST,
+            id,
+            -32022,
+            "Unsupported protocol version",
+            Some(json!({
+                "supported": [PROTOCOL_VERSION],
+                "requested": protocol_version
+            })),
+        ));
+    }
+    if !meta
+        .get("io.modelcontextprotocol/clientCapabilities")
+        .is_some_and(Value::is_object)
+    {
+        return Err(invalid_params(id));
     }
 
     Ok(())
@@ -141,7 +144,12 @@ fn same_origin(left: &Url, right: &Url) -> bool {
 }
 
 fn header_string<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
-    headers.get(name)?.to_str().ok()
+    let mut values = headers.get_all(name).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value.to_str().ok()
 }
 
 fn decode_header_value(value: &str) -> Option<String> {
