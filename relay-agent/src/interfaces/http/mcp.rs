@@ -92,12 +92,15 @@ pub async fn post(
             }
         },
         _ => {
+            let data = (request.method == "initialize").then(|| {
+                json!({ "supported": [protocol::PROTOCOL_VERSION] })
+            });
             return protocol::rpc_error_response(
                 StatusCode::NOT_FOUND,
                 Some(id),
                 -32601,
                 "Method not found",
-                None,
+                data,
             )
         }
     };
