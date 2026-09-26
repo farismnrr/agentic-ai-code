@@ -118,7 +118,10 @@ impl McpOAuthService {
         }
 
         let now = now()?;
-        let mut codes = self.codes.lock().map_err(|_| AuthError::StorageUnavailable)?;
+        let mut codes = self
+            .codes
+            .lock()
+            .map_err(|_| AuthError::StorageUnavailable)?;
         codes.retain(|_, item| item.expires_at > now);
         let pending = codes
             .get(&request.code)
