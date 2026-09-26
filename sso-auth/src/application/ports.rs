@@ -4,6 +4,18 @@ use crate::domain::{AuthSession, AuthenticatedUser, ConnectedApp};
 
 use super::AuthError;
 
+#[derive(Clone, Debug)]
+pub struct McpClientMetadata {
+    pub client_id: String,
+    pub redirect_uris: Vec<String>,
+    pub token_endpoint_auth_methods_supported: Vec<String>,
+}
+
+#[async_trait]
+pub trait McpClientMetadataResolver: Send + Sync {
+    async fn resolve(&self, client_id: &str) -> Result<McpClientMetadata, AuthError>;
+}
+
 #[async_trait]
 pub trait OAuthProvider: Send + Sync {
     fn authorization_url(&self, state: &str) -> String;
