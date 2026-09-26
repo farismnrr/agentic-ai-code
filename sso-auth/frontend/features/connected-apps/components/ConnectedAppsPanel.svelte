@@ -17,7 +17,20 @@
   let message = ''
   let error = ''
 
-  onMount(() => { void load() })
+  onMount(() => {
+    applyConnectionResult()
+    void load()
+  })
+
+  function applyConnectionResult() {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('relay_connection') !== 'connected') return
+
+    message = 'Relay connected successfully.'
+    url.searchParams.delete('relay_connection')
+    url.searchParams.delete('connection_id')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }
 
   async function load() {
     loading = true

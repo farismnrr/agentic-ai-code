@@ -5,7 +5,7 @@ use std::{
 
 use axum::{
     body::{to_bytes, Body},
-    http::{header::SET_COOKIE, Request, StatusCode},
+    http::{header::{ACCEPT, LOCATION, SET_COOKIE}, Request, StatusCode},
     Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -69,6 +69,7 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
             "https://relay.example.com/connections/start".to_string(),
             "https://relay.example.com/connections/{connectionId}".to_string(),
         ),
+        Url::parse(ISSUER).expect("SSO dashboard URL"),
     ))
 }
 
@@ -110,6 +111,38 @@ async fn body_text(response: axum::response::Response) -> String {
         .await
         .expect("body");
     String::from_utf8(bytes.to_vec()).expect("UTF-8")
+}
+
+#[tokio::test]
+async fn browser_callback_returns_to_sso_dashboard_after_connecting() {
+    let store = Arc::new(InMemoryConnectionRepository::new(300));
+    store
+        .create(Connection::pending("conn-1".to_string(), STATE.to_string()))
+        .unwrap();
+    let app = router(store);
+    let token = assertion(STATE, CLIENT_ID, future_expiry());
+
+    let response = app
+        .oneshot(
+            Request::get(format!("/connections/callback?assertion={token}"))
+                .header(ACCEPT, "text/html,application/xhtml+xml")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let location = Url::parse(
+        response
+            .headers()
+            .get(LOCATION)
+            .expect("location")
+            .to_str()
+            .expect("location string"),
+    )
+    .expect("redirect URL");
+    assert_eq!(location.as_str(), "https://sso.farismnrr.com/?relay_connection=connected&connection_id=conn-1");
 }
 
 #[tokio::test]

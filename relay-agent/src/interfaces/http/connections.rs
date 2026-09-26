@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
+    http::{header::{ACCEPT, CACHE_CONTROL}, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Json,
 };
@@ -27,9 +27,20 @@ pub async fn start(State(state): State<RelayHttpState>) -> Response {
 
 pub async fn callback(
     State(state): State<RelayHttpState>,
+    headers: HeaderMap,
     Query(query): Query<CallbackQuery>,
 ) -> Response {
     match state.callback.execute(query.assertion.as_deref()) {
+        Ok(connection) if accepts_html(&headers) => {
+            let mut url = state.sso_dashboard_url.clone();
+            url.set_path("/");
+            url.set_query(None);
+            url.set_fragment(None);
+            url.query_pairs_mut()
+                .append_pair("relay_connection", "connected")
+                .append_pair("connection_id", &connection.id);
+            no_store_redirect(url.as_str())
+        }
         Ok(connection) => no_store_json(StatusCode::OK, connection),
         Err(AuthError::MissingAssertion) => {
             no_store(StatusCode::BAD_REQUEST, "callback assertion is required")
@@ -58,6 +69,21 @@ pub async fn status(State(state): State<RelayHttpState>, Path(id): Path<String>)
             "connection status is unavailable",
         ),
     }
+}
+
+fn accepts_html(headers: &HeaderMap) -> bool {
+    headers
+        .get(ACCEPT)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.split(',').any(|part| part.trim().starts_with("text/html")))
+}
+
+fn no_store_redirect(location: &str) -> Response {
+    let mut response = Redirect::to(location).into_response();
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 fn no_store(status: StatusCode, message: &'static str) -> Response {

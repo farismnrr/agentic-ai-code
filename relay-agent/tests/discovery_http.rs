@@ -76,6 +76,7 @@ fn router(tokens: Vec<String>) -> Router {
             "https://relay.example.com/connections/start".to_string(),
             "https://relay.example.com/connections/{connectionId}".to_string(),
         ),
+        Url::parse(ISSUER).expect("SSO dashboard URL"),
     ))
 }
 

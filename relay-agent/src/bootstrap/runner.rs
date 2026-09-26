@@ -28,6 +28,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         client_id.to_string(),
     )?);
 
+    let sso_dashboard_url = config.sso_base_url();
     let public_url = config.relay_public_url();
     let discovery = DiscoveryDocument::new(
         client_id.to_string(),
@@ -47,6 +48,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         Arc::new(ConnectCallbackUseCase::new(verifier, connections.clone())),
         Arc::new(ConnectionStatusUseCase::new(connections)),
         discovery,
+        sso_dashboard_url,
     );
 
     let listener = tokio::net::TcpListener::bind(address).await?;
