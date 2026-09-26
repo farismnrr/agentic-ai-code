@@ -102,7 +102,7 @@ async fn protected_resource_metadata_is_path_specific_for_mcp() {
 }
 
 #[tokio::test]
-async fn root_protected_resource_metadata_remains_root_scoped() {
+async fn root_protected_resource_metadata_aliases_mcp_resource() {
     let response = router()
         .oneshot(
             Request::get("/.well-known/oauth-protected-resource")
@@ -114,8 +114,9 @@ async fn root_protected_resource_metadata_remains_root_scoped() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = response_json(response).await;
-    assert_eq!(body["resource"], "https://relay.example.com");
+    assert_eq!(body["resource"], "https://relay.example.com/mcp");
     assert_eq!(body["authorization_servers"][0], ISSUER);
+    assert_eq!(body["scopes_supported"][0], "identity.read");
 }
 
 #[tokio::test]
