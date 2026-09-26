@@ -35,8 +35,7 @@ fn normalized_path(uri: &Uri) -> &str {
 }
 
 fn should_use_spa_fallback(path: &str) -> bool {
-    !path.starts_with(".well-known/")
-        && !path.rsplit('/').next().unwrap_or(path).contains('.')
+    !path.starts_with(".well-known/") && !path.rsplit('/').next().unwrap_or(path).contains('.')
 }
 
 fn embedded_response(path: &str) -> Option<Response> {
