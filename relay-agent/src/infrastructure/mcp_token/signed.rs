@@ -75,15 +75,18 @@ impl McpAccessTokenVerifier for SignedMcpAccessTokenVerifier {
             && claims.aud == self.expected_audience
             && !claims.sub.is_empty()
             && !claims.login.is_empty()
-            && claims
-                .scope
-                .split_whitespace()
-                .any(|scope| scope == required_scope)
             && claims.iat <= now.saturating_add(30)
             && claims.exp > now
             && claims.exp > claims.iat;
         if !valid {
             return Err(AuthError::InvalidAccessToken);
+        }
+        if !claims
+            .scope
+            .split_whitespace()
+            .any(|scope| scope == required_scope)
+        {
+            return Err(AuthError::InsufficientScope);
         }
 
         Ok(VerifiedPrincipal::new(
