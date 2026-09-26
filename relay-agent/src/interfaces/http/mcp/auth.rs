@@ -6,10 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{
-    application::AuthError,
-    domain::VerifiedPrincipal,
-};
+use crate::{application::AuthError, domain::VerifiedPrincipal};
 
 use super::super::{mcp_metadata::MCP_SCOPE, RelayHttpState};
 
