@@ -5,8 +5,8 @@
   import { emptyConnectedApp, type ConnectedApp } from '../model/connected-app'
   import {
     clearRelayConnection,
+    consumeRelayConnectionResult,
     loadRelayConnectionState,
-    saveRelayConnection,
     type RelayConnectionState
   } from '../model/relay-connection-state'
   import ConnectedAppCard from './ConnectedAppCard.svelte'
@@ -24,32 +24,15 @@
   let error = ''
   let relayConnection: RelayConnectionState = loadRelayConnectionState()
 
-  onMount(() => { void initialize() })
-
-  async function initialize() {
-    await load()
-    applyConnectionResult()
-  }
-
-  function applyConnectionResult() {
-    const url = new URL(window.location.href)
-    const result = url.searchParams.get('relay_connection')
-    if (!result) return
-
-    const connectionId = url.searchParams.get('connection_id')
-    if (result === 'connected' && connectionId) {
-      relayConnection = saveRelayConnection(connectionId)
-      message = 'Relay connected successfully.'
-    } else if (result === 'failed') {
-      relayConnection = { status: 'failed' }
-      clearRelayConnection()
-      error = 'Relay connection failed. Try connecting again.'
-    }
-
-    url.searchParams.delete('relay_connection')
-    url.searchParams.delete('connection_id')
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-  }
+  onMount(() => {
+    void load().then(() => {
+      const result = consumeRelayConnectionResult()
+      if (!result) return
+      relayConnection = result.state
+      message = result.message
+      error = result.error
+    })
+  })
 
   async function load() {
     loading = true

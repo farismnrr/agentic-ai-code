@@ -44,3 +44,38 @@ export function clearRelayConnection(): RelayConnectionState {
   }
   return { status: 'not_connected' }
 }
+
+export type RelayConnectionResult = {
+  state: RelayConnectionState
+  message: string
+  error: string
+}
+
+export function consumeRelayConnectionResult(): RelayConnectionResult | null {
+  const url = new URL(window.location.href)
+  const result = url.searchParams.get('relay_connection')
+  if (!result) return null
+
+  const connectionId = url.searchParams.get('connection_id')
+  let outcome: RelayConnectionResult | null = null
+
+  if (result === 'connected' && connectionId) {
+    outcome = {
+      state: saveRelayConnection(connectionId),
+      message: 'Relay connected successfully.',
+      error: ''
+    }
+  } else if (result === 'failed') {
+    clearRelayConnection()
+    outcome = {
+      state: { status: 'failed' },
+      message: '',
+      error: 'Relay connection failed. Try connecting again.'
+    }
+  }
+
+  url.searchParams.delete('relay_connection')
+  url.searchParams.delete('connection_id')
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  return outcome
+}
