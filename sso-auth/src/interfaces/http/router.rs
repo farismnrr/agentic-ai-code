@@ -4,7 +4,7 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 
-use super::{auth, connected_apps, frontend, health, session, AuthHttpState};
+use super::{auth, connected_apps, frontend, health, oauth, session, AuthHttpState};
 
 pub fn build_router(auth_state: AuthHttpState) -> Router {
     Router::new()
@@ -12,6 +12,12 @@ pub fn build_router(auth_state: AuthHttpState) -> Router {
         .route("/auth/github", get(auth::start))
         .route("/auth/github/callback", get(auth::callback))
         .route("/auth/logout", post(session::logout))
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth::metadata),
+        )
+        .route("/oauth/authorize", get(oauth::authorize))
+        .route("/oauth/token", post(oauth::token))
         .route("/api/session", get(session::get))
         .route(
             "/api/connect/apps/{client_id}",

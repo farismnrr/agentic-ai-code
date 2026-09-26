@@ -33,6 +33,16 @@ pub trait ConnectionAssertionIssuer: Send + Sync {
     ) -> Result<String, AuthError>;
 }
 
+pub trait McpAccessTokenIssuer: Send + Sync {
+    fn issue(
+        &self,
+        user: &AuthenticatedUser,
+        audience: &str,
+        scope: &str,
+        ttl_seconds: u64,
+    ) -> Result<String, AuthError>;
+}
+
 pub trait ConnectedAppRepository: Send + Sync {
     fn list(&self) -> Result<Vec<ConnectedApp>, AuthError>;
     fn find(&self, client_id: &str) -> Result<Option<ConnectedApp>, AuthError>;

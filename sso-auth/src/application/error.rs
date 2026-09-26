@@ -5,6 +5,8 @@ pub enum AuthError {
     ExternalProvider,
     InvalidSession,
     InvalidConnectionAssertion,
+    InvalidOAuthRequest,
+    InvalidAuthorizationCode,
     ConnectedAppNotFound,
     ConnectedAppDisabled,
     InvalidConnectedApp(&'static str),
@@ -22,6 +24,10 @@ impl fmt::Display for AuthError {
             Self::InvalidSession => formatter.write_str("authentication session is invalid"),
             Self::InvalidConnectionAssertion => {
                 formatter.write_str("connection assertion could not be issued")
+            }
+            Self::InvalidOAuthRequest => formatter.write_str("OAuth request is invalid"),
+            Self::InvalidAuthorizationCode => {
+                formatter.write_str("OAuth authorization code is invalid")
             }
             Self::ConnectedAppNotFound => formatter.write_str("connected app was not found"),
             Self::ConnectedAppDisabled => formatter.write_str("connected app is disabled"),

@@ -9,7 +9,7 @@ use crate::application::ConnectionHandoff;
 use super::{
     auth_cookie::{
         append_set_cookie, clear_cookie, session_cookie, CONNECTED_APP_CLIENT_COOKIE,
-        OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
+        MCP_OAUTH_RETURN_COOKIE, OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
     },
     AuthHttpState,
 };
@@ -26,6 +26,24 @@ pub(super) fn connection_redirect(
         .append_pair("assertion", &handoff.assertion);
 
     let mut response = Redirect::to(url.as_str()).into_response();
+    clear_auth_flow_cookies(&mut response, state);
+    append_set_cookie(
+        response.headers_mut(),
+        session_cookie(
+            &session_token,
+            state.session_ttl_seconds,
+            state.cookie_secure,
+        ),
+    );
+    no_store_response(response)
+}
+
+pub(super) fn oauth_resume_redirect(
+    state: &AuthHttpState,
+    return_to: &str,
+    session_token: String,
+) -> Response {
+    let mut response = Redirect::to(return_to).into_response();
     clear_auth_flow_cookies(&mut response, state);
     append_set_cookie(
         response.headers_mut(),
@@ -75,10 +93,12 @@ pub(super) fn no_store(status: StatusCode, message: &'static str) -> Response {
 }
 
 fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
-    append_set_cookie(
-        response.headers_mut(),
-        clear_cookie(OAUTH_STATE_COOKIE, "/auth/github", state.cookie_secure),
-    );
+    for name in [OAUTH_STATE_COOKIE, MCP_OAUTH_RETURN_COOKIE] {
+        append_set_cookie(
+            response.headers_mut(),
+            clear_cookie(name, "/auth/github", state.cookie_secure),
+        );
+    }
     clear_connection_cookies(response, state);
 }
 

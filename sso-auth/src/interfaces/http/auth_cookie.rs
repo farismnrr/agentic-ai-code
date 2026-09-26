@@ -2,11 +2,13 @@ use axum::http::{
     header::{COOKIE, SET_COOKIE},
     HeaderMap, HeaderValue,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 pub(super) const OAUTH_STATE_COOKIE: &str = "sso_oauth_state";
 pub(super) const RELAY_CONNECTION_STATE_COOKIE: &str = "sso_relay_connection_state";
 pub(super) const CONNECTED_APP_CLIENT_COOKIE: &str = "sso_connected_app_client";
 pub(super) const SESSION_COOKIE: &str = "sso_session";
+pub(super) const MCP_OAUTH_RETURN_COOKIE: &str = "sso_mcp_oauth_return";
 const STATE_MAX_AGE_SECONDS: u64 = 600;
 
 pub(super) fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -45,6 +47,22 @@ pub(super) fn connected_app_client_cookie(value: &str, secure: bool) -> String {
         STATE_MAX_AGE_SECONDS,
         secure,
     )
+}
+
+pub(super) fn mcp_oauth_return_cookie(value: &str, secure: bool) -> String {
+    let encoded = URL_SAFE_NO_PAD.encode(value.as_bytes());
+    build_cookie(
+        MCP_OAUTH_RETURN_COOKIE,
+        &encoded,
+        "/auth/github",
+        STATE_MAX_AGE_SECONDS,
+        secure,
+    )
+}
+
+pub(super) fn decode_mcp_oauth_return(value: &str) -> Option<String> {
+    let decoded = URL_SAFE_NO_PAD.decode(value).ok()?;
+    String::from_utf8(decoded).ok()
 }
 
 pub(super) fn session_cookie(value: &str, max_age: u64, secure: bool) -> String {

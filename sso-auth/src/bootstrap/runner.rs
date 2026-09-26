@@ -1,14 +1,14 @@
 use std::{error::Error, path::PathBuf, sync::Arc};
 
 use crate::{
-    application::{AuthService, ConnectedAppService, ConnectionService},
+    application::{AuthService, ConnectedAppService, ConnectionService, McpOAuthService},
     infrastructure::{
         access::GitHubUserAllowlist, config::AppConfig,
         connected_apps::SqliteConnectedAppRepository, github::GitHubOAuthClient,
-        random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
-        session::SignedSessionCodec,
+        mcp_oauth::SignedMcpAccessTokenIssuer, random_state::SecureStateGenerator,
+        relay_assertion::SignedRelayAssertionIssuer, session::SignedSessionCodec,
     },
-    interfaces::http::{build_router, AuthHttpState},
+    interfaces::http::{build_router, AuthHttpState, OAuthServerMetadata},
 };
 
 const CONNECTED_APPS_DATABASE: &str = "/app-data/sso.sqlite3";
@@ -48,10 +48,22 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     let connections = Arc::new(ConnectionService::new(assertions, app_registry.clone()));
     let connected_apps = Arc::new(ConnectedAppService::new(app_registry));
 
+    let mcp_tokens = Arc::new(SignedMcpAccessTokenIssuer::new(
+        config.relay_assertion_secret(),
+        config.sso_issuer(),
+    )?);
+    let oauth = Arc::new(McpOAuthService::new(
+        Arc::new(SecureStateGenerator),
+        mcp_tokens,
+    ));
+    let oauth_metadata = OAuthServerMetadata::new(&config.sso_issuer());
+
     let http_state = AuthHttpState {
         auth,
         connections,
         connected_apps,
+        oauth,
+        oauth_metadata,
         cookie_secure: config.cookie_secure(),
         session_ttl_seconds: config.session_ttl_seconds(),
     };
