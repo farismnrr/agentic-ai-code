@@ -84,10 +84,7 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
             "https://relay.example.com/mcp".to_string(),
             ISSUER.to_string(),
         ),
-        ProtectedResourceMetadata::new(
-            "https://relay.example.com".to_string(),
-            ISSUER.to_string(),
-        ),
+        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
         "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
