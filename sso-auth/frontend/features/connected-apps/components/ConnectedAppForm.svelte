@@ -72,11 +72,17 @@
 
   <label class="flex items-center gap-4 py-1">
     <span class="text-sm font-semibold text-slate-900">Enabled</span>
-    <input
-      type="checkbox"
-      class="toggle toggle-sm border-slate-300 bg-slate-200 checked:border-blue-600 checked:bg-blue-600"
-      bind:checked={app.enabled}
-    />
+    <span class="relative inline-flex h-6 w-11 shrink-0 items-center">
+      <input type="checkbox" class="peer sr-only" bind:checked={app.enabled} />
+      <span
+        aria-hidden="true"
+        class="absolute inset-0 rounded-full border border-slate-300 bg-slate-100 transition-colors peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2"
+      ></span>
+      <span
+        aria-hidden="true"
+        class="pointer-events-none absolute left-1 size-4 rounded-full bg-white shadow-sm ring-1 ring-slate-200 transition-transform peer-checked:translate-x-5 peer-checked:ring-white/20"
+      ></span>
+    </span>
   </label>
 
   <div class="flex items-start gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
