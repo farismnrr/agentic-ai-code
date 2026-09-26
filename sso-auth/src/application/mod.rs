@@ -9,11 +9,17 @@ pub use auth_service::{AuthService, LoginCompletion};
 pub use connected_app_service::ConnectedAppService;
 pub use connection_service::{ConnectionHandoff, ConnectionService};
 pub use error::AuthError;
-pub use mcp_oauth_service::{McpAuthorizationRequest, McpOAuthService, McpTokenRequest, MCP_SCOPE};
+pub use mcp_oauth_service::{
+    McpAuthorizationRequest, McpOAuthService, McpTokenRequest, ValidatedMcpAuthorizationRequest,
+    ValidatedMcpClient, MCP_SCOPE,
+};
 pub use ports::ConnectedAppRepository;
 pub use ports::ConnectionAssertionIssuer;
-pub use ports::McpAccessTokenIssuer;
+pub use ports::{McpAccessTokenIssuer, McpClientMetadata, McpClientMetadataResolver};
 pub use ports::OAuthProvider;
 pub use ports::SessionCodec;
 pub use ports::StateGenerator;
 pub use ports::UserAccessPolicy;
+
+#[cfg(test)]
+mod mcp_oauth_service_test;
