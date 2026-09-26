@@ -91,7 +91,8 @@ fn browser_failure_redirect(state: &RelayHttpState) -> Response {
     url.set_path("/");
     url.set_query(None);
     url.set_fragment(None);
-    url.query_pairs_mut().append_pair("relay_connection", "failed");
+    url.query_pairs_mut()
+        .append_pair("relay_connection", "failed");
     no_store_redirect(url.as_str())
 }
 
