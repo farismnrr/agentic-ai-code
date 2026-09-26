@@ -1,5 +1,6 @@
 mod auth;
 mod auth_cookie;
+mod auth_response;
 mod connected_apps;
 mod frontend;
 mod health;

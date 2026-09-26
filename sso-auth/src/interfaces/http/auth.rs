@@ -1,18 +1,21 @@
 use axum::{
     extract::{Query, State},
-    http::{header::CACHE_CONTROL, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect, Response},
 };
 use serde::Deserialize;
-use url::Url;
 
-use crate::application::{AuthError, ConnectionHandoff, LoginCompletion};
+use crate::application::{AuthError, LoginCompletion};
 
 use super::{
     auth_cookie::{
-        append_set_cookie, clear_cookie, connected_app_client_cookie, constant_time_eq,
-        cookie_value, relay_connection_state_cookie, session_cookie, state_cookie,
-        CONNECTED_APP_CLIENT_COOKIE, OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
+        append_set_cookie, connected_app_client_cookie, constant_time_eq, cookie_value,
+        relay_connection_state_cookie, state_cookie, CONNECTED_APP_CLIENT_COOKIE,
+        OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
+    },
+    auth_response::{
+        callback_redirect, clear_connection_cookies, connection_redirect, forbidden_response,
+        no_store,
     },
     AuthHttpState,
 };
@@ -67,7 +70,7 @@ pub async fn start(
         }
         None => clear_connection_cookies(&mut response, &state),
     }
-    no_store_response(response)
+    response
 }
 
 pub async fn callback(
@@ -135,84 +138,9 @@ fn complete_callback(
     }
 }
 
-fn connection_redirect(
-    state: &AuthHttpState,
-    session_token: String,
-    handoff: ConnectionHandoff,
-) -> Response {
-    let Ok(mut url) = Url::parse(&handoff.callback_url) else {
-        return callback_redirect(state, false, None);
-    };
-    url.query_pairs_mut()
-        .append_pair("assertion", &handoff.assertion);
-
-    let mut response = Redirect::to(url.as_str()).into_response();
-    clear_auth_flow_cookies(&mut response, state);
-    append_set_cookie(
-        response.headers_mut(),
-        session_cookie(
-            &session_token,
-            state.session_ttl_seconds,
-            state.cookie_secure,
-        ),
-    );
-    no_store_response(response)
-}
-
-fn callback_redirect(
-    state: &AuthHttpState,
-    success: bool,
-    session_token: Option<String>,
-) -> Response {
-    let mut response =
-        Redirect::to(if success { "/" } else { "/?auth_error=github" }).into_response();
-    clear_auth_flow_cookies(&mut response, state);
-    if let Some(token) = session_token {
-        append_set_cookie(
-            response.headers_mut(),
-            session_cookie(&token, state.session_ttl_seconds, state.cookie_secure),
-        );
-    }
-    no_store_response(response)
-}
-
-fn forbidden_response(state: &AuthHttpState) -> Response {
-    let mut response = (StatusCode::FORBIDDEN, "Forbidden").into_response();
-    clear_auth_flow_cookies(&mut response, state);
-    no_store_response(response)
-}
-
-fn clear_connection_cookies(response: &mut Response, state: &AuthHttpState) {
-    for name in [CONNECTED_APP_CLIENT_COOKIE, RELAY_CONNECTION_STATE_COOKIE] {
-        append_set_cookie(
-            response.headers_mut(),
-            clear_cookie(name, "/auth/github", state.cookie_secure),
-        );
-    }
-}
-
-fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
-    append_set_cookie(
-        response.headers_mut(),
-        clear_cookie(OAUTH_STATE_COOKIE, "/auth/github", state.cookie_secure),
-    );
-    clear_connection_cookies(response, state);
-}
-
 fn valid_connection_state(value: &str) -> bool {
     (20..=128).contains(&value.len())
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-}
-
-fn no_store(status: StatusCode, message: &'static str) -> Response {
-    no_store_response((status, message).into_response())
-}
-
-fn no_store_response(mut response: Response) -> Response {
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
 }
