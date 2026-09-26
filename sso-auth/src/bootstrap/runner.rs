@@ -1,9 +1,10 @@
 use std::{error::Error, sync::Arc};
 
 use crate::{
-    application::{AuthService, ConnectionService},
+    application::{AuthService, ConnectedAppService, ConnectionService},
     infrastructure::{
-        access::GitHubUserAllowlist, config::AppConfig, github::GitHubOAuthClient,
+        access::GitHubUserAllowlist, config::AppConfig,
+        connected_apps::FileConnectedAppRepository, github::GitHubOAuthClient,
         random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
         session::SignedSessionCodec,
     },
@@ -34,18 +35,24 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         Arc::new(SecureStateGenerator),
         access_policy,
     ));
-    let connections = Arc::new(ConnectionService::new(Arc::new(
-        SignedRelayAssertionIssuer::new(
-            config.relay_assertion_secret(),
-            config.sso_issuer(),
-            config.relay_audience(),
-            config.relay_assertion_ttl_seconds(),
-        )?,
-    )));
+
+    let app_registry = Arc::new(FileConnectedAppRepository::new(
+        config.connected_apps_path(),
+    )?);
+    let assertions = Arc::new(SignedRelayAssertionIssuer::new(
+        config.relay_assertion_secret(),
+        config.sso_issuer(),
+    )?);
+    let connections = Arc::new(ConnectionService::new(
+        assertions,
+        app_registry.clone(),
+    ));
+    let connected_apps = Arc::new(ConnectedAppService::new(app_registry));
+
     let http_state = AuthHttpState {
         auth,
         connections,
-        relay_callback_url: config.relay_callback_url(),
+        connected_apps,
         cookie_secure: config.cookie_secure(),
         session_ttl_seconds: config.session_ttl_seconds(),
     };

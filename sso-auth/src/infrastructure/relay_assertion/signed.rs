@@ -27,33 +27,18 @@ struct AssertionClaims<'a> {
 pub struct SignedRelayAssertionIssuer {
     secret: Vec<u8>,
     issuer: String,
-    audience: String,
-    ttl_seconds: u64,
 }
 
 impl SignedRelayAssertionIssuer {
-    pub fn new(
-        secret: String,
-        issuer: String,
-        audience: String,
-        ttl_seconds: u64,
-    ) -> Result<Self, AuthError> {
+    pub fn new(secret: String, issuer: String) -> Result<Self, AuthError> {
         if secret.len() < 32 {
             return Err(AuthError::InvalidConfiguration(
                 "RELAY_ASSERTION_SECRET must contain at least 32 bytes",
             ));
         }
-        if ttl_seconds == 0 || ttl_seconds > 300 {
-            return Err(AuthError::InvalidConfiguration(
-                "RELAY_ASSERTION_TTL_SECONDS must be between 1 and 300",
-            ));
-        }
-
         Ok(Self {
             secret: secret.into_bytes(),
             issuer,
-            audience,
-            ttl_seconds,
         })
     }
 
@@ -66,17 +51,27 @@ impl SignedRelayAssertionIssuer {
 }
 
 impl ConnectionAssertionIssuer for SignedRelayAssertionIssuer {
-    fn issue(&self, user: &AuthenticatedUser, state: &str) -> Result<String, AuthError> {
+    fn issue(
+        &self,
+        user: &AuthenticatedUser,
+        audience: &str,
+        state: &str,
+        ttl_seconds: u64,
+    ) -> Result<String, AuthError> {
+        if audience.is_empty() || !(30..=300).contains(&ttl_seconds) {
+            return Err(AuthError::InvalidConnectionAssertion);
+        }
+
         let issued_at = Self::now()?;
         let claims = AssertionClaims {
             iss: &self.issuer,
-            aud: &self.audience,
+            aud: audience,
             sub: format!("github:{}", user.id),
             login: &user.login,
             avatar_url: &user.avatar_url,
             state,
             iat: issued_at,
-            exp: issued_at.saturating_add(self.ttl_seconds),
+            exp: issued_at.saturating_add(ttl_seconds),
         };
         let payload =
             serde_json::to_vec(&claims).map_err(|_| AuthError::InvalidConnectionAssertion)?;

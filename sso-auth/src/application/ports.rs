@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::domain::{AuthSession, AuthenticatedUser};
+use crate::domain::{AuthSession, AuthenticatedUser, ConnectedApp};
 
 use super::AuthError;
 
@@ -24,5 +24,17 @@ pub trait UserAccessPolicy: Send + Sync {
 }
 
 pub trait ConnectionAssertionIssuer: Send + Sync {
-    fn issue(&self, user: &AuthenticatedUser, state: &str) -> Result<String, AuthError>;
+    fn issue(
+        &self,
+        user: &AuthenticatedUser,
+        audience: &str,
+        state: &str,
+        ttl_seconds: u64,
+    ) -> Result<String, AuthError>;
+}
+
+pub trait ConnectedAppRepository: Send + Sync {
+    fn list(&self) -> Result<Vec<ConnectedApp>, AuthError>;
+    fn find(&self, client_id: &str) -> Result<Option<ConnectedApp>, AuthError>;
+    fn save(&self, app: ConnectedApp) -> Result<ConnectedApp, AuthError>;
 }

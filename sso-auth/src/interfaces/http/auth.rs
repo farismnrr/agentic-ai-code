@@ -4,20 +4,22 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use serde::Deserialize;
+use url::Url;
 
-use crate::application::{AuthError, LoginCompletion};
+use crate::application::{AuthError, ConnectionHandoff, LoginCompletion};
 
 use super::{
     auth_cookie::{
-        append_set_cookie, clear_cookie, constant_time_eq, cookie_value,
-        relay_connection_state_cookie, session_cookie, state_cookie, OAUTH_STATE_COOKIE,
-        RELAY_CONNECTION_STATE_COOKIE,
+        append_set_cookie, clear_cookie, connected_app_client_cookie, constant_time_eq,
+        cookie_value, relay_connection_state_cookie, session_cookie, state_cookie,
+        CONNECTED_APP_CLIENT_COOKIE, OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
     },
     AuthHttpState,
 };
 
 #[derive(Deserialize)]
 pub struct StartQuery {
+    client_id: Option<String>,
     connection_state: Option<String>,
 }
 
@@ -32,10 +34,17 @@ pub async fn start(
     State(state): State<AuthHttpState>,
     Query(query): Query<StartQuery>,
 ) -> Response {
-    let connection_state = match query.connection_state.as_deref() {
-        Some(value) if valid_connection_state(value) => Some(value),
-        Some(_) => return no_store(StatusCode::BAD_REQUEST, "invalid connection state"),
-        None => None,
+    let connection = match (query.client_id.as_deref(), query.connection_state.as_deref()) {
+        (None, None) => None,
+        (Some(client_id), Some(connection_state))
+            if valid_connection_state(connection_state) =>
+        {
+            if state.connections.authorize(client_id).is_err() {
+                return no_store(StatusCode::BAD_REQUEST, "connected app is unavailable");
+            }
+            Some((client_id, connection_state))
+        }
+        _ => return no_store(StatusCode::BAD_REQUEST, "invalid connection request"),
     };
 
     let login = state.auth.begin_login();
@@ -44,21 +53,21 @@ pub async fn start(
         response.headers_mut(),
         state_cookie(&login.state, state.cookie_secure),
     );
-    match connection_state {
-        Some(value) => append_set_cookie(
-            response.headers_mut(),
-            relay_connection_state_cookie(value, state.cookie_secure),
-        ),
-        None => append_set_cookie(
-            response.headers_mut(),
-            clear_cookie(
-                RELAY_CONNECTION_STATE_COOKIE,
-                "/auth/github",
-                state.cookie_secure,
-            ),
-        ),
+
+    match connection {
+        Some((client_id, connection_state)) => {
+            append_set_cookie(
+                response.headers_mut(),
+                connected_app_client_cookie(client_id, state.cookie_secure),
+            );
+            append_set_cookie(
+                response.headers_mut(),
+                relay_connection_state_cookie(connection_state, state.cookie_secure),
+            );
+        }
+        None => clear_connection_cookies(&mut response, &state),
     }
-    response
+    no_store_response(response)
 }
 
 pub async fn callback(
@@ -84,13 +93,14 @@ pub async fn callback(
         return callback_redirect(&state, false, None);
     }
 
+    let client_id = cookie_value(&headers, CONNECTED_APP_CLIENT_COOKIE);
     let connection_state = cookie_value(&headers, RELAY_CONNECTION_STATE_COOKIE);
     match state
         .auth
         .complete_login(query.code.as_deref().unwrap_or_default())
         .await
     {
-        Ok(completion) => complete_callback(&state, completion, connection_state),
+        Ok(completion) => complete_callback(&state, completion, client_id, connection_state),
         Err(AuthError::Forbidden) => forbidden_response(&state),
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");
@@ -102,34 +112,40 @@ pub async fn callback(
 fn complete_callback(
     state: &AuthHttpState,
     completion: LoginCompletion,
+    client_id: Option<String>,
     connection_state: Option<String>,
 ) -> Response {
-    let Some(connection_state) = connection_state else {
-        return callback_redirect(state, true, Some(completion.session_token));
-    };
-    if !valid_connection_state(&connection_state) {
-        return callback_redirect(state, false, None);
-    }
-
-    match state
-        .connections
-        .issue_assertion(&completion.user, &connection_state)
-    {
-        Ok(assertion) => connection_redirect(state, completion.session_token, assertion),
-        Err(error) => {
-            tracing::warn!(error = %error, "relay connection assertion failed");
-            callback_redirect(state, false, None)
+    match (client_id, connection_state) {
+        (None, None) => callback_redirect(state, true, Some(completion.session_token)),
+        (Some(client_id), Some(connection_state))
+            if valid_connection_state(&connection_state) =>
+        {
+            match state
+                .connections
+                .issue_handoff(&completion.user, &client_id, &connection_state)
+            {
+                Ok(handoff) => connection_redirect(state, completion.session_token, handoff),
+                Err(error) => {
+                    tracing::warn!(error = %error, "connected app handoff failed");
+                    callback_redirect(state, false, None)
+                }
+            }
         }
+        _ => callback_redirect(state, false, None),
     }
 }
 
 fn connection_redirect(
     state: &AuthHttpState,
     session_token: String,
-    assertion: String,
+    handoff: ConnectionHandoff,
 ) -> Response {
-    let mut url = state.relay_callback_url.clone();
-    url.query_pairs_mut().append_pair("assertion", &assertion);
+    let Ok(mut url) = Url::parse(&handoff.callback_url) else {
+        return callback_redirect(state, false, None);
+    };
+    url.query_pairs_mut()
+        .append_pair("assertion", &handoff.assertion);
+
     let mut response = Redirect::to(url.as_str()).into_response();
     clear_auth_flow_cookies(&mut response, state);
     append_set_cookie(
@@ -166,13 +182,21 @@ fn forbidden_response(state: &AuthHttpState) -> Response {
     no_store_response(response)
 }
 
-fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
-    for name in [OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE] {
+fn clear_connection_cookies(response: &mut Response, state: &AuthHttpState) {
+    for name in [CONNECTED_APP_CLIENT_COOKIE, RELAY_CONNECTION_STATE_COOKIE] {
         append_set_cookie(
             response.headers_mut(),
             clear_cookie(name, "/auth/github", state.cookie_secure),
         );
     }
+}
+
+fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
+    append_set_cookie(
+        response.headers_mut(),
+        clear_cookie(OAUTH_STATE_COOKIE, "/auth/github", state.cookie_secure),
+    );
+    clear_connection_cookies(response, state);
 }
 
 fn valid_connection_state(value: &str) -> bool {

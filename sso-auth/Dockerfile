@@ -119,7 +119,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     target="$(cat /tmp/rust-target)" \
     && cargo build --release --target "${target}" \
-    && cp "target/${target}/release/sso-auth" /build/sso-auth
+    && cp "target/${target}/release/sso-auth" /build/sso-auth \
+    && mkdir -p /build/app-data
 
 
 FROM gcr.io/distroless/cc-debian12:nonroot
@@ -127,6 +128,7 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 LABEL org.opencontainers.image.source="https://github.com/farismnrr/agentic-ai-code"
 
 COPY --from=backend-builder /build/sso-auth /sso-auth
+COPY --from=backend-builder --chown=65532:65532 /build/app-data /app-data
 
 ENV PORT=3000
 

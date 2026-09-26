@@ -1,4 +1,4 @@
-use std::{env, error::Error, net::SocketAddr};
+use std::{env, error::Error, net::SocketAddr, path::PathBuf};
 
 use url::Url;
 
@@ -16,10 +16,8 @@ pub struct AppConfig {
     session_ttl_seconds: u64,
     cookie_secure: bool,
     sso_issuer: String,
-    relay_callback_url: Url,
-    relay_audience: String,
     relay_assertion_secret: String,
-    relay_assertion_ttl_seconds: u64,
+    connected_apps_path: PathBuf,
 }
 
 impl AppConfig {
@@ -28,10 +26,6 @@ impl AppConfig {
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()?;
         let base_url = required_http_url("SSO_BASE_URL")?;
-        let relay_callback_url = required_http_url("RELAY_CALLBACK_URL")?;
-        if relay_callback_url.query().is_some() || relay_callback_url.fragment().is_some() {
-            return Err("RELAY_CALLBACK_URL must not contain a query or fragment".into());
-        }
 
         Ok(Self {
             port,
@@ -53,12 +47,10 @@ impl AppConfig {
                 .parse::<u64>()?,
             cookie_secure: base_url.scheme() == "https",
             sso_issuer: base_url.as_str().trim_end_matches('/').to_string(),
-            relay_callback_url,
-            relay_audience: required("RELAY_AUDIENCE")?,
             relay_assertion_secret: required("RELAY_ASSERTION_SECRET")?,
-            relay_assertion_ttl_seconds: env::var("RELAY_ASSERTION_TTL_SECONDS")
-                .unwrap_or_else(|_| "90".to_string())
-                .parse::<u64>()?,
+            connected_apps_path: env::var("CONNECTED_APPS_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("/app-data/connected-apps.json")),
         })
     }
 
@@ -110,20 +102,12 @@ impl AppConfig {
         self.sso_issuer.clone()
     }
 
-    pub fn relay_callback_url(&self) -> Url {
-        self.relay_callback_url.clone()
-    }
-
-    pub fn relay_audience(&self) -> String {
-        self.relay_audience.clone()
-    }
-
     pub fn relay_assertion_secret(&self) -> String {
         self.relay_assertion_secret.clone()
     }
 
-    pub fn relay_assertion_ttl_seconds(&self) -> u64 {
-        self.relay_assertion_ttl_seconds
+    pub fn connected_apps_path(&self) -> PathBuf {
+        self.connected_apps_path.clone()
     }
 }
 
