@@ -16,11 +16,11 @@ Dependency direction points inward. Domain and application do not depend on Axum
 
 1. A client discovers Relay at `/.well-known/relay.json`.
 2. `/connections/start` creates a pending server-side connection with a high-entropy state.
-3. Relay redirects to the configured SSO `/auth/github` endpoint with its client ID and the opaque state.
-4. SSO resolves that client ID from its dashboard-managed connected-app registry.
+3. Relay redirects to the configured SSO `/auth/github` endpoint with client ID `relay-agent` and the opaque state.
+4. SSO resolves that client ID from its dashboard-managed SQLite registry.
 5. SSO completes its existing GitHub OAuth and allowlist checks.
 6. SSO signs a short-lived assertion using the registered client ID as audience and the registered TTL.
-7. SSO redirects only to the callback URL stored in the registry.
+7. SSO redirects only to the callback URL stored in SQLite.
 8. Relay verifies the assertion and consumes a matching pending state exactly once.
 9. The connection becomes `connected` and can be read through `/connections/{id}`.
 
@@ -34,9 +34,9 @@ The signed assertion is a handoff credential, not a Relay session. Relay session
 
 ## Configuration boundary
 
-Relay defaults to client ID `relay-agent`; an optional `RELAY_CLIENT_ID` override can change it. That value must match the Client ID / audience registered in the SSO dashboard.
+Relay's current connected-app identity is fixed to `relay-agent`. Audience, callback URL, enabled state, display metadata, and assertion TTL live in the SSO SQLite registry and are managed from the dashboard.
 
-The HMAC signing secret remains environment-provided on both services. App callback, enabled state, display metadata, and assertion TTL are not Relay or SSO environment configuration.
+Relay environment configuration is limited to service addresses, port, and the shared HMAC signing secret. The pending connection attempt TTL is an internal default.
 
 ## Deferred layers
 

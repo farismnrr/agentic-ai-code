@@ -8,8 +8,8 @@ This milestone establishes the discover + connect foundation, modeled after a co
 
 - `GET /.well-known/relay.json` exposes Relay discovery metadata and the connection entry point.
 - `GET /connections/start` creates a short-lived pending connection and redirects to the configured SSO service.
-- Relay sends only its client ID and an opaque `connection_state`; it never sends a caller-controlled callback target.
-- SSO resolves the client ID from its authenticated dashboard-managed app registry.
+- Relay identifies itself as `relay-agent` and sends only an opaque `connection_state`; it never sends a caller-controlled callback target.
+- SSO resolves `relay-agent` from its authenticated dashboard-managed SQLite registry.
 - SSO completes the existing GitHub OAuth and allowlist flow, then returns a short-lived signed assertion to the registered callback.
 - `GET /connections/callback` verifies signature, issuer, audience, expiry, and the pending Relay state before marking the connection connected.
 - `GET /connections/{id}` exposes the in-memory connection status/read model.
@@ -17,21 +17,18 @@ This milestone establishes the discover + connect foundation, modeled after a co
 
 Relay does not create a local login/session cookie in this milestone.
 
-## Configuration
+## Relay environment
 
-Required Relay settings:
+Relay now keeps only deployment/bootstrap values in env:
 
 - `PORT=3100`
 - `RELAY_PUBLIC_URL=http://localhost:3100`
 - `SSO_BASE_URL=https://sso.farismnrr.com`
 - `RELAY_ASSERTION_SECRET=<shared secret, at least 32 bytes>`
-- `CONNECTION_ATTEMPT_TTL_SECONDS=300`
 
-`RELAY_CLIENT_ID` is optional and defaults to `relay-agent`.
+The Relay client ID/audience is fixed to `relay-agent` for this service. Callback URL, enabled state, display metadata, and assertion TTL are stored in SSO SQLite and managed from the Connected Apps dashboard.
 
-On SSO, sign in normally and register the Relay app from the Connected Apps dashboard. For local development the dashboard is prefilled with client ID `relay-agent`, callback `http://localhost:3100/connections/callback`, and a 90-second assertion TTL.
-
-The app registry is server-side and persisted in the SSO data volume. The signing secret remains environment configuration.
+The SSO SQLite database lives at `/app-data/sso.sqlite3` and is persisted by the compose data volume.
 
 ## Fast local image flow
 
