@@ -59,11 +59,8 @@ fn router(tokens: Vec<String>) -> Router {
         .expect("verifier"),
     );
     let sso = Arc::new(
-        SsoConnectUrlBuilder::new(
-            Url::parse(ISSUER).expect("SSO URL"),
-            CLIENT_ID.to_string(),
-        )
-        .expect("connect URL"),
+        SsoConnectUrlBuilder::new(Url::parse(ISSUER).expect("SSO URL"), CLIENT_ID.to_string())
+            .expect("connect URL"),
     );
 
     build_router(RelayHttpState::new(
