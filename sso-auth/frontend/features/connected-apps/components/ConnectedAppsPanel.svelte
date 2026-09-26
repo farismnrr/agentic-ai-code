@@ -2,14 +2,14 @@
   import { onMount } from 'svelte'
 
   import { deleteConnectedApp, listConnectedApps, saveConnectedApp } from '../api/connected-apps-api'
-  import { defaultRelayApp, type ConnectedApp } from '../model/connected-app'
+  import { emptyConnectedApp, type ConnectedApp } from '../model/connected-app'
   import ConnectedAppCard from './ConnectedAppCard.svelte'
   import ConnectedAppDetails from './ConnectedAppDetails.svelte'
   import ConnectedAppDialog from './ConnectedAppDialog.svelte'
 
   let apps: ConnectedApp[] = []
   let selected: ConnectedApp | null = null
-  let draft = defaultRelayApp()
+  let draft = emptyConnectedApp()
   let dialogMode: 'create' | 'edit' | null = null
   let loading = true
   let saving = false
@@ -32,7 +32,7 @@
   }
 
   function createNew() {
-    draft = defaultRelayApp()
+    draft = emptyConnectedApp()
     dialogMode = 'create'
     message = ''
     error = ''

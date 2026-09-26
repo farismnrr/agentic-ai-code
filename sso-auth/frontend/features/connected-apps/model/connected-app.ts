@@ -7,11 +7,11 @@ export type ConnectedApp = {
   assertionTtlSeconds: number
 }
 
-export const defaultRelayApp = (): ConnectedApp => ({
-  clientId: 'relay-agent',
-  name: 'Masih Awam Relay',
-  description: 'Agentic AI relay for Masih Awam.',
-  callbackUrl: 'http://localhost:3100/connections/callback',
-  enabled: true,
-  assertionTtlSeconds: 90
+export const emptyConnectedApp = (): ConnectedApp => ({
+  clientId: '',
+  name: '',
+  description: '',
+  callbackUrl: '',
+  enabled: false,
+  assertionTtlSeconds: 0
 })

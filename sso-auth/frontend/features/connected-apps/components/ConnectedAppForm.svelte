@@ -51,7 +51,6 @@
       type="url"
       class="input input-bordered h-10 w-full border-slate-300 bg-white text-sm focus:border-blue-500 focus:outline-none"
       bind:value={app.callbackUrl}
-      placeholder="https://relay.example.com/connections/callback"
       required
     />
     <span class="mt-1 block text-xs text-slate-500">After authentication, Masih Awam will only return users to this address.</span>
@@ -62,7 +61,9 @@
     <select
       class="select select-bordered h-10 w-full border-slate-300 bg-white text-sm focus:border-blue-500 focus:outline-none"
       bind:value={app.assertionTtlSeconds}
+      required
     >
+      <option value={0} disabled>Select lifetime</option>
       {#each lifetimes as seconds}
         <option value={seconds}>{seconds} seconds</option>
       {/each}
