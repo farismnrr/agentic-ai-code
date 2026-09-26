@@ -48,14 +48,14 @@ impl OAuthServerMetadata {
 
 #[derive(Deserialize)]
 pub struct AuthorizeQuery {
-    response_type: String,
-    client_id: String,
-    redirect_uri: String,
-    code_challenge: String,
-    code_challenge_method: String,
-    scope: String,
-    state: String,
-    resource: String,
+    response_type: Option<String>,
+    client_id: Option<String>,
+    redirect_uri: Option<String>,
+    code_challenge: Option<String>,
+    code_challenge_method: Option<String>,
+    scope: Option<String>,
+    state: Option<String>,
+    resource: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -86,26 +86,84 @@ pub async fn authorize(
     headers: HeaderMap,
     Query(query): Query<AuthorizeQuery>,
 ) -> Response {
-    if query.response_type != "code" {
-        return oauth_error("unsupported_response_type");
+    let issuer = state.oauth_metadata.issuer.as_str();
+    let Some(client_id) = query.client_id.as_deref() else {
+        return direct_authorization_error("invalid_request", issuer);
+    };
+    let Some(redirect_uri) = query.redirect_uri.as_deref() else {
+        return direct_authorization_error("invalid_request", issuer);
+    };
+
+    let client = match state.oauth.validate_client(client_id, redirect_uri).await {
+        Ok(client) => client,
+        Err(_) => return direct_authorization_error("invalid_request", issuer),
+    };
+
+    if query.response_type.as_deref() != Some("code") {
+        return authorization_redirect_error(
+            redirect_uri,
+            "unsupported_response_type",
+            query.state.as_deref(),
+            issuer,
+        );
     }
 
-    let request = McpAuthorizationRequest {
-        client_id: query.client_id,
-        redirect_uri: query.redirect_uri,
-        code_challenge: query.code_challenge,
-        code_challenge_method: query.code_challenge_method,
-        scope: query.scope,
-        state: query.state,
-        resource: query.resource,
+    let Some(code_challenge) = query.code_challenge.as_deref() else {
+        return authorization_redirect_error(
+            redirect_uri,
+            "invalid_request",
+            query.state.as_deref(),
+            issuer,
+        );
     };
-    if state
-        .oauth
-        .validate_authorization_request(&request)
-        .is_err()
-    {
-        return oauth_error("invalid_request");
-    }
+    let Some(code_challenge_method) = query.code_challenge_method.as_deref() else {
+        return authorization_redirect_error(
+            redirect_uri,
+            "invalid_request",
+            query.state.as_deref(),
+            issuer,
+        );
+    };
+    let Some(scope) = query.scope.as_deref() else {
+        return authorization_redirect_error(
+            redirect_uri,
+            "invalid_scope",
+            query.state.as_deref(),
+            issuer,
+        );
+    };
+    let Some(state_value) = query.state.as_deref() else {
+        return authorization_redirect_error(redirect_uri, "invalid_request", None, issuer);
+    };
+    let Some(resource) = query.resource.as_deref() else {
+        return authorization_redirect_error(
+            redirect_uri,
+            "invalid_request",
+            query.state.as_deref(),
+            issuer,
+        );
+    };
+
+    let request = McpAuthorizationRequest {
+        client_id: client_id.to_string(),
+        redirect_uri: redirect_uri.to_string(),
+        code_challenge: code_challenge.to_string(),
+        code_challenge_method: code_challenge_method.to_string(),
+        scope: scope.to_string(),
+        state: state_value.to_string(),
+        resource: resource.to_string(),
+    };
+    let request = match state.oauth.validate_authorization_request(request, &client) {
+        Ok(request) => request,
+        Err(_) => {
+            return authorization_redirect_error(
+                redirect_uri,
+                "invalid_request",
+                query.state.as_deref(),
+                issuer,
+            )
+        }
+    };
 
     let session = cookie_value(&headers, SESSION_COOKIE)
         .and_then(|token| state.auth.read_session(&token).ok());
@@ -117,17 +175,25 @@ pub async fn authorize(
         return login_redirect(return_to);
     };
 
-    let Ok(code) = state.oauth.issue_code(session.user, request.clone()) else {
-        return oauth_error("server_error");
+    let code = match state.oauth.issue_code(session.user, request) {
+        Ok(code) => code,
+        Err(_) => {
+            return authorization_redirect_error(
+                redirect_uri,
+                "server_error",
+                query.state.as_deref(),
+                issuer,
+            )
+        }
     };
-    let Ok(mut redirect) = Url::parse(&request.redirect_uri) else {
-        return oauth_error("invalid_request");
+    let Ok(mut redirect) = Url::parse(redirect_uri) else {
+        return direct_authorization_error("invalid_request", issuer);
     };
     redirect
         .query_pairs_mut()
         .append_pair("code", &code)
-        .append_pair("state", &request.state)
-        .append_pair("iss", &state.oauth_metadata.issuer);
+        .append_pair("state", state_value)
+        .append_pair("iss", issuer);
     no_store_redirect(redirect.as_str())
 }
 
@@ -151,8 +217,34 @@ pub async fn token(State(state): State<AuthHttpState>, Form(form): Form<TokenFor
                 scope: token.scope,
             },
         ),
-        Err(_) => oauth_error("invalid_grant"),
+        Err(_) => token_error("invalid_grant"),
     }
+}
+
+fn authorization_redirect_error(
+    redirect_uri: &str,
+    error: &'static str,
+    state: Option<&str>,
+    issuer: &str,
+) -> Response {
+    let Ok(mut redirect) = Url::parse(redirect_uri) else {
+        return direct_authorization_error("invalid_request", issuer);
+    };
+    let mut query = redirect.query_pairs_mut();
+    query.append_pair("error", error);
+    if let Some(state) = state.filter(|value| !value.is_empty()) {
+        query.append_pair("state", state);
+    }
+    query.append_pair("iss", issuer);
+    drop(query);
+    no_store_redirect(redirect.as_str())
+}
+
+fn direct_authorization_error(error: &'static str, issuer: &str) -> Response {
+    no_store_json(
+        StatusCode::BAD_REQUEST,
+        serde_json::json!({ "error": error, "iss": issuer }),
+    )
 }
 
 fn login_redirect(return_to: &str) -> Response {
@@ -162,7 +254,7 @@ fn login_redirect(return_to: &str) -> Response {
     no_store_redirect(&format!("/auth/github?{query}"))
 }
 
-fn oauth_error(error: &'static str) -> Response {
+fn token_error(error: &'static str) -> Response {
     no_store_json(
         StatusCode::BAD_REQUEST,
         serde_json::json!({ "error": error }),
