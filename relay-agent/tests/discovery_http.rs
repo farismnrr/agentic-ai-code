@@ -23,7 +23,7 @@ use url::Url;
 
 const SECRET: &str = "0123456789abcdef0123456789abcdef";
 const ISSUER: &str = "https://sso.farismnrr.com";
-const AUDIENCE: &str = "relay-agent";
+const CLIENT_ID: &str = "relay-agent";
 const STATE: &str = "0123456789abcdef0123456789abcdef0123456789a";
 
 struct FixedTokens {
@@ -54,12 +54,16 @@ fn router(tokens: Vec<String>) -> Router {
         SignedRelayAssertionVerifier::new(
             SECRET.to_string(),
             ISSUER.to_string(),
-            AUDIENCE.to_string(),
+            CLIENT_ID.to_string(),
         )
         .expect("verifier"),
     );
     let sso = Arc::new(
-        SsoConnectUrlBuilder::new(Url::parse(ISSUER).expect("SSO URL")).expect("connect URL"),
+        SsoConnectUrlBuilder::new(
+            Url::parse(ISSUER).expect("SSO URL"),
+            CLIENT_ID.to_string(),
+        )
+        .expect("connect URL"),
     );
 
     build_router(RelayHttpState::new(
@@ -71,6 +75,7 @@ fn router(tokens: Vec<String>) -> Router {
         Arc::new(ConnectCallbackUseCase::new(verifier, store.clone())),
         Arc::new(ConnectionStatusUseCase::new(store)),
         DiscoveryDocument::new(
+            CLIENT_ID.to_string(),
             "https://relay.example.com/connections/start".to_string(),
             "https://relay.example.com/connections/{connectionId}".to_string(),
         ),
@@ -91,6 +96,7 @@ async fn discovery_exposes_connect_contract_without_tools() {
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+    assert_eq!(body["id"], CLIENT_ID);
     assert_eq!(body["connection"]["type"], "sso");
     assert_eq!(
         body["connection"]["connectUrl"],
@@ -100,7 +106,7 @@ async fn discovery_exposes_connect_contract_without_tools() {
 }
 
 #[tokio::test]
-async fn connect_start_uses_relay_state_and_no_return_target() {
+async fn connect_start_uses_registered_client_and_relay_state() {
     let response = router(vec!["connection-id".to_string(), STATE.to_string()])
         .oneshot(
             Request::get("/connections/start")
@@ -121,6 +127,13 @@ async fn connect_start_uses_relay_state_and_no_return_target() {
     )
     .expect("redirect URL");
     assert_eq!(location.path(), "/auth/github");
+    assert_eq!(
+        location
+            .query_pairs()
+            .find(|(key, _)| key == "client_id")
+            .map(|(_, value)| value.into_owned()),
+        Some(CLIENT_ID.to_string())
+    );
     assert_eq!(
         location
             .query_pairs()

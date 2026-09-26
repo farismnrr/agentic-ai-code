@@ -33,9 +33,10 @@ Fast AMD64 CI publishes:
 
 ```text
 ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast
+ghcr.io/farismnrr/agentic-ai-code-relay-agent:fast
 ```
 
-and an immutable commit-specific AMD64 validation tag.
+and immutable commit-specific AMD64 validation tags.
 
 Fast AMD64 CI does not publish or modify the production `:latest` tag.
 

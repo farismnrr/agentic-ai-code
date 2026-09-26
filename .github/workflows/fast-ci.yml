@@ -16,6 +16,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-sso-auth
+  RELAY_IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-relay-agent
   AGENTATION_ENABLED: ${{ vars.AGENTATION_ENABLED || 'false' }}
   BUILDX_BUILDER: sso-auth-ci
 
@@ -172,7 +173,7 @@ jobs:
             .
 
   publish:
-    name: 4. Publish AMD64 validation image
+    name: 4. Publish AMD64 validation images
     needs: build
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
@@ -235,9 +236,31 @@ jobs:
           build-args: |
             VITE_AGENTATION_ENABLED=${{ env.AGENTATION_ENABLED }}
 
-      - name: Verify validation image platform
+      - name: Prepare Relay image metadata
+        id: relay-meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.RELAY_IMAGE_NAME }}
+          tags: |
+            type=raw,value=fast
+            type=raw,value=${{ github.sha }}-amd64
+
+      - name: Publish Relay AMD64 validation image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: relay-agent/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.relay-meta.outputs.tags }}
+          labels: ${{ steps.relay-meta.outputs.labels }}
+
+      - name: Verify validation image platforms
         run: |
           set -eu
-          manifest="$(docker buildx imagetools inspect "$IMAGE_NAME:fast")"
-          printf '%s\n' "$manifest"
-          printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
+          for image in "$IMAGE_NAME:fast" "$RELAY_IMAGE_NAME:fast"; do
+            manifest="$(docker buildx imagetools inspect "$image")"
+            printf '%s\n' "$manifest"
+            printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
+          done

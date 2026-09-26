@@ -39,7 +39,8 @@ The Fast AMD64 pipeline is the default completion gate for ordinary edits that a
 Fast AMD64 CI publishes validation-only tags:
 
 - `ghcr.io/farismnrr/agentic-ai-code-sso-auth:fast`
-- an immutable AMD64 validation tag for the validated commit
+- `ghcr.io/farismnrr/agentic-ai-code-relay-agent:fast`
+- immutable AMD64 validation tags for the validated commit
 
 Fast AMD64 CI must never overwrite the production `:latest` tag.
 

@@ -6,3 +6,16 @@ services:
       - ./sso-auth/.env
     ports:
       - "0.0.0.0:3000:3000"
+    volumes:
+      - sso-auth-data:/app-data
+
+  relay-agent:
+    image: ghcr.io/farismnrr/agentic-ai-code-relay-agent:fast
+    restart: unless-stopped
+    env_file:
+      - ./relay-agent/.env
+    ports:
+      - "0.0.0.0:3100:3100"
+
+volumes:
+  sso-auth-data:

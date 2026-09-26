@@ -7,7 +7,7 @@ use super::RelayHttpState;
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDocument {
     schema_version: u8,
-    id: &'static str,
+    id: String,
     name: &'static str,
     description: &'static str,
     connection: ConnectionDiscovery,
@@ -23,10 +23,10 @@ struct ConnectionDiscovery {
 }
 
 impl DiscoveryDocument {
-    pub fn new(connect_url: String, status_url_template: String) -> Self {
+    pub fn new(id: String, connect_url: String, status_url_template: String) -> Self {
         Self {
             schema_version: 1,
-            id: "masih-awam-relay",
+            id,
             name: "Masih Awam Relay",
             description: "Connect an authenticated Masih Awam identity to the Relay service.",
             connection: ConnectionDiscovery {

@@ -29,7 +29,7 @@ use url::Url;
 
 const SECRET: &str = "0123456789abcdef0123456789abcdef";
 const ISSUER: &str = "https://sso.farismnrr.com";
-const AUDIENCE: &str = "relay-agent";
+const CLIENT_ID: &str = "relay-agent";
 const STATE: &str = "0123456789abcdef0123456789abcdef0123456789a";
 
 type HmacSha256 = Hmac<Sha256>;
@@ -47,12 +47,16 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
         SignedRelayAssertionVerifier::new(
             SECRET.to_string(),
             ISSUER.to_string(),
-            AUDIENCE.to_string(),
+            CLIENT_ID.to_string(),
         )
         .expect("verifier"),
     );
     let sso = Arc::new(
-        SsoConnectUrlBuilder::new(Url::parse(ISSUER).expect("SSO URL")).expect("connect URL"),
+        SsoConnectUrlBuilder::new(
+            Url::parse(ISSUER).expect("SSO URL"),
+            CLIENT_ID.to_string(),
+        )
+        .expect("connect URL"),
     );
 
     build_router(RelayHttpState::new(
@@ -64,6 +68,7 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
         Arc::new(ConnectCallbackUseCase::new(verifier, store.clone())),
         Arc::new(ConnectionStatusUseCase::new(store)),
         DiscoveryDocument::new(
+            CLIENT_ID.to_string(),
             "https://relay.example.com/connections/start".to_string(),
             "https://relay.example.com/connections/{connectionId}".to_string(),
         ),
@@ -117,7 +122,7 @@ async fn valid_assertion_connects_without_relay_session() {
         .create(Connection::pending("conn-1".to_string(), STATE.to_string()))
         .unwrap();
     let app = router(store);
-    let token = assertion(STATE, AUDIENCE, future_expiry());
+    let token = assertion(STATE, CLIENT_ID, future_expiry());
 
     let response = app
         .clone()
@@ -149,9 +154,9 @@ async fn valid_assertion_connects_without_relay_session() {
 #[tokio::test]
 async fn invalid_assertions_are_rejected() {
     for token in [
-        format!("{}x", assertion(STATE, AUDIENCE, future_expiry())),
+        format!("{}x", assertion(STATE, CLIENT_ID, future_expiry())),
         assertion(STATE, "wrong-audience", future_expiry()),
-        assertion(STATE, AUDIENCE, 1),
+        assertion(STATE, CLIENT_ID, 1),
     ] {
         let store = Arc::new(InMemoryConnectionRepository::new(300));
         store
@@ -171,7 +176,7 @@ async fn invalid_assertions_are_rejected() {
 
 #[tokio::test]
 async fn callback_rejects_state_without_pending_connection() {
-    let token = assertion("different-state", AUDIENCE, future_expiry());
+    let token = assertion("different-state", CLIENT_ID, future_expiry());
     let response = router(Arc::new(InMemoryConnectionRepository::new(300)))
         .oneshot(
             Request::get(format!("/connections/callback?assertion={token}"))

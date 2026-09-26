@@ -6,3 +6,8 @@ services:
       - ./sso-auth/.env
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - sso-auth-data:/app-data
+
+volumes:
+  sso-auth-data:
