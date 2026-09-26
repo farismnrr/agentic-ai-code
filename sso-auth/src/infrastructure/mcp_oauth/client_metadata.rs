@@ -93,6 +93,12 @@ struct RemoteClientMetadata {
 
 fn trusted_chatgpt_client_id(url: &Url) -> bool {
     let path = url.path();
+    let valid_path = path == "/oauth/client.json"
+        || path
+            .strip_prefix("/oauth/")
+            .and_then(|rest| rest.strip_suffix("/client.json"))
+            .is_some_and(|callback_id| !callback_id.is_empty() && !callback_id.contains('/'));
+
     url.scheme() == "https"
         && url.host_str() == Some("chatgpt.com")
         && url.port().is_none()
@@ -100,9 +106,7 @@ fn trusted_chatgpt_client_id(url: &Url) -> bool {
         && url.password().is_none()
         && url.query().is_none()
         && url.fragment().is_none()
-        && path.starts_with("/oauth/")
-        && path.ends_with("/client.json")
-        && path.len() > "/oauth/client.json".len() - 1
+        && valid_path
 }
 
 #[cfg(test)]
@@ -126,6 +130,7 @@ mod tests {
             "https://example.com/oauth/client.json",
             "https://chatgpt.com/",
             "https://chatgpt.com/oauth/client.json?next=x",
+            "https://chatgpt.com/oauth/a/b/client.json",
             "http://chatgpt.com/oauth/client.json",
         ] {
             assert!(!trusted_chatgpt_client_id(&Url::parse(value).unwrap()));
