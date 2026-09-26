@@ -91,6 +91,10 @@ fn router(tokens: Vec<String>) -> Router {
             "https://relay.example.com/mcp".to_string(),
             ISSUER.to_string(),
         ),
+        ProtectedResourceMetadata::new(
+            "https://relay.example.com".to_string(),
+            ISSUER.to_string(),
+        ),
         "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
@@ -112,6 +116,24 @@ async fn mcp_protected_resource_metadata_is_path_specific() {
     assert_eq!(body["resource"], "https://relay.example.com/mcp");
     assert_eq!(body["authorization_servers"][0], ISSUER);
     assert_eq!(body["scopes_supported"][0], "identity.read");
+}
+
+#[tokio::test]
+async fn root_protected_resource_metadata_remains_root_scoped() {
+    let response = router(vec![])
+        .oneshot(
+            Request::get("/.well-known/oauth-protected-resource")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+    assert_eq!(body["resource"], "https://relay.example.com");
+    assert_eq!(body["authorization_servers"][0], ISSUER);
 }
 
 #[tokio::test]

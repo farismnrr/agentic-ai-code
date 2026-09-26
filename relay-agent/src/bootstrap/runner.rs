@@ -42,6 +42,10 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         mcp_resource_url.clone(),
     )?);
     let mcp_resource = ProtectedResourceMetadata::new(mcp_resource_url, config.sso_issuer());
+    let mcp_root_resource = ProtectedResourceMetadata::new(
+        public_url.as_str().trim_end_matches('/').to_string(),
+        config.sso_issuer(),
+    );
 
     let discovery = DiscoveryDocument::new(
         client_id.to_string(),
@@ -64,6 +68,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         sso_dashboard_url,
         mcp_tokens,
         mcp_resource,
+        mcp_root_resource,
         mcp_resource_metadata_url,
     );
 

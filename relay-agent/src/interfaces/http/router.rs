@@ -14,7 +14,7 @@ pub fn build_router(state: RelayHttpState) -> Router {
         )
         .route(
             "/.well-known/oauth-protected-resource",
-            get(mcp::protected_resource),
+            get(mcp::protected_resource_root),
         )
         .route("/mcp", post(mcp::post))
         .route("/connections/start", get(connections::start))
