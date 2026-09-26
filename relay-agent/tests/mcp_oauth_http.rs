@@ -7,7 +7,10 @@ use axum::{
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use support::mcp_oauth::{mcp_request, router, ISSUER, PROTOCOL, RESOURCE};
+use support::mcp_oauth::{
+    mcp_request, mcp_request_with_protocol, mcp_request_with_scope, router, ISSUER, PROTOCOL,
+    RESOURCE,
+};
 
 async fn response_json(response: axum::response::Response) -> Value {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -75,6 +78,28 @@ async fn unauthenticated_modern_request_returns_oauth_discovery_challenge() {
 }
 
 #[tokio::test]
+async fn insufficient_scope_returns_forbidden_step_up_challenge() {
+    let response = router()
+        .oneshot(mcp_request_with_scope(
+            "server/discover",
+            json!({}),
+            "other.scope",
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let challenge = response
+        .headers()
+        .get(WWW_AUTHENTICATE)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(challenge.contains(r#"error="insufficient_scope""#));
+    assert!(challenge.contains(r#"scope="identity.read""#));
+}
+
+#[tokio::test]
 async fn authenticated_discovery_advertises_only_latest_protocol() {
     let response = router()
         .oneshot(mcp_request("server/discover", json!({}), true))
@@ -85,6 +110,34 @@ async fn authenticated_discovery_advertises_only_latest_protocol() {
     let body = response_json(response).await;
     assert_eq!(body["result"]["supportedVersions"], json!([PROTOCOL]));
     assert_eq!(body["result"]["resultType"], "complete");
+}
+
+#[tokio::test]
+async fn unsupported_protocol_returns_supported_versions() {
+    let response = router()
+        .oneshot(mcp_request_with_protocol(
+            "server/discover",
+            json!({}),
+            "1900-01-01",
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_json(response).await;
+    assert_eq!(body["error"]["code"], -32022);
+    assert_eq!(body["error"]["data"]["supported"], json!([PROTOCOL]));
+}
+
+#[tokio::test]
+async fn missing_standard_header_is_rejected_with_header_mismatch() {
+    let mut request = mcp_request("tools/list", json!({}), true);
+    request.headers_mut().remove("mcp-method");
+    let response = router().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_json(response).await;
+    assert_eq!(body["error"]["code"], -32020);
 }
 
 #[tokio::test]
@@ -114,4 +167,5 @@ async fn legacy_initialize_is_not_part_of_latest_protocol() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = response_json(response).await;
     assert_eq!(body["error"]["code"], -32601);
+    assert_eq!(body["error"]["data"]["supported"], json!([PROTOCOL]));
 }
