@@ -33,6 +33,28 @@ async fn protected_resource_metadata_aliases_canonical_mcp_resource() {
 }
 
 #[tokio::test]
+async fn invalid_origin_is_rejected_before_authentication() {
+    let mut request = mcp_request("server/discover", json!({}), false);
+    request
+        .headers_mut()
+        .insert("origin", "https://evil.example".parse().unwrap());
+
+    let response = router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn chatgpt_origin_is_allowed_to_reach_oauth_boundary() {
+    let mut request = mcp_request("server/discover", json!({}), false);
+    request
+        .headers_mut()
+        .insert("origin", "https://chatgpt.com".parse().unwrap());
+
+    let response = router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn unauthenticated_modern_request_returns_oauth_discovery_challenge() {
     let response = router()
         .oneshot(mcp_request("server/discover", json!({}), false))
