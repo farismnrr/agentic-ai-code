@@ -8,4 +8,7 @@ pub use connection_callback::ConnectCallbackUseCase;
 pub use connection_start::{ConnectStart, ConnectStartUseCase};
 pub use connection_status::ConnectionStatusUseCase;
 pub use error::AuthError;
-pub use ports::{ConnectionRepository, SignedAssertionVerifier, SsoConnectUrlProvider, TokenGenerator};
+pub use ports::ConnectionRepository;
+pub use ports::SignedAssertionVerifier;
+pub use ports::SsoConnectUrlProvider;
+pub use ports::TokenGenerator;
