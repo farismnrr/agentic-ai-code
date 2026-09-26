@@ -140,7 +140,7 @@ pub async fn callback(
             client_id,
             connection_state,
             oauth_return,
-        )
+        ),
         Err(AuthError::Forbidden) => forbidden_response(&state),
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");
