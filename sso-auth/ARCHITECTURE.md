@@ -5,22 +5,44 @@ The service follows Clean Architecture boundaries and SOLID design by default.
 ## Backend layers
 
 - `interfaces/` owns HTTP transport and request/response adaptation.
-- `application/` owns authentication and trusted connection-handoff use cases and ports.
-- `domain/` owns framework-independent authentication concepts.
+- `application/` owns authentication, connected-app registration, and trusted connection-handoff use cases and ports.
+- `domain/` owns framework-independent authentication and connected-app concepts.
 - `infrastructure/` owns environment, GitHub OAuth adapters, signing codecs, persistence, and external systems.
 - `bootstrap/` is the composition root and wires concrete adapters.
 
 Dependency direction points inward. Domain and application code must not depend on Axum, Tokio, Reqwest, SQL clients, or frontend concerns.
 
+## Connected-app registry
+
+Non-secret app registration belongs to the authenticated SSO dashboard rather than deployment environment variables.
+
+Each registered app owns:
+
+- client ID, which is also the signed assertion audience
+- display name and description
+- trusted callback URL
+- enabled/disabled state
+- short assertion TTL
+
+The current persistence adapter stores registrations as JSON at `/app-data/connected-apps.json`. Compose mounts a named volume at `/app-data`, so app registration survives container recreation. `CONNECTED_APPS_PATH` is only an optional infrastructure override.
+
+Secrets remain server configuration. `RELAY_ASSERTION_SECRET` is still required by SSO and Relay for the current HMAC handoff implementation.
+
 ## Relay connection handoff
 
-The normal GitHub OAuth and allowlist flow remains the source of authenticated identity. A Relay connection begins only when `/auth/github` receives a valid opaque `connection_state`.
+A Relay connection starts with an opaque `connection_state` plus a registered `client_id`. SSO resolves that client ID from the registry before GitHub OAuth begins and again before the callback is completed.
 
-SSO preserves that state in an HttpOnly, SameSite=Lax flow cookie while GitHub OAuth runs. After OAuth succeeds and the allowlist accepts the user, `ConnectionService` asks the `ConnectionAssertionIssuer` port for a short-lived signed assertion.
+The normal GitHub OAuth and allowlist flow remains the source of authenticated identity. SSO preserves the client ID and Relay state in HttpOnly, SameSite=Lax flow cookies while GitHub OAuth runs.
 
-The assertion contains a stable GitHub subject plus login, issuer, audience, Relay state, issue time, and expiry. The redirect destination is the configuration-owned `RELAY_CALLBACK_URL`; request input cannot replace it.
+After OAuth succeeds and the allowlist accepts the user, `ConnectionService` reloads the enabled app registration and asks the `ConnectionAssertionIssuer` port for a short-lived assertion. The assertion contains the stable GitHub subject, login, registered client ID as audience, Relay state, issue time, and expiry.
 
-The shared assertion secret is separate from `SESSION_SECRET`. Relay is responsible for signature, issuer, audience, expiry, and pending-state verification before it considers a connection established.
+The redirect destination is always the callback URL stored in the server-side app registry. Request input cannot replace it.
+
+## Dashboard security
+
+Connected-app registry APIs require a valid SSO session. In the current single-admin model, users admitted by the existing GitHub allowlist can manage the registry.
+
+The dashboard never reads or writes the assertion signing secret.
 
 ## Frontend layers
 
