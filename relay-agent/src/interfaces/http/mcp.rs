@@ -27,12 +27,12 @@ pub async fn post(
     body: Bytes,
 ) -> Response {
     if let Err(response) = protocol::validate_origin(&headers, &state.mcp_resource.resource) {
-        return response;
+        return *response;
     }
 
     let principal = match auth::authenticate(&state, &headers) {
         Ok(principal) => principal,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     if !protocol::content_type_is_json(&headers) {
@@ -69,7 +69,7 @@ pub async fn post(
     }
 
     if let Err(response) = protocol::validate_request(&headers, &request) {
-        return response;
+        return *response;
     }
 
     let Some(id) = request.id.clone() else {
