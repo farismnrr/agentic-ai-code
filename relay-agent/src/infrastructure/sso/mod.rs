@@ -1,3 +1,3 @@
-pub mod login_url;
+mod login_url;
 
-pub use login_url::SsoLoginUrlBuilder;
+pub use login_url::SsoConnectUrlBuilder;

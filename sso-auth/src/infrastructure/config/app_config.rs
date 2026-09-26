@@ -1,5 +1,7 @@
 use std::{env, error::Error, net::SocketAddr};
 
+use url::Url;
+
 #[derive(Clone)]
 pub struct AppConfig {
     port: u16,
@@ -13,6 +15,11 @@ pub struct AppConfig {
     session_secret: String,
     session_ttl_seconds: u64,
     cookie_secure: bool,
+    sso_issuer: String,
+    relay_callback_url: Url,
+    relay_audience: String,
+    relay_assertion_secret: String,
+    relay_assertion_ttl_seconds: u64,
 }
 
 impl AppConfig {
@@ -20,7 +27,11 @@ impl AppConfig {
         let port = env::var("PORT")
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()?;
-        let base_url = url::Url::parse(&required("SSO_BASE_URL")?)?;
+        let base_url = required_http_url("SSO_BASE_URL")?;
+        let relay_callback_url = required_http_url("RELAY_CALLBACK_URL")?;
+        if relay_callback_url.query().is_some() || relay_callback_url.fragment().is_some() {
+            return Err("RELAY_CALLBACK_URL must not contain a query or fragment".into());
+        }
 
         Ok(Self {
             port,
@@ -41,6 +52,13 @@ impl AppConfig {
                 .unwrap_or_else(|_| "604800".to_string())
                 .parse::<u64>()?,
             cookie_secure: base_url.scheme() == "https",
+            sso_issuer: base_url.as_str().trim_end_matches('/').to_string(),
+            relay_callback_url,
+            relay_audience: required("RELAY_AUDIENCE")?,
+            relay_assertion_secret: required("RELAY_ASSERTION_SECRET")?,
+            relay_assertion_ttl_seconds: env::var("RELAY_ASSERTION_TTL_SECONDS")
+                .unwrap_or_else(|_| "90".to_string())
+                .parse::<u64>()?,
         })
     }
 
@@ -87,6 +105,26 @@ impl AppConfig {
     pub fn cookie_secure(&self) -> bool {
         self.cookie_secure
     }
+
+    pub fn sso_issuer(&self) -> String {
+        self.sso_issuer.clone()
+    }
+
+    pub fn relay_callback_url(&self) -> Url {
+        self.relay_callback_url.clone()
+    }
+
+    pub fn relay_audience(&self) -> String {
+        self.relay_audience.clone()
+    }
+
+    pub fn relay_assertion_secret(&self) -> String {
+        self.relay_assertion_secret.clone()
+    }
+
+    pub fn relay_assertion_ttl_seconds(&self) -> u64 {
+        self.relay_assertion_ttl_seconds
+    }
 }
 
 fn required(name: &'static str) -> Result<String, Box<dyn Error>> {
@@ -95,6 +133,14 @@ fn required(name: &'static str) -> Result<String, Box<dyn Error>> {
         return Err(format!("{name} must not be empty").into());
     }
     Ok(value)
+}
+
+fn required_http_url(name: &'static str) -> Result<Url, Box<dyn Error>> {
+    let url = Url::parse(&required(name)?)?;
+    if !matches!(url.scheme(), "http" | "https") || url.cannot_be_a_base() {
+        return Err(format!("{name} must be an absolute HTTP(S) URL").into());
+    }
+    Ok(url)
 }
 
 fn parse_allowed_github_user_ids(value: &str) -> Result<Vec<u64>, Box<dyn Error>> {

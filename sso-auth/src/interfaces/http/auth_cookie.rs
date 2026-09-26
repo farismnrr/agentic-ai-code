@@ -4,6 +4,7 @@ use axum::http::{
 };
 
 pub(super) const OAUTH_STATE_COOKIE: &str = "sso_oauth_state";
+pub(super) const RELAY_CONNECTION_STATE_COOKIE: &str = "sso_relay_connection_state";
 pub(super) const SESSION_COOKIE: &str = "sso_session";
 const STATE_MAX_AGE_SECONDS: u64 = 600;
 
@@ -18,6 +19,16 @@ pub(super) fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
 pub(super) fn state_cookie(value: &str, secure: bool) -> String {
     build_cookie(
         OAUTH_STATE_COOKIE,
+        value,
+        "/auth/github",
+        STATE_MAX_AGE_SECONDS,
+        secure,
+    )
+}
+
+pub(super) fn relay_connection_state_cookie(value: &str, secure: bool) -> String {
+    build_cookie(
+        RELAY_CONNECTION_STATE_COOKIE,
         value,
         "/auth/github",
         STATE_MAX_AGE_SECONDS,

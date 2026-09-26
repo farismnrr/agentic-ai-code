@@ -1,3 +1,3 @@
-pub mod pending;
+mod signed;
 
-pub use pending::PendingSignedAssertionVerifier;
+pub use signed::SignedRelayAssertionVerifier;

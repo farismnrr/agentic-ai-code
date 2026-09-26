@@ -1,25 +1,23 @@
 use url::{ParseError, Url};
 
-use crate::application::SsoLoginUrlProvider;
+use crate::application::SsoConnectUrlProvider;
 
-pub struct SsoLoginUrlBuilder {
+pub struct SsoConnectUrlBuilder {
     login_url: Url,
 }
 
-impl SsoLoginUrlBuilder {
-    pub fn new(sso_base_url: Url, relay_public_url: Url) -> Result<Self, ParseError> {
-        let callback_url = relay_public_url.join("/auth/callback")?;
-        let mut login_url = sso_base_url.join("/auth/github")?;
-        login_url
-            .query_pairs_mut()
-            .append_pair("return_to", callback_url.as_str());
-
-        Ok(Self { login_url })
+impl SsoConnectUrlBuilder {
+    pub fn new(sso_base_url: Url) -> Result<Self, ParseError> {
+        Ok(Self {
+            login_url: sso_base_url.join("/auth/github")?,
+        })
     }
 }
 
-impl SsoLoginUrlProvider for SsoLoginUrlBuilder {
-    fn login_url(&self) -> String {
-        self.login_url.to_string()
+impl SsoConnectUrlProvider for SsoConnectUrlBuilder {
+    fn connect_url(&self, state: &str) -> String {
+        let mut url = self.login_url.clone();
+        url.query_pairs_mut().append_pair("connection_state", state);
+        url.to_string()
     }
 }

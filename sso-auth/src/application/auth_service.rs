@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
-use crate::domain::AuthSession;
+use crate::domain::{AuthSession, AuthenticatedUser};
 
 use super::{AuthError, OAuthProvider, SessionCodec, StateGenerator, UserAccessPolicy};
 
 pub struct LoginStart {
     pub authorization_url: String,
     pub state: String,
+}
+
+pub struct LoginCompletion {
+    pub session_token: String,
+    pub user: AuthenticatedUser,
 }
 
 pub struct AuthService {
@@ -39,12 +44,17 @@ impl AuthService {
         }
     }
 
-    pub async fn complete_login(&self, code: &str) -> Result<String, AuthError> {
+    pub async fn complete_login(&self, code: &str) -> Result<LoginCompletion, AuthError> {
         let user = self.oauth.authenticate(code).await?;
         if !self.access_policy.is_allowed(&user) {
             return Err(AuthError::Forbidden);
         }
-        self.sessions.issue(user).map(|(token, _)| token)
+
+        let (session_token, _) = self.sessions.issue(user.clone())?;
+        Ok(LoginCompletion {
+            session_token,
+            user,
+        })
     }
 
     pub fn read_session(&self, token: &str) -> Result<AuthSession, AuthError> {

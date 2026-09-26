@@ -22,3 +22,7 @@ pub trait StateGenerator: Send + Sync {
 pub trait UserAccessPolicy: Send + Sync {
     fn is_allowed(&self, user: &AuthenticatedUser) -> bool;
 }
+
+pub trait ConnectionAssertionIssuer: Send + Sync {
+    fn issue(&self, user: &AuthenticatedUser, state: &str) -> Result<String, AuthError>;
+}

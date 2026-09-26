@@ -1,10 +1,14 @@
 use axum::{routing::get, Router};
 
-use super::{auth, AuthHttpState};
+use super::{connections, discovery, RelayHttpState};
 
-pub fn build_router(state: AuthHttpState) -> Router {
+pub fn build_router(state: RelayHttpState) -> Router {
     Router::new()
-        .route("/auth/login", get(auth::login))
-        .route("/auth/callback", get(auth::callback))
+        .route("/.well-known/relay.json", get(discovery::get))
+        .route("/connections/start", get(connections::start))
+        .route("/connections/callback", get(connections::callback))
+        .route("/connections/{id}", get(connections::status))
+        .route("/auth/login", get(connections::start))
+        .route("/auth/callback", get(connections::callback))
         .with_state(state)
 }
