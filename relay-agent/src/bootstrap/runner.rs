@@ -4,10 +4,12 @@ use crate::{
     application::{ConnectCallbackUseCase, ConnectStartUseCase, ConnectionStatusUseCase},
     infrastructure::{
         config::AppConfig, connection_store::InMemoryConnectionRepository,
-        random_token::SecureTokenGenerator, sso::SsoConnectUrlBuilder,
-        verification::SignedRelayAssertionVerifier,
+        mcp_token::SignedMcpAccessTokenVerifier, random_token::SecureTokenGenerator,
+        sso::SsoConnectUrlBuilder, verification::SignedRelayAssertionVerifier,
     },
-    interfaces::http::{build_router, DiscoveryDocument, RelayHttpState},
+    interfaces::http::{
+        build_router, DiscoveryDocument, ProtectedResourceMetadata, RelayHttpState,
+    },
 };
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
@@ -30,6 +32,15 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
 
     let sso_dashboard_url = config.sso_base_url();
     let public_url = config.relay_public_url();
+    let mcp_resource_url = public_url.as_str().trim_end_matches('/').to_string();
+    let mcp_tokens = Arc::new(SignedMcpAccessTokenVerifier::new(
+        config.relay_assertion_secret(),
+        config.sso_issuer(),
+        mcp_resource_url.clone(),
+    )?);
+    let mcp_resource =
+        ProtectedResourceMetadata::new(mcp_resource_url, config.sso_issuer());
+
     let discovery = DiscoveryDocument::new(
         client_id.to_string(),
         public_url.join("/connections/start")?.to_string(),
@@ -49,6 +60,8 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         Arc::new(ConnectionStatusUseCase::new(connections)),
         discovery,
         sso_dashboard_url,
+        mcp_tokens,
+        mcp_resource,
     );
 
     let listener = tokio::net::TcpListener::bind(address).await?;

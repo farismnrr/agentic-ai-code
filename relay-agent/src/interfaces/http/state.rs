@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use crate::application::{ConnectCallbackUseCase, ConnectStartUseCase, ConnectionStatusUseCase};
 use url::Url;
 
-use super::DiscoveryDocument;
+use crate::application::{
+    ConnectCallbackUseCase, ConnectStartUseCase, ConnectionStatusUseCase, McpAccessTokenVerifier,
+};
+
+use super::{DiscoveryDocument, ProtectedResourceMetadata};
 
 #[derive(Clone)]
 pub struct RelayHttpState {
@@ -12,15 +15,20 @@ pub struct RelayHttpState {
     pub status: Arc<ConnectionStatusUseCase>,
     pub discovery: DiscoveryDocument,
     pub sso_dashboard_url: Url,
+    pub mcp_tokens: Arc<dyn McpAccessTokenVerifier>,
+    pub mcp_resource: ProtectedResourceMetadata,
 }
 
 impl RelayHttpState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         start: Arc<ConnectStartUseCase>,
         callback: Arc<ConnectCallbackUseCase>,
         status: Arc<ConnectionStatusUseCase>,
         discovery: DiscoveryDocument,
         sso_dashboard_url: Url,
+        mcp_tokens: Arc<dyn McpAccessTokenVerifier>,
+        mcp_resource: ProtectedResourceMetadata,
     ) -> Self {
         Self {
             start,
@@ -28,6 +36,8 @@ impl RelayHttpState {
             status,
             discovery,
             sso_dashboard_url,
+            mcp_tokens,
+            mcp_resource,
         }
     }
 }

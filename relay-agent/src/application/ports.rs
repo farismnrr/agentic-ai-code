@@ -10,6 +10,10 @@ pub trait SignedAssertionVerifier: Send + Sync {
     fn verify(&self, assertion: &str) -> Result<VerifiedConnectionAssertion, AuthError>;
 }
 
+pub trait McpAccessTokenVerifier: Send + Sync {
+    fn verify(&self, token: &str, required_scope: &str) -> Result<VerifiedPrincipal, AuthError>;
+}
+
 pub trait ConnectionRepository: Send + Sync {
     fn create(&self, connection: Connection) -> Result<(), AuthError>;
     fn find(&self, id: &str) -> Result<Connection, AuthError>;
