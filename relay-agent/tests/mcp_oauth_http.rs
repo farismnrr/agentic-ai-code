@@ -113,6 +113,21 @@ async fn authenticated_discovery_advertises_only_latest_protocol() {
 }
 
 #[tokio::test]
+async fn tools_list_keeps_openai_oauth_security_schemes() {
+    let response = router()
+        .oneshot(mcp_request("tools/list", json!({}), true))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let tool = &body["result"]["tools"][0];
+    assert_eq!(tool["securitySchemes"][0]["type"], "oauth2");
+    assert_eq!(tool["securitySchemes"][0]["scopes"], json!(["identity.read"]));
+    assert_eq!(tool["_meta"]["securitySchemes"], tool["securitySchemes"]);
+}
+
+#[tokio::test]
 async fn unsupported_protocol_returns_supported_versions() {
     let response = router()
         .oneshot(mcp_request_with_protocol(
