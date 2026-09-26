@@ -20,9 +20,20 @@ pub(super) fn valid_client_id_url(value: &str) -> bool {
 }
 
 pub(super) fn valid_resource(value: &str) -> bool {
-    Url::parse(value)
-        .ok()
-        .is_some_and(|url| matches!(url.scheme(), "http" | "https") && !url.cannot_be_a_base())
+    Url::parse(value).ok().is_some_and(|url| {
+        matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.fragment().is_none()
+    })
+}
+
+pub(super) fn valid_challenge(value: &str) -> bool {
+    value.len() == 43
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 pub(super) fn normalize_scope(value: &str) -> Option<String> {
