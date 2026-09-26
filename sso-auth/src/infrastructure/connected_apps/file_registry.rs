@@ -33,8 +33,7 @@ impl FileConnectedAppRepository {
         let parent = self.path.parent().ok_or(AuthError::StorageUnavailable)?;
         fs::create_dir_all(parent).map_err(|_| AuthError::StorageUnavailable)?;
 
-        let payload =
-            serde_json::to_vec_pretty(apps).map_err(|_| AuthError::StorageUnavailable)?;
+        let payload = serde_json::to_vec_pretty(apps).map_err(|_| AuthError::StorageUnavailable)?;
         let temporary = self.path.with_extension("tmp");
         fs::write(&temporary, payload).map_err(|_| AuthError::StorageUnavailable)?;
         fs::rename(temporary, &self.path).map_err(|_| AuthError::StorageUnavailable)
@@ -84,9 +83,8 @@ fn load_apps(path: &Path) -> Result<Vec<ConnectedApp>, AuthError> {
         return Ok(Vec::new());
     }
     let payload = fs::read(path).map_err(|_| AuthError::StorageUnavailable)?;
-    serde_json::from_slice(&payload).map_err(|_| {
-        AuthError::InvalidConnectedApp("connected app registry contains invalid JSON")
-    })
+    serde_json::from_slice(&payload)
+        .map_err(|_| AuthError::InvalidConnectedApp("connected app registry contains invalid JSON"))
 }
 
 fn validate_app(app: &ConnectedApp) -> Result<(), AuthError> {

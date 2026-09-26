@@ -40,12 +40,9 @@ impl ConnectionService {
         state: &str,
     ) -> Result<ConnectionHandoff, AuthError> {
         let app = self.authorize(client_id)?;
-        let assertion = self.assertions.issue(
-            user,
-            &app.client_id,
-            state,
-            app.assertion_ttl_seconds,
-        )?;
+        let assertion =
+            self.assertions
+                .issue(user, &app.client_id, state, app.assertion_ttl_seconds)?;
 
         Ok(ConnectionHandoff {
             callback_url: app.callback_url,

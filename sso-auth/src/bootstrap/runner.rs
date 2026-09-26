@@ -3,10 +3,9 @@ use std::{error::Error, sync::Arc};
 use crate::{
     application::{AuthService, ConnectedAppService, ConnectionService},
     infrastructure::{
-        access::GitHubUserAllowlist, config::AppConfig,
-        connected_apps::FileConnectedAppRepository, github::GitHubOAuthClient,
-        random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
-        session::SignedSessionCodec,
+        access::GitHubUserAllowlist, config::AppConfig, connected_apps::FileConnectedAppRepository,
+        github::GitHubOAuthClient, random_state::SecureStateGenerator,
+        relay_assertion::SignedRelayAssertionIssuer, session::SignedSessionCodec,
     },
     interfaces::http::{build_router, AuthHttpState},
 };
@@ -43,10 +42,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         config.relay_assertion_secret(),
         config.sso_issuer(),
     )?);
-    let connections = Arc::new(ConnectionService::new(
-        assertions,
-        app_registry.clone(),
-    ));
+    let connections = Arc::new(ConnectionService::new(assertions, app_registry.clone()));
     let connected_apps = Arc::new(ConnectedAppService::new(app_registry));
 
     let http_state = AuthHttpState {

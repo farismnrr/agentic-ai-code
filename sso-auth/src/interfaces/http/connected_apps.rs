@@ -41,9 +41,7 @@ pub async fn save(
 
     match state.connected_apps.save(app) {
         Ok(saved) => no_store_json(StatusCode::OK, saved),
-        Err(AuthError::InvalidConnectedApp(message)) => {
-            no_store(StatusCode::BAD_REQUEST, message)
-        }
+        Err(AuthError::InvalidConnectedApp(message)) => no_store(StatusCode::BAD_REQUEST, message),
         Err(_) => no_store(
             StatusCode::SERVICE_UNAVAILABLE,
             "connected app could not be saved",

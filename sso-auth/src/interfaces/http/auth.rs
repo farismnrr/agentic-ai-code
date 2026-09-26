@@ -37,11 +37,12 @@ pub async fn start(
     State(state): State<AuthHttpState>,
     Query(query): Query<StartQuery>,
 ) -> Response {
-    let connection = match (query.client_id.as_deref(), query.connection_state.as_deref()) {
+    let connection = match (
+        query.client_id.as_deref(),
+        query.connection_state.as_deref(),
+    ) {
         (None, None) => None,
-        (Some(client_id), Some(connection_state))
-            if valid_connection_state(connection_state) =>
-        {
+        (Some(client_id), Some(connection_state)) if valid_connection_state(connection_state) => {
             if state.connections.authorize(client_id).is_err() {
                 return no_store(StatusCode::BAD_REQUEST, "connected app is unavailable");
             }
@@ -120,9 +121,7 @@ fn complete_callback(
 ) -> Response {
     match (client_id, connection_state) {
         (None, None) => callback_redirect(state, true, Some(completion.session_token)),
-        (Some(client_id), Some(connection_state))
-            if valid_connection_state(&connection_state) =>
-        {
+        (Some(client_id), Some(connection_state)) if valid_connection_state(&connection_state) => {
             match state
                 .connections
                 .issue_handoff(&completion.user, &client_id, &connection_state)
