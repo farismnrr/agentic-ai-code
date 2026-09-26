@@ -10,10 +10,10 @@ use url::Url;
 
 use crate::domain::AuthenticatedUser;
 
-use super::{AuthError, McpAccessTokenIssuer, StateGenerator};
+use super::{
+    AuthError, McpAccessTokenIssuer, McpClientMetadataResolver, StateGenerator,
+};
 
-pub const CHATGPT_CLIENT_ID: &str = "https://chatgpt.com/oauth/client.json";
-pub const CHATGPT_REDIRECT_URI: &str = "https://chatgpt.com/connector_platform_oauth_redirect";
 pub const MCP_SCOPE: &str = "identity.read";
 
 #[derive(Clone)]
@@ -42,6 +42,13 @@ pub struct McpTokenResponse {
     pub scope: String,
 }
 
+pub struct ValidatedMcpClient {
+    client_id: String,
+    redirect_uri: String,
+}
+
+pub struct ValidatedMcpAuthorizationRequest(McpAuthorizationRequest);
+
 struct PendingCode {
     user: AuthenticatedUser,
     request: McpAuthorizationRequest,
@@ -52,27 +59,63 @@ pub struct McpOAuthService {
     codes: Mutex<HashMap<String, PendingCode>>,
     states: Arc<dyn StateGenerator>,
     tokens: Arc<dyn McpAccessTokenIssuer>,
+    client_metadata: Arc<dyn McpClientMetadataResolver>,
     code_ttl_seconds: u64,
     access_ttl_seconds: u64,
 }
 
 impl McpOAuthService {
-    pub fn new(states: Arc<dyn StateGenerator>, tokens: Arc<dyn McpAccessTokenIssuer>) -> Self {
+    pub fn new(
+        states: Arc<dyn StateGenerator>,
+        tokens: Arc<dyn McpAccessTokenIssuer>,
+        client_metadata: Arc<dyn McpClientMetadataResolver>,
+    ) -> Self {
         Self {
             codes: Mutex::new(HashMap::new()),
             states,
             tokens,
+            client_metadata,
             code_ttl_seconds: 300,
             access_ttl_seconds: 3600,
         }
     }
 
+    pub async fn validate_client(
+        &self,
+        client_id: &str,
+        redirect_uri: &str,
+    ) -> Result<ValidatedMcpClient, AuthError> {
+        if !valid_client_id_url(client_id) {
+            return Err(AuthError::InvalidOAuthRequest);
+        }
+
+        let metadata = self.client_metadata.resolve(client_id).await?;
+        let valid = metadata.client_id == client_id
+            && metadata
+                .redirect_uris
+                .iter()
+                .any(|candidate| candidate == redirect_uri)
+            && metadata
+                .token_endpoint_auth_methods_supported
+                .iter()
+                .any(|method| method == "none");
+        if !valid {
+            return Err(AuthError::InvalidOAuthRequest);
+        }
+
+        Ok(ValidatedMcpClient {
+            client_id: client_id.to_string(),
+            redirect_uri: redirect_uri.to_string(),
+        })
+    }
+
     pub fn validate_authorization_request(
         &self,
-        request: &McpAuthorizationRequest,
-    ) -> Result<(), AuthError> {
-        let valid = request.client_id == CHATGPT_CLIENT_ID
-            && request.redirect_uri == CHATGPT_REDIRECT_URI
+        request: McpAuthorizationRequest,
+        client: &ValidatedMcpClient,
+    ) -> Result<ValidatedMcpAuthorizationRequest, AuthError> {
+        let valid = request.client_id == client.client_id
+            && request.redirect_uri == client.redirect_uri
             && request.code_challenge_method == "S256"
             && !request.state.is_empty()
             && request.code_challenge.len() == 43
@@ -81,15 +124,15 @@ impl McpOAuthService {
         if !valid {
             return Err(AuthError::InvalidOAuthRequest);
         }
-        Ok(())
+
+        Ok(ValidatedMcpAuthorizationRequest(request))
     }
 
     pub fn issue_code(
         &self,
         user: AuthenticatedUser,
-        request: McpAuthorizationRequest,
+        request: ValidatedMcpAuthorizationRequest,
     ) -> Result<String, AuthError> {
-        self.validate_authorization_request(&request)?;
         let now = now()?;
         let code = self.states.generate();
         let mut codes = self
@@ -101,7 +144,7 @@ impl McpOAuthService {
             code.clone(),
             PendingCode {
                 user,
-                request,
+                request: request.0,
                 expires_at: now.saturating_add(self.code_ttl_seconds),
             },
         );
@@ -109,11 +152,7 @@ impl McpOAuthService {
     }
 
     pub fn exchange(&self, request: McpTokenRequest) -> Result<McpTokenResponse, AuthError> {
-        if request.grant_type != "authorization_code"
-            || request.client_id != CHATGPT_CLIENT_ID
-            || request.redirect_uri != CHATGPT_REDIRECT_URI
-            || !valid_verifier(&request.code_verifier)
-        {
+        if request.grant_type != "authorization_code" || !valid_verifier(&request.code_verifier) {
             return Err(AuthError::InvalidAuthorizationCode);
         }
 
@@ -152,6 +191,18 @@ impl McpOAuthService {
             scope,
         })
     }
+}
+
+fn valid_client_id_url(value: &str) -> bool {
+    Url::parse(value).ok().is_some_and(|url| {
+        url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+            && !matches!(url.path(), "" | "/")
+    })
 }
 
 fn valid_resource(value: &str) -> bool {
