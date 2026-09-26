@@ -26,6 +26,10 @@ pub async fn post(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    if let Err(response) = protocol::validate_origin(&headers, &state.mcp_resource.resource) {
+        return response;
+    }
+
     let principal = match auth::authenticate(&state, &headers) {
         Ok(principal) => principal,
         Err(response) => return response,
