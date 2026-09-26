@@ -99,7 +99,11 @@ pub async fn authorize(
         state: query.state,
         resource: query.resource,
     };
-    if state.oauth.validate_authorization_request(&request).is_err() {
+    if state
+        .oauth
+        .validate_authorization_request(&request)
+        .is_err()
+    {
         return oauth_error("invalid_request");
     }
 
@@ -127,10 +131,7 @@ pub async fn authorize(
     no_store_redirect(redirect.as_str())
 }
 
-pub async fn token(
-    State(state): State<AuthHttpState>,
-    Form(form): Form<TokenForm>,
-) -> Response {
+pub async fn token(State(state): State<AuthHttpState>, Form(form): Form<TokenForm>) -> Response {
     let request = McpTokenRequest {
         grant_type: form.grant_type,
         code: form.code,
@@ -162,7 +163,10 @@ fn login_redirect(return_to: &str) -> Response {
 }
 
 fn oauth_error(error: &'static str) -> Response {
-    no_store_json(StatusCode::BAD_REQUEST, serde_json::json!({ "error": error }))
+    no_store_json(
+        StatusCode::BAD_REQUEST,
+        serde_json::json!({ "error": error }),
+    )
 }
 
 fn no_store_redirect(location: &str) -> Response {

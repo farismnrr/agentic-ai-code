@@ -94,11 +94,7 @@ pub async fn start(
     } else {
         append_set_cookie(
             response.headers_mut(),
-            clear_cookie(
-                MCP_OAUTH_RETURN_COOKIE,
-                "/auth/github",
-                state.cookie_secure,
-            ),
+            clear_cookie(MCP_OAUTH_RETURN_COOKIE, "/auth/github", state.cookie_secure),
         );
     }
     response
@@ -138,9 +134,13 @@ pub async fn callback(
         .complete_login(query.code.as_deref().unwrap_or_default())
         .await
     {
-        Ok(completion) => {
-            complete_callback(&state, completion, client_id, connection_state, oauth_return)
-        }
+        Ok(completion) => complete_callback(
+            &state,
+            completion,
+            client_id,
+            connection_state,
+            oauth_return,
+        )
         Err(AuthError::Forbidden) => forbidden_response(&state),
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");

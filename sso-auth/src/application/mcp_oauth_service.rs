@@ -92,7 +92,7 @@ impl McpOAuthService {
         self.validate_authorization_request(&request)?;
         let now = now()?;
         let code = self.states.generate();
-        let mut codes = self.codes.lock().map_err(|_| AuthError::StorageUnavailable)?;
+        let mut codes = self\n            .codes\n            .lock()\n            .map_err(|_| AuthError::StorageUnavailable)?;
         codes.retain(|_, item| item.expires_at > now);
         codes.insert(
             code.clone(),
@@ -131,7 +131,7 @@ impl McpOAuthService {
         let pending = codes
             .remove(&request.code)
             .ok_or(AuthError::InvalidAuthorizationCode)?;
-        let scope = normalize_scope(&pending.request.scope).ok_or(AuthError::InvalidOAuthRequest)?;
+        let scope =\n            normalize_scope(&pending.request.scope).ok_or(AuthError::InvalidOAuthRequest)?;
         let access_token = self.tokens.issue(
             &pending.user,
             &pending.request.resource,
