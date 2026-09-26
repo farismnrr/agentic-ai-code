@@ -4,31 +4,13 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::RelayHttpState;
+use super::{mcp_metadata::MCP_SCOPE, RelayHttpState};
 
-const MCP_SCOPE: &str = "identity.read";
 const PROTOCOL_MODERN: &str = "2026-07-28";
 const PROTOCOL_LEGACY: &str = "2025-11-25";
-
-#[derive(Clone, Serialize)]
-pub struct ProtectedResourceMetadata {
-    pub resource: String,
-    pub authorization_servers: Vec<String>,
-    pub scopes_supported: Vec<String>,
-}
-
-impl ProtectedResourceMetadata {
-    pub fn new(resource: String, authorization_server: String) -> Self {
-        Self {
-            resource,
-            authorization_servers: vec![authorization_server],
-            scopes_supported: vec![MCP_SCOPE.to_string()],
-        }
-    }
-}
 
 #[derive(Deserialize)]
 pub struct JsonRpcRequest {
