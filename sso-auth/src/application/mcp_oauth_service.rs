@@ -10,7 +10,8 @@ use super::{AuthError, McpAccessTokenIssuer, McpClientMetadataResolver, StateGen
 mod validation;
 
 use validation::{
-    normalize_scope, now, pkce_matches, valid_client_id_url, valid_resource, valid_verifier,
+    normalize_scope, now, pkce_matches, valid_challenge, valid_client_id_url, valid_resource,
+    valid_verifier,
 };
 
 pub const MCP_SCOPE: &str = "identity.read";
@@ -117,7 +118,7 @@ impl McpOAuthService {
             && request.redirect_uri == client.redirect_uri
             && request.code_challenge_method == "S256"
             && !request.state.is_empty()
-            && request.code_challenge.len() == 43
+            && valid_challenge(&request.code_challenge)
             && normalize_scope(&request.scope).as_deref() == Some(MCP_SCOPE)
             && valid_resource(&request.resource);
         if !valid {
