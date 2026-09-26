@@ -79,11 +79,15 @@ fn router(store: Arc<InMemoryConnectionRepository>) -> Router {
             SignedMcpAccessTokenVerifier::new(
                 SECRET.to_string(),
                 ISSUER.to_string(),
-                "https://relay.example.com".to_string(),
+                "https://relay.example.com/mcp".to_string(),
             )
             .expect("MCP verifier"),
         ),
-        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
+        ProtectedResourceMetadata::new(
+            "https://relay.example.com/mcp".to_string(),
+            ISSUER.to_string(),
+        ),
+        "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
 

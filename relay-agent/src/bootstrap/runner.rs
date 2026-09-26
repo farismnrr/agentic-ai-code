@@ -32,7 +32,10 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
 
     let sso_dashboard_url = config.sso_base_url();
     let public_url = config.relay_public_url();
-    let mcp_resource_url = public_url.as_str().trim_end_matches('/').to_string();
+    let mcp_resource_url = public_url.join("/mcp")?.to_string();
+    let mcp_resource_metadata_url = public_url
+        .join("/.well-known/oauth-protected-resource/mcp")?
+        .to_string();
     let mcp_tokens = Arc::new(SignedMcpAccessTokenVerifier::new(
         config.relay_assertion_secret(),
         config.sso_issuer(),
@@ -61,6 +64,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         sso_dashboard_url,
         mcp_tokens,
         mcp_resource,
+        mcp_resource_metadata_url,
     );
 
     let listener = tokio::net::TcpListener::bind(address).await?;

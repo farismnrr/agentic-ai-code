@@ -83,12 +83,61 @@ fn router(tokens: Vec<String>) -> Router {
             SignedMcpAccessTokenVerifier::new(
                 SECRET.to_string(),
                 ISSUER.to_string(),
-                "https://relay.example.com".to_string(),
+                "https://relay.example.com/mcp".to_string(),
             )
             .expect("MCP verifier"),
         ),
-        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
+        ProtectedResourceMetadata::new(
+            "https://relay.example.com/mcp".to_string(),
+            ISSUER.to_string(),
+        ),
+        "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
+}
+
+#[tokio::test]
+async fn mcp_protected_resource_metadata_is_path_specific() {
+    let response = router(vec![])
+        .oneshot(
+            Request::get("/.well-known/oauth-protected-resource/mcp")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+    assert_eq!(body["resource"], "https://relay.example.com/mcp");
+    assert_eq!(body["authorization_servers"][0], ISSUER);
+    assert_eq!(body["scopes_supported"][0], "identity.read");
+}
+
+#[tokio::test]
+async fn mcp_auth_challenge_advertises_path_specific_metadata() {
+    let response = router(vec![])
+        .oneshot(
+            Request::post("/mcp")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_profile","arguments":{}}}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+    let challenge = body["result"]["_meta"]["mcp/www_authenticate"][0]
+        .as_str()
+        .expect("auth challenge");
+    assert!(challenge.contains(
+        r#"resource_metadata="https://relay.example.com/.well-known/oauth-protected-resource/mcp""#
+    ));
+    assert!(challenge.contains(r#"scope="identity.read""#));
 }
 
 #[tokio::test]

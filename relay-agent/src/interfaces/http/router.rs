@@ -9,6 +9,10 @@ pub fn build_router(state: RelayHttpState) -> Router {
     Router::new()
         .route("/.well-known/relay.json", get(discovery::get))
         .route(
+            "/.well-known/oauth-protected-resource/mcp",
+            get(mcp::protected_resource),
+        )
+        .route(
             "/.well-known/oauth-protected-resource",
             get(mcp::protected_resource),
         )

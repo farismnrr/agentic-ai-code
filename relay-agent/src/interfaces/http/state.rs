@@ -17,6 +17,7 @@ pub struct RelayHttpState {
     pub sso_dashboard_url: Url,
     pub mcp_tokens: Arc<dyn McpAccessTokenVerifier>,
     pub mcp_resource: ProtectedResourceMetadata,
+    pub mcp_resource_metadata_url: String,
 }
 
 impl RelayHttpState {
@@ -29,6 +30,7 @@ impl RelayHttpState {
         sso_dashboard_url: Url,
         mcp_tokens: Arc<dyn McpAccessTokenVerifier>,
         mcp_resource: ProtectedResourceMetadata,
+        mcp_resource_metadata_url: String,
     ) -> Self {
         Self {
             start,
@@ -38,6 +40,7 @@ impl RelayHttpState {
             sso_dashboard_url,
             mcp_tokens,
             mcp_resource,
+            mcp_resource_metadata_url,
         }
     }
 }

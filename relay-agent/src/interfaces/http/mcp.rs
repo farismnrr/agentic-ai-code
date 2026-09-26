@@ -138,9 +138,8 @@ fn tools_call_result(state: &RelayHttpState, headers: &HeaderMap, params: &Value
         bearer_token(headers).and_then(|token| state.mcp_tokens.verify(token, MCP_SCOPE).ok());
     let Some(principal) = principal else {
         let challenge = format!(
-            "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"{}\", error=\"insufficient_scope\", error_description=\"Login required\"",
-            state.mcp_resource.resource.trim_end_matches('/'),
-            MCP_SCOPE
+            "Bearer resource_metadata=\"{}\", scope=\"{}\", error=\"insufficient_scope\", error_description=\"Login required\"",
+            state.mcp_resource_metadata_url, MCP_SCOPE
         );
         return json!({
             "resultType": "complete",
