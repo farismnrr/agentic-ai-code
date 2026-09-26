@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -106,7 +106,7 @@ impl ConnectedAppRepository for SqliteConnectedAppRepository {
                     app.name,
                     app.description,
                     app.callback_url,
-                    i64::from(app.enabled),
+                    if app.enabled { 1_i64 } else { 0_i64 },
                     app.assertion_ttl_seconds as i64,
                 ],
             )
