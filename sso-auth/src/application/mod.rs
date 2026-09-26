@@ -10,8 +10,7 @@ pub use connected_app_service::ConnectedAppService;
 pub use connection_service::{ConnectionHandoff, ConnectionService};
 pub use error::AuthError;
 pub use mcp_oauth_service::{
-    McpAuthorizationRequest, McpOAuthService, McpTokenRequest, McpTokenResponse, CHATGPT_CLIENT_ID,
-    CHATGPT_REDIRECT_URI, MCP_SCOPE,
+    McpAuthorizationRequest, McpOAuthService, McpTokenRequest, MCP_SCOPE,
 };
 pub use ports::ConnectedAppRepository;
 pub use ports::ConnectionAssertionIssuer;
