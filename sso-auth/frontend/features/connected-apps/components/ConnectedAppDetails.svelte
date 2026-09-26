@@ -102,14 +102,14 @@
   {#if confirmOpen}
     <div class="fixed inset-0 z-50 grid place-items-center p-4">
       <button type="button" aria-label="Close confirmation" class="absolute inset-0 bg-slate-950/40" on:click={() => { confirmOpen = false }}></button>
-      <section role="dialog" aria-modal="true" class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+      <div role="dialog" aria-modal="true" class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
         <h2 class="text-lg font-semibold text-slate-950">Disconnect {app.name}?</h2>
         <p class="mt-2 text-sm leading-6 text-slate-500">This removes the app registration. You can add it again later.</p>
         <div class="mt-6 flex justify-end gap-3">
           <button type="button" class="btn h-10 min-h-0 border-slate-200 bg-white text-slate-700 shadow-none" on:click={() => { confirmOpen = false }}>Cancel</button>
           <button type="button" class="btn h-10 min-h-0 border-red-600 bg-red-600 text-white shadow-none hover:bg-red-700" disabled={busy} on:click={() => onDisconnect(app)}>Disconnect</button>
         </div>
-      </section>
+      </div>
     </div>
   {/if}
 </div>

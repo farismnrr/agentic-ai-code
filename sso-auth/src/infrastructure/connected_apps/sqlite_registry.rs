@@ -114,7 +114,10 @@ impl ConnectedAppRepository for SqliteConnectedAppRepository {
     fn delete(&self, client_id: &str) -> Result<bool, AuthError> {
         let connection = self.connect()?;
         let changed = connection
-            .execute("DELETE FROM connected_apps WHERE client_id = ?1", [client_id])
+            .execute(
+                "DELETE FROM connected_apps WHERE client_id = ?1",
+                [client_id],
+            )
             .map_err(|_| AuthError::StorageUnavailable)?;
         Ok(changed > 0)
     }

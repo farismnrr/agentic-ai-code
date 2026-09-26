@@ -13,7 +13,7 @@
 <div class="fixed inset-0 z-50 grid place-items-center p-4" role="presentation">
   <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-slate-950/40" on:click={onClose}></button>
 
-  <section
+  <div
     role="dialog"
     aria-modal="true"
     aria-labelledby="connected-app-dialog-title"
@@ -49,5 +49,5 @@
         onCancel={onClose}
       />
     </div>
-  </section>
+  </div>
 </div>
