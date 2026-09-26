@@ -47,7 +47,7 @@ pub(super) fn validate_origin(headers: &HeaderMap, resource: &str) -> Result<(),
     if trusted_chatgpt || same_origin(&origin, &resource) {
         Ok(())
     } else {
-        Err(StatusCode::FORBIDDEN.into_response())
+        Err(Box::new(StatusCode::FORBIDDEN.into_response()))
     }
 }
 
