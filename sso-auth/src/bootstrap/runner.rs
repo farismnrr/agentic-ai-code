@@ -3,10 +3,13 @@ use std::{error::Error, path::PathBuf, sync::Arc};
 use crate::{
     application::{AuthService, ConnectedAppService, ConnectionService, McpOAuthService},
     infrastructure::{
-        access::GitHubUserAllowlist, config::AppConfig,
-        connected_apps::SqliteConnectedAppRepository, github::GitHubOAuthClient,
+        access::GitHubUserAllowlist,
+        config::AppConfig,
+        connected_apps::SqliteConnectedAppRepository,
+        github::GitHubOAuthClient,
         mcp_oauth::{HttpMcpClientMetadataResolver, SignedMcpAccessTokenIssuer},
-        random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
+        random_state::SecureStateGenerator,
+        relay_assertion::SignedRelayAssertionIssuer,
         session::SignedSessionCodec,
     },
     interfaces::http::{build_router, AuthHttpState, OAuthServerMetadata},
