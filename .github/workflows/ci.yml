@@ -16,6 +16,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-sso-auth
+  RELAY_IMAGE_NAME: ghcr.io/farismnrr/agentic-ai-code-relay-agent
   AGENTATION_ENABLED: ${{ vars.AGENTATION_ENABLED || 'false' }}
   BUILDX_BUILDER: sso-auth-ci
 
@@ -73,6 +74,17 @@ jobs:
             --output type=cacheonly \
             .
 
+      - name: Run Relay quality gates
+        run: |
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform linux/amd64 \
+            --target check \
+            --file relay-agent/Dockerfile \
+            --progress plain \
+            --output type=cacheonly \
+            .
+
   guardrail:
     name: 2. Structural guardrail
     needs: quality
@@ -103,6 +115,15 @@ jobs:
             --workdir /workspace \
             node:22-bookworm-slim \
             node scripts/guardrail.mjs sso-auth
+
+          docker run --rm \
+            --cpus "$CI_CPU_LIMIT" \
+            --memory "$CI_MEMORY_LIMIT" \
+            --memory-swap "$CI_MEMORY_LIMIT" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            node:22-bookworm-slim \
+            node scripts/guardrail.mjs relay-agent
   test:
     name: 3. Rust tests
     needs: guardrail
@@ -145,6 +166,17 @@ jobs:
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --target backend-test \
             --file sso-auth/Dockerfile \
+            --progress plain \
+            --output type=cacheonly \
+            .
+
+      - name: Run Relay tests
+        run: |
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform linux/amd64 \
+            --target check \
+            --file relay-agent/Dockerfile \
             --progress plain \
             --output type=cacheonly \
             .
@@ -197,6 +229,16 @@ jobs:
             --platform "${{ matrix.platform }}" \
             --build-arg VITE_AGENTATION_ENABLED="$AGENTATION_ENABLED" \
             --file sso-auth/Dockerfile \
+            --progress plain \
+            --output type=cacheonly \
+            .
+
+      - name: Validate Relay production image build
+        run: |
+          docker buildx build \
+            --builder "$BUILDX_BUILDER" \
+            --platform "${{ matrix.platform }}" \
+            --file relay-agent/Dockerfile \
             --progress plain \
             --output type=cacheonly \
             .
@@ -371,30 +413,56 @@ jobs:
           build-args: |
             VITE_AGENTATION_ENABLED=${{ env.AGENTATION_ENABLED }}
 
+      - name: Prepare Relay image metadata
+        id: relay-meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.RELAY_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ github.sha }}
+
+      - name: Publish Relay multi-platform image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: relay-agent/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.relay-meta.outputs.tags }}
+          labels: ${{ steps.relay-meta.outputs.labels }}
+
       - name: Verify published image platforms
         run: |
           set -eu
-          manifest="$(docker buildx imagetools inspect "$IMAGE_NAME:latest")"
-          printf '%s\n' "$manifest"
-          printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
-          printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)'
+          for image in "$IMAGE_NAME:latest" "$RELAY_IMAGE_NAME:latest"; do
+            manifest="$(docker buildx imagetools inspect "$image")"
+            printf '%s\n' "$manifest"
+            printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/amd64([[:space:]]|$)'
+            printf '%s\n' "$manifest" | grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)'
+          done
 
       - name: Verify ARM64 binary architecture
         run: |
           set -eu
 
-          container="sso-auth-arm64-inspect-${{ github.run_id }}"
-          binary="$RUNNER_TEMP/sso-auth-arm64"
+          verify_binary() {
+            image="$1"
+            source_path="$2"
+            name="$3"
+            container="${name}-arm64-inspect-${{ github.run_id }}"
+            binary="$RUNNER_TEMP/${name}-arm64"
 
-          cleanup() {
-            docker rm -f "$container" >/dev/null 2>&1 || true
+            docker pull --platform linux/arm64 "$image"
+            docker create --platform linux/arm64 --name "$container" "$image"
+            docker cp "$container:$source_path" "$binary"
+            docker rm -f "$container"
+
+            file "$binary"
+            file "$binary" | grep -Eq 'ARM aarch64|aarch64'
             rm -f "$binary"
           }
-          trap cleanup EXIT
 
-          docker pull --platform linux/arm64 "$IMAGE_NAME:latest"
-          docker create --platform linux/arm64 --name "$container" "$IMAGE_NAME:latest"
-          docker cp "$container:/sso-auth" "$binary"
-
-          file "$binary"
-          file "$binary" | grep -Eq 'ARM aarch64|aarch64'
+          verify_binary "$IMAGE_NAME:latest" /sso-auth sso-auth
+          verify_binary "$RELAY_IMAGE_NAME:latest" /relay-agent relay-agent
