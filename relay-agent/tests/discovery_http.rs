@@ -13,10 +13,13 @@ use relay_agent::{
         ConnectCallbackUseCase, ConnectStartUseCase, ConnectionStatusUseCase, TokenGenerator,
     },
     infrastructure::{
-        connection_store::InMemoryConnectionRepository, sso::SsoConnectUrlBuilder,
+        connection_store::InMemoryConnectionRepository,
+        mcp_token::SignedMcpAccessTokenVerifier, sso::SsoConnectUrlBuilder,
         verification::SignedRelayAssertionVerifier,
     },
-    interfaces::http::{build_router, DiscoveryDocument, RelayHttpState},
+    interfaces::http::{
+        build_router, DiscoveryDocument, ProtectedResourceMetadata, RelayHttpState,
+    },
 };
 use tower::ServiceExt;
 use url::Url;
@@ -77,6 +80,18 @@ fn router(tokens: Vec<String>) -> Router {
             "https://relay.example.com/connections/{connectionId}".to_string(),
         ),
         Url::parse(ISSUER).expect("SSO dashboard URL"),
+        Arc::new(
+            SignedMcpAccessTokenVerifier::new(
+                SECRET.to_string(),
+                ISSUER.to_string(),
+                "https://relay.example.com".to_string(),
+            )
+            .expect("MCP verifier"),
+        ),
+        ProtectedResourceMetadata::new(
+            "https://relay.example.com".to_string(),
+            ISSUER.to_string(),
+        ),
     ))
 }
 
