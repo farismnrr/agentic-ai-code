@@ -24,10 +24,12 @@
   let error = ''
   let relayConnection: RelayConnectionState = loadRelayConnectionState()
 
-  onMount(() => {
+  onMount(() => { void initialize() })
+
+  async function initialize() {
+    await load()
     applyConnectionResult()
-    void load()
-  })
+  }
 
   function applyConnectionResult() {
     const url = new URL(window.location.href)
