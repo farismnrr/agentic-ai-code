@@ -62,7 +62,6 @@ pub(super) fn no_store_json<T: Serialize>(status: StatusCode, body: T) -> Respon
     response
 }
 
-
 #[cfg(test)]
 mod tests {
     use axum::http::{header::LOCATION, StatusCode};
