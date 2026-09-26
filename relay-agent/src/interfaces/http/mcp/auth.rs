@@ -13,16 +13,16 @@ use super::super::{mcp_metadata::MCP_SCOPE, RelayHttpState};
 pub(super) fn authenticate(
     state: &RelayHttpState,
     headers: &HeaderMap,
-) -> Result<VerifiedPrincipal, Response> {
+) -> Result<VerifiedPrincipal, Box<Response>> {
     let Some(token) = bearer_token(headers) else {
-        return Err(oauth_challenge(state, ChallengeKind::Missing));
+        return Err(Box::new(oauth_challenge(state, ChallengeKind::Missing)));
     };
     match state.mcp_tokens.verify(token, MCP_SCOPE) {
         Ok(principal) => Ok(principal),
         Err(AuthError::InsufficientScope) => {
-            Err(oauth_challenge(state, ChallengeKind::InsufficientScope))
+            Err(Box::new(oauth_challenge(state, ChallengeKind::InsufficientScope)))
         }
-        Err(_) => Err(oauth_challenge(state, ChallengeKind::InvalidToken)),
+        Err(_) => Err(Box::new(oauth_challenge(state, ChallengeKind::InvalidToken))),
     }
 }
 
