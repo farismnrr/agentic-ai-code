@@ -1,3 +1,4 @@
-mod file_registry;
+mod sqlite_registry;
+mod validation;
 
-pub use file_registry::FileConnectedAppRepository;
+pub use sqlite_registry::SqliteConnectedAppRepository;

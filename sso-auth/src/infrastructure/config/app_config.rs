@@ -1,4 +1,4 @@
-use std::{env, error::Error, net::SocketAddr, path::PathBuf};
+use std::{env, error::Error, net::SocketAddr};
 
 use url::Url;
 
@@ -17,7 +17,6 @@ pub struct AppConfig {
     cookie_secure: bool,
     sso_issuer: String,
     relay_assertion_secret: String,
-    connected_apps_path: PathBuf,
 }
 
 impl AppConfig {
@@ -48,9 +47,6 @@ impl AppConfig {
             cookie_secure: base_url.scheme() == "https",
             sso_issuer: base_url.as_str().trim_end_matches('/').to_string(),
             relay_assertion_secret: required("RELAY_ASSERTION_SECRET")?,
-            connected_apps_path: env::var("CONNECTED_APPS_PATH")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("/app-data/connected-apps.json")),
         })
     }
 
@@ -104,10 +100,6 @@ impl AppConfig {
 
     pub fn relay_assertion_secret(&self) -> String {
         self.relay_assertion_secret.clone()
-    }
-
-    pub fn connected_apps_path(&self) -> PathBuf {
-        self.connected_apps_path.clone()
     }
 }
 

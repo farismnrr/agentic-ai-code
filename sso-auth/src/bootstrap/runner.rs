@@ -1,14 +1,17 @@
-use std::{error::Error, sync::Arc};
+use std::{error::Error, path::PathBuf, sync::Arc};
 
 use crate::{
     application::{AuthService, ConnectedAppService, ConnectionService},
     infrastructure::{
-        access::GitHubUserAllowlist, config::AppConfig, connected_apps::FileConnectedAppRepository,
-        github::GitHubOAuthClient, random_state::SecureStateGenerator,
-        relay_assertion::SignedRelayAssertionIssuer, session::SignedSessionCodec,
+        access::GitHubUserAllowlist, config::AppConfig,
+        connected_apps::SqliteConnectedAppRepository, github::GitHubOAuthClient,
+        random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
+        session::SignedSessionCodec,
     },
     interfaces::http::{build_router, AuthHttpState},
 };
+
+const CONNECTED_APPS_DATABASE: &str = "/app-data/sso.sqlite3";
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
     init_tracing();
@@ -35,9 +38,9 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         access_policy,
     ));
 
-    let app_registry = Arc::new(FileConnectedAppRepository::new(
-        config.connected_apps_path(),
-    )?);
+    let app_registry = Arc::new(SqliteConnectedAppRepository::new(PathBuf::from(
+        CONNECTED_APPS_DATABASE,
+    ))?);
     let assertions = Arc::new(SignedRelayAssertionIssuer::new(
         config.relay_assertion_secret(),
         config.sso_issuer(),

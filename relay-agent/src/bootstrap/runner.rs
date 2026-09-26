@@ -20,17 +20,17 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     ));
     let sso_connect = Arc::new(SsoConnectUrlBuilder::new(
         config.sso_base_url(),
-        client_id.clone(),
+        client_id.to_string(),
     )?);
     let verifier = Arc::new(SignedRelayAssertionVerifier::new(
         config.relay_assertion_secret(),
         config.sso_issuer(),
-        client_id.clone(),
+        client_id.to_string(),
     )?);
 
     let public_url = config.relay_public_url();
     let discovery = DiscoveryDocument::new(
-        client_id,
+        client_id.to_string(),
         public_url.join("/connections/start")?.to_string(),
         format!(
             "{}/connections/{{connectionId}}",
