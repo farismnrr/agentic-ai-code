@@ -19,10 +19,14 @@ pub(super) fn authenticate(
     };
     match state.mcp_tokens.verify(token, MCP_SCOPE) {
         Ok(principal) => Ok(principal),
-        Err(AuthError::InsufficientScope) => {
-            Err(Box::new(oauth_challenge(state, ChallengeKind::InsufficientScope)))
-        }
-        Err(_) => Err(Box::new(oauth_challenge(state, ChallengeKind::InvalidToken))),
+        Err(AuthError::InsufficientScope) => Err(Box::new(oauth_challenge(
+            state,
+            ChallengeKind::InsufficientScope,
+        ))),
+        Err(_) => Err(Box::new(oauth_challenge(
+            state,
+            ChallengeKind::InvalidToken,
+        ))),
     }
 }
 
