@@ -1,11 +1,12 @@
 use axum::{
-    http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+    http::{header::{CONTENT_TYPE, ORIGIN}, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use url::Url;
 
 pub(super) const PROTOCOL_VERSION: &str = "2026-07-28";
 const HEADER_MCP_PROTOCOL_VERSION: &str = "mcp-protocol-version";
@@ -19,6 +20,35 @@ pub(super) struct JsonRpcRequest {
     pub(super) method: String,
     #[serde(default)]
     pub(super) params: Value,
+}
+
+pub(super) fn validate_origin(
+    headers: &HeaderMap,
+    resource: &str,
+) -> Result<(), Response> {
+    let mut origins = headers.get_all(ORIGIN).iter();
+    let Some(origin) = origins.next() else {
+        return Ok(());
+    };
+    if origins.next().is_some() {
+        return Err(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let Some(origin) = origin.to_str().ok().and_then(parse_origin) else {
+        return Err(StatusCode::FORBIDDEN.into_response());
+    };
+    let Some(resource) = Url::parse(resource).ok() else {
+        return Err(StatusCode::FORBIDDEN.into_response());
+    };
+
+    let trusted_chatgpt = origin.scheme() == "https"
+        && origin.host_str() == Some("chatgpt.com")
+        && origin.port().is_none();
+    if trusted_chatgpt || same_origin(&origin, &resource) {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN.into_response())
+    }
 }
 
 pub(super) fn validate_request(
@@ -88,6 +118,26 @@ pub(super) fn content_type_is_json(headers: &HeaderMap) -> bool {
                 .next()
                 .is_some_and(|media_type| media_type.trim() == "application/json")
         })
+}
+
+fn parse_origin(value: &str) -> Option<Url> {
+    if value == "null" {
+        return None;
+    }
+    let url = Url::parse(value).ok()?;
+    (matches!(url.scheme(), "http" | "https")
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none())
+    .then_some(url)
+}
+
+fn same_origin(left: &Url, right: &Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host_str() == right.host_str()
+        && left.port_or_known_default() == right.port_or_known_default()
 }
 
 fn header_string<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
