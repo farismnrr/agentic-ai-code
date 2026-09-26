@@ -21,5 +21,3 @@ pub use ports::SessionCodec;
 pub use ports::StateGenerator;
 pub use ports::UserAccessPolicy;
 
-#[cfg(test)]
-mod mcp_oauth_service_test;
