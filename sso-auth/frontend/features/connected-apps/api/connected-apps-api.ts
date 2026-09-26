@@ -1,33 +1,47 @@
 import type { ConnectedApp } from '../model/connected-app'
 
 export async function listConnectedApps(): Promise<ConnectedApp[]> {
-  const response = await fetch('/api/connected-apps', {
-    headers: { Accept: 'application/json' },
-    credentials: 'same-origin'
-  })
-  if (!response.ok) {
-    throw new Error(await responseMessage(response, 'Unable to load connected apps.'))
-  }
-  return await response.json() as ConnectedApp[]
+  return await request<ConnectedApp[]>('/api/connected-apps')
 }
 
 export async function saveConnectedApp(app: ConnectedApp): Promise<ConnectedApp> {
-  const response = await fetch(
+  return await request<ConnectedApp>(
     `/api/connected-apps/${encodeURIComponent(app.clientId)}`,
     {
       method: 'PUT',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(app)
     }
   )
+}
+
+export async function deleteConnectedApp(clientId: string): Promise<void> {
+  const response = await fetch(
+    `/api/connected-apps/${encodeURIComponent(clientId)}`,
+    {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    }
+  )
   if (!response.ok) {
-    throw new Error(await responseMessage(response, 'Unable to save connected app.'))
+    throw new Error(await responseMessage(response, 'Unable to disconnect app.'))
   }
-  return await response.json() as ConnectedApp
+}
+
+async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  headers.set('Accept', 'application/json')
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    credentials: 'same-origin'
+  })
+  if (!response.ok) {
+    throw new Error(await responseMessage(response, 'Connected app request failed.'))
+  }
+  return await response.json() as T
 }
 
 async function responseMessage(response: Response, fallback: string) {

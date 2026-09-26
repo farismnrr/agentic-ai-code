@@ -37,4 +37,5 @@ pub trait ConnectedAppRepository: Send + Sync {
     fn list(&self) -> Result<Vec<ConnectedApp>, AuthError>;
     fn find(&self, client_id: &str) -> Result<Option<ConnectedApp>, AuthError>;
     fn save(&self, app: ConnectedApp) -> Result<ConnectedApp, AuthError>;
+    fn delete(&self, client_id: &str) -> Result<bool, AuthError>;
 }

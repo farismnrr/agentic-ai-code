@@ -123,7 +123,7 @@ async fn connect_start_uses_registered_client_and_relay_state() {
             .expect("location string"),
     )
     .expect("redirect URL");
-    assert_eq!(location.path(), "/auth/github");
+    assert_eq!(location.path(), "/connect");
     assert_eq!(
         location
             .query_pairs()

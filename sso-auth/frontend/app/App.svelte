@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
 
   import { AuthView, type AuthState } from '../features/auth'
+  import { ConnectionConsent } from '../features/connection-consent'
   import AgentationInspector from '../shared/dev/AgentationInspector.svelte'
 
   type SessionPayload = {
@@ -9,16 +10,17 @@
     user?: {
       id: number
       login: string
-      avatarUrl?: string
+      avatar_url?: string
     }
     issuedAt?: number
     expiresAt?: number
   }
 
   let authState: AuthState = { status: 'loading' }
+  const routePath = window.location.pathname
 
   onMount(() => {
-    void hydrateSession()
+    if (routePath !== '/connect') void hydrateSession()
   })
 
   async function hydrateSession() {
@@ -36,9 +38,7 @@
         headers: { Accept: 'application/json' },
         credentials: 'same-origin'
       })
-      if (!response.ok) {
-        throw new Error('session request failed')
-      }
+      if (!response.ok) throw new Error('session request failed')
 
       const payload = await response.json() as SessionPayload
       if (
@@ -50,7 +50,11 @@
         authState = {
           status: 'authenticated',
           session: {
-            user: payload.user,
+            user: {
+              id: payload.user.id,
+              login: payload.user.login,
+              avatarUrl: payload.user.avatar_url
+            },
             issuedAt: payload.issuedAt,
             expiresAt: payload.expiresAt
           }
@@ -79,9 +83,7 @@
         method: 'POST',
         credentials: 'same-origin'
       })
-      if (!response.ok) {
-        throw new Error('logout failed')
-      }
+      if (!response.ok) throw new Error('logout failed')
       authState = { status: 'signed_out' }
     } catch {
       authState = {
@@ -92,12 +94,12 @@
   }
 </script>
 
-<main class="min-h-screen bg-slate-50 text-slate-950">
-  <AuthView
-    state={authState}
-    onSignIn={startSignIn}
-    onSignOut={signOut}
-  />
+<main class="min-h-screen bg-white text-slate-950">
+  {#if routePath === '/connect'}
+    <ConnectionConsent />
+  {:else}
+    <AuthView state={authState} onSignIn={startSignIn} onSignOut={signOut} />
+  {/if}
 </main>
 
 <AgentationInspector />

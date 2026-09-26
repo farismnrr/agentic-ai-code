@@ -20,4 +20,8 @@ impl ConnectedAppService {
     pub fn save(&self, app: ConnectedApp) -> Result<ConnectedApp, AuthError> {
         self.apps.save(app)
     }
+
+    pub fn delete(&self, client_id: &str) -> Result<bool, AuthError> {
+        self.apps.delete(client_id)
+    }
 }

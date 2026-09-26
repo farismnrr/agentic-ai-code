@@ -10,7 +10,7 @@ export type ConnectedApp = {
 export const defaultRelayApp = (): ConnectedApp => ({
   clientId: 'relay-agent',
   name: 'Masih Awam Relay',
-  description: 'Connect Masih Awam identity to the Relay service.',
+  description: 'Agentic AI relay for Masih Awam.',
   callbackUrl: 'http://localhost:3100/connections/callback',
   enabled: true,
   assertionTtlSeconds: 90

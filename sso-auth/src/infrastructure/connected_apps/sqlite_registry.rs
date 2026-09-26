@@ -110,6 +110,14 @@ impl ConnectedAppRepository for SqliteConnectedAppRepository {
             .map_err(|_| AuthError::StorageUnavailable)?;
         Ok(app)
     }
+
+    fn delete(&self, client_id: &str) -> Result<bool, AuthError> {
+        let connection = self.connect()?;
+        let changed = connection
+            .execute("DELETE FROM connected_apps WHERE client_id = ?1", [client_id])
+            .map_err(|_| AuthError::StorageUnavailable)?;
+        Ok(changed > 0)
+    }
 }
 
 fn map_app(row: &Row<'_>) -> rusqlite::Result<ConnectedApp> {
@@ -140,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn saves_and_reads_connected_apps() {
+    fn saves_reads_and_deletes_connected_apps() {
         let path = test_path();
         let repository = SqliteConnectedAppRepository::new(path.clone()).unwrap();
         let app = ConnectedApp {
@@ -153,9 +161,10 @@ mod tests {
         };
 
         repository.save(app.clone()).unwrap();
-
         assert_eq!(repository.find("relay-agent").unwrap(), Some(app.clone()));
         assert_eq!(repository.list().unwrap(), vec![app]);
+        assert!(repository.delete("relay-agent").unwrap());
+        assert!(repository.find("relay-agent").unwrap().is_none());
 
         let _ = fs::remove_file(path);
     }

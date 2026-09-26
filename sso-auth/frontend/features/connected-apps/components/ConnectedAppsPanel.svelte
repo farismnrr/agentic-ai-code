@@ -1,31 +1,29 @@
 <script lang="ts">
   import { onMount } from 'svelte'
 
-  import { listConnectedApps, saveConnectedApp } from '../api/connected-apps-api'
+  import { deleteConnectedApp, listConnectedApps, saveConnectedApp } from '../api/connected-apps-api'
   import { defaultRelayApp, type ConnectedApp } from '../model/connected-app'
   import ConnectedAppCard from './ConnectedAppCard.svelte'
-  import ConnectedAppForm from './ConnectedAppForm.svelte'
+  import ConnectedAppDetails from './ConnectedAppDetails.svelte'
+  import ConnectedAppDialog from './ConnectedAppDialog.svelte'
 
   let apps: ConnectedApp[] = []
+  let selected: ConnectedApp | null = null
   let draft = defaultRelayApp()
-  let editingId: string | null = null
+  let dialogMode: 'create' | 'edit' | null = null
   let loading = true
   let saving = false
+  let busy = false
   let message = ''
   let error = ''
 
-  onMount(() => {
-    void load()
-  })
+  onMount(() => { void load() })
 
   async function load() {
     loading = true
     error = ''
     try {
       apps = await listConnectedApps()
-      if (apps.length > 0) {
-        edit(apps[0])
-      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Unable to load connected apps.'
     } finally {
@@ -33,85 +31,132 @@
     }
   }
 
-  function edit(app: ConnectedApp) {
-    draft = { ...app }
-    editingId = app.clientId
+  function createNew() {
+    draft = defaultRelayApp()
+    dialogMode = 'create'
     message = ''
     error = ''
   }
 
-  function createNew() {
-    draft = defaultRelayApp()
-    editingId = null
+  function edit(app: ConnectedApp) {
+    draft = { ...app }
+    dialogMode = 'edit'
     message = ''
     error = ''
   }
 
   async function save(app: ConnectedApp) {
     saving = true
-    message = ''
     error = ''
     try {
       const saved = await saveConnectedApp({ ...app })
-      const existing = apps.findIndex((item) => item.clientId === saved.clientId)
-      if (existing >= 0) {
-        apps = apps.map((item) => item.clientId === saved.clientId ? saved : item)
-      } else {
-        apps = [...apps, saved]
-      }
-      edit(saved)
-      message = 'Connected app saved.'
+      const exists = apps.some(item => item.clientId === saved.clientId)
+      apps = exists
+        ? apps.map(item => item.clientId === saved.clientId ? saved : item)
+        : [...apps, saved]
+      if (selected?.clientId === saved.clientId) selected = saved
+      dialogMode = null
+      message = exists ? 'Connected app updated.' : 'Connected app added.'
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Unable to save connected app.'
     } finally {
       saving = false
     }
   }
+
+  async function toggle(app: ConnectedApp) {
+    busy = true
+    error = ''
+    try {
+      const saved = await saveConnectedApp({ ...app, enabled: !app.enabled })
+      apps = apps.map(item => item.clientId === saved.clientId ? saved : item)
+      selected = saved
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Unable to update connected app.'
+    } finally {
+      busy = false
+    }
+  }
+
+  async function disconnect(app: ConnectedApp) {
+    busy = true
+    error = ''
+    try {
+      await deleteConnectedApp(app.clientId)
+      apps = apps.filter(item => item.clientId !== app.clientId)
+      selected = null
+      message = 'Connected app disconnected.'
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Unable to disconnect app.'
+    } finally {
+      busy = false
+    }
+  }
 </script>
 
-<section class="w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
-  <div class="p-6 sm:p-8">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <header class="space-y-2">
-        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Connected apps</p>
-        <h2 class="text-2xl font-semibold tracking-tight text-slate-950">App registry</h2>
-        <p class="max-w-xl text-sm leading-6 text-slate-600">
-          Register trusted callback settings here. Secrets stay in server configuration.
-        </p>
-      </header>
+{#if error && !dialogMode}
+  <div class="alert mb-5 border-red-200 bg-red-50 text-sm text-red-700">{error}</div>
+{:else if message}
+  <div class="alert mb-5 border-emerald-200 bg-emerald-50 text-sm text-emerald-700">{message}</div>
+{/if}
 
-      <button type="button" class="btn btn-ghost btn-sm" on:click={createNew}>
-        New app
-      </button>
-    </div>
-
-    {#if error}
-      <div class="alert alert-error mt-5 text-sm">{error}</div>
-    {:else if message}
-      <div class="alert alert-success mt-5 text-sm">{message}</div>
-    {/if}
-
-    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <div class="space-y-3">
-        {#if loading}
-          <div class="skeleton h-28 w-full"></div>
-        {:else if apps.length === 0}
-          <div class="rounded-xl border border-dashed border-slate-300 p-5 text-sm leading-6 text-slate-500">
-            No apps registered yet. The form is prefilled for the local Relay service.
-          </div>
-        {:else}
-          {#each apps as app (app.clientId)}
-            <ConnectedAppCard {app} onEdit={edit} />
-          {/each}
-        {/if}
-      </div>
-
-      <ConnectedAppForm
-        app={draft}
-        {saving}
-        clientIdLocked={editingId !== null}
-        onSave={save}
-      />
-    </div>
+{#if selected}
+  <ConnectedAppDetails
+    app={selected}
+    {busy}
+    onBack={() => { selected = null }}
+    onEdit={edit}
+    onToggle={toggle}
+    onDisconnect={disconnect}
+  />
+{:else}
+  <div class="flex flex-wrap items-start justify-between gap-5">
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Connected Apps</p>
+      <h1 class="mt-2 text-4xl font-semibold tracking-tight text-slate-950">Connected Apps</h1>
+      <p class="mt-2 text-lg text-slate-500">Apps and services connected to your Masih Awam account.</p>
+    </header>
+    <button type="button" class="btn h-12 min-h-0 border-blue-600 bg-blue-600 px-7 text-white shadow-none hover:border-blue-700 hover:bg-blue-700" on:click={createNew}>
+      Add app
+    </button>
   </div>
-</section>
+
+  <section class="mt-9 overflow-hidden rounded-xl border border-slate-200 bg-white">
+    {#if loading}
+      <div class="space-y-4 p-7">
+        <div class="skeleton h-16 w-full"></div>
+        <div class="skeleton h-16 w-full"></div>
+      </div>
+    {:else}
+      <div class="divide-y divide-slate-200">
+        {#each apps as app (app.clientId)}
+          <ConnectedAppCard {app} onOpen={(item) => { selected = item }} />
+        {/each}
+
+        <button type="button" class="flex w-full items-center gap-5 px-8 py-6 text-left hover:bg-slate-50" on:click={createNew}>
+          <span class="grid size-14 place-items-center rounded-xl bg-slate-50 text-slate-500">
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="size-7 fill-none stroke-current stroke-[1.8]"><path d="M12 5v14M5 12h14"></path></svg>
+          </span>
+          <span>
+            <span class="block text-base font-semibold text-slate-950">Add another app</span>
+            <span class="mt-0.5 block text-sm text-slate-500">Register a new connected app</span>
+          </span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="ml-auto size-5 fill-none stroke-slate-500 stroke-2"><path d="m9 5 7 7-7 7"></path></svg>
+        </button>
+      </div>
+    {/if}
+  </section>
+
+  <p class="mt-7 text-sm text-slate-500">Connected apps can only return users to callback URLs you register here.</p>
+{/if}
+
+{#if dialogMode}
+  <ConnectedAppDialog
+    app={draft}
+    {saving}
+    {error}
+    mode={dialogMode}
+    onSave={save}
+    onClose={() => { dialogMode = null; error = '' }}
+  />
+{/if}

@@ -104,7 +104,8 @@ async function main() {
     ])
 
     await page.getByText('@farismnrr-e2e', { exact: true }).waitFor()
-    await page.getByText('Active session', { exact: true }).waitFor()
+    await page.getByText('GitHub Connected', { exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Connected Apps', exact: true }).waitFor()
 
     const session = await page.request.get(`${baseUrl}/api/session`)
     if (!session.ok()) {
@@ -118,6 +119,7 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' })
     await page.getByText('@farismnrr-e2e', { exact: true }).waitFor()
 
+    await page.getByText('@farismnrr-e2e', { exact: true }).click()
     await page.getByRole('button', { name: 'Sign out' }).click()
     const signInAgain = page.getByRole('button', { name: 'Continue with GitHub' })
     await signInAgain.waitFor()
@@ -151,7 +153,7 @@ async function main() {
       fullPage: true
     })
 
-    console.log('E2E passed: allowed GitHub user session, logout, and blocked-user 403')
+    console.log('E2E passed: allowed GitHub user dashboard, logout, and blocked-user 403')
   } catch (error) {
     await page.screenshot({
       path: `${artifactDir}/sso-auth-failure.png`,

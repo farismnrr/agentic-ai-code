@@ -13,8 +13,15 @@ pub fn build_router(auth_state: AuthHttpState) -> Router {
         .route("/auth/github/callback", get(auth::callback))
         .route("/auth/logout", post(session::logout))
         .route("/api/session", get(session::get))
+        .route(
+            "/api/connect/apps/{client_id}",
+            get(connected_apps::connection_info),
+        )
         .route("/api/connected-apps", get(connected_apps::list))
-        .route("/api/connected-apps/{client_id}", put(connected_apps::save))
+        .route(
+            "/api/connected-apps/{client_id}",
+            put(connected_apps::save).delete(connected_apps::delete),
+        )
         .fallback(frontend::serve)
         .with_state(auth_state)
         .layer(TraceLayer::new_for_http())
