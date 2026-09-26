@@ -17,9 +17,9 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="connected-app-dialog-title"
-    class="relative z-10 w-full max-w-[630px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
+    class="relative z-10 w-full max-w-[630px] overflow-visible rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
   >
-    <div class="max-h-[90vh] overflow-y-auto overscroll-contain p-6 sm:p-8">
+    <div class="max-h-[90vh] overflow-y-auto overscroll-contain rounded-xl p-6 sm:p-8">
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 id="connected-app-dialog-title" class="text-xl font-semibold tracking-tight text-slate-950">
