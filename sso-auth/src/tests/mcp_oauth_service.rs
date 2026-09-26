@@ -79,7 +79,10 @@ async fn cimd_client_validation_requires_exact_document_identity_and_redirect() 
     let invalid_redirect = service
         .validate_client(CLIENT_ID, "https://example.com/callback")
         .await;
-    assert!(matches!(invalid_redirect, Err(AuthError::InvalidOAuthRequest)));
+    assert!(matches!(
+        invalid_redirect,
+        Err(AuthError::InvalidOAuthRequest)
+    ));
 }
 
 #[tokio::test]
