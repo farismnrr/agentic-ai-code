@@ -12,9 +12,18 @@
 
   let confirmOpen = false
   $: isGitHub = app.clientId.toLowerCase().includes('github')
+  $: isRelay = app.clientId === 'relay-agent'
 
   function copyCallback() {
     void navigator.clipboard?.writeText(app.callbackUrl)
+  }
+
+  function connect() {
+    const url = new URL(app.callbackUrl)
+    url.pathname = '/connections/start'
+    url.search = ''
+    url.hash = ''
+    window.location.assign(url.toString())
   }
 </script>
 
@@ -46,6 +55,16 @@
     </div>
 
     <div class="flex gap-3">
+      {#if isRelay}
+        <button
+          type="button"
+          class="btn h-11 min-h-0 border-blue-600 bg-blue-600 px-7 text-white shadow-none hover:border-blue-700 hover:bg-blue-700"
+          disabled={!app.enabled || busy}
+          on:click={connect}
+        >
+          Connect
+        </button>
+      {/if}
       <button type="button" class="btn h-11 min-h-0 border-slate-200 bg-white px-7 text-slate-700 shadow-none hover:bg-slate-50" on:click={() => onEdit(app)}>
         Edit
       </button>
