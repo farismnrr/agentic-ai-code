@@ -15,9 +15,9 @@ pub use mcp_oauth_service::{
 };
 pub use ports::ConnectedAppRepository;
 pub use ports::ConnectionAssertionIssuer;
-pub use ports::{McpAccessTokenIssuer, McpClientMetadata, McpClientMetadataResolver};
 pub use ports::OAuthProvider;
 pub use ports::SessionCodec;
 pub use ports::StateGenerator;
 pub use ports::UserAccessPolicy;
+pub use ports::{McpAccessTokenIssuer, McpClientMetadata, McpClientMetadataResolver};
 
