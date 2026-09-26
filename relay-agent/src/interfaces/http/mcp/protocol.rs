@@ -25,20 +25,20 @@ pub(super) struct JsonRpcRequest {
     pub(super) params: Value,
 }
 
-pub(super) fn validate_origin(headers: &HeaderMap, resource: &str) -> Result<(), Response> {
+pub(super) fn validate_origin(headers: &HeaderMap, resource: &str) -> Result<(), Box<Response>> {
     let mut origins = headers.get_all(ORIGIN).iter();
     let Some(origin) = origins.next() else {
         return Ok(());
     };
     if origins.next().is_some() {
-        return Err(StatusCode::FORBIDDEN.into_response());
+        return Err(Box::new(StatusCode::FORBIDDEN.into_response()));
     }
 
     let Some(origin) = origin.to_str().ok().and_then(parse_origin) else {
-        return Err(StatusCode::FORBIDDEN.into_response());
+        return Err(Box::new(StatusCode::FORBIDDEN.into_response()));
     };
     let Some(resource) = Url::parse(resource).ok() else {
-        return Err(StatusCode::FORBIDDEN.into_response());
+        return Err(Box::new(StatusCode::FORBIDDEN.into_response()));
     };
 
     let trusted_chatgpt = origin.scheme() == "https"
@@ -54,43 +54,43 @@ pub(super) fn validate_origin(headers: &HeaderMap, resource: &str) -> Result<(),
 pub(super) fn validate_request(
     headers: &HeaderMap,
     request: &JsonRpcRequest,
-) -> Result<(), Response> {
+) -> Result<(), Box<Response>> {
     let id = request.id.clone();
     let Some(header_version) = header_string(headers, HEADER_MCP_PROTOCOL_VERSION) else {
-        return Err(header_mismatch(id));
+        return Err(Box::new(header_mismatch(id)));
     };
     if header_string(headers, HEADER_MCP_METHOD) != Some(request.method.as_str()) {
-        return Err(header_mismatch(id));
+        return Err(Box::new(header_mismatch(id)));
     }
 
     if request.method == "tools/call" {
         let Some(name) = request.params.get("name").and_then(Value::as_str) else {
-            return Err(invalid_params(id));
+            return Err(Box::new(invalid_params(id)));
         };
         let Some(header_name) =
             header_string(headers, HEADER_MCP_NAME).and_then(decode_header_value)
         else {
-            return Err(header_mismatch(id));
+            return Err(Box::new(header_mismatch(id)));
         };
         if header_name != name {
-            return Err(header_mismatch(id));
+            return Err(Box::new(header_mismatch(id)));
         }
     }
 
     let Some(meta) = request.params.get("_meta").and_then(Value::as_object) else {
-        return Err(invalid_params(id));
+        return Err(Box::new(invalid_params(id)));
     };
     let Some(protocol_version) = meta
         .get("io.modelcontextprotocol/protocolVersion")
         .and_then(Value::as_str)
     else {
-        return Err(invalid_params(id));
+        return Err(Box::new(invalid_params(id)));
     };
     if header_version != protocol_version {
-        return Err(header_mismatch(id));
+        return Err(Box::new(header_mismatch(id)));
     }
     if protocol_version != PROTOCOL_VERSION {
-        return Err(rpc_error_response(
+        return Err(Box::new(rpc_error_response(
             StatusCode::BAD_REQUEST,
             id,
             -32022,
@@ -99,13 +99,13 @@ pub(super) fn validate_request(
                 "supported": [PROTOCOL_VERSION],
                 "requested": protocol_version
             })),
-        ));
+        )));
     }
     if !meta
         .get("io.modelcontextprotocol/clientCapabilities")
         .is_some_and(Value::is_object)
     {
-        return Err(invalid_params(id));
+        return Err(Box::new(invalid_params(id)));
     }
 
     Ok(())
