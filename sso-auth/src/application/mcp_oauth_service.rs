@@ -42,12 +42,12 @@ pub struct McpTokenResponse {
     pub scope: String,
 }
 
-pub struct ValidatedMcpClient {
+pub(crate) struct ValidatedMcpClient {
     client_id: String,
     redirect_uri: String,
 }
 
-pub struct ValidatedMcpAuthorizationRequest(McpAuthorizationRequest);
+pub(crate) struct ValidatedMcpAuthorizationRequest(McpAuthorizationRequest);
 
 struct PendingCode {
     user: AuthenticatedUser,
@@ -80,7 +80,7 @@ impl McpOAuthService {
         }
     }
 
-    pub async fn validate_client(
+    pub(crate) async fn validate_client(
         &self,
         client_id: &str,
         redirect_uri: &str,
@@ -109,7 +109,7 @@ impl McpOAuthService {
         })
     }
 
-    pub fn validate_authorization_request(
+    pub(crate) fn validate_authorization_request(
         &self,
         request: McpAuthorizationRequest,
         client: &ValidatedMcpClient,
@@ -128,7 +128,7 @@ impl McpOAuthService {
         Ok(ValidatedMcpAuthorizationRequest(request))
     }
 
-    pub fn issue_code(
+    pub(crate) fn issue_code(
         &self,
         user: AuthenticatedUser,
         request: ValidatedMcpAuthorizationRequest,
