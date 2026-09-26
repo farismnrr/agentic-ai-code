@@ -13,9 +13,8 @@ use relay_agent::{
         ConnectCallbackUseCase, ConnectStartUseCase, ConnectionStatusUseCase, TokenGenerator,
     },
     infrastructure::{
-        connection_store::InMemoryConnectionRepository,
-        mcp_token::SignedMcpAccessTokenVerifier, sso::SsoConnectUrlBuilder,
-        verification::SignedRelayAssertionVerifier,
+        connection_store::InMemoryConnectionRepository, mcp_token::SignedMcpAccessTokenVerifier,
+        sso::SsoConnectUrlBuilder, verification::SignedRelayAssertionVerifier,
     },
     interfaces::http::{
         build_router, DiscoveryDocument, ProtectedResourceMetadata, RelayHttpState,
@@ -88,10 +87,7 @@ fn router(tokens: Vec<String>) -> Router {
             )
             .expect("MCP verifier"),
         ),
-        ProtectedResourceMetadata::new(
-            "https://relay.example.com".to_string(),
-            ISSUER.to_string(),
-        ),
+        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
     ))
 }
 
