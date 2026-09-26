@@ -9,9 +9,7 @@ use serde::Serialize;
 use crate::domain::AuthenticatedUser;
 
 use super::{
-    auth_cookie::{
-        append_set_cookie, clear_cookie, cookie_value, SESSION_COOKIE,
-    },
+    auth_cookie::{append_set_cookie, clear_cookie, cookie_value, SESSION_COOKIE},
     AuthHttpState,
 };
 

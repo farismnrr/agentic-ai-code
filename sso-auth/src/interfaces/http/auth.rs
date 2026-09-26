@@ -69,7 +69,10 @@ pub async fn callback(
     let cookie_state = cookie_value(&headers, OAUTH_STATE_COOKIE);
     let valid_input = query.error.is_none()
         && query.code.as_deref().is_some_and(|value| !value.is_empty())
-        && query.state.as_deref().is_some_and(|value| !value.is_empty())
+        && query
+            .state
+            .as_deref()
+            .is_some_and(|value| !value.is_empty())
         && cookie_state
             .as_deref()
             .zip(query.state.as_deref())
