@@ -88,23 +88,43 @@ pub fn router() -> Router {
 }
 
 pub fn mcp_request(method: &str, params: Value, authenticated: bool) -> Request<Body> {
+    let token = authenticated.then(|| access_token("identity.read"));
+    build_request(method, params, token.as_deref(), PROTOCOL)
+}
+
+pub fn mcp_request_with_scope(method: &str, params: Value, scope: &str) -> Request<Body> {
+    let token = access_token(scope);
+    build_request(method, params, Some(&token), PROTOCOL)
+}
+
+pub fn mcp_request_with_protocol(method: &str, params: Value, protocol: &str) -> Request<Body> {
+    let token = access_token("identity.read");
+    build_request(method, params, Some(&token), protocol)
+}
+
+fn build_request(
+    method: &str,
+    params: Value,
+    token: Option<&str>,
+    protocol: &str,
+) -> Request<Body> {
     let mut builder = Request::post("/mcp")
         .header("content-type", "application/json")
         .header("accept", "application/json, text/event-stream")
-        .header("mcp-protocol-version", PROTOCOL)
+        .header("mcp-protocol-version", protocol)
         .header("mcp-method", method);
     if method == "tools/call" {
         builder = builder.header("mcp-name", "get_profile");
     }
-    if authenticated {
-        builder = builder.header("authorization", format!("Bearer {}", access_token()));
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
     }
 
     let mut params = params.as_object().cloned().unwrap_or_default();
     params.insert(
         "_meta".to_string(),
         json!({
-            "io.modelcontextprotocol/protocolVersion": PROTOCOL,
+            "io.modelcontextprotocol/protocolVersion": protocol,
             "io.modelcontextprotocol/clientCapabilities": {}
         }),
     );
@@ -121,7 +141,7 @@ pub fn mcp_request(method: &str, params: Value, authenticated: bool) -> Request<
         .unwrap()
 }
 
-fn access_token() -> String {
+fn access_token(scope: &str) -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -133,7 +153,7 @@ fn access_token() -> String {
         "sub": "github:1",
         "login": "faris",
         "avatar_url": null,
-        "scope": "identity.read",
+        "scope": scope,
         "iat": now,
         "exp": now + 3600
     }))
