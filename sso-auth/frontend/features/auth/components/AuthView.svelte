@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { ConnectedAppsPanel } from '../../connected-apps'
   import type { AuthState } from '../model/auth-state'
+  import AuthArtwork from '../layout/AuthArtwork.svelte'
+  import BrandHeader from '../layout/BrandHeader.svelte'
   import AuthenticatedPanel from './AuthenticatedPanel.svelte'
   import CallbackPanel from './CallbackPanel.svelte'
   import ErrorPanel from './ErrorPanel.svelte'
   import LoginPanel from './LoginPanel.svelte'
   import SessionExpiredPanel from './SessionExpiredPanel.svelte'
-  import AuthArtwork from '../layout/AuthArtwork.svelte'
-  import BrandHeader from '../layout/BrandHeader.svelte'
 
   export let state: AuthState
   export let onSignIn: () => void
@@ -17,7 +18,7 @@
   <BrandHeader />
 
   <div class="flex flex-1 items-center justify-center py-8 sm:py-12">
-    <div class="w-full max-w-4xl">
+    <div class="w-full max-w-5xl">
       {#if state.status === 'signed_out'}
         <div class="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
           <LoginPanel loading={false} {onSignIn} />
@@ -28,8 +29,9 @@
           <CallbackPanel phase="callback" />
         </div>
       {:else if state.status === 'authenticated'}
-        <div class="mx-auto max-w-lg">
+        <div class="grid items-start gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           <AuthenticatedPanel session={state.session} {onSignOut} />
+          <ConnectedAppsPanel />
         </div>
       {:else if state.status === 'session_expired'}
         <div class="mx-auto max-w-md">
