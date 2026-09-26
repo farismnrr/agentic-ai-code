@@ -5,8 +5,9 @@ use crate::{
     infrastructure::{
         access::GitHubUserAllowlist, config::AppConfig,
         connected_apps::SqliteConnectedAppRepository, github::GitHubOAuthClient,
-        mcp_oauth::SignedMcpAccessTokenIssuer, random_state::SecureStateGenerator,
-        relay_assertion::SignedRelayAssertionIssuer, session::SignedSessionCodec,
+        mcp_oauth::{HttpMcpClientMetadataResolver, SignedMcpAccessTokenIssuer},
+        random_state::SecureStateGenerator, relay_assertion::SignedRelayAssertionIssuer,
+        session::SignedSessionCodec,
     },
     interfaces::http::{build_router, AuthHttpState, OAuthServerMetadata},
 };
@@ -52,9 +53,11 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         config.relay_assertion_secret(),
         config.sso_issuer(),
     )?);
+    let client_metadata = Arc::new(HttpMcpClientMetadataResolver::new()?);
     let oauth = Arc::new(McpOAuthService::new(
         Arc::new(SecureStateGenerator),
         mcp_tokens,
+        client_metadata,
     ));
     let oauth_metadata = OAuthServerMetadata::new(&config.sso_issuer());
 
