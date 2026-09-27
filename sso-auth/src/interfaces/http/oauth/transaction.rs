@@ -5,7 +5,7 @@ use crate::application::McpAuthorizationRequest;
 
 use super::{response::authorization_redirect_error, super::AuthHttpState};
 
-pub(super) async fn authorization_error_from_return_to(
+pub(crate) async fn authorization_error_from_return_to(
     state: &AuthHttpState,
     return_to: &str,
     error: &'static str,
