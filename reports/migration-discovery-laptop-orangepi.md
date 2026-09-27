@@ -294,3 +294,90 @@ None of these probes could be run from Orange Pi because no authenticated shell 
 | `http://100.82.13.112:3000/.well-known/oauth-authorization-server` | Not run; Orange Pi shell unavailable |
 | `http://100.82.13.112:3100/.well-known/relay.json` | Not run; Orange Pi shell unavailable |
 | `http://100.82.13.112:3100/.well-known/oauth-protected-resource/mcp` | Not run; Orange Pi shell unavailable |
+
+## 16. Orange Pi Ingress and Laptop Reachability
+
+```text
+ORANGEPI_HOSTNAME=orangepi3b
+ORANGEPI_LAN_IP=192.168.10.5/24 (enx9c69d3b546c6); 10.10.1.1/24 (end0)
+ORANGEPI_TAILSCALE_IP=100.89.159.121
+ORANGEPI_PUBLIC_IP=103.130.18.204 (outbound IPv4 observed)
+
+ORANGEPI_PROXY=nginx-proxy for sso.farismnrr.com; relay ingress is Cloudflare-fronted, origin route unconfirmed
+ORANGEPI_PROXY_CONTAINER=nginx-proxy (nginx:alpine; host network; restart always)
+
+SSO_OLD_CONTAINER=masih-awam-sso-auth-1 (running; ghcr.io/farismnrr/agentic-ai-code-sso-auth:latest)
+RELAY_OLD_CONTAINER=masih-awam-relay-agent-1 (running; ghcr.io/farismnrr/agentic-ai-code-relay-agent:latest)
+
+SSO_CURRENT_UPSTREAM=127.0.0.1:5000 -> masih-awam-sso-auth-1:5000 over Docker host-published loopback port
+RELAY_CURRENT_UPSTREAM=UNKNOWN; no relay.farismnrr.com nginx vhost; active token-authenticated Cloudflared tunnel has no local hostname/origin config; relay container is reachable at 127.0.0.1:5001 -> masih-awam-relay-agent-1:3100
+
+SSO_TLS_TERMINATION=nginx-proxy on Orange Pi; Let's Encrypt certificate at /etc/letsencrypt/live/sso.farismnrr.com/fullchain.pem; public DNS resolves directly to Orange Pi Tailscale IP, not Cloudflare anycast
+RELAY_TLS_TERMINATION=Cloudflare edge observed; Google Trust Services certificate; origin/Tunnel route and Cloudflare-to-origin transport are not locally observable
+
+CLOUDFLARED_RUNNING=yes (cloudflared.service active, enabled; running tunnel with token authentication; no token value recorded)
+CLOUDFLARE_TUNNEL_PRESENT=yes; hostname routes are remotely managed/not visible in local config, so Relay Tunnel-vs-ordinary-proxy origin routing is unconfirmed
+
+LAPTOP_TAILSCALE_IP=100.82.13.112
+
+LAPTOP_SSO_REACHABLE_FROM_ORANGEPI=yes (both direct HTTP probes returned 200)
+LAPTOP_RELAY_REACHABLE_FROM_ORANGEPI=yes (both direct HTTP probes returned 200)
+
+SSO_LAPTOP_HEALTH_STATUS=200
+SSO_LAPTOP_METADATA_STATUS=200; issuer, authorization_endpoint, token_endpoint present
+RELAY_LAPTOP_DISCOVERY_STATUS=200; id, connection, connectUrl present
+RELAY_LAPTOP_PRM_STATUS=200; resource and authorization_servers present
+
+HOST_HEADER_BEHAVIOR=SSO nginx explicitly sets Host to $host; no Relay nginx vhost
+ORIGIN_HEADER_BEHAVIOR=SSO nginx does not override Origin; default request-header forwarding applies; no Relay nginx vhost
+FORWARDED_PROTO_BEHAVIOR=SSO nginx sets X-Forwarded-Proto to $scheme
+
+MCP_PROXY_BUFFERING=SSO nginx does not override proxy_buffering; Nginx default is on. No Relay nginx vhost.
+MCP_PROXY_READ_TIMEOUT=SSO nginx does not override proxy_read_timeout; Nginx default is 60s. No Relay nginx vhost.
+
+DIRECT_UPSTREAM_SWAP_FEASIBLE=yes; Orange Pi reached both laptop service ports over Tailscale. SSO's existing nginx upstream can be changed while keeping its hostname/TLS endpoint; Relay requires updating its Cloudflare Tunnel origin route or adding a Relay nginx vhost because none currently exists. Public URLs and OAuth issuer/MCP resource can remain unchanged. MCP long-running/streaming responses may require revisiting buffering and the 60s read timeout.
+```
+
+Observed container details:
+
+| container | published ports | Docker network / container IP / aliases | restart | mounts |
+|---|---|---|---|---|
+| `masih-awam-sso-auth-1` | `127.0.0.1:5000 -> 5000/tcp`; `3000/tcp` is not published | `masih-awam_default`, `172.22.0.2`, aliases `masih-awam-sso-auth-1`, `sso-auth` | `always` | none |
+| `masih-awam-relay-agent-1` | `127.0.0.1:5001 -> 3100/tcp` | `masih-awam_default`, `172.22.0.3`, aliases `masih-awam-relay-agent-1`, `relay-agent` | `always` | none |
+| `nginx-proxy` | host network; listens on `0.0.0.0:80` and `0.0.0.0:443` | host network; no bridge IP/aliases | `always` | read-only: `/home/farismnrr/Documents/Programs/nginx-proxy/nginx.conf` -> `/etc/nginx/nginx.conf`; `conf.d` -> `/etc/nginx/conf.d`; `stream.d` -> `/etc/nginx/stream.d`; `letsencrypt` -> `/etc/letsencrypt`; `certs_flat` -> `/etc/nginx/certs` |
+
+The inspected active nginx configuration has an HTTP and HTTPS vhost for `sso.farismnrr.com`. Its HTTPS location proxies to `http://127.0.0.1:5000`, preserves `Host` with `$host`, appends `X-Forwarded-For` with `$proxy_add_x_forwarded_for`, sets `X-Forwarded-Proto` to `$scheme`, uses upstream HTTP/1.1, and sets WebSocket `Upgrade` and `Connection` headers. It does not explicitly set proxy buffering or proxy connect/read/send timeouts; Nginx defaults apply: buffering on and 60 seconds for connect, read, and send timeouts. No exact `relay.farismnrr.com` or apex `farismnrr.com` vhost was found in the active nginx server blocks.
+
+`cloudflared.service` is active and enabled, and its process runs `cloudflared tunnel run` with token authentication. No local config argument or ingress hostname configuration was found; the only file under the checked Cloudflared config directories was `cert.pem`. The service's token value and certificate contents were not read or printed. Its running state and Cloudflare-fronted Relay response do not reveal whether Relay uses a Cloudflare Tunnel route or ordinary Cloudflare proxying to another origin.
+
+The Orange Pi reports Armbian 25.8.1 (Debian GNU/Linux 12 Bookworm), `aarch64`, default route via `192.168.10.1` on `enx9c69d3b546c6`, and uptime of 2 days, 19 hours, 56 minutes at inspection. `tailscale ip -4` returned `100.89.159.121`; `tailscale status` listed peer `100.82.13.112` as `thinkpad`, Windows, active and direct. Thus `100.89.159.121` belongs to this Orange Pi.
+
+### Current confirmed ingress path
+
+```text
+sso.farismnrr.com
+  -> DNS A 100.89.159.121 (Orange Pi Tailscale address)
+  -> nginx-proxy TLS termination (Let's Encrypt)
+  -> http://127.0.0.1:5000
+  -> masih-awam-sso-auth-1:5000
+
+relay.farismnrr.com
+  -> Cloudflare edge TLS termination
+  -> [origin route not available in local config; cloudflared tunnel is active]
+
+Local Relay container listener:
+  127.0.0.1:5001 -> masih-awam-relay-agent-1:3100
+  (whether this is the configured Cloudflare origin was not confirmed)
+```
+
+### Future path
+
+**NOT IMPLEMENTED**
+
+```text
+Internet / existing DNS and Cloudflare hostnames
+  -> Orange Pi ingress (retain current public hostnames and TLS termination)
+  -> Tailscale
+  -> 100.82.13.112:3000 -> laptop Docker sso-auth
+  -> 100.82.13.112:3100 -> laptop Docker relay-agent
+```
