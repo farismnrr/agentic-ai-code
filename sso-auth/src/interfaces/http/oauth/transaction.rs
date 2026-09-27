@@ -140,8 +140,8 @@ mod tests {
 
     #[test]
     fn parses_complete_authorization_return() {
-        let request = parse_authorization_return(&return_to(RESOURCE))
-            .expect("authorization return");
+        let request =
+            parse_authorization_return(&return_to(RESOURCE)).expect("authorization return");
         assert_eq!(request.state, "state-123");
         assert_eq!(request.resource, RESOURCE);
     }
@@ -172,11 +172,19 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .expect("location");
         let url = url::Url::parse(location).expect("redirect URL");
-        let query = url.query_pairs().collect::<std::collections::HashMap<_, _>>();
+        let query = url
+            .query_pairs()
+            .collect::<std::collections::HashMap<_, _>>();
 
         assert_eq!(url.origin().ascii_serialization(), "https://chatgpt.com");
-        assert_eq!(query.get("error").map(|value| value.as_ref()), Some("access_denied"));
-        assert_eq!(query.get("state").map(|value| value.as_ref()), Some("state-123"));
+        assert_eq!(
+            query.get("error").map(|value| value.as_ref()),
+            Some("access_denied")
+        );
+        assert_eq!(
+            query.get("state").map(|value| value.as_ref()),
+            Some("state-123")
+        );
         assert_eq!(query.get("iss").map(|value| value.as_ref()), Some(ISSUER));
     }
 
