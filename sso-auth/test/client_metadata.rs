@@ -1,6 +1,6 @@
 use url::Url;
 
-use crate::infrastructure::mcp_oauth::trusted_chatgpt_client_id;
+use crate::infrastructure::mcp_oauth::client_metadata::trusted_chatgpt_client_id;
 
 #[test]
 fn trusts_stable_and_callback_specific_chatgpt_cimd_urls() {
