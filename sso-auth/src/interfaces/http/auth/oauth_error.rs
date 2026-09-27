@@ -19,3 +19,8 @@ pub(super) async fn oauth_error_redirect(
     clear_auth_flow_cookies(&mut response, state);
     Some(response)
 }
+
+
+pub(super) fn valid_oauth_return_path(value: &str) -> bool {
+    value.len() <= 2048 && value.starts_with("/oauth/authorize?")
+}
