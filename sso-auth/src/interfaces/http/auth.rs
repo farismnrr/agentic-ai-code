@@ -15,10 +15,10 @@ use super::{
         MCP_OAUTH_RETURN_COOKIE, OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
     },
     auth_response::{
-        callback_redirect, clear_connection_cookies, connection_redirect, forbidden_response,
-        no_store, oauth_resume_redirect,
+        callback_redirect, clear_auth_flow_cookies, clear_connection_cookies, connection_redirect,
+        forbidden_response, no_store, oauth_resume_redirect,
     },
-    AuthHttpState,
+    oauth, AuthHttpState,
 };
 
 #[derive(Deserialize)]
@@ -106,18 +106,32 @@ pub async fn callback(
     Query(query): Query<CallbackQuery>,
 ) -> Response {
     let cookie_state = cookie_value(&headers, OAUTH_STATE_COOKIE);
+    let state_matches = cookie_state
+        .as_deref()
+        .zip(query.state.as_deref())
+        .is_some_and(|(cookie, returned)| {
+            constant_time_eq(cookie.as_bytes(), returned.as_bytes())
+        });
+    let oauth_return = cookie_value(&headers, MCP_OAUTH_RETURN_COOKIE)
+        .and_then(|value| decode_mcp_oauth_return(&value))
+        .filter(|value| valid_oauth_return_path(value));
+
+    if query.error.is_some() && state_matches {
+        if let Some(response) =
+            oauth_error_redirect(&state, oauth_return.as_deref(), "access_denied").await
+        {
+            return response;
+        }
+        return callback_redirect(&state, false, None);
+    }
+
     let valid_input = query.error.is_none()
         && query.code.as_deref().is_some_and(|value| !value.is_empty())
         && query
             .state
             .as_deref()
             .is_some_and(|value| !value.is_empty())
-        && cookie_state
-            .as_deref()
-            .zip(query.state.as_deref())
-            .is_some_and(|(cookie, returned)| {
-                constant_time_eq(cookie.as_bytes(), returned.as_bytes())
-            });
+        && state_matches;
 
     if !valid_input {
         return callback_redirect(&state, false, None);
@@ -125,9 +139,6 @@ pub async fn callback(
 
     let client_id = cookie_value(&headers, CONNECTED_APP_CLIENT_COOKIE);
     let connection_state = cookie_value(&headers, RELAY_CONNECTION_STATE_COOKIE);
-    let oauth_return = cookie_value(&headers, MCP_OAUTH_RETURN_COOKIE)
-        .and_then(|value| decode_mcp_oauth_return(&value))
-        .filter(|value| valid_oauth_return_path(value));
 
     match state
         .auth
@@ -141,10 +152,24 @@ pub async fn callback(
             connection_state,
             oauth_return,
         ),
-        Err(AuthError::Forbidden) => forbidden_response(&state),
+        Err(AuthError::Forbidden) => {
+            if let Some(response) =
+                oauth_error_redirect(&state, oauth_return.as_deref(), "access_denied").await
+            {
+                response
+            } else {
+                forbidden_response(&state)
+            }
+        }
         Err(error) => {
             tracing::warn!(error = %error, "github oauth callback failed");
-            callback_redirect(&state, false, None)
+            if let Some(response) =
+                oauth_error_redirect(&state, oauth_return.as_deref(), "server_error").await
+            {
+                response
+            } else {
+                callback_redirect(&state, false, None)
+            }
         }
     }
 }
@@ -188,4 +213,15 @@ fn valid_connection_state(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+async fn oauth_error_redirect(
+    state: &AuthHttpState,
+    return_to: Option<&str>,
+    error: &'static str,
+) -> Option<Response> {
+    let mut response =
+        oauth::authorization_error_from_return_to(state, return_to?, error).await?;
+    clear_auth_flow_cookies(&mut response, state);
+    Some(response)
 }
