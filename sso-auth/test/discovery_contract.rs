@@ -42,7 +42,7 @@ impl McpClientMetadataResolver for ContractMetadata {
 }
 
 fn contract() -> Value {
-    serde_json::from_str(include_str!("../../../contracts/chatgpt-discovery.json"))
+    serde_json::from_str(include_str!("../../contracts/chatgpt-discovery.json"))
         .expect("shared discovery contract")
 }
 

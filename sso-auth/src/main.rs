@@ -5,6 +5,7 @@ mod infrastructure;
 mod interfaces;
 
 #[cfg(test)]
+#[path = "../test/mod.rs"]
 mod tests;
 
 #[tokio::main]

@@ -7,6 +7,7 @@ if (!target) throw new Error('usage: node scripts/guardrail.mjs <service-directo
 const root = resolve(target)
 const sourceExtensions = new Set(['.rs', '.ts', '.svelte', '.css', '.mjs'])
 const ignoredDirectories = new Set(['node_modules', 'target', 'dist', '.git'])
+const forbiddenCatchAllDirectories = new Set(['common', 'helpers', 'misc', 'utils'])
 const limits = {
   '.rs': 220,
   '.ts': 180,
@@ -15,6 +16,7 @@ const limits = {
   '.mjs': 240
 }
 const maxFilesPerDirectory = 12
+const maxBackendLayerFiles = 8
 const violations = []
 
 async function walk(directory) {
@@ -22,16 +24,36 @@ async function walk(directory) {
   const sourceFiles = entries.filter(entry =>
     entry.isFile() && sourceExtensions.has(extname(entry.name))
   )
+  const normalizedDirectory = relative(root, directory).replaceAll('\\', '/')
 
   if (sourceFiles.length > maxFilesPerDirectory) {
     violations.push(
-      `${relative(root, directory) || '.'}: ${sourceFiles.length} source files; max is ${maxFilesPerDirectory}. Split by responsibility.`
+      `${normalizedDirectory || '.'}: ${sourceFiles.length} source files; max is ${maxFilesPerDirectory}. Split by responsibility.`
+    )
+  }
+
+  if (
+    ['src/application', 'src/domain', 'src/infrastructure', 'src/interfaces'].includes(normalizedDirectory)
+    && sourceFiles.length > maxBackendLayerFiles
+  ) {
+    violations.push(
+      `${normalizedDirectory}: ${sourceFiles.length} direct source files; max is ${maxBackendLayerFiles}. Create feature/responsibility modules instead of growing a general layer folder.`
     )
   }
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) await walk(join(directory, entry.name))
+      const child = join(directory, entry.name)
+      const normalizedChild = relative(root, child).replaceAll('\\', '/')
+      if (
+        normalizedChild.startsWith('src/')
+        && forbiddenCatchAllDirectories.has(entry.name)
+      ) {
+        violations.push(
+          `${normalizedChild}: generic catch-all directories are forbidden. Use a responsibility/feature module, or shared/ only for genuinely reusable code.`
+        )
+      }
+      if (!ignoredDirectories.has(entry.name)) await walk(child)
       continue
     }
 
@@ -44,6 +66,7 @@ async function walk(directory) {
     const content = await readFile(path, 'utf8')
     checkFileBudget(path, extension, content)
     checkArchitectureBoundary(path, content)
+    checkTestPlacement(path, content)
     checkModuleManifest(path, content)
     checkFrontendBarrel(path, content)
   }
@@ -79,6 +102,24 @@ function checkArchitectureBoundary(path, content) {
         `${normalized}: inner architecture layer must not depend on ${dependency}.`
       )
     }
+  }
+}
+
+function checkTestPlacement(path, content) {
+  const normalized = relative(root, path).replaceAll('\\', '/')
+  if (!normalized.startsWith('src/') || extname(path) !== '.rs') return
+
+  if (/(^|\/)tests?(\/|$)/.test(normalized)) {
+    violations.push(
+      `${normalized}: tests must live outside production src/ in the service test/ or tests/ directory.`
+    )
+  }
+
+  const inlineTest = /#\[(?:tokio::)?test\]|#\[cfg\s*\(test\)\]\s*mod\s+[A-Za-z0-9_]+\s*\{/m
+  if (inlineTest.test(content)) {
+    violations.push(
+      `${normalized}: inline/co-located Rust tests are forbidden. Move test bodies into the service test/ or tests/ directory.`
+    )
   }
 }
 

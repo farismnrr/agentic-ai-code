@@ -1,2 +1,3 @@
+mod client_metadata;
 mod discovery_contract;
 mod mcp_oauth_service;
