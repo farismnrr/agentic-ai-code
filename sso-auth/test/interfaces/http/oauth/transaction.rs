@@ -78,8 +78,7 @@ fn return_to(resource: &str) -> String {
 
 #[test]
 fn parses_complete_authorization_return() {
-    let request =
-        parse_authorization_return(&return_to(RESOURCE)).expect("authorization return");
+    let request = parse_authorization_return(&return_to(RESOURCE)).expect("authorization return");
     assert_eq!(request.state, "state-123");
     assert_eq!(request.resource, RESOURCE);
 }
@@ -96,14 +95,10 @@ fn rejects_duplicate_or_unrelated_redirect_targets() {
 
 #[tokio::test]
 async fn validated_provider_error_returns_state_and_issuer_to_chatgpt() {
-    let response = authorization_error_from_return_to(
-        &oauth(),
-        ISSUER,
-        &return_to(RESOURCE),
-        "access_denied",
-    )
-    .await
-    .expect("OAuth error redirect");
+    let response =
+        authorization_error_from_return_to(&oauth(), ISSUER, &return_to(RESOURCE), "access_denied")
+            .await
+            .expect("OAuth error redirect");
     let location = response
         .headers()
         .get(LOCATION)
