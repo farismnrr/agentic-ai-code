@@ -12,6 +12,7 @@ use crate::{
 
 const CLIENT_ID: &str = "https://chatgpt.com/oauth/client.json";
 const REDIRECT_URI: &str = "https://chatgpt.com/connector_platform_oauth_redirect";
+const RESOURCE: &str = "https://relay.farismnrr.com/mcp";
 
 struct FixedState;
 
@@ -57,6 +58,7 @@ fn service(metadata: FixedMetadata) -> McpOAuthService {
         Arc::new(FixedState),
         Arc::new(DummyTokens),
         Arc::new(metadata),
+        RESOURCE.to_string(),
     )
 }
 
@@ -111,10 +113,32 @@ async fn authorization_request_requires_pkce_scope_state_and_resource() {
         code_challenge_method: "S256".to_string(),
         scope: "identity.read".to_string(),
         state: "state".to_string(),
-        resource: "https://relay.example.com/mcp".to_string(),
+        resource: RESOURCE.to_string(),
     };
 
     service
         .validate_authorization_request(request, &client)
         .expect("valid authorization request");
+}
+
+
+#[tokio::test]
+async fn authorization_request_rejects_unknown_resource_target() {
+    let service = service(valid_metadata());
+    let client = service
+        .validate_client(CLIENT_ID, REDIRECT_URI)
+        .await
+        .expect("validated client");
+    let request = McpAuthorizationRequest {
+        client_id: CLIENT_ID.to_string(),
+        redirect_uri: REDIRECT_URI.to_string(),
+        code_challenge: "a".repeat(43),
+        code_challenge_method: "S256".to_string(),
+        scope: "identity.read".to_string(),
+        state: "state".to_string(),
+        resource: "https://evil.example/mcp".to_string(),
+    };
+
+    let result = service.validate_authorization_request(request, &client);
+    assert!(matches!(result, Err(AuthError::InvalidOAuthTarget)));
 }
