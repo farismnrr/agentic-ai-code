@@ -3,3 +3,4 @@ oauth-error-resource-hardening-retry 385c24ddb43cb4712bd4dee1f9120f502fffa911
 2026-09-27T14:01:00+07:00 retry-test-isolation
 2026-09-27T14:04:00+07:00 retry-mcp-test-module
 2026-09-27T14:08:00+07:00 retry-externalized-inline-tests
+2026-09-27T14:12:00+07:00 retry-format-externalized-tests
