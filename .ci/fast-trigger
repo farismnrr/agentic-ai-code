@@ -5,3 +5,4 @@ oauth-error-resource-hardening-retry 385c24ddb43cb4712bd4dee1f9120f502fffa911
 2026-09-27T14:08:00+07:00 retry-externalized-inline-tests
 2026-09-27T14:12:00+07:00 retry-format-externalized-tests
 2026-09-27T14:05:00+07:00 rerun-test-isolation-fix
+oauth-discovery-root-metadata-trace 60763e9eb0fb006aa6ad466ce096936077bc2686
