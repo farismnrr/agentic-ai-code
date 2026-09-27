@@ -1,119 +1,115 @@
-use axum::{
-    body::to_bytes,
-    http::{header::WWW_AUTHENTICATE, Request, StatusCode},
-};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::{json, Value};
-use tower::ServiceExt;
-use url::Url;
+use sha2::{Digest, Sha256};
 
 use crate::{
-    application::{McpAuthorizationRequest, McpTokenRequest},
+    application::{
+        AuthError, McpAuthorizationRequest, McpClientMetadata, McpClientMetadataResolver,
+        McpOAuthService, McpTokenRequest, StateGenerator,
+    },
     domain::AuthenticatedUser,
+    infrastructure::mcp_oauth::SignedMcpAccessTokenIssuer,
     interfaces::http::OAuthServerMetadata,
 };
 
-use super::discovery_contract_support::{
-    mcp_request, oauth_service, pkce, relay_router, resource_metadata_url, CLIENT_ID, ISSUER,
-    PROTOCOL, REDIRECT_URI, RESOURCE, SCOPE,
-};
+const SECRET: &str = "0123456789abcdef0123456789abcdef";
 
-async fn response_json(response: axum::response::Response) -> Value {
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("response body");
-    serde_json::from_slice(&body).expect("JSON response")
+struct FixedState;
+
+impl StateGenerator for FixedState {
+    fn generate(&self) -> String {
+        "fixed-authorization-code".to_string()
+    }
+}
+
+struct ContractMetadata {
+    client_id: String,
+    redirect_uri: String,
+}
+
+#[async_trait]
+impl McpClientMetadataResolver for ContractMetadata {
+    async fn resolve(&self, _client_id: &str) -> Result<McpClientMetadata, AuthError> {
+        Ok(McpClientMetadata {
+            client_id: self.client_id.clone(),
+            redirect_uris: vec![self.redirect_uri.clone()],
+            token_endpoint_auth_methods_supported: vec!["none".to_string()],
+        })
+    }
+}
+
+fn contract() -> Value {
+    serde_json::from_str(include_str!("../../../contracts/chatgpt-discovery.json"))
+        .expect("shared discovery contract")
 }
 
 #[tokio::test]
-async fn chatgpt_discovery_contract_connects_relay_oauth_and_latest_mcp() {
-    let relay = relay_router();
+async fn sso_matches_shared_chatgpt_discovery_contract() {
+    let contract = contract();
+    let issuer = contract["issuer"].as_str().expect("issuer");
+    let resource = contract["resource"].as_str().expect("resource");
+    let scope = contract["scope"].as_str().expect("scope");
+    let client_id = contract["client_id"].as_str().expect("client ID");
+    let redirect_uri = contract["redirect_uri"].as_str().expect("redirect URI");
 
-    let challenge_response = relay
-        .clone()
-        .oneshot(mcp_request("server/discover", None))
-        .await
-        .expect("unauthenticated discovery response");
-    assert_eq!(challenge_response.status(), StatusCode::UNAUTHORIZED);
-    let challenge = challenge_response
-        .headers()
-        .get(WWW_AUTHENTICATE)
-        .and_then(|value| value.to_str().ok())
-        .expect("OAuth challenge");
-    let metadata_url = resource_metadata_url(challenge).expect("resource metadata URL");
+    let metadata = serde_json::to_value(OAuthServerMetadata::new(issuer))
+        .expect("authorization server metadata");
+    assert_eq!(metadata["issuer"], issuer);
     assert_eq!(
-        metadata_url,
-        "https://relay.example.com/.well-known/oauth-protected-resource/mcp"
+        metadata["authorization_endpoint"],
+        format!("{issuer}/oauth/authorize")
     );
-
-    let metadata_path = Url::parse(metadata_url)
-        .expect("resource metadata URL")
-        .path()
-        .to_string();
-    let prm_response = relay
-        .clone()
-        .oneshot(
-            Request::get(metadata_path)
-                .body(axum::body::Body::empty())
-                .expect("PRM request"),
-        )
-        .await
-        .expect("PRM response");
-    assert_eq!(prm_response.status(), StatusCode::OK);
-    let prm = response_json(prm_response).await;
-    assert_eq!(prm["resource"], RESOURCE);
-    assert_eq!(prm["authorization_servers"], json!([ISSUER]));
-    assert_eq!(prm["scopes_supported"], json!([SCOPE]));
-
-    let as_metadata = serde_json::to_value(OAuthServerMetadata::new(
-        prm["authorization_servers"][0]
-            .as_str()
-            .expect("authorization server"),
-    ))
-    .expect("authorization server metadata");
-    assert_eq!(as_metadata["issuer"], ISSUER);
+    assert_eq!(metadata["token_endpoint"], format!("{issuer}/oauth/token"));
     assert_eq!(
-        as_metadata["authorization_endpoint"],
-        format!("{ISSUER}/oauth/authorize")
-    );
-    assert_eq!(
-        as_metadata["token_endpoint"],
-        format!("{ISSUER}/oauth/token")
-    );
-    assert_eq!(
-        as_metadata["client_id_metadata_document_supported"],
+        metadata["authorization_response_iss_parameter_supported"],
         json!(true)
     );
     assert_eq!(
-        as_metadata["token_endpoint_auth_methods_supported"],
+        metadata["client_id_metadata_document_supported"],
+        json!(true)
+    );
+    assert_eq!(
+        metadata["token_endpoint_auth_methods_supported"],
         json!(["none"])
     );
     assert_eq!(
-        as_metadata["code_challenge_methods_supported"],
+        metadata["code_challenge_methods_supported"],
         json!(["S256"])
     );
+    assert_eq!(metadata["scopes_supported"], json!([scope]));
 
-    let oauth = oauth_service();
+    let token_issuer = Arc::new(
+        SignedMcpAccessTokenIssuer::new(SECRET.to_string(), issuer.to_string())
+            .expect("token issuer"),
+    );
+    let oauth = McpOAuthService::new(
+        Arc::new(FixedState),
+        token_issuer,
+        Arc::new(ContractMetadata {
+            client_id: client_id.to_string(),
+            redirect_uri: redirect_uri.to_string(),
+        }),
+    );
+
     let client = oauth
-        .validate_client(CLIENT_ID, REDIRECT_URI)
+        .validate_client(client_id, redirect_uri)
         .await
-        .expect("ChatGPT CIMD client");
-    let verifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
-        .chars()
-        .take(64)
-        .collect::<String>();
+        .expect("CIMD client");
+    let verifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let authorization = oauth
         .validate_authorization_request(
             McpAuthorizationRequest {
-                client_id: CLIENT_ID.to_string(),
-                redirect_uri: REDIRECT_URI.to_string(),
-                code_challenge: pkce(&verifier),
+                client_id: client_id.to_string(),
+                redirect_uri: redirect_uri.to_string(),
+                code_challenge: challenge,
                 code_challenge_method: "S256".to_string(),
-                scope: SCOPE.to_string(),
+                scope: scope.to_string(),
                 state: "chatgpt-state".to_string(),
-                resource: prm["resource"]
-                    .as_str()
-                    .expect("canonical resource")
-                    .to_string(),
+                resource: resource.to_string(),
             },
             &client,
         )
@@ -133,36 +129,22 @@ async fn chatgpt_discovery_contract_connects_relay_oauth_and_latest_mcp() {
         .exchange(McpTokenRequest {
             grant_type: "authorization_code".to_string(),
             code,
-            redirect_uri: REDIRECT_URI.to_string(),
-            client_id: CLIENT_ID.to_string(),
-            code_verifier: verifier,
-            resource: RESOURCE.to_string(),
+            redirect_uri: redirect_uri.to_string(),
+            client_id: client_id.to_string(),
+            code_verifier: verifier.to_string(),
+            resource: resource.to_string(),
         })
-        .expect("access token");
-    assert_eq!(token.scope, SCOPE);
+        .expect("token exchange");
 
-    let discover_response = relay
-        .clone()
-        .oneshot(mcp_request("server/discover", Some(&token.access_token)))
-        .await
-        .expect("authenticated discovery response");
-    assert_eq!(discover_response.status(), StatusCode::OK);
-    let discover = response_json(discover_response).await;
-    assert_eq!(discover["result"]["supportedVersions"], json!([PROTOCOL]));
-    assert_eq!(discover["result"]["resultType"], "complete");
-
-    let tools_response = relay
-        .oneshot(mcp_request("tools/list", Some(&token.access_token)))
-        .await
-        .expect("tools list response");
-    assert_eq!(tools_response.status(), StatusCode::OK);
-    let tools = response_json(tools_response).await;
-    let profile = &tools["result"]["tools"][0];
-    assert_eq!(profile["name"], "get_profile");
-    assert_eq!(profile["securitySchemes"][0]["type"], "oauth2");
-    assert_eq!(profile["securitySchemes"][0]["scopes"], json!([SCOPE]));
-    assert_eq!(
-        profile["_meta"]["securitySchemes"],
-        profile["securitySchemes"]
-    );
+    assert_eq!(token.scope, scope);
+    let (payload, _) = token.access_token.split_once('.').expect("signed token");
+    let claims: Value = serde_json::from_slice(
+        &URL_SAFE_NO_PAD
+            .decode(payload)
+            .expect("access token payload"),
+    )
+    .expect("access token claims");
+    assert_eq!(claims["iss"], issuer);
+    assert_eq!(claims["aud"], resource);
+    assert_eq!(claims["scope"], scope);
 }
