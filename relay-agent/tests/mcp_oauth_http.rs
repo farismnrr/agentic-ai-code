@@ -72,7 +72,7 @@ async fn unauthenticated_modern_request_returns_oauth_discovery_challenge() {
         .to_str()
         .unwrap();
     assert!(challenge.contains(
-        r#"resource_metadata="https://relay.example.com/.well-known/oauth-protected-resource/mcp""#
+        r#"resource_metadata="https://relay.farismnrr.com/.well-known/oauth-protected-resource/mcp""#
     ));
     assert!(challenge.contains(r#"scope="identity.read""#));
 }
