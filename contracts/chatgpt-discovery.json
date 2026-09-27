@@ -1,7 +1,7 @@
 {
   "issuer": "https://sso.farismnrr.com",
-  "resource": "https://relay.example.com/mcp",
-  "resource_metadata": "https://relay.example.com/.well-known/oauth-protected-resource/mcp",
+  "resource": "https://relay.farismnrr.com/mcp",
+  "resource_metadata": "https://relay.farismnrr.com/.well-known/oauth-protected-resource/mcp",
   "scope": "identity.read",
   "client_id": "https://chatgpt.com/oauth/client.json",
   "redirect_uri": "https://chatgpt.com/connector_platform_oauth_redirect",
