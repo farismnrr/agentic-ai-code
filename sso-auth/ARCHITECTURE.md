@@ -5,12 +5,19 @@ The service follows Clean Architecture boundaries and SOLID design by default.
 ## Backend layers
 
 - `interfaces/` owns HTTP transport and request/response adaptation.
-- `application/` owns authentication, connected-app registration, and trusted connection-handoff use cases and ports.
+- `application/` owns authentication, connected-app registration, trusted connection handoff, and MCP OAuth use cases.
+- `application/shared/` owns application contracts and errors reused by more than one use case. It must stay narrow; feature-specific logic belongs with its feature/use case.
 - `domain/` owns framework-independent authentication and connected-app concepts.
 - `infrastructure/` owns environment, GitHub OAuth adapters, signing codecs, SQLite persistence, and external systems.
 - `bootstrap/` is the composition root and wires concrete adapters.
 
 Dependency direction points inward. Domain and application code must not depend on Axum, Tokio, Reqwest, SQLite clients, or frontend concerns.
+
+Backend layer roots must stay small. When a layer grows beyond a handful of direct files, split it by feature or responsibility instead of adding generic `utils`, `helpers`, `common`, or `misc` buckets. Use `shared/` only for concrete reusable contracts or behavior with multiple consumers.
+
+## Test layout
+
+Rust test bodies must live outside production `src/`. SSO uses the top-level `test/` tree and a single crate test harness declaration. Inline `#[test]`, `#[tokio::test]`, or nested `src/tests` modules are rejected by the structural guardrail.
 
 ## Connected-app registry
 

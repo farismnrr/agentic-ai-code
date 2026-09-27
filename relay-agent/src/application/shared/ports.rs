@@ -1,6 +1,6 @@
 use crate::domain::{Connection, VerifiedConnectionAssertion, VerifiedPrincipal};
 
-use super::AuthError;
+use super::error::AuthError;
 
 pub trait SsoConnectUrlProvider: Send + Sync {
     fn connect_url(&self, state: &str) -> String;

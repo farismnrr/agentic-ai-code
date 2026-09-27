@@ -1,19 +1,15 @@
 mod auth_service;
 mod connected_app_service;
 mod connection_service;
-mod error;
 mod mcp_oauth_service;
-mod ports;
+mod shared;
 
 pub use auth_service::{AuthService, LoginCompletion};
 pub use connected_app_service::ConnectedAppService;
 pub use connection_service::{ConnectionHandoff, ConnectionService};
-pub use error::AuthError;
 pub use mcp_oauth_service::{McpAuthorizationRequest, McpOAuthService, McpTokenRequest, MCP_SCOPE};
-pub use ports::ConnectedAppRepository;
-pub use ports::ConnectionAssertionIssuer;
-pub use ports::OAuthProvider;
-pub use ports::SessionCodec;
-pub use ports::StateGenerator;
-pub use ports::UserAccessPolicy;
-pub use ports::{McpAccessTokenIssuer, McpClientMetadata, McpClientMetadataResolver};
+pub use shared::{
+    AuthError, ConnectedAppRepository, ConnectionAssertionIssuer, McpAccessTokenIssuer,
+    McpClientMetadata, McpClientMetadataResolver, OAuthProvider, SessionCodec, StateGenerator,
+    UserAccessPolicy,
+};

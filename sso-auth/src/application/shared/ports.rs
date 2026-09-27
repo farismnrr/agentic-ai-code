@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::domain::{AuthSession, AuthenticatedUser, ConnectedApp};
 
-use super::AuthError;
+use super::error::AuthError;
 
 #[derive(Clone, Debug)]
 pub struct McpClientMetadata {
