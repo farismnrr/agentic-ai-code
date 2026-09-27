@@ -87,6 +87,7 @@ FROM backend-deps AS backend-check
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
+COPY contracts /contracts
 COPY --from=frontend-check /build/dist ./dist
 
 RUN cargo fmt --check
@@ -101,6 +102,7 @@ FROM backend-deps AS backend-test
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
+COPY contracts /contracts
 COPY --from=frontend-builder /build/dist ./dist
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
