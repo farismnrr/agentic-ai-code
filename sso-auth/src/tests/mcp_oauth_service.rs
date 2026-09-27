@@ -69,7 +69,6 @@ fn valid_metadata() -> FixedMetadata {
         methods: vec!["none".to_string(), "private_key_jwt".to_string()],
     }
 }
-
 #[tokio::test]
 async fn cimd_client_validation_requires_exact_document_identity_and_redirect() {
     let service = service(valid_metadata());
@@ -86,7 +85,6 @@ async fn cimd_client_validation_requires_exact_document_identity_and_redirect() 
         Err(AuthError::InvalidOAuthRequest)
     ));
 }
-
 #[tokio::test]
 async fn cimd_client_validation_requires_supported_token_auth_intersection() {
     let service = service(FixedMetadata {
@@ -98,7 +96,6 @@ async fn cimd_client_validation_requires_supported_token_auth_intersection() {
     let result = service.validate_client(CLIENT_ID, REDIRECT_URI).await;
     assert!(matches!(result, Err(AuthError::InvalidOAuthRequest)));
 }
-
 #[tokio::test]
 async fn authorization_request_requires_pkce_scope_state_and_resource() {
     let service = service(valid_metadata());
@@ -121,7 +118,6 @@ async fn authorization_request_requires_pkce_scope_state_and_resource() {
         .expect("valid authorization request");
 }
 
-
 #[tokio::test]
 async fn authorization_request_rejects_unknown_resource_target() {
     let service = service(valid_metadata());
@@ -142,7 +138,6 @@ async fn authorization_request_rejects_unknown_resource_target() {
     let result = service.validate_authorization_request(request, &client);
     assert!(matches!(result, Err(AuthError::InvalidOAuthTarget)));
 }
-
 
 #[tokio::test]
 async fn token_exchange_rejects_resource_switch() {
