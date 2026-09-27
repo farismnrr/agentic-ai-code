@@ -60,6 +60,7 @@ pub struct McpOAuthService {
     states: Arc<dyn StateGenerator>,
     tokens: Arc<dyn McpAccessTokenIssuer>,
     client_metadata: Arc<dyn McpClientMetadataResolver>,
+    resource: String,
     code_ttl_seconds: u64,
     access_ttl_seconds: u64,
 }
@@ -69,12 +70,14 @@ impl McpOAuthService {
         states: Arc<dyn StateGenerator>,
         tokens: Arc<dyn McpAccessTokenIssuer>,
         client_metadata: Arc<dyn McpClientMetadataResolver>,
+        resource: String,
     ) -> Self {
         Self {
             codes: Mutex::new(HashMap::new()),
             states,
             tokens,
             client_metadata,
+            resource,
             code_ttl_seconds: 300,
             access_ttl_seconds: 3600,
         }
@@ -114,13 +117,16 @@ impl McpOAuthService {
         request: McpAuthorizationRequest,
         client: &ValidatedMcpClient,
     ) -> Result<ValidatedMcpAuthorizationRequest, AuthError> {
+        if !valid_resource(&request.resource) || request.resource != self.resource {
+            return Err(AuthError::InvalidOAuthTarget);
+        }
+
         let valid = request.client_id == client.client_id
             && request.redirect_uri == client.redirect_uri
             && request.code_challenge_method == "S256"
             && !request.state.is_empty()
             && valid_challenge(&request.code_challenge)
-            && normalize_scope(&request.scope).as_deref() == Some(MCP_SCOPE)
-            && valid_resource(&request.resource);
+            && normalize_scope(&request.scope).as_deref() == Some(MCP_SCOPE);
         if !valid {
             return Err(AuthError::InvalidOAuthRequest);
         }
@@ -165,9 +171,11 @@ impl McpOAuthService {
         let pending = codes
             .get(&request.code)
             .ok_or(AuthError::InvalidAuthorizationCode)?;
+        if pending.request.resource != request.resource || request.resource != self.resource {
+            return Err(AuthError::InvalidOAuthTarget);
+        }
         if pending.request.client_id != request.client_id
             || pending.request.redirect_uri != request.redirect_uri
-            || pending.request.resource != request.resource
             || !pkce_matches(&request.code_verifier, &pending.request.code_challenge)
         {
             return Err(AuthError::InvalidAuthorizationCode);
