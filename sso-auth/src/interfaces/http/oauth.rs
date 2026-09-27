@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::application::{McpAuthorizationRequest, McpTokenRequest, MCP_SCOPE};
+use crate::application::{AuthError, McpAuthorizationRequest, McpTokenRequest, MCP_SCOPE};
 
 use super::{
     auth_cookie::{cookie_value, SESSION_COOKIE},
@@ -127,6 +127,14 @@ pub async fn authorize(
     };
     let request = match state.oauth.validate_authorization_request(request, &client) {
         Ok(request) => request,
+        Err(AuthError::InvalidOAuthTarget) => {
+            return authorization_redirect_error(
+                redirect_uri,
+                "invalid_target",
+                query.state.as_deref(),
+                issuer,
+            )
+        }
         Err(_) => {
             return authorization_redirect_error(
                 redirect_uri,
@@ -189,6 +197,7 @@ pub async fn token(State(state): State<AuthHttpState>, Form(form): Form<TokenFor
                 scope: token.scope,
             },
         ),
+        Err(AuthError::InvalidOAuthTarget) => token_error("invalid_target"),
         Err(_) => token_error("invalid_grant"),
     }
 }
