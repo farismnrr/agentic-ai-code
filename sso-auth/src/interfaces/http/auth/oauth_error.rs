@@ -9,8 +9,13 @@ pub(super) async fn oauth_error_redirect(
     return_to: Option<&str>,
     error: &'static str,
 ) -> Option<Response> {
-    let mut response =
-        oauth::authorization_error_from_return_to(state, return_to?, error).await?;
+    let mut response = oauth::authorization_error_from_return_to(
+        &state.oauth,
+        &state.oauth_metadata.issuer,
+        return_to?,
+        error,
+    )
+    .await?;
     clear_auth_flow_cookies(&mut response, state);
     Some(response)
 }
