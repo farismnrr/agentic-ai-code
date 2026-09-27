@@ -92,6 +92,7 @@ async fn sso_matches_shared_chatgpt_discovery_contract() {
             client_id: client_id.to_string(),
             redirect_uri: redirect_uri.to_string(),
         }),
+        resource.to_string(),
     );
 
     let client = oauth
