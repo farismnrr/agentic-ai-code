@@ -87,6 +87,7 @@ FROM backend-deps AS backend-check
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
+COPY sso-auth/test ./test
 COPY contracts /contracts
 COPY --from=frontend-check /build/dist ./dist
 
@@ -102,6 +103,7 @@ FROM backend-deps AS backend-test
 
 COPY sso-auth/Cargo.toml ./
 COPY sso-auth/src ./src
+COPY sso-auth/test ./test
 COPY contracts /contracts
 COPY --from=frontend-builder /build/dist ./dist
 
