@@ -14,6 +14,9 @@ use super::{
 };
 
 mod response;
+mod transaction;
+
+pub(super) use transaction::authorization_error_from_return_to;
 
 use response::{
     authorization_redirect_error, direct_authorization_error, login_redirect, no_store_json,
