@@ -273,3 +273,34 @@ ENV_EXAMPLE_DRIFT=yes
 
 CHANGES_REQUIRED=yes
 ```
+
+## 12. Environment Remediation Result
+
+```text
+SSO_BASE_URL=https://sso.farismnrr.com
+MCP_RESOURCE_URL=https://relay.farismnrr.com/mcp
+GITHUB_CALLBACK_URL=https://sso.farismnrr.com/auth/github/callback
+RELAY_PUBLIC_URL=https://relay.farismnrr.com
+RELAY_SSO_BASE_URL=https://sso.farismnrr.com
+
+SSO_PORT=3000
+RELAY_PORT=3100
+
+AGENTATION_ENABLED=false
+
+SSO_LOCAL_VALIDATION=HTTP 200 health and authorization-server metadata; metadata fields canonical; generated GitHub redirect_uri canonical
+RELAY_LOCAL_VALIDATION=HTTP 200 discovery and protected-resource metadata; connect/status URLs, resource, and authorization server canonical
+
+SSO_TUNNEL_VALIDATION=HTTP 200 for Orange Pi 127.0.0.1:5000 health and authorization-server metadata
+RELAY_TUNNEL_VALIDATION=HTTP 200 for Orange Pi 127.0.0.1:5001 discovery and protected-resource metadata
+
+SSO_PUBLIC_VALIDATION=HTTP 200; issuer, authorization_endpoint, and token_endpoint canonical; no localhost or loopback URLs
+RELAY_PUBLIC_VALIDATION=HTTP 200; discovery and protected-resource values canonical; no localhost or loopback URLs
+
+LOCALHOST_PUBLIC_URLS_REMAINING=no
+ENV_EXAMPLE_DRIFT_FIXED=yes
+
+REMEDIATION_RESULT=success
+```
+
+The first Relay public curl immediately after recreation returned HTTP 502; subsequent fetch and curl validations for both Relay public discovery endpoints returned HTTP 200. No ingress configuration was changed.
