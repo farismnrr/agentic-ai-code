@@ -15,11 +15,15 @@ use super::{
         MCP_OAUTH_RETURN_COOKIE, OAUTH_STATE_COOKIE, RELAY_CONNECTION_STATE_COOKIE,
     },
     auth_response::{
-        callback_redirect, clear_auth_flow_cookies, clear_connection_cookies, connection_redirect,
-        forbidden_response, no_store, oauth_resume_redirect,
+        callback_redirect, clear_connection_cookies, connection_redirect, forbidden_response,
+        no_store, oauth_resume_redirect,
     },
-    oauth, AuthHttpState,
+    AuthHttpState,
 };
+
+mod oauth_error;
+
+use oauth_error::oauth_error_redirect;
 
 #[derive(Deserialize)]
 pub struct StartQuery {
@@ -215,13 +219,3 @@ fn valid_connection_state(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
-async fn oauth_error_redirect(
-    state: &AuthHttpState,
-    return_to: Option<&str>,
-    error: &'static str,
-) -> Option<Response> {
-    let mut response =
-        oauth::authorization_error_from_return_to(state, return_to?, error).await?;
-    clear_auth_flow_cookies(&mut response, state);
-    Some(response)
-}
