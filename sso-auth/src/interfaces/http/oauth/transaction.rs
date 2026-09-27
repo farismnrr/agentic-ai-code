@@ -1,23 +1,22 @@
 use axum::response::Response;
 use url::Url;
 
-use crate::application::McpAuthorizationRequest;
+use crate::application::{McpAuthorizationRequest, McpOAuthService};
 
-use super::{response::authorization_redirect_error, super::AuthHttpState};
+use super::response::authorization_redirect_error;
 
 pub(crate) async fn authorization_error_from_return_to(
-    state: &AuthHttpState,
+    oauth: &McpOAuthService,
+    issuer: &str,
     return_to: &str,
     error: &'static str,
 ) -> Option<Response> {
     let request = parse_authorization_return(return_to)?;
-    let client = state
-        .oauth
+    let client = oauth
         .validate_client(&request.client_id, &request.redirect_uri)
         .await
         .ok()?;
-    state
-        .oauth
+    oauth
         .validate_authorization_request(request.clone(), &client)
         .ok()?;
 
@@ -25,7 +24,7 @@ pub(crate) async fn authorization_error_from_return_to(
         &request.redirect_uri,
         error,
         Some(&request.state),
-        &state.oauth_metadata.issuer,
+        issuer,
     ))
 }
 
