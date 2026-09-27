@@ -16,6 +16,7 @@ FROM base AS check
 
 COPY relay-agent/src ./src
 COPY relay-agent/tests ./tests
+COPY contracts /contracts
 
 RUN cargo fmt --check
 RUN cargo clippy --all-targets --all-features -- -D warnings
