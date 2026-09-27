@@ -85,11 +85,13 @@ pub fn mcp_request(method: &str, params: Value, authenticated: bool) -> Request<
     build_request(method, params, token.as_deref(), PROTOCOL)
 }
 
+#[allow(dead_code)]
 pub fn mcp_request_with_scope(method: &str, params: Value, scope: &str) -> Request<Body> {
     let token = access_token(scope);
     build_request(method, params, Some(&token), PROTOCOL)
 }
 
+#[allow(dead_code)]
 pub fn mcp_request_with_protocol(method: &str, params: Value, protocol: &str) -> Request<Body> {
     let token = access_token("identity.read");
     build_request(method, params, Some(&token), protocol)
