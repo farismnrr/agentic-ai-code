@@ -75,7 +75,10 @@ pub fn router() -> Router {
             .expect("MCP verifier"),
         ),
         ProtectedResourceMetadata::new(RESOURCE.to_string(), ISSUER.to_string()),
-        ProtectedResourceMetadata::new("https://relay.farismnrr.com".to_string(), ISSUER.to_string()),
+        ProtectedResourceMetadata::new(
+            "https://relay.farismnrr.com".to_string(),
+            ISSUER.to_string(),
+        ),
         "https://relay.farismnrr.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
