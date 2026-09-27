@@ -23,7 +23,7 @@ use sha2::Sha256;
 use url::Url;
 
 pub const ISSUER: &str = "https://sso.farismnrr.com";
-pub const RESOURCE: &str = "https://relay.example.com/mcp";
+pub const RESOURCE: &str = "https://relay.farismnrr.com/mcp";
 pub const PROTOCOL: &str = "2026-07-28";
 
 const SECRET: &str = "0123456789abcdef0123456789abcdef";
@@ -62,8 +62,8 @@ pub fn router() -> Router {
         Arc::new(ConnectionStatusUseCase::new(store)),
         DiscoveryDocument::new(
             CLIENT_ID.to_string(),
-            "https://relay.example.com/connections/start".to_string(),
-            "https://relay.example.com/connections/{connectionId}".to_string(),
+            "https://relay.farismnrr.com/connections/start".to_string(),
+            "https://relay.farismnrr.com/connections/{connectionId}".to_string(),
         ),
         Url::parse(ISSUER).expect("SSO dashboard URL"),
         Arc::new(
@@ -75,8 +75,8 @@ pub fn router() -> Router {
             .expect("MCP verifier"),
         ),
         ProtectedResourceMetadata::new(RESOURCE.to_string(), ISSUER.to_string()),
-        ProtectedResourceMetadata::new("https://relay.example.com".to_string(), ISSUER.to_string()),
-        "https://relay.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
+        ProtectedResourceMetadata::new("https://relay.farismnrr.com".to_string(), ISSUER.to_string()),
+        "https://relay.farismnrr.com/.well-known/oauth-protected-resource/mcp".to_string(),
     ))
 }
 
