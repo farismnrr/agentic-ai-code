@@ -247,3 +247,50 @@ CHATGPT_REDIRECT_URI=https://chatgpt.com/connector_platform_oauth_redirect
 
 CURRENT_TLS_TERMINATION=Relay: Cloudflare edge observed; origin-side TLS unknown. SSO: nginx response observed; endpoint location unknown.
 ```
+
+## 15. Orange Pi Follow-up Discovery
+
+Orange Pi shell access was unavailable. The configured SSH alias `orangepi` did not resolve. The report's candidate overlay address `100.89.159.121` accepted a TCP connection on port 22, but non-interactive SSH as `farismnrr` was denied (`Permission denied (publickey,password)`). That address cannot be identified as the Orange Pi without an authenticated host session or tailnet status.
+
+```text
+ORANGEPI_HOSTNAME=UNKNOWN (no authenticated Orange Pi shell)
+ORANGEPI_LAN_IP=UNKNOWN
+ORANGEPI_PUBLIC_IP=UNKNOWN
+ORANGEPI_TAILSCALE_IP=UNKNOWN; 100.89.159.121 is an unverified candidate
+
+LAPTOP_TAILSCALE_IP=100.82.13.112 (from prior workstation observation)
+TAILSCALE_LAPTOP_REACHABLE=UNKNOWN (cannot originate a test from Orange Pi)
+
+ORANGEPI_REVERSE_PROXY=UNKNOWN (Orange Pi configuration unavailable)
+ORANGEPI_CLOUDFLARED=UNKNOWN
+ORANGEPI_CLOUDFLARE_TUNNEL=UNKNOWN
+
+SSO_CURRENT_UPSTREAM=UNKNOWN; public DNS answers 100.89.159.121 and HTTPS presents nginx, but the host/upstream mapping is unverified
+RELAY_CURRENT_UPSTREAM=UNKNOWN; HTTPS is served through Cloudflare, origin is not observable from this access
+
+SSO_TLS_TERMINATION=HTTPS certificate issuer is Let's Encrypt (YE1); response identifies nginx. The machine terminating TLS is UNKNOWN.
+RELAY_TLS_TERMINATION=Cloudflare edge observed; presented certificate issuer is Google Trust Services (WE1). Origin-side TLS and termination are UNKNOWN.
+
+SSO_APP_RUNNING_ON_ORANGEPI=UNKNOWN (could not inspect Orange Pi processes/containers)
+RELAY_APP_RUNNING_ON_ORANGEPI=UNKNOWN (could not inspect Orange Pi processes/containers)
+```
+
+### Overlay and ingress facts available without Orange Pi access
+
+- The laptop-side workstation interface reported `100.82.13.112/32`; the local `tailscale` CLI was not available, so a tailnet peer listing or `tailscale status` could not be obtained.
+- From the workstation, the route to `100.89.159.121` used its `100.82.13.112` overlay-looking interface, and TCP port 22 accepted a connection. This does not establish which device owns that address.
+- `sso.farismnrr.com` resolved to `100.89.159.121`; HTTPS returned an nginx response and its presented certificate issuer was Let's Encrypt (YE1). No Orange Pi mapping or proxy upstream could be read.
+- `relay.farismnrr.com` and `farismnrr.com` were served through Cloudflare. Their observed public certificate issuer was Google Trust Services (WE1). No origin target, Orange Pi proxy configuration, or Cloudflare Tunnel configuration could be read.
+- The configured SSH alias specifies port 22. Effective `AllowTcpForwarding`, `GatewayPorts`, `PermitOpen`, `PermitListen`, SSH listener details, firewall, installed/running ingress services, cloudflared configuration, and `ss -lntup` output remain unknown because Orange Pi SSH authentication was unavailable.
+- Whether `sso-auth` or `relay-agent` runs on Orange Pi could not be confirmed.
+
+### Orange Pi to laptop connectivity tests
+
+None of these probes could be run from Orange Pi because no authenticated shell was available. No bind address, firewall, or service setting was changed.
+
+| probe from Orange Pi | result |
+|---|---|
+| `http://100.82.13.112:3000/health` | Not run; Orange Pi shell unavailable |
+| `http://100.82.13.112:3000/.well-known/oauth-authorization-server` | Not run; Orange Pi shell unavailable |
+| `http://100.82.13.112:3100/.well-known/relay.json` | Not run; Orange Pi shell unavailable |
+| `http://100.82.13.112:3100/.well-known/oauth-protected-resource/mcp` | Not run; Orange Pi shell unavailable |
