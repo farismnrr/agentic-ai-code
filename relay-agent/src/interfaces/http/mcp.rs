@@ -18,7 +18,7 @@ pub async fn protected_resource(State(state): State<RelayHttpState>) -> Response
 }
 
 pub async fn protected_resource_root(State(state): State<RelayHttpState>) -> Response {
-    Json(state.mcp_resource.clone()).into_response()
+    Json(state.mcp_root_resource.clone()).into_response()
 }
 
 pub async fn post(

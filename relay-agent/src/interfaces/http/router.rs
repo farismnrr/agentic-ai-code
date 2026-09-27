@@ -1,7 +1,10 @@
 use axum::{
+    http::Request,
     routing::{get, post},
     Router,
 };
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use super::{connections, discovery, mcp, RelayHttpState};
 
@@ -23,4 +26,16 @@ pub fn build_router(state: RelayHttpState) -> Router {
         .route("/auth/login", get(connections::start))
         .route("/auth/callback", get(connections::callback))
         .with_state(state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    tracing::info_span!(
+                        "http_request",
+                        method = %request.method(),
+                        path = %request.uri().path()
+                    )
+                })
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
 }

@@ -13,6 +13,8 @@ use crate::{
 };
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
+    init_tracing();
+
     let config = AppConfig::from_env()?;
     let address = config.listen_address();
     let client_id = config.relay_client_id();
@@ -76,4 +78,13 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     eprintln!("relay-agent listening on {address}");
     axum::serve(listener, build_router(http_state)).await?;
     Ok(())
+}
+
+fn init_tracing() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "relay_agent=info,tower_http=info".into()),
+        )
+        .init();
 }

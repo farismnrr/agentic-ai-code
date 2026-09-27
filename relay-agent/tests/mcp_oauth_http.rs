@@ -18,10 +18,13 @@ async fn response_json(response: axum::response::Response) -> Value {
 }
 
 #[tokio::test]
-async fn protected_resource_metadata_aliases_canonical_mcp_resource() {
-    for path in [
-        "/.well-known/oauth-protected-resource/mcp",
-        "/.well-known/oauth-protected-resource",
+async fn protected_resource_metadata_routes_report_their_resource_identifiers() {
+    for (path, expected_resource) in [
+        ("/.well-known/oauth-protected-resource/mcp", RESOURCE),
+        (
+            "/.well-known/oauth-protected-resource",
+            "https://relay.farismnrr.com",
+        ),
     ] {
         let response = router()
             .oneshot(Request::get(path).body(Body::empty()).unwrap())
@@ -29,7 +32,7 @@ async fn protected_resource_metadata_aliases_canonical_mcp_resource() {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
-        assert_eq!(body["resource"], RESOURCE);
+        assert_eq!(body["resource"], expected_resource);
         assert_eq!(body["authorization_servers"][0], ISSUER);
         assert_eq!(body["scopes_supported"][0], "identity.read");
     }
