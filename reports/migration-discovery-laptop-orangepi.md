@@ -381,3 +381,25 @@ Internet / existing DNS and Cloudflare hostnames
   -> 100.82.13.112:3000 -> laptop Docker sso-auth
   -> 100.82.13.112:3100 -> laptop Docker relay-agent
 ```
+
+## 17. Direct Reverse Tunnel Cutover
+
+```text
+LAPTOP_SSO_PORT=3000
+LAPTOP_RELAY_PORT=3100
+
+ORANGEPI_SSO_PORT=5000
+ORANGEPI_RELAY_PORT=5001
+
+TUNNEL_TYPE=ssh reverse forwarding
+
+OLD_SSO_CONTAINER=masih-awam-sso-auth-1 (removed)
+OLD_RELAY_CONTAINER=masih-awam-relay-agent-1 (removed)
+
+TUNNEL_SERVICE=agentic-ai-orangepi-tunnel.service (systemd --user; enabled and active)
+
+SSO_TUNNEL_VALIDATION=HTTP 200 for /health and /.well-known/oauth-authorization-server
+RELAY_TUNNEL_VALIDATION=HTTP 200 for /.well-known/relay.json and /.well-known/oauth-protected-resource/mcp
+
+CUTOVER_RESULT=success; Orange Pi 127.0.0.1:5000 forwards to laptop 127.0.0.1:3000 and Orange Pi 127.0.0.1:5001 forwards to laptop 127.0.0.1:3100
+```
