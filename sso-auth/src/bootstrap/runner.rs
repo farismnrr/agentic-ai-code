@@ -61,6 +61,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         Arc::new(SecureStateGenerator),
         mcp_tokens,
         client_metadata,
+        config.mcp_resource_url(),
     ));
     let oauth_metadata = OAuthServerMetadata::new(&config.sso_issuer());
 
