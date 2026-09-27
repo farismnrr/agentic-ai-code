@@ -16,6 +16,7 @@ pub struct AppConfig {
     session_ttl_seconds: u64,
     cookie_secure: bool,
     sso_issuer: String,
+    mcp_resource_url: String,
     relay_assertion_secret: String,
 }
 
@@ -25,6 +26,10 @@ impl AppConfig {
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()?;
         let base_url = required_http_url("SSO_BASE_URL")?;
+        let mcp_resource_url = optional_http_url(
+            "MCP_RESOURCE_URL",
+            "https://relay.farismnrr.com/mcp",
+        )?;
 
         Ok(Self {
             port,
@@ -46,6 +51,7 @@ impl AppConfig {
                 .parse::<u64>()?,
             cookie_secure: base_url.scheme() == "https",
             sso_issuer: base_url.as_str().trim_end_matches('/').to_string(),
+            mcp_resource_url: mcp_resource_url.to_string(),
             relay_assertion_secret: required("RELAY_ASSERTION_SECRET")?,
         })
     }
@@ -98,6 +104,10 @@ impl AppConfig {
         self.sso_issuer.clone()
     }
 
+    pub fn mcp_resource_url(&self) -> String {
+        self.mcp_resource_url.clone()
+    }
+
     pub fn relay_assertion_secret(&self) -> String {
         self.relay_assertion_secret.clone()
     }
@@ -112,9 +122,24 @@ fn required(name: &'static str) -> Result<String, Box<dyn Error>> {
 }
 
 fn required_http_url(name: &'static str) -> Result<Url, Box<dyn Error>> {
-    let url = Url::parse(&required(name)?)?;
-    if !matches!(url.scheme(), "http" | "https") || url.cannot_be_a_base() {
-        return Err(format!("{name} must be an absolute HTTP(S) URL").into());
+    parse_http_url(name, &required(name)?)
+}
+
+fn optional_http_url(name: &'static str, default: &str) -> Result<Url, Box<dyn Error>> {
+    let value = env::var(name).unwrap_or_else(|_| default.to_string());
+    parse_http_url(name, &value)
+}
+
+fn parse_http_url(name: &'static str, value: &str) -> Result<Url, Box<dyn Error>> {
+    let url = Url::parse(value)?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || url.username() != ""
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(format!("{name} must be an absolute HTTP(S) URL without query or fragment").into());
     }
     Ok(url)
 }
