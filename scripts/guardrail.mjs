@@ -107,7 +107,18 @@ function checkArchitectureBoundary(path, content) {
 
 function checkTestPlacement(path, content) {
   const normalized = relative(root, path).replaceAll('\\', '/')
-  if (!normalized.startsWith('src/') || extname(path) !== '.rs') return
+  const extension = extname(path)
+  const inTopLevelTestTree = /^(test|tests)\//.test(normalized)
+  const testNamedSource = /\.(?:test|spec)\.(?:ts|mjs)$/.test(normalized)
+    || /\.(?:test|spec)\.svelte$/.test(normalized)
+
+  if (testNamedSource && !inTopLevelTestTree) {
+    violations.push(
+      `${normalized}: co-located frontend/JavaScript tests are forbidden. Move test files into the service test/ or tests/ directory.`
+    )
+  }
+
+  if (!normalized.startsWith('src/') || extension !== '.rs') return
 
   if (/(^|\/)tests?(\/|$)/.test(normalized)) {
     violations.push(
