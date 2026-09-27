@@ -23,7 +23,7 @@ use super::{
 
 mod oauth_error;
 
-use oauth_error::oauth_error_redirect;
+use oauth_error::{oauth_error_redirect, valid_oauth_return_path};
 
 #[derive(Deserialize)]
 pub struct StartQuery {
@@ -208,9 +208,6 @@ fn complete_callback(
     }
 }
 
-fn valid_oauth_return_path(value: &str) -> bool {
-    value.len() <= 2048 && value.starts_with("/oauth/authorize?")
-}
 
 fn valid_connection_state(value: &str) -> bool {
     (20..=128).contains(&value.len())
