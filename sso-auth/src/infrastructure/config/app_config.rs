@@ -26,10 +26,8 @@ impl AppConfig {
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()?;
         let base_url = required_http_url("SSO_BASE_URL")?;
-        let mcp_resource_url = optional_http_url(
-            "MCP_RESOURCE_URL",
-            "https://relay.farismnrr.com/mcp",
-        )?;
+        let mcp_resource_url =
+            optional_http_url("MCP_RESOURCE_URL", "https://relay.farismnrr.com/mcp")?;
 
         Ok(Self {
             port,
@@ -139,7 +137,9 @@ fn parse_http_url(name: &'static str, value: &str) -> Result<Url, Box<dyn Error>
         || url.query().is_some()
         || url.fragment().is_some()
     {
-        return Err(format!("{name} must be an absolute HTTP(S) URL without query or fragment").into());
+        return Err(
+            format!("{name} must be an absolute HTTP(S) URL without query or fragment").into(),
+        );
     }
     Ok(url)
 }
