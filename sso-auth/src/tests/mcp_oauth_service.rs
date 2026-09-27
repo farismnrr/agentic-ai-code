@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::{
     application::{
         AuthError, McpAccessTokenIssuer, McpAuthorizationRequest, McpClientMetadata,
-        McpClientMetadataResolver, McpOAuthService, StateGenerator,
+        McpClientMetadataResolver, McpOAuthService, McpTokenRequest, StateGenerator,
     },
     domain::AuthenticatedUser,
 };
@@ -140,5 +140,49 @@ async fn authorization_request_rejects_unknown_resource_target() {
     };
 
     let result = service.validate_authorization_request(request, &client);
+    assert!(matches!(result, Err(AuthError::InvalidOAuthTarget)));
+}
+
+
+#[tokio::test]
+async fn token_exchange_rejects_resource_switch() {
+    let service = service(valid_metadata());
+    let client = service
+        .validate_client(CLIENT_ID, REDIRECT_URI)
+        .await
+        .expect("validated client");
+    let authorization = service
+        .validate_authorization_request(
+            McpAuthorizationRequest {
+                client_id: CLIENT_ID.to_string(),
+                redirect_uri: REDIRECT_URI.to_string(),
+                code_challenge: "a".repeat(43),
+                code_challenge_method: "S256".to_string(),
+                scope: "identity.read".to_string(),
+                state: "state".to_string(),
+                resource: RESOURCE.to_string(),
+            },
+            &client,
+        )
+        .expect("authorization request");
+    let code = service
+        .issue_code(
+            AuthenticatedUser {
+                id: 1,
+                login: "faris".to_string(),
+                avatar_url: None,
+            },
+            authorization,
+        )
+        .expect("authorization code");
+
+    let result = service.exchange(McpTokenRequest {
+        grant_type: "authorization_code".to_string(),
+        code,
+        redirect_uri: REDIRECT_URI.to_string(),
+        client_id: CLIENT_ID.to_string(),
+        code_verifier: "b".repeat(43),
+        resource: "https://evil.example/mcp".to_string(),
+    });
     assert!(matches!(result, Err(AuthError::InvalidOAuthTarget)));
 }
