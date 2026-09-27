@@ -8,8 +8,13 @@ pub use auth_service::{AuthService, LoginCompletion};
 pub use connected_app_service::ConnectedAppService;
 pub use connection_service::{ConnectionHandoff, ConnectionService};
 pub use mcp_oauth_service::{McpAuthorizationRequest, McpOAuthService, McpTokenRequest, MCP_SCOPE};
-pub use shared::{
-    AuthError, ConnectedAppRepository, ConnectionAssertionIssuer, McpAccessTokenIssuer,
-    McpClientMetadata, McpClientMetadataResolver, OAuthProvider, SessionCodec, StateGenerator,
-    UserAccessPolicy,
-};
+pub use shared::AuthError;
+pub use shared::ConnectedAppRepository;
+pub use shared::ConnectionAssertionIssuer;
+pub use shared::McpAccessTokenIssuer;
+pub use shared::McpClientMetadata;
+pub use shared::McpClientMetadataResolver;
+pub use shared::OAuthProvider;
+pub use shared::SessionCodec;
+pub use shared::StateGenerator;
+pub use shared::UserAccessPolicy;
