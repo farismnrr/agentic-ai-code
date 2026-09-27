@@ -22,7 +22,3 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2"
 
-
-[dev-dependencies]
-relay-agent = { path = "../relay-agent" }
-tower = { version = "0.5", features = ["util"] }
