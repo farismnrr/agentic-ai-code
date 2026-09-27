@@ -92,7 +92,7 @@ pub(super) fn no_store(status: StatusCode, message: &'static str) -> Response {
     no_store_response((status, message).into_response())
 }
 
-fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
+pub(super) fn clear_auth_flow_cookies(response: &mut Response, state: &AuthHttpState) {
     for name in [OAUTH_STATE_COOKIE, MCP_OAUTH_RETURN_COOKIE] {
         append_set_cookie(
             response.headers_mut(),
