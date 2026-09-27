@@ -113,9 +113,7 @@ pub async fn callback(
     let state_matches = cookie_state
         .as_deref()
         .zip(query.state.as_deref())
-        .is_some_and(|(cookie, returned)| {
-            constant_time_eq(cookie.as_bytes(), returned.as_bytes())
-        });
+        .is_some_and(|(cookie, returned)| constant_time_eq(cookie.as_bytes(), returned.as_bytes()));
     let oauth_return = cookie_value(&headers, MCP_OAUTH_RETURN_COOKIE)
         .and_then(|value| decode_mcp_oauth_return(&value))
         .filter(|value| valid_oauth_return_path(value));
@@ -208,11 +206,9 @@ fn complete_callback(
     }
 }
 
-
 fn valid_connection_state(value: &str) -> bool {
     (20..=128).contains(&value.len())
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
-
