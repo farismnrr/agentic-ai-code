@@ -16,7 +16,7 @@ use relay_agent::{
         RelayHttpState,
     },
 };
-use serde_json::{json, Value};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use url::Url;
 
@@ -166,8 +166,4 @@ pub(super) fn resource_metadata_url(challenge: &str) -> Option<&str> {
         .nth(1)?
         .split('"')
         .next()
-}
-
-pub(super) fn json_body(value: Value) -> Value {
-    value
 }
